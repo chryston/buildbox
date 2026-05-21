@@ -161,3 +161,24 @@ describe('computeCutList – accessories', () => {
     expect(entries.find(e => e.label === 'Drawer front')?.qty).toBe(1)
   })
 })
+
+describe('computeCutList – door accessories', () => {
+  it('produces separate entries for doors of different heights', () => {
+    const design = bareDesign()
+    design.root = {
+      id: 'root',
+      splitAxis: 'horizontal',
+      splitRatio: 0.4,
+      children: [
+        { id: 'top', accessories: [{ id: 'a1', type: 'door' }] },
+        { id: 'bot', accessories: [{ id: 'a2', type: 'door' }] },
+      ],
+    }
+
+    const entries = computeCutList(design)
+    const doors = entries.filter(e => e.label === 'Door panel')
+    expect(doors.length).toBe(2)
+    const totalQty = doors.reduce((sum, entry) => sum + entry.qty, 0)
+    expect(totalQty).toBe(2)
+  })
+})

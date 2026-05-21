@@ -122,14 +122,20 @@ export function computeCutList(design: Design): CutListEntry[] {
   const doors = layout.voids.flatMap((v) =>
     v.accessories.filter((a) => a.type === 'door').map((a) => ({ v, a })),
   )
-  if (doors.length > 0) {
+  const doorGroups = new Map<string, { qty: number, w: number, h: number, mat: MaterialId }>()
+  for (const { v } of doors) {
+    const key = `${Math.round(v.w)}×${Math.round(v.h)}×${v.material}`
+    const group = doorGroups.get(key) ?? { qty: 0, w: v.w, h: v.h, mat: v.material }
+    doorGroups.set(key, { ...group, qty: group.qty + 1 })
+  }
+  for (const group of doorGroups.values()) {
     entries.push({
       label: 'Door panel',
-      qty: doors.length,
-      width: doors[0].v.w,
-      height: doors[0].v.h,
+      qty: group.qty,
+      width: group.w,
+      height: group.h,
       depth: t,
-      material: doors[0].v.material,
+      material: group.mat,
       notes: 'full overlay',
     })
   }
@@ -137,16 +143,23 @@ export function computeCutList(design: Design): CutListEntry[] {
   const drawerFronts = layout.voids.flatMap((v) =>
     v.accessories.filter((a) => a.type === 'drawer-front').map((a) => ({ v, a })),
   )
-  if (drawerFronts.length > 0) {
+  const drawerFrontGroups = new Map<string, { qty: number, w: number, h: number, mat: MaterialId }>()
+  for (const { v } of drawerFronts) {
+    const key = `${Math.round(v.w)}×${Math.round(v.h)}×${v.material}`
+    const group = drawerFrontGroups.get(key) ?? { qty: 0, w: v.w, h: v.h, mat: v.material }
+    drawerFrontGroups.set(key, { ...group, qty: group.qty + 1 })
+  }
+  for (const group of drawerFrontGroups.values()) {
     entries.push({
       label: 'Drawer front',
-      qty: drawerFronts.length,
-      width: drawerFronts[0].v.w,
-      height: drawerFronts[0].v.h,
+      qty: group.qty,
+      width: group.w,
+      height: group.h,
       depth: t,
-      material: drawerFronts[0].v.material,
+      material: group.mat,
     })
   }
+  // 'pull' and 'hinge' accessories are hardware (purchased, not cut) — no cut list entry
 
   return entries
 }
