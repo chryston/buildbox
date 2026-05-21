@@ -3,7 +3,7 @@ export type SplitAxis = 'horizontal' | 'vertical'
 export type MaterialId = 'oak' | 'walnut' | 'white' | 'birch' | 'mdf'
 export type ElementType = 'void' | 'drawer' | 'hanging-space'
 export type SlideType = 'side-mount' | 'undermount'
-export type AccessoryType = 'hanging-rail'
+export type AccessoryType = 'door' | 'drawer-front' | 'pull' | 'hinge'
 
 export interface ToeKick {
   height: number   // mm
@@ -27,9 +27,9 @@ export interface GlobalSettings {
 }
 
 export interface Accessory {
-  id: string          // nanoid()
+  id: string
   type: AccessoryType
-  heightFromBottom: number  // mm from bottom of void
+  label?: string
 }
 
 export interface Divider {
@@ -48,7 +48,7 @@ export interface CabinetNode {
   elementType?: ElementType      // leaf annotation (default: 'void')
   drawerConfig?: DrawerConfig    // only when elementType === 'drawer'
   dividers?: Divider[]           // one per binary split, carries its own id and materialId
-  // NOTE: accessories?: Accessory[] is added in Task 17 (self-contained accessory task)
+  accessories?: Accessory[]
 }
 
 export interface Design {

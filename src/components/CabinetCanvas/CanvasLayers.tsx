@@ -89,23 +89,39 @@ export default function CanvasLayers({
                 <circle cx={v.x + v.w / 2} cy={v.y + v.h / 2} r={4} fill="#7c3aed" />
               </g>
             )}
-            {(v.accessories ?? [])
-              .filter((a) => a.type === 'hanging-rail')
-              .map((a) => {
-                const railY = v.y + v.h - a.heightFromBottom
-                return (
-                  <line
-                    key={a.id}
-                    x1={v.x}
-                    y1={railY}
-                    x2={v.x + v.w}
-                    y2={railY}
-                    stroke="#666"
-                    strokeWidth={3}
-                    strokeDasharray="4 2"
+            {(v.accessories ?? []).map((a) => (
+              <g key={a.id}>
+                {(a.type === 'door' || a.type === 'drawer-front') && (
+                  <rect
+                    x={v.x + 4}
+                    y={v.y + 4}
+                    width={v.w - 8}
+                    height={v.h - 8}
+                    fill="none"
+                    stroke="#94a3b8"
+                    strokeWidth={2}
+                    strokeDasharray={a.type === 'drawer-front' ? '6 2' : undefined}
+                    rx={2}
                   />
-                )
-              })}
+                )}
+                {a.type === 'pull' && (
+                  <rect
+                    x={v.x + v.w / 2 - 10}
+                    y={v.y + v.h / 2 - 1.5}
+                    width={20}
+                    height={3}
+                    fill="#cbd5e1"
+                    rx={1.5}
+                  />
+                )}
+                {a.type === 'hinge' && (
+                  <>
+                    <circle cx={v.x + 6} cy={v.y + 16} r={3} fill="#cbd5e1" />
+                    <circle cx={v.x + 6} cy={v.y + v.h - 16} r={3} fill="#cbd5e1" />
+                  </>
+                )}
+              </g>
+            ))}
           </g>
         ))}
       </g>

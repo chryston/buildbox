@@ -119,5 +119,34 @@ export function computeCutList(design: Design): CutListEntry[] {
       })
     })
 
+  const doors = layout.voids.flatMap((v) =>
+    v.accessories.filter((a) => a.type === 'door').map((a) => ({ v, a })),
+  )
+  if (doors.length > 0) {
+    entries.push({
+      label: 'Door panel',
+      qty: doors.length,
+      width: doors[0].v.w,
+      height: doors[0].v.h,
+      depth: t,
+      material: doors[0].v.material,
+      notes: 'full overlay',
+    })
+  }
+
+  const drawerFronts = layout.voids.flatMap((v) =>
+    v.accessories.filter((a) => a.type === 'drawer-front').map((a) => ({ v, a })),
+  )
+  if (drawerFronts.length > 0) {
+    entries.push({
+      label: 'Drawer front',
+      qty: drawerFronts.length,
+      width: drawerFronts[0].v.w,
+      height: drawerFronts[0].v.h,
+      depth: t,
+      material: drawerFronts[0].v.material,
+    })
+  }
+
   return entries
 }

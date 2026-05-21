@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type {
+  AccessoryType,
   CabinetNode,
   DrawerConfig,
   ElementType,
@@ -18,6 +19,8 @@ interface Props {
   onSetMaterial: (id: string, mat: MaterialId) => void
   onSetElementType: (id: string, type: ElementType) => void
   onSetDrawerConfig: (id: string, config: DrawerConfig) => void
+  onAddAccessory: (nodeId: string, type: AccessoryType) => void
+  onRemoveAccessory: (nodeId: string, accessoryId: string) => void
 }
 
 const ELEMENT_TYPES: ElementType[] = ['void', 'drawer', 'hanging-space']
@@ -58,6 +61,8 @@ export default function Sidebar({
   onSetMaterial,
   onSetElementType,
   onSetDrawerConfig,
+  onAddAccessory,
+  onRemoveAccessory,
 }: Props) {
   const isVoid = !selectedNode?.splitAxis
   const isLocked = selectedNode?.locked ?? false
@@ -171,6 +176,37 @@ export default function Sidebar({
             />
           </label>
         </div>
+      )}
+
+      {selectedId && (
+        <section className="border-t border-white/10 p-3">
+          <h3 className="mb-2 text-xs uppercase tracking-wide text-white/40">Accessories</h3>
+          <div className="mb-2 flex flex-wrap gap-1">
+            {(['door', 'drawer-front', 'pull', 'hinge'] as AccessoryType[]).map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => onAddAccessory(selectedId, type)}
+                className="rounded bg-white/10 px-2 py-0.5 text-xs text-white/70 hover:bg-white/20"
+              >
+                + {type}
+              </button>
+            ))}
+          </div>
+          {(selectedNode?.accessories ?? []).map((acc) => (
+            <div key={acc.id} className="flex items-center justify-between py-0.5 text-xs text-white/60">
+              <span>{acc.label ?? acc.type}</span>
+              <button
+                type="button"
+                onClick={() => onRemoveAccessory(selectedId, acc.id)}
+                aria-label={`Remove ${acc.label ?? acc.type}`}
+                className="text-white/30 hover:text-white/70"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </section>
       )}
     </aside>
   )

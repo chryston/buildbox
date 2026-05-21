@@ -39,4 +39,15 @@ describe('useStore temporal history', () => {
     expect(useStore.getState().projects).toHaveLength(1)
     expect(useStore.getState().activeProjectId).toBe(onlyProjectId)
   })
+
+  it('adds and removes accessories on the selected node', async () => {
+    const { useStore } = await import('./store')
+
+    const rootId = useStore.getState().projects[0]!.root.id
+    useStore.getState().addAccessory(rootId, { id: 'a1', type: 'door' })
+    expect(useStore.getState().projects[0]!.root.accessories).toEqual([{ id: 'a1', type: 'door' }])
+
+    useStore.getState().removeAccessory(rootId, 'a1')
+    expect(useStore.getState().projects[0]!.root.accessories).toEqual([])
+  })
 })

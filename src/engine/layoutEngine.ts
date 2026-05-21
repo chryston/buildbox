@@ -1,5 +1,4 @@
 import type {
-  Accessory,
   CabinetNode,
   Design,
   LayoutDivider,
@@ -70,7 +69,7 @@ export function computeLayout(design: Design): LayoutResult {
         elementType: node.elementType ?? 'void',
         drawerConfig: node.drawerConfig,
         material,
-        accessories: [] as Accessory[],
+        accessories: node.accessories ?? [],
       })
       return
     }

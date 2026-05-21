@@ -142,3 +142,22 @@ describe('computeCutList – drawer box', () => {
     expect(drawerBox).toBeDefined()
   })
 })
+
+describe('computeCutList – accessories', () => {
+  it('adds door and drawer front entries from void accessories', () => {
+    const design = bareDesign()
+    design.root = {
+      id: 'root',
+      splitAxis: 'vertical',
+      children: [
+        { id: 'left', accessories: [{ id: 'a1', type: 'door' }] },
+        { id: 'right', accessories: [{ id: 'a2', type: 'drawer-front' }] },
+      ],
+    }
+
+    const entries = computeCutList(design)
+
+    expect(entries.find(e => e.label === 'Door panel')?.qty).toBe(1)
+    expect(entries.find(e => e.label === 'Drawer front')?.qty).toBe(1)
+  })
+})

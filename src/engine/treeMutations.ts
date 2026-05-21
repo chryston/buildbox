@@ -74,7 +74,7 @@ export function setDrawerConfig(root: CabinetNode, id: string, cfg: DrawerConfig
   return mapNode(root, (node) => (node.id === id ? { ...node, drawerConfig: cfg } : node))
 }
 
-function mapNode(node: CabinetNode, fn: (n: CabinetNode) => CabinetNode): CabinetNode {
+export function mapNode(node: CabinetNode, fn: (n: CabinetNode) => CabinetNode): CabinetNode {
   const mapped = fn(node)
   if (!mapped.children) return mapped
 

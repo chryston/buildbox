@@ -4,8 +4,9 @@ import { immer } from 'zustand/middleware/immer'
 import { shallow } from 'zustand/shallow'
 import { temporal } from 'zundo'
 import { nanoid } from 'nanoid'
-import type { Design, GlobalSettings, MaterialId, DrawerConfig, UIState, ElementType } from '../types'
+import type { Accessory, Design, GlobalSettings, MaterialId, DrawerConfig, UIState, ElementType } from '../types'
 import { addShelf, addDivider, deleteBoard, setNodeSize, setLocked, setMaterial, setSplitRatio, unlockNode, setElementType as treeMutSetElementType, setDrawerConfig as treeMutSetDrawerConfig } from '../engine/treeMutations'
+import { addAccessory as addAccessoryFn, removeAccessory as removeAccessoryFn } from '../engine/accessories'
 
 interface PersistedState {
   projects: Design[]
@@ -33,7 +34,8 @@ interface StoreState extends PersistedState, UIState {
   setElementType: (nodeId: string, et: ElementType) => void
   setDrawerConfig: (nodeId: string, config: DrawerConfig) => void
   commitDrag: (parentNodeId: string, ratio: number) => void
-  // NOTE: addAccessory / removeAccessory added in Task 17
+  addAccessory: (nodeId: string, accessory: Accessory) => void
+  removeAccessory: (nodeId: string, accessoryId: string) => void
 
   // UI (not persisted)
   setSelectedId: (id: string | null) => void
@@ -157,10 +159,20 @@ export const useStore = create<StoreState>()(
           }))
         }),
 
+        addAccessory: (nodeId, accessory) => set((draft) => {
+          const design = activeDesign(draft)
+          if (!design) return
+          design.root = addAccessoryFn(design.root, nodeId, accessory)
+        }),
+
+        removeAccessory: (nodeId, accessoryId) => set((draft) => {
+          const design = activeDesign(draft)
+          if (!design) return
+          design.root = removeAccessoryFn(design.root, nodeId, accessoryId)
+        }),
+
         setSelectedId: (id) => set(s => { s.selectedId = id }),
         setSnapGrid: (mm) => set(s => { s.snapGrid = mm }),
-
-        // NOTE: addAccessory / removeAccessory added in Task 17
       })),
       {
         name: 'buildbox-store',

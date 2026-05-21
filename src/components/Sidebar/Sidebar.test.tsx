@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import Sidebar from './Sidebar'
-import type { CabinetNode } from '../../types'
+import type { AccessoryType, CabinetNode } from '../../types'
 
 const baseProps = {
   selectedId: 'v1',
@@ -13,6 +13,8 @@ const baseProps = {
   onSetMaterial: vi.fn(),
   onSetElementType: vi.fn(),
   onSetDrawerConfig: vi.fn(),
+  onAddAccessory: vi.fn(),
+  onRemoveAccessory: vi.fn(),
 }
 
 describe('Sidebar', () => {
@@ -66,5 +68,29 @@ describe('Sidebar', () => {
       slideType: 'side-mount',
       reveal: 1.5,
     })
+  })
+
+  it('shows accessory actions and removal controls for selected node', () => {
+    const onAddAccessory = vi.fn()
+    const onRemoveAccessory = vi.fn()
+
+    render(
+      <Sidebar
+        {...baseProps}
+        selectedNode={{
+          id: 'v1',
+          elementType: 'void',
+          accessories: [{ id: 'a1', type: 'door', label: 'Main door' }],
+        }}
+        onAddAccessory={onAddAccessory}
+        onRemoveAccessory={onRemoveAccessory}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '+ door' }))
+    expect(onAddAccessory).toHaveBeenCalledWith('v1', 'door' satisfies AccessoryType)
+
+    fireEvent.click(screen.getByRole('button', { name: /remove main door/i }))
+    expect(onRemoveAccessory).toHaveBeenCalledWith('v1', 'a1')
   })
 })

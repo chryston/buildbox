@@ -30,6 +30,8 @@ export default function App() {
   const storeMaterial = useStore((state) => state.setMaterial)
   const storeDrawerConfig = useStore((state) => state.setDrawerConfig)
   const storeSetElementType = useStore((state) => state.setElementType)
+  const storeAddAccessory = useStore((state) => state.addAccessory)
+  const storeRemoveAccessory = useStore((state) => state.removeAccessory)
   const selectedId = useStore((state) => state.selectedId)
 
   const svgRef = useRef<SVGSVGElement>(null)
@@ -122,6 +124,8 @@ export default function App() {
           onSetMaterial={storeMaterial}
           onSetElementType={storeSetElementType}
           onSetDrawerConfig={storeDrawerConfig}
+          onAddAccessory={(nodeId, type) => storeAddAccessory(nodeId, { id: crypto.randomUUID(), type })}
+          onRemoveAccessory={storeRemoveAccessory}
         />
         <div className="flex w-72 flex-col overflow-y-auto border-l border-white/10 bg-panel">
           <details open className="p-2">
