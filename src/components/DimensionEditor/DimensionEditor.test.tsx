@@ -36,6 +36,25 @@ describe('DimensionEditor', () => {
     expect(onCommit).toHaveBeenCalledWith(200)
   })
 
+  it('calls onCommit exactly once when Enter pressed (not again on blur)', () => {
+    const onCommit = vi.fn()
+    render(
+      <DimensionEditor
+        anchor={anchor}
+        currentMm={373}
+        unit="mm"
+        onCommit={onCommit}
+        onClose={vi.fn()}
+      />,
+    )
+    const input = screen.getByRole('spinbutton')
+    fireEvent.change(input, { target: { value: '200' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    fireEvent.blur(input)
+    expect(onCommit).toHaveBeenCalledTimes(1)
+    expect(onCommit).toHaveBeenCalledWith(200)
+  })
+
   it('calls onClose when Escape pressed', () => {
     const onClose = vi.fn()
     render(

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import type { RefObject } from 'react'
 import { formatDisplay } from '../../engine/unitConversion'
 import type { LayoutVoid, Unit } from '../../types'
 import DimensionEditor from '../DimensionEditor/DimensionEditor'
@@ -7,7 +6,6 @@ import DimensionEditor from '../DimensionEditor/DimensionEditor'
 interface Props {
   voids: LayoutVoid[]
   unit: Unit
-  svgRef: RefObject<SVGSVGElement | null>
   onCommitSize: (nodeId: string, mm: number, axis: 'w' | 'h') => void
   onUnlockNode?: (nodeId: string) => void
   lockedNodeIds?: string[]
@@ -76,9 +74,14 @@ export default function DimensionLabels(props: Props) {
 
             {lockedNodeIds.includes(v.nodeId) && (
               <g
+                role="button"
+                tabIndex={0}
                 transform={`translate(${v.x + v.w - 18}, ${v.y + 8})`}
                 cursor={onUnlockNode ? 'pointer' : 'default'}
                 onClick={() => onUnlockNode?.(v.nodeId)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') onUnlockNode?.(v.nodeId)
+                }}
                 aria-label="Unlock section"
               >
                 <path d="M3 7V5a3 3 0 1 1 6 0v2" fill="none" stroke="#fbbf24" strokeWidth={1.5} />

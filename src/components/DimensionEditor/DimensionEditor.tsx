@@ -20,6 +20,7 @@ interface Props {
 
 export default function DimensionEditor({ anchor, currentMm, unit, onCommit, onClose }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const committed = useRef(false)
   const [value, setValue] = useState(String(Math.round(fromMm(currentMm, unit))))
 
   useEffect(() => {
@@ -27,6 +28,9 @@ export default function DimensionEditor({ anchor, currentMm, unit, onCommit, onC
   }, [])
 
   function commit() {
+    if (committed.current) return
+    committed.current = true
+
     const mm = toMm(Number(value), unit)
 
     if (!Number.isNaN(mm) && mm > 0) {

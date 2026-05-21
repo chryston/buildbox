@@ -91,7 +91,6 @@ export default function CabinetCanvas({ design, svgRef }: Props) {
           <DimensionLabels
             voids={layout.voids}
             unit={design.globalSettings.unit}
-            svgRef={svgRef}
             onCommitSize={handleCommitSize}
           />
           <DragHandles
