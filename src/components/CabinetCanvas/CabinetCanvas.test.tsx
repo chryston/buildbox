@@ -1,7 +1,8 @@
 import { createRef } from 'react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
-import type { Design } from '../../types'
+import type { Design, LayoutResult } from '../../types'
+import { computeLayout } from '../../engine/layoutEngine'
 import CabinetCanvas from './CabinetCanvas'
 
 function createDesign(): Design {
@@ -26,7 +27,17 @@ function createDesign(): Design {
 }
 
 function renderCabinetCanvas() {
-  const result = render(<CabinetCanvas design={createDesign()} svgRef={createRef<SVGSVGElement>()} />)
+  const design = createDesign()
+  const layout: LayoutResult = computeLayout(design)
+  const result = render(
+    <CabinetCanvas
+      design={design}
+      layout={layout}
+      svgRef={createRef<SVGSVGElement>()}
+      overConstrainedIds={[]}
+      onUnlockNode={() => {}}
+    />
+  )
   const svg = screen.getByTestId('cabinet-canvas') as unknown as SVGSVGElement
   const getViewport = () => {
     const viewport = result.container.querySelector('svg > g')

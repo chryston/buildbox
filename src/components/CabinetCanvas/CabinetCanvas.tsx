@@ -1,20 +1,22 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import type { RefObject } from 'react'
-import { computeLayout } from '../../engine/layoutEngine'
 import { useStore } from '../../store/store'
-import type { Design } from '../../types'
+import type { Design, LayoutResult } from '../../types'
 import CanvasLayers from './CanvasLayers'
 import DragHandles from './DragHandles'
 import DimensionLabels from './DimensionLabels'
 
 interface Props {
   design: Design
+  layout: LayoutResult
   svgRef: RefObject<SVGSVGElement | null>
+  overConstrainedIds: string[]
+  onUnlockNode: (nodeId: string) => void
 }
 
 const PADDING = 40
 
-export default function CabinetCanvas({ design, svgRef }: Props) {
+export default function CabinetCanvas({ design, layout, svgRef, overConstrainedIds, onUnlockNode }: Props) {
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const isPanning = useRef(false)
@@ -23,12 +25,6 @@ export default function CabinetCanvas({ design, svgRef }: Props) {
   const setSelectedId = useStore((s) => s.setSelectedId)
   const storeSetNodeSize = useStore((s) => s.setNodeSize)
   const snapGrid = useStore((s) => s.snapGrid)
-
-  const layout = useMemo(
-    () => computeLayout(design),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [design.root, design.globalSettings],
-  )
 
   const { width: cW, height: cH } = design.globalSettings
   const viewBox = `${-PADDING} ${-PADDING} ${cW + 2 * PADDING} ${cH + 2 * PADDING}`
@@ -92,10 +88,11 @@ export default function CabinetCanvas({ design, svgRef }: Props) {
             voids={layout.voids}
             unit={design.globalSettings.unit}
             onCommitSize={handleCommitSize}
+            lockedNodeIds={overConstrainedIds}
+            onUnlockNode={onUnlockNode}
           />
           <DragHandles
             dividers={layout.dividers}
-            voids={layout.voids}
             snapGrid={snapGrid}
             svgRef={svgRef}
             zoom={zoom}

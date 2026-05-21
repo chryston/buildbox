@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import CabinetCanvas from './components/CabinetCanvas/CabinetCanvas'
 import CutListPanel from './components/CutListPanel/CutListPanel'
+import ErrorBoundary from './components/ErrorBoundary'
 import ProjectTabs from './components/ProjectTabs/ProjectTabs'
 import Sidebar from './components/Sidebar/Sidebar'
 import Toolbar from './components/Toolbar/Toolbar'
@@ -39,9 +40,14 @@ export default function App() {
     () => (selectedId && activeDesign ? findNode(activeDesign.root, selectedId) ?? null : null),
     [selectedId, activeDesign],
   )
-  const cutList = activeDesign ? computeCutList(activeDesign) : []
-  // TODO: pass layout result down to CabinetCanvas to avoid computing twice per render
-  const layout = activeDesign ? computeLayout(activeDesign) : null
+  const cutList = useMemo(
+    () => (activeDesign ? computeCutList(activeDesign) : []),
+    [activeDesign]
+  )
+  const layout = useMemo(
+    () => (activeDesign ? computeLayout(activeDesign) : null),
+    [activeDesign]
+  )
   const overConstrainedIds = layout?.overConstrainedIds ?? []
 
   useEffect(() => {
@@ -59,7 +65,11 @@ export default function App() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      ) return
 
       const key = e.key.toLowerCase()
 
@@ -83,6 +93,7 @@ export default function App() {
   }
 
   return (
+    <ErrorBoundary>
     <div className="min-h-screen bg-surface text-white flex flex-col">
       <Toolbar
         settings={activeDesign.globalSettings}
@@ -110,7 +121,15 @@ export default function App() {
         </div>
       )}
       <main className="flex flex-1 overflow-hidden">
-        {activeDesign && <CabinetCanvas design={activeDesign} svgRef={svgRef} />}
+        {activeDesign && layout && (
+          <CabinetCanvas
+            design={activeDesign}
+            layout={layout}
+            svgRef={svgRef}
+            overConstrainedIds={overConstrainedIds}
+            onUnlockNode={storeUnlockNode}
+          />
+        )}
         <Sidebar
           selectedId={selectedId}
           selectedNode={selectedNode}
@@ -137,5 +156,6 @@ export default function App() {
         </div>
       </main>
     </div>
+    </ErrorBoundary>
   )
 }

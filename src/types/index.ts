@@ -86,6 +86,8 @@ export interface LayoutDivider {
   axis: SplitAxis         // which axis this divider cuts
   material: MaterialId
   dividerId?: string      // from CabinetNode.dividers[n].id
+  childABounds: { x: number; y: number; w: number; h: number }
+  childBBounds: { x: number; y: number; w: number; h: number }
 }
 
 export interface LayoutResult {

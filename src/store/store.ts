@@ -5,7 +5,7 @@ import { shallow } from 'zustand/shallow'
 import { temporal } from 'zundo'
 import { nanoid } from 'nanoid'
 import type { Accessory, Design, GlobalSettings, MaterialId, DrawerConfig, UIState, ElementType } from '../types'
-import { addShelf, addDivider, deleteBoard, setNodeSize, setLocked, setMaterial, setSplitRatio, unlockNode, setElementType as treeMutSetElementType, setDrawerConfig as treeMutSetDrawerConfig } from '../engine/treeMutations'
+import { addShelf, addDivider, deleteBoard as deleteBoardFn, setNodeSize, setLocked, setMaterial, setSplitRatio, unlockNode, setElementType as treeMutSetElementType, setDrawerConfig as treeMutSetDrawerConfig } from '../engine/treeMutations'
 import { addAccessory as addAccessoryFn, removeAccessory as removeAccessoryFn } from '../engine/accessories'
 
 interface PersistedState {
@@ -123,8 +123,10 @@ export const useStore = create<StoreState>()(
         }),
 
         deleteBoard: (nodeId) => set(s => {
-          mutateRoot(s, d => ({ ...d, root: deleteBoard(d.root, nodeId) }))
-          s.selectedId = null
+          const d = activeDesign(s)
+          if (!d || d.root.id === nodeId) return  // cannot delete root
+          mutateRoot(s, d => ({ ...d, root: deleteBoardFn(d.root, nodeId) }))
+          if (s.selectedId === nodeId) s.selectedId = null
         }),
 
         setNodeSize: (nodeId, sizeMm) => set(s => {

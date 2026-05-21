@@ -1,16 +1,15 @@
 import { useCallback, useRef } from 'react'
-import type { LayoutDivider, LayoutVoid } from '../../types'
+import type { LayoutDivider } from '../../types'
 import { useStore } from '../../store/store'
 
 interface Props {
   dividers: LayoutDivider[]
-  voids: LayoutVoid[]
   snapGrid: number
   svgRef: React.RefObject<SVGSVGElement | null>
   zoom: number
 }
 
-export default function DragHandles({ dividers, voids, snapGrid, svgRef, zoom }: Props) {
+export default function DragHandles({ dividers, snapGrid, svgRef, zoom }: Props) {
   const commitDrag = useStore((s) => s.commitDrag)
   const dragging = useRef<{
     dividerId: string
@@ -40,20 +39,20 @@ export default function DragHandles({ dividers, voids, snapGrid, svgRef, zoom }:
   function onPointerDown(
     e: React.PointerEvent<SVGRectElement>,
     divider: LayoutDivider,
-    adjacentVoid: LayoutVoid,
-    mainVoid: LayoutVoid,
   ) {
     e.stopPropagation()
     ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
     const initialHandleX = parseFloat(e.currentTarget.getAttribute('x') ?? '0')
     const initialHandleY = parseFloat(e.currentTarget.getAttribute('y') ?? '0')
+    const mainBounds = divider.childABounds
+    const adjacentBounds = divider.childBBounds
     dragging.current = {
       dividerId: divider.nodeId,
       axis: divider.axis,
       parentNodeId: divider.parentId,
       originClientPos: divider.axis === 'horizontal' ? e.clientY : e.clientX,
-      originSizeA: divider.axis === 'horizontal' ? mainVoid.h : mainVoid.w,
-      originSizeB: divider.axis === 'horizontal' ? adjacentVoid.h : adjacentVoid.w,
+      originSizeA: divider.axis === 'horizontal' ? mainBounds.h : mainBounds.w,
+      originSizeB: divider.axis === 'horizontal' ? adjacentBounds.h : adjacentBounds.w,
       initialHandleX,
       initialHandleY,
       handle: e.currentTarget,
@@ -93,9 +92,6 @@ export default function DragHandles({ dividers, voids, snapGrid, svgRef, zoom }:
     <g data-layer="drag-handles">
       {dividers.map((d) => {
         const isHoriz = d.axis === 'horizontal'
-        const mainVoid = voids.find((v) => v.nodeId === d.childAId)
-        const adjacentVoid = voids.find((v) => v.nodeId === d.childBId)
-        if (!mainVoid || !adjacentVoid) return null
 
         const hW = isHoriz ? d.w : 12
         const hH = isHoriz ? 12 : d.h
@@ -115,7 +111,7 @@ export default function DragHandles({ dividers, voids, snapGrid, svgRef, zoom }:
             strokeWidth={1}
             cursor={isHoriz ? 'ns-resize' : 'ew-resize'}
             rx={3}
-            onPointerDown={(e) => onPointerDown(e, d, adjacentVoid, mainVoid)}
+            onPointerDown={(e) => onPointerDown(e, d)}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
           />

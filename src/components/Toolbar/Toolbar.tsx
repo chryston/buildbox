@@ -22,6 +22,46 @@ function roundDisplay(mm: number, unit: Unit): number {
   return parseFloat(value.toFixed(4))
 }
 
+interface NumFieldProps {
+  label: string
+  settingsKey: keyof GlobalSettings
+  htmlFor: string
+  settings: GlobalSettings
+  onSettingsChange: (patch: Partial<GlobalSettings>) => void
+}
+
+function NumField({ label, settingsKey, htmlFor, settings, onSettingsChange }: NumFieldProps) {
+  const unit = settings.unit
+  const displayValue = String(roundDisplay(settings[settingsKey] as number, unit))
+  const [raw, setRaw] = useState(displayValue)
+
+  useEffect(() => {
+    setRaw(displayValue)
+  }, [displayValue])
+
+  return (
+    <label htmlFor={htmlFor} className="flex items-center gap-1 text-sm text-white/80">
+      {label}
+      <input
+        id={htmlFor}
+        type="number"
+        value={raw}
+        onChange={(e) => setRaw(e.target.value)}
+        onBlur={(e) => {
+          const nextValue = parseFloat(e.target.value)
+          if (!Number.isNaN(nextValue) && nextValue > 0) {
+            onSettingsChange({ [settingsKey]: toMm(nextValue, unit) } as Partial<GlobalSettings>)
+            return
+          }
+
+          setRaw(displayValue)
+        }}
+        className="w-20 rounded border border-white/20 bg-surface px-1 py-0.5 text-right text-white"
+      />
+    </label>
+  )
+}
+
 export default function Toolbar({
   settings,
   onSettingsChange,
@@ -31,39 +71,6 @@ export default function Toolbar({
   canRedo = false,
   onRedo,
 }: Props) {
-  const unit = settings.unit
-
-  function NumField({ label, settingsKey, htmlFor }: { label: string; settingsKey: keyof GlobalSettings; htmlFor: string }) {
-    const displayValue = String(roundDisplay(settings[settingsKey] as number, unit))
-    const [raw, setRaw] = useState(displayValue)
-
-    useEffect(() => {
-      setRaw(displayValue)
-    }, [displayValue])
-
-    return (
-      <label htmlFor={htmlFor} className="flex items-center gap-1 text-sm text-white/80">
-        {label}
-        <input
-          id={htmlFor}
-          type="number"
-          value={raw}
-          onChange={(e) => setRaw(e.target.value)}
-          onBlur={(e) => {
-            const nextValue = parseFloat(e.target.value)
-            if (!Number.isNaN(nextValue) && nextValue > 0) {
-              onSettingsChange({ [settingsKey]: toMm(nextValue, unit) } as Partial<GlobalSettings>)
-              return
-            }
-
-            setRaw(displayValue)
-          }}
-          className="w-20 rounded border border-white/20 bg-surface px-1 py-0.5 text-right text-white"
-        />
-      </label>
-    )
-  }
-
   return (
     <header className="flex flex-wrap items-center gap-4 border-b border-white/10 bg-panel px-4 py-2">
       <span className="mr-2 font-bold text-accent">BuildBox</span>
@@ -82,10 +89,10 @@ export default function Toolbar({
         ))}
       </div>
 
-      <NumField label="Height" settingsKey="height" htmlFor="tb-height" />
-      <NumField label="Width" settingsKey="width" htmlFor="tb-width" />
-      <NumField label="Depth" settingsKey="depth" htmlFor="tb-depth" />
-      <NumField label="Thickness" settingsKey="thickness" htmlFor="tb-thickness" />
+      <NumField label="Height" settingsKey="height" htmlFor="tb-height" settings={settings} onSettingsChange={onSettingsChange} />
+      <NumField label="Width" settingsKey="width" htmlFor="tb-width" settings={settings} onSettingsChange={onSettingsChange} />
+      <NumField label="Depth" settingsKey="depth" htmlFor="tb-depth" settings={settings} onSettingsChange={onSettingsChange} />
+      <NumField label="Thickness" settingsKey="thickness" htmlFor="tb-thickness" settings={settings} onSettingsChange={onSettingsChange} />
 
       <div className="ml-auto flex items-center gap-2">
         <UndoRedo canUndo={canUndo} onUndo={onUndo ?? (() => {})} canRedo={canRedo} onRedo={onRedo ?? (() => {})} />

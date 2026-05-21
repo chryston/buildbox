@@ -103,6 +103,8 @@ export function computeLayout(design: Design): LayoutResult {
         axis,
         material: dividerMaterial,
         dividerId: dividerConfig?.id,
+        childABounds: { x, y, w, h: sizeA },
+        childBBounds: { x, y: dividerY + thickness, w, h: sizeB },
       })
 
       layoutNode(childB, x, dividerY + thickness, w, sizeB, material, axis)
@@ -124,6 +126,8 @@ export function computeLayout(design: Design): LayoutResult {
       axis,
       material: dividerMaterial,
       dividerId: dividerConfig?.id,
+      childABounds: { x, y, w: sizeA, h },
+      childBBounds: { x: dividerX + thickness, y, w: sizeB, h },
     })
 
     layoutNode(childB, dividerX + thickness, y, sizeB, h, material, axis)
@@ -178,7 +182,7 @@ function distributeTwo(
     }
   }
 
-  if (parent?.splitRatio != null) {
+  if (parent?.splitRatio != null && !Number.isNaN(parent.splitRatio)) {
     const sizeA = Math.round(available * parent.splitRatio)
     return [sizeA, available - sizeA, false]
   }

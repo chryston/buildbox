@@ -1,7 +1,7 @@
 import { createRef } from 'react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
-import type { Design, LayoutDivider, LayoutVoid } from '../../types'
+import type { Design, LayoutDivider } from '../../types'
 import { useStore } from '../../store/store'
 import DragHandles from './DragHandles'
 
@@ -43,28 +43,19 @@ describe('DragHandles', () => {
 
   function renderDragHandles({
     divider,
-    voids,
     snapGrid = 1,
     zoom = 1,
   }: {
     divider: LayoutDivider & { parentId: string }
-    voids: LayoutVoid[]
     snapGrid?: number
     zoom?: number
   }) {
     const svgRef = createRef<SVGSVGElement>()
     const setPointerCapture = vi.fn()
-    const AnyDragHandles = DragHandles as unknown as React.ComponentType<{
-      dividers: Array<LayoutDivider & { parentId: string }>
-      voids: LayoutVoid[]
-      snapGrid: number
-      svgRef: React.RefObject<SVGSVGElement | null>
-      zoom: number
-    }>
 
     const { container } = render(
       <svg ref={svgRef}>
-        <AnyDragHandles dividers={[divider]} voids={voids} snapGrid={snapGrid} svgRef={svgRef} zoom={zoom} />
+        <DragHandles dividers={[divider]} snapGrid={snapGrid} svgRef={svgRef} zoom={zoom} />
       </svg>,
     )
 
@@ -103,13 +94,11 @@ describe('DragHandles', () => {
       h: 18,
       axis: 'horizontal',
       material: 'oak',
+      childABounds: { x: 0, y: 0, w: 200, h: 100 },
+      childBBounds: { x: 0, y: 118, w: 200, h: 100 },
     } as LayoutDivider & { parentId: string }
-    const voids: LayoutVoid[] = [
-      { nodeId: 'top', x: 0, y: 0, w: 200, h: 100, elementType: 'void', material: 'oak', accessories: [] },
-      { nodeId: 'bottom', x: 0, y: 118, w: 200, h: 100, elementType: 'void', material: 'oak', accessories: [] },
-    ]
 
-    const { handle } = renderDragHandles({ divider, voids })
+    const { handle } = renderDragHandles({ divider })
 
     fireEvent.pointerDown(handle, { pointerId: 1, clientY: 0 })
     fireEvent.pointerMove(handle, { pointerId: 1, clientY: 10 })
@@ -135,13 +124,11 @@ describe('DragHandles', () => {
       h: 18,
       axis: 'horizontal',
       material: 'oak',
+      childABounds: { x: 0, y: 0, w: 200, h: 100 },
+      childBBounds: { x: 0, y: 118, w: 200, h: 100 },
     } as LayoutDivider & { parentId: string }
-    const voids: LayoutVoid[] = [
-      { nodeId: 'top', x: 0, y: 0, w: 200, h: 100, elementType: 'void', material: 'oak', accessories: [] },
-      { nodeId: 'bottom', x: 0, y: 118, w: 200, h: 100, elementType: 'void', material: 'oak', accessories: [] },
-    ]
 
-    const { handle } = renderDragHandles({ divider, voids, zoom: 2 })
+    const { handle } = renderDragHandles({ divider, zoom: 2 })
 
     fireEvent.pointerDown(handle, { pointerId: 1, clientY: 0 })
     fireEvent.pointerUp(handle, { pointerId: 1, clientY: 20 })
@@ -163,13 +150,11 @@ describe('DragHandles', () => {
       h: 18,
       axis: 'horizontal',
       material: 'oak',
+      childABounds: { x: 0, y: 0, w: 200, h: 100 },
+      childBBounds: { x: 0, y: 118, w: 200, h: 100 },
     } as LayoutDivider & { parentId: string }
-    const voids: LayoutVoid[] = [
-      { nodeId: 'top', x: 0, y: 0, w: 200, h: 100, elementType: 'void', material: 'oak', accessories: [] },
-      { nodeId: 'bottom', x: 0, y: 118, w: 200, h: 100, elementType: 'void', material: 'oak', accessories: [] },
-    ]
 
-    const { handle } = renderDragHandles({ divider, voids, snapGrid: 10 })
+    const { handle } = renderDragHandles({ divider, snapGrid: 10 })
 
     fireEvent.pointerDown(handle, { pointerId: 1, clientY: 0 })
     fireEvent.pointerUp(handle, { pointerId: 1, clientY: 13 })
@@ -191,13 +176,11 @@ describe('DragHandles', () => {
       h: 18,
       axis: 'horizontal',
       material: 'oak',
+      childABounds: { x: 0, y: 0, w: 200, h: 100 },
+      childBBounds: { x: 0, y: 118, w: 200, h: 100 },
     } as LayoutDivider & { parentId: string }
-    const voids: LayoutVoid[] = [
-      { nodeId: 'top', x: 0, y: 0, w: 200, h: 100, elementType: 'void', material: 'oak', accessories: [] },
-      { nodeId: 'bottom', x: 0, y: 118, w: 200, h: 100, elementType: 'void', material: 'oak', accessories: [] },
-    ]
 
-    const { handle } = renderDragHandles({ divider, voids })
+    const { handle } = renderDragHandles({ divider })
 
     fireEvent.pointerDown(handle, { pointerId: 1, clientY: 0 })
     fireEvent.pointerUp(handle, { pointerId: 1, clientY: 20 })
