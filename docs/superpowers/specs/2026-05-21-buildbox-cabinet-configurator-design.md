@@ -134,16 +134,17 @@ Returns a flat list of positioned rectangles (voids and dividers) in mm, relativ
 
 ### 4.2 Locking Cascade
 
-When a user edits a void's dimension directly:
+When a user edits a void's dimension directly, that node becomes `locked = true, fixedSize = newValue`. The remaining space is distributed among **unlocked** siblings.
 
 | Case | Rule |
 |---|---|
-| Middle vertical division (shelf gap) changed | Sibling **above** is locked; unlocked siblings below absorb |
-| Middle horizontal division (column) changed | Sibling to the **right** is locked; unlocked siblings to the left absorb |
-| **Topmost** vertical division changed | **Bottom** unlocked sibling absorbs |
-| **Rightmost** horizontal division changed | **Leftmost** unlocked sibling absorbs |
+| Middle vertical division (shelf gap) changed | Edited node locked; all unlocked siblings redistribute to absorb |
+| Middle horizontal division (column) changed | Edited node locked; all unlocked siblings redistribute to absorb |
+| **Topmost** vertical division changed | Edited node locked; unlocked siblings below absorb equally |
+| **Rightmost** horizontal division changed | Edited node locked; unlocked siblings to the left absorb equally |
+| **All siblings already locked** | Over-constraint path (see §4.3) |
 
-"Absorb" means: the absorbing node has its `locked` flag cleared and `fixedSize` removed; `computeLayout` then redistributes freely.
+"Absorb" means all unlocked siblings in the same container share the remaining space equally. If multiple unlocked siblings exist, they all participate — not just the nearest neighbour.
 
 ### 4.3 Over-constraint Handling
 
@@ -250,7 +251,7 @@ Each divider has a transparent drag-handle strip (±8px around its centre line).
 2. `pointermove` → compute delta in mm, apply snapping, preview new positions immediately
 3. `pointerup` → commit final positions to store, recompute layout
 
-The nodes on either side of the dragged divider are updated: the node being shrunk has its size reduced; the node being grown has its `locked` flag cleared (drag = free resize, not explicit lock).
+The nodes on either side of the dragged divider are both explicitly resized: both have their `fixedSize` updated to the new computed size and `locked = true`. Since the total available space is preserved by the drag (the two adjacent nodes' sizes always sum to the same total), no other siblings need to absorb.
 
 ### 6.3 Snapping
 
@@ -404,9 +405,9 @@ Global default is set in `GlobalSettings.defaultMaterial`. Per-panel overrides a
 ### 11.3 Integration Tests
 
 **Full user flow:**
-1. Create project → set 600×800×500mm, thickness 18mm
-2. Add shelf → verify two equal voids (382mm each)
-3. Edit top void to 200mm → verify bottom void autoscales to 564mm
+1. Create project → set width=600, height=800, depth=500mm, thickness=18mm
+2. Add shelf → internal height = 764mm; shelf = 18mm; each void = (764−18)/2 = **373mm**
+3. Edit top void to 200mm → bottom void autoscales to 764−18−200 = **546mm**
 4. Export SVG → verify SVG blob contains correct `<rect>` count
 
 ### 11.4 File Layout
