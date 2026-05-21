@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import CabinetCanvas from './components/CabinetCanvas/CabinetCanvas'
 import CutListPanel from './components/CutListPanel/CutListPanel'
 import ProjectTabs from './components/ProjectTabs/ProjectTabs'
@@ -15,6 +15,8 @@ export default function App() {
   const projects = useStore((state) => state.projects)
   const activeProjectId = useStore((state) => state.activeProjectId)
   const activeDesign = projects.find((project) => project.id === activeProjectId) ?? projects[0]
+  const [canUndo, setCanUndo] = useState(false)
+  const [canRedo, setCanRedo] = useState(false)
 
   const createProject = useStore((state) => state.createProject)
   const deleteProject = useStore((state) => state.deleteProject)
@@ -36,8 +38,41 @@ export default function App() {
     [selectedId, activeDesign],
   )
   const cutList = activeDesign ? computeCutList(activeDesign) : []
+  // TODO: pass layout result down to CabinetCanvas to avoid computing twice per render
   const layout = activeDesign ? computeLayout(activeDesign) : null
   const overConstrainedIds = layout?.overConstrainedIds ?? []
+
+  useEffect(() => {
+    const syncTemporalState = () => {
+      const state = useStore.temporal.getState()
+      setCanUndo(state.pastStates.length > 0)
+      setCanRedo(state.futureStates.length > 0)
+    }
+
+    syncTemporalState()
+    const unsubscribe = useStore.temporal.subscribe(syncTemporalState)
+
+    return unsubscribe
+  }, [])
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase()
+
+      if ((e.ctrlKey || e.metaKey) && key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        useStore.temporal.getState().undo()
+      }
+
+      if ((e.ctrlKey || e.metaKey) && (key === 'y' || (key === 'z' && e.shiftKey))) {
+        e.preventDefault()
+        useStore.temporal.getState().redo()
+      }
+    }
+
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [])
 
   if (!activeDesign) {
     return <div className="min-h-screen bg-surface text-white">BuildBox</div>
@@ -48,6 +83,10 @@ export default function App() {
       <Toolbar
         settings={activeDesign.globalSettings}
         onSettingsChange={updateSettings}
+        canUndo={canUndo}
+        onUndo={() => useStore.temporal.getState().undo()}
+        canRedo={canRedo}
+        onRedo={() => useStore.temporal.getState().redo()}
         onExport={() => {
           if (svgRef.current) {
             downloadSVG(svgRef.current, activeDesign.name)
