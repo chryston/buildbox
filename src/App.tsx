@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import CabinetCanvas from './components/CabinetCanvas/CabinetCanvas'
 import ProjectTabs from './components/ProjectTabs/ProjectTabs'
 import Toolbar from './components/Toolbar/Toolbar'
 import { useStore } from './store/store'
@@ -35,9 +36,7 @@ export default function App() {
         onDelete={deleteProject}
       />
       <main className="flex flex-1 overflow-hidden">
-        <div className="flex-1 flex items-center justify-center text-sm text-white/30">
-          Canvas coming in Task 8
-        </div>
+        {activeDesign && <CabinetCanvas design={activeDesign} svgRef={svgRef} />}
       </main>
     </div>
   )
