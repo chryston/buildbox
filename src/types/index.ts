@@ -79,6 +79,7 @@ export interface LayoutVoid {
 
 export interface LayoutDivider {
   nodeId: string          // synthesised ID for the divider rect
+  parentId: string        // CabinetNode ID of the split parent
   childAId: string        // actual CabinetNode ID of child A
   childBId: string        // actual CabinetNode ID of child B
   x: number; y: number; w: number; h: number

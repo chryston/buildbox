@@ -55,6 +55,12 @@ describe('computeLayout – one shelf', () => {
     expect(shelves).toHaveLength(1)
     expect(shelves[0].h).toBe(18)
   })
+
+  it('tracks the split parent id on the divider', () => {
+    const result = computeLayout(makeDesign(root))
+    const shelves = result.dividers.filter(d => d.axis === 'horizontal')
+    expect(shelves[0]).toMatchObject({ parentId: 'root' })
+  })
 })
 
 describe('computeLayout – locked void', () => {

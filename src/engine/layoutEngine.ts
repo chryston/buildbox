@@ -94,6 +94,7 @@ export function computeLayout(design: Design): LayoutResult {
       const dividerY = y + sizeA
       dividers.push({
         nodeId: `${childA.id}-shelf`,
+        parentId: node.id,
         childAId: childA.id,
         childBId: childB.id,
         x,
@@ -114,6 +115,7 @@ export function computeLayout(design: Design): LayoutResult {
     const dividerX = x + sizeA
     dividers.push({
       nodeId: `${childA.id}-divider`,
+      parentId: node.id,
       childAId: childA.id,
       childBId: childB.id,
       x: dividerX,

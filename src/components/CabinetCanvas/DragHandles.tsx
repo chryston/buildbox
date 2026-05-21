@@ -45,7 +45,7 @@ export default function DragHandles({ dividers, voids, snapGrid, svgRef }: Props
     dragging.current = {
       dividerId: divider.nodeId,
       axis: divider.axis,
-      parentNodeId: divider.childAId,
+      parentNodeId: divider.parentId,
       originClientPos: divider.axis === 'horizontal' ? e.clientY : e.clientX,
       originSizeA: divider.axis === 'horizontal' ? mainVoid.h : mainVoid.w,
       originSizeB: divider.axis === 'horizontal' ? adjacentVoid.h : adjacentVoid.w,
