@@ -1,8 +1,10 @@
 import { useMemo, useRef } from 'react'
 import CabinetCanvas from './components/CabinetCanvas/CabinetCanvas'
+import CutListPanel from './components/CutListPanel/CutListPanel'
 import ProjectTabs from './components/ProjectTabs/ProjectTabs'
 import Sidebar from './components/Sidebar/Sidebar'
 import Toolbar from './components/Toolbar/Toolbar'
+import { computeCutList } from './engine/cutList'
 import { findNode } from './engine/treeMutations'
 import { useStore } from './store/store'
 
@@ -29,6 +31,7 @@ export default function App() {
     () => (selectedId && activeDesign ? findNode(activeDesign.root, selectedId) ?? null : null),
     [selectedId, activeDesign],
   )
+  const cutList = activeDesign ? computeCutList(activeDesign) : []
 
   if (!activeDesign) {
     return <div className="min-h-screen bg-surface text-white">BuildBox</div>
@@ -62,6 +65,14 @@ export default function App() {
           onSetElementType={storeSetElementType}
           onSetDrawerConfig={storeDrawerConfig}
         />
+        <div className="flex w-72 flex-col overflow-y-auto border-l border-white/10 bg-panel">
+          <details open className="p-2">
+            <summary className="cursor-pointer select-none text-sm font-semibold text-white/60">
+              Cut List ({cutList.length} parts)
+            </summary>
+            <CutListPanel entries={cutList} />
+          </details>
+        </div>
       </main>
     </div>
   )

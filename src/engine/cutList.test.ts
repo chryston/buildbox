@@ -1,0 +1,81 @@
+import { describe, it, expect } from 'vitest'
+import { computeCutList } from './cutList'
+import type { Design } from '../types'
+
+function bareDesign(): Design {
+  return {
+    id: 'd1', name: 'Test',
+    root: { id: 'root' },
+    globalSettings: {
+      unit: 'mm', height: 800, width: 600, depth: 500,
+      thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak',
+    },
+  }
+}
+
+describe('computeCutList – bare cabinet', () => {
+  it('produces 2 side panels, 1 top, 1 bottom', () => {
+    const entries = computeCutList(bareDesign())
+    const labels = entries.map(e => e.label)
+    expect(labels).toContain('Top panel')
+    expect(labels).toContain('Bottom panel')
+    const sides = entries.filter(e => e.label === 'Side panel')
+    expect(sides[0].qty).toBe(2)
+  })
+
+  it('side panels are height  depth', () => {
+    const entries = computeCutList(bareDesign())
+    const side = entries.find(e => e.label === 'Side panel')!
+    expect(side.width).toBe(800)
+    expect(side.height).toBe(500)
+    expect(side.depth).toBe(18)
+  })
+
+  it('top/bottom panels are (width - 2×thickness) × depth', () => {
+    const entries = computeCutList(bareDesign())
+    const top = entries.find(e => e.label === 'Top panel')!
+    expect(top.width).toBe(564)
+    expect(top.height).toBe(500)
+  })
+})
+
+describe('computeCutList – with shelf', () => {
+  it('adds 1 shelf entry', () => {
+    const design = bareDesign()
+    design.root = {
+      id: 'root',
+      splitAxis: 'horizontal',
+      children: [{ id: 'a' }, { id: 'b' }],
+    }
+    const entries = computeCutList(design)
+    const shelves = entries.filter(e => e.label === 'Shelf')
+    expect(shelves[0].qty).toBe(1)
+    expect(shelves[0].width).toBe(564)
+  })
+})
+
+describe('computeCutList – with toe-kick', () => {
+  it('adds toe-kick board to cut list', () => {
+    const design = bareDesign()
+    design.globalSettings.toeKick = { height: 100, setback: 20 }
+    const entries = computeCutList(design)
+    const tk = entries.find(e => e.label === 'Toe-kick board')
+    expect(tk).toBeDefined()
+    expect(tk!.width).toBe(600 - 2 * 20)
+    expect(tk!.height).toBe(100)
+  })
+})
+
+describe('computeCutList – drawer box', () => {
+  it('adds drawer box dimensions for side-mount drawer', () => {
+    const design = bareDesign()
+    design.root = {
+      id: 'root',
+      elementType: 'drawer',
+      drawerConfig: { slideType: 'side-mount', reveal: 3 },
+    }
+    const entries = computeCutList(design)
+    const drawerBox = entries.find(e => e.label === 'Drawer box (side-mount)')
+    expect(drawerBox).toBeDefined()
+  })
+})
