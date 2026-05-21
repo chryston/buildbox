@@ -4,6 +4,7 @@ import { computeLayout } from '../../engine/layoutEngine'
 import { useStore } from '../../store/store'
 import type { Design } from '../../types'
 import CanvasLayers from './CanvasLayers'
+import DragHandles from './DragHandles'
 import DimensionLabels from './DimensionLabels'
 
 interface Props {
@@ -21,6 +22,7 @@ export default function CabinetCanvas({ design, svgRef }: Props) {
   const selectedId = useStore((s) => s.selectedId)
   const setSelectedId = useStore((s) => s.setSelectedId)
   const storeSetNodeSize = useStore((s) => s.setNodeSize)
+  const snapGrid = useStore((s) => s.snapGrid)
 
   const layout = useMemo(
     () => computeLayout(design),
@@ -91,6 +93,12 @@ export default function CabinetCanvas({ design, svgRef }: Props) {
             unit={design.globalSettings.unit}
             svgRef={svgRef}
             onCommitSize={handleCommitSize}
+          />
+          <DragHandles
+            dividers={layout.dividers}
+            voids={layout.voids}
+            snapGrid={snapGrid}
+            svgRef={svgRef}
           />
         </g>
       </svg>
