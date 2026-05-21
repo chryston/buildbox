@@ -4,8 +4,11 @@ import CutListPanel from './components/CutListPanel/CutListPanel'
 import ProjectTabs from './components/ProjectTabs/ProjectTabs'
 import Sidebar from './components/Sidebar/Sidebar'
 import Toolbar from './components/Toolbar/Toolbar'
+import WarningBanner from './components/WarningBanner/WarningBanner'
 import { computeCutList } from './engine/cutList'
+import { computeLayout } from './engine/layoutEngine'
 import { findNode } from './engine/treeMutations'
+import { downloadSVG } from './utils/exportSVG'
 import { useStore } from './store/store'
 
 export default function App() {
@@ -33,6 +36,8 @@ export default function App() {
     [selectedId, activeDesign],
   )
   const cutList = activeDesign ? computeCutList(activeDesign) : []
+  const layout = activeDesign ? computeLayout(activeDesign) : null
+  const overConstrainedIds = layout?.overConstrainedIds ?? []
 
   if (!activeDesign) {
     return <div className="min-h-screen bg-surface text-white">BuildBox</div>
@@ -43,8 +48,11 @@ export default function App() {
       <Toolbar
         settings={activeDesign.globalSettings}
         onSettingsChange={updateSettings}
-        svgRef={svgRef}
-        designName={activeDesign.name}
+        onExport={() => {
+          if (svgRef.current) {
+            downloadSVG(svgRef.current, activeDesign.name)
+          }
+        }}
       />
       <ProjectTabs
         projects={projects}
@@ -53,6 +61,11 @@ export default function App() {
         onCreate={createProject}
         onDelete={deleteProject}
       />
+      {overConstrainedIds.length > 0 && (
+        <div className="border-b border-white/10 bg-panel px-4 py-2">
+          <WarningBanner overConstrainedIds={overConstrainedIds} />
+        </div>
+      )}
       <main className="flex flex-1 overflow-hidden">
         {activeDesign && <CabinetCanvas design={activeDesign} svgRef={svgRef} />}
         <Sidebar

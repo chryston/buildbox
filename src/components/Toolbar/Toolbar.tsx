@@ -1,12 +1,11 @@
-import { useEffect, useState, type RefObject } from 'react'
+import { useEffect, useState } from 'react'
 import type { GlobalSettings, Unit } from '../../types'
 import { fromMm, toMm } from '../../engine/unitConversion'
 
 interface Props {
   settings: GlobalSettings
   onSettingsChange: (patch: Partial<GlobalSettings>) => void
-  svgRef?: RefObject<SVGSVGElement | null>
-  designName?: string
+  onExport?: () => void
 }
 
 const UNITS: Unit[] = ['mm', 'cm', 'in']
@@ -18,7 +17,7 @@ function roundDisplay(mm: number, unit: Unit): number {
   return parseFloat(value.toFixed(4))
 }
 
-export default function Toolbar({ settings, onSettingsChange, svgRef, designName }: Props) {
+export default function Toolbar({ settings, onSettingsChange, onExport }: Props) {
   const unit = settings.unit
 
   function NumField({ label, settingsKey, htmlFor }: { label: string; settingsKey: keyof GlobalSettings; htmlFor: string }) {
@@ -76,11 +75,7 @@ export default function Toolbar({ settings, onSettingsChange, svgRef, designName
       <NumField label="Thickness" settingsKey="thickness" htmlFor="tb-thickness" />
 
       <button
-        onClick={() => {
-          if (svgRef?.current && designName) {
-            console.log('Export SVG:', designName)
-          }
-        }}
+        onClick={onExport}
         className="ml-auto rounded bg-accent px-3 py-1.5 text-sm text-white hover:bg-accent/80"
       >
         Export SVG
