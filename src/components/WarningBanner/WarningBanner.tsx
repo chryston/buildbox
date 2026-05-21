@@ -3,7 +3,9 @@ interface Props {
 }
 
 export default function WarningBanner({ overConstrainedIds }: Props) {
-  if (overConstrainedIds.length === 0) return null
+  const count = overConstrainedIds.length
+
+  if (count === 0) return null
 
   return (
     <div
@@ -12,8 +14,7 @@ export default function WarningBanner({ overConstrainedIds }: Props) {
     >
       <span>⚠</span>
       <span>
-        {overConstrainedIds.length} section{overConstrainedIds.length > 1 ? 's' : ''} are over-constrained and have been
-        {' '}scaled proportionally.
+        {count} section{count !== 1 ? 's' : ''} {count !== 1 ? 'are' : 'is'} over-constrained and {count !== 1 ? 'have' : 'has'} been scaled proportionally.
       </span>
     </div>
   )
