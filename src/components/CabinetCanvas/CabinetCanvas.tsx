@@ -4,6 +4,7 @@ import { computeLayout } from '../../engine/layoutEngine'
 import { useStore } from '../../store/store'
 import type { Design } from '../../types'
 import CanvasLayers from './CanvasLayers'
+import DimensionLabels from './DimensionLabels'
 
 interface Props {
   design: Design
@@ -19,6 +20,7 @@ export default function CabinetCanvas({ design, svgRef }: Props) {
   const lastPan = useRef({ x: 0, y: 0 })
   const selectedId = useStore((s) => s.selectedId)
   const setSelectedId = useStore((s) => s.setSelectedId)
+  const storeSetNodeSize = useStore((s) => s.setNodeSize)
 
   const layout = useMemo(
     () => computeLayout(design),
@@ -53,6 +55,10 @@ export default function CabinetCanvas({ design, svgRef }: Props) {
     isPanning.current = false
   }, [])
 
+  function handleCommitSize(nodeId: string, mm: number, _axis: 'w' | 'h') {
+    storeSetNodeSize(nodeId, mm)
+  }
+
   return (
     <div className="flex flex-1 items-center justify-center overflow-hidden bg-surface">
       <svg
@@ -74,6 +80,12 @@ export default function CabinetCanvas({ design, svgRef }: Props) {
             selectedId={selectedId}
             onSelectVoid={setSelectedId}
             onSelectDivider={setSelectedId}
+          />
+          <DimensionLabels
+            voids={layout.voids}
+            unit={design.globalSettings.unit}
+            svgRef={svgRef}
+            onCommitSize={handleCommitSize}
           />
         </g>
       </svg>
