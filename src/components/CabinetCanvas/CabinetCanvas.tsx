@@ -40,7 +40,7 @@ export default function CabinetCanvas({ design, svgRef }: Props) {
     if (e.button !== 1 && !e.altKey) return
     isPanning.current = true
     lastPan.current = { x: e.clientX, y: e.clientY }
-    ;(e.target as Element).setPointerCapture(e.pointerId)
+    ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
   }, [])
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
@@ -52,6 +52,10 @@ export default function CabinetCanvas({ design, svgRef }: Props) {
   }, [])
 
   const onPointerUp = useCallback(() => {
+    isPanning.current = false
+  }, [])
+
+  const onPointerCancel = useCallback(() => {
     isPanning.current = false
   }, [])
 
@@ -71,8 +75,9 @@ export default function CabinetCanvas({ design, svgRef }: Props) {
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
       >
-        <g transform={`translate(${pan.x / zoom},${pan.y / zoom}) scale(${zoom})`}>
+        <g transform={`matrix(${zoom},0,0,${zoom},${pan.x},${pan.y})`}>
           <CanvasLayers
             panels={layout.panels}
             voids={layout.voids}
