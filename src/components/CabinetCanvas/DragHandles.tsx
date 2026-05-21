@@ -7,9 +7,10 @@ interface Props {
   voids: LayoutVoid[]
   snapGrid: number
   svgRef: React.RefObject<SVGSVGElement | null>
+  zoom: number
 }
 
-export default function DragHandles({ dividers, voids, snapGrid, svgRef }: Props) {
+export default function DragHandles({ dividers, voids, snapGrid, svgRef, zoom }: Props) {
   const commitDrag = useStore((s) => s.commitDrag)
   const dragging = useRef<{
     dividerId: string
@@ -18,6 +19,8 @@ export default function DragHandles({ dividers, voids, snapGrid, svgRef }: Props
     originClientPos: number
     originSizeA: number
     originSizeB: number
+    initialHandleX: number
+    initialHandleY: number
     handle: SVGRectElement
   } | null>(null)
 
@@ -26,8 +29,8 @@ export default function DragHandles({ dividers, voids, snapGrid, svgRef }: Props
     const svgRect = svgRef.current.getBoundingClientRect()
     const viewBox = svgRef.current.viewBox.baseVal
     const scale = viewBox.width / svgRect.width
-    return clientDelta * scale
-  }, [svgRef])
+    return clientDelta * scale / zoom
+  }, [svgRef, zoom])
 
   function snap(mm: number): number {
     if (snapGrid <= 0) return mm
@@ -42,6 +45,8 @@ export default function DragHandles({ dividers, voids, snapGrid, svgRef }: Props
   ) {
     e.stopPropagation()
     ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+    const initialHandleX = parseFloat(e.currentTarget.getAttribute('x') ?? '0')
+    const initialHandleY = parseFloat(e.currentTarget.getAttribute('y') ?? '0')
     dragging.current = {
       dividerId: divider.nodeId,
       axis: divider.axis,
@@ -49,21 +54,23 @@ export default function DragHandles({ dividers, voids, snapGrid, svgRef }: Props
       originClientPos: divider.axis === 'horizontal' ? e.clientY : e.clientX,
       originSizeA: divider.axis === 'horizontal' ? mainVoid.h : mainVoid.w,
       originSizeB: divider.axis === 'horizontal' ? adjacentVoid.h : adjacentVoid.w,
+      initialHandleX,
+      initialHandleY,
       handle: e.currentTarget,
     }
   }
 
   function onPointerMove(e: React.PointerEvent<SVGRectElement>) {
     if (!dragging.current) return
-    const { axis, originClientPos, originSizeA, handle } = dragging.current
+    const { axis, originClientPos, originSizeA, initialHandleX, initialHandleY, handle } = dragging.current
     const clientDelta = (axis === 'horizontal' ? e.clientY : e.clientX) - originClientPos
     const mmDelta = svgToMmScale(clientDelta)
     const newSizeA = snap(Math.max(50, originSizeA + mmDelta))
 
     if (axis === 'horizontal') {
-      handle.setAttribute('y', String(parseFloat(handle.getAttribute('y') ?? '0') + mmDelta))
+      handle.setAttribute('y', String(initialHandleY + mmDelta))
     } else {
-      handle.setAttribute('x', String(parseFloat(handle.getAttribute('x') ?? '0') + mmDelta))
+      handle.setAttribute('x', String(initialHandleX + mmDelta))
     }
 
     void newSizeA
@@ -75,7 +82,8 @@ export default function DragHandles({ dividers, voids, snapGrid, svgRef }: Props
     const clientDelta = (axis === 'horizontal' ? e.clientY : e.clientX) - originClientPos
     const mmDelta = svgToMmScale(clientDelta)
     const finalSizeA = snap(Math.max(50, originSizeA + mmDelta))
-    const finalSizeB = Math.max(50, originSizeB - mmDelta)
+    const effectiveDelta = finalSizeA - originSizeA
+    const finalSizeB = Math.max(50, originSizeB - effectiveDelta)
     const ratio = finalSizeA / (finalSizeA + finalSizeB)
     commitDrag(parentNodeId, ratio)
     dragging.current = null

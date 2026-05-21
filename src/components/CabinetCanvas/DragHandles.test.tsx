@@ -41,7 +41,47 @@ describe('DragHandles', () => {
     localStorage.clear()
   })
 
-  it('commits the drag ratio to the split parent node', () => {
+  function renderDragHandles({
+    divider,
+    voids,
+    snapGrid = 1,
+    zoom = 1,
+  }: {
+    divider: LayoutDivider & { parentId: string }
+    voids: LayoutVoid[]
+    snapGrid?: number
+    zoom?: number
+  }) {
+    const svgRef = createRef<SVGSVGElement>()
+    const setPointerCapture = vi.fn()
+    const AnyDragHandles = DragHandles as unknown as React.ComponentType<{
+      dividers: Array<LayoutDivider & { parentId: string }>
+      voids: LayoutVoid[]
+      snapGrid: number
+      svgRef: React.RefObject<SVGSVGElement | null>
+      zoom: number
+    }>
+
+    const { container } = render(
+      <svg ref={svgRef}>
+        <AnyDragHandles dividers={[divider]} voids={voids} snapGrid={snapGrid} svgRef={svgRef} zoom={zoom} />
+      </svg>,
+    )
+
+    const svg = container.querySelector('svg') as SVGSVGElement
+    Object.defineProperty(svg, 'viewBox', {
+      value: { baseVal: { width: 200 } },
+      configurable: true,
+    })
+    svg.getBoundingClientRect = () => ({ width: 200 } as DOMRect)
+
+    const handle = screen.getByTestId(`drag-handle-${divider.nodeId}`)
+    ;((handle as unknown) as SVGRectElement & { setPointerCapture: ReturnType<typeof vi.fn> }).setPointerCapture = setPointerCapture
+
+    return { handle, setPointerCapture }
+  }
+
+  function seedStore() {
     useStore.setState((state) => ({
       ...state,
       projects: [createDesign()],
@@ -49,9 +89,9 @@ describe('DragHandles', () => {
       selectedId: null,
       snapGrid: 1,
     }))
+  }
 
-    const svgRef = createRef<SVGSVGElement>()
-    const setPointerCapture = vi.fn()
+  it('anchors handle movement to the initial handle position during drag', () => {
     const divider = {
       nodeId: 'top-shelf',
       parentId: 'root',
@@ -69,21 +109,95 @@ describe('DragHandles', () => {
       { nodeId: 'bottom', x: 0, y: 118, w: 200, h: 100, elementType: 'void', material: 'oak', accessories: [] },
     ]
 
-    const { container } = render(
-      <svg ref={svgRef}>
-        <DragHandles dividers={[divider]} voids={voids} snapGrid={1} svgRef={svgRef} />
-      </svg>,
-    )
+    const { handle } = renderDragHandles({ divider, voids })
 
-    const svg = container.querySelector('svg') as SVGSVGElement
-    Object.defineProperty(svg, 'viewBox', {
-      value: { baseVal: { width: 200 } },
-      configurable: true,
-    })
-    svg.getBoundingClientRect = () => ({ width: 200 } as DOMRect)
+    fireEvent.pointerDown(handle, { pointerId: 1, clientY: 0 })
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 10 })
+    expect(handle).toHaveAttribute('y', '113')
 
-    const handle = screen.getByTestId('drag-handle-top-shelf')
-    ;((handle as unknown) as SVGRectElement & { setPointerCapture: ReturnType<typeof vi.fn> }).setPointerCapture = setPointerCapture
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 20 })
+    expect(handle).toHaveAttribute('y', '123')
+
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 30 })
+    expect(handle).toHaveAttribute('y', '133')
+  })
+
+  it('scales pointer movement by zoom before committing the drag ratio', () => {
+    seedStore()
+    const divider = {
+      nodeId: 'top-shelf',
+      parentId: 'root',
+      childAId: 'top',
+      childBId: 'bottom',
+      x: 0,
+      y: 100,
+      w: 200,
+      h: 18,
+      axis: 'horizontal',
+      material: 'oak',
+    } as LayoutDivider & { parentId: string }
+    const voids: LayoutVoid[] = [
+      { nodeId: 'top', x: 0, y: 0, w: 200, h: 100, elementType: 'void', material: 'oak', accessories: [] },
+      { nodeId: 'bottom', x: 0, y: 118, w: 200, h: 100, elementType: 'void', material: 'oak', accessories: [] },
+    ]
+
+    const { handle } = renderDragHandles({ divider, voids, zoom: 2 })
+
+    fireEvent.pointerDown(handle, { pointerId: 1, clientY: 0 })
+    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 20 })
+
+    const state = useStore.getState()
+    expect(state.projects[0].root.splitRatio).toBeCloseTo(0.55, 5)
+  })
+
+  it('uses the snapped effective delta for the sibling size before committing the ratio', () => {
+    seedStore()
+    const divider = {
+      nodeId: 'top-shelf',
+      parentId: 'root',
+      childAId: 'top',
+      childBId: 'bottom',
+      x: 0,
+      y: 100,
+      w: 200,
+      h: 18,
+      axis: 'horizontal',
+      material: 'oak',
+    } as LayoutDivider & { parentId: string }
+    const voids: LayoutVoid[] = [
+      { nodeId: 'top', x: 0, y: 0, w: 200, h: 100, elementType: 'void', material: 'oak', accessories: [] },
+      { nodeId: 'bottom', x: 0, y: 118, w: 200, h: 100, elementType: 'void', material: 'oak', accessories: [] },
+    ]
+
+    const { handle } = renderDragHandles({ divider, voids, snapGrid: 10 })
+
+    fireEvent.pointerDown(handle, { pointerId: 1, clientY: 0 })
+    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 13 })
+
+    const state = useStore.getState()
+    expect(state.projects[0].root.splitRatio).toBeCloseTo(0.55, 5)
+  })
+
+  it('commits the drag ratio to the split parent node', () => {
+    seedStore()
+    const divider = {
+      nodeId: 'top-shelf',
+      parentId: 'root',
+      childAId: 'top',
+      childBId: 'bottom',
+      x: 0,
+      y: 100,
+      w: 200,
+      h: 18,
+      axis: 'horizontal',
+      material: 'oak',
+    } as LayoutDivider & { parentId: string }
+    const voids: LayoutVoid[] = [
+      { nodeId: 'top', x: 0, y: 0, w: 200, h: 100, elementType: 'void', material: 'oak', accessories: [] },
+      { nodeId: 'bottom', x: 0, y: 118, w: 200, h: 100, elementType: 'void', material: 'oak', accessories: [] },
+    ]
+
+    const { handle } = renderDragHandles({ divider, voids })
 
     fireEvent.pointerDown(handle, { pointerId: 1, clientY: 0 })
     fireEvent.pointerUp(handle, { pointerId: 1, clientY: 20 })

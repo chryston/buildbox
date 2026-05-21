@@ -98,6 +98,7 @@ export default function CabinetCanvas({ design, svgRef }: Props) {
             voids={layout.voids}
             snapGrid={snapGrid}
             svgRef={svgRef}
+            zoom={zoom}
           />
         </g>
       </svg>
