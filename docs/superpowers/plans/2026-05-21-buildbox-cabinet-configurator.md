@@ -37,26 +37,17 @@ src/
       Toolbar.test.tsx
     CabinetCanvas/
       CabinetCanvas.tsx                # SVG root, zoom/pan, memoised layout
-      PanelLayer.tsx                   # outer frame rectangles
-      VoidLayer.tsx                    # clickable void fills
-      DividerLayer.tsx                 # shelf/divider rects
-      AccessoryLayer.tsx               # drawer faces, toe-kick, hanging rails
+      CanvasLayers.tsx                 # all SVG layers: panels, voids, dividers, accessories
       DimensionLabels.tsx              # SVG text labels (editable axis only)
       DragHandles.tsx                  # pointer-drag handles + snap guides
     DimensionEditor/
       DimensionEditor.tsx              # Portal-based floating input
     Sidebar/
-      ActionPanel.tsx
-      ElementTypePanel.tsx
-      MaterialPanel.tsx
-      DrawerConfigPanel.tsx
-      AccessoryPanel.tsx
+      Sidebar.tsx                      # all sidebar sections inline (no sub-panel files)
     CutListPanel/
       CutListPanel.tsx
     WarningBanner/
       WarningBanner.tsx
-    ExportButton/
-      ExportButton.tsx
   App.tsx
   main.tsx
   test/
@@ -242,14 +233,14 @@ export interface CabinetNode {
   id: string
   splitAxis?: SplitAxis          // undefined → leaf (void)
   splitRatio?: number            // 0–1, default 0.5; used for proportional drag
-  children?: CabinetNode[]       // length 2 when splitAxis defined
+  children?: [CabinetNode, CabinetNode]  // binary split — TypeScript enforces exactly 2
   fixedSize?: number             // mm; set by user typing
   locked?: boolean               // true → engine never adjusts fixedSize
   material?: MaterialId          // overrides globalSettings.defaultMaterial
   elementType?: ElementType      // leaf annotation (default: 'void')
   drawerConfig?: DrawerConfig    // only when elementType === 'drawer'
   dividers?: Divider[]           // one per binary split, carries its own id and materialId
-  accessories?: Accessory[]      // accessories attached to this void
+  // NOTE: accessories?: Accessory[] is added in Task 17 (self-contained accessory task)
 }
 
 export interface Design {
@@ -622,7 +613,7 @@ export function computeLayout(design: Design): LayoutResult {
   ) {
     const material = node.material ?? inheritedMaterial
 
-    if (!node.splitAxis || !node.children || node.children.length !== 2) {
+    if (!node.splitAxis || !node.children) {
       voids.push({
         nodeId: node.id, x, y, w, h,
         parentSplitAxis,
@@ -703,21 +694,6 @@ function distributeTwo(
     return [Math.max(remaining, MIN_SECTION_SIZE), b.fixedSize!, false]
   }
 
-  // Both have fixedSize but not locked → scale proportionally
-  if (a.fixedSize != null && b.fixedSize != null) {
-    const ratio = a.fixedSize / (a.fixedSize + b.fixedSize)
-    const sizeA = Math.round(available * ratio)
-    return [sizeA, available - sizeA, false]
-  }
-
-  if (a.fixedSize != null) {
-    return [a.fixedSize, available - a.fixedSize, false]
-  }
-
-  if (b.fixedSize != null) {
-    return [available - b.fixedSize, b.fixedSize, false]
-  }
-
   // Use splitRatio if parent has one set (from drag)
   if (parent?.splitRatio != null) {
     const sizeA = Math.round(available * parent.splitRatio)
@@ -770,7 +746,7 @@ All functions return a **new** root `CabinetNode` (immutable). They never mutate
 ```ts
 // src/engine/treeMutations.test.ts
 import { describe, it, expect } from 'vitest'
-import { addShelf, addDivider, deleteBoard, setNodeSize, setLocked, setMaterial, setSplitRatio, unlockNode } from './treeMutations'
+import { addShelf, addDivider, deleteBoard, setNodeSize, setSplitRatio, setLocked, setMaterial, unlockNode } from './treeMutations'
 import type { CabinetNode } from '../types'
 
 const leaf = (): CabinetNode => ({ id: 'root' })
@@ -853,37 +829,6 @@ describe('unlockNode', () => {
   })
 })
 
-describe('setSplitRatio', () => {
-  it('sets splitRatio on the parent node', () => {
-    const root: CabinetNode = {
-      id: 'root',
-      splitAxis: 'horizontal',
-      children: [{ id: 'a' }, { id: 'b' }],
-    }
-    const next = setSplitRatio(root, 'root', 0.3)
-    expect(next.splitRatio).toBe(0.3)
-  })
-})
-
-describe('setLocked', () => {
-  it('toggles locked flag on a node', () => {
-    const root: CabinetNode = {
-      id: 'root',
-      splitAxis: 'horizontal',
-      children: [{ id: 'a', fixedSize: 200, locked: false }, { id: 'b' }],
-    }
-    const next = setLocked(root, 'a', true)
-    expect(next.children![0].locked).toBe(true)
-  })
-})
-
-describe('setMaterial', () => {
-  it('sets material on a node', () => {
-    const next = setMaterial(leaf(), 'root', 'walnut')
-    expect(next.material).toBe('walnut')
-  })
-})
-
 describe('splitNode guards', () => {
   it('throws when splitting a drawer node', () => {
     const root: CabinetNode = { id: 'root', elementType: 'drawer' }
@@ -902,15 +847,11 @@ npx vitest run src/engine/treeMutations.test.ts
 
 ```ts
 // src/engine/treeMutations.ts
-import type { CabinetNode, MaterialId, SplitAxis, ElementType, Accessory } from '../types'
+import type { CabinetNode, MaterialId, SplitAxis, ElementType, DrawerConfig } from '../types'
 import { nanoid } from 'nanoid'
 
 export function addShelf(root: CabinetNode, targetId: string): CabinetNode {
   return splitNode(root, targetId, 'horizontal')
-}
-
-export function addDivider(root: CabinetNode, targetId: string): CabinetNode {
-  return splitNode(root, targetId, 'vertical')
 }
 
 export function deleteBoard(root: CabinetNode, childId: string): CabinetNode {
@@ -950,6 +891,14 @@ export function setSplitRatio(root: CabinetNode, nodeId: string, ratio: number):
   return mapNode(root, node => node.id === nodeId ? { ...node, splitRatio: ratio } : node)
 }
 
+export function setElementType(root: CabinetNode, id: string, et: ElementType): CabinetNode {
+  return mapNode(root, (n) => n.id === id ? { ...n, elementType: et } : n)
+}
+
+export function setDrawerConfig(root: CabinetNode, id: string, cfg: DrawerConfig): CabinetNode {
+  return mapNode(root, (n) => n.id === id ? { ...n, drawerConfig: cfg } : n)
+}
+
 // --- helpers ---
 
 function mapNode(node: CabinetNode, fn: (n: CabinetNode) => CabinetNode): CabinetNode {
@@ -963,19 +912,6 @@ export function findNode(root: CabinetNode, id: string): CabinetNode | null {
   if (!root.children) return null
   for (const child of root.children) {
     const found = findNode(child, id)
-    if (found) return found
-  }
-  return null
-}
-
-export function findDividerContext(
-  root: CabinetNode,
-  dividerId: string,
-): { parent: CabinetNode; index: number } | null {
-  if (!root.children) return null
-  for (let i = 0; i < root.children.length; i++) {
-    if (root.children[i].id === dividerId) return { parent: root, index: i }
-    const found = findDividerContext(root.children[i], dividerId)
     if (found) return found
   }
   return null
@@ -1006,24 +942,12 @@ function splitNode(root: CabinetNode, targetId: string, axis: SplitAxis): Cabine
       children: [
         { id: nanoid(8), elementType: 'void' as ElementType },
         { id: nanoid(8), elementType: 'void' as ElementType },
-      ],
+      ] as [CabinetNode, CabinetNode],
     }
   })
 }
 
-export function addAccessory(root: CabinetNode, nodeId: string, acc: Accessory): CabinetNode {
-  return mapNode(root, (n) => {
-    if (n.id !== nodeId) return n
-    return { ...n, accessories: [...(n.accessories ?? []), acc] }
-  })
-}
-
-export function removeAccessory(root: CabinetNode, nodeId: string, accId: string): CabinetNode {
-  return mapNode(root, (n) => {
-    if (n.id !== nodeId) return n
-    return { ...n, accessories: (n.accessories ?? []).filter((a) => a.id !== accId) }
-  })
-}
+// NOTE: addAccessory / removeAccessory are added in Task 17 (self-contained accessory task)
 ```
 
 Install nanoid:
@@ -1065,8 +989,8 @@ import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { temporal } from 'zundo'
 import { nanoid } from 'nanoid'
-import type { Design, GlobalSettings, MaterialId, DrawerConfig, UIState, ElementType, AccessoryType, Accessory } from '../types'
-import { addShelf, addDivider, deleteBoard, setNodeSize, setLocked, setMaterial, setSplitRatio, unlockNode, addAccessory as treeAddAccessory, removeAccessory as treeRemoveAccessory } from '../engine/treeMutations'
+import type { Design, GlobalSettings, MaterialId, DrawerConfig, UIState, ElementType } from '../types'
+import { addShelf, addDivider, deleteBoard, setNodeSize, setLocked, setMaterial, setSplitRatio, unlockNode, setElementType as treeMutSetElementType, setDrawerConfig as treeMutSetDrawerConfig } from '../engine/treeMutations'
 
 interface PersistedState {
   projects: Design[]
@@ -1094,11 +1018,9 @@ interface StoreState extends PersistedState, UIState {
   setElementType: (nodeId: string, et: ElementType) => void
   setDrawerConfig: (nodeId: string, config: DrawerConfig) => void
   commitDrag: (parentNodeId: string, ratio: number) => void
-  addAccessory: (nodeId: string, type: AccessoryType, heightFromBottom: number) => void
-  removeAccessory: (nodeId: string, accId: string) => void
+  // NOTE: addAccessory / removeAccessory added in Task 17
 
   // UI (not persisted)
-  selectNode: (id: string | null) => void
   setSelectedId: (id: string | null) => void
   setSnapGrid: (mm: number) => void
 }
@@ -1199,32 +1121,12 @@ export const useStore = create<StoreState>()(
           mutateRoot(s, d => ({ ...d, root: setMaterial(d.root, nodeId, material) }))
         }),
 
-        setElementType: (nodeId, et) => set(s => {
-          mutateRoot(s, d => ({
-            ...d,
-            root: (() => {
-              function mapNode(n: typeof d.root): typeof d.root {
-                if (n.id === nodeId) return { ...n, elementType: et }
-                if (!n.children) return n
-                return { ...n, children: n.children.map(mapNode) }
-              }
-              return mapNode(d.root)
-            })(),
-          }))
+        setElementType: (nodeId, et) => set((s) => {
+          mutateRoot(s, (d) => ({ ...d, root: treeMutSetElementType(d.root, nodeId, et) }))
         }),
 
-        setDrawerConfig: (nodeId, config) => set(s => {
-          mutateRoot(s, d => ({
-            ...d,
-            root: (() => {
-              function mapNode(n: typeof d.root): typeof d.root {
-                if (n.id === nodeId) return { ...n, drawerConfig: config }
-                if (!n.children) return n
-                return { ...n, children: n.children.map(mapNode) }
-              }
-              return mapNode(d.root)
-            })(),
-          }))
+        setDrawerConfig: (nodeId, config) => set((s) => {
+          mutateRoot(s, (d) => ({ ...d, root: treeMutSetDrawerConfig(d.root, nodeId, config) }))
         }),
 
         // commitDrag: sets splitRatio on the parent node for proportional distribution
@@ -1235,22 +1137,10 @@ export const useStore = create<StoreState>()(
           }))
         }),
 
-        selectNode: (id) => set(s => { s.selectedId = id }),
         setSelectedId: (id) => set(s => { s.selectedId = id }),
         setSnapGrid: (mm) => set(s => { s.snapGrid = mm }),
 
-        addAccessory: (nodeId, type, heightFromBottom) => set(s => {
-          const design = activeDesign(s)
-          if (!design) return
-          const acc: Accessory = { id: nanoid(), type, heightFromBottom }
-          design.root = treeAddAccessory(design.root, nodeId, acc)
-        }),
-
-        removeAccessory: (nodeId, accId) => set(s => {
-          const design = activeDesign(s)
-          if (!design) return
-          design.root = treeRemoveAccessory(design.root, nodeId, accId)
-        }),
+        // NOTE: addAccessory / removeAccessory added in Task 17
       })),
       {
         name: 'buildbox-store',
@@ -1335,26 +1225,11 @@ const settings: GlobalSettings = {
 }
 
 describe('Toolbar', () => {
-  it('shows unit toggle buttons', () => {
-    render(<Toolbar settings={settings} onSettingsChange={vi.fn()} />)
-    expect(screen.getByRole('button', { name: 'mm' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'cm' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'in' })).toBeInTheDocument()
-  })
-
   it('calls onSettingsChange with new unit when toggle clicked', () => {
     const onChange = vi.fn()
     render(<Toolbar settings={settings} onSettingsChange={onChange} />)
     fireEvent.click(screen.getByRole('button', { name: 'cm' }))
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ unit: 'cm' }))
-  })
-
-  it('shows height/width/depth/thickness input fields', () => {
-    render(<Toolbar settings={settings} onSettingsChange={vi.fn()} />)
-    expect(screen.getByLabelText(/height/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/width/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/depth/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/thickness/i)).toBeInTheDocument()
   })
 })
 ```
@@ -1411,16 +1286,20 @@ export default function ProjectTabs({ projects, activeId, onSelect, onCreate, on
 ```tsx
 // src/components/Toolbar/Toolbar.tsx
 import type { GlobalSettings, Unit } from '../../types'
+import type { RefObject } from 'react'
 import { fromMm, toMm } from '../../engine/unitConversion'
+import { downloadSVG } from '../../utils/exportSVG'
 
 interface Props {
   settings: GlobalSettings
   onSettingsChange: (patch: Partial<GlobalSettings>) => void
+  svgRef: RefObject<SVGSVGElement>
+  designName: string
 }
 
 const UNITS: Unit[] = ['mm', 'cm', 'in']
 
-export default function Toolbar({ settings, onSettingsChange }: Props) {
+export default function Toolbar({ settings, onSettingsChange, svgRef, designName }: Props) {
   const u = settings.unit
 
   function numField(label: string, key: keyof GlobalSettings, htmlFor: string) {
@@ -1457,6 +1336,13 @@ export default function Toolbar({ settings, onSettingsChange }: Props) {
       {numField('Width', 'width', 'tb-width')}
       {numField('Depth', 'depth', 'tb-depth')}
       {numField('Thickness', 'thickness', 'tb-thickness')}
+
+      <button
+        onClick={() => downloadSVG(svgRef, designName)}
+        className="ml-auto px-3 py-1.5 bg-accent hover:bg-accent/80 text-white text-sm rounded"
+      >
+        Export SVG
+      </button>
     </header>
   )
 }
@@ -1559,28 +1445,101 @@ git commit -m "feat: materials constants (MaterialId, MATERIALS)
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```
 
-- [ ] **Step 1: Implement PanelLayer**
+- [ ] **Step 1: Implement CanvasLayers**
 
 ```tsx
-// src/components/CabinetCanvas/PanelLayer.tsx
-import type { LayoutPanel } from '../../types'
+// src/components/CabinetCanvas/CanvasLayers.tsx
+import type { LayoutPanel, LayoutVoid, LayoutDivider } from '../../types'
 import { MATERIALS } from '../../utils/materials'
 
-interface Props { panels: LayoutPanel[] }
+interface Props {
+  panels: LayoutPanel[]
+  voids: LayoutVoid[]
+  dividers: LayoutDivider[]
+  selectedId: string | null
+  onSelectVoid: (id: string) => void
+  onSelectDivider: (id: string) => void
+}
 
-export default function PanelLayer({ panels }: Props) {
+export default function CanvasLayers({ panels, voids, dividers, selectedId, onSelectVoid, onSelectDivider }: Props) {
   return (
-    <g data-layer="panels">
-      {panels.map(p => (
-        <rect
-          key={p.id}
-          x={p.x} y={p.y} width={p.w} height={p.h}
-          fill={MATERIALS[p.material].fill}
-          stroke={MATERIALS[p.material].stroke}
-          strokeWidth={1}
-        />
-      ))}
-    </g>
+    <>
+      {/* Panels (outer frame + divider boards) */}
+      <g data-layer="panels">
+        {panels.map(p => (
+          <rect
+            key={p.id}
+            x={p.x} y={p.y} width={p.w} height={p.h}
+            fill={MATERIALS[p.material].fill}
+            stroke={MATERIALS[p.material].stroke}
+            strokeWidth={1}
+          />
+        ))}
+      </g>
+
+      {/* Voids */}
+      <g data-layer="voids">
+        {voids.map(v => (
+          <rect
+            key={v.nodeId}
+            data-testid={`void-${v.nodeId}`}
+            x={v.x} y={v.y} width={v.w} height={v.h}
+            fill={v.nodeId === selectedId ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.03)'}
+            stroke={v.nodeId === selectedId ? '#7c3aed' : 'transparent'}
+            strokeWidth={2}
+            cursor="pointer"
+            onClick={() => onSelectVoid(v.nodeId)}
+          />
+        ))}
+      </g>
+
+      {/* Dividers (selectable) */}
+      <g data-layer="dividers">
+        {dividers.map(d => (
+          <rect
+            key={d.nodeId}
+            data-testid={`divider-${d.nodeId}`}
+            x={d.x} y={d.y} width={d.w} height={d.h}
+            fill={MATERIALS[d.material].fill}
+            stroke={d.childAId === selectedId ? '#7c3aed' : MATERIALS[d.material].stroke}
+            strokeWidth={d.childAId === selectedId ? 2 : 1}
+            cursor="pointer"
+            onClick={() => onSelectDivider(d.childAId)}
+          />
+        ))}
+      </g>
+
+      {/* Accessories */}
+      <g data-layer="accessories">
+        {voids.map(v => (
+          <g key={v.nodeId}>
+            {v.elementType === 'drawer' && (
+              <g>
+                <rect
+                  x={v.x + 6} y={v.y + 6}
+                  width={v.w - 12} height={v.h - 12}
+                  fill="none" stroke="#7c3aed" strokeWidth={1.5} rx={2}
+                />
+                <circle cx={v.x + v.w / 2} cy={v.y + v.h / 2} r={4} fill="#7c3aed" />
+              </g>
+            )}
+            {(v.accessories ?? [])
+              .filter((a) => a.type === 'hanging-rail')
+              .map((a) => {
+                const railY = v.y + v.h - a.heightFromBottom
+                return (
+                  <line
+                    key={a.id}
+                    x1={v.x} y1={railY}
+                    x2={v.x + v.w} y2={railY}
+                    stroke="#666" strokeWidth={3} strokeDasharray="4 2"
+                  />
+                )
+              })}
+          </g>
+        ))}
+      </g>
+    </>
   )
 }
 ```
@@ -1592,18 +1551,20 @@ export default function PanelLayer({ panels }: Props) {
 import { useMemo, useRef, useState, useCallback } from 'react'
 import type { Design } from '../../types'
 import { computeLayout } from '../../engine/layoutEngine'
-import PanelLayer from './PanelLayer'
+import CanvasLayers from './CanvasLayers'
+import { useStore } from '../../store/store'
 
-interface Props { design: Design }
+interface Props { design: Design; svgRef: React.RefObject<SVGSVGElement> }
 
 const PADDING = 40   // px around cabinet in SVG viewport
 
-export default function CabinetCanvas({ design }: Props) {
-  const svgRef = useRef<SVGSVGElement>(null)
+export default function CabinetCanvas({ design, svgRef }: Props) {
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const isPanning = useRef(false)
   const lastPan = useRef({ x: 0, y: 0 })
+  const selectedId = useStore(s => s.selectedId)
+  const setSelectedId = useStore(s => s.setSelectedId)
 
   const layout = useMemo(
     () => computeLayout(design),
@@ -1650,7 +1611,14 @@ export default function CabinetCanvas({ design }: Props) {
         onPointerUp={onPointerUp}
       >
         <g transform={`translate(${pan.x / zoom},${pan.y / zoom}) scale(${zoom})`}>
-          <PanelLayer panels={layout.panels} />
+          <CanvasLayers
+            panels={layout.panels}
+            voids={layout.voids}
+            dividers={layout.dividers}
+            selectedId={selectedId}
+            onSelectVoid={setSelectedId}
+            onSelectDivider={setSelectedId}
+          />
         </g>
       </svg>
     </div>
@@ -1664,10 +1632,14 @@ In `src/App.tsx`, replace the placeholder `<main>` content:
 
 ```tsx
 import CabinetCanvas from './components/CabinetCanvas/CabinetCanvas'
+import { useRef } from 'react'
+
+// In App body:
+const svgRef = useRef<SVGSVGElement>(null)
 
 // inside <main>:
 <main className="flex flex-1 overflow-hidden">
-  {activeDesign && <CabinetCanvas design={activeDesign} />}
+  {activeDesign && <CabinetCanvas design={activeDesign} svgRef={svgRef} />}
 </main>
 ```
 
@@ -1683,163 +1655,34 @@ Open browser. Should see a cabinet frame rendered as 4 coloured rectangles on a 
 
 ```bash
 git add src/components/CabinetCanvas/ src/utils/materials.ts src/App.tsx
-git commit -m "feat: CabinetCanvas SVG root with zoom/pan and outer panel layer
+git commit -m "feat: CabinetCanvas SVG root with zoom/pan and CanvasLayers (panels, voids, dividers, accessories)
 
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```
 
 ---
 
-### Task 9: VoidLayer, DividerLayer, AccessoryLayer
+### Task 9: CanvasLayers — Selection, Dividers, Accessories
 
-**Files:**
-- Create: `src/components/CabinetCanvas/VoidLayer.tsx`
-- Create: `src/components/CabinetCanvas/DividerLayer.tsx`
-- Create: `src/components/CabinetCanvas/AccessoryLayer.tsx`
-- Modify: `src/components/CabinetCanvas/CabinetCanvas.tsx`
+**Decision D1:** All canvas layer components (`PanelLayer`, `VoidLayer`, `DividerLayer`, `AccessoryLayer`) are merged into the single `CanvasLayers.tsx` file created in Task 8. No separate files are needed.
 
-- [ ] **Step 1: Implement VoidLayer**
+This task adds `DimensionLabels` to the canvas and wires up selection-driven `DragHandles`.
 
-```tsx
-// src/components/CabinetCanvas/VoidLayer.tsx
-import type { LayoutVoid } from '../../types'
+**No additional step needed** — `CanvasLayers.tsx` already renders panels, voids, dividers, and accessories from `layout` and `selectedId` (implemented in Task 8).
 
-interface Props {
-  voids: LayoutVoid[]
-  selectedId: string | null
-  onSelect: (id: string) => void
-}
+- [ ] **Step 1: Verify CanvasLayers renders all layers**
 
-export default function VoidLayer({ voids, selectedId, onSelect }: Props) {
-  return (
-    <g data-layer="voids">
-      {voids.map(v => (
-        <rect
-          key={v.nodeId}
-          data-testid={`void-${v.nodeId}`}
-          x={v.x} y={v.y} width={v.w} height={v.h}
-          fill={v.nodeId === selectedId ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.03)'}
-          stroke={v.nodeId === selectedId ? '#7c3aed' : 'transparent'}
-          strokeWidth={2}
-          cursor="pointer"
-          onClick={() => onSelect(v.nodeId)}
-        />
-      ))}
-    </g>
-  )
-}
-```
+Confirm `src/components/CabinetCanvas/CanvasLayers.tsx` (created in Task 8) renders:
+- `data-layer="panels"` — outer frame rects
+- `data-layer="voids"` — clickable void fills with selection highlight
+- `data-layer="dividers"` — shelf/divider rects with material fills
+- `data-layer="accessories"` — drawer faces + hanging rails (see Task 17 for rail data)
 
-- [ ] **Step 2: Implement DividerLayer**
-
-```tsx
-// src/components/CabinetCanvas/DividerLayer.tsx
-import type { LayoutDivider } from '../../types'
-import { MATERIALS } from '../../utils/materials'
-
-interface Props {
-  dividers: LayoutDivider[]
-  selectedId: string | null
-  onSelect: (id: string) => void
-}
-
-export default function DividerLayer({ dividers, selectedId, onSelect }: Props) {
-  return (
-    <g data-layer="dividers">
-      {dividers.map(d => (
-        <rect
-          key={d.nodeId}
-          data-testid={`divider-${d.nodeId}`}
-          x={d.x} y={d.y} width={d.w} height={d.h}
-          fill={MATERIALS[d.material].fill}
-          stroke={d.childAId === selectedId ? '#7c3aed' : MATERIALS[d.material].stroke}
-          strokeWidth={d.childAId === selectedId ? 2 : 1}
-          cursor="pointer"
-          onClick={() => onSelect(d.childAId)}
-        />
-      ))}
-    </g>
-  )
-}
-```
-
-- [ ] **Step 3: Implement AccessoryLayer**
-
-```tsx
-// src/components/CabinetCanvas/AccessoryLayer.tsx
-import type { LayoutVoid } from '../../types'
-
-interface Props { voids: LayoutVoid[] }
-
-interface ScaledProps extends Props {
-  scale?: number
-}
-
-export default function AccessoryLayer({ voids, scale = 1 }: ScaledProps) {
-  return (
-    <g data-layer="accessories">
-      {voids.map(v => (
-        <g key={v.nodeId}>
-          {v.elementType === 'drawer' && renderDrawerFace(v)}
-          {(v.accessories ?? [])
-            .filter((a) => a.type === 'hanging-rail')
-            .map((a) => {
-              const railY = v.y + v.h - a.heightFromBottom * scale
-              return (
-                <line
-                  key={a.id}
-                  x1={v.x} y1={railY}
-                  x2={v.x + v.w} y2={railY}
-                  stroke="#666" strokeWidth={3} strokeDasharray="4 2"
-                />
-              )
-            })}
-        </g>
-      ))}
-    </g>
-  )
-}
-
-function renderDrawerFace(v: LayoutVoid) {
-  const inset = 6
-  return (
-    <g>
-      <rect
-        x={v.x + inset} y={v.y + inset}
-        width={v.w - inset * 2} height={v.h - inset * 2}
-        fill="none" stroke="#7c3aed" strokeWidth={1.5} rx={2}
-      />
-      <circle cx={v.x + v.w / 2} cy={v.y + v.h / 2} r={4} fill="#7c3aed" />
-    </g>
-  )
-}
-```
-
-- [ ] **Step 4: Add layers to CabinetCanvas**
-
-```tsx
-// src/components/CabinetCanvas/CabinetCanvas.tsx  (add imports and layers)
-import VoidLayer from './VoidLayer'
-import DividerLayer from './DividerLayer'
-import AccessoryLayer from './AccessoryLayer'
-import { useStore } from '../../store/store'
-
-// Inside the <g transform=...> after PanelLayer:
-const selectedId = useStore(s => s.selectedId)
-const setSelectedId = useStore(s => s.setSelectedId)
-
-// In JSX inside the transform group:
-<PanelLayer panels={layout.panels} />
-<VoidLayer voids={layout.voids} selectedId={selectedId} onSelect={setSelectedId} />
-<DividerLayer dividers={layout.dividers} selectedId={selectedId} onSelect={setSelectedId} />
-<AccessoryLayer voids={layout.voids} />
-```
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 2: Commit**
 
 ```bash
 git add src/components/CabinetCanvas/
-git commit -m "feat: VoidLayer, DividerLayer, AccessoryLayer for cabinet canvas
+git commit -m "feat: CanvasLayers consolidates panels, voids, dividers, accessories (D1)
 
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```
@@ -2287,14 +2130,11 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ### Task 12: Sidebar Panels
 
 **Files:**
-- Create: `src/components/Sidebar/ActionPanel.tsx`
-- Create: `src/components/Sidebar/ElementTypePanel.tsx`
-- Create: `src/components/Sidebar/MaterialPanel.tsx`
-- Create: `src/components/Sidebar/DrawerConfigPanel.tsx`
-- Create: `src/components/Sidebar/AccessoryPanel.tsx`
 - Create: `src/components/Sidebar/Sidebar.tsx`
 - Create: `src/components/Sidebar/Sidebar.test.tsx`
 - Modify: `src/App.tsx`
+
+All sidebar sections (actions, material, element type, drawer config) are inline in a single `Sidebar.tsx` — no sub-panel files.
 
 - [ ] **Step 1: Write failing tests**
 
@@ -2302,55 +2142,38 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 // src/components/Sidebar/Sidebar.test.tsx
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
-import ActionPanel from './ActionPanel'
+import Sidebar from './Sidebar'
+import type { CabinetNode } from '../../types'
 
-describe('ActionPanel', () => {
+const baseProps = {
+  selectedId: 'v1',
+  selectedNode: { id: 'v1', elementType: 'void' } as CabinetNode,
+  onAddShelf: vi.fn(),
+  onAddDivider: vi.fn(),
+  onDelete: vi.fn(),
+  onToggleLock: vi.fn(),
+  onSetMaterial: vi.fn(),
+  onSetElementType: vi.fn(),
+  onSetDrawerConfig: vi.fn(),
+}
+
+describe('Sidebar', () => {
   it('Add Shelf button calls onAddShelf', () => {
     const onAddShelf = vi.fn()
-    render(
-      <ActionPanel
-        selectedId="v1"
-        isVoid={true}
-        onAddShelf={onAddShelf}
-        onAddDivider={vi.fn()}
-        onDelete={vi.fn()}
-        onToggleLock={vi.fn()}
-        isLocked={false}
-      />,
-    )
+    render(<Sidebar {...baseProps} onAddShelf={onAddShelf} />)
     fireEvent.click(screen.getByRole('button', { name: /add shelf/i }))
     expect(onAddShelf).toHaveBeenCalledWith('v1')
   })
 
   it('Add Divider button calls onAddDivider', () => {
     const onAddDivider = vi.fn()
-    render(
-      <ActionPanel
-        selectedId="v1"
-        isVoid={true}
-        onAddShelf={vi.fn()}
-        onAddDivider={onAddDivider}
-        onDelete={vi.fn()}
-        onToggleLock={vi.fn()}
-        isLocked={false}
-      />,
-    )
+    render(<Sidebar {...baseProps} onAddDivider={onAddDivider} />)
     fireEvent.click(screen.getByRole('button', { name: /add divider/i }))
     expect(onAddDivider).toHaveBeenCalledWith('v1')
   })
 
   it('Delete button is disabled when no selection', () => {
-    render(
-      <ActionPanel
-        selectedId={null}
-        isVoid={false}
-        onAddShelf={vi.fn()}
-        onAddDivider={vi.fn()}
-        onDelete={vi.fn()}
-        onToggleLock={vi.fn()}
-        isLocked={false}
-      />,
-    )
+    render(<Sidebar {...baseProps} selectedId={null} selectedNode={null} />)
     expect(screen.getByRole('button', { name: /delete/i })).toBeDisabled()
   })
 })
@@ -2362,186 +2185,16 @@ describe('ActionPanel', () => {
 npx vitest run src/components/Sidebar/Sidebar.test.tsx
 ```
 
-- [ ] **Step 3: Implement ActionPanel**
+- [ ] **Step 3: Implement Sidebar**
 
 ```tsx
-// src/components/Sidebar/ActionPanel.tsx
-interface Props {
-  selectedId: string | null
-  isVoid: boolean
-  isLocked: boolean
-  onAddShelf: (id: string) => void
-  onAddDivider: (id: string) => void
-  onDelete: (id: string) => void
-  onToggleLock: (id: string, locked: boolean) => void
-}
-
-function Btn({ label, onClick, disabled = false }: { label: string; onClick?: () => void; disabled?: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="w-full text-left px-3 py-2 rounded text-sm bg-panel hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
-    >
-      {label}
-    </button>
-  )
-}
-
-export default function ActionPanel({ selectedId, isVoid, isLocked, onAddShelf, onAddDivider, onDelete, onToggleLock }: Props) {
-  return (
-    <div className="flex flex-col gap-1 p-3">
-      <p className="text-xs text-white/40 uppercase tracking-wide mb-1">Actions</p>
-      <Btn label="Add Shelf" disabled={!selectedId || !isVoid} onClick={() => selectedId && onAddShelf(selectedId)} />
-      <Btn label="Add Divider" disabled={!selectedId || !isVoid} onClick={() => selectedId && onAddDivider(selectedId)} />
-      <Btn label="Delete" disabled={!selectedId} onClick={() => selectedId && onDelete(selectedId)} />
-      {selectedId && (
-        <Btn
-          label={isLocked ? '🔒 Locked – click to unlock' : '🔓 Unlocked – click to lock'}
-          onClick={() => selectedId && onToggleLock(selectedId, !isLocked)}
-        />
-      )}
-    </div>
-  )
-}
-```
-
-- [ ] **Step 4: Implement MaterialPanel**
-
-```tsx
-// src/components/Sidebar/MaterialPanel.tsx
-import type { MaterialId } from '../../types'
+// src/components/Sidebar/Sidebar.tsx
+import type { CabinetNode, ElementType, MaterialId, DrawerConfig, SlideType } from '../../types'
 import { MATERIALS } from '../../utils/materials'
 
 interface Props {
   selectedId: string | null
-  currentMaterial: MaterialId | undefined
-  onSetMaterial: (id: string, mat: MaterialId) => void
-}
-
-export default function MaterialPanel({ selectedId, currentMaterial, onSetMaterial }: Props) {
-  if (!selectedId) return null
-
-  return (
-    <div className="p-3 border-t border-white/10">
-      <p className="text-xs text-white/40 uppercase tracking-wide mb-2">Material</p>
-      <div className="flex flex-wrap gap-2">
-        {(Object.keys(MATERIALS) as MaterialId[]).map(key => (
-          <button
-            key={key}
-            title={MATERIALS[key].label}
-            onClick={() => onSetMaterial(selectedId, key)}
-            className={`w-8 h-8 rounded-full border-2 ${currentMaterial === key ? 'border-accent' : 'border-transparent'}`}
-            style={{ backgroundColor: MATERIALS[key].fill }}
-          />
-        ))}
-      </div>
-    </div>
-  )
-}
-```
-
-- [ ] **Step 5: Implement ElementTypePanel**
-
-```tsx
-// src/components/Sidebar/ElementTypePanel.tsx
-import type { ElementType } from '../../types'
-
-const ELEMENT_TYPES: ElementType[] = ['void', 'drawer', 'hanging-space']
-const ELEMENT_TYPE_LABELS: Record<ElementType, string> = {
-  void: 'Empty',
-  drawer: 'Drawer',
-  'hanging-space': 'Hanging Space',
-}
-
-interface Props {
-  selectedId: string | null
-  currentType: ElementType | undefined
-  onSetType: (id: string, type: ElementType) => void
-}
-
-export default function ElementTypePanel({ selectedId, currentType, onSetType }: Props) {
-  if (!selectedId) return null
-
-  return (
-    <div className="p-3 border-t border-white/10">
-      <p className="text-xs text-white/40 uppercase tracking-wide mb-2">Element Type</p>
-      <div className="flex flex-col gap-1">
-        {ELEMENT_TYPES.map(t => (
-          <button
-            key={t}
-            onClick={() => onSetType(selectedId, t)}
-            className={`text-left px-3 py-1.5 rounded text-sm ${currentType === t ? 'bg-accent text-white' : 'bg-panel hover:bg-white/10 text-white/70'}`}
-          >{ELEMENT_TYPE_LABELS[t]}</button>
-        ))}
-      </div>
-    </div>
-  )
-}
-```
-
-- [ ] **Step 6: Implement DrawerConfigPanel**
-
-```tsx
-// src/components/Sidebar/DrawerConfigPanel.tsx
-import type { DrawerConfig, SlideType } from '../../types'
-
-interface Props {
-  selectedId: string | null
-  config: DrawerConfig | undefined
-  onSetConfig: (id: string, config: DrawerConfig) => void
-}
-
-const DEFAULT_CONFIG: DrawerConfig = { slideType: 'side-mount', reveal: 3 }
-
-export default function DrawerConfigPanel({ selectedId, config, onSetConfig }: Props) {
-  if (!selectedId || !config) return null
-
-  function update(patch: Partial<DrawerConfig>) {
-    onSetConfig(selectedId!, { ...config!, ...patch })
-  }
-
-  return (
-    <div className="p-3 border-t border-white/10">
-      <p className="text-xs text-white/40 uppercase tracking-wide mb-2">Drawer Config</p>
-      <label className="flex items-center gap-2 text-sm text-white/80 mb-2">
-        Slide type
-        <select
-          value={config.slideType}
-          onChange={e => update({ slideType: e.target.value as SlideType })}
-          className="bg-surface border border-white/20 rounded px-1 py-0.5 text-white text-sm"
-        >
-          <option value="side-mount">Side-mount</option>
-          <option value="undermount">Undermount</option>
-        </select>
-      </label>
-      <label className="flex items-center gap-2 text-sm text-white/80">
-        Reveal (mm)
-        <input
-          type="number"
-          value={config.reveal}
-          onChange={e => update({ reveal: Number(e.target.value) })}
-          className="w-16 bg-surface border border-white/20 rounded px-1 py-0.5 text-white text-sm text-right"
-        />
-      </label>
-    </div>
-  )
-}
-```
-
-- [ ] **Step 7: Implement Sidebar**
-
-```tsx
-// src/components/Sidebar/Sidebar.tsx
-import type { CabinetNode, ElementType, MaterialId, DrawerConfig } from '../../types'
-import ActionPanel from './ActionPanel'
-import MaterialPanel from './MaterialPanel'
-import ElementTypePanel from './ElementTypePanel'
-import DrawerConfigPanel from './DrawerConfigPanel'
-
-interface Props {
-  selectedId: string | null
-  allNodes: CabinetNode[]      // flat list derived from tree
+  selectedNode: CabinetNode | null
   onAddShelf: (id: string) => void
   onAddDivider: (id: string) => void
   onDelete: (id: string) => void
@@ -2551,61 +2204,117 @@ interface Props {
   onSetDrawerConfig: (id: string, config: DrawerConfig) => void
 }
 
-function findNode(nodes: CabinetNode[], id: string): CabinetNode | undefined {
-  return nodes.find(n => n.id === id)
+const ELEMENT_TYPES: ElementType[] = ['void', 'drawer', 'hanging-space']
+const ELEMENT_TYPE_LABELS: Record<ElementType, string> = {
+  void: 'Empty', drawer: 'Drawer', 'hanging-space': 'Hanging Space',
+}
+
+function Btn({ label, onClick, disabled = false }: { label: string; onClick?: () => void; disabled?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="w-full text-left px-3 py-2 rounded text-sm bg-panel hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+    >{label}</button>
+  )
 }
 
 export default function Sidebar({
-  selectedId, allNodes, onAddShelf, onAddDivider, onDelete,
+  selectedId, selectedNode, onAddShelf, onAddDivider, onDelete,
   onToggleLock, onSetMaterial, onSetElementType, onSetDrawerConfig,
 }: Props) {
-  const node = selectedId ? findNode(allNodes, selectedId) : undefined
-  const isVoid = !node?.splitAxis
-  const isLocked = node?.locked ?? false
+  const isVoid = !selectedNode?.splitAxis
+  const isLocked = selectedNode?.locked ?? false
 
   return (
     <aside className="w-60 flex flex-col bg-panel border-l border-white/10 overflow-y-auto">
-      <ActionPanel
-        selectedId={selectedId}
-        isVoid={isVoid}
-        isLocked={isLocked}
-        onAddShelf={onAddShelf}
-        onAddDivider={onAddDivider}
-        onDelete={onDelete}
-        onToggleLock={onToggleLock}
-      />
-      <MaterialPanel
-        selectedId={selectedId}
-        currentMaterial={node?.material}
-        onSetMaterial={onSetMaterial}
-      />
-      <ElementTypePanel
-        selectedId={selectedId}
-        currentType={node?.elementType}
-        onSetType={onSetElementType}
-      />
-      {node?.elementType === 'drawer' && (
-        <DrawerConfigPanel
-          selectedId={selectedId}
-          config={node.drawerConfig}
-          onSetConfig={onSetDrawerConfig}
-        />
+      {/* Actions */}
+      <div className="flex flex-col gap-1 p-3">
+        <p className="text-xs text-white/40 uppercase tracking-wide mb-1">Actions</p>
+        <Btn label="Add Shelf" disabled={!selectedId || !isVoid} onClick={() => selectedId && onAddShelf(selectedId)} />
+        <Btn label="Add Divider" disabled={!selectedId || !isVoid} onClick={() => selectedId && onAddDivider(selectedId)} />
+        <Btn label="Delete" disabled={!selectedId} onClick={() => selectedId && onDelete(selectedId)} />
+        {selectedId && (
+          <Btn
+            label={isLocked ? '🔒 Locked – click to unlock' : '🔓 Unlocked – click to lock'}
+            onClick={() => selectedId && onToggleLock(selectedId, !isLocked)}
+          />
+        )}
+      </div>
+
+      {/* Material */}
+      {selectedId && (
+        <div className="p-3 border-t border-white/10">
+          <p className="text-xs text-white/40 uppercase tracking-wide mb-2">Material</p>
+          <div className="flex flex-wrap gap-2">
+            {(Object.keys(MATERIALS) as MaterialId[]).map(key => (
+              <button
+                key={key}
+                title={MATERIALS[key].label}
+                onClick={() => onSetMaterial(selectedId, key)}
+                className={`w-8 h-8 rounded-full border-2 ${selectedNode?.material === key ? 'border-accent' : 'border-transparent'}`}
+                style={{ backgroundColor: MATERIALS[key].fill }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Element Type */}
+      {selectedId && (
+        <div className="p-3 border-t border-white/10">
+          <p className="text-xs text-white/40 uppercase tracking-wide mb-2">Element Type</p>
+          <div className="flex flex-col gap-1">
+            {ELEMENT_TYPES.map(t => (
+              <button
+                key={t}
+                onClick={() => onSetElementType(selectedId, t)}
+                className={`text-left px-3 py-1.5 rounded text-sm ${selectedNode?.elementType === t ? 'bg-accent text-white' : 'bg-panel hover:bg-white/10 text-white/70'}`}
+              >{ELEMENT_TYPE_LABELS[t]}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Drawer Config */}
+      {selectedId && selectedNode?.elementType === 'drawer' && selectedNode.drawerConfig && (
+        <div className="p-3 border-t border-white/10">
+          <p className="text-xs text-white/40 uppercase tracking-wide mb-2">Drawer Config</p>
+          <label className="flex items-center gap-2 text-sm text-white/80 mb-2">
+            Slide type
+            <select
+              value={selectedNode.drawerConfig.slideType}
+              onChange={e => onSetDrawerConfig(selectedId, { ...selectedNode.drawerConfig!, slideType: e.target.value as SlideType })}
+              className="bg-surface border border-white/20 rounded px-1 py-0.5 text-white text-sm"
+            >
+              <option value="side-mount">Side-mount</option>
+              <option value="undermount">Undermount</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-sm text-white/80">
+            Reveal (mm)
+            <input
+              type="number"
+              value={selectedNode.drawerConfig.reveal}
+              onChange={e => onSetDrawerConfig(selectedId, { ...selectedNode.drawerConfig!, reveal: Number(e.target.value) })}
+              className="w-16 bg-surface border border-white/20 rounded px-1 py-0.5 text-white text-sm text-right"
+            />
+          </label>
+        </div>
       )}
     </aside>
   )
 }
 ```
 
-- [ ] **Step 8: Wire Sidebar into App and flatten tree for allNodes**
+- [ ] **Step 4: Wire Sidebar into App**
 
 ```tsx
-// src/App.tsx — add flattenTree helper and Sidebar
+// src/App.tsx — add Sidebar with selectedNode
+import { useMemo } from 'react'
 import Sidebar from './components/Sidebar/Sidebar'
-import type { CabinetNode, ElementType, MaterialId, DrawerConfig } from './types'
-
-function flattenTree(node: CabinetNode): CabinetNode[] {
-  return [node, ...(node.children?.flatMap(flattenTree) ?? [])]
-}
+import { findNode } from './engine/treeMutations'
+import type { ElementType, MaterialId, DrawerConfig } from './types'
 
 // In App component body:
 const storeAddShelf = useStore(s => s.addShelf)
@@ -2617,56 +2326,39 @@ const storeDrawerConfig = useStore(s => s.setDrawerConfig)
 const storeSetElementType = useStore(s => s.setElementType)
 const selectedId = useStore(s => s.selectedId)
 
-function setElementType(id: string, type: ElementType) {
-  storeSetElementType(id, type)
-}
+const selectedNode = useMemo(
+  () => selectedId && activeDesign ? findNode(activeDesign.root, selectedId) ?? null : null,
+  [selectedId, activeDesign],
+)
 
 // Inside <main>:
 <main className="flex flex-1 overflow-hidden">
-  {activeDesign && <CabinetCanvas design={activeDesign} />}
+  {activeDesign && <CabinetCanvas design={activeDesign} svgRef={svgRef} />}
   <Sidebar
     selectedId={selectedId}
-    allNodes={activeDesign ? flattenTree(activeDesign.root) : []}
+    selectedNode={selectedNode}
     onAddShelf={storeAddShelf}
     onAddDivider={storeAddDivider}
     onDelete={storeDeleteBoard}
     onToggleLock={storeLocked}
     onSetMaterial={storeMaterial}
-    onSetElementType={setElementType}
+    onSetElementType={storeSetElementType}
     onSetDrawerConfig={storeDrawerConfig}
   />
 </main>
 ```
 
-The `setElementType` action now exists in `store.ts` (added in Task 6):
-
-```ts
-setElementType: (nodeId: string, type: ElementType) => set(s => {
-  mutateRoot(s, d => ({
-    ...d,
-    root: (() => {
-      function mapNode(n: CabinetNode): CabinetNode {
-        if (n.id === nodeId) return { ...n, elementType: type }
-        if (!n.children) return n
-        return { ...n, children: n.children.map(mapNode) }
-      }
-      return mapNode(d.root)
-    })(),
-  }))
-}),
-```
-
-- [ ] **Step 9: Run – expect PASS**
+- [ ] **Step 5: Run – expect PASS**
 
 ```bash
 npx vitest run src/components/Sidebar/Sidebar.test.tsx
 ```
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add src/components/Sidebar/ src/App.tsx src/store/store.ts
-git commit -m "feat: sidebar with ActionPanel, MaterialPanel, ElementTypePanel, DrawerConfigPanel
+git add src/components/Sidebar/ src/App.tsx
+git commit -m "feat: Sidebar with all panels merged (actions, material, element type, drawer config)
 
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```
@@ -2927,24 +2619,21 @@ export default function CutListPanel({ entries }: Props) {
 - [ ] **Step 6: Add CutListPanel to App as collapsible panel**
 
 ```tsx
-// src/App.tsx — add cut-list sidebar section
-import { useState } from 'react'
+// src/App.tsx — add cut-list sidebar section (uses native <details> — no state needed)
 import { computeCutList } from './engine/cutList'
 import CutListPanel from './components/CutListPanel/CutListPanel'
 
 // In App body:
-const [showCutList, setShowCutList] = useState(false)
 const cutList = activeDesign ? computeCutList(activeDesign) : []
 
 // Add below the Sidebar in <main>:
 <div className="w-72 border-l border-white/10 bg-panel flex flex-col">
-  <button
-    className="px-4 py-2 text-sm text-white/60 hover:text-white text-left border-b border-white/10"
-    onClick={() => setShowCutList(v => !v)}
-  >
-    {showCutList ? '▲' : '▼'} Cut List ({cutList.length} parts)
-  </button>
-  {showCutList && <CutListPanel entries={cutList} />}
+  <details className="border rounded p-2">
+    <summary className="cursor-pointer font-semibold text-sm text-white/60">
+      Cut List ({cutList.length} parts)
+    </summary>
+    <CutListPanel entries={cutList} />
+  </details>
 </div>
 ```
 
@@ -2958,13 +2647,16 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```
 
 ---
-### Task 14: WarningBanner + ExportButton + exportSVG
+### Task 14: WarningBanner + exportSVG
 
 **Files:**
 - Create: `src/components/WarningBanner/WarningBanner.tsx`
-- Create: `src/components/ExportButton/ExportButton.tsx`
 - Create: `src/utils/exportSVG.ts`
 - Modify: `src/App.tsx`
+- Modify: `src/components/Toolbar/Toolbar.tsx` (Export SVG button already inlined in Task 7)
+
+> **Note (Fix 5):** `ExportButton` has no separate directory. The Export SVG button is inlined in `Toolbar.tsx`.
+> **Note (Fix 4):** `overConstrainedIds` is derived with `useMemo` in App — no `onLayoutComputed` callback on `CabinetCanvas`.
 
 - [ ] **Step 1: Write failing tests**
 
@@ -3077,54 +2769,31 @@ export default function WarningBanner({ overConstrainedIds }: Props) {
 }
 ```
 
-- [ ] **Step 5: Implement ExportButton**
-
-```tsx
-// src/components/ExportButton/ExportButton.tsx
-import type { RefObject } from 'react'
-import { downloadSVG } from '../../utils/exportSVG'
-
-interface Props {
-  svgRef: RefObject<SVGSVGElement>
-  filename: string
-}
-
-export default function ExportButton({ svgRef, filename }: Props) {
-  return (
-    <button
-      onClick={() => downloadSVG(svgRef, filename)}
-      className="px-3 py-1.5 bg-accent hover:bg-accent/80 text-white text-sm rounded"
-    >
-      Export SVG
-    </button>
-  )
-}
-```
-
-- [ ] **Step 6: Wire into App**
+- [ ] **Step 5: Wire into App**
 
 ```tsx
 // src/App.tsx
+import { useMemo } from 'react'
 import WarningBanner from './components/WarningBanner/WarningBanner'
-import ExportButton from './components/ExportButton/ExportButton'
-import { useRef, useState } from 'react'
+import { computeLayout } from './engine/layoutEngine'
 
-// In App body:
-const canvasRef = useRef<SVGSVGElement>(null)  // pass this ref through to CabinetCanvas
-const [overConstrainedIds, setOverConstrainedIds] = useState<string[]>([])
-
-// Pass onLayoutComputed callback to CabinetCanvas:
-// CabinetCanvas calls onLayoutComputed(layout.overConstrainedIds) in useMemo
-// <CabinetCanvas design={activeDesign} onLayoutComputed={setOverConstrainedIds} />
+// In App body — derive overConstrainedIds without a callback (Fix 4):
+const overConstrainedIds = useMemo(
+  () => activeDesign ? computeLayout(activeDesign).overConstrainedIds : [],
+  [activeDesign],
+)
 
 // Between Toolbar and ProjectTabs:
 <WarningBanner overConstrainedIds={overConstrainedIds} />
 
-// In Toolbar or a footer area:
-<ExportButton svgRef={canvasRef} filename={activeDesign?.name ?? 'cabinet'} />
+// svgRef is already defined in Task 12 App wiring; pass to Toolbar:
+<Toolbar
+  settings={activeDesign.globalSettings}
+  onSettingsChange={updateSettings}
+  svgRef={svgRef}
+  designName={activeDesign?.name ?? 'cabinet'}
+/>
 ```
-
-Pass `svgRef` to `CabinetCanvas` as a prop so it uses the same ref.
 
 - [ ] **Step 7: Run – expect PASS**
 
@@ -3135,8 +2804,8 @@ npx vitest run src/utils/exportSVG.test.ts
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/components/WarningBanner/ src/components/ExportButton/ src/utils/exportSVG.ts src/utils/exportSVG.test.ts src/App.tsx
-git commit -m "feat: WarningBanner, ExportButton, SVG export utility
+git add src/components/WarningBanner/ src/utils/exportSVG.ts src/utils/exportSVG.test.ts src/App.tsx src/components/Toolbar/
+git commit -m "feat: WarningBanner, SVG export utility, overConstrainedIds via useMemo
 
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```
@@ -3281,7 +2950,7 @@ Pure-frontend SPA: React 18, Vite 5, TypeScript 5, Tailwind CSS 3.
 
 **Layout engine:** `computeLayout(design)` in `src/engine/layoutEngine.ts` converts the tree into flat `LayoutResult` arrays. It is pure and memoised in `CabinetCanvas`. Never call it from within a store action.
 
-**Canvas:** Single `<svg>` element. Layers in render order: PanelLayer → VoidLayer → DividerLayer → AccessoryLayer → DimensionLabels → DragHandles.
+**Canvas:** Single `<svg>` element. Layers in render order inside `CanvasLayers.tsx`: panels → voids → dividers → accessories. Then `DimensionLabels` and `DragHandles` are added on top.
 
 ## Strict Rules
 
@@ -3323,6 +2992,7 @@ This test exercises the full user workflow: open app → configure global settin
 ```tsx
 // src/test/e2e.test.tsx
 import { render, screen, fireEvent, act } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, it, expect, beforeEach } from 'vitest'
 import App from '../App'
 import { useStore } from '../store/store'
@@ -3356,64 +3026,71 @@ describe('Full cabinet workflow', () => {
     expect(rects.length).toBeGreaterThanOrEqual(4)
   })
 
-  it('clicking a void selects it', () => {
+  it('clicking a void selects it', async () => {
+    const user = userEvent.setup()
     render(<App />)
     const voids = screen.getAllByTestId(/^void-/)
-    fireEvent.click(voids[0])
+    await user.click(voids[0])
     expect(useStore.getState().selectedId).not.toBeNull()
   })
 
-  it('adding a shelf splits the selected void', () => {
+  it('adding a shelf splits the selected void', async () => {
+    const user = userEvent.setup()
     render(<App />)
     // Select the root void
-    fireEvent.click(screen.getByTestId('void-root-node'))
+    await user.click(screen.getByTestId('void-root-node'))
     // Click Add Shelf
-    fireEvent.click(screen.getByRole('button', { name: /add shelf/i }))
+    await user.click(screen.getByRole('button', { name: /add shelf/i }))
     // Now there should be 2 voids
     expect(screen.getAllByTestId(/^void-/).length).toBe(2)
   })
 
-  it('after adding one shelf, each void is 373mm tall (800 - 2×18 - 18) / 2', () => {
+  it('after adding one shelf, each void is 373mm tall (800 - 2×18 - 18) / 2', async () => {
+    const user = userEvent.setup()
     render(<App />)
-    fireEvent.click(screen.getByTestId('void-root-node'))
-    fireEvent.click(screen.getByRole('button', { name: /add shelf/i }))
+    await user.click(screen.getByTestId('void-root-node'))
+    await user.click(screen.getByRole('button', { name: /add shelf/i }))
 
     // The dimension labels should show 373 mm
     const labels = screen.getAllByText(/373/)
     expect(labels.length).toBeGreaterThanOrEqual(1)
   })
 
-  it('typing a new height into the top void adjusts the bottom void', () => {
+  it('typing a new height into the top void adjusts the bottom void', async () => {
+    const user = userEvent.setup()
     render(<App />)
-    fireEvent.click(screen.getByTestId('void-root-node'))
-    fireEvent.click(screen.getByRole('button', { name: /add shelf/i }))
+    await user.click(screen.getByTestId('void-root-node'))
+    await user.click(screen.getByRole('button', { name: /add shelf/i }))
 
-    const topNodeId = useStore.getState().projects[0].root.children![0].id
+    // Click the top void's height label (which shows 373) to open DimensionEditor
+    const topHeightLabel = screen.getAllByText(/373/)[0]
+    await user.click(topHeightLabel)
 
-    // Simulate typing a size — setNodeSize sets fixedSize + locked: true
-    act(() => {
-      useStore.getState().setNodeSize(topNodeId, 200)
-    })
+    // Type new dimension into the DimensionEditor input
+    const input = screen.getByRole('spinbutton')
+    await user.clear(input)
+    await user.type(input, '200')
+    await user.keyboard('{Enter}')
 
     // Bottom void should now be 800 - 2*18 - 18 - 200 = 546
     expect(screen.getByText(/546/)).toBeInTheDocument()
 
-    // Unlock the top node — both voids should return to 373mm
-    act(() => {
-      useStore.getState().unlockNode(topNodeId)
-    })
+    // Click the lock icon on the top void to unlock it
+    const lockIcon = screen.getByLabelText('Unlock section')
+    await user.click(lockIcon)
     const labels = screen.getAllByText(/373/)
     expect(labels.length).toBeGreaterThanOrEqual(1)
   })
 
-  it('cut list shows correct panel count after adding shelf and divider', () => {
+  it('cut list shows correct panel count after adding shelf and divider', async () => {
+    const user = userEvent.setup()
     render(<App />)
     // Add shelf
-    fireEvent.click(screen.getByTestId('void-root-node'))
-    fireEvent.click(screen.getByRole('button', { name: /add shelf/i }))
+    await user.click(screen.getByTestId('void-root-node'))
+    await user.click(screen.getByRole('button', { name: /add shelf/i }))
 
-    // Open cut list
-    fireEvent.click(screen.getByRole('button', { name: /cut list/i }))
+    // Open cut list (native <details> — click summary)
+    await user.click(screen.getByText(/cut list/i))
 
     // Should show Side panel, Top panel, Bottom panel, Back panel, Shelf
     expect(screen.getByText('Side panel')).toBeInTheDocument()
@@ -3421,10 +3098,11 @@ describe('Full cabinet workflow', () => {
     expect(screen.getByText('Back panel')).toBeInTheDocument()
   })
 
-  it('undo restores the tree after adding a shelf', () => {
+  it('undo restores the tree after adding a shelf', async () => {
+    const user = userEvent.setup()
     render(<App />)
-    fireEvent.click(screen.getByTestId('void-root-node'))
-    fireEvent.click(screen.getByRole('button', { name: /add shelf/i }))
+    await user.click(screen.getByTestId('void-root-node'))
+    await user.click(screen.getByRole('button', { name: /add shelf/i }))
     expect(screen.getAllByTestId(/^void-/).length).toBe(2)
 
     // Trigger undo
@@ -3464,19 +3142,39 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ---
 ### Task 17: Accessory System (Hanging Rails)
 
+**Self-contained task** — adds all accessory code in one place. Earlier tasks do NOT add accessory types or functions; they note "See Task 17".
+
 **Files:**
-- Modify: `src/types/index.ts` (Accessory, AccessoryType already added in Task 2)
-- Modify: `src/store/store.ts` (addAccessory, removeAccessory already added in Task 6)
-- Modify: `src/engine/treeMutations.ts` (accessory mutations already added in Task 5)
+- Modify: `src/types/index.ts` — add `Accessory`, `AccessoryType`, `CabinetNode.accessories`, `LayoutVoid.accessories`
+- Modify: `src/engine/treeMutations.ts` — add `addAccessory`, `removeAccessory`
+- Modify: `src/store/store.ts` — add `addAccessory`, `removeAccessory` actions + import `AccessoryType`, `Accessory`
+- Modify: `src/engine/layoutEngine.ts` — pass `accessories: node.accessories ?? []` in void push
 - Create: `src/components/AccessoryPanel.tsx`
-- Modify: `src/components/canvas/AccessoryLayer.tsx` (rendering updated in Task 9)
-- Modify: `src/engine/cutList.ts` (add hanging-rail entries)
-- Test: `src/engine/treeMutations.test.ts` (accessory tests)
+- Modify: `src/components/CabinetCanvas/CanvasLayers.tsx` — accessories already rendered from `v.accessories`
+- Modify: `src/engine/cutList.ts` — add hanging-rail entries
+- Test: `src/engine/treeMutations.test.ts` — add accessory tests
 - Test: `src/components/AccessoryPanel.test.tsx`
 
-- [ ] **Step 1: Verify Accessory types exist**
+- [ ] **Step 1: Add Accessory types to `src/types/index.ts`**
 
-The `AccessoryType`, `Accessory` types and `CabinetNode.accessories`, `LayoutVoid.accessories` were added in Task 2. Confirm they are present in `src/types/index.ts`.
+```ts
+// Add to src/types/index.ts (after AccessoryType line which already exists):
+export interface Accessory {
+  id: string          // nanoid()
+  type: AccessoryType
+  heightFromBottom: number  // mm from bottom of void
+}
+```
+
+Also add to `CabinetNode`:
+```ts
+  accessories?: Accessory[]      // accessories attached to this void
+```
+
+And to `LayoutVoid`:
+```ts
+  accessories: Accessory[]
+```
 
 - [ ] **Step 2: Write failing tests for accessory mutations**
 
@@ -3502,19 +3200,21 @@ describe('accessory mutations', () => {
 
 Also update the treeMutations.test.ts import to include `addAccessory` and `removeAccessory`:
 ```ts
-import { addShelf, addDivider, deleteBoard, setNodeSize, setLocked, setMaterial, setSplitRatio, unlockNode, addAccessory, removeAccessory } from './treeMutations'
+import { addShelf, addDivider, deleteBoard, setNodeSize, setSplitRatio, setLocked, setMaterial, unlockNode, addAccessory, removeAccessory } from './treeMutations'
 import type { CabinetNode, Accessory } from '../types'
 ```
 
 - [ ] **Step 3: Run test to verify it fails**
 
 Run: `npm run test -- treeMutations --run`
-Expected: FAIL with "treeMutations.addAccessory is not a function" (if not yet implemented) or PASS if already implemented in Task 5.
+Expected: FAIL with "treeMutations.addAccessory is not a function"
 
-- [ ] **Step 4: Confirm accessory mutations are implemented**
+- [ ] **Step 4: Add accessory mutations to treeMutations.ts**
 
-In `src/engine/treeMutations.ts`, verify `addAccessory` and `removeAccessory` functions exist (added in Task 5). If not, add:
+In `src/engine/treeMutations.ts`, add the `Accessory` import and these functions:
 ```ts
+import type { CabinetNode, MaterialId, SplitAxis, ElementType, DrawerConfig, Accessory } from '../types'
+
 export function addAccessory(root: CabinetNode, nodeId: string, acc: Accessory): CabinetNode {
   return mapNode(root, (n) => {
     if (n.id !== nodeId) return n
@@ -3535,35 +3235,49 @@ export function removeAccessory(root: CabinetNode, nodeId: string, accId: string
 Run: `npm run test -- treeMutations --run`
 Expected: PASS
 
-- [ ] **Step 6: Verify store actions exist**
+- [ ] **Step 6: Add accessory store actions**
 
-In `src/store/store.ts`, verify `addAccessory` and `removeAccessory` actions exist (added in Task 6). If not, add to `StoreState`:
+In `src/store/store.ts`, add to `StoreState` interface:
 ```ts
 addAccessory: (nodeId: string, type: AccessoryType, heightFromBottom: number) => void
 removeAccessory: (nodeId: string, accId: string) => void
 ```
-And to store implementation:
+
+Update imports:
 ```ts
-addAccessory(nodeId, type, heightFromBottom) {
-  set((s) => {
-    const design = activeDesign(s)
-    if (!design) return
-    const acc: Accessory = { id: nanoid(), type, heightFromBottom }
-    design.root = treeAddAccessory(design.root, nodeId, acc)
-  })
-},
-removeAccessory(nodeId, accId) {
-  set((s) => {
-    const design = activeDesign(s)
-    if (!design) return
-    design.root = treeRemoveAccessory(design.root, nodeId, accId)
-  })
-},
+import type { ..., AccessoryType, Accessory } from '../types'
+import { ..., addAccessory as treeAddAccessory, removeAccessory as treeRemoveAccessory } from '../engine/treeMutations'
 ```
 
-- [ ] **Step 7: Verify layoutEngine passes accessories to LayoutVoid**
+Add to store implementation:
+```ts
+addAccessory: (nodeId, type, heightFromBottom) => set(s => {
+  const design = activeDesign(s)
+  if (!design) return
+  const acc: Accessory = { id: nanoid(), type, heightFromBottom }
+  design.root = treeAddAccessory(design.root, nodeId, acc)
+}),
+removeAccessory: (nodeId, accId) => set(s => {
+  const design = activeDesign(s)
+  if (!design) return
+  design.root = treeRemoveAccessory(design.root, nodeId, accId)
+}),
+```
 
-In `src/engine/layoutEngine.ts`, confirm the void push includes `accessories: node.accessories ?? []` (added in Task 4 fix).
+- [ ] **Step 7: Update layoutEngine to pass accessories to LayoutVoid**
+
+In `src/engine/layoutEngine.ts`, ensure the leaf void push includes `accessories: node.accessories ?? []`:
+
+```ts
+voids.push({
+  nodeId: node.id, x, y, w, h,
+  parentSplitAxis,
+  elementType: node.elementType ?? 'void',
+  drawerConfig: node.drawerConfig,
+  material,
+  accessories: node.accessories ?? [],
+})
+```
 
 - [ ] **Step 8: Write failing AccessoryPanel test**
 
@@ -3678,14 +3392,14 @@ export default function AccessoryPanel() {
 Run: `npm run test -- AccessoryPanel --run`
 Expected: PASS
 
-- [ ] **Step 12: Verify AccessoryLayer renders from accessories**
+- [ ] **Step 12: Verify CanvasLayers renders from accessories**
 
-Confirm `src/components/canvas/AccessoryLayer.tsx` renders hanging rails from `v.accessories` (updated in Task 9). The rendering should look like:
+Confirm `src/components/CabinetCanvas/CanvasLayers.tsx` renders hanging rails from `v.accessories` (the accessories layer renders from the same `layout.voids` data that Task 17 now populates). The rendering in `CanvasLayers.tsx` should already handle:
 ```tsx
 {(v.accessories ?? [])
   .filter((a) => a.type === 'hanging-rail')
   .map((a) => {
-    const railY = v.y + v.h - a.heightFromBottom * scale
+    const railY = v.y + v.h - a.heightFromBottom
     return (
       <line key={a.id} x1={v.x} y1={railY} x2={v.x + v.w} y2={railY}
         stroke="#666" strokeWidth={3} strokeDasharray="4 2" />
@@ -3740,7 +3454,7 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 | Over-constraint detection + WarningBanner | Task 4 + Task 14 |
 | Material colours per panel | Task 2 (types), Task 8/9 (layers), Task 12 (MaterialPanel) |
 | Drawer with DrawerConfig (slide/reveal) | Task 2, Task 6, Task 12 (DrawerConfigPanel), Task 13 (cutList) |
-| Hanging rail accessory system | Task 9 (AccessoryLayer), Task 17 |
+| Hanging rail accessory system | Task 17 (self-contained) |
 | Drag handles + snap | Task 11 |
 | Autoscaling engine rules | Task 4 (distributeTwo) |
 | Cut-list with formulas | Task 13 (cutList.ts) |
@@ -3761,6 +3475,31 @@ All 22 spec requirements are covered. ✓
 - `commitDrag(parentNodeId, ratio)` — 2 params (parentNodeId, ratio 0-1) in store.ts and DragHandles.tsx ✓
 - `formatDisplay` returns a string — used as SVG `<text>` children ✓
 - `CutListEntry.depth` — third dimension (physical thickness of the piece) ✓
-- `LayoutVoid.accessories` flows from tree → layout → AccessoryLayer and cut-list tasks ✓
+- `LayoutVoid.accessories` flows from tree → layout → CanvasLayers and cut-list tasks ✓
 
 ---
+
+## Simplification Review Applied
+
+The following simplifications were applied to this plan after the initial review:
+
+| # | Fix | Impact |
+|---|-----|--------|
+| D1 | **Merge 4 canvas layers into `CanvasLayers.tsx`** | `PanelLayer.tsx`, `VoidLayer.tsx`, `DividerLayer.tsx`, `AccessoryLayer.tsx` removed; single file with inline `<g>` groups |
+| D2 | **`children?: [CabinetNode, CabinetNode]` tuple** | TypeScript enforces binary split invariant; all `length !== 2` guards removed |
+| Fix 1 | **Remove duplicate `selectNode`** | Only `setSelectedId` remains in `StoreState`; `selectNode` alias deleted |
+| Fix 2 | **Move `setElementType`/`setDrawerConfig` to `treeMutations.ts`** | IIFE tree-walkers in store replaced with `treeMutations.setElementType` / `treeMutations.setDrawerConfig` |
+| Fix 3 | **Replace `allNodes`/`flattenTree` with `findNode` + `selectedNode` prop** | `Sidebar` receives `selectedNode: CabinetNode \| null` directly; no flat list, no local `findNode` |
+| Fix 4 | **Derive `overConstrainedIds` with `useMemo`** | No `onLayoutComputed` callback; no side-effect in `useMemo`; no `useState` in App for this |
+| Fix 5 | **Inline `ExportButton` into Toolbar** | `src/components/ExportButton/` directory removed; button and `downloadSVG` import live in `Toolbar.tsx` |
+| Fix 6 | **Delete `findDividerContext`** | Dead export removed from `treeMutations.ts` |
+| Fix 7 | **Remove dead `distributeTwo` branch** | "Both have fixedSize but neither locked" unreachable branch deleted |
+| Fix 8 | **Delete trivial property-setter tests** | `setSplitRatio`, `setLocked`, `setMaterial` test blocks removed from `treeMutations.test.ts` |
+| Fix 9 | **Remove DOM-only Toolbar tests** | "shows unit toggle buttons" and "shows height/width/depth/thickness" tests removed |
+| Fix 10 | **Remove `ScaledProps`/unused `scale`** | Merged `CanvasLayers.tsx` uses absolute mm coordinates directly (no per-function scale prop) |
+| Fix 11 | **`<details>` for cut-list collapse** | `showCutList` state and custom toggle button removed; native `<details>`/`<summary>` used |
+| Fix 12 | **Merge Sidebar sub-panels into `Sidebar.tsx`** | `ActionPanel.tsx`, `ElementTypePanel.tsx`, `MaterialPanel.tsx`, `DrawerConfigPanel.tsx` removed as separate files |
+| Fix 13 | **CanvasLayers consolidation (D1 implementation)** | Task 9 replaced with a verification step; no new separate layer files |
+| Fix 14 | **`children` tuple (D2 implementation)** | Type updated in Task 2; `length !== 2` guards removed from Task 4; `as [CabinetNode, CabinetNode]` cast added in `splitNode` |
+| Fix 15 | **Consolidate accessory code into Task 17 only** | Tasks 2, 5, 6 no longer add accessories; Task 17 is fully self-contained |
+| Fix 16 | **E2E test uses `userEvent` not direct store calls** | `act(() => store.getState().setNodeSize(...))` replaced with `userEvent.click` + `userEvent.type` + `userEvent.keyboard` |
