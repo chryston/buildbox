@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type {
   CabinetNode,
   DrawerConfig,
@@ -13,7 +14,7 @@ interface Props {
   onAddShelf: (id: string) => void
   onAddDivider: (id: string) => void
   onDelete: (id: string) => void
-  onToggleLock: (id: string, locked: boolean) => void
+  onToggleLock: (id: string) => void
   onSetMaterial: (id: string, mat: MaterialId) => void
   onSetElementType: (id: string, type: ElementType) => void
   onSetDrawerConfig: (id: string, config: DrawerConfig) => void
@@ -60,6 +61,13 @@ export default function Sidebar({
 }: Props) {
   const isVoid = !selectedNode?.splitAxis
   const isLocked = selectedNode?.locked ?? false
+  const [revealStr, setRevealStr] = useState(String(selectedNode?.drawerConfig?.reveal ?? 3))
+
+  useEffect(() => {
+    if (selectedNode?.drawerConfig) {
+      setRevealStr(String(selectedNode.drawerConfig.reveal))
+    }
+  }, [selectedId, selectedNode?.drawerConfig?.reveal])
 
   return (
     <aside className="w-60 flex flex-col bg-panel border-l border-white/10 overflow-y-auto">
@@ -83,7 +91,7 @@ export default function Sidebar({
         {selectedId && (
           <Btn
             label={isLocked ? '🔒 Locked – click to unlock' : '🔓 Unlocked – click to lock'}
-            onClick={() => selectedId && onToggleLock(selectedId, !isLocked)}
+            onClick={() => selectedId && onToggleLock(selectedId)}
           />
         )}
       </div>
@@ -97,6 +105,7 @@ export default function Sidebar({
                 key={key}
                 type="button"
                 title={MATERIALS[key].label}
+                aria-label={MATERIALS[key].label}
                 onClick={() => onSetMaterial(selectedId, key)}
                 className={`w-8 h-8 rounded-full border-2 ${selectedNode?.material === key ? 'border-accent' : 'border-transparent'}`}
                 style={{ backgroundColor: MATERIALS[key].fill }}
@@ -147,13 +156,17 @@ export default function Sidebar({
             Reveal (mm)
             <input
               type="number"
-              value={selectedNode.drawerConfig.reveal}
-              onChange={(e) =>
-                onSetDrawerConfig(selectedId, {
-                  ...selectedNode.drawerConfig!,
-                  reveal: Number(e.target.value),
-                })
-              }
+              value={revealStr}
+              onChange={(e) => setRevealStr(e.target.value)}
+              onBlur={() => {
+                const value = Number.parseFloat(revealStr)
+                if (!Number.isNaN(value) && value >= 0 && selectedNode?.drawerConfig) {
+                  onSetDrawerConfig(selectedId, {
+                    ...selectedNode.drawerConfig,
+                    reveal: value,
+                  })
+                }
+              }}
               className="w-16 bg-surface border border-white/20 rounded px-1 py-0.5 text-white text-sm text-right"
             />
           </label>

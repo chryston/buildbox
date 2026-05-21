@@ -34,4 +34,37 @@ describe('Sidebar', () => {
     render(<Sidebar {...baseProps} selectedId={null} selectedNode={null} />)
     expect(screen.getByRole('button', { name: /delete/i })).toBeDisabled()
   })
+
+  it('exposes material swatches with accessible labels', () => {
+    render(<Sidebar {...baseProps} />)
+    expect(screen.getByRole('button', { name: 'Oak' })).toBeInTheDocument()
+  })
+
+  it('buffers drawer reveal changes until blur', () => {
+    const onSetDrawerConfig = vi.fn()
+    render(
+      <Sidebar
+        {...baseProps}
+        selectedNode={{
+          id: 'v1',
+          elementType: 'drawer',
+          drawerConfig: { slideType: 'side-mount', reveal: 3 },
+        }}
+        onSetDrawerConfig={onSetDrawerConfig}
+      />,
+    )
+
+    const revealInput = screen.getByRole('spinbutton', { name: /reveal/i })
+    fireEvent.change(revealInput, { target: { value: '1.5' } })
+
+    expect(onSetDrawerConfig).not.toHaveBeenCalled()
+    expect(revealInput).toHaveValue(1.5)
+
+    fireEvent.blur(revealInput)
+
+    expect(onSetDrawerConfig).toHaveBeenCalledWith('v1', {
+      slideType: 'side-mount',
+      reveal: 1.5,
+    })
+  })
 })

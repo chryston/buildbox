@@ -57,8 +57,17 @@ export function setSplitRatio(root: CabinetNode, nodeId: string, ratio: number):
   return mapNode(root, (node) => (node.id === nodeId ? { ...node, splitRatio: ratio } : node))
 }
 
-export function setElementType(root: CabinetNode, id: string, et: ElementType): CabinetNode {
-  return mapNode(root, (node) => (node.id === id ? { ...node, elementType: et } : node))
+export function setElementType(root: CabinetNode, id: string, elementType: ElementType): CabinetNode {
+  return mapNode(root, (node) => {
+    if (node.id !== id) return node
+
+    const patch: Partial<CabinetNode> = { elementType }
+    if (elementType === 'drawer' && !node.drawerConfig) {
+      patch.drawerConfig = { slideType: 'side-mount', reveal: 3 }
+    }
+
+    return { ...node, ...patch }
+  })
 }
 
 export function setDrawerConfig(root: CabinetNode, id: string, cfg: DrawerConfig): CabinetNode {

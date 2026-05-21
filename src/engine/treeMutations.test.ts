@@ -143,6 +143,18 @@ describe('setElementType', () => {
     const root: CabinetNode = { id: 'root' }
     const next = setElementType(root, 'root', 'drawer')
     expect(next.elementType).toBe('drawer')
+    expect(next.drawerConfig).toEqual({ slideType: 'side-mount', reveal: 3 })
+  })
+
+  it('preserves an existing drawerConfig when setting drawer element type', () => {
+    const root: CabinetNode = {
+      id: 'root',
+      drawerConfig: { slideType: 'undermount', reveal: 5 },
+    }
+
+    const next = setElementType(root, 'root', 'drawer')
+
+    expect(next.drawerConfig).toEqual({ slideType: 'undermount', reveal: 5 })
   })
 })
 

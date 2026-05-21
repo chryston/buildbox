@@ -21,6 +21,7 @@ export default function App() {
   const storeAddDivider = useStore((state) => state.addDivider)
   const storeDeleteBoard = useStore((state) => state.deleteBoard)
   const storeLocked = useStore((state) => state.setLocked)
+  const storeUnlockNode = useStore((state) => state.unlockNode)
   const storeMaterial = useStore((state) => state.setMaterial)
   const storeDrawerConfig = useStore((state) => state.setDrawerConfig)
   const storeSetElementType = useStore((state) => state.setElementType)
@@ -60,7 +61,10 @@ export default function App() {
           onAddShelf={storeAddShelf}
           onAddDivider={storeAddDivider}
           onDelete={storeDeleteBoard}
-          onToggleLock={storeLocked}
+          onToggleLock={(id) => {
+            if (selectedNode?.locked) storeUnlockNode(id)
+            else storeLocked(id, true)
+          }}
           onSetMaterial={storeMaterial}
           onSetElementType={storeSetElementType}
           onSetDrawerConfig={storeDrawerConfig}
