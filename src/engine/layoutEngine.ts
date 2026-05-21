@@ -81,7 +81,8 @@ export function computeLayout(design: Design): LayoutResult {
     const [sizeA, sizeB, overConstrained] = distributeTwo(childA, childB, available, node)
 
     if (overConstrained) {
-      overConstrainedIds.push(...[childA.id, childB.id].filter((id, index, ids) => ids.indexOf(id) === index))
+      if (childA.locked) overConstrainedIds.push(childA.id)
+      if (childB.locked) overConstrainedIds.push(childB.id)
     }
 
     const dividerConfig = node.dividers?.[0]
@@ -150,6 +151,10 @@ function distributeTwo(
       lockedFlags[1] ? (childB.fixedSize ?? 0) * (available / lockedTotal) : 0,
       true,
     ]
+  }
+
+  if (lockedFlags[0] && lockedFlags[1]) {
+    return [childA.fixedSize ?? 0, childB.fixedSize ?? 0, false]
   }
 
   if (lockedFlags[0] && !lockedFlags[1]) {

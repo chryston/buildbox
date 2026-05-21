@@ -93,6 +93,26 @@ describe('computeLayout – over-constrained', () => {
   })
 })
 
+describe('computeLayout – both locked, both fit', () => {
+  const root: CabinetNode = {
+    id: 'root',
+    splitAxis: 'horizontal',
+    children: [
+      { id: 'a', fixedSize: 300, locked: true },
+      { id: 'b', fixedSize: 400, locked: true },
+    ],
+  }
+
+  it('each void gets its exact fixedSize when combined sizes fit', () => {
+    const result = computeLayout(makeDesign(root))
+    const a = result.voids.find(v => v.nodeId === 'a')!
+    const b = result.voids.find(v => v.nodeId === 'b')!
+    expect(a.h).toBe(300)
+    expect(b.h).toBe(400)
+    expect(result.overConstrainedIds).toHaveLength(0)
+  })
+})
+
 describe('computeLayout – toe-kick', () => {
   it('subtracts toe-kick height from inner height and adds toe-kick panel', () => {
     const design = makeDesign({ id: 'root' })

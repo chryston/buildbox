@@ -3,13 +3,16 @@ import {
   addShelf,
   addDivider,
   deleteBoard,
+  findNode,
+  setDrawerConfig,
+  setElementType,
   setNodeSize,
   setSplitRatio,
   setLocked,
   setMaterial,
   unlockNode,
 } from './treeMutations'
-import type { CabinetNode } from '../types'
+import type { CabinetNode, DrawerConfig } from '../types'
 
 const leaf = (): CabinetNode => ({ id: 'root' })
 
@@ -35,6 +38,16 @@ describe('addShelf', () => {
 
   it('throws when id not found', () => {
     expect(() => addShelf(leaf(), 'missing')).toThrow()
+  })
+
+  it('throws when the target node is already split', () => {
+    const root: CabinetNode = {
+      id: 'root',
+      splitAxis: 'horizontal',
+      children: [{ id: 'a' }, { id: 'b' }],
+    }
+
+    expect(() => addShelf(root, 'root')).toThrow()
   })
 })
 
@@ -122,5 +135,35 @@ describe('other mutations', () => {
 
     const materialNext = setMaterial(root, 'b', 'oak')
     expect(materialNext.children![1].material).toBe('oak')
+  })
+})
+
+describe('setElementType', () => {
+  it('sets elementType on target node', () => {
+    const root: CabinetNode = { id: 'root' }
+    const next = setElementType(root, 'root', 'drawer')
+    expect(next.elementType).toBe('drawer')
+  })
+})
+
+describe('setDrawerConfig', () => {
+  it('sets drawerConfig on target node', () => {
+    const root: CabinetNode = { id: 'root' }
+    const config: DrawerConfig = { slideType: 'undermount', reveal: 3 }
+    const next = setDrawerConfig(root, 'root', config)
+    expect(next.drawerConfig).toEqual(config)
+  })
+})
+
+describe('findNode', () => {
+  it('finds a node by id', () => {
+    const root: CabinetNode = {
+      id: 'root',
+      splitAxis: 'horizontal',
+      children: [{ id: 'a' }, { id: 'b' }],
+    }
+
+    expect(findNode(root, 'a')?.id).toBe('a')
+    expect(findNode(root, 'missing')).toBeNull()
   })
 })
