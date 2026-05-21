@@ -1,4 +1,4 @@
-import type { RefObject } from 'react'
+import { useEffect, useState, type RefObject } from 'react'
 import type { GlobalSettings, Unit } from '../../types'
 import { fromMm, toMm } from '../../engine/unitConversion'
 
@@ -11,11 +11,23 @@ interface Props {
 
 const UNITS: Unit[] = ['mm', 'cm', 'in']
 
+function roundDisplay(mm: number, unit: Unit): number {
+  const value = fromMm(mm, unit)
+  if (unit === 'mm') return Math.round(value)
+  if (unit === 'cm') return parseFloat(value.toFixed(1))
+  return parseFloat(value.toFixed(4))
+}
+
 export default function Toolbar({ settings, onSettingsChange, svgRef, designName }: Props) {
   const unit = settings.unit
 
-  function numField(label: string, key: keyof GlobalSettings, htmlFor: string) {
-    const displayVal = fromMm(settings[key] as number, unit)
+  function NumField({ label, settingsKey, htmlFor }: { label: string; settingsKey: keyof GlobalSettings; htmlFor: string }) {
+    const displayValue = String(roundDisplay(settings[settingsKey] as number, unit))
+    const [raw, setRaw] = useState(displayValue)
+
+    useEffect(() => {
+      setRaw(displayValue)
+    }, [displayValue])
 
     return (
       <label htmlFor={htmlFor} className="flex items-center gap-1 text-sm text-white/80">
@@ -23,8 +35,17 @@ export default function Toolbar({ settings, onSettingsChange, svgRef, designName
         <input
           id={htmlFor}
           type="number"
-          value={displayVal}
-          onChange={(e) => onSettingsChange({ [key]: toMm(Number(e.target.value), unit) } as Partial<GlobalSettings>)}
+          value={raw}
+          onChange={(e) => setRaw(e.target.value)}
+          onBlur={(e) => {
+            const nextValue = parseFloat(e.target.value)
+            if (!Number.isNaN(nextValue) && nextValue > 0) {
+              onSettingsChange({ [settingsKey]: toMm(nextValue, unit) } as Partial<GlobalSettings>)
+              return
+            }
+
+            setRaw(displayValue)
+          }}
           className="w-20 rounded border border-white/20 bg-surface px-1 py-0.5 text-right text-white"
         />
       </label>
@@ -49,10 +70,10 @@ export default function Toolbar({ settings, onSettingsChange, svgRef, designName
         ))}
       </div>
 
-      {numField('Height', 'height', 'tb-height')}
-      {numField('Width', 'width', 'tb-width')}
-      {numField('Depth', 'depth', 'tb-depth')}
-      {numField('Thickness', 'thickness', 'tb-thickness')}
+      <NumField label="Height" settingsKey="height" htmlFor="tb-height" />
+      <NumField label="Width" settingsKey="width" htmlFor="tb-width" />
+      <NumField label="Depth" settingsKey="depth" htmlFor="tb-depth" />
+      <NumField label="Thickness" settingsKey="thickness" htmlFor="tb-thickness" />
 
       <button
         onClick={() => {

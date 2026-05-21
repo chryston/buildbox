@@ -93,6 +93,7 @@ export const useStore = create<StoreState>()(
         }),
 
         deleteProject: (id) => set(s => {
+          if (s.projects.length <= 1) return
           s.projects = s.projects.filter(p => p.id !== id)
           if (s.activeProjectId === id) {
             s.activeProjectId = s.projects[0]?.id ?? null

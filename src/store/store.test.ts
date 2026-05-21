@@ -29,4 +29,14 @@ describe('useStore temporal history', () => {
     expect(useStore.getState().projects[0]?.name).toBe('Renamed cabinet')
     expect(useStore.temporal.getState().pastStates).toHaveLength(1)
   })
+
+  it('does not delete the last remaining project', async () => {
+    const { useStore } = await import('./store')
+
+    const onlyProjectId = useStore.getState().activeProjectId!
+    useStore.getState().deleteProject(onlyProjectId)
+
+    expect(useStore.getState().projects).toHaveLength(1)
+    expect(useStore.getState().activeProjectId).toBe(onlyProjectId)
+  })
 })
