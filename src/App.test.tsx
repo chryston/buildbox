@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 
 beforeEach(() => {
@@ -6,10 +6,24 @@ beforeEach(() => {
   vi.resetModules()
 })
 
-test('renders the BuildBox app shell title', async () => {
+test('renders the BuildBox app shell title and ignores undo shortcuts in focused inputs', async () => {
+  const { useStore } = await import('./store/store')
   const { default: App } = await import('./App')
+
   render(<App />)
+
   expect(screen.getByText('BuildBox')).toBeInTheDocument()
+
+  act(() => {
+    useStore.getState().createProject()
+  })
+  expect(useStore.getState().projects).toHaveLength(2)
+
+  const heightInput = screen.getByLabelText('Height')
+  heightInput.focus()
+  fireEvent.keyDown(heightInput, { key: 'z', ctrlKey: true })
+
+  expect(useStore.getState().projects).toHaveLength(2)
 })
 
 test('unlocking from the sidebar clears fixedSize on the selected node', async () => {

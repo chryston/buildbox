@@ -22,7 +22,7 @@ export default function UndoRedo({ canUndo, onUndo, canRedo, onRedo }: Props) {
         onClick={onRedo}
         disabled={!canRedo}
         className="px-2 py-1 rounded text-sm text-white/70 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
-        title="Redo (Ctrl+Y)"
+        title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
       >
         ↪
       </button>

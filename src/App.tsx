@@ -57,6 +57,8 @@ export default function App() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+
       const key = e.key.toLowerCase()
 
       if ((e.ctrlKey || e.metaKey) && key === 'z' && !e.shiftKey) {
