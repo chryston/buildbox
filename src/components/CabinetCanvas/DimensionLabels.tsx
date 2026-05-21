@@ -48,6 +48,7 @@ export default function DimensionLabels(props: Props) {
         return (
           <g key={v.nodeId}>
             <text
+              data-testid={`dim-label-${v.nodeId}-w`}
               x={v.x + v.w / 2}
               y={v.y + 14}
               textAnchor="middle"
@@ -60,6 +61,7 @@ export default function DimensionLabels(props: Props) {
             </text>
 
             <text
+              data-testid={`dim-label-${v.nodeId}-h`}
               x={v.x + 12}
               y={v.y + v.h / 2}
               textAnchor="middle"
