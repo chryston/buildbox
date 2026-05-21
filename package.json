@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "immer": "^10.1.1",
+    "nanoid": "^5.1.11",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "zundo": "^2.3.0",
