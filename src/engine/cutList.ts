@@ -1,6 +1,8 @@
 import type { CutListEntry, Design, MaterialId } from '../types'
 import { computeLayout } from './layoutEngine'
 
+const DRAWER_BOX_TOP_CLEARANCE_MM = 12
+
 export function computeCutList(design: Design): CutListEntry[] {
   const gs = design.globalSettings
   const t = gs.thickness
@@ -77,14 +79,22 @@ export function computeCutList(design: Design): CutListEntry[] {
   }
 
   const verticalDividers = layout.dividers.filter((divider) => divider.axis === 'vertical')
-  if (verticalDividers.length > 0) {
+  const dividerGroups = new Map<string, { qty: number, h: number, mat: MaterialId }>()
+
+  for (const divider of verticalDividers) {
+    const key = `${Math.round(divider.h)}×${divider.material}`
+    const group = dividerGroups.get(key) ?? { qty: 0, h: divider.h, mat: divider.material }
+    dividerGroups.set(key, { ...group, qty: group.qty + 1 })
+  }
+
+  for (const group of dividerGroups.values()) {
     entries.push({
       label: 'Divider',
-      qty: verticalDividers.length,
-      width: verticalDividers[0].h,
+      qty: group.qty,
+      width: group.h,
       height: gs.depth,
       depth: t,
-      material: verticalDividers[0].material,
+      material: group.mat,
     })
   }
 
@@ -94,7 +104,7 @@ export function computeCutList(design: Design): CutListEntry[] {
       const cfg = voidEntry.drawerConfig!
       const sideClearance = cfg.slideType === 'side-mount' ? 25 : 0
       const faceH = voidEntry.h - cfg.reveal
-      const boxH = faceH - 12
+      const boxH = faceH - DRAWER_BOX_TOP_CLEARANCE_MM
       const boxW = voidEntry.w - 2 * sideClearance
       const boxD = gs.depth - t
 

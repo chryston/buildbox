@@ -66,6 +66,69 @@ describe('computeCutList – with toe-kick', () => {
   })
 })
 
+describe('computeCutList – with back panel', () => {
+  it('includes a back panel entry', () => {
+    const entries = computeCutList(bareDesign())
+    const back = entries.find(e => e.label === 'Back panel')
+    expect(back).toBeDefined()
+    expect(back!.width).toBe(600 - 2 * 18)
+    expect(back!.height).toBe(800 - 2 * 18)
+  })
+})
+
+describe('computeCutList – mixed-height vertical dividers', () => {
+  it('produces separate entries for dividers of different heights', () => {
+    const design = bareDesign()
+    design.root = {
+      id: 'root',
+      splitAxis: 'horizontal',
+      splitRatio: 0.5,
+      children: [
+        {
+          id: 'top',
+          splitAxis: 'vertical',
+          children: [{ id: 'tl' }, { id: 'tr' }],
+        },
+        {
+          id: 'bot',
+          splitAxis: 'vertical',
+          children: [{ id: 'bl' }, { id: 'br' }],
+        },
+      ],
+    }
+    const entries = computeCutList(design)
+    const dividers = entries.filter(e => e.label === 'Divider')
+    const totalQty = dividers.reduce((sum, entry) => sum + entry.qty, 0)
+    expect(totalQty).toBe(2)
+  })
+
+  it('produces two entries for dividers at different spans', () => {
+    const design = bareDesign()
+    design.root = {
+      id: 'root',
+      splitAxis: 'horizontal',
+      splitRatio: 0.5,
+      children: [
+        {
+          id: 'top',
+          splitAxis: 'vertical',
+          material: 'oak',
+          children: [{ id: 'tl' }, { id: 'tr' }],
+        },
+        {
+          id: 'bot',
+          splitAxis: 'vertical',
+          material: 'walnut',
+          children: [{ id: 'bl' }, { id: 'br' }],
+        },
+      ],
+    }
+    const entries = computeCutList(design)
+    const dividers = entries.filter(e => e.label === 'Divider')
+    expect(dividers.length).toBe(2)
+  })
+})
+
 describe('computeCutList – drawer box', () => {
   it('adds drawer box dimensions for side-mount drawer', () => {
     const design = bareDesign()

@@ -5,6 +5,14 @@ interface Props {
 }
 
 export default function CutListPanel({ entries }: Props) {
+  if (entries.length === 0) {
+    return (
+      <div className="p-4 text-center text-sm text-white/40">
+        No parts to show
+      </div>
+    )
+  }
+
   return (
     <div className="p-4">
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-white/60">Cut List</h2>
