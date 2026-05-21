@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
+import { shallow } from 'zustand/shallow'
 import { temporal } from 'zundo'
 import { nanoid } from 'nanoid'
 import type { Design, GlobalSettings, MaterialId, DrawerConfig, UIState, ElementType } from '../types'
@@ -68,6 +69,10 @@ function mutateRoot(state: PersistedState, fn: (d: Design) => Design): void {
 }
 
 const _initialDesign = defaultDesign()
+const partializeProjectState = (state: PersistedState) => ({
+  projects: state.projects,
+  activeProjectId: state.activeProjectId,
+})
 
 export const useStore = create<StoreState>()(
   temporal(
@@ -95,7 +100,7 @@ export const useStore = create<StoreState>()(
         }),
 
         renameProject: (id, name) => set(s => {
-          const p = s.projects.find(p => p.id === id)
+          const p = s.projects.find(proj => proj.id === id)
           if (p) p.name = name
         }),
 
@@ -158,12 +163,13 @@ export const useStore = create<StoreState>()(
       })),
       {
         name: 'buildbox-store',
-        partialize: (state) => ({
-          projects: state.projects,
-          activeProjectId: state.activeProjectId,
-        }),
+        partialize: partializeProjectState,
       },
     ),
+    {
+      partialize: partializeProjectState,
+      equality: shallow,
+    },
   ),
 )
 
