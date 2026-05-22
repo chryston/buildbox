@@ -4,7 +4,7 @@
 
 **Goal:** Maximise the canvas area by relocating the cut list into the sidebar, add zoom +/− and fit-all buttons, and keep dimension labels at a constant 14px on screen regardless of zoom.
 
-**Architecture:** All changes are localised to the canvas and sidebar layers — no store changes, no data model changes. A new `fitAll.ts` utility exports `ZOOM_MIN`, `ZOOM_MAX`, and `computeFitAll()`. A new `ZoomControls` component floats over the canvas bottom-right. `DimensionLabels` gains a `zoom` prop and counter-scales font size and icon transforms.
+**Architecture:** All changes are localised to the canvas and sidebar layers — no store changes, no data model changes. `ZoomControls` exports `ZOOM_MIN`, `ZOOM_MAX` constants and floats over the canvas bottom-right. `DimensionLabels` gains a `zoom` prop and counter-scales font size and icon transforms.
 
 **Tech Stack:** React 19, TypeScript, Tailwind CSS 3, Vitest + React Testing Library
 
@@ -18,9 +18,7 @@
 
 | File | Action | Responsibility |
 |------|--------|---------------|
-| `src/utils/fitAll.ts` | **Create** | `ZOOM_MIN`, `ZOOM_MAX` constants; `computeFitAll()` pure function |
-| `src/utils/fitAll.test.ts` | **Create** | Unit tests for fit-all function |
-| `src/components/CabinetCanvas/ZoomControls.tsx` | **Create** | Stateless zoom overlay (−, +, ⊡ buttons) |
+| `src/components/CabinetCanvas/ZoomControls.tsx` | **Create** | Stateless zoom overlay; exports ZOOM_MIN, ZOOM_MAX constants |
 | `src/components/CabinetCanvas/ZoomControls.test.tsx` | **Create** | Component tests for ZoomControls |
 | `src/components/CabinetCanvas/CabinetCanvas.tsx` | **Modify** | Wire ZoomControls, update onWheel clamp, pass zoom to DimensionLabels (**A3 depends on A2**: DimensionLabels must have `zoom` prop before CabinetCanvas wires it) |
 | `src/components/CabinetCanvas/DimensionLabels.tsx` | **Modify** | Add `zoom` prop; `fontSize = 14 / zoom`; scale offsets and lock icon |
@@ -30,60 +28,13 @@
 
 ---
 
-## Task A1: `fitAll.ts` Utility + `ZoomControls` Component
+## Task A1: `ZoomControls` Component
 
 **Files:**
-- Create: `src/utils/fitAll.ts`
-- Create: `src/utils/fitAll.test.ts`
 - Create: `src/components/CabinetCanvas/ZoomControls.tsx`
 - Create: `src/components/CabinetCanvas/ZoomControls.test.tsx`
 
-### Step 1: Write failing tests for `fitAll.ts`
-
-- [ ] Create `src/utils/fitAll.test.ts`:
-
-```ts
-import { describe, expect, it } from 'vitest'
-import { computeFitAll, ZOOM_MAX, ZOOM_MIN } from './fitAll'
-
-describe('computeFitAll', () => {
-  it('returns zoom=1, panX=0, panY=0 — SVG viewBox already frames the cabinet', () => {
-    expect(computeFitAll()).toEqual({ zoom: 1, panX: 0, panY: 0 })
-  })
-})
-
-describe('zoom constants', () => {
-  it('ZOOM_MIN is 0.05', () => expect(ZOOM_MIN).toBe(0.05))
-  it('ZOOM_MAX is 10', () => expect(ZOOM_MAX).toBe(10))
-})
-```
-
-### Step 2: Run to verify it fails
-
-- [ ] Run: `npm test -- --run src/utils/fitAll.test.ts`
-- Expected: FAIL — `fitAll` module not found
-
-### Step 3: Implement `fitAll.ts`
-
-- [ ] Create `src/utils/fitAll.ts`:
-
-```ts
-export const ZOOM_MIN = 0.05
-export const ZOOM_MAX = 10
-
-export function computeFitAll(): { zoom: number; panX: number; panY: number } {
-  // The SVG viewBox already frames the full cabinet at zoom=1, pan=(0,0).
-  // Fit-all simply resets the user-controlled zoom/pan overlay transform.
-  return { zoom: 1, panX: 0, panY: 0 }
-}
-```
-
-### Step 4: Run to verify `fitAll` tests pass
-
-- [ ] Run: `npm test -- --run src/utils/fitAll.test.ts`
-- Expected: 3 tests PASS
-
-### Step 5: Write failing tests for `ZoomControls`
+### Step 1: Write failing tests for `ZoomControls`
 
 - [ ] Create `src/components/CabinetCanvas/ZoomControls.test.tsx`:
 
@@ -91,8 +42,7 @@ export function computeFitAll(): { zoom: number; panX: number; panY: number } {
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { ZOOM_MAX, ZOOM_MIN } from '../../utils/fitAll'
-import ZoomControls from './ZoomControls'
+import ZoomControls, { ZOOM_MAX, ZOOM_MIN } from './ZoomControls'
 
 describe('ZoomControls', () => {
   it('calls onZoomIn when + clicked', async () => {
@@ -128,17 +78,18 @@ describe('ZoomControls', () => {
 })
 ```
 
-### Step 6: Run to verify ZoomControls tests fail
+### Step 2: Run to verify ZoomControls tests fail
 
 - [ ] Run: `npm test -- --run src/components/CabinetCanvas/ZoomControls.test.tsx`
 - Expected: FAIL — `ZoomControls` not found
 
-### Step 7: Implement `ZoomControls.tsx`
+### Step 3: Implement `ZoomControls.tsx`
 
 - [ ] Create `src/components/CabinetCanvas/ZoomControls.tsx`:
 
 ```tsx
-import { ZOOM_MAX, ZOOM_MIN } from '../../utils/fitAll'
+export const ZOOM_MIN = 0.05
+export const ZOOM_MAX = 10
 
 interface Props {
   zoom: number
@@ -181,29 +132,27 @@ export default function ZoomControls({ zoom, onZoomIn, onZoomOut, onFitAll }: Pr
 }
 ```
 
-### Step 8: Run all A1 tests
+### Step 4: Run all A1 tests
 
-- [ ] Run: `npm test -- --run src/utils/fitAll.test.ts src/components/CabinetCanvas/ZoomControls.test.tsx`
-- Expected: 8 tests PASS
+- [ ] Run: `npm test -- --run src/components/CabinetCanvas/ZoomControls.test.tsx`
+- Expected: 5 tests PASS
 
-### Step 9: Run full suite to check no regressions
+### Step 5: Run full suite to check no regressions
 
 - [ ] Run: `npm test -- --run`
 - Expected: all existing tests still PASS
 
-### Step 10: Commit
+### Step 6: Commit
 
 - [ ] Run:
 ```bash
-git add src/utils/fitAll.ts src/utils/fitAll.test.ts \
-        src/components/CabinetCanvas/ZoomControls.tsx \
+git add src/components/CabinetCanvas/ZoomControls.tsx \
         src/components/CabinetCanvas/ZoomControls.test.tsx
-git commit -m "feat(canvas-ux): add fitAll utility and ZoomControls component
+git commit -m "feat(canvas-ux): add ZoomControls component with zoom constants
 
-- ZOOM_MIN=0.05, ZOOM_MAX=10 exported from fitAll.ts
-- computeFitAll() returns {zoom:1, panX:0, panY:0}
+- ZOOM_MIN=0.05, ZOOM_MAX=10 exported from ZoomControls.tsx
 - ZoomControls: −/+/⊡ buttons, disabled at limits, aria-labels
-- 8 tests passing"
+- 5 tests passing"
 ```
 
 ---
@@ -242,54 +191,23 @@ function makeVoid(id: string): LayoutVoid {
 }
 
 describe('DimensionLabels font scaling', () => {
-  it('applies fontSize=28 at zoom=0.5 (14/0.5)', () => {
+  it.each([
+    { zoom: 0.5, expectedFontSize: 28 },
+    { zoom: 1.0, expectedFontSize: 14 },
+    { zoom: 2.0, expectedFontSize: 7  },
+  ])('fontSize = 14/zoom: at zoom=$zoom → $expectedFontSize SVG units', ({ zoom, expectedFontSize }) => {
     const { container } = render(
       <svg>
         <DimensionLabels
           voids={[makeVoid('v1')]}
           unit="mm"
           onCommitSize={() => {}}
-          zoom={0.5}
+          zoom={zoom}
         />
       </svg>
     )
-    const texts = container.querySelectorAll('text')
-    for (const t of texts) {
-      expect(Number(t.getAttribute('font-size'))).toBeCloseTo(28, 5)
-    }
-  })
-
-  it('applies fontSize=14 at zoom=1.0', () => {
-    const { container } = render(
-      <svg>
-        <DimensionLabels
-          voids={[makeVoid('v1')]}
-          unit="mm"
-          onCommitSize={() => {}}
-          zoom={1}
-        />
-      </svg>
-    )
-    const texts = container.querySelectorAll('text')
-    for (const t of texts) {
-      expect(Number(t.getAttribute('font-size'))).toBeCloseTo(14, 5)
-    }
-  })
-
-  it('applies fontSize=7 at zoom=2.0 (14/2)', () => {
-    const { container } = render(
-      <svg>
-        <DimensionLabels
-          voids={[makeVoid('v1')]}
-          unit="mm"
-          onCommitSize={() => {}}
-          zoom={2}
-        />
-      </svg>
-    )
-    const texts = container.querySelectorAll('text')
-    for (const t of texts) {
-      expect(Number(t.getAttribute('font-size'))).toBeCloseTo(7, 5)
+    for (const t of container.querySelectorAll('text')) {
+      expect(Number(t.getAttribute('font-size'))).toBeCloseTo(expectedFontSize, 5)
     }
   })
 })
@@ -298,7 +216,7 @@ describe('DimensionLabels font scaling', () => {
 ### Step 2: Run to verify tests fail
 
 - [ ] Run: `npm test -- --run src/components/CabinetCanvas/DimensionLabels.test.tsx`
-- Expected: FAIL — `zoom` prop doesn't exist yet / font-size is `11`
+- Expected: FAIL — `zoom` prop doesn't exist yet / font-size is `11` — 3 test cases (from 1 it.each)
 
 ### Step 3: Update `DimensionLabels.tsx`
 
@@ -433,7 +351,7 @@ export default function DimensionLabels(props: Props) {
 ### Step 4: Run all tests
 
 - [ ] Run: `npm test -- --run`
-- Expected: all tests PASS including the 3 new DimensionLabels font tests
+- Expected: all tests PASS including the 3 new DimensionLabels font test cases (via 1 it.each)
 
 ### Step 5: Commit
 
@@ -447,7 +365,7 @@ git commit -m "feat(canvas-ux): DimensionLabels constant 14px font via counter-s
 - fontSize = 14 / zoom (28 SVG units at zoom=0.5 → 14px on screen)
 - label offsets scale with fontSize (v.y + fontSize + 2)
 - lock icon uses scale(1/zoom) to remain constant screen size
-- 3 font-scaling tests added"
+- 1 parametrized font-scaling test (3 cases)"
 ```
 
 ---
@@ -470,11 +388,10 @@ import { useCallback, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { useStore } from '../../store/store'
 import type { Design, LayoutResult } from '../../types'
-import { computeFitAll, ZOOM_MAX, ZOOM_MIN } from '../../utils/fitAll'
 import CanvasLayers from './CanvasLayers'
 import DragHandles from './DragHandles'
 import DimensionLabels from './DimensionLabels'
-import ZoomControls from './ZoomControls'
+import ZoomControls, { ZOOM_MAX, ZOOM_MIN } from './ZoomControls'
 
 interface Props {
   design: Design
@@ -536,9 +453,8 @@ export default function CabinetCanvas({ design, layout, svgRef, overConstrainedI
   }, [])
 
   const handleFitAll = useCallback(() => {
-    const { zoom: z, panX, panY } = computeFitAll()
-    setZoom(z)
-    setPan({ x: panX, y: panY })
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
   }, [])
 
   function handleCommitSize(nodeId: string, mm: number, _axis: 'w' | 'h') {
@@ -605,10 +521,11 @@ export default function CabinetCanvas({ design, layout, svgRef, overConstrainedI
 - [ ] Run:
 ```bash
 git add src/components/CabinetCanvas/CabinetCanvas.tsx
-git commit -m "feat(canvas-ux): wire ZoomControls and fit-all into CabinetCanvas
+git commit -m "feat(canvas-ux): wire ZoomControls into CabinetCanvas
 
-- Import ZoomControls, computeFitAll, ZOOM_MIN, ZOOM_MAX
+- Import ZoomControls, ZOOM_MIN, ZOOM_MAX from ./ZoomControls
 - handleZoomIn/Out/FitAll handlers with clamped setZoom
+- handleFitAll inlined: resets zoom=1, pan=(0,0)
 - onWheel clamp updated from [0.2,5] to [ZOOM_MIN, ZOOM_MAX]
 - ZoomControls rendered as absolute overlay bottom-right
 - zoom prop passed to DimensionLabels (A2 already added the prop)"
@@ -645,7 +562,8 @@ it('shows cut list in sidebar, removes right panel, and fit-all resets zoom', as
   expect(fitAllBtn).toBeInTheDocument()
 
   // Saturate zoom to ZOOM_MAX so fit-all has real signal
-  for (let i = 0; i < 25; i++) await user.click(zoomInBtn)
+  // 1.25^11 ≈ 11.6 > ZOOM_MAX=10, so 12 clicks is sufficient
+  for (let i = 0; i < 12; i++) await user.click(zoomInBtn)
   expect(zoomInBtn).toBeDisabled()
 
   // Fit-all resets zoom to 1 — zoom-in re-enables
@@ -725,6 +643,6 @@ git commit -m "feat(canvas-ux): relocate cut list into sidebar, remove right pan
 After all four tasks are complete:
 
 - [ ] Run: `npm test -- --run`
-- Expected: all tests PASS (≥ 104 tests: 92 existing + 8 new from A1 + 3 new from A2 (DimensionLabels) + 1 new from A4 = 104 total)
+- Expected: all tests PASS (≥ 101 tests: 92 existing + 5 new (ZoomControls) + 3 new (DimensionLabels font, via it.each) + 1 new (integration) = 101 total)
 - [ ] Check TypeScript: `npx tsc --noEmit`
 - Expected: no errors
