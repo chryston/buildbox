@@ -30,7 +30,7 @@ describe('DimensionLabels font scaling', () => {
       </svg>
     )
     for (const t of container.querySelectorAll('text')) {
-      expect(Number(t.getAttribute('font-size'))).toBeCloseTo(expectedFontSize, 5)
+      expect(Number(t.getAttribute('font-size'))).toBe(expectedFontSize)
     }
   })
 })

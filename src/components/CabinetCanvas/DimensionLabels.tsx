@@ -82,6 +82,7 @@ export default function DimensionLabels(props: Props) {
               <g
                 role="button"
                 tabIndex={0}
+                // pivot at icon centre (6, 9.5) so scale(1/zoom) keeps icon at constant screen size
                 transform={`translate(${v.x + v.w - 18 + 6}, ${v.y + 4 + 9.5}) scale(${1 / zoom}) translate(-6, -9.5)`}
                 cursor={onUnlockNode ? 'pointer' : 'default'}
                 onClick={() => onUnlockNode?.(v.nodeId)}
