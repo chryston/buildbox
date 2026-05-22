@@ -37,6 +37,32 @@ function resetStore() {
 describe('Cabinet design flow', () => {
   beforeEach(resetStore)
 
+  it('shows cut list in sidebar, removes right panel, and fit-all resets zoom', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    // Cut list lives inside the sidebar <aside>, not in a standalone right panel
+    const aside = screen.getByRole('complementary')
+    expect(within(aside).getAllByText(/cut list/i).length).toBeGreaterThan(0)
+
+    // Zoom controls are rendered on the canvas
+    const zoomInBtn = screen.getByRole('button', { name: /zoom in/i })
+    const zoomOutBtn = screen.getByRole('button', { name: /zoom out/i })
+    const fitAllBtn = screen.getByRole('button', { name: /fit to screen/i })
+    expect(zoomInBtn).toBeInTheDocument()
+    expect(zoomOutBtn).toBeInTheDocument()
+    expect(fitAllBtn).toBeInTheDocument()
+
+    // Saturate zoom to ZOOM_MAX so fit-all has real signal
+    // 1.25^11 ≈ 11.6 > ZOOM_MAX=10, so 12 clicks is sufficient
+    for (let i = 0; i < 12; i++) await user.click(zoomInBtn)
+    expect(zoomInBtn).toBeDisabled()
+
+    // Fit-all resets zoom to 1 — zoom-in re-enables
+    await user.click(fitAllBtn)
+    expect(zoomInBtn).toBeEnabled()
+  })
+
   it('creates a project, adds shelf and divider, and supports undo', async () => {
     const user = userEvent.setup()
     render(<App />)

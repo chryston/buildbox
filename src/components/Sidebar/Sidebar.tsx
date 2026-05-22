@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import CutListPanel from '../CutListPanel/CutListPanel'
 import type {
   AccessoryType,
   CabinetNode,
+  CutListEntry,
   DrawerConfig,
   ElementType,
   MaterialId,
@@ -10,6 +12,7 @@ import type {
 import { MATERIALS } from '../../utils/materials'
 
 interface Props {
+  cutList?: CutListEntry[]
   selectedId: string | null
   selectedNode: CabinetNode | null
   onAddShelf: (id: string) => void
@@ -52,6 +55,7 @@ function Btn({
 }
 
 export default function Sidebar({
+  cutList = [],
   selectedId,
   selectedNode,
   onAddShelf,
@@ -208,6 +212,14 @@ export default function Sidebar({
           ))}
         </section>
       )}
+      <details className="border-t border-white/10">
+        <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white/40">
+          Cut List ({cutList.length} parts)
+        </summary>
+        <div className="max-h-64 overflow-y-auto">
+          <CutListPanel entries={cutList} />
+        </div>
+      </details>
     </aside>
   )
 }

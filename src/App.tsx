@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import CabinetCanvas from './components/CabinetCanvas/CabinetCanvas'
-import CutListPanel from './components/CutListPanel/CutListPanel'
 import ErrorBoundary from './components/ErrorBoundary'
 import ProjectTabs from './components/ProjectTabs/ProjectTabs'
 import Sidebar from './components/Sidebar/Sidebar'
@@ -131,6 +130,7 @@ export default function App() {
           />
         )}
         <Sidebar
+          cutList={cutList}
           selectedId={selectedId}
           selectedNode={selectedNode}
           onAddShelf={storeAddShelf}
@@ -146,14 +146,6 @@ export default function App() {
           onAddAccessory={(nodeId, type) => storeAddAccessory(nodeId, { id: crypto.randomUUID(), type })}
           onRemoveAccessory={storeRemoveAccessory}
         />
-        <div className="flex w-72 flex-col overflow-y-auto border-l border-white/10 bg-panel">
-          <details open className="p-2">
-            <summary className="cursor-pointer select-none text-sm font-semibold text-white/60">
-              Cut List ({cutList.length} parts)
-            </summary>
-            <CutListPanel entries={cutList} />
-          </details>
-        </div>
       </main>
     </div>
     </ErrorBoundary>

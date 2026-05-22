@@ -5,6 +5,7 @@ import type { Design, LayoutResult } from '../../types'
 import CanvasLayers from './CanvasLayers'
 import DragHandles from './DragHandles'
 import DimensionLabels from './DimensionLabels'
+import ZoomControls, { ZOOM_MAX, ZOOM_MIN } from './ZoomControls'
 
 interface Props {
   design: Design
@@ -31,7 +32,7 @@ export default function CabinetCanvas({ design, layout, svgRef, overConstrainedI
 
   const onWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault()
-    setZoom((z) => Math.min(5, Math.max(0.2, z * (e.deltaY < 0 ? 1.1 : 0.9))))
+    setZoom((z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * (e.deltaY < 0 ? 1.25 : 0.8))))
   }, [])
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
@@ -57,12 +58,25 @@ export default function CabinetCanvas({ design, layout, svgRef, overConstrainedI
     isPanning.current = false
   }, [])
 
+  const handleZoomIn = useCallback(() => {
+    setZoom((z) => Math.min(ZOOM_MAX, z * 1.25))
+  }, [])
+
+  const handleZoomOut = useCallback(() => {
+    setZoom((z) => Math.max(ZOOM_MIN, z * 0.8))
+  }, [])
+
+  const handleFitAll = useCallback(() => {
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+  }, [])
+
   function handleCommitSize(nodeId: string, mm: number, _axis: 'w' | 'h') {
     storeSetNodeSize(nodeId, mm)
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center overflow-hidden bg-surface">
+    <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-surface">
       <svg
         ref={svgRef}
         data-testid="cabinet-canvas"
@@ -90,6 +104,7 @@ export default function CabinetCanvas({ design, layout, svgRef, overConstrainedI
             onCommitSize={handleCommitSize}
             lockedNodeIds={overConstrainedIds}
             onUnlockNode={onUnlockNode}
+            zoom={zoom}
           />
           <DragHandles
             dividers={layout.dividers}
@@ -99,6 +114,12 @@ export default function CabinetCanvas({ design, layout, svgRef, overConstrainedI
           />
         </g>
       </svg>
+      <ZoomControls
+        zoom={zoom}
+        onZoomIn={handleZoomIn}
+        onZoomOut={handleZoomOut}
+        onFitAll={handleFitAll}
+      />
     </div>
   )
 }
