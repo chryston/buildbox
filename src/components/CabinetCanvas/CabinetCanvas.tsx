@@ -32,7 +32,7 @@ export default function CabinetCanvas({ design, layout, svgRef, overConstrainedI
 
   const onWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault()
-    setZoom((z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * (e.deltaY < 0 ? 1.1 : 0.9))))
+    setZoom((z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * (e.deltaY < 0 ? 1.25 : 0.8))))
   }, [])
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {

@@ -70,7 +70,7 @@ describe('CabinetCanvas', () => {
     fireEvent.pointerDown(svg, { pointerId: 1, clientX: 10, clientY: 20, button: 1 })
     fireEvent.pointerMove(svg, { pointerId: 1, clientX: 35, clientY: 55 })
 
-    expect(getViewport()).toHaveAttribute('transform', 'matrix(1.1,0,0,1.1,25,35)')
+    expect(getViewport()).toHaveAttribute('transform', 'matrix(1.25,0,0,1.25,25,35)')
   })
 
   it('captures the pointer on the svg element even when panning starts on a child shape', () => {
