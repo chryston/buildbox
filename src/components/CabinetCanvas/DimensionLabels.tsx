@@ -9,6 +9,7 @@ interface Props {
   onCommitSize: (nodeId: string, mm: number, axis: 'w' | 'h') => void
   onUnlockNode?: (nodeId: string) => void
   lockedNodeIds?: string[]
+  zoom: number
 }
 
 interface Editing {
@@ -25,8 +26,11 @@ export default function DimensionLabels(props: Props) {
     onCommitSize,
     onUnlockNode,
     lockedNodeIds = [],
+    zoom,
   } = props
   const [editing, setEditing] = useState<Editing | null>(null)
+
+  const fontSize = 14 / zoom
 
   function openEditor(v: LayoutVoid, axis: 'w' | 'h', labelEl: SVGTextElement) {
     const rect = labelEl.getBoundingClientRect()
@@ -50,9 +54,9 @@ export default function DimensionLabels(props: Props) {
             <text
               data-testid={`dim-label-${v.nodeId}-w`}
               x={v.x + v.w / 2}
-              y={v.y + 14}
+              y={v.y + fontSize + 2}
               textAnchor="middle"
-              fontSize={11}
+              fontSize={fontSize}
               fill="rgba(255,255,255,0.7)"
               cursor={canEditW ? 'pointer' : 'default'}
               onClick={canEditW ? (e) => openEditor(v, 'w', e.currentTarget) : undefined}
@@ -62,12 +66,12 @@ export default function DimensionLabels(props: Props) {
 
             <text
               data-testid={`dim-label-${v.nodeId}-h`}
-              x={v.x + 12}
+              x={v.x + fontSize + 2}
               y={v.y + v.h / 2}
               textAnchor="middle"
-              fontSize={11}
+              fontSize={fontSize}
               fill="rgba(255,255,255,0.7)"
-              transform={`rotate(-90, ${v.x + 12}, ${v.y + v.h / 2})`}
+              transform={`rotate(-90, ${v.x + fontSize + 2}, ${v.y + v.h / 2})`}
               cursor={canEditH ? 'pointer' : 'default'}
               onClick={canEditH ? (e) => openEditor(v, 'h', e.currentTarget) : undefined}
             >
@@ -78,7 +82,7 @@ export default function DimensionLabels(props: Props) {
               <g
                 role="button"
                 tabIndex={0}
-                transform={`translate(${v.x + v.w - 18}, ${v.y + 8})`}
+                transform={`translate(${v.x + v.w - 18 + 6}, ${v.y + 4 + 9.5}) scale(${1 / zoom}) translate(-6, -9.5)`}
                 cursor={onUnlockNode ? 'pointer' : 'default'}
                 onClick={() => onUnlockNode?.(v.nodeId)}
                 onKeyDown={(e) => {
