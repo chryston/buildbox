@@ -6,11 +6,18 @@ function makeDesign(overrides: Partial<Design> = {}): Design {
   return {
     id: 'test-id',
     name: 'Test Cabinet',
-    globalSettings: {
-      unit: 'mm', height: 800, width: 600, depth: 500,
-      thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak',
-    },
-    root: { id: 'root', elementType: 'void', accessories: [] },
+    units: [{
+      type: 'cabinet',
+      id: 'unit-1',
+      label: 'Unit 1',
+      x: 0,
+      y: 0,
+      settings: {
+        unit: 'mm', height: 800, width: 600, depth: 500,
+        thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak',
+      },
+      root: { id: 'root', elementType: 'void', accessories: [] },
+    }],
     ...overrides,
   }
 }
@@ -39,6 +46,21 @@ describe('importWorkspace', () => {
     const result = importWorkspace(json)
     expect(result.projects).toEqual(projects)
     expect(result.activeProjectId).toBe('test-id')
+  })
+
+  it('migrates v0 design (root/globalSettings) to v1 (units[])', () => {
+    const v0Project = {
+      id: 'v0-id',
+      name: 'Old Cabinet',
+      globalSettings: { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak' },
+      root: { id: 'r1', elementType: 'void', accessories: [] },
+    }
+    const json = JSON.stringify({ version: 0, exportedAt: '', projects: [v0Project], activeProjectId: 'v0-id' })
+    const result = importWorkspace(json)
+    expect(result.projects[0].units).toHaveLength(1)
+    expect(result.projects[0].units[0].type).toBe('cabinet')
+    expect(result.projects[0].units[0].settings.height).toBe(800)
+    expect(result.projects[0].units[0].root).toEqual(v0Project.root)
   })
 
   it('throws WorkspaceImportError on empty string', () => {

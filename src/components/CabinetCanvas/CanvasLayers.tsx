@@ -8,6 +8,7 @@ interface Props {
   selectedId: string | null
   onSelectVoid: (id: string) => void
   onSelectDivider: (id: string) => void
+  onUnitClick: () => void
 }
 
 export default function CanvasLayers({
@@ -17,6 +18,7 @@ export default function CanvasLayers({
   selectedId,
   onSelectVoid,
   onSelectDivider,
+  onUnitClick,
 }: Props) {
   return (
     <>
@@ -48,7 +50,7 @@ export default function CanvasLayers({
             stroke={v.nodeId === selectedId ? '#7c3aed' : 'transparent'}
             strokeWidth={2}
             cursor="pointer"
-            onClick={() => onSelectVoid(v.nodeId)}
+            onClick={() => { onUnitClick(); onSelectVoid(v.nodeId) }}
           />
         ))}
       </g>
@@ -66,7 +68,7 @@ export default function CanvasLayers({
             stroke={d.childAId === selectedId ? '#7c3aed' : MATERIALS[d.material].stroke}
             strokeWidth={d.childAId === selectedId ? 2 : 1}
             cursor="pointer"
-            onClick={() => onSelectDivider(d.childAId)}
+            onClick={() => { onUnitClick(); onSelectDivider(d.childAId) }}
           />
         ))}
       </g>

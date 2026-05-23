@@ -5,8 +5,8 @@ import ExportModal from './ExportModal'
 import type { Design } from '../../types'
 
 const mockProjects: Design[] = [
-  { id: 'p1', name: 'Cabinet 1', globalSettings: { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak' }, root: { id: 'r1', elementType: 'void', accessories: [] } },
-  { id: 'p2', name: 'Cabinet 2', globalSettings: { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak' }, root: { id: 'r2', elementType: 'void', accessories: [] } },
+  { id: 'p1', name: 'Cabinet 1', units: [{ type: 'cabinet', id: 'u1', label: 'Unit 1', x: 0, y: 0, settings: { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak' }, root: { id: 'r1', elementType: 'void', accessories: [] } }] },
+  { id: 'p2', name: 'Cabinet 2', units: [{ type: 'cabinet', id: 'u2', label: 'Unit 1', x: 0, y: 0, settings: { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak' }, root: { id: 'r2', elementType: 'void', accessories: [] } }] },
 ]
 
 describe('ExportModal', () => {

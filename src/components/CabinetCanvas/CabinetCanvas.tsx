@@ -113,6 +113,7 @@ export default function CabinetCanvas({ sceneLayout, svgRef, onUnlockNode, onUni
                 selectedId={selectedId}
                 onSelectVoid={setSelectedId}
                 onSelectDivider={setSelectedId}
+                onUnitClick={() => onUnitClick(result.unitId)}
               />
               <DimensionLabels
                 voids={result.voids}

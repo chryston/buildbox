@@ -5,7 +5,7 @@ import ImportModal from './ImportModal'
 import type { Design } from '../../types'
 
 const mockIncoming = {
-  projects: [{ id: 'p1', name: 'Imported', globalSettings: { unit: 'mm' as const, height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak' as const }, root: { id: 'r1', elementType: 'void' as const, accessories: [] } }] as Design[],
+  projects: [{ id: 'p1', name: 'Imported', units: [{ type: 'cabinet' as const, id: 'u1', label: 'Unit 1', x: 0, y: 0, settings: { unit: 'mm' as const, height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak' as const }, root: { id: 'r1', elementType: 'void' as const, accessories: [] } }] }] as Design[],
   activeProjectId: 'p1',
 }
 

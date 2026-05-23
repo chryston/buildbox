@@ -100,6 +100,18 @@ describe('rehydration', () => {
   })
 })
 
+describe('undo/redo activeUnitId reconciliation', () => {
+  it('activeUnitId is reconciled after undo removes a unit', () => {
+    act(() => useStore.getState().addUnit())
+    const { activeUnitId } = useStore.getState()
+    expect(activeUnitId).not.toBe('u1')
+    act(() => useStore.temporal.getState().undo())
+    const state = useStore.getState()
+    const proj = state.projects.find(p => p.id === state.activeProjectId)!
+    expect(proj.units.some(u => u.id === state.activeUnitId)).toBe(true)
+  })
+})
+
 describe('useStore temporal history', () => {
   beforeEach(() => {
     localStorage.clear()

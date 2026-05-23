@@ -35,11 +35,12 @@ interface Props {
   onRenameUnit?: (unitId: string, label: string) => void
 }
 
-const ELEMENT_TYPES: ElementType[] = ['void', 'drawer', 'hanging-space']
+const ELEMENT_TYPES: ElementType[] = ['void', 'drawer', 'hanging-space', 'microwave']
 const ELEMENT_TYPE_LABELS: Record<ElementType, string> = {
   void: 'Empty',
   drawer: 'Drawer',
   'hanging-space': 'Hanging Space',
+  microwave: 'Microwave',
 }
 
 function Btn({
@@ -83,9 +84,9 @@ export default function Sidebar({
   onSelectUnit = () => {},
   onRenameUnit = () => {},
 }: Props) {
-  const grouped = cutList.reduce<Record<string, CutListEntry[]>>((acc, e) => {
-    if (!acc[e.unitLabel]) acc[e.unitLabel] = []
-    acc[e.unitLabel].push(e)
+  const grouped = cutList.reduce<Record<string, { label: string; entries: CutListEntry[] }>>((acc, e) => {
+    if (!acc[e.unitId]) acc[e.unitId] = { label: e.unitLabel, entries: [] }
+    acc[e.unitId].entries.push(e)
     return acc
   }, {})
   const isVoid = !selectedNode?.splitAxis
@@ -245,10 +246,10 @@ export default function Sidebar({
           Cut List ({cutList.length} parts)
         </summary>
         <div className="max-h-64 overflow-y-auto">
-          {Object.entries(grouped).map(([unitLabel, entries]) => (
-            <div key={unitLabel}>
+          {Object.entries(grouped).map(([unitId, { label, entries }]) => (
+            <div key={unitId}>
               {Object.keys(grouped).length > 1 && (
-                <p className="text-xs font-semibold text-white/60 mt-2 mb-1 px-4">{unitLabel}</p>
+                <p className="text-xs font-semibold text-white/60 mt-2 mb-1 px-4">{label}</p>
               )}
               <CutListPanel entries={entries} />
             </div>

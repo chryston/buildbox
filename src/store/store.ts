@@ -329,3 +329,12 @@ export const useStore = create<StoreState>()(
 
 // Access temporal state: useStore.temporal.getState() or useStore.temporal.subscribe(...)
 // Example in components: const { undo, redo } = useStore.temporal.getState()
+
+// Reconcile activeUnitId after undo/redo removes or changes units
+useStore.temporal.subscribe(() => {
+  const { projects, activeProjectId, activeUnitId } = useStore.getState()
+  const proj = projects.find(p => p.id === activeProjectId)
+  if (proj && !proj.units.some(u => u.id === activeUnitId)) {
+    useStore.setState({ activeUnitId: proj.units[0]?.id ?? null })
+  }
+})
