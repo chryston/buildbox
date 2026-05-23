@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { CabinetUnit } from '../../types'
 
 interface Props {
@@ -13,16 +13,27 @@ interface Props {
 export default function UnitSelector({ units, activeUnitId, onSelect, onAdd, onRemove, onRename }: Props) {
   const [editLabels, setEditLabels] = useState<Record<string, string>>({})
 
+  useEffect(() => {
+    setEditLabels(prev => {
+      const unitIds = new Set(units.map(u => u.id))
+      const cleaned = Object.fromEntries(Object.entries(prev).filter(([k]) => unitIds.has(k)))
+      return Object.keys(cleaned).length === Object.keys(prev).length ? prev : cleaned
+    })
+  }, [units])
+
   function labelFor(unitId: string, fallback: string) {
     return editLabels[unitId] ?? fallback
   }
 
   function handleBlur(unitId: string, original: string) {
     const current = editLabels[unitId]
-    if (current !== undefined && current !== original) {
-      onRename(unitId, current)
+    if (current !== undefined) {
+      if (current.trim() !== '' && current !== original) {
+        onRename(unitId, current.trim())
+      }
+      // revert to original (either empty or unchanged)
+      setEditLabels(prev => { const n = { ...prev }; delete n[unitId]; return n })
     }
-    setEditLabels(prev => { const n = { ...prev }; delete n[unitId]; return n })
   }
 
   return (
@@ -49,6 +60,7 @@ export default function UnitSelector({ units, activeUnitId, onSelect, onAdd, onR
             onClick={e => { e.stopPropagation(); onSelect(unit.id) }}
             onChange={e => setEditLabels(prev => ({ ...prev, [unit.id]: e.target.value }))}
             onBlur={() => handleBlur(unit.id, unit.label)}
+            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
           />
           {units.length >= 2 && (
             <button

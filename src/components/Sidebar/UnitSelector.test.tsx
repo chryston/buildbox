@@ -60,4 +60,25 @@ describe('UnitSelector', () => {
     await user.tab()
     expect(onRename).toHaveBeenCalledWith('u1', 'New Name')
   })
+
+  it('does not fire onRename when field cleared to empty string', async () => {
+    const user = userEvent.setup()
+    const onRename = vi.fn()
+    render(<UnitSelector units={[makeUnit('u1', 'Base')]} activeUnitId="u1" onSelect={noop} onAdd={noop} onRemove={noop} onRename={onRename} />)
+    const input = screen.getByDisplayValue('Base')
+    await user.clear(input)
+    await user.tab()
+    expect(onRename).not.toHaveBeenCalled()
+  })
+
+  it('pressing Enter commits rename', async () => {
+    const user = userEvent.setup()
+    const onRename = vi.fn()
+    render(<UnitSelector units={[makeUnit('u1', 'Base')]} activeUnitId="u1" onSelect={noop} onAdd={noop} onRemove={noop} onRename={onRename} />)
+    const input = screen.getByDisplayValue('Base')
+    await user.clear(input)
+    await user.type(input, 'New Name')
+    await user.keyboard('{Enter}')
+    expect(onRename).toHaveBeenCalledWith('u1', 'New Name')
+  })
 })
