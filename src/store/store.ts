@@ -36,6 +36,7 @@ interface StoreState extends PersistedState, UIState {
   commitDrag: (parentNodeId: string, ratio: number) => void
   addAccessory: (nodeId: string, accessory: Accessory) => void
   removeAccessory: (nodeId: string, accessoryId: string) => void
+  importWorkspace: (incoming: Design[], mode: 'replace' | 'merge') => void
 
   // UI (not persisted)
   setSelectedId: (id: string | null) => void
@@ -172,6 +173,22 @@ export const useStore = create<StoreState>()(
           if (!design) return
           design.root = removeAccessoryFn(design.root, nodeId, accessoryId)
         }),
+
+        importWorkspace: (incoming, mode) => {
+          if (mode === 'replace') {
+            set((s) => {
+              s.projects = incoming
+              s.activeProjectId = incoming[0]?.id ?? null
+              s.selectedId = null
+            })
+            useStore.temporal.getState().clear()
+          } else {
+            set((s) => {
+              const remapped = incoming.map((p) => ({ ...p, id: nanoid() }))
+              s.projects.push(...remapped)
+            })
+          }
+        },
 
         setSelectedId: (id) => set(s => { s.selectedId = id }),
         setSnapGrid: (mm) => set(s => { s.snapGrid = mm }),

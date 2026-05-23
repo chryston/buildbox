@@ -34,6 +34,7 @@ export default function App() {
   const storeRemoveAccessory = useStore((state) => state.removeAccessory)
   const selectedId = useStore((state) => state.selectedId)
 
+  const storeImportWorkspace = useStore((state) => state.importWorkspace)
   const svgRef = useRef<SVGSVGElement>(null)
   const selectedNode = useMemo(
     () => (selectedId && activeDesign ? findNode(activeDesign.root, selectedId) ?? null : null),
@@ -106,6 +107,9 @@ export default function App() {
             downloadSVG(svgRef.current, activeDesign.name)
           }
         }}
+        projects={projects}
+        activeProjectId={activeProjectId}
+        onImportWorkspace={(incoming, mode) => storeImportWorkspace(incoming.projects, mode)}
       />
       <ProjectTabs
         projects={projects}

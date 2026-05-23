@@ -104,4 +104,30 @@ describe('Cabinet design flow', () => {
       expect(within(screen.getByRole('table')).queryByText(/divider/i)).not.toBeInTheDocument()
     })
   })
+
+  it('shows export and import buttons in toolbar and merge increases project count', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    // Export and Import buttons are present in the toolbar
+    expect(screen.getByRole('button', { name: /export workspace/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /import workspace/i })).toBeInTheDocument()
+
+    // Open export modal and verify options are shown
+    await user.click(screen.getByRole('button', { name: /export workspace/i }))
+    expect(screen.getByText(/export workspace/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /active project/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /all projects/i })).toBeInTheDocument()
+
+    // Close export modal via cancel
+    await user.click(screen.getByRole('button', { name: /cancel/i }))
+    expect(screen.queryByRole('button', { name: /active project/i })).not.toBeInTheDocument()
+
+    // Merge via direct store call (file picker can't be tested in jsdom)
+    const { projects, activeProjectId, importWorkspace: storeImport } = useStore.getState()
+    const active = projects.find((p) => p.id === activeProjectId)!
+    const initialCount = projects.length
+    storeImport([active], 'merge')
+    expect(useStore.getState().projects.length).toBe(initialCount + 1)
+  })
 })

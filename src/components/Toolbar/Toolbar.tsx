@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react'
-import type { GlobalSettings, Unit } from '../../types'
+import { useEffect, useRef, useState } from 'react'
+import type { Design, GlobalSettings, Unit } from '../../types'
 import { fromMm, toMm } from '../../engine/unitConversion'
+import ExportModal from './ExportModal'
+import ImportModal from './ImportModal'
 import UndoRedo from './UndoRedo'
+import { importWorkspace } from '../../utils/workspaceIO'
 
 interface Props {
   settings: GlobalSettings
@@ -11,6 +14,9 @@ interface Props {
   onUndo?: () => void
   canRedo?: boolean
   onRedo?: () => void
+  projects?: Design[]
+  activeProjectId?: string | null
+  onImportWorkspace?: (incoming: { projects: Design[]; activeProjectId: string | null }, mode: 'replace' | 'merge') => void
 }
 
 const UNITS: Unit[] = ['mm', 'cm', 'in']
@@ -70,8 +76,35 @@ export default function Toolbar({
   onUndo,
   canRedo = false,
   onRedo,
+  projects = [],
+  activeProjectId = null,
+  onImportWorkspace,
 }: Props) {
+  const [showExport, setShowExport] = useState(false)
+  const [importState, setImportState] = useState<{
+    incoming: { projects: Design[]; activeProjectId: string | null }
+    error?: string
+  } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function handleImportFile(e: React.ChangeEvent<HTMLInputElement>): void {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      try {
+        const result = importWorkspace(ev.target?.result as string)
+        setImportState({ incoming: { projects: result.projects, activeProjectId: result.activeProjectId } })
+      } catch {
+        setImportState({ incoming: { projects: [], activeProjectId: null }, error: 'Invalid file — could not import workspace.' })
+      }
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+
   return (
+    <>
     <header className="flex flex-wrap items-center gap-4 border-b border-white/10 bg-panel px-4 py-2">
       <span className="mr-2 font-bold text-accent">BuildBox</span>
 
@@ -97,6 +130,27 @@ export default function Toolbar({
       <div className="ml-auto flex items-center gap-2">
         <UndoRedo canUndo={canUndo} onUndo={onUndo ?? (() => {})} canRedo={canRedo} onRedo={onRedo ?? (() => {})} />
         <button
+          onClick={() => setShowExport(true)}
+          className="rounded border border-white/20 px-3 py-1.5 text-sm text-white/80 hover:text-white"
+          aria-label="Export workspace"
+        >
+          ↓ Export
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".buildbox.json"
+          className="hidden"
+          onChange={handleImportFile}
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="rounded border border-white/20 px-3 py-1.5 text-sm text-white/80 hover:text-white"
+          aria-label="Import workspace"
+        >
+          ↑ Import
+        </button>
+        <button
           onClick={onExport}
           className="rounded bg-accent px-3 py-1.5 text-sm text-white hover:bg-accent/80"
         >
@@ -104,5 +158,26 @@ export default function Toolbar({
         </button>
       </div>
     </header>
+    {showExport && (
+      <ExportModal
+        projects={projects}
+        activeProjectId={activeProjectId}
+        onClose={() => setShowExport(false)}
+      />
+    )}
+    {importState && (
+      <ImportModal
+        incoming={importState.incoming}
+        onConfirm={(mode) => {
+          if (importState.incoming.projects.length > 0) {
+            onImportWorkspace?.(importState.incoming, mode)
+          }
+          setImportState(null)
+        }}
+        onClose={() => setImportState(null)}
+        error={importState.error}
+      />
+    )}
+    </>
   )
 }
