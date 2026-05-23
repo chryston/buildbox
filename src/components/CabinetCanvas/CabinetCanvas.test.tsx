@@ -1,7 +1,7 @@
 import { createRef } from 'react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
-import type { Design, LayoutResult } from '../../types'
+import type { Design, SceneLayout } from '../../types'
 import { computeLayout } from '../../engine/layoutEngine'
 import CabinetCanvas from './CabinetCanvas'
 
@@ -9,33 +9,90 @@ function createDesign(): Design {
   return {
     id: 'design-1',
     name: 'Test Cabinet',
-    globalSettings: {
-      unit: 'mm',
-      height: 800,
-      width: 600,
-      depth: 500,
-      thickness: 18,
-      backThickness: 6,
-      toeKick: null,
-      defaultMaterial: 'oak',
-    },
-    root: {
-      id: 'root-void',
-      elementType: 'void',
-    },
+    units: [
+      {
+        id: 'unit-1',
+        label: 'Unit 1',
+        type: 'cabinet',
+        x: 0,
+        y: 0,
+        settings: {
+          unit: 'mm',
+          height: 800,
+          width: 600,
+          depth: 500,
+          thickness: 18,
+          backThickness: 6,
+          toeKick: null,
+          defaultMaterial: 'oak',
+        },
+        root: {
+          id: 'root-void',
+          elementType: 'void',
+        },
+      },
+    ],
+  }
+}
+
+function makeSceneLayout(unitCount: number): SceneLayout {
+  const units = Array.from({ length: unitCount }, (_, i) => ({
+    kind: 'cabinet' as const,
+    unitId: `u${i + 1}`,
+    label: `Unit ${i + 1}`,
+    isActive: i === 0,
+    x: i * 700,
+    y: 0,
+    w: 600,
+    h: 800,
+    unit: 'mm' as const,
+    panels: [],
+    voids: [],
+    dividers: [],
+    overConstrainedIds: [],
+  }))
+  return {
+    units,
+    boundingBox: { x: 0, y: 0, w: unitCount * 700, h: 800 },
+  }
+}
+
+function designToSceneLayout(design: Design): SceneLayout {
+  const layout = computeLayout(design)
+  const firstUnit = design.units[0]
+  const { width: w, height: h, unit } = firstUnit.settings
+  return {
+    units: [
+      {
+        kind: 'cabinet',
+        unitId: firstUnit.id,
+        label: firstUnit.label,
+        isActive: true,
+        x: firstUnit.x,
+        y: firstUnit.y,
+        w,
+        h,
+        unit,
+        panels: layout.panels,
+        voids: layout.voids,
+        dividers: layout.dividers,
+        overConstrainedIds: layout.overConstrainedIds,
+      },
+    ],
+    boundingBox: { x: 0, y: 0, w, h },
   }
 }
 
 function renderCabinetCanvas() {
   const design = createDesign()
-  const layout: LayoutResult = computeLayout(design)
+  const sceneLayout = designToSceneLayout(design)
+  const svgRef = createRef<SVGSVGElement>()
   const result = render(
     <CabinetCanvas
-      design={design}
-      layout={layout}
-      svgRef={createRef<SVGSVGElement>()}
-      overConstrainedIds={[]}
+      sceneLayout={sceneLayout}
+      svgRef={svgRef}
       onUnlockNode={() => {}}
+      onUnitClick={() => {}}
     />
   )
   const svg = screen.getByTestId('cabinet-canvas') as unknown as SVGSVGElement
@@ -104,5 +161,19 @@ describe('CabinetCanvas', () => {
     fireEvent.pointerMove(svg, { pointerId: 3, clientX: 40, clientY: 50 })
 
     expect(getViewport()).toHaveAttribute('transform', 'matrix(1,0,0,1,10,5)')
+  })
+
+  it('renders one <g> group per unit', () => {
+    const sceneLayout = makeSceneLayout(2)
+    render(
+      <CabinetCanvas
+        sceneLayout={sceneLayout}
+        svgRef={createRef()}
+        onUnlockNode={() => {}}
+        onUnitClick={() => {}}
+      />
+    )
+    const groups = document.querySelectorAll('[data-unit-id]')
+    expect(groups).toHaveLength(2)
   })
 })
