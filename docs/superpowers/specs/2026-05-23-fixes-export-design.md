@@ -141,8 +141,8 @@ Added to the Zustand store:
 importWorkspace: (incoming: Design[], mode: 'replace' | 'merge') => void
 ```
 
-- **replace**: Clears `projects`, sets to `incoming`, sets `activeProjectId` to first incoming project.
-- **merge**: Appends `incoming` (re-generating IDs with `nanoid()` to avoid collisions if re-importing the same file). Keeps current `activeProjectId`.
+- **replace**: Clears `projects`, sets to `incoming`, sets `activeProjectId` to first incoming project. Clears undo/redo history (import is a bulk operation, not undoable).
+- **merge**: Appends `incoming` (re-generating IDs with `nanoid()` to avoid collisions if re-importing the same file). Keeps current `activeProjectId`. Does not clear undo history.
 
 #### 4.3.4 UI: Toolbar Buttons
 
