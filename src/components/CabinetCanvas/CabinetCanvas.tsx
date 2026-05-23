@@ -93,6 +93,7 @@ export default function CabinetCanvas({ sceneLayout, svgRef, onUnlockNode, onUni
             <g
               key={result.unitId}
               data-unit-id={result.unitId}
+              data-testid="unit-group"
               transform={`translate(${result.x}, ${result.y})`}
             >
               {/* Background rect for unit selection — sits behind all content */}

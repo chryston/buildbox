@@ -65,16 +65,16 @@ describe('Phase B: multi-unit canvas', () => {
 
     // Canvas should now show 2 unit groups
     const canvas = screen.getByTestId('cabinet-canvas')
-    expect(canvas.querySelectorAll('[data-unit-id]')).toHaveLength(2)
+    expect(within(canvas).getAllByTestId('unit-group')).toHaveLength(2)
 
     // Open cut list (in sidebar details — summary element acts as button)
     const aside = screen.getByRole('complementary')
-    const cutListSummary = within(aside).getAllByText(/cut list/i)[0]
+    const cutListSummary = within(aside).getByText(/cut list/i, { selector: 'summary' })
     await user.click(cutListSummary)
 
     // Both unit sections should appear in cut list
-    expect(screen.getAllByText('Unit 1').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Unit 2').length).toBeGreaterThan(0)
+    expect(within(aside).getAllByText('Unit 1').length).toBeGreaterThan(0)
+    expect(within(aside).getAllByText('Unit 2').length).toBeGreaterThan(0)
   })
 })
 
