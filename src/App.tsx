@@ -115,7 +115,10 @@ export default function App() {
     <div className="min-h-screen bg-surface text-white flex flex-col">
       <Toolbar
         settings={activeUnit?.settings ?? defaultSettings}
-        onSettingsChange={(patch) => activeUnitId && updateUnitSettings(activeUnitId, patch)}
+        onSettingsChange={(patch) => {
+          const id = activeUnitId ?? activeProject?.units[0]?.id
+          if (id) updateUnitSettings(id, patch)
+        }}
         canUndo={canUndo}
         onUndo={() => useStore.temporal.getState().undo()}
         canRedo={canRedo}
