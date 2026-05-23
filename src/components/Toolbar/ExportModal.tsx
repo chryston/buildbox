@@ -13,8 +13,10 @@ function triggerDownload(json: string, filename: string): void {
   const a = document.createElement('a')
   a.href = url
   a.download = filename
+  document.body.appendChild(a)
   a.click()
-  URL.revokeObjectURL(url)
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 100)
 }
 
 export default function ExportModal({ projects, activeProjectId, onClose }: Props) {
