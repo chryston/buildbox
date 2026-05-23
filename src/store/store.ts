@@ -313,6 +313,8 @@ export const useStore = create<StoreState>()(
         },
         onRehydrateStorage: () => (state, error) => {
           if (!error && state) {
+            const proj = state.projects.find(p => p.id === state.activeProjectId)
+            state.activeUnitId = proj?.units[0]?.id ?? null
             useStore.temporal.getState().clear()
           }
         },
