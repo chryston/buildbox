@@ -44,6 +44,40 @@ function resetStore() {
   useStore.temporal.getState().clear()
 }
 
+describe('Phase B: multi-unit canvas', () => {
+  beforeEach(resetStore)
+
+  it('user adds a second unit, selects it, and sees cut list entries from both units', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    // Initial state: 1 unit "Unit 1" in sidebar
+    expect(screen.getByDisplayValue('Unit 1')).toBeInTheDocument()
+
+    // Add a second unit
+    await user.click(screen.getByRole('button', { name: /add unit/i }))
+
+    // Unit 2 should appear in sidebar
+    expect(screen.getByDisplayValue('Unit 2')).toBeInTheDocument()
+
+    // Click Unit 2 to select it
+    await user.click(screen.getByDisplayValue('Unit 2'))
+
+    // Canvas should now show 2 unit groups
+    const canvas = screen.getByTestId('cabinet-canvas')
+    expect(canvas.querySelectorAll('[data-unit-id]')).toHaveLength(2)
+
+    // Open cut list (in sidebar details — summary element acts as button)
+    const aside = screen.getByRole('complementary')
+    const cutListSummary = within(aside).getAllByText(/cut list/i)[0]
+    await user.click(cutListSummary)
+
+    // Both unit sections should appear in cut list
+    expect(screen.getAllByText('Unit 1').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Unit 2').length).toBeGreaterThan(0)
+  })
+})
+
 describe('Cabinet design flow', () => {
   beforeEach(resetStore)
 
