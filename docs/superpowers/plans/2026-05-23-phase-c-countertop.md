@@ -127,12 +127,6 @@ export interface CountertopSceneUnit {
 // Extend CabinetUnit to be a true discriminated union (Phase B had only CabinetSceneUnit)
 export type CabinetUnit = CabinetSceneUnit | CountertopSceneUnit
 
-export interface CountertopElementLayout {
-  element: CountertopElement
-  // x, y are relative to countertop origin (same as element.x, element.y)
-  // The parent <g translate(ct.x, ct.y)> handles scene-level offset
-}
-
 export interface CountertopLayout {
   kind: 'countertop'
   unitId: string
@@ -140,9 +134,10 @@ export interface CountertopLayout {
   isActive: boolean
   x: number; y: number
   w: number; h: number
+  material: CountertopMaterialId  // threaded from settings for canvas rendering
   slabRect: { x: number; y: number; w: number; h: number }  // in unit-local coords
   unit: 'mm'              // countertops always in mm for now
-  elements: CountertopElementLayout[]
+  elements: CountertopElement[]   // direct — no wrapper needed
 }
 
 // Replace the Phase B UnitLayoutResult-only union:
@@ -240,7 +235,7 @@ describe('computeSceneLayout with countertop unit', () => {
     const scene = computeSceneLayout([ct], 'ct1')
     const layout = scene.units[0] as import('../types').CountertopLayout
     expect(layout.elements).toHaveLength(1)
-    expect(layout.elements[0].element.type).toBe('sink')
+    expect(layout.elements[0].type).toBe('sink')
   })
 
   it('mixed cabinet + countertop produces bounding box covering both', () => {
@@ -261,7 +256,7 @@ describe('computeSceneLayout with countertop unit', () => {
     }
     const scene = computeSceneLayout([ct], 'ct1')
     const layout = scene.units[0] as import('../types').CountertopLayout
-    expect(layout.elements[0].element.x).toBe(600)  // clamped
+    expect(layout.elements[0].x).toBe(600)  // clamped
   })
 })
 ```
@@ -278,7 +273,7 @@ Expected: FAIL — `computeSceneLayout` doesn't handle countertop units yet
 Add this function to `layoutEngine.ts`:
 
 ```ts
-import type { ..., CountertopSceneUnit, CountertopLayout, CountertopElementLayout, AnyUnitLayout } from '../types'
+import type { ..., CountertopSceneUnit, CountertopLayout, AnyUnitLayout } from '../types'
 
 function clampElement(el: CountertopElement, settings: CountertopSettings): CountertopElement {
   const x = Math.max(0, Math.min(el.x, settings.worktopWidth - el.width))
@@ -291,9 +286,7 @@ function clampElement(el: CountertopElement, settings: CountertopSettings): Coun
 function computeCountertopLayout(unit: CountertopSceneUnit, activeUnitId: string | null): CountertopLayout {
   const { settings } = unit
   const slabRect = { x: 0, y: 0, w: settings.worktopWidth, h: settings.worktopDepth }
-  const elements: CountertopElementLayout[] = unit.elements.map(el => ({
-    element: clampElement(el, settings),
-  }))
+  const elements: CountertopElement[] = unit.elements.map(el => clampElement(el, settings))
   return {
     kind: 'countertop',
     unitId: unit.id,
@@ -303,6 +296,7 @@ function computeCountertopLayout(unit: CountertopSceneUnit, activeUnitId: string
     y: unit.y,
     w: settings.worktopWidth,
     h: settings.slabThickness,  // elevation height = slab thickness
+    material: settings.material,
     unit: 'mm',
     slabRect,
     elements,
@@ -451,7 +445,8 @@ In `cutList.ts`, update the `computeCutListForUnits` function:
 export function computeCutListForUnits(units: CabinetUnit[]): CutListEntry[] {
   return units.flatMap(unit => {
     if (unit.type === 'countertop') return computeCountertopCutList(unit)
-    return computeCutListForUnit(unit as CabinetSceneUnit)
+    if (unit.type === 'cabinet') return computeCutListForUnit(unit)  // type-safe, no cast
+    return []
   })
 }
 
@@ -482,17 +477,37 @@ Add necessary imports at top of file:
 import type { CutListEntry, Design, CabinetUnit, CabinetSceneUnit, CountertopSceneUnit } from '../types'
 ```
 
-- [ ] **Step 4: Run tests**
+- [ ] **Step 5: Update `CutListPanel.tsx` to render `cutouts[]` sub-rows**
+
+In `src/components/Sidebar/CutListPanel.tsx` (or wherever the cut list is rendered), add a nested row for each cutout beneath its parent slab entry:
+
+```tsx
+// After the main row for a cut list entry, render cutouts if present:
+{entry.cutouts?.map((cutout, ci) => (
+  <tr key={ci} className="text-xs text-zinc-500 bg-zinc-50">
+    <td className="pl-6 py-1">{cutout.label} ({cutout.type})</td>
+    <td className="text-right py-1">—</td>
+    <td className="text-right py-1">{cutout.width}</td>
+    <td className="text-right py-1">{cutout.depth}</td>
+    <td className="text-right py-1">—</td>
+    <td></td>
+  </tr>
+))}
+```
+
+This makes countertop entries visually expand to show which holes need to be cut.
+
+- [ ] **Step 6: Run tests**
 
 ```bash
 npx vitest run src/engine/cutList.test.ts
 ```
 Expected: All pass.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add src/engine/cutList.ts src/engine/cutList.test.ts
+git add src/engine/cutList.ts src/engine/cutList.test.ts src/components/Sidebar/CutListPanel.tsx
 git commit -m "feat(engine): countertop slab cut list entry with structured cutouts[]"
 ```
 

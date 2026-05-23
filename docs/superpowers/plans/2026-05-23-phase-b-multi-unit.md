@@ -255,6 +255,22 @@ git commit -m "feat(types): CabinetUnit, Design.units, SceneLayout, UIState.acti
 
 Depends on: Task 1
 
+> **⚠️ Existing test helpers:** After Task 1, the existing tests in `layoutEngine.test.ts` that construct `Design` objects with `{ root, globalSettings }` will fail to compile. Update those helpers at the top of the file to the new shape:
+> ```ts
+> function makeDesign(root: CabinetNode, settingsOverride?: Partial<GlobalSettings>): Design {
+>   const unitId = 'u1'
+>   return {
+>     id: 'd1', name: 'Test',
+>     units: [{
+>       type: 'cabinet', id: unitId, label: 'Unit 1', x: 0, y: 0,
+>       settings: { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak', ...settingsOverride },
+>       root,
+>     }],
+>   }
+> }
+> ```
+> Do this update at the start of Step 1, before writing new tests.
+
 - [ ] **Step 1: Write failing tests for `computeSceneLayout`**
 
 Add to `src/engine/layoutEngine.test.ts`:
@@ -351,10 +367,8 @@ import type {
 const MIN_SECTION_SIZE = 50
 
 // Core per-unit layout. Panel/void/divider coords are relative to unit origin (0,0).
-export function computeUnitLayout(
-  settings: GlobalSettings,
-  root: CabinetNode,
-): Omit<LayoutResult, 'overConstrainedIds'> & { overConstrainedIds: string[] } {
+// Return type is LayoutResult directly (Omit<T,K>&{K:T} is identical to T — no need for the complex form).
+export function computeUnitLayout(settings: GlobalSettings, root: CabinetNode): LayoutResult {
   // ... move body of existing computeLayout here, replacing design.globalSettings with settings, design.root with root
 }
 
@@ -362,18 +376,20 @@ export function computeSceneLayout(
   units: CabinetUnit[],
   activeUnitId: string | null,
 ): SceneLayout {
-  const unitResults: UnitLayoutResult[] = units.map(unit => {
-    const inner = computeUnitLayout(unit.settings, unit.root)
+  // NOTE: rename lambda param to `cabinetUnit` to avoid shadowing the `unit: Unit` property
+  // being set inside the returned object literal.
+  const unitResults: UnitLayoutResult[] = units.map(cabinetUnit => {
+    const inner = computeUnitLayout(cabinetUnit.settings, cabinetUnit.root)
     return {
       kind: 'cabinet',
-      unitId: unit.id,
-      label: unit.label,
-      isActive: unit.id === activeUnitId,
-      x: unit.x,
-      y: unit.y,
-      w: unit.settings.width,
-      h: unit.settings.height,
-      unit: unit.settings.unit,
+      unitId: cabinetUnit.id,
+      label: cabinetUnit.label,
+      isActive: cabinetUnit.id === activeUnitId,
+      x: cabinetUnit.x,
+      y: cabinetUnit.y,
+      w: cabinetUnit.settings.width,
+      h: cabinetUnit.settings.height,
+      unit: cabinetUnit.settings.unit,   // 'unit' here is the Unit enum ('mm'|'cm'|'in')
       ...inner,
     }
   })
@@ -498,8 +514,13 @@ At the bottom of `src/engine/cutList.ts`, add:
 import type { CabinetUnit, CabinetSceneUnit } from '../types'
 import { computeUnitLayout } from './layoutEngine'
 
+// IMPORTANT: use the type discriminant, NOT `as CabinetSceneUnit`. This makes Phase C
+// extension safe — TypeScript will error if a CountertopSceneUnit is passed without handling.
 export function computeCutListForUnits(units: CabinetUnit[]): CutListEntry[] {
-  return units.flatMap(unit => computeCutListForUnit(unit as CabinetSceneUnit))
+  return units.flatMap(unit => {
+    if (unit.type === 'cabinet') return computeCutListForUnit(unit)
+    return []  // Phase C: add countertop handling here
+  })
 }
 
 function computeCutListForUnit(unit: CabinetSceneUnit): CutListEntry[] {
@@ -685,12 +706,11 @@ Key changes (full diff, not exhaustive — adapt carefully to preserve existing 
 // In StoreState interface, add after snapGrid:
 activeUnitId: string | null
 
-// New actions:
+// New actions (setUnitPosition is deferred until drag-to-reorder is implemented):
 addUnit: () => void
 removeUnit: (unitId: string) => void
 setActiveUnit: (unitId: string) => void
 renameUnit: (unitId: string, label: string) => void
-setUnitPosition: (unitId: string, x: number, y: number) => void
 updateUnitSettings: (unitId: string, patch: Partial<GlobalSettings>) => void
 ```
 
