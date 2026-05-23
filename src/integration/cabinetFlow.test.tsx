@@ -9,17 +9,26 @@ function createDesign(): Design {
   return {
     id: 'design-1',
     name: 'Cabinet 1',
-    globalSettings: {
-      unit: 'mm',
-      height: 800,
-      width: 600,
-      depth: 500,
-      thickness: 18,
-      backThickness: 6,
-      toeKick: null,
-      defaultMaterial: 'oak',
-    },
-    root: { id: 'root', elementType: 'void' },
+    units: [
+      {
+        type: 'cabinet',
+        id: 'unit-1',
+        label: 'Unit 1',
+        settings: {
+          unit: 'mm',
+          height: 800,
+          width: 600,
+          depth: 500,
+          thickness: 18,
+          backThickness: 6,
+          toeKick: null,
+          defaultMaterial: 'oak',
+        },
+        root: { id: 'root', elementType: 'void' },
+        x: 0,
+        y: 0,
+      },
+    ],
   }
 }
 
@@ -28,6 +37,7 @@ function resetStore() {
   useStore.setState({
     projects: [createDesign()],
     activeProjectId: 'design-1',
+    activeUnitId: 'unit-1',
     selectedId: null,
     snapGrid: 5,
   })

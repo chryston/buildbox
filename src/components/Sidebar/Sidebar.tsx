@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import CutListPanel from '../CutListPanel/CutListPanel'
+import UnitSelector from './UnitSelector'
 import type {
   AccessoryType,
   CabinetNode,
+  CabinetUnit,
   CutListEntry,
   DrawerConfig,
   ElementType,
@@ -24,6 +26,13 @@ interface Props {
   onSetDrawerConfig: (id: string, config: DrawerConfig) => void
   onAddAccessory: (nodeId: string, type: AccessoryType) => void
   onRemoveAccessory: (nodeId: string, accessoryId: string) => void
+  // Multi-unit props (optional for backward compatibility)
+  units?: CabinetUnit[]
+  activeUnitId?: string | null
+  onAddUnit?: () => void
+  onRemoveUnit?: (unitId: string) => void
+  onSelectUnit?: (unitId: string) => void
+  onRenameUnit?: (unitId: string, label: string) => void
 }
 
 const ELEMENT_TYPES: ElementType[] = ['void', 'drawer', 'hanging-space']
@@ -67,7 +76,18 @@ export default function Sidebar({
   onSetDrawerConfig,
   onAddAccessory,
   onRemoveAccessory,
+  units = [],
+  activeUnitId = null,
+  onAddUnit = () => {},
+  onRemoveUnit = () => {},
+  onSelectUnit = () => {},
+  onRenameUnit = () => {},
 }: Props) {
+  const grouped = cutList.reduce<Record<string, CutListEntry[]>>((acc, e) => {
+    if (!acc[e.unitLabel]) acc[e.unitLabel] = []
+    acc[e.unitLabel].push(e)
+    return acc
+  }, {})
   const isVoid = !selectedNode?.splitAxis
   const isLocked = selectedNode?.locked ?? false
   const [revealStr, setRevealStr] = useState(String(selectedNode?.drawerConfig?.reveal ?? 3))
@@ -80,6 +100,14 @@ export default function Sidebar({
 
   return (
     <aside className="w-60 flex flex-col bg-panel border-l border-white/10 overflow-y-auto">
+      <UnitSelector
+        units={units}
+        activeUnitId={activeUnitId}
+        onSelect={onSelectUnit}
+        onAdd={onAddUnit}
+        onRemove={onRemoveUnit}
+        onRename={onRenameUnit}
+      />
       <div className="flex flex-col gap-1 p-3">
         <p className="text-xs text-white/40 uppercase tracking-wide mb-1">Actions</p>
         <Btn
@@ -217,7 +245,15 @@ export default function Sidebar({
           Cut List ({cutList.length} parts)
         </summary>
         <div className="max-h-64 overflow-y-auto">
-          <CutListPanel entries={cutList} />
+          {Object.entries(grouped).map(([unitLabel, entries]) => (
+            <div key={unitLabel}>
+              {Object.keys(grouped).length > 1 && (
+                <p className="text-xs font-semibold text-white/60 mt-2 mb-1 px-4">{unitLabel}</p>
+              )}
+              <CutListPanel entries={entries} />
+            </div>
+          ))}
+          {cutList.length === 0 && <CutListPanel entries={[]} />}
         </div>
       </details>
     </aside>
