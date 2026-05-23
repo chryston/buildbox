@@ -94,8 +94,17 @@ export default function CabinetCanvas({ sceneLayout, svgRef, onUnlockNode, onUni
               key={result.unitId}
               data-unit-id={result.unitId}
               transform={`translate(${result.x}, ${result.y})`}
-              onClick={() => onUnitClick(result.unitId)}
             >
+              {/* Background rect for unit selection — sits behind all content */}
+              <rect
+                x={0}
+                y={0}
+                width={result.w}
+                height={result.h}
+                fill="transparent"
+                style={{ cursor: 'pointer' }}
+                onClick={() => onUnitClick(result.unitId)}
+              />
               <CanvasLayers
                 panels={result.panels}
                 voids={result.voids}

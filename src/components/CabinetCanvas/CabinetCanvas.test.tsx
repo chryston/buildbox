@@ -176,4 +176,38 @@ describe('CabinetCanvas', () => {
     const groups = document.querySelectorAll('[data-unit-id]')
     expect(groups).toHaveLength(2)
   })
+
+  it('clicking a unit group fires onUnitClick with that unit id', () => {
+    const sceneLayout = makeSceneLayout(2)
+    const onUnitClick = vi.fn()
+    render(
+      <CabinetCanvas
+        sceneLayout={sceneLayout}
+        svgRef={createRef()}
+        onUnlockNode={() => {}}
+        onUnitClick={onUnitClick}
+      />
+    )
+    const groups = document.querySelectorAll('[data-unit-id]')
+    fireEvent.click(groups[1].querySelector('rect')!)
+    expect(onUnitClick).toHaveBeenCalledWith('u2')
+  })
+
+  it('renders dashed border rect for active unit only', () => {
+    const sceneLayout = makeSceneLayout(2)
+    render(
+      <CabinetCanvas
+        sceneLayout={sceneLayout}
+        svgRef={createRef()}
+        onUnlockNode={() => {}}
+        onUnitClick={() => {}}
+      />
+    )
+    const groups = document.querySelectorAll('[data-unit-id]')
+    const activeGroup = groups[0]
+    const dashedRects = activeGroup.querySelectorAll('rect[stroke-dasharray]')
+    expect(dashedRects.length).toBeGreaterThan(0)
+    const inactiveGroup = groups[1]
+    expect(inactiveGroup.querySelectorAll('rect[stroke-dasharray]').length).toBe(0)
+  })
 })
