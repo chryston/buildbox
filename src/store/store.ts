@@ -179,6 +179,7 @@ export const useStore = create<StoreState>()(
             set((s) => {
               s.projects = incoming
               s.activeProjectId = incoming[0]?.id ?? null
+              s.selectedId = null
             })
             useStore.temporal.getState().clear()
           } else {
