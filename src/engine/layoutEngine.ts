@@ -1,6 +1,5 @@
 import type {
   CabinetNode,
-  CabinetSceneUnit,
   CabinetUnit,
   Design,
   GlobalSettings,
@@ -180,7 +179,7 @@ function computeBoundingBox(units: CabinetUnit[]): SceneLayout['boundingBox'] {
 // Backward-compat shim for tests and existing callers
 export function computeLayout(design: Design): LayoutResult {
   if (design.units.length === 0) return { panels: [], voids: [], dividers: [], overConstrainedIds: [] }
-  const first = design.units[0] as CabinetSceneUnit
+  const first = design.units[0]
   return computeUnitLayout(first.settings, first.root)
 }
 
