@@ -1,16 +1,32 @@
 import { describe, it, expect } from 'vitest'
-import { computeLayout } from './layoutEngine'
-import type { Design, CabinetNode } from '../types'
+import { computeLayout, computeSceneLayout } from './layoutEngine'
+import type { CabinetSceneUnit, Design, CabinetNode, GlobalSettings } from '../types'
 
-function makeDesign(root: CabinetNode): Design {
+function makeDesign(root: CabinetNode, settingsOverride?: Partial<GlobalSettings>): Design {
+  const unitId = 'u1'
   return {
-    id: 'd1',
-    name: 'Test',
-    root,
-    globalSettings: {
+    id: 'd1', name: 'Test',
+    units: [{
+      type: 'cabinet', id: unitId, label: 'Unit 1', x: 0, y: 0,
+      settings: { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak', ...settingsOverride },
+      root,
+    }],
+  }
+}
+
+function makeUnit(id: string, label: string, x: number, overrides: Partial<GlobalSettings> = {}): CabinetSceneUnit {
+  return {
+    type: 'cabinet',
+    id,
+    label,
+    x,
+    y: 0,
+    settings: {
       unit: 'mm', height: 800, width: 600, depth: 500,
       thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak',
+      ...overrides,
     },
+    root: { id: `${id}-root`, elementType: 'void' },
   }
 }
 
@@ -121,12 +137,50 @@ describe('computeLayout – both locked, both fit', () => {
 
 describe('computeLayout – toe-kick', () => {
   it('subtracts toe-kick height from inner height and adds toe-kick panel', () => {
-    const design = makeDesign({ id: 'root' })
-    design.globalSettings.toeKick = { height: 100, setback: 20 }
+    const design = makeDesign({ id: 'root' }, { toeKick: { height: 100, setback: 20 } })
     const result = computeLayout(design)
     const tk = result.panels.find(p => p.role === 'toe-kick-board')
     expect(tk).toBeDefined()
     expect(tk!.h).toBe(100)
     expect(result.voids[0].h).toBe(664)
+  })
+})
+
+describe('computeSceneLayout', () => {
+  it('single unit produces one UnitLayoutResult with kind cabinet', () => {
+    const unit = makeUnit('u1', 'Base', 0)
+    const scene = computeSceneLayout([unit], 'u1')
+    expect(scene.units).toHaveLength(1)
+    expect(scene.units[0].kind).toBe('cabinet')
+    expect(scene.units[0].unitId).toBe('u1')
+    expect(scene.units[0].isActive).toBe(true)
+  })
+
+  it('two units both appear in SceneLayout', () => {
+    const u1 = makeUnit('u1', 'Base Left', 0)
+    const u2 = makeUnit('u2', 'Base Right', 700)
+    const scene = computeSceneLayout([u1, u2], 'u1')
+    expect(scene.units).toHaveLength(2)
+    expect(scene.units[1].x).toBe(700)
+    expect(scene.units[1].isActive).toBe(false)
+  })
+
+  it('bounding box encompasses both units', () => {
+    const u1 = makeUnit('u1', 'L', 0, { width: 600, height: 800 })
+    const u2 = makeUnit('u2', 'R', 700, { width: 500, height: 900 })
+    const scene = computeSceneLayout([u1, u2], null)
+    expect(scene.boundingBox.x).toBe(0)
+    expect(scene.boundingBox.y).toBe(0)
+    expect(scene.boundingBox.w).toBe(1200)   // 700 + 500
+    expect(scene.boundingBox.h).toBe(900)    // max height
+  })
+
+  it('UnitLayoutResult.panels are in unit-local coordinates', () => {
+    const unit = makeUnit('u1', 'Base', 50)  // offset x=50
+    const scene = computeSceneLayout([unit], 'u1')
+    const result = scene.units[0]
+    // left panel should start at x=0 in unit-local coords (not 50)
+    const leftPanel = result.panels.find(p => p.role === 'left')!
+    expect(leftPanel.x).toBe(0)
   })
 })
