@@ -9,24 +9,31 @@ function createDesign(): Design {
   return {
     id: 'design-1',
     name: 'Test Cabinet',
-    globalSettings: {
-      unit: 'mm',
-      height: 800,
-      width: 600,
-      depth: 500,
-      thickness: 18,
-      backThickness: 6,
-      toeKick: null,
-      defaultMaterial: 'oak',
-    },
-    root: {
-      id: 'root',
-      splitAxis: 'horizontal',
-      children: [
-        { id: 'top' },
-        { id: 'bottom' },
-      ],
-    },
+    units: [{
+      type: 'cabinet',
+      id: 'unit-1',
+      label: 'Unit 1',
+      x: 0,
+      y: 0,
+      settings: {
+        unit: 'mm',
+        height: 800,
+        width: 600,
+        depth: 500,
+        thickness: 18,
+        backThickness: 6,
+        toeKick: null,
+        defaultMaterial: 'oak',
+      },
+      root: {
+        id: 'root',
+        splitAxis: 'horizontal',
+        children: [
+          { id: 'top' },
+          { id: 'bottom' },
+        ],
+      },
+    }],
   }
 }
 
@@ -77,6 +84,7 @@ describe('DragHandles', () => {
       ...state,
       projects: [createDesign()],
       activeProjectId: 'design-1',
+      activeUnitId: 'unit-1',
       selectedId: null,
       snapGrid: 1,
     }))
@@ -134,7 +142,7 @@ describe('DragHandles', () => {
     fireEvent.pointerUp(handle, { pointerId: 1, clientY: 20 })
 
     const state = useStore.getState()
-    expect(state.projects[0].root.splitRatio).toBeCloseTo(0.55, 5)
+    expect(state.projects[0].units[0].root.splitRatio).toBeCloseTo(0.55, 5)
   })
 
   it('uses the snapped effective delta for the sibling size before committing the ratio', () => {
@@ -160,7 +168,7 @@ describe('DragHandles', () => {
     fireEvent.pointerUp(handle, { pointerId: 1, clientY: 13 })
 
     const state = useStore.getState()
-    expect(state.projects[0].root.splitRatio).toBeCloseTo(0.55, 5)
+    expect(state.projects[0].units[0].root.splitRatio).toBeCloseTo(0.55, 5)
   })
 
   it('commits the drag ratio to the split parent node', () => {
@@ -186,7 +194,7 @@ describe('DragHandles', () => {
     fireEvent.pointerUp(handle, { pointerId: 1, clientY: 20 })
 
     const state = useStore.getState()
-    expect(state.projects[0].root.splitRatio).toBe(0.6)
-    expect(state.projects[0].root.children?.[0].splitRatio).toBeUndefined()
+    expect(state.projects[0].units[0].root.splitRatio).toBe(0.6)
+    expect(state.projects[0].units[0].root.children?.[0].splitRatio).toBeUndefined()
   })
 })

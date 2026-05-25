@@ -1,15 +1,18 @@
 import { describe, it, expect } from 'vitest'
-import { computeCutList } from './cutList'
-import type { Design } from '../types'
+import { computeCutList, computeCutListForUnits } from './cutList'
+import type { CabinetSceneUnit, Design } from '../types'
 
 function bareDesign(): Design {
   return {
     id: 'd1', name: 'Test',
-    root: { id: 'root' },
-    globalSettings: {
-      unit: 'mm', height: 800, width: 600, depth: 500,
-      thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak',
-    },
+    units: [{
+      type: 'cabinet', id: 'u1', label: 'Base', x: 0, y: 0,
+      settings: {
+        unit: 'mm', height: 800, width: 600, depth: 500,
+        thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak',
+      },
+      root: { id: 'root' },
+    }],
   }
 }
 
@@ -42,7 +45,7 @@ describe('computeCutList – bare cabinet', () => {
 describe('computeCutList – with shelf', () => {
   it('adds 1 shelf entry', () => {
     const design = bareDesign()
-    design.root = {
+    design.units[0].root = {
       id: 'root',
       splitAxis: 'horizontal',
       children: [{ id: 'a' }, { id: 'b' }],
@@ -57,7 +60,7 @@ describe('computeCutList – with shelf', () => {
 describe('computeCutList – with toe-kick', () => {
   it('adds toe-kick board to cut list', () => {
     const design = bareDesign()
-    design.globalSettings.toeKick = { height: 100, setback: 20 }
+    design.units[0].settings.toeKick = { height: 100, setback: 20 }
     const entries = computeCutList(design)
     const tk = entries.find(e => e.label === 'Toe-kick board')
     expect(tk).toBeDefined()
@@ -79,7 +82,7 @@ describe('computeCutList – with back panel', () => {
 describe('computeCutList – mixed-height vertical dividers', () => {
   it('produces separate entries for dividers of different heights', () => {
     const design = bareDesign()
-    design.root = {
+    design.units[0].root = {
       id: 'root',
       splitAxis: 'horizontal',
       splitRatio: 0.5,
@@ -104,7 +107,7 @@ describe('computeCutList – mixed-height vertical dividers', () => {
 
   it('produces two entries for dividers at different spans', () => {
     const design = bareDesign()
-    design.root = {
+    design.units[0].root = {
       id: 'root',
       splitAxis: 'horizontal',
       splitRatio: 0.5,
@@ -132,7 +135,7 @@ describe('computeCutList – mixed-height vertical dividers', () => {
 describe('computeCutList – drawer box', () => {
   it('adds drawer box dimensions for side-mount drawer', () => {
     const design = bareDesign()
-    design.root = {
+    design.units[0].root = {
       id: 'root',
       elementType: 'drawer',
       drawerConfig: { slideType: 'side-mount', reveal: 3 },
@@ -146,7 +149,7 @@ describe('computeCutList – drawer box', () => {
 describe('computeCutList – accessories', () => {
   it('adds door and drawer front entries from void accessories', () => {
     const design = bareDesign()
-    design.root = {
+    design.units[0].root = {
       id: 'root',
       splitAxis: 'vertical',
       children: [
@@ -165,7 +168,7 @@ describe('computeCutList – accessories', () => {
 describe('computeCutList – door accessories', () => {
   it('produces separate entries for doors of different heights', () => {
     const design = bareDesign()
-    design.root = {
+    design.units[0].root = {
       id: 'root',
       splitAxis: 'horizontal',
       splitRatio: 0.4,
@@ -180,5 +183,44 @@ describe('computeCutList – door accessories', () => {
     expect(doors.length).toBe(2)
     const totalQty = doors.reduce((sum, entry) => sum + entry.qty, 0)
     expect(totalQty).toBe(2)
+  })
+})
+
+function makeUnit(id: string, label: string, widthOverride?: number): CabinetSceneUnit {
+  return {
+    type: 'cabinet', id, label, x: 0, y: 0,
+    settings: {
+      unit: 'mm', height: 800, width: widthOverride ?? 600, depth: 500,
+      thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak',
+    },
+    root: { id: `${id}-root`, elementType: 'void' },
+  }
+}
+
+describe('computeCutListForUnits', () => {
+  it('tags every entry with unitId and unitLabel', () => {
+    const unit = makeUnit('u1', 'Base Left')
+    const entries = computeCutListForUnits([unit])
+    expect(entries.every(e => e.unitId === 'u1')).toBe(true)
+    expect(entries.every(e => e.unitLabel === 'Base Left')).toBe(true)
+  })
+
+  it('two units produce entries for each unit', () => {
+    const u1 = makeUnit('u1', 'Left', 600)
+    const u2 = makeUnit('u2', 'Right', 900)
+    const entries = computeCutListForUnits([u1, u2])
+    const u1Entries = entries.filter(e => e.unitId === 'u1')
+    const u2Entries = entries.filter(e => e.unitId === 'u2')
+    expect(u1Entries.length).toBeGreaterThan(0)
+    expect(u2Entries.length).toBeGreaterThan(0)
+    expect(u1Entries.find(e => e.label === 'Side panel')!.unitId).toBe('u1')
+    expect(u2Entries.find(e => e.label === 'Side panel')!.unitId).toBe('u2')
+  })
+
+  it('identical cabinets still produce separate entries with distinct unitIds', () => {
+    const u1 = makeUnit('u1', 'A', 600)
+    const u2 = makeUnit('u2', 'B', 600)
+    const entries = computeCutListForUnits([u1, u2])
+    expect(new Set(entries.map(e => e.unitId)).size).toBe(2)
   })
 })

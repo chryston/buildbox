@@ -5,23 +5,37 @@ import ProjectTabs from './components/ProjectTabs/ProjectTabs'
 import Sidebar from './components/Sidebar/Sidebar'
 import Toolbar from './components/Toolbar/Toolbar'
 import WarningBanner from './components/WarningBanner/WarningBanner'
-import { computeCutList } from './engine/cutList'
-import { computeLayout } from './engine/layoutEngine'
+import { computeCutListForUnits } from './engine/cutList'
+import { computeSceneLayout } from './engine/layoutEngine'
 import { findNode } from './engine/treeMutations'
 import { downloadSVG } from './utils/exportSVG'
 import { useStore } from './store/store'
+import type { GlobalSettings } from './types'
+
+const defaultSettings: GlobalSettings = {
+  unit: 'mm',
+  height: 800,
+  width: 600,
+  depth: 500,
+  thickness: 18,
+  backThickness: 6,
+  toeKick: null,
+  defaultMaterial: 'oak',
+}
 
 export default function App() {
   const projects = useStore((state) => state.projects)
   const activeProjectId = useStore((state) => state.activeProjectId)
-  const activeDesign = projects.find((project) => project.id === activeProjectId) ?? projects[0]
+  const activeUnitId = useStore((state) => state.activeUnitId)
+  const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0]
+  const activeUnit = activeProject?.units.find(u => u.id === activeUnitId) ?? activeProject?.units[0]
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
 
   const createProject = useStore((state) => state.createProject)
   const deleteProject = useStore((state) => state.deleteProject)
   const setActiveProject = useStore((state) => state.setActiveProject)
-  const updateSettings = useStore((state) => state.updateSettings)
+  const updateUnitSettings = useStore((state) => state.updateUnitSettings)
   const storeAddShelf = useStore((state) => state.addShelf)
   const storeAddDivider = useStore((state) => state.addDivider)
   const storeDeleteBoard = useStore((state) => state.deleteBoard)
@@ -32,22 +46,27 @@ export default function App() {
   const storeSetElementType = useStore((state) => state.setElementType)
   const storeAddAccessory = useStore((state) => state.addAccessory)
   const storeRemoveAccessory = useStore((state) => state.removeAccessory)
+  const addUnit = useStore((state) => state.addUnit)
+  const removeUnit = useStore((state) => state.removeUnit)
+  const setActiveUnit = useStore((state) => state.setActiveUnit)
+  const renameUnit = useStore((state) => state.renameUnit)
   const selectedId = useStore((state) => state.selectedId)
 
+  const storeImportWorkspace = useStore((state) => state.importWorkspace)
   const svgRef = useRef<SVGSVGElement>(null)
   const selectedNode = useMemo(
-    () => (selectedId && activeDesign ? findNode(activeDesign.root, selectedId) ?? null : null),
-    [selectedId, activeDesign],
+    () => (selectedId && activeUnit ? findNode(activeUnit.root, selectedId) ?? null : null),
+    [selectedId, activeUnit],
   )
   const cutList = useMemo(
-    () => (activeDesign ? computeCutList(activeDesign) : []),
-    [activeDesign]
+    () => (activeProject ? computeCutListForUnits(activeProject.units) : []),
+    [activeProject]
   )
-  const layout = useMemo(
-    () => (activeDesign ? computeLayout(activeDesign) : null),
-    [activeDesign]
+  const sceneLayout = useMemo(
+    () => (activeProject ? computeSceneLayout(activeProject.units, activeUnitId) : null),
+    [activeProject, activeUnitId]
   )
-  const overConstrainedIds = layout?.overConstrainedIds ?? []
+  const overConstrainedIds = sceneLayout?.units.flatMap(u => u.overConstrainedIds) ?? []
 
   useEffect(() => {
     const syncTemporalState = () => {
@@ -87,7 +106,7 @@ export default function App() {
     return () => document.removeEventListener('keydown', handler)
   }, [])
 
-  if (!activeDesign) {
+  if (!activeProject) {
     return <div className="min-h-screen bg-surface text-white">BuildBox</div>
   }
 
@@ -95,17 +114,23 @@ export default function App() {
     <ErrorBoundary>
     <div className="min-h-screen bg-surface text-white flex flex-col">
       <Toolbar
-        settings={activeDesign.globalSettings}
-        onSettingsChange={updateSettings}
+        settings={activeUnit?.settings ?? defaultSettings}
+        onSettingsChange={(patch) => {
+          const id = activeUnitId ?? activeProject?.units[0]?.id
+          if (id) updateUnitSettings(id, patch)
+        }}
         canUndo={canUndo}
         onUndo={() => useStore.temporal.getState().undo()}
         canRedo={canRedo}
         onRedo={() => useStore.temporal.getState().redo()}
         onExport={() => {
           if (svgRef.current) {
-            downloadSVG(svgRef.current, activeDesign.name)
+            downloadSVG(svgRef.current, activeProject.name)
           }
         }}
+        projects={projects}
+        activeProjectId={activeProjectId}
+        onImportWorkspace={(incoming, mode) => storeImportWorkspace(incoming.projects, mode)}
       />
       <ProjectTabs
         projects={projects}
@@ -120,17 +145,22 @@ export default function App() {
         </div>
       )}
       <main className="flex flex-1 overflow-hidden">
-        {activeDesign && layout && (
+        {sceneLayout && (
           <CabinetCanvas
-            design={activeDesign}
-            layout={layout}
+            sceneLayout={sceneLayout}
             svgRef={svgRef}
-            overConstrainedIds={overConstrainedIds}
             onUnlockNode={storeUnlockNode}
+            onUnitClick={setActiveUnit}
           />
         )}
         <Sidebar
           cutList={cutList}
+          units={activeProject?.units ?? []}
+          activeUnitId={activeUnitId}
+          onAddUnit={addUnit}
+          onRemoveUnit={removeUnit}
+          onSelectUnit={setActiveUnit}
+          onRenameUnit={renameUnit}
           selectedId={selectedId}
           selectedNode={selectedNode}
           onAddShelf={storeAddShelf}

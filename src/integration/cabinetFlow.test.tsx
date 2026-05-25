@@ -9,17 +9,26 @@ function createDesign(): Design {
   return {
     id: 'design-1',
     name: 'Cabinet 1',
-    globalSettings: {
-      unit: 'mm',
-      height: 800,
-      width: 600,
-      depth: 500,
-      thickness: 18,
-      backThickness: 6,
-      toeKick: null,
-      defaultMaterial: 'oak',
-    },
-    root: { id: 'root', elementType: 'void' },
+    units: [
+      {
+        type: 'cabinet',
+        id: 'unit-1',
+        label: 'Unit 1',
+        settings: {
+          unit: 'mm',
+          height: 800,
+          width: 600,
+          depth: 500,
+          thickness: 18,
+          backThickness: 6,
+          toeKick: null,
+          defaultMaterial: 'oak',
+        },
+        root: { id: 'root', elementType: 'void' },
+        x: 0,
+        y: 0,
+      },
+    ],
   }
 }
 
@@ -28,11 +37,46 @@ function resetStore() {
   useStore.setState({
     projects: [createDesign()],
     activeProjectId: 'design-1',
+    activeUnitId: 'unit-1',
     selectedId: null,
     snapGrid: 5,
   })
   useStore.temporal.getState().clear()
 }
+
+describe('Phase B: multi-unit canvas', () => {
+  beforeEach(resetStore)
+
+  it('user adds a second unit, selects it, and sees cut list entries from both units', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    // Initial state: 1 unit "Unit 1" in sidebar
+    expect(screen.getByDisplayValue('Unit 1')).toBeInTheDocument()
+
+    // Add a second unit
+    await user.click(screen.getByRole('button', { name: /add unit/i }))
+
+    // Unit 2 should appear in sidebar
+    expect(screen.getByDisplayValue('Unit 2')).toBeInTheDocument()
+
+    // Click Unit 2 to select it
+    await user.click(screen.getByDisplayValue('Unit 2'))
+
+    // Canvas should now show 2 unit groups
+    const canvas = screen.getByTestId('cabinet-canvas')
+    expect(within(canvas).getAllByTestId('unit-group')).toHaveLength(2)
+
+    // Open cut list (in sidebar details — summary element acts as button)
+    const aside = screen.getByRole('complementary')
+    const cutListSummary = within(aside).getByText(/cut list/i, { selector: 'summary' })
+    await user.click(cutListSummary)
+
+    // Both unit sections should appear in cut list
+    expect(within(aside).getAllByText('Unit 1').length).toBeGreaterThan(0)
+    expect(within(aside).getAllByText('Unit 2').length).toBeGreaterThan(0)
+  })
+})
 
 describe('Cabinet design flow', () => {
   beforeEach(resetStore)
@@ -103,5 +147,31 @@ describe('Cabinet design flow', () => {
       expect(screen.queryAllByTestId(/^void-/)).toHaveLength(2)
       expect(within(screen.getByRole('table')).queryByText(/divider/i)).not.toBeInTheDocument()
     })
+  })
+
+  it('shows export and import buttons in toolbar and merge increases project count', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    // Export and Import buttons are present in the toolbar
+    expect(screen.getByRole('button', { name: /export workspace/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /import workspace/i })).toBeInTheDocument()
+
+    // Open export modal and verify options are shown
+    await user.click(screen.getByRole('button', { name: /export workspace/i }))
+    expect(screen.getByText(/export workspace/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /active project/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /all projects/i })).toBeInTheDocument()
+
+    // Close export modal via cancel
+    await user.click(screen.getByRole('button', { name: /cancel/i }))
+    expect(screen.queryByRole('button', { name: /active project/i })).not.toBeInTheDocument()
+
+    // Merge via direct store call (file picker can't be tested in jsdom)
+    const { projects, activeProjectId, importWorkspace: storeImport } = useStore.getState()
+    const active = projects.find((p) => p.id === activeProjectId)!
+    const initialCount = projects.length
+    storeImport([active], 'merge')
+    expect(useStore.getState().projects.length).toBe(initialCount + 1)
   })
 })

@@ -32,20 +32,28 @@ test('unlocking from the sidebar clears fixedSize on the selected node', async (
 
   const state = useStore.getState()
   const activeProjectId = state.activeProjectId!
+  const activeUnitId = state.activeUnitId
   useStore.setState({
     selectedId: 'a',
     projects: state.projects.map((project) =>
       project.id === activeProjectId
         ? {
             ...project,
-            root: {
-              id: 'root',
-              splitAxis: 'horizontal',
-              children: [
-                { id: 'a', elementType: 'void', fixedSize: 200, locked: true },
-                { id: 'b', elementType: 'void' },
-              ],
-            },
+            units: project.units.map((u) =>
+              u.id === activeUnitId
+                ? {
+                    ...u,
+                    root: {
+                      id: 'root',
+                      splitAxis: 'horizontal',
+                      children: [
+                        { id: 'a', elementType: 'void', fixedSize: 200, locked: true },
+                        { id: 'b', elementType: 'void' },
+                      ],
+                    },
+                  }
+                : u,
+            ),
           }
         : project,
     ),
@@ -55,6 +63,7 @@ test('unlocking from the sidebar clears fixedSize on the selected node', async (
   fireEvent.click(screen.getByRole('button', { name: /locked/i }))
 
   const selectedProject = useStore.getState().projects.find((project) => project.id === activeProjectId)
-  expect(selectedProject?.root.children?.[0].locked).toBe(false)
-  expect(selectedProject?.root.children?.[0].fixedSize).toBeUndefined()
+  const unit = selectedProject?.units.find((u) => u.id === activeUnitId)
+  expect(unit?.root.children?.[0].locked).toBe(false)
+  expect(unit?.root.children?.[0].fixedSize).toBeUndefined()
 })

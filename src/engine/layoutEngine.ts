@@ -1,18 +1,23 @@
 import type {
   CabinetNode,
+  CabinetUnit,
   Design,
+  GlobalSettings,
   LayoutDivider,
   LayoutPanel,
   LayoutResult,
   LayoutVoid,
-  MaterialId,
+  CabinetMaterialId,
+  SceneLayout,
   SplitAxis,
+  UnitLayoutResult,
 } from '../types'
 
 const MIN_SECTION_SIZE = 50
 
-export function computeLayout(design: Design): LayoutResult {
-  const { globalSettings: gs, root } = design
+// Core per-unit layout. Panel/void/divider coords are relative to unit origin (0,0).
+export function computeUnitLayout(settings: GlobalSettings, root: CabinetNode): LayoutResult {
+  const gs = settings
   const thickness = gs.thickness
   const toeKickHeight = gs.toeKick?.height ?? 0
 
@@ -53,7 +58,7 @@ export function computeLayout(design: Design): LayoutResult {
     y: number,
     w: number,
     h: number,
-    inheritedMaterial: MaterialId,
+    inheritedMaterial: CabinetMaterialId,
     parentSplitAxis: SplitAxis | undefined,
   ): void {
     const material = node.material ?? inheritedMaterial
@@ -134,6 +139,50 @@ export function computeLayout(design: Design): LayoutResult {
   }
 }
 
+export function computeSceneLayout(
+  units: CabinetUnit[],
+  activeUnitId: string | null,
+): SceneLayout {
+  // NOTE: use `cabinetUnit` as lambda param to avoid shadowing the `unit: Unit` property
+  const unitResults: UnitLayoutResult[] = units.map(cabinetUnit => {
+    const inner = computeUnitLayout(cabinetUnit.settings, cabinetUnit.root)
+    return {
+      kind: 'cabinet' as const,
+      unitId: cabinetUnit.id,
+      label: cabinetUnit.label,
+      isActive: cabinetUnit.id === activeUnitId,
+      x: cabinetUnit.x,
+      y: cabinetUnit.y,
+      w: cabinetUnit.settings.width,
+      h: cabinetUnit.settings.height,
+      unit: cabinetUnit.settings.unit,
+      ...inner,
+    }
+  })
+
+  const boundingBox = computeBoundingBox(units)
+  return { units: unitResults, boundingBox }
+}
+
+function computeBoundingBox(units: CabinetUnit[]): SceneLayout['boundingBox'] {
+  if (units.length === 0) return { x: 0, y: 0, w: 0, h: 0 }
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const u of units) {
+    minX = Math.min(minX, u.x)
+    minY = Math.min(minY, u.y)
+    maxX = Math.max(maxX, u.x + u.settings.width)
+    maxY = Math.max(maxY, u.y + u.settings.height)
+  }
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
+}
+
+// Backward-compat shim for tests and existing callers
+export function computeLayout(design: Design): LayoutResult {
+  if (design.units.length === 0) return { panels: [], voids: [], dividers: [], overConstrainedIds: [] }
+  const first = design.units[0]
+  return computeUnitLayout(first.settings, first.root)
+}
+
 function distributeTwo(
   childA: CabinetNode,
   childB: CabinetNode,
@@ -206,7 +255,7 @@ function buildOuterPanels(gs: {
   width: number
   height: number
   thickness: number
-  defaultMaterial: MaterialId
+  defaultMaterial: CabinetMaterialId
 }): LayoutPanel[] {
   const thickness = gs.thickness
 

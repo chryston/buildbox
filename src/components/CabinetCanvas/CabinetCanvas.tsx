@@ -1,23 +1,22 @@
 import { useCallback, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { useStore } from '../../store/store'
-import type { Design, LayoutResult } from '../../types'
+import type { SceneLayout } from '../../types'
 import CanvasLayers from './CanvasLayers'
 import DragHandles from './DragHandles'
 import DimensionLabels from './DimensionLabels'
 import ZoomControls, { ZOOM_MAX, ZOOM_MIN } from './ZoomControls'
 
 interface Props {
-  design: Design
-  layout: LayoutResult
+  sceneLayout: SceneLayout
   svgRef: RefObject<SVGSVGElement | null>
-  overConstrainedIds: string[]
   onUnlockNode: (nodeId: string) => void
+  onUnitClick: (unitId: string) => void
 }
 
 const PADDING = 40
 
-export default function CabinetCanvas({ design, layout, svgRef, overConstrainedIds, onUnlockNode }: Props) {
+export default function CabinetCanvas({ sceneLayout, svgRef, onUnlockNode, onUnitClick }: Props) {
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const isPanning = useRef(false)
@@ -27,8 +26,8 @@ export default function CabinetCanvas({ design, layout, svgRef, overConstrainedI
   const storeSetNodeSize = useStore((s) => s.setNodeSize)
   const snapGrid = useStore((s) => s.snapGrid)
 
-  const { width: cW, height: cH } = design.globalSettings
-  const viewBox = `${-PADDING} ${-PADDING} ${cW + 2 * PADDING} ${cH + 2 * PADDING}`
+  const { boundingBox: bb } = sceneLayout
+  const viewBox = `${bb.x - PADDING} ${bb.y - PADDING} ${bb.w + 2 * PADDING} ${bb.h + 2 * PADDING}`
 
   const onWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault()
@@ -90,28 +89,61 @@ export default function CabinetCanvas({ design, layout, svgRef, overConstrainedI
         onPointerCancel={onPointerCancel}
       >
         <g transform={`matrix(${zoom},0,0,${zoom},${pan.x},${pan.y})`}>
-          <CanvasLayers
-            panels={layout.panels}
-            voids={layout.voids}
-            dividers={layout.dividers}
-            selectedId={selectedId}
-            onSelectVoid={setSelectedId}
-            onSelectDivider={setSelectedId}
-          />
-          <DimensionLabels
-            voids={layout.voids}
-            unit={design.globalSettings.unit}
-            onCommitSize={handleCommitSize}
-            lockedNodeIds={overConstrainedIds}
-            onUnlockNode={onUnlockNode}
-            zoom={zoom}
-          />
-          <DragHandles
-            dividers={layout.dividers}
-            snapGrid={snapGrid}
-            svgRef={svgRef}
-            zoom={zoom}
-          />
+          {sceneLayout.units.map((result) => (
+            <g
+              key={result.unitId}
+              data-unit-id={result.unitId}
+              data-testid="unit-group"
+              transform={`translate(${result.x}, ${result.y})`}
+            >
+              {/* Background rect for unit selection — sits behind all content */}
+              <rect
+                x={0}
+                y={0}
+                width={result.w}
+                height={result.h}
+                fill="transparent"
+                style={{ cursor: 'pointer' }}
+                onClick={() => onUnitClick(result.unitId)}
+              />
+              <CanvasLayers
+                panels={result.panels}
+                voids={result.voids}
+                dividers={result.dividers}
+                selectedId={selectedId}
+                onSelectVoid={setSelectedId}
+                onSelectDivider={setSelectedId}
+                onUnitClick={() => onUnitClick(result.unitId)}
+              />
+              <DimensionLabels
+                voids={result.voids}
+                unit={result.unit}
+                onCommitSize={handleCommitSize}
+                lockedNodeIds={result.overConstrainedIds}
+                onUnlockNode={onUnlockNode}
+                zoom={zoom}
+              />
+              <DragHandles
+                dividers={result.dividers}
+                snapGrid={snapGrid}
+                svgRef={svgRef}
+                zoom={zoom}
+              />
+              {result.isActive && (
+                <rect
+                  x={-2}
+                  y={-2}
+                  width={result.w + 4}
+                  height={result.h + 4}
+                  fill="none"
+                  stroke="var(--color-accent)"
+                  strokeWidth={2 / zoom}
+                  strokeDasharray={`${6 / zoom} ${3 / zoom}`}
+                  pointerEvents="none"
+                />
+              )}
+            </g>
+          ))}
         </g>
       </svg>
       <ZoomControls

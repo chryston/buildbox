@@ -10,7 +10,7 @@ interface Props {
 
 export default function ZoomControls({ zoom, onZoomIn, onZoomOut, onFitAll }: Props) {
   return (
-    <div className="absolute bottom-4 right-4 z-10 flex gap-1">
+    <div className="absolute top-4 left-4 z-10 flex gap-1">
       <button
         type="button"
         aria-label="Zoom out"
