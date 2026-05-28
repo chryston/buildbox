@@ -12,7 +12,7 @@ export default function UndoRedo({ canUndo, onUndo, canRedo, onRedo }: Props) {
         aria-label="Undo"
         onClick={onUndo}
         disabled={!canUndo}
-        className="px-2 py-1 rounded text-sm text-white/70 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+        className="px-2 py-1 rounded text-sm border border-divider text-text-muted hover:text-text-primary disabled:opacity-40 disabled:cursor-not-allowed"
         title="Undo (Ctrl+Z)"
       >
         ↩
@@ -21,7 +21,7 @@ export default function UndoRedo({ canUndo, onUndo, canRedo, onRedo }: Props) {
         aria-label="Redo"
         onClick={onRedo}
         disabled={!canRedo}
-        className="px-2 py-1 rounded text-sm text-white/70 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+        className="px-2 py-1 rounded text-sm border border-divider text-text-muted hover:text-text-primary disabled:opacity-40 disabled:cursor-not-allowed"
         title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
       >
         ↪

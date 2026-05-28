@@ -6,9 +6,13 @@ export default {
   theme: {
     extend: {
       colors: {
-        surface: '#1e1e2e',
-        panel: '#2a2a3e',
-        accent: '#7c3aed',
+        surface: '#ffffff',
+        panel: '#f8f9fa',
+        accent: '#2563eb',
+        'accent-hover': '#1d4ed8',
+        divider: '#e5e7eb',
+        'text-primary': '#111827',
+        'text-muted': '#6b7280',
       },
     },
   },

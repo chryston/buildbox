@@ -37,9 +37,9 @@ export default function UnitSelector({ units, activeUnitId, onSelect, onAdd, onR
   }
 
   return (
-    <div className="flex flex-col gap-1 p-2 border-b border-border">
+    <div className="flex flex-col gap-1 p-2 border-b border-divider">
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Units</span>
+        <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">Units</span>
         <button
           onClick={onAdd}
           aria-label="Add unit"
@@ -51,11 +51,11 @@ export default function UnitSelector({ units, activeUnitId, onSelect, onAdd, onR
       {units.map(unit => (
         <div
           key={unit.id}
-          className={`flex items-center gap-1 rounded px-1 py-0.5 cursor-pointer ${unit.id === activeUnitId ? 'bg-accent/20 ring-1 ring-accent' : 'hover:bg-surface-elevated'}`}
+          className={`flex items-center gap-1 rounded px-1 py-0.5 cursor-pointer ${unit.id === activeUnitId ? 'bg-accent/10 text-accent border-l-2 border-accent' : 'hover:bg-gray-100'}`}
           onClick={() => onSelect(unit.id)}
         >
           <input
-            className="flex-1 bg-transparent text-sm text-text outline-none"
+            className="flex-1 bg-transparent text-sm text-text-primary outline-none"
             value={labelFor(unit.id, unit.label)}
             onClick={e => { e.stopPropagation(); onSelect(unit.id) }}
             onChange={e => setEditLabels(prev => ({ ...prev, [unit.id]: e.target.value }))}

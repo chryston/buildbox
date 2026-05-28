@@ -16,7 +16,7 @@ export default function ZoomControls({ zoom, onZoomIn, onZoomOut, onFitAll }: Pr
         aria-label="Zoom out"
         disabled={zoom <= ZOOM_MIN}
         onClick={onZoomOut}
-        className="flex h-8 w-8 items-center justify-center rounded bg-panel text-white shadow hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex h-8 w-8 items-center justify-center rounded border border-divider bg-white text-text-primary shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
       >
         −
       </button>
@@ -25,7 +25,7 @@ export default function ZoomControls({ zoom, onZoomIn, onZoomOut, onFitAll }: Pr
         aria-label="Zoom in"
         disabled={zoom >= ZOOM_MAX}
         onClick={onZoomIn}
-        className="flex h-8 w-8 items-center justify-center rounded bg-panel text-white shadow hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex h-8 w-8 items-center justify-center rounded border border-divider bg-white text-text-primary shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
       >
         +
       </button>
@@ -33,7 +33,7 @@ export default function ZoomControls({ zoom, onZoomIn, onZoomOut, onFitAll }: Pr
         type="button"
         aria-label="Fit to screen"
         onClick={onFitAll}
-        className="flex h-8 w-8 items-center justify-center rounded bg-panel text-white shadow hover:bg-white/10"
+        className="flex h-8 w-8 items-center justify-center rounded border border-divider bg-white text-text-primary shadow-sm hover:bg-gray-50"
       >
         ⊡
       </button>
