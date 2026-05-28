@@ -61,8 +61,10 @@ import { createRef } from 'react'
 
 const mockLayout: SceneLayout = {
   units: [{
+    kind: 'cabinet',
     unitId: 'u1',
-    unit: { id: 'u1', type: 'cabinet', label: 'U1', settings: { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak' }, root: { id: 'root', elementType: 'void' }, x: 0, y: 0 },
+    label: 'U1',
+    unit: 'mm',
     x: 0, y: 0, w: 600, h: 800,
     panels: [], voids: [], dividers: [],
     overConstrainedIds: [],
@@ -72,7 +74,7 @@ const mockLayout: SceneLayout = {
 }
 
 describe('CabinetCanvas fit-to-screen', () => {
-  it('handleFitAll resets zoom to 1 and pan to origin', async () => {
+  it('SVG has explicit preserveAspectRatio for correct vertical fitting', () => {
     const svgRef = createRef<SVGSVGElement>()
     render(
       <CabinetCanvas
@@ -82,14 +84,7 @@ describe('CabinetCanvas fit-to-screen', () => {
         onUnitClick={vi.fn()}
       />
     )
-    // Zoom in first
-    const canvas = screen.getByTestId('cabinet-canvas')
-    await userEvent.click(screen.getByLabelText('Zoom in'))
-    await userEvent.click(screen.getByLabelText('Zoom in'))
-    // Then fit
-    await userEvent.click(screen.getByLabelText('Fit to screen'))
-    // After fit, SVG preserveAspectRatio should be "xMidYMid meet" — confirms vertical fits
-    expect(canvas).toHaveAttribute('preserveAspectRatio', 'xMidYMid meet')
+    expect(screen.getByTestId('cabinet-canvas')).toHaveAttribute('preserveAspectRatio', 'xMidYMid meet')
   })
 })
 ```
@@ -113,19 +108,10 @@ In `src/App.tsx`, line 115, change:
 <div className="h-screen overflow-hidden bg-surface text-white flex flex-col">
 ```
 
-- [ ] **Step 4: Fix CabinetCanvas.tsx — add `preserveAspectRatio` + robust `handleFitAll`**
+- [ ] **Step 4: Add `preserveAspectRatio` to SVG in CabinetCanvas.tsx**
 
-Replace the `handleFitAll` and SVG element in `src/components/CabinetCanvas/CabinetCanvas.tsx`:
+The `handleFitAll` function (lines 68–71) is already correct — it resets `zoom=1, pan=0` which works correctly once `h-screen` fixes the container height. The only change needed is adding the `preserveAspectRatio` attribute to the SVG element so the browser uses the correct `meet` mode:
 
-```tsx
-// handleFitAll (replaces lines 68-71)
-const handleFitAll = useCallback(() => {
-  setZoom(1)
-  setPan({ x: 0, y: 0 })
-}, [])
-```
-
-Add `preserveAspectRatio="xMidYMid meet"` to the SVG element (add as explicit attribute after `className`):
 ```tsx
 <svg
   ref={svgRef}
@@ -134,9 +120,15 @@ Add `preserveAspectRatio="xMidYMid meet"` to the SVG element (add as explicit at
   preserveAspectRatio="xMidYMid meet"
   className="h-full w-full"
   style={{ touchAction: 'none' }}
-  ...
+  onWheel={onWheel}
+  onPointerDown={onPointerDown}
+  onPointerMove={onPointerMove}
+  onPointerUp={onPointerUp}
+  onPointerCancel={onPointerCancel}
 >
 ```
+
+**Do not change** the `handleFitAll` implementation — it is already correct.
 
 - [ ] **Step 5: Run test to verify it passes**
 
@@ -177,7 +169,14 @@ git commit -m "fix(canvas): h-screen layout + explicit preserveAspectRatio for f
 
 File: `src/components/CabinetCanvas/DimensionLabels.test.tsx` (already exists — add test cases)
 
-Open `src/components/CabinetCanvas/DimensionLabels.test.tsx` and add:
+Open `src/components/CabinetCanvas/DimensionLabels.test.tsx` and update the imports and add tests:
+
+```tsx
+// Update imports — add vi and screen
+import { render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+import type { LayoutVoid } from '../../types'
+import DimensionLabels from './DimensionLabels'
 
 ```tsx
 function makeTestVoid(id: string, parentSplitAxis: 'horizontal' | 'vertical'): LayoutVoid {
@@ -249,11 +248,14 @@ return (
 
       return (
         <g key={v.nodeId}>
-          {/* Width label */}
+          {/* Width label — horizontal group, no rotation */}
           <g
             opacity={canEditW ? 1 : 0.4}
             cursor={canEditW ? 'pointer' : 'default'}
-            onClick={canEditW ? (e) => openEditor(v, 'w', (e.currentTarget.querySelector('text') as SVGTextElement)) : undefined}
+            onClick={canEditW ? (e) => {
+              const el = e.currentTarget.querySelector('text')
+              if (el) openEditor(v, 'w', el as SVGTextElement)
+            } : undefined}
           >
             <text
               data-testid={`dim-label-${v.nodeId}-w`}
@@ -271,18 +273,20 @@ return (
                 data-testid={`dim-label-${v.nodeId}-w-lock`}
                 transform={`translate(${v.x + v.w / 2 + fontSize * 1.8}, ${v.y + fontSize + 2 - fontSize * 0.7}) scale(${fontSize / 14})`}
               >
-                <path d="M2 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="currentColor" strokeWidth={1.5} />
-                <rect x={1} y={5} width={7} height={5} rx={1} fill="none" stroke="currentColor" strokeWidth={1.5} />
+                <path d="M2 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="var(--color-dim-label)" strokeWidth={1.5} />
+                <rect x={1} y={5} width={7} height={5} rx={1} fill="none" stroke="var(--color-dim-label)" strokeWidth={1.5} />
               </g>
             )}
           </g>
 
-          {/* Height label */}
+          {/* Height label — rotation applied only to text, lock icon stays in un-rotated space */}
           <g
             opacity={canEditH ? 1 : 0.4}
             cursor={canEditH ? 'pointer' : 'default'}
-            transform={`rotate(-90, ${v.x + fontSize + 2}, ${v.y + v.h / 2})`}
-            onClick={canEditH ? (e) => openEditor(v, 'h', (e.currentTarget.querySelector('text') as SVGTextElement)) : undefined}
+            onClick={canEditH ? (e) => {
+              const el = e.currentTarget.querySelector('text')
+              if (el) openEditor(v, 'h', el as SVGTextElement)
+            } : undefined}
           >
             <text
               data-testid={`dim-label-${v.nodeId}-h`}
@@ -292,16 +296,17 @@ return (
               fontSize={fontSize}
               fill="var(--color-dim-label)"
               textDecoration={canEditH ? 'underline' : 'none'}
+              transform={`rotate(-90, ${v.x + fontSize + 2}, ${v.y + v.h / 2})`}
             >
               {formatDisplay(v.h, unit)}
             </text>
             {!canEditH && (
               <g
                 data-testid={`dim-label-${v.nodeId}-h-lock`}
-                transform={`translate(${v.x + fontSize + 2 + fontSize * 1.8}, ${v.y + v.h / 2 - fontSize * 0.7}) scale(${fontSize / 14})`}
+                transform={`translate(${v.x + fontSize + 2 - fontSize * 0.4}, ${v.y + v.h / 2 - fontSize * 2.5}) scale(${fontSize / 14})`}
               >
-                <path d="M2 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="currentColor" strokeWidth={1.5} />
-                <rect x={1} y={5} width={7} height={5} rx={1} fill="none" stroke="currentColor" strokeWidth={1.5} />
+                <path d="M2 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="var(--color-dim-label)" strokeWidth={1.5} />
+                <rect x={1} y={5} width={7} height={5} rx={1} fill="none" stroke="var(--color-dim-label)" strokeWidth={1.5} />
               </g>
             )}
           </g>
@@ -343,21 +348,7 @@ return (
 )
 ```
 
-Also update the `openEditor` function signature — the `<g>` onClick passes the group element, not a text element directly. Update `openEditor` to accept the click event and find the text child:
-
-```tsx
-function openEditor(v: LayoutVoid, axis: 'w' | 'h', labelEl: SVGTextElement) {
-  const rect = labelEl.getBoundingClientRect()
-  setEditing({
-    nodeId: v.nodeId,
-    axis,
-    currentMm: axis === 'w' ? v.w : v.h,
-    anchor: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
-  })
-}
-```
-
-The `querySelector('text')` in the onClick callbacks above retrieves the SVGTextElement from the `<g>` group.
+Note: The height label `rotate` is kept on the `<text>` element only (not on the parent `<g>`). The lock icon for the height label is positioned in un-rotated SVG coordinate space, appearing above the rotated text label.
 
 - [ ] **Step 4: Add `--color-dim-label` CSS variable to `src/index.css`**
 
@@ -413,7 +404,7 @@ git commit -m "feat(canvas): locked dimension labels show 40% opacity + lock ico
 | `panel` | `#2a2a3e` | `#f8f9fa` |
 | `accent` | `#7c3aed` | `#2563eb` |
 | `accent-hover` | — | `#1d4ed8` |
-| `border` | — | `#e5e7eb` |
+| `divider` | — | `#e5e7eb` |
 | `text-primary` | — | `#111827` |
 | `text-muted` | — | `#6b7280` |
 
@@ -467,7 +458,7 @@ export default {
         panel: '#f8f9fa',
         accent: '#2563eb',
         'accent-hover': '#1d4ed8',
-        border: '#e5e7eb',
+        divider: '#e5e7eb',
         'text-primary': '#111827',
         'text-muted': '#6b7280',
       },
@@ -496,7 +487,7 @@ export default {
 Replace:
 - `bg-surface text-white flex flex-col` → `bg-surface text-text-primary flex flex-col`
 - `min-h-screen` → `h-screen overflow-hidden` (done in Task 1)
-- `border-white/10 bg-panel` (warning banner wrapper) → `border-border bg-panel`
+- `border-white/10 bg-panel` (warning banner wrapper) → `border-divider bg-panel`
 - `bg-surface text-white` (loading fallback) → `bg-surface text-text-primary`
 
 Full changes in `src/App.tsx`:
@@ -507,10 +498,14 @@ Full changes in `src/App.tsx`:
 // Line ~110 (loading fallback):
 return <div className="h-screen bg-surface text-text-primary">BuildBox</div>
 
-// Line ~142 (warning banner wrapper):
-<div className="border-b border-border bg-panel px-4 py-2">
+// Warning banner (now inside activeModule guard, handled in T4 — see T4 Step 5 for full JSX):
+{activeModule === 'cabinet' && overConstrainedIds.length > 0 && (
+  <div className="border-b border-divider bg-panel px-4 py-2">
+    <WarningBanner overConstrainedIds={overConstrainedIds} />
+  </div>
+)}
 
-// Line ~147 (main):
+// main element:
 <main className="flex flex-1 overflow-hidden min-h-0">
 ```
 
@@ -520,13 +515,13 @@ Full replacement of class strings:
 
 ```tsx
 // Header
-<header className="flex flex-wrap items-center gap-4 border-b border-border bg-panel px-4 py-2">
+<header className="flex flex-wrap items-center gap-4 border-b border-divider bg-panel px-4 py-2">
 
 // BuildBox brand
 <span className="mr-2 font-bold text-accent">BuildBox</span>
 
 // Unit toggle group
-<div className="flex overflow-hidden rounded border border-border">
+<div className="flex overflow-hidden rounded border border-divider">
 {UNITS.map((nextUnit) => (
   <button
     key={nextUnit}
@@ -545,16 +540,16 @@ Full replacement of class strings:
   {label}
   <input
     ...
-    className="w-20 rounded border border-border bg-white px-1 py-0.5 text-right text-text-primary focus:border-accent focus:outline-none"
+    className="w-20 rounded border border-divider bg-white px-1 py-0.5 text-right text-text-primary focus:border-accent focus:outline-none"
   />
 </label>
 
 // Export workspace button
-<button className="rounded border border-border px-3 py-1.5 text-sm text-text-muted hover:text-text-primary">
+<button className="rounded border border-divider px-3 py-1.5 text-sm text-text-muted hover:text-text-primary">
   ↓ Export
 </button>
 // Import workspace button
-<button className="rounded border border-border px-3 py-1.5 text-sm text-text-muted hover:text-text-primary">
+<button className="rounded border border-divider px-3 py-1.5 text-sm text-text-muted hover:text-text-primary">
   ↑ Import
 </button>
 // Export SVG button
@@ -571,7 +566,7 @@ Replace all `text-white`, `text-white/60`, `border-white/20`, `bg-panel` with li
 // Undo button
 <button
   ...
-  className="flex h-8 w-8 items-center justify-center rounded border border-border text-text-muted hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+  className="flex h-8 w-8 items-center justify-center rounded border border-divider text-text-muted hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
 >
 // Redo button (same pattern)
 ```
@@ -583,8 +578,8 @@ Common pattern — replace:
 - `bg-panel` → `bg-panel`
 - `text-white` → `text-text-primary`
 - `text-white/60` → `text-text-muted`
-- `border-white/10` → `border-border`
-- `border-white/20` → `border-border`
+- `border-white/10` → `border-divider`
+- `border-white/20` → `border-divider`
 - `hover:bg-white/10` → `hover:bg-gray-100`
 - `bg-accent` → `bg-accent`
 - `rounded` modals get `shadow-xl`
@@ -595,12 +590,12 @@ Open each file and apply these replacements throughout.
 
 ```tsx
 // Container
-<div className="flex items-center gap-1 overflow-x-auto border-b border-border bg-panel px-2 py-1">
+<div className="flex items-center gap-1 overflow-x-auto border-b border-divider bg-panel px-2 py-1">
 
 // Tab item
 className={`flex items-center gap-1 rounded px-3 py-1 text-sm select-none ${
   project.id === activeId
-    ? 'bg-white text-text-primary shadow-sm border border-border'
+    ? 'bg-white text-text-primary shadow-sm border border-divider'
     : 'text-text-muted hover:text-text-primary hover:bg-white'
 }`}
 
@@ -614,11 +609,11 @@ className={`flex items-center gap-1 rounded px-3 py-1 text-sm select-none ${
 - [ ] **Step 9: Update `src/components/Sidebar/Sidebar.tsx` and `UnitSelector.tsx`**
 
 Common pattern in sidebar:
-- Sidebar outer div: `border-l border-border bg-panel`
+- Sidebar outer div: `border-l border-divider bg-panel`
 - Section headings: `text-text-primary font-semibold`
 - Secondary text: `text-text-muted`
-- Buttons: `border-border text-text-primary hover:bg-gray-100`
-- Separator lines: `border-border`
+- Buttons: `border-divider text-text-primary hover:bg-gray-100`
+- Separator lines: `border-divider`
 - Active unit highlight: `bg-accent/10 text-accent border-l-2 border-accent`
 - Disabled/muted values: `text-text-muted`
 
@@ -635,19 +630,19 @@ Common pattern in sidebar:
 <table className="w-full border-collapse text-sm text-text-primary">
 
 // Header row
-<tr className="border-b border-border text-xs text-text-muted">
+<tr className="border-b border-divider text-xs text-text-muted">
 
-// Data cells — replace text-white/80 → text-text-primary, border-white/10 → border-border
+// Data cells — replace text-white/80 → text-text-primary, border-white/10 → border-divider
 ```
 
 - [ ] **Step 11: Update `src/components/DimensionEditor/DimensionEditor.tsx`**
 
 ```tsx
 // Container div
-className="fixed z-50 rounded-lg border border-border bg-white p-3 shadow-xl"
+className="fixed z-50 rounded-lg border border-divider bg-white p-3 shadow-xl"
 
 // Input
-className="w-full rounded border border-border px-2 py-1 text-sm text-text-primary focus:border-accent focus:outline-none"
+className="w-full rounded border border-divider px-2 py-1 text-sm text-text-primary focus:border-accent focus:outline-none"
 
 // Confirm/cancel buttons — accent + border patterns
 ```
@@ -656,7 +651,7 @@ className="w-full rounded border border-border px-2 py-1 text-sm text-text-prima
 
 ```tsx
 // All three buttons
-className="flex h-8 w-8 items-center justify-center rounded border border-border bg-white text-text-primary shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+className="flex h-8 w-8 items-center justify-center rounded border border-divider bg-white text-text-primary shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
 ```
 
 - [ ] **Step 13: Update `src/components/CabinetCanvas/CabinetCanvas.tsx`**
@@ -773,8 +768,8 @@ interface Props {
 
 export default function ModuleSwitcher({ activeModule, onChange }: Props) {
   return (
-    <div className="flex items-center gap-1 border-b border-border bg-panel px-4 py-1.5">
-      <div className="flex overflow-hidden rounded-md border border-border">
+    <div className="flex items-center gap-1 border-b border-divider bg-panel px-4 py-1.5">
+      <div className="flex overflow-hidden rounded-md border border-divider">
         <button
           type="button"
           onClick={() => onChange('cabinet')}
@@ -837,13 +832,24 @@ Add state after the existing state declarations:
 const [activeModule, setActiveModule] = useState<'cabinet' | 'floorplan'>('cabinet')
 ```
 
-In the JSX, add `ModuleSwitcher` after `<ProjectTabs>` and before `{overConstrainedIds.length > 0 && ...}`:
+In the JSX, add `ModuleSwitcher` **between `<Toolbar>` and `<ProjectTabs>`** (above ProjectTabs — it's a higher-level navigation concern):
 ```tsx
+<Toolbar ... />
 <ModuleSwitcher activeModule={activeModule} onChange={setActiveModule} />
+<ProjectTabs ... />
 ```
 
-Replace the `<main>` contents:
+Also wrap the over-constrained warning banner and the `<main>` cabinet contents inside an `activeModule === 'cabinet'` guard so floor plan view stays clean:
+
 ```tsx
+<Toolbar ... />
+<ModuleSwitcher activeModule={activeModule} onChange={setActiveModule} />
+<ProjectTabs ... />
+{activeModule === 'cabinet' && overConstrainedIds.length > 0 && (
+  <div className="border-b border-divider bg-panel px-4 py-2">
+    <WarningBanner overConstrainedIds={overConstrainedIds} />
+  </div>
+)}
 <main className="flex flex-1 overflow-hidden min-h-0">
   {activeModule === 'floorplan' ? (
     <FloorPlanPlaceholder />
@@ -883,7 +889,6 @@ Replace the `<main>` contents:
     </>
   )}
 </main>
-```
 
 - [ ] **Step 6: Run tests to verify they pass**
 
