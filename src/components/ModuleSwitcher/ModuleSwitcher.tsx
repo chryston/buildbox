@@ -1,4 +1,5 @@
-export type Module = 'cabinet' | 'floorplan'
+import type { AppModule as Module } from '../../types'
+export type { Module }
 
 interface Props {
   activeModule: Module

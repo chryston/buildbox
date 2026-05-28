@@ -160,3 +160,5 @@ export interface UIState {
   snapGrid: number
   activeUnitId: string | null  // not persisted, not in temporal history
 }
+
+export type AppModule = 'cabinet' | 'floorplan'
