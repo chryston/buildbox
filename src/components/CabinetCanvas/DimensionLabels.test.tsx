@@ -1,5 +1,5 @@
-import { render } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import type { LayoutVoid } from '../../types'
 import DimensionLabels from './DimensionLabels'
 
@@ -33,4 +33,46 @@ describe('DimensionLabels font scaling', () => {
       expect(Number(t.getAttribute('font-size'))).toBe(expectedFontSize)
     }
   })
+})
+
+function makeTestVoid(id: string, parentSplitAxis: 'horizontal' | 'vertical'): LayoutVoid {
+  return {
+    nodeId: id, x: 0, y: 0, w: 200, h: 300,
+    parentSplitAxis,
+    elementType: 'void',
+    material: 'oak',
+    accessories: [],
+  }
+}
+
+it('non-editable width label shows lock icon', () => {
+  // parentSplitAxis=horizontal → canEditH=true, canEditW=false
+  render(
+    <svg>
+      <DimensionLabels
+        voids={[makeTestVoid('n1', 'horizontal')]}
+        unit="mm"
+        onCommitSize={vi.fn()}
+        zoom={1}
+      />
+    </svg>
+  )
+  expect(screen.getByTestId('dim-label-n1-w-lock')).toBeInTheDocument()
+  expect(screen.queryByTestId('dim-label-n1-h-lock')).not.toBeInTheDocument()
+})
+
+it('editable width label has no lock icon', () => {
+  // parentSplitAxis=vertical → canEditW=true, canEditH=false
+  render(
+    <svg>
+      <DimensionLabels
+        voids={[makeTestVoid('n2', 'vertical')]}
+        unit="mm"
+        onCommitSize={vi.fn()}
+        zoom={1}
+      />
+    </svg>
+  )
+  expect(screen.queryByTestId('dim-label-n2-w-lock')).not.toBeInTheDocument()
+  expect(screen.getByTestId('dim-label-n2-h-lock')).toBeInTheDocument()
 })

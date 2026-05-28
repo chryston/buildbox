@@ -51,33 +51,60 @@ export default function DimensionLabels(props: Props) {
 
         return (
           <g key={v.nodeId}>
-            <text
+            {/* Width label */}
+          <text
               data-testid={`dim-label-${v.nodeId}-w`}
               x={v.x + v.w / 2}
               y={v.y + fontSize + 2}
               textAnchor="middle"
               fontSize={fontSize}
-              fill="rgba(255,255,255,0.7)"
+              fill="var(--color-dim-label)"
+              opacity={canEditW ? 1 : 0.4}
+              textDecoration={canEditW ? 'underline' : 'none'}
               cursor={canEditW ? 'pointer' : 'default'}
               onClick={canEditW ? (e) => openEditor(v, 'w', e.currentTarget) : undefined}
             >
               {formatDisplay(v.w, unit)}
             </text>
+            {!canEditW && (
+              <g
+                data-testid={`dim-label-${v.nodeId}-w-lock`}
+                opacity={0.4}
+                transform={`translate(${v.x + v.w / 2 + fontSize * 1.8}, ${v.y + fontSize + 2 - fontSize * 0.7}) scale(${fontSize / 14})`}
+              >
+                <path d="M2 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="var(--color-dim-label)" strokeWidth={1.5} />
+                <rect x={1} y={5} width={7} height={5} rx={1} fill="none" stroke="var(--color-dim-label)" strokeWidth={1.5} />
+              </g>
+            )}
 
+            {/* Height label */}
             <text
               data-testid={`dim-label-${v.nodeId}-h`}
               x={v.x + fontSize + 2}
               y={v.y + v.h / 2}
               textAnchor="middle"
               fontSize={fontSize}
-              fill="rgba(255,255,255,0.7)"
-              transform={`rotate(-90, ${v.x + fontSize + 2}, ${v.y + v.h / 2})`}
+              fill="var(--color-dim-label)"
+              opacity={canEditH ? 1 : 0.4}
+              textDecoration={canEditH ? 'underline' : 'none'}
               cursor={canEditH ? 'pointer' : 'default'}
+              transform={`rotate(-90, ${v.x + fontSize + 2}, ${v.y + v.h / 2})`}
               onClick={canEditH ? (e) => openEditor(v, 'h', e.currentTarget) : undefined}
             >
               {formatDisplay(v.h, unit)}
             </text>
+            {!canEditH && (
+              <g
+                data-testid={`dim-label-${v.nodeId}-h-lock`}
+                opacity={0.4}
+                transform={`translate(${v.x + fontSize + 2 - fontSize * 0.4}, ${v.y + v.h / 2 - fontSize * 2.5}) scale(${fontSize / 14})`}
+              >
+                <path d="M2 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="var(--color-dim-label)" strokeWidth={1.5} />
+                <rect x={1} y={5} width={7} height={5} rx={1} fill="none" stroke="var(--color-dim-label)" strokeWidth={1.5} />
+              </g>
+            )}
 
+            {/* Over-constrained unlock button (existing — unchanged) */}
             {lockedNodeIds.includes(v.nodeId) && (
               <g
                 role="button"
