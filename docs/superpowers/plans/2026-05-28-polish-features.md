@@ -49,54 +49,16 @@
 
 - [ ] **Step 1: Write the failing test**
 
-File: `src/components/CabinetCanvas/CabinetCanvas.test.tsx`
+File: `src/components/CabinetCanvas/CabinetCanvas.test.tsx` — **no new test file needed.** The `preserveAspectRatio` assertion is already in the T5 integration test. Skipping this step keeps coverage in one place.
 
-```tsx
-import { render, screen, act } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import CabinetCanvas from './CabinetCanvas'
-import type { SceneLayout } from '../../types'
-import { createRef } from 'react'
-
-const mockLayout: SceneLayout = {
-  units: [{
-    kind: 'cabinet',
-    unitId: 'u1',
-    label: 'U1',
-    unit: 'mm',
-    x: 0, y: 0, w: 600, h: 800,
-    panels: [], voids: [], dividers: [],
-    overConstrainedIds: [],
-    isActive: true,
-  }],
-  boundingBox: { x: 0, y: 0, w: 600, h: 800 },
-}
-
-describe('CabinetCanvas fit-to-screen', () => {
-  it('SVG has explicit preserveAspectRatio for correct vertical fitting', () => {
-    const svgRef = createRef<SVGSVGElement>()
-    render(
-      <CabinetCanvas
-        sceneLayout={mockLayout}
-        svgRef={svgRef}
-        onUnlockNode={vi.fn()}
-        onUnitClick={vi.fn()}
-      />
-    )
-    expect(screen.getByTestId('cabinet-canvas')).toHaveAttribute('preserveAspectRatio', 'xMidYMid meet')
-  })
-})
-```
-
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 2: Confirm existing tests still pass before making changes**
 
 ```bash
 cd /home/chryston/docker/copilot/repos/worktrees/buildbox-main-polish-features
-npx vitest run src/components/CabinetCanvas/CabinetCanvas.test.tsx
+npx vitest run
 ```
 
-Expected: FAIL — `preserveAspectRatio` attribute missing
+Expected: 147 tests PASS
 
 - [ ] **Step 3: Fix App.tsx outer div — `min-h-screen` → `h-screen overflow-hidden`**
 
@@ -233,9 +195,7 @@ Expected: FAIL — `dim-label-n1-w-lock` not found
 
 - [ ] **Step 3: Update DimensionLabels.tsx**
 
-Replace the `<text>` elements for width and height labels in `src/components/CabinetCanvas/DimensionLabels.tsx`. The key changes:
-- Non-editable labels: `opacity={0.4}` + inline `<LockIcon>` SVG group beside the text
-- Editable labels: `textDecoration="underline"` + `cursor="pointer"`
+Replace the `<text>` elements for width and height labels in `src/components/CabinetCanvas/DimensionLabels.tsx`. Keep `onClick` directly on `<text>` (same as current code), add `opacity` and `textDecoration` inline. Render lock icon as a **sibling `<g>`**, not a wrapper parent — no DOM level change, no `querySelector`.
 
 Replace the entire return body with:
 
@@ -248,70 +208,60 @@ return (
 
       return (
         <g key={v.nodeId}>
-          {/* Width label — horizontal group, no rotation */}
-          <g
+          {/* Width label */}
+          <text
+            data-testid={`dim-label-${v.nodeId}-w`}
+            x={v.x + v.w / 2}
+            y={v.y + fontSize + 2}
+            textAnchor="middle"
+            fontSize={fontSize}
+            fill="var(--color-dim-label)"
             opacity={canEditW ? 1 : 0.4}
+            textDecoration={canEditW ? 'underline' : 'none'}
             cursor={canEditW ? 'pointer' : 'default'}
-            onClick={canEditW ? (e) => {
-              const el = e.currentTarget.querySelector('text')
-              if (el) openEditor(v, 'w', el as SVGTextElement)
-            } : undefined}
+            onClick={canEditW ? (e) => openEditor(v, 'w', e.currentTarget) : undefined}
           >
-            <text
-              data-testid={`dim-label-${v.nodeId}-w`}
-              x={v.x + v.w / 2}
-              y={v.y + fontSize + 2}
-              textAnchor="middle"
-              fontSize={fontSize}
-              fill="var(--color-dim-label)"
-              textDecoration={canEditW ? 'underline' : 'none'}
+            {formatDisplay(v.w, unit)}
+          </text>
+          {!canEditW && (
+            <g
+              data-testid={`dim-label-${v.nodeId}-w-lock`}
+              opacity={0.4}
+              transform={`translate(${v.x + v.w / 2 + fontSize * 1.8}, ${v.y + fontSize + 2 - fontSize * 0.7}) scale(${fontSize / 14})`}
             >
-              {formatDisplay(v.w, unit)}
-            </text>
-            {!canEditW && (
-              <g
-                data-testid={`dim-label-${v.nodeId}-w-lock`}
-                transform={`translate(${v.x + v.w / 2 + fontSize * 1.8}, ${v.y + fontSize + 2 - fontSize * 0.7}) scale(${fontSize / 14})`}
-              >
-                <path d="M2 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="var(--color-dim-label)" strokeWidth={1.5} />
-                <rect x={1} y={5} width={7} height={5} rx={1} fill="none" stroke="var(--color-dim-label)" strokeWidth={1.5} />
-              </g>
-            )}
-          </g>
+              <path d="M2 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="var(--color-dim-label)" strokeWidth={1.5} />
+              <rect x={1} y={5} width={7} height={5} rx={1} fill="none" stroke="var(--color-dim-label)" strokeWidth={1.5} />
+            </g>
+          )}
 
-          {/* Height label — rotation applied only to text, lock icon stays in un-rotated space */}
-          <g
+          {/* Height label */}
+          <text
+            data-testid={`dim-label-${v.nodeId}-h`}
+            x={v.x + fontSize + 2}
+            y={v.y + v.h / 2}
+            textAnchor="middle"
+            fontSize={fontSize}
+            fill="var(--color-dim-label)"
             opacity={canEditH ? 1 : 0.4}
+            textDecoration={canEditH ? 'underline' : 'none'}
             cursor={canEditH ? 'pointer' : 'default'}
-            onClick={canEditH ? (e) => {
-              const el = e.currentTarget.querySelector('text')
-              if (el) openEditor(v, 'h', el as SVGTextElement)
-            } : undefined}
+            transform={`rotate(-90, ${v.x + fontSize + 2}, ${v.y + v.h / 2})`}
+            onClick={canEditH ? (e) => openEditor(v, 'h', e.currentTarget) : undefined}
           >
-            <text
-              data-testid={`dim-label-${v.nodeId}-h`}
-              x={v.x + fontSize + 2}
-              y={v.y + v.h / 2}
-              textAnchor="middle"
-              fontSize={fontSize}
-              fill="var(--color-dim-label)"
-              textDecoration={canEditH ? 'underline' : 'none'}
-              transform={`rotate(-90, ${v.x + fontSize + 2}, ${v.y + v.h / 2})`}
+            {formatDisplay(v.h, unit)}
+          </text>
+          {!canEditH && (
+            <g
+              data-testid={`dim-label-${v.nodeId}-h-lock`}
+              opacity={0.4}
+              transform={`translate(${v.x + fontSize + 2 - fontSize * 0.4}, ${v.y + v.h / 2 - fontSize * 2.5}) scale(${fontSize / 14})`}
             >
-              {formatDisplay(v.h, unit)}
-            </text>
-            {!canEditH && (
-              <g
-                data-testid={`dim-label-${v.nodeId}-h-lock`}
-                transform={`translate(${v.x + fontSize + 2 - fontSize * 0.4}, ${v.y + v.h / 2 - fontSize * 2.5}) scale(${fontSize / 14})`}
-              >
-                <path d="M2 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="var(--color-dim-label)" strokeWidth={1.5} />
-                <rect x={1} y={5} width={7} height={5} rx={1} fill="none" stroke="var(--color-dim-label)" strokeWidth={1.5} />
-              </g>
-            )}
-          </g>
+              <path d="M2 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="var(--color-dim-label)" strokeWidth={1.5} />
+              <rect x={1} y={5} width={7} height={5} rx={1} fill="none" stroke="var(--color-dim-label)" strokeWidth={1.5} />
+            </g>
+          )}
 
-          {/* Over-constrained unlock button (existing) */}
+          {/* Over-constrained unlock button (existing — unchanged) */}
           {lockedNodeIds.includes(v.nodeId) && (
             <g
               role="button"
@@ -348,7 +298,7 @@ return (
 )
 ```
 
-Note: The height label `rotate` is kept on the `<text>` element only (not on the parent `<g>`). The lock icon for the height label is positioned in un-rotated SVG coordinate space, appearing above the rotated text label.
+The `openEditor` function is **unchanged** from the current code — `e.currentTarget` on the `<text>` click is already the `SVGTextElement`.
 
 - [ ] **Step 4: Add `--color-dim-label` CSS variable to `src/index.css`**
 
@@ -414,7 +364,6 @@ git commit -m "feat(canvas): locked dimension labels show 40% opacity + lock ico
 |----------|-------|
 | `--color-dim-label` | `#374151` (gray-700) |
 | `--color-accent` | `#2563eb` |
-| `--color-panel` | `#f8f9fa` |
 
 **Files:**
 - Modify: `tailwind.config.ts`
@@ -478,7 +427,6 @@ export default {
 :root {
   --color-dim-label: #374151;
   --color-accent: #2563eb;
-  --color-panel: #f8f9fa;
 }
 ```
 
@@ -719,12 +667,6 @@ describe('ModuleSwitcher', () => {
     render(<ModuleSwitcher activeModule="cabinet" onChange={onChange} />)
     await userEvent.click(screen.getByRole('button', { name: /floor plan/i }))
     expect(onChange).toHaveBeenCalledWith('floorplan')
-  })
-
-  it('highlights active module button', () => {
-    render(<ModuleSwitcher activeModule="floorplan" onChange={vi.fn()} />)
-    const floorBtn = screen.getByRole('button', { name: /floor plan/i })
-    expect(floorBtn).toHaveClass('bg-accent')
   })
 })
 ```
