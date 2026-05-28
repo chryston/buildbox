@@ -112,7 +112,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-    <div className="min-h-screen bg-surface text-white flex flex-col">
+    <div className="h-screen overflow-hidden bg-surface text-white flex flex-col">
       <Toolbar
         settings={activeUnit?.settings ?? defaultSettings}
         onSettingsChange={(patch) => {
