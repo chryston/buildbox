@@ -1,4 +1,4 @@
-type Module = 'cabinet' | 'floorplan'
+export type Module = 'cabinet' | 'floorplan'
 
 interface Props {
   activeModule: Module
@@ -15,7 +15,7 @@ export default function ModuleSwitcher({ activeModule, onChange }: Props) {
           className={`px-4 py-1 text-sm font-medium transition-colors ${
             activeModule === 'cabinet'
               ? 'bg-accent text-white'
-              : 'bg-white text-text-muted hover:text-text-primary'
+              : 'bg-panel text-text-muted hover:text-text-primary'
           }`}
         >
           Cabinet
@@ -26,7 +26,7 @@ export default function ModuleSwitcher({ activeModule, onChange }: Props) {
           className={`px-4 py-1 text-sm font-medium transition-colors ${
             activeModule === 'floorplan'
               ? 'bg-accent text-white'
-              : 'bg-white text-text-muted hover:text-text-primary'
+              : 'bg-panel text-text-muted hover:text-text-primary'
           }`}
         >
           Floor Plan

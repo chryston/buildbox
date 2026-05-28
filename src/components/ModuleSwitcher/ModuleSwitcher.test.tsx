@@ -16,4 +16,11 @@ describe('ModuleSwitcher', () => {
     await userEvent.click(screen.getByRole('button', { name: /floor plan/i }))
     expect(onChange).toHaveBeenCalledWith('floorplan')
   })
+
+  it('calls onChange with cabinet when Cabinet clicked', async () => {
+    const onChange = vi.fn()
+    render(<ModuleSwitcher activeModule="floorplan" onChange={onChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /cabinet/i }))
+    expect(onChange).toHaveBeenCalledWith('cabinet')
+  })
 })

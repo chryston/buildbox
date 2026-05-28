@@ -3,6 +3,7 @@ import CabinetCanvas from './components/CabinetCanvas/CabinetCanvas'
 import ErrorBoundary from './components/ErrorBoundary'
 import FloorPlanPlaceholder from './components/FloorPlanPlaceholder/FloorPlanPlaceholder'
 import ModuleSwitcher from './components/ModuleSwitcher/ModuleSwitcher'
+import type { Module } from './components/ModuleSwitcher/ModuleSwitcher'
 import ProjectTabs from './components/ProjectTabs/ProjectTabs'
 import Sidebar from './components/Sidebar/Sidebar'
 import Toolbar from './components/Toolbar/Toolbar'
@@ -33,7 +34,7 @@ export default function App() {
   const activeUnit = activeProject?.units.find(u => u.id === activeUnitId) ?? activeProject?.units[0]
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
-  const [activeModule, setActiveModule] = useState<'cabinet' | 'floorplan'>('cabinet')
+  const [activeModule, setActiveModule] = useState<Module>('cabinet')
 
   const createProject = useStore((state) => state.createProject)
   const deleteProject = useStore((state) => state.deleteProject)
