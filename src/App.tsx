@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import CabinetCanvas from './components/CabinetCanvas/CabinetCanvas'
 import ErrorBoundary from './components/ErrorBoundary'
+import FloorPlanPlaceholder from './components/FloorPlanPlaceholder/FloorPlanPlaceholder'
+import ModuleSwitcher from './components/ModuleSwitcher/ModuleSwitcher'
 import ProjectTabs from './components/ProjectTabs/ProjectTabs'
 import Sidebar from './components/Sidebar/Sidebar'
 import Toolbar from './components/Toolbar/Toolbar'
@@ -31,6 +33,7 @@ export default function App() {
   const activeUnit = activeProject?.units.find(u => u.id === activeUnitId) ?? activeProject?.units[0]
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
+  const [activeModule, setActiveModule] = useState<'cabinet' | 'floorplan'>('cabinet')
 
   const createProject = useStore((state) => state.createProject)
   const deleteProject = useStore((state) => state.deleteProject)
@@ -107,7 +110,7 @@ export default function App() {
   }, [])
 
   if (!activeProject) {
-    return <div className="min-h-screen bg-surface text-white">BuildBox</div>
+    return <div className="min-h-screen bg-surface text-text-primary">BuildBox</div>
   }
 
   return (
@@ -132,6 +135,7 @@ export default function App() {
         activeProjectId={activeProjectId}
         onImportWorkspace={(incoming, mode) => storeImportWorkspace(incoming.projects, mode)}
       />
+      <ModuleSwitcher activeModule={activeModule} onChange={setActiveModule} />
       <ProjectTabs
         projects={projects}
         activeId={activeProjectId}
@@ -139,43 +143,49 @@ export default function App() {
         onCreate={createProject}
         onDelete={deleteProject}
       />
-      {overConstrainedIds.length > 0 && (
-        <div className="border-b border-white/10 bg-panel px-4 py-2">
+      {activeModule === 'cabinet' && overConstrainedIds.length > 0 && (
+        <div className="border-b border-divider bg-panel px-4 py-2">
           <WarningBanner overConstrainedIds={overConstrainedIds} />
         </div>
       )}
       <main className="flex flex-1 overflow-hidden">
-        {sceneLayout && (
-          <CabinetCanvas
-            sceneLayout={sceneLayout}
-            svgRef={svgRef}
-            onUnlockNode={storeUnlockNode}
-            onUnitClick={setActiveUnit}
-          />
+        {activeModule === 'floorplan' ? (
+          <FloorPlanPlaceholder />
+        ) : (
+          <>
+            {sceneLayout && (
+              <CabinetCanvas
+                sceneLayout={sceneLayout}
+                svgRef={svgRef}
+                onUnlockNode={storeUnlockNode}
+                onUnitClick={setActiveUnit}
+              />
+            )}
+            <Sidebar
+              cutList={cutList}
+              units={activeProject?.units ?? []}
+              activeUnitId={activeUnitId}
+              onAddUnit={addUnit}
+              onRemoveUnit={removeUnit}
+              onSelectUnit={setActiveUnit}
+              onRenameUnit={renameUnit}
+              selectedId={selectedId}
+              selectedNode={selectedNode}
+              onAddShelf={storeAddShelf}
+              onAddDivider={storeAddDivider}
+              onDelete={storeDeleteBoard}
+              onToggleLock={(id) => {
+                if (selectedNode?.locked) storeUnlockNode(id)
+                else storeLocked(id, true)
+              }}
+              onSetMaterial={storeMaterial}
+              onSetElementType={storeSetElementType}
+              onSetDrawerConfig={storeDrawerConfig}
+              onAddAccessory={(nodeId, type) => storeAddAccessory(nodeId, { id: crypto.randomUUID(), type })}
+              onRemoveAccessory={storeRemoveAccessory}
+            />
+          </>
         )}
-        <Sidebar
-          cutList={cutList}
-          units={activeProject?.units ?? []}
-          activeUnitId={activeUnitId}
-          onAddUnit={addUnit}
-          onRemoveUnit={removeUnit}
-          onSelectUnit={setActiveUnit}
-          onRenameUnit={renameUnit}
-          selectedId={selectedId}
-          selectedNode={selectedNode}
-          onAddShelf={storeAddShelf}
-          onAddDivider={storeAddDivider}
-          onDelete={storeDeleteBoard}
-          onToggleLock={(id) => {
-            if (selectedNode?.locked) storeUnlockNode(id)
-            else storeLocked(id, true)
-          }}
-          onSetMaterial={storeMaterial}
-          onSetElementType={storeSetElementType}
-          onSetDrawerConfig={storeDrawerConfig}
-          onAddAccessory={(nodeId, type) => storeAddAccessory(nodeId, { id: crypto.randomUUID(), type })}
-          onRemoveAccessory={storeRemoveAccessory}
-        />
       </main>
     </div>
     </ErrorBoundary>
