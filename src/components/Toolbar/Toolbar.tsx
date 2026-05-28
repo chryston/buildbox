@@ -46,7 +46,7 @@ function NumField({ label, settingsKey, htmlFor, settings, onSettingsChange }: N
   }, [displayValue])
 
   return (
-    <label htmlFor={htmlFor} className="flex items-center gap-1 text-sm text-white/80">
+    <label htmlFor={htmlFor} className="flex items-center gap-1 text-sm text-text-muted">
       {label}
       <input
         id={htmlFor}
@@ -62,7 +62,7 @@ function NumField({ label, settingsKey, htmlFor, settings, onSettingsChange }: N
 
           setRaw(displayValue)
         }}
-        className="w-20 rounded border border-white/20 bg-surface px-1 py-0.5 text-right text-white"
+        className="w-20 rounded border border-divider bg-white px-1 py-0.5 text-right text-text-primary focus:border-accent"
       />
     </label>
   )
@@ -105,16 +105,16 @@ export default function Toolbar({
 
   return (
     <>
-    <header className="flex flex-wrap items-center gap-4 border-b border-white/10 bg-panel px-4 py-2">
+    <header className="flex flex-wrap items-center gap-4 border-b border-divider bg-panel px-4 py-2">
       <span className="mr-2 font-bold text-accent">BuildBox</span>
 
-      <div className="flex overflow-hidden rounded border border-white/20">
+      <div className="flex overflow-hidden rounded border border-divider">
         {UNITS.map((nextUnit) => (
           <button
             key={nextUnit}
             onClick={() => onSettingsChange({ unit: nextUnit })}
             className={`px-2 py-1 text-sm ${
-              settings.unit === nextUnit ? 'bg-accent text-white' : 'text-white/60 hover:text-white'
+              settings.unit === nextUnit ? 'bg-accent text-white' : 'text-text-muted hover:text-text-primary'
             }`}
           >
             {nextUnit}
@@ -131,7 +131,7 @@ export default function Toolbar({
         <UndoRedo canUndo={canUndo} onUndo={onUndo ?? (() => {})} canRedo={canRedo} onRedo={onRedo ?? (() => {})} />
         <button
           onClick={() => setShowExport(true)}
-          className="rounded border border-white/20 px-3 py-1.5 text-sm text-white/80 hover:text-white"
+          className="rounded border border-divider px-3 py-1.5 text-sm text-text-muted hover:text-text-primary"
           aria-label="Export workspace"
         >
           ↓ Export
@@ -145,14 +145,14 @@ export default function Toolbar({
         />
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="rounded border border-white/20 px-3 py-1.5 text-sm text-white/80 hover:text-white"
+          className="rounded border border-divider px-3 py-1.5 text-sm text-text-muted hover:text-text-primary"
           aria-label="Import workspace"
         >
           ↑ Import
         </button>
         <button
           onClick={onExport}
-          className="rounded bg-accent px-3 py-1.5 text-sm text-white hover:bg-accent/80"
+          className="rounded bg-accent px-3 py-1.5 text-sm text-white hover:bg-accent-hover"
         >
           Export SVG
         </button>

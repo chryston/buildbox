@@ -80,6 +80,7 @@ export default function CabinetCanvas({ sceneLayout, svgRef, onUnlockNode, onUni
         ref={svgRef}
         data-testid="cabinet-canvas"
         viewBox={viewBox}
+        preserveAspectRatio="xMidYMid meet"
         className="h-full w-full"
         style={{ touchAction: 'none' }}
         onWheel={onWheel}

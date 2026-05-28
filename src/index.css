@@ -1,3 +1,8 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --color-dim-label: #374151;
+  --color-accent: #2563eb;
+}

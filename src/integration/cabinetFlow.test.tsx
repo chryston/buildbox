@@ -175,3 +175,38 @@ describe('Cabinet design flow', () => {
     expect(useStore.getState().projects.length).toBe(initialCount + 1)
   })
 })
+
+describe('Polish features E2E', () => {
+  beforeEach(resetStore)
+
+  it('user switches to Floor Plan and back, cabinet state preserved', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    // Add a shelf to the cabinet
+    const voids = screen.queryAllByTestId(/^void-/)
+    await user.click(voids[0]!)
+    await user.click(screen.getByRole('button', { name: /add shelf/i }))
+
+    // Canvas shows the cabinet
+    expect(screen.getByTestId('cabinet-canvas')).toBeInTheDocument()
+
+    // Switch to Floor Plan
+    await user.click(screen.getByRole('button', { name: /floor plan/i }))
+    expect(screen.getByText(/coming soon/i)).toBeInTheDocument()
+    expect(screen.queryByTestId('cabinet-canvas')).not.toBeInTheDocument()
+
+    // Switch back to Cabinet — canvas is back and shelf still there
+    await user.click(screen.getByRole('button', { name: 'Cabinet' }))
+    expect(screen.getByTestId('cabinet-canvas')).toBeInTheDocument()
+    // Cut list should show shelf entry
+    const table = screen.getByRole('table')
+    expect(within(table).getByText(/shelf/i)).toBeInTheDocument()
+  })
+
+  it('fit to page button is present and SVG has preserveAspectRatio', () => {
+    render(<App />)
+    expect(screen.getByLabelText('Fit to screen')).toBeInTheDocument()
+    expect(screen.getByTestId('cabinet-canvas')).toHaveAttribute('preserveAspectRatio', 'xMidYMid meet')
+  })
+})

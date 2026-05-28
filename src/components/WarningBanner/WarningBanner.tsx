@@ -10,7 +10,7 @@ export default function WarningBanner({ overConstrainedIds }: Props) {
   return (
     <div
       role="alert"
-      className="flex items-center gap-2 rounded border border-amber-500/40 bg-amber-500/20 px-3 py-1.5 text-xs text-amber-200"
+      className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-800"
     >
       <span>⚠</span>
       <span>
