@@ -30,7 +30,7 @@ export const OBJECT_CATALOG = [
   { type: 'wardrobe' as FloorPlanObjectType,        label: 'Wardrobe',        defaultW: 1800, defaultH: 600,  color: '#92400e' },
   { type: 'kitchen-counter' as FloorPlanObjectType, label: 'Kitchen Counter', defaultW: 2400, defaultH: 600,  color: '#92400e' },
   { type: 'cabinet-unit' as FloorPlanObjectType,    label: 'Cabinet Unit',    defaultW: 600,  defaultH: 600,  color: '#92400e' },
-]
+] as const satisfies ReadonlyArray<{ type: FloorPlanObjectType; label: string; defaultW: number; defaultH: number; color: string }>
 
 export const OBJECT_CATEGORIES = {
   'Seating':          ['sofa-2', 'sofa-3', 'armchair'],
