@@ -194,7 +194,7 @@ describe('Polish features E2E', () => {
 
     // Switch to Floor Plan
     await user.click(screen.getByRole('button', { name: /floor plan/i }))
-    expect(screen.getByText(/coming soon/i)).toBeInTheDocument()
+    expect(screen.getByText(/upload image/i)).toBeInTheDocument()
     expect(screen.queryByTestId('cabinet-canvas')).not.toBeInTheDocument()
 
     // Switch back to Cabinet — canvas is back and shelf still there
