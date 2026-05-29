@@ -12,11 +12,12 @@ interface Props {
   svgRef: RefObject<SVGSVGElement | null>
   onUnlockNode: (nodeId: string) => void
   onUnitClick: (unitId: string) => void
+  selectedNode?: import('../../types').CabinetNode | null
 }
 
 const PADDING = 40
 
-export default function CabinetCanvas({ sceneLayout, svgRef, onUnlockNode, onUnitClick }: Props) {
+export default function CabinetCanvas({ sceneLayout, svgRef, onUnlockNode, onUnitClick, selectedNode }: Props) {
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const isPanning = useRef(false)
@@ -24,6 +25,7 @@ export default function CabinetCanvas({ sceneLayout, svgRef, onUnlockNode, onUni
   const selectedId = useStore((s) => s.selectedId)
   const setSelectedId = useStore((s) => s.setSelectedId)
   const storeSetNodeSize = useStore((s) => s.setNodeSize)
+  const storeSetNodeLabel = useStore((s) => s.setNodeLabel)
   const snapGrid = useStore((s) => s.snapGrid)
 
   const { boundingBox: bb } = sceneLayout
@@ -70,8 +72,16 @@ export default function CabinetCanvas({ sceneLayout, svgRef, onUnlockNode, onUni
     setPan({ x: 0, y: 0 })
   }, [])
 
-  function handleCommitSize(nodeId: string, mm: number, _axis: 'w' | 'h') {
-    storeSetNodeSize(nodeId, mm)
+  function handleCommitSize(voidId: string, mm: number, axis: 'w' | 'h') {
+    // Look up the control node ID from the already-computed layout
+    for (const unit of sceneLayout.units) {
+      const void_ = unit.voids.find(v => v.nodeId === voidId)
+      if (void_) {
+        const controlId = axis === 'h' ? void_.heightControlNodeId : void_.widthControlNodeId
+        if (controlId) storeSetNodeSize(controlId, mm)
+        return
+      }
+    }
   }
 
   return (
@@ -120,8 +130,10 @@ export default function CabinetCanvas({ sceneLayout, svgRef, onUnlockNode, onUni
                 voids={result.voids}
                 unit={result.unit}
                 onCommitSize={handleCommitSize}
+                onCommitLabel={storeSetNodeLabel}
                 lockedNodeIds={result.overConstrainedIds}
                 onUnlockNode={onUnlockNode}
+                selectedNode={selectedNode}
                 zoom={zoom}
               />
               <DragHandles

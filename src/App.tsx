@@ -13,7 +13,7 @@ import { computeSceneLayout } from './engine/layoutEngine'
 import { findNode } from './engine/treeMutations'
 import { downloadSVG } from './utils/exportSVG'
 import { useStore } from './store/store'
-import type { GlobalSettings } from './types'
+import type { GlobalSettings, LayoutVoid } from './types'
 
 const defaultSettings: GlobalSettings = {
   unit: 'mm',
@@ -23,7 +23,7 @@ const defaultSettings: GlobalSettings = {
   thickness: 18,
   backThickness: 6,
   toeKick: null,
-  defaultMaterial: 'oak',
+  material: 'oak',
 }
 
 export default function App() {
@@ -43,9 +43,12 @@ export default function App() {
   const storeAddShelf = useStore((state) => state.addShelf)
   const storeAddDivider = useStore((state) => state.addDivider)
   const storeDeleteBoard = useStore((state) => state.deleteBoard)
-  const storeLocked = useStore((state) => state.setLocked)
+  const storeUnpinNode = useStore((state) => state.unpinNode)
+  const storePinNode = useStore((state) => state.pinNode)
   const storeUnlockNode = useStore((state) => state.unlockNode)
-  const storeMaterial = useStore((state) => state.setMaterial)
+  const storeSetCabinetMaterial = useStore((state) => state.setCabinetMaterial)
+  const storeSetNodeLabel = useStore((state) => state.setNodeLabel)
+  const storeDistributeEvenly = useStore((state) => state.distributeEvenly)
   const storeDrawerConfig = useStore((state) => state.setDrawerConfig)
   const storeSetElementType = useStore((state) => state.setElementType)
   const storeAddAccessory = useStore((state) => state.addAccessory)
@@ -71,6 +74,23 @@ export default function App() {
     [activeProject, activeUnitId]
   )
   const overConstrainedIds = sceneLayout?.units.flatMap(u => u.overConstrainedIds) ?? []
+
+  const selectedVoid = useMemo<LayoutVoid | null>(() => {
+    if (!selectedId || !sceneLayout) return null
+    for (const unit of sceneLayout.units) {
+      const v = unit.voids.find(v => v.nodeId === selectedId)
+      if (v) return v
+    }
+    return null
+  }, [selectedId, sceneLayout])
+
+  const evenH = useMemo<number | null>(() => {
+    if (!selectedVoid?.columnRootId || !sceneLayout) return null
+    const allVoids: LayoutVoid[] = sceneLayout.units.flatMap(u => u.voids)
+    const siblings = allVoids.filter(v => v.columnRootId === selectedVoid.columnRootId)
+    if (siblings.length === 0) return null
+    return siblings.reduce((sum, v) => sum + v.h, 0) / siblings.length
+  }, [selectedVoid, sceneLayout])
 
   useEffect(() => {
     const syncTemporalState = () => {
@@ -160,6 +180,7 @@ export default function App() {
                 svgRef={svgRef}
                 onUnlockNode={storeUnlockNode}
                 onUnitClick={setActiveUnit}
+                selectedNode={selectedNode}
               />
             )}
             <Sidebar
@@ -176,10 +197,17 @@ export default function App() {
               onAddDivider={storeAddDivider}
               onDelete={storeDeleteBoard}
               onToggleLock={(id) => {
-                if (selectedNode?.locked) storeUnlockNode(id)
-                else storeLocked(id, true)
+                if (selectedNode?.locked) storeUnpinNode(id)
+                else {
+                  const sizeMm = selectedVoid?.parentSplitAxis === 'vertical' ? selectedVoid.w : (selectedVoid?.h ?? selectedNode?.fixedSize ?? 0)
+                  if (sizeMm > 0) storePinNode(id, sizeMm)
+                }
               }}
-              onSetMaterial={storeMaterial}
+              onSetCabinetMaterial={storeSetCabinetMaterial}
+              currentMaterial={activeUnit?.settings.material ?? 'oak'}
+              selectedVoid={selectedVoid}
+              evenH={evenH}
+              onDistributeEvenly={(colId, h) => storeDistributeEvenly(colId, h)}
               onSetElementType={storeSetElementType}
               onSetDrawerConfig={storeDrawerConfig}
               onAddAccessory={(nodeId, type) => storeAddAccessory(nodeId, { id: crypto.randomUUID(), type })}

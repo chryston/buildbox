@@ -10,7 +10,7 @@ const baseProps = {
   onAddDivider: vi.fn(),
   onDelete: vi.fn(),
   onToggleLock: vi.fn(),
-  onSetMaterial: vi.fn(),
+  onSetCabinetMaterial: vi.fn(),
   onSetElementType: vi.fn(),
   onSetDrawerConfig: vi.fn(),
   onAddAccessory: vi.fn(),
@@ -92,5 +92,64 @@ describe('Sidebar', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /remove main door/i }))
     expect(onRemoveAccessory).toHaveBeenCalledWith('v1', 'a1')
+  })
+})
+
+import type { LayoutVoid } from '../../types'
+
+const mockVoid: LayoutVoid = {
+  nodeId: 'v1', x: 0, y: 0, w: 200, h: 200,
+  elementType: 'void', material: 'oak', accessories: [],
+  heightControlNodeId: 'v1',
+  columnRootId: 'parent',
+}
+
+describe('Even Space button', () => {
+  it('shows Even Space button when selectedVoid has columnRootId and evenH is provided', () => {
+    render(
+      <Sidebar
+        {...baseProps}
+        selectedVoid={mockVoid}
+        evenH={200}
+        onDistributeEvenly={vi.fn()}
+      />
+    )
+    expect(screen.getByRole('button', { name: /even space/i })).toBeInTheDocument()
+  })
+
+  it('calls onDistributeEvenly with columnRootId and evenH when clicked', () => {
+    const onDistributeEvenly = vi.fn()
+    render(
+      <Sidebar
+        {...baseProps}
+        selectedVoid={mockVoid}
+        evenH={200}
+        onDistributeEvenly={onDistributeEvenly}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: /even space/i }))
+    expect(onDistributeEvenly).toHaveBeenCalledWith('parent', 200)
+  })
+
+  it('does not show Even Space button when selectedVoid has no columnRootId', () => {
+    const voidNoColumn: LayoutVoid = { ...mockVoid, columnRootId: undefined }
+    render(
+      <Sidebar
+        {...baseProps}
+        selectedVoid={voidNoColumn}
+        evenH={200}
+        onDistributeEvenly={vi.fn()}
+      />
+    )
+    expect(screen.queryByRole('button', { name: /even space/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('Global material swatch', () => {
+  it('material swatch calls onSetCabinetMaterial', () => {
+    const onSetCabinetMaterial = vi.fn()
+    render(<Sidebar {...baseProps} onSetCabinetMaterial={onSetCabinetMaterial} currentMaterial="oak" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Walnut' }))
+    expect(onSetCabinetMaterial).toHaveBeenCalledWith('walnut')
   })
 })

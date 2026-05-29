@@ -1,28 +1,26 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { LayoutVoid } from '../../types'
+import type { CabinetNode, LayoutVoid } from '../../types'
 import DimensionLabels from './DimensionLabels'
 
-function makeTestVoid(id: string, parentSplitAxis: 'horizontal' | 'vertical'): LayoutVoid {
+function makeVoid(overrides: Partial<LayoutVoid> = {}): LayoutVoid {
   return {
-    nodeId: id, x: 0, y: 0, w: 200, h: 300,
-    parentSplitAxis,
-    elementType: 'void',
-    material: 'oak',
-    accessories: [],
+    nodeId: 'v1', x: 50, y: 50, w: 200, h: 200,
+    elementType: 'void', material: 'oak', accessories: [],
+    ...overrides,
   }
 }
 
 describe('DimensionLabels font scaling', () => {
   it.each([
-    { zoom: 0.5, expectedFontSize: 28 },
-    { zoom: 1.0, expectedFontSize: 14 },
-    { zoom: 2.0, expectedFontSize: 7  },
-  ])('fontSize = 14/zoom: at zoom=$zoom → $expectedFontSize SVG units', ({ zoom, expectedFontSize }) => {
+    { zoom: 0.5, expectedFontSize: 24 },
+    { zoom: 1.0, expectedFontSize: 12 },
+    { zoom: 2.0, expectedFontSize: 8  },
+  ])('fontSize = Math.max(12/zoom,8): at zoom=$zoom → $expectedFontSize SVG units', ({ zoom, expectedFontSize }) => {
     const { container } = render(
       <svg>
         <DimensionLabels
-          voids={[makeTestVoid('v1', 'horizontal')]}
+          voids={[makeVoid({ heightControlNodeId: 'v1' })]}
           unit="mm"
           onCommitSize={() => {}}
           zoom={zoom}
@@ -35,56 +33,96 @@ describe('DimensionLabels font scaling', () => {
   })
 })
 
-describe('DimensionLabels lock icons', () => {
-  it('non-editable width label shows lock icon', () => {
-    // parentSplitAxis=horizontal → canEditH=true, canEditW=false
+describe('editability using control node IDs', () => {
+  it('width label is clickable when widthControlNodeId is set', () => {
+    const onCommit = vi.fn()
     render(
       <svg>
-        <DimensionLabels
-          voids={[makeTestVoid('n1', 'horizontal')]}
-          unit="mm"
-          onCommitSize={vi.fn()}
-          zoom={1}
-        />
+        <DimensionLabels voids={[makeVoid({ widthControlNodeId: 'v1' })]}
+          unit="mm" onCommitSize={onCommit} zoom={1} />
       </svg>
     )
-    expect(screen.getByTestId('dim-label-n1-w-lock')).toBeInTheDocument()
-    expect(screen.queryByTestId('dim-label-n1-h-lock')).not.toBeInTheDocument()
-    expect(screen.getByTestId('dim-label-n1-w')).toHaveAttribute('opacity', '0.4')
-    expect(screen.getByTestId('dim-label-n1-w')).toHaveAttribute('text-decoration', 'none')
+    const label = screen.getByTestId('dim-label-v1-w')
+    expect(label).toHaveAttribute('cursor', 'pointer')
   })
 
-  it('vertical split: width editable (no w-lock), height locked (h-lock present)', () => {
-    // parentSplitAxis=vertical → canEditW=true, canEditH=false
+  it('width label shows lock icon when widthControlNodeId is absent', () => {
     render(
       <svg>
-        <DimensionLabels
-          voids={[makeTestVoid('n2', 'vertical')]}
-          unit="mm"
-          onCommitSize={vi.fn()}
-          zoom={1}
-        />
+        <DimensionLabels voids={[makeVoid()]} unit="mm" onCommitSize={vi.fn()} zoom={1} />
       </svg>
     )
-    expect(screen.queryByTestId('dim-label-n2-w-lock')).not.toBeInTheDocument()
-    expect(screen.getByTestId('dim-label-n2-h-lock')).toBeInTheDocument()
-    expect(screen.getByTestId('dim-label-n2-w')).toHaveAttribute('opacity', '1')
-    expect(screen.getByTestId('dim-label-n2-w')).toHaveAttribute('text-decoration', 'underline')
-    expect(screen.getByTestId('dim-label-n2-w')).toHaveAttribute('cursor', 'pointer')
+    expect(screen.getByTestId('lock-icon-v1-w')).toBeInTheDocument()
   })
 
-  it('unsplit void (no parentSplitAxis): both labels locked', () => {
+  it('height label shows lock icon when heightControlNodeId is absent', () => {
+    render(
+      <svg>
+        <DimensionLabels voids={[makeVoid()]} unit="mm" onCommitSize={vi.fn()} zoom={1} />
+      </svg>
+    )
+    expect(screen.getByTestId('lock-icon-v1-h')).toBeInTheDocument()
+  })
+
+  it('pinned void shows lock icons on both labels (via selectedNode prop)', () => {
+    const pinnedNode: CabinetNode = { id: 'v1', elementType: 'void', locked: true, fixedSize: 200 }
     render(
       <svg>
         <DimensionLabels
-          voids={[{ nodeId: 'n3', x: 0, y: 0, w: 200, h: 300, elementType: 'void', material: 'oak', accessories: [] }]}
+          voids={[makeVoid({ heightControlNodeId: 'v1', widthControlNodeId: 'v1' })]}
+          selectedNode={pinnedNode}
+          unit="mm" onCommitSize={vi.fn()} zoom={1} />
+      </svg>
+    )
+    expect(screen.getByTestId('lock-icon-v1-h')).toBeInTheDocument()
+    expect(screen.getByTestId('lock-icon-v1-w')).toBeInTheDocument()
+  })
+})
+
+describe('spaceLabel overlay', () => {
+  it('renders spaceLabel text when set', () => {
+    render(
+      <svg>
+        <DimensionLabels
+          voids={[makeVoid({ spaceLabel: 'Pots' })]}
+          unit="mm" onCommitSize={vi.fn()} zoom={1} />
+      </svg>
+    )
+    expect(screen.getByTestId('space-label-v1')).toHaveTextContent('Pots')
+  })
+})
+
+describe('DimensionLabels lock icons (backward compat)', () => {
+  it('unsplit void: both width and height labels are non-editable', () => {
+    render(
+      <svg>
+        <DimensionLabels
+          voids={[makeVoid()]}
           unit="mm"
           onCommitSize={vi.fn()}
           zoom={1}
         />
       </svg>
     )
-    expect(screen.getByTestId('dim-label-n3-w-lock')).toBeInTheDocument()
-    expect(screen.getByTestId('dim-label-n3-h-lock')).toBeInTheDocument()
+    expect(screen.getByTestId('lock-icon-v1-w')).toBeInTheDocument()
+    expect(screen.getByTestId('lock-icon-v1-h')).toBeInTheDocument()
+    expect(screen.getByTestId('dim-label-v1-w')).toHaveAttribute('cursor', 'default')
+    expect(screen.getByTestId('dim-label-v1-h')).toHaveAttribute('cursor', 'default')
+  })
+
+  it('void with only heightControlNodeId: only h is editable', () => {
+    render(
+      <svg>
+        <DimensionLabels
+          voids={[makeVoid({ heightControlNodeId: 'v1' })]}
+          unit="mm"
+          onCommitSize={vi.fn()}
+          zoom={1}
+        />
+      </svg>
+    )
+    expect(screen.queryByTestId('lock-icon-v1-h')).not.toBeInTheDocument()
+    expect(screen.getByTestId('lock-icon-v1-w')).toBeInTheDocument()
+    expect(screen.getByTestId('dim-label-v1-h')).toHaveAttribute('cursor', 'pointer')
   })
 })

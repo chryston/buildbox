@@ -14,7 +14,7 @@ function makeDesign(overrides: Partial<Design> = {}): Design {
       y: 0,
       settings: {
         unit: 'mm', height: 800, width: 600, depth: 500,
-        thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak',
+        thickness: 18, backThickness: 6, toeKick: null, material: 'oak',
       },
       root: { id: 'root', elementType: 'void', accessories: [] },
     }],
@@ -52,7 +52,7 @@ describe('importWorkspace', () => {
     const v0Project = {
       id: 'v0-id',
       name: 'Old Cabinet',
-      globalSettings: { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak' },
+      globalSettings: { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, material: 'oak' },
       root: { id: 'r1', elementType: 'void', accessories: [] },
     }
     const json = JSON.stringify({ version: 0, exportedAt: '', projects: [v0Project], activeProjectId: 'v0-id' })

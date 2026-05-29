@@ -39,11 +39,12 @@ export function computeUnitLayout(settings: GlobalSettings, root: CabinetNode): 
       y: gs.height - thickness - toeKickHeight,
       w: gs.width - (2 * gs.toeKick.setback),
       h: toeKickHeight,
-      material: gs.defaultMaterial,
+      material: gs.material,
     })
   }
 
-  layoutNode(root, innerX, innerY, innerW, innerH, gs.defaultMaterial, undefined)
+  layoutNode(root, innerX, innerY, innerW, innerH, gs.material ?? (gs as any).defaultMaterial ?? 'oak', undefined,
+    undefined, undefined, undefined)
 
   return {
     panels,
@@ -60,8 +61,11 @@ export function computeUnitLayout(settings: GlobalSettings, root: CabinetNode): 
     h: number,
     inheritedMaterial: CabinetMaterialId,
     parentSplitAxis: SplitAxis | undefined,
+    hControlNodeId: string | undefined,
+    columnRootId: string | undefined,
+    vControlNodeId: string | undefined,
   ): void {
-    const material = node.material ?? inheritedMaterial
+    const material = inheritedMaterial
 
     if (!node.splitAxis || !node.children) {
       voids.push({
@@ -75,6 +79,10 @@ export function computeUnitLayout(settings: GlobalSettings, root: CabinetNode): 
         drawerConfig: node.drawerConfig,
         material,
         accessories: node.accessories ?? [],
+        heightControlNodeId: hControlNodeId,
+        widthControlNodeId: vControlNodeId,
+        columnRootId,
+        spaceLabel: node.spaceLabel,
       })
       return
     }
@@ -93,7 +101,9 @@ export function computeUnitLayout(settings: GlobalSettings, root: CabinetNode): 
     const dividerMaterial = dividerConfig?.materialId ?? material
 
     if (axis === 'horizontal') {
-      layoutNode(childA, x, y, w, sizeA, material, axis)
+      const newColumnRootId = columnRootId ?? node.id
+      layoutNode(childA, x, y, w, sizeA, material, axis,
+        childA.id, newColumnRootId, vControlNodeId)
 
       const dividerY = y + sizeA
       dividers.push({
@@ -112,11 +122,14 @@ export function computeUnitLayout(settings: GlobalSettings, root: CabinetNode): 
         childBBounds: { x, y: dividerY + thickness, w, h: sizeB },
       })
 
-      layoutNode(childB, x, dividerY + thickness, w, sizeB, material, axis)
+      layoutNode(childB, x, dividerY + thickness, w, sizeB, material, axis,
+        childB.id, newColumnRootId, vControlNodeId)
       return
     }
 
-    layoutNode(childA, x, y, sizeA, h, material, axis)
+    // axis === 'vertical': each child enters a new v-scope → columnRootId resets
+    layoutNode(childA, x, y, sizeA, h, material, axis,
+      hControlNodeId, undefined, childA.id)
 
     const dividerX = x + sizeA
     dividers.push({
@@ -135,7 +148,8 @@ export function computeUnitLayout(settings: GlobalSettings, root: CabinetNode): 
       childBBounds: { x: dividerX + thickness, y, w: sizeB, h },
     })
 
-    layoutNode(childB, dividerX + thickness, y, sizeB, h, material, axis)
+    layoutNode(childB, dividerX + thickness, y, sizeB, h, material, axis,
+      hControlNodeId, undefined, childB.id)
   }
 }
 
@@ -255,7 +269,7 @@ function buildOuterPanels(gs: {
   width: number
   height: number
   thickness: number
-  defaultMaterial: CabinetMaterialId
+  material: CabinetMaterialId
 }): LayoutPanel[] {
   const thickness = gs.thickness
 
@@ -267,7 +281,7 @@ function buildOuterPanels(gs: {
       y: 0,
       w: gs.width,
       h: thickness,
-      material: gs.defaultMaterial,
+      material: gs.material,
     },
     {
       id: 'bottom',
@@ -276,7 +290,7 @@ function buildOuterPanels(gs: {
       y: gs.height - thickness,
       w: gs.width,
       h: thickness,
-      material: gs.defaultMaterial,
+      material: gs.material,
     },
     {
       id: 'left',
@@ -285,7 +299,7 @@ function buildOuterPanels(gs: {
       y: thickness,
       w: thickness,
       h: gs.height - (2 * thickness),
-      material: gs.defaultMaterial,
+      material: gs.material,
     },
     {
       id: 'right',
@@ -294,7 +308,7 @@ function buildOuterPanels(gs: {
       y: thickness,
       w: thickness,
       h: gs.height - (2 * thickness),
-      material: gs.defaultMaterial,
+      material: gs.material,
     },
   ]
 }

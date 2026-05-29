@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { formatDisplay } from '../../engine/unitConversion'
-import type { LayoutVoid, Unit } from '../../types'
+import type { CabinetNode, LayoutVoid, Unit } from '../../types'
 import DimensionEditor from '../DimensionEditor/DimensionEditor'
 
 const LOCKED_OPACITY = 0.4
@@ -18,8 +18,10 @@ interface Props {
   voids: LayoutVoid[]
   unit: Unit
   onCommitSize: (nodeId: string, mm: number, axis: 'w' | 'h') => void
+  onCommitLabel?: (nodeId: string, label: string) => void
   onUnlockNode?: (nodeId: string) => void
   lockedNodeIds?: string[]
+  selectedNode?: CabinetNode | null
   zoom: number
 }
 
@@ -30,22 +32,36 @@ interface Editing {
   anchor: { x: number; y: number; width: number; height: number }
 }
 
+interface LabelEditing {
+  nodeId: string
+  svgX: number
+  svgY: number
+  svgW: number
+  current: string
+}
+
 export default function DimensionLabels(props: Props) {
   const {
     voids,
     unit,
     onCommitSize,
+    onCommitLabel,
     onUnlockNode,
     lockedNodeIds = [],
+    selectedNode,
     zoom,
   } = props
   const [editing, setEditing] = useState<Editing | null>(null)
+  const [labelEditing, setLabelEditing] = useState<LabelEditing | null>(null)
 
-  const fontSize = 14 / zoom
+  const fontSize = Math.max(12 / zoom, 8)
+
+  const isPinnedId = selectedNode?.locked === true && selectedNode?.fixedSize != null
+    ? selectedNode.id
+    : null
 
   function openEditor(v: LayoutVoid, axis: 'w' | 'h', labelEl: SVGTextElement) {
     const rect = labelEl.getBoundingClientRect()
-
     setEditing({
       nodeId: v.nodeId,
       axis,
@@ -57,13 +73,14 @@ export default function DimensionLabels(props: Props) {
   return (
     <g data-layer="dimension-labels">
       {voids.map((v) => {
-        const canEditH = v.parentSplitAxis === 'horizontal'
-        const canEditW = v.parentSplitAxis === 'vertical'
+        const voidIsPinned = v.nodeId === isPinnedId
+        const canEditH = !!v.heightControlNodeId && !voidIsPinned
+        const canEditW = !!v.widthControlNodeId && !voidIsPinned
 
         return (
           <g key={v.nodeId}>
             {/* Width label */}
-          <text
+            <text
               data-testid={`dim-label-${v.nodeId}-w`}
               x={v.x + v.w / 2}
               y={v.y + fontSize + 2}
@@ -79,7 +96,7 @@ export default function DimensionLabels(props: Props) {
             </text>
             {!canEditW && (
               <g
-                data-testid={`dim-label-${v.nodeId}-w-lock`}
+                data-testid={`lock-icon-${v.nodeId}-w`}
                 opacity={LOCKED_OPACITY}
                 transform={`translate(${v.x + v.w / 2 + fontSize * 1.8}, ${v.y + fontSize + 2 - fontSize * 0.7}) scale(${fontSize / 14})`}
               >
@@ -105,7 +122,7 @@ export default function DimensionLabels(props: Props) {
             </text>
             {!canEditH && (
               <g
-                data-testid={`dim-label-${v.nodeId}-h-lock`}
+                data-testid={`lock-icon-${v.nodeId}-h`}
                 opacity={LOCKED_OPACITY}
                 transform={`translate(${v.x + fontSize + 2 - fontSize * 0.4}, ${v.y + v.h / 2 - fontSize * 2.5}) scale(${fontSize / 14})`}
               >
@@ -113,12 +130,48 @@ export default function DimensionLabels(props: Props) {
               </g>
             )}
 
-            {/* Over-constrained unlock button (existing — unchanged) */}
+            {/* Space label overlay */}
+            {v.spaceLabel && (
+              <text
+                data-testid={`space-label-${v.nodeId}`}
+                x={v.x + v.w / 2}
+                y={v.y + v.h / 2}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontSize={Math.max(10 / zoom, 6)}
+                fill="#6b7280"
+                style={{ pointerEvents: 'none', userSelect: 'none' }}
+              >
+                {v.spaceLabel.length > 20 ? v.spaceLabel.slice(0, 20) + '…' : v.spaceLabel}
+              </text>
+            )}
+
+            {/* Space label click-to-edit area */}
+            {onCommitLabel && (
+              <rect
+                x={v.x + v.w / 4}
+                y={v.y + v.h / 4}
+                width={v.w / 2}
+                height={v.h / 2}
+                fill="transparent"
+                style={{ cursor: 'text' }}
+                onDoubleClick={() => {
+                  setLabelEditing({
+                    nodeId: v.nodeId,
+                    svgX: v.x + v.w / 4,
+                    svgY: v.y + v.h / 4,
+                    svgW: v.w / 2,
+                    current: v.spaceLabel ?? '',
+                  })
+                }}
+              />
+            )}
+
+            {/* Over-constrained unlock button */}
             {lockedNodeIds.includes(v.nodeId) && (
               <g
                 role="button"
                 tabIndex={0}
-                // pivot at icon centre (6, 9.5) so scale(1/zoom) keeps icon at constant screen size
                 transform={`translate(${v.x + v.w - 18 + 6}, ${v.y + 4 + 9.5}) scale(${1 / zoom}) translate(-6, -9.5)`}
                 cursor={onUnlockNode ? 'pointer' : 'default'}
                 onClick={() => onUnlockNode?.(v.nodeId)}
@@ -155,6 +208,44 @@ export default function DimensionLabels(props: Props) {
           }}
           onClose={() => setEditing(null)}
         />
+      )}
+
+      {labelEditing && onCommitLabel && (
+        <foreignObject
+          x={labelEditing.svgX}
+          y={labelEditing.svgY}
+          width={labelEditing.svgW}
+          height={24 / zoom}
+          style={{ overflow: 'visible' }}
+        >
+          <input
+            // @ts-expect-error — xmlns required for foreignObject in SVG
+            xmlns="http://www.w3.org/1999/xhtml"
+            autoFocus
+            defaultValue={labelEditing.current}
+            style={{
+              width: '100%',
+              height: '100%',
+              padding: '2px 4px',
+              fontSize: 12 / zoom,
+              border: '1px solid var(--color-accent)',
+              borderRadius: 3,
+              background: 'var(--color-surface)',
+              color: 'var(--color-text-primary)',
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                onCommitLabel(labelEditing.nodeId, (e.target as HTMLInputElement).value)
+                setLabelEditing(null)
+              }
+              if (e.key === 'Escape') setLabelEditing(null)
+            }}
+            onBlur={(e) => {
+              onCommitLabel(labelEditing.nodeId, e.target.value)
+              setLabelEditing(null)
+            }}
+          />
+        </foreignObject>
       )}
     </g>
   )

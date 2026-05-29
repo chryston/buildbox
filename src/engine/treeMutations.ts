@@ -4,7 +4,6 @@ import type {
   CabinetNode,
   DrawerConfig,
   ElementType,
-  MaterialId,
   SplitAxis,
 } from '../types'
 
@@ -31,27 +30,71 @@ export function deleteBoard(root: CabinetNode, childId: string): CabinetNode {
 
 export function setNodeSize(root: CabinetNode, targetId: string, size: number): CabinetNode {
   return mapNode(root, (node) =>
-    node.id === targetId ? { ...node, fixedSize: size, locked: true } : node,
+    node.id === targetId ? { ...node, fixedSize: size } : node,
   )
 }
 
-export function unlockNode(root: CabinetNode, targetId: string): CabinetNode {
+export function pinNode(root: CabinetNode, targetId: string, sizeMm: number): CabinetNode {
+  return mapNode(root, (node) =>
+    node.id === targetId ? { ...node, fixedSize: sizeMm, locked: true } : node,
+  )
+}
+
+export function unpinNode(root: CabinetNode, targetId: string): CabinetNode {
   return mapNode(root, (node) =>
     node.id === targetId ? { ...node, locked: false, fixedSize: undefined } : node,
   )
 }
 
-export function setLocked(root: CabinetNode, targetId: string, locked: boolean): CabinetNode {
-  return mapNode(root, (node) => (node.id === targetId ? { ...node, locked } : node))
+export function setNodeLabel(root: CabinetNode, targetId: string, label: string): CabinetNode {
+  return mapNode(root, (node) =>
+    node.id === targetId
+      ? { ...node, spaceLabel: label.trim() || undefined }
+      : node,
+  )
 }
 
-export function setMaterial(
+export function distributeEvenly(
   root: CabinetNode,
-  targetId: string,
-  material: MaterialId,
+  columnRootId: string,
+  evenH: number,
+  thickness: number,
 ): CabinetNode {
-  return mapNode(root, (node) => (node.id === targetId ? { ...node, material } : node))
+  return mapNode(root, (node) => {
+    if (node.id !== columnRootId) return node
+    return setColumnSplitRatios(node, evenH, thickness)
+  })
 }
+
+function subtreeH(node: CabinetNode, evenH: number, t: number): number {
+  if (!node.splitAxis || node.splitAxis === 'vertical') return evenH
+  return subtreeH(node.children![0], evenH, t) + t + subtreeH(node.children![1], evenH, t)
+}
+
+function setColumnSplitRatios(node: CabinetNode, evenH: number, thickness: number): CabinetNode {
+  const cleared: CabinetNode = { ...node, fixedSize: undefined, locked: false }
+
+  if (!node.splitAxis || node.splitAxis === 'vertical') {
+    return cleared
+  }
+
+  const [childA, childB] = node.children!
+  const leftH = subtreeH(childA, evenH, thickness)
+  const rightH = subtreeH(childB, evenH, thickness)
+  const available = leftH + rightH
+
+  return {
+    ...cleared,
+    splitRatio: available > 0 ? leftH / available : 0.5,
+    children: [
+      setColumnSplitRatios(childA, evenH, thickness),
+      setColumnSplitRatios(childB, evenH, thickness),
+    ],
+  }
+}
+
+// Kept for backward compat with store callers
+export const unlockNode = unpinNode
 
 export function setSplitRatio(root: CabinetNode, nodeId: string, ratio: number): CabinetNode {
   return mapNode(root, (node) => (node.id === nodeId ? { ...node, splitRatio: ratio } : node))
@@ -125,6 +168,9 @@ function splitNode(root: CabinetNode, targetId: string, axis: SplitAxis): Cabine
     return {
       ...node,
       splitAxis: axis,
+      spaceLabel: undefined,
+      fixedSize: undefined,
+      locked: false,
       children: [
         { id: nanoid(8), elementType: 'void' as ElementType },
         { id: nanoid(8), elementType: 'void' as ElementType },
