@@ -61,7 +61,7 @@ export default function DragHandles({ dividers, snapGrid, svgRef, zoom }: Props)
       const parentStartY = divider.y - originSizeA
       alignmentYs.current = dividers
         .filter(d => d.axis === 'horizontal' && d.nodeId !== divider.nodeId)
-        .map(d => d.y + d.h / 2 - parentStartY)
+        .map(d => d.y - parentStartY)
         .filter(y => y > 0)
     }
 
