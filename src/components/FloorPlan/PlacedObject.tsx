@@ -1,3 +1,4 @@
+import { useRef, useEffect } from 'react'
 import { useStore } from '../../store/store'
 import type { FloorPlanObject } from '../../types'
 
@@ -22,6 +23,11 @@ export default function PlacedObject({ id, zoom }: Props) {
   const cy = y + h / 2
   const fontSize = Math.max(12 / zoom, 8)
   const handleR = HANDLE_SIZE / zoom
+  const dragAbortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    return () => { dragAbortRef.current?.abort() }
+  }, [])
 
   function handlePointerDown(e: React.PointerEvent<SVGGElement>) {
     e.stopPropagation()
@@ -32,18 +38,18 @@ export default function PlacedObject({ id, zoom }: Props) {
     const origY = y
     const svgScale = getSvgScale(e.currentTarget)
 
+    dragAbortRef.current?.abort()
+    const controller = new AbortController()
+    dragAbortRef.current = controller
+
     function onMove_(ev: PointerEvent) {
       const dx = (ev.clientX - startX) / svgScale / zoom
       const dy = (ev.clientY - startY) / svgScale / zoom
       updateFloorPlanObject(id, { x: origX + dx, y: origY + dy })
     }
-    function onUp() {
-      window.removeEventListener('pointermove', onMove_)
-      window.removeEventListener('pointerup', onUp)
-    }
 
-    window.addEventListener('pointermove', onMove_)
-    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointermove', onMove_, { signal: controller.signal })
+    window.addEventListener('pointerup', () => controller.abort(), { signal: controller.signal })
     ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
   }
 
@@ -59,9 +65,20 @@ export default function PlacedObject({ id, zoom }: Props) {
       const origH = h
       const svgScale = getSvgScale(e.currentTarget)
 
+      dragAbortRef.current?.abort()
+      const controller = new AbortController()
+      dragAbortRef.current = controller
+
       function onMove_(ev: PointerEvent) {
-        const dx = (ev.clientX - startX) / svgScale / zoom
-        const dy = (ev.clientY - startY) / svgScale / zoom
+        const rawDx = (ev.clientX - startX) / svgScale / zoom
+        const rawDy = (ev.clientY - startY) / svgScale / zoom
+
+        // Transform delta into object's local coordinate space
+        const rad = (rotation * Math.PI) / 180
+        const cos = Math.cos(-rad)
+        const sin = Math.sin(-rad)
+        const dx = rawDx * cos - rawDy * sin
+        const dy = rawDx * sin + rawDy * cos
 
         const nextW = Math.max(50, handle.includes('w') ? origW - dx : handle.includes('e') ? origW + dx : origW)
         const nextH = Math.max(50, handle.includes('n') ? origH - dy : handle.includes('s') ? origH + dy : origH)
@@ -73,13 +90,9 @@ export default function PlacedObject({ id, zoom }: Props) {
           h: nextH,
         })
       }
-      function onUp() {
-        window.removeEventListener('pointermove', onMove_)
-        window.removeEventListener('pointerup', onUp)
-      }
 
-      window.addEventListener('pointermove', onMove_)
-      window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointermove', onMove_, { signal: controller.signal })
+      window.addEventListener('pointerup', () => controller.abort(), { signal: controller.signal })
       ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
     }
   }
@@ -101,6 +114,7 @@ export default function PlacedObject({ id, zoom }: Props) {
       transform={`rotate(${rotation}, ${cx}, ${cy})`}
       style={{ cursor: 'move' }}
       onPointerDown={handlePointerDown}
+      onClick={e => e.stopPropagation()}
     >
       <rect
         x={x} y={y} width={w} height={h}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { Annotation, AnnotationType } from '../../types'
 import { nanoid } from 'nanoid'
 
@@ -11,6 +11,8 @@ interface Props {
 
 export default function AnnotationLayer({ annotations, activeType, zoom, onAddAnnotation }: Props) {
   const [inProgressPoints, setInProgressPoints] = useState<{ x: number; y: number }[]>([])
+  const inProgressRef = useRef(inProgressPoints)
+  useEffect(() => { inProgressRef.current = inProgressPoints }, [inProgressPoints])
   const [previewPoint, setPreviewPoint] = useState<{ x: number; y: number } | null>(null)
   const [tileStart, setTileStart] = useState<{ x: number; y: number } | null>(null)
 
@@ -54,7 +56,7 @@ export default function AnnotationLayer({ annotations, activeType, zoom, onAddAn
     if (activeType !== 'wall-hack') return
     // The first click of the dblclick sequence (detail:1) slips past the handleClick guard
     // and adds a spurious point — strip it off before committing.
-    const pts = inProgressPoints.slice(0, -1)
+    const pts = inProgressRef.current.slice(0, -1)
     if (pts.length < 2) return
     e.stopPropagation()
     commitWallHack(pts)

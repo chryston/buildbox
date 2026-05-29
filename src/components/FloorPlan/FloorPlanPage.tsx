@@ -18,6 +18,7 @@ export default function FloorPlanPage() {
   const [activeAnnotationType, setActiveAnnotationType] = useState<AnnotationType | null>(null)
   const [showCustomShape, setShowCustomShape] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [pendingImageUpload, setPendingImageUpload] = useState<{ dataUrl: string; widthPx: number; heightPx: number } | null>(null)
 
   const floorPlan = useStore(s => s.floorPlan)
   const floorPlanSelectedId = useStore(s => s.floorPlanSelectedId)
@@ -29,6 +30,7 @@ export default function FloorPlanPage() {
   const addAnnotation = useStore(s => s.addAnnotation)
   const addCustomTemplate = useStore(s => s.addCustomTemplate)
   const selectFloorPlanObject = useStore(s => s.selectFloorPlanObject)
+  const clearFloorPlan = useStore(s => s.clearFloorPlan)
 
   const selectedObject = floorPlan.objects.find(o => o.id === floorPlanSelectedId) ?? null
 
@@ -60,7 +62,12 @@ export default function FloorPlanPage() {
 
       const img = new Image()
       img.onload = () => {
-        setFloorPlanImage({ dataUrl: result, widthPx: img.naturalWidth, heightPx: img.naturalHeight })
+        const hasExistingData = floorPlan.objects.length > 0 || floorPlan.annotations.length > 0
+        if (hasExistingData) {
+          setPendingImageUpload({ dataUrl: result, widthPx: img.naturalWidth, heightPx: img.naturalHeight })
+        } else {
+          setFloorPlanImage({ dataUrl: result, widthPx: img.naturalWidth, heightPx: img.naturalHeight })
+        }
         input.value = ''
       }
       img.onerror = () => {
@@ -70,6 +77,20 @@ export default function FloorPlanPage() {
       img.src = result
     }
     reader.readAsDataURL(file)
+  }
+
+  function confirmImageUpload() {
+    if (!pendingImageUpload) return
+    clearFloorPlan()
+    setFloorPlanImage(pendingImageUpload)
+    setPendingImageUpload(null)
+  }
+
+  function handleExportSvg() {
+    selectFloorPlanObject(null)
+    setTimeout(() => {
+      if (svgRef.current) downloadSVG(svgRef.current, 'floor-plan')
+    }, 50)
   }
 
   function handleAddObject(type: FloorPlanObjectType) {
@@ -155,10 +176,7 @@ export default function FloorPlanPage() {
         <div className="flex-1" />
         <button
           type="button"
-          onClick={() => {
-            if (svgRef.current) downloadSVG(svgRef.current, 'floor-plan')
-          }}
-          disabled={!floorPlan.image}
+          onClick={handleExportSvg}
           className="rounded border border-divider bg-surface px-3 py-1 text-sm text-text-primary hover:bg-surface-raised disabled:opacity-40"
         >
           Export SVG
@@ -180,6 +198,21 @@ export default function FloorPlanPage() {
       {uploadError && (
         <div role="alert" className="border-b border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200">
           {uploadError}
+        </div>
+      )}
+      {pendingImageUpload && (
+        <div role="alertdialog" className="border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-100 flex items-center gap-4">
+          <span>Uploading a new image will clear all placed objects and annotations. Continue?</span>
+          <button
+            type="button"
+            onClick={confirmImageUpload}
+            className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-500"
+          >Yes, clear and upload</button>
+          <button
+            type="button"
+            onClick={() => setPendingImageUpload(null)}
+            className="rounded border border-divider bg-surface px-3 py-1 text-sm text-text-primary hover:bg-surface-raised"
+          >Cancel</button>
         </div>
       )}
       {floorPlan.image && !floorPlan.pixelsPerMm && (

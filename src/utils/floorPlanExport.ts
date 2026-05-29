@@ -3,8 +3,11 @@ import type { FloorPlanData } from '../types'
 export function downloadFloorPlanJSON(data: FloorPlanData, name: string): void {
   const payload = {
     pixelsPerMm: data.pixelsPerMm,
-    imageWidthPx: data.image?.widthPx ?? null,
-    imageHeightPx: data.image?.heightPx ?? null,
+    image: data.image ? {
+      dataUrl: data.image.dataUrl,
+      widthPx: data.image.widthPx,
+      heightPx: data.image.heightPx,
+    } : null,
     objects: data.objects,
     annotations: data.annotations,
     customTemplates: data.customTemplates,

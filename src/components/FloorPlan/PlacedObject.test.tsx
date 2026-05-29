@@ -1,9 +1,12 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useStore } from '../../store/store'
 import PlacedObject from './PlacedObject'
 import type { FloorPlanObject } from '../../types'
+
+// jsdom doesn't implement setPointerCapture; silence the unhandled error
+Element.prototype.setPointerCapture = vi.fn()
 
 const sofa: FloorPlanObject = {
   id: 'o1', type: 'sofa-2', label: 'Sofa', x: 100, y: 200,

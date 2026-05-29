@@ -66,6 +66,7 @@ interface StoreState extends PersistedState, UIState {
   addCustomTemplate: (template: CustomTemplate) => void
   removeCustomTemplate: (id: string) => void
   selectFloorPlanObject: (id: string | null) => void
+  clearFloorPlan: () => void
 }
 
 function defaultDesign(): Design {
@@ -340,6 +341,12 @@ export const useStore = create<StoreState>()(
           s.floorPlan.customTemplates = s.floorPlan.customTemplates.filter(t => t.id !== id)
         }),
         selectFloorPlanObject: (id) => set(s => { s.floorPlanSelectedId = id }),
+        clearFloorPlan: () => set(s => {
+          s.floorPlan.objects = []
+          s.floorPlan.annotations = []
+          s.floorPlan.pixelsPerMm = null
+          s.floorPlanSelectedId = null
+        }),
       })),
       {
         name: 'buildbox-store',

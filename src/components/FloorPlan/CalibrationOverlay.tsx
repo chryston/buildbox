@@ -15,7 +15,9 @@ export default function CalibrationOverlay({ zoom, pixelsPerMm, onMeasured }: Pr
     const pt = svg.createSVGPoint()
     pt.x = e.clientX
     pt.y = e.clientY
-    const xf = pt.matrixTransform(e.currentTarget.getScreenCTM()!.inverse())
+    const ctm = e.currentTarget.getScreenCTM()
+    if (!ctm) return { x: e.clientX, y: e.clientY }
+    const xf = pt.matrixTransform(ctm.inverse())
     return { x: xf.x, y: xf.y }
   }
 

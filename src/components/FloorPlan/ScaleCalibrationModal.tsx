@@ -10,7 +10,8 @@ export default function ScaleCalibrationModal({ distancePx, onConfirm, onClose }
   const [mm, setMm] = useState(1000)
 
   function handleConfirm() {
-    if (mm <= 0) return
+    if (distancePx <= 0) return
+    if (!Number.isFinite(mm) || mm <= 0) return
     onConfirm(distancePx / mm)
   }
 
@@ -22,6 +23,11 @@ export default function ScaleCalibrationModal({ distancePx, onConfirm, onClose }
           You drew a line of <strong className="text-text-primary">{Math.round(distancePx)}px</strong>.<br />
           What is the real-world length of this line?
         </p>
+        {distancePx <= 0 && (
+          <p className="mb-4 text-sm text-red-400">
+            Could not measure distance — try clicking two further-apart points.
+          </p>
+        )}
         <div className="mb-6">
           <label htmlFor="cal-mm" className="mb-1 block text-sm text-text-muted">Distance (mm)</label>
           <input
