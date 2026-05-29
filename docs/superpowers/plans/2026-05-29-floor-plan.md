@@ -199,11 +199,20 @@ export interface FloorPlanImage {
   heightPx: number
 }
 
+export interface CustomTemplate {
+  id: string
+  label: string
+  defaultW: number  // mm
+  defaultH: number  // mm
+  color: string
+}
+
 export interface FloorPlanData {
   image: FloorPlanImage | null
   pixelsPerMm: number | null
   objects: FloorPlanObject[]
   annotations: Annotation[]
+  customTemplates: CustomTemplate[]   // ADD this field
 }
 ```
 
@@ -305,7 +314,8 @@ describe('floor plan store', () => {
       selectedId: null,
       snapGrid: 5,
       activeUnitId: 'u1',
-      floorPlan: { image: null, pixelsPerMm: null, objects: [], annotations: [] },
+      floorPlanSelectedId: null,
+      floorPlan: { image: null, pixelsPerMm: null, objects: [], annotations: [], customTemplates: [] },
     })
   })
 
@@ -375,10 +385,10 @@ Expected: FAIL — "result.current.setFloorPlanImage is not a function"
 
 - [ ] **Step 3: Update `src/store/store.ts`**
 
-**3a.** Add `FloorPlanData, FloorPlanObject, Annotation, FloorPlanImage` to the import from `'../types'`:
+**3a.** Add `FloorPlanData, FloorPlanObject, Annotation, FloorPlanImage, CustomTemplate` to the import from `'../types'`:
 
 ```typescript
-import type { Accessory, CabinetMaterialId, CabinetSceneUnit, Design, GlobalSettings, DrawerConfig, UIState, ElementType, FloorPlanData, FloorPlanObject, Annotation, FloorPlanImage } from '../types'
+import type { Accessory, CabinetMaterialId, CabinetSceneUnit, Design, GlobalSettings, DrawerConfig, UIState, ElementType, FloorPlanData, FloorPlanObject, Annotation, FloorPlanImage, CustomTemplate } from '../types'
 ```
 
 **3b.** Update `PersistedState` interface to include `floorPlan`:
@@ -391,9 +401,11 @@ interface PersistedState {
 }
 ```
 
-**3c.** Add floor plan actions to `StoreState` interface (after `importWorkspace`):
+**3c.** Add floor plan state/actions to `StoreState` interface (after `importWorkspace`):
 
 ```typescript
+  floorPlanSelectedId: string | null
+
   // floor plan
   setFloorPlanImage: (image: FloorPlanImage | null) => void
   setFloorPlanScale: (pixelsPerMm: number) => void
@@ -402,6 +414,9 @@ interface PersistedState {
   removeFloorPlanObject: (id: string) => void
   addAnnotation: (ann: Annotation) => void
   removeAnnotation: (id: string) => void
+  addCustomTemplate: (template: CustomTemplate) => void
+  removeCustomTemplate: (id: string) => void
+  selectFloorPlanObject: (id: string | null) => void
 ```
 
 **3d.** Update `partializeProjectState` to also save `floorPlan` for persistence (but NOT for temporal/undo-redo — temporal keeps its own partialize that only covers projects):
@@ -421,23 +436,44 @@ const partializeForPersist = (state: PersistedState) => ({
 })
 ```
 
-**3e.** Update the `persist` call to use `partializeForPersist`:
+**3e.** Update the `persist` call to use `partializeForPersist`, bump the persist `version` to `3`, and add a migration for the new floor-plan shape:
 
 ```typescript
       persist(
         immer((set) => ({...})),
         {
           ...
+          version: 3,
           partialize: partializeForPersist,  // was partializeProjectState
+          migrate: (persisted, version) => {
+            let fromVersion = version ?? 0
+
+            if (fromVersion <= 2) {
+              (persisted as any).floorPlan ??= {
+                image: null,
+                pixelsPerMm: null,
+                objects: [],
+                annotations: [],
+                customTemplates: [],
+              }
+              ;(persisted as any).floorPlan.customTemplates ??= []
+              fromVersion = 3
+            }
+
+            // keep the existing v1 migration logic after this block
+            ...
+            return persisted as PersistedState
+          },
           ...
         }
       ),
 ```
 
-**3f.** Add initial `floorPlan` state and actions inside the `immer` set call (after `activeProjectId: _initialDesign.id,`):
+**3f.** Add initial `floorPlan` state, selection state, and actions inside the `immer` set call (after `activeProjectId: _initialDesign.id,`):
 
 ```typescript
-        floorPlan: { image: null, pixelsPerMm: null, objects: [], annotations: [] },
+        floorPlan: { image: null, pixelsPerMm: null, objects: [], annotations: [], customTemplates: [] },
+        floorPlanSelectedId: null,
 
         setFloorPlanImage: (image) => set(s => { s.floorPlan.image = image }),
         setFloorPlanScale: (pixelsPerMm) => set(s => { s.floorPlan.pixelsPerMm = pixelsPerMm }),
@@ -448,11 +484,17 @@ const partializeForPersist = (state: PersistedState) => ({
         }),
         removeFloorPlanObject: (id) => set(s => {
           s.floorPlan.objects = s.floorPlan.objects.filter(o => o.id !== id)
+          if (s.floorPlanSelectedId === id) s.floorPlanSelectedId = null
         }),
         addAnnotation: (ann) => set(s => { s.floorPlan.annotations.push(ann) }),
         removeAnnotation: (id) => set(s => {
           s.floorPlan.annotations = s.floorPlan.annotations.filter(a => a.id !== id)
         }),
+        addCustomTemplate: (template) => set(s => { s.floorPlan.customTemplates.push(template) }),
+        removeCustomTemplate: (id) => set(s => {
+          s.floorPlan.customTemplates = s.floorPlan.customTemplates.filter(t => t.id !== id)
+        }),
+        selectFloorPlanObject: (id) => set(s => { s.floorPlanSelectedId = id }),
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -479,7 +521,7 @@ git commit -m "feat(floor-plan): store slice — image, scale, objects, annotati
 
 No test file for this task — it is purely a rendering wrapper tested via FloorPlanPage.test.tsx in Task 11.
 
-> **Dependency note:** `AnnotationLayer` (Task 6) and `CalibrationOverlay` (Task 7) are created after this task. Add stub files now so TypeScript compiles; Tasks 6 and 7 will replace them.
+> **Dependency note:** `PlacedObject` (Task 5), `AnnotationLayer` (Task 6), and `CalibrationOverlay` (Task 7) are created after this task. Add stub files now so TypeScript compiles; later tasks will replace them.
 
 - [ ] **Step 0: Create stub files for forward dependencies**
 
@@ -497,8 +539,13 @@ export default function AnnotationLayer(_props: Props) { return null }
 
 ```typescript
 // src/components/FloorPlan/CalibrationOverlay.tsx
-interface Props { zoom: number; onMeasured: (distancePx: number) => void }
+interface Props { zoom: number; pixelsPerMm: number | null; onMeasured: (distancePx: number) => void }
 export default function CalibrationOverlay(_props: Props) { return null }
+```
+
+```typescript
+// src/components/FloorPlan/PlacedObject.tsx
+export default function PlacedObject(_props: { id: string; zoom: number; isSelected?: boolean }) { return null }
 ```
 
 - [ ] **Step 1: Create `src/components/FloorPlan/FloorPlanCanvas.tsx`**
@@ -506,7 +553,9 @@ export default function CalibrationOverlay(_props: Props) { return null }
 ```typescript
 import { useCallback, useRef, useState } from 'react'
 import type { RefObject } from 'react'
-import type { Annotation, FloorPlanData, FloorPlanObject } from '../../types'
+import { useStore } from '../../store/store'
+import { shallow } from 'zustand/shallow'
+import type { Annotation, FloorPlanData } from '../../types'
 import AnnotationLayer from './AnnotationLayer'
 import PlacedObject from './PlacedObject'
 import CalibrationOverlay from './CalibrationOverlay'
@@ -518,26 +567,23 @@ const PADDING = 80
 interface Props {
   floorPlan: FloorPlanData
   svgRef: RefObject<SVGSVGElement | null>
-  selectedObjectId: string | null
   isCalibrating: boolean
   activeAnnotationType: 'wall-hack' | 'tile-zone' | null
   onCalibrationPoints: (distancePx: number) => void
-  onSelectObject: (id: string | null) => void
-  onMoveObject: (id: string, x: number, y: number) => void
-  onResizeObject: (id: string, w: number, h: number) => void
   onAddAnnotation: (ann: Annotation) => void
 }
 
 export default function FloorPlanCanvas({
-  floorPlan, svgRef, selectedObjectId, isCalibrating, activeAnnotationType,
-  onCalibrationPoints, onSelectObject, onMoveObject, onResizeObject, onAddAnnotation,
+  floorPlan, svgRef, isCalibrating, activeAnnotationType, onCalibrationPoints, onAddAnnotation,
 }: Props) {
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const isPanning = useRef(false)
   const lastPan = useRef({ x: 0, y: 0 })
 
-  const { image, pixelsPerMm, objects, annotations } = floorPlan
+  const { image, pixelsPerMm, annotations } = floorPlan
+  const objectIds = useStore(s => s.floorPlan.objects.map(o => o.id), shallow)
+  const selectFloorPlanObject = useStore(s => s.selectFloorPlanObject)
 
   // Image dimensions in SVG mm-space (or pixels if not calibrated)
   const imgW = image ? (pixelsPerMm ? image.widthPx / pixelsPerMm : image.widthPx) : 800
@@ -567,12 +613,19 @@ export default function FloorPlanCanvas({
   const onPointerUp = useCallback(() => { isPanning.current = false }, [])
 
   function handleFitToScreen() {
-    setZoom(1)
+    if (!svgRef.current) return
+    const container = svgRef.current.parentElement
+    if (!container) return
+    const { width: cw, height: ch } = container.getBoundingClientRect()
+    const scaleX = (cw - 2 * PADDING) / imgW
+    const scaleY = (ch - 2 * PADDING) / imgH
+    const newZoom = Math.min(scaleX, scaleY, ZOOM_MAX)
+    setZoom(newZoom)
     setPan({ x: 0, y: 0 })
   }
 
   function handleBackgroundClick() {
-    if (!isCalibrating && !activeAnnotationType) onSelectObject(null)
+    if (!isCalibrating && !activeAnnotationType) selectFloorPlanObject(null)
   }
 
   return (
@@ -615,20 +668,17 @@ export default function FloorPlanCanvas({
             zoom={zoom}
             onAddAnnotation={onAddAnnotation}
           />
-          {objects.map(obj => (
+          {objectIds.map(id => (
             <PlacedObject
-              key={obj.id}
-              obj={obj}
-              isSelected={obj.id === selectedObjectId}
+              key={id}
+              id={id}
               zoom={zoom}
-              onSelect={onSelectObject}
-              onMove={onMoveObject}
-              onResize={onResizeObject}
             />
           ))}
           {isCalibrating && (
             <CalibrationOverlay
               zoom={zoom}
+              pixelsPerMm={pixelsPerMm}
               onMeasured={onCalibrationPoints}
             />
           )}
@@ -679,6 +729,7 @@ Expected: All tests still pass (no new tests added in this task)
 
 ```bash
 git add src/components/FloorPlan/FloorPlanCanvas.tsx \
+        src/components/FloorPlan/PlacedObject.tsx \
         src/components/FloorPlan/AnnotationLayer.tsx \
         src/components/FloorPlan/CalibrationOverlay.tsx
 git commit -m "feat(floor-plan): FloorPlanCanvas — SVG canvas with image/zoom/pan (+ stubs)"
@@ -698,7 +749,8 @@ git commit -m "feat(floor-plan): FloorPlanCanvas — SVG canvas with image/zoom/
 // src/components/FloorPlan/PlacedObject.test.tsx
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { useStore } from '../../store/store'
 import PlacedObject from './PlacedObject'
 import type { FloorPlanObject } from '../../types'
 
@@ -707,53 +759,52 @@ const sofa: FloorPlanObject = {
   w: 1500, h: 800, rotation: 0, color: '#6366f1',
 }
 
+function resetStore(selectedId: string | null = null, obj: FloorPlanObject = sofa) {
+  useStore.setState({
+    floorPlanSelectedId: selectedId,
+    floorPlan: {
+      image: null,
+      pixelsPerMm: null,
+      objects: [obj],
+      annotations: [],
+      customTemplates: [],
+    },
+  })
+}
+
 function renderInSvg(ui: React.ReactNode) {
-  return render(<svg>{ui}</svg>)
+  return render(<svg viewBox="0 0 3000 2000">{ui}</svg>)
 }
 
 describe('PlacedObject', () => {
-  it('renders label text', () => {
-    renderInSvg(
-      <PlacedObject obj={sofa} isSelected={false} zoom={1}
-        onSelect={vi.fn()} onMove={vi.fn()} onResize={vi.fn()} />
-    )
+  beforeEach(() => resetStore())
+
+  it('renders label text from store state', () => {
+    renderInSvg(<PlacedObject id="o1" zoom={1} />)
     expect(screen.getByText('Sofa')).toBeInTheDocument()
   })
 
-  it('calls onSelect when clicked', async () => {
-    const onSelect = vi.fn()
+  it('clicking object selects it in the store', async () => {
     const user = userEvent.setup()
-    renderInSvg(
-      <PlacedObject obj={sofa} isSelected={false} zoom={1}
-        onSelect={onSelect} onMove={vi.fn()} onResize={vi.fn()} />
-    )
+    renderInSvg(<PlacedObject id="o1" zoom={1} />)
     await user.click(screen.getByTestId('placed-object-o1'))
-    expect(onSelect).toHaveBeenCalledWith('o1')
+    expect(useStore.getState().floorPlanSelectedId).toBe('o1')
   })
 
   it('shows resize handles when selected', () => {
-    renderInSvg(
-      <PlacedObject obj={sofa} isSelected={true} zoom={1}
-        onSelect={vi.fn()} onMove={vi.fn()} onResize={vi.fn()} />
-    )
-    // 8 resize handles
+    resetStore('o1')
+    renderInSvg(<PlacedObject id="o1" zoom={1} />)
     expect(screen.getAllByTestId(/^resize-handle-/)).toHaveLength(8)
   })
 
   it('hides resize handles when not selected', () => {
-    renderInSvg(
-      <PlacedObject obj={sofa} isSelected={false} zoom={1}
-        onSelect={vi.fn()} onMove={vi.fn()} onResize={vi.fn()} />
-    )
+    renderInSvg(<PlacedObject id="o1" zoom={1} />)
     expect(screen.queryAllByTestId(/^resize-handle-/)).toHaveLength(0)
   })
 
   it('applies rotation transform', () => {
-    const rotated = { ...sofa, rotation: 90 as const }
-    const { container } = renderInSvg(
-      <PlacedObject obj={rotated} isSelected={false} zoom={1}
-        onSelect={vi.fn()} onMove={vi.fn()} onResize={vi.fn()} />
-    )
+    resetStore(null, { ...sofa, rotation: 90 })
+    const { container } = renderInSvg(<PlacedObject id="o1" zoom={1} />)
     const g = container.querySelector('[data-testid="placed-object-o1"]')
     expect(g?.getAttribute('transform')).toContain('rotate(90')
   })
@@ -766,26 +817,31 @@ describe('PlacedObject', () => {
 npm test -- --run src/components/FloorPlan/PlacedObject.test.tsx 2>&1 | tail -5
 ```
 
-Expected: FAIL — "Cannot find module './PlacedObject'"
+Expected: FAIL — at least one assertion fails because the Task 4 stub renders `null` and does not select, render, or resize anything
 
 - [ ] **Step 3: Create `src/components/FloorPlan/PlacedObject.tsx`**
 
 ```typescript
+import { useStore } from '../../store/store'
 import type { FloorPlanObject } from '../../types'
 
 const HANDLE_SIZE = 8  // px at zoom=1 (scaled by 1/zoom)
 
 interface Props {
-  obj: FloorPlanObject
-  isSelected: boolean
+  id: string
   zoom: number
-  onSelect: (id: string) => void
-  onMove: (id: string, x: number, y: number) => void
-  onResize: (id: string, w: number, h: number) => void
 }
 
-export default function PlacedObject({ obj, isSelected, zoom, onSelect, onMove, onResize }: Props) {
-  const { id, x, y, w, h, rotation, color, label } = obj
+export default function PlacedObject({ id, zoom }: Props) {
+  const obj = useStore(s => s.floorPlan.objects.find(o => o.id === id) ?? null)
+  const selectedId = useStore(s => s.floorPlanSelectedId)
+  const updateFloorPlanObject = useStore(s => s.updateFloorPlanObject)
+  const selectFloorPlanObject = useStore(s => s.selectFloorPlanObject)
+
+  if (!obj) return null
+
+  const isSelected = selectedId === id
+  const { x, y, w, h, rotation, color, label } = obj
   const cx = x + w / 2
   const cy = y + h / 2
   const fontSize = Math.max(12 / zoom, 8)
@@ -793,7 +849,7 @@ export default function PlacedObject({ obj, isSelected, zoom, onSelect, onMove, 
 
   function handlePointerDown(e: React.PointerEvent<SVGGElement>) {
     e.stopPropagation()
-    onSelect(id)
+    selectFloorPlanObject(id)
     const startX = e.clientX
     const startY = e.clientY
     const origX = x
@@ -803,22 +859,26 @@ export default function PlacedObject({ obj, isSelected, zoom, onSelect, onMove, 
     function onMove_(ev: PointerEvent) {
       const dx = (ev.clientX - startX) / svgScale / zoom
       const dy = (ev.clientY - startY) / svgScale / zoom
-      onMove(id, origX + dx, origY + dy)
+      updateFloorPlanObject(id, { x: origX + dx, y: origY + dy })
     }
     function onUp() {
       window.removeEventListener('pointermove', onMove_)
       window.removeEventListener('pointerup', onUp)
     }
+
     window.addEventListener('pointermove', onMove_)
     window.addEventListener('pointerup', onUp)
     ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
   }
 
-  function makeResizeHandler(corner: string) {
+  function makeResizeHandler(handle: 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w') {
     return (e: React.PointerEvent<SVGCircleElement>) => {
       e.stopPropagation()
+      selectFloorPlanObject(id)
       const startX = e.clientX
       const startY = e.clientY
+      const origX = x
+      const origY = y
       const origW = w
       const origH = h
       const svgScale = getSvgScale(e.currentTarget)
@@ -826,21 +886,30 @@ export default function PlacedObject({ obj, isSelected, zoom, onSelect, onMove, 
       function onMove_(ev: PointerEvent) {
         const dx = (ev.clientX - startX) / svgScale / zoom
         const dy = (ev.clientY - startY) / svgScale / zoom
-        const newW = Math.max(50, corner.includes('e') ? origW + dx : origW - dx)
-        const newH = Math.max(50, corner.includes('s') ? origH + dy : origH - dy)
-        onResize(id, newW, newH)
+
+        const nextX = handle.includes('w') ? origX + dx : origX
+        const nextY = handle.includes('n') ? origY + dy : origY
+        const nextW = Math.max(50, handle.includes('w') ? origW - dx : handle.includes('e') ? origW + dx : origW)
+        const nextH = Math.max(50, handle.includes('n') ? origH - dy : handle.includes('s') ? origH + dy : origH)
+
+        updateFloorPlanObject(id, {
+          x: handle.includes('w') ? origX + (origW - nextW) : nextX,
+          y: handle.includes('n') ? origY + (origH - nextH) : nextY,
+          w: nextW,
+          h: nextH,
+        })
       }
       function onUp() {
         window.removeEventListener('pointermove', onMove_)
         window.removeEventListener('pointerup', onUp)
       }
+
       window.addEventListener('pointermove', onMove_)
       window.addEventListener('pointerup', onUp)
       ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
     }
   }
 
-  // 8 handle positions relative to object top-left
   const handles = [
     { key: 'nw', cx: x,       cy: y,       cursor: 'nw-resize' },
     { key: 'n',  cx: x + w/2, cy: y,       cursor: 'n-resize'  },
@@ -850,7 +919,7 @@ export default function PlacedObject({ obj, isSelected, zoom, onSelect, onMove, 
     { key: 's',  cx: x + w/2, cy: y + h,   cursor: 's-resize'  },
     { key: 'sw', cx: x,       cy: y + h,   cursor: 'sw-resize' },
     { key: 'w',  cx: x,       cy: y + h/2, cursor: 'w-resize'  },
-  ]
+  ] as const
 
   return (
     <g
@@ -892,17 +961,19 @@ export default function PlacedObject({ obj, isSelected, zoom, onSelect, onMove, 
 
 function renderIcon(obj: FloorPlanObject) {
   const { x, y, w, h, color } = obj
-  const sw = 1.5  // stroke width in mm (unscaled, looks consistent at any zoom)
-  const alpha = '80'  // hex opacity
+  const sw = 1.5
+  const alpha = '80'
 
   switch (obj.type) {
-    case 'bed-single': case 'bed-double': case 'bed-queen': case 'bed-king':
-      // Pillow bar at top 20% of bed
+    case 'bed-single':
+    case 'bed-double':
+    case 'bed-queen':
+    case 'bed-king':
       return <rect x={x + w*0.05} y={y + h*0.03} width={w*0.9} height={h*0.17}
         fill="none" stroke={color + alpha} strokeWidth={sw} rx={sw} />
 
-    case 'sofa-2': case 'sofa-3':
-      // Backrest at top, armrests on sides
+    case 'sofa-2':
+    case 'sofa-3':
       return <g fill="none" stroke={color + alpha} strokeWidth={sw}>
         <rect x={x + w*0.12} y={y + h*0.05} width={w*0.76} height={h*0.3} rx={sw} />
         <rect x={x + w*0.02} y={y + h*0.05} width={w*0.1}  height={h*0.9} rx={sw} />
@@ -917,7 +988,6 @@ function renderIcon(obj: FloorPlanObject) {
       </g>
 
     case 'toilet':
-      // Tank + oval bowl
       return <g fill="none" stroke={color + alpha} strokeWidth={sw}>
         <rect x={x + w*0.05} y={y + h*0.03} width={w*0.9} height={h*0.25} rx={sw} />
         <ellipse cx={x + w/2} cy={y + h*0.65} rx={w*0.42} ry={h*0.3} />
@@ -928,25 +998,23 @@ function renderIcon(obj: FloorPlanObject) {
         fill="none" stroke={color + alpha} strokeWidth={sw} />
 
     case 'bathtub':
-      // Outline + drain circle
       return <g fill="none" stroke={color + alpha} strokeWidth={sw}>
         <rect x={x + w*0.05} y={y + h*0.05} width={w*0.9} height={h*0.9} rx={w*0.08} />
         <circle cx={x + w/2} cy={y + h*0.82} r={w*0.08} />
       </g>
 
     case 'shower':
-      // Corner shower tray with drain
       return <g fill="none" stroke={color + alpha} strokeWidth={sw}>
         <rect x={x + w*0.05} y={y + h*0.05} width={w*0.9} height={h*0.9} rx={sw} />
         <circle cx={x + w/2} cy={y + h/2} r={w*0.08} />
       </g>
 
-    case 'washer': case 'dryer':
+    case 'washer':
+    case 'dryer':
       return <circle cx={x + w/2} cy={y + h/2} r={w*0.35}
         fill="none" stroke={color + alpha} strokeWidth={sw} />
 
     case 'ceiling-fan':
-      // 4 blades radiating from centre
       return <g fill={color + alpha} stroke="none">
         <ellipse cx={x + w/2} cy={y + h*0.3}  rx={w*0.08} ry={h*0.18} />
         <ellipse cx={x + w/2} cy={y + h*0.7}  rx={w*0.08} ry={h*0.18} />
@@ -1087,13 +1155,12 @@ export default function AnnotationLayer({ annotations, activeType, zoom, onAddAn
   const [tileStart, setTileStart] = useState<{ x: number; y: number } | null>(null)
 
   function svgPoint(e: React.MouseEvent<SVGGElement>): { x: number; y: number } {
-    const svg = e.currentTarget.closest('svg') as SVGSVGElement
+    const svg = e.currentTarget.ownerSVGElement as SVGSVGElement
     const pt = svg.createSVGPoint()
     pt.x = e.clientX
     pt.y = e.clientY
-    const xf = pt.matrixTransform(svg.getScreenCTM()!.inverse())
-    // Undo the zoom transform applied by parent <g>
-    return { x: xf.x / zoom, y: xf.y / zoom }
+    const xf = pt.matrixTransform(e.currentTarget.getScreenCTM()!.inverse())
+    return { x: xf.x, y: xf.y }
   }
 
   function handleClick(e: React.MouseEvent<SVGGElement>) {
@@ -1132,11 +1199,18 @@ export default function AnnotationLayer({ annotations, activeType, zoom, onAddAn
   }
 
   function commitTileZone(a: { x: number; y: number }, b: { x: number; y: number }) {
+    const left = Math.min(a.x, b.x)
+    const right = Math.max(a.x, b.x)
+    const top = Math.min(a.y, b.y)
+    const bottom = Math.max(a.y, b.y)
+
+    if (right - left < 1 || bottom - top < 1) return
+
     onAddAnnotation({
       id: nanoid(), type: 'tile-zone',
       points: [
-        { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y) },
-        { x: Math.max(a.x, b.x), y: Math.max(a.y, b.y) },
+        { x: left, y: top },
+        { x: right, y: bottom },
       ],
     })
   }
@@ -1289,20 +1363,21 @@ import { useState } from 'react'
 
 interface Props {
   zoom: number
+  pixelsPerMm: number | null
   onMeasured: (distancePx: number) => void
 }
 
-export default function CalibrationOverlay({ zoom, onMeasured }: Props) {
+export default function CalibrationOverlay({ zoom, pixelsPerMm, onMeasured }: Props) {
   const [pointA, setPointA] = useState<{ x: number; y: number } | null>(null)
   const [preview, setPreview] = useState<{ x: number; y: number } | null>(null)
 
   function toSvgCoords(e: React.MouseEvent<SVGGElement>): { x: number; y: number } {
-    const svg = e.currentTarget.closest('svg') as SVGSVGElement
+    const svg = e.currentTarget.ownerSVGElement as SVGSVGElement
     const pt = svg.createSVGPoint()
     pt.x = e.clientX
     pt.y = e.clientY
-    const xf = pt.matrixTransform(svg.getScreenCTM()!.inverse())
-    return { x: xf.x, y: xf.y }  // keep in zoomed SVG space for distance calc
+    const xf = pt.matrixTransform(e.currentTarget.getScreenCTM()!.inverse())
+    return { x: xf.x, y: xf.y }
   }
 
   function handleClick(e: React.MouseEvent<SVGGElement>) {
@@ -1313,8 +1388,11 @@ export default function CalibrationOverlay({ zoom, onMeasured }: Props) {
     } else {
       const dx = pt.x - pointA.x
       const dy = pt.y - pointA.y
-      const distancePx = Math.sqrt(dx * dx + dy * dy)
-      onMeasured(distancePx)
+      const distanceMm = Math.hypot(dx, dy)
+      // When pixelsPerMm is already set, local coords are in mm — convert back to raw pixels.
+      // When no scale yet, local coords are raw pixels already.
+      const rawDistancePx = pixelsPerMm ? distanceMm * pixelsPerMm : distanceMm
+      onMeasured(rawDistancePx)
       setPointA(null)
       setPreview(null)
     }
@@ -1333,8 +1411,13 @@ export default function CalibrationOverlay({ zoom, onMeasured }: Props) {
       onMouseMove={handleMouseMove}
       style={{ cursor: 'crosshair' }}
     >
-      {/* Transparent full-canvas hit area */}
-      <rect x={-9999} y={-9999} width={99999} height={99999} fill="transparent" />
+      {/* Transparent full-canvas hit area — use % units so it always covers the viewBox */}
+      <rect
+        x="-50%" y="-50%"
+        width="200%" height="200%"
+        fill="transparent"
+        style={{ cursor: 'crosshair' }}
+      />
 
       {pointA && (
         <circle cx={pointA.x} cy={pointA.y} r={r}
@@ -1453,12 +1536,35 @@ git commit -m "feat(floor-plan): CalibrationOverlay + ScaleCalibrationModal"
 // src/components/FloorPlan/FloorPlanSidebar.test.tsx
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useStore } from '../../store/store'
 import FloorPlanSidebar from './FloorPlanSidebar'
+
+beforeEach(() => {
+  useStore.setState({
+    floorPlan: {
+      image: null,
+      pixelsPerMm: null,
+      objects: [],
+      annotations: [],
+      customTemplates: [
+        { id: 'ct1', label: 'Study Nook', defaultW: 1200, defaultH: 900, color: '#f59e0b' },
+      ],
+    },
+  })
+})
 
 describe('FloorPlanSidebar', () => {
   it('renders all 6 category headings', () => {
-    render(<FloorPlanSidebar onAddObject={vi.fn()} onAddCustomShape={vi.fn()} onSetAnnotationType={vi.fn()} activeAnnotationType={null} />)
+    render(
+      <FloorPlanSidebar
+        onAddObject={vi.fn()}
+        onAddCustomTemplate={vi.fn()}
+        onAddCustomShape={vi.fn()}
+        onSetAnnotationType={vi.fn()}
+        activeAnnotationType={null}
+      />,
+    )
     expect(screen.getByText('Seating')).toBeInTheDocument()
     expect(screen.getByText('Sleeping')).toBeInTheDocument()
     expect(screen.getByText('Appliances')).toBeInTheDocument()
@@ -1470,7 +1576,7 @@ describe('FloorPlanSidebar', () => {
   it('clicking an object type calls onAddObject with that type', async () => {
     const onAddObject = vi.fn()
     const user = userEvent.setup()
-    render(<FloorPlanSidebar onAddObject={onAddObject} onAddCustomShape={vi.fn()} onSetAnnotationType={vi.fn()} activeAnnotationType={null} />)
+    render(<FloorPlanSidebar onAddObject={onAddObject} onAddCustomTemplate={vi.fn()} onAddCustomShape={vi.fn()} onSetAnnotationType={vi.fn()} activeAnnotationType={null} />)
     await user.click(screen.getByText('Sofa 2-seater'))
     expect(onAddObject).toHaveBeenCalledWith('sofa-2')
   })
@@ -1478,7 +1584,7 @@ describe('FloorPlanSidebar', () => {
   it('clicking Wall to Hack calls onSetAnnotationType with wall-hack', async () => {
     const onSetAnnotationType = vi.fn()
     const user = userEvent.setup()
-    render(<FloorPlanSidebar onAddObject={vi.fn()} onAddCustomShape={vi.fn()} onSetAnnotationType={onSetAnnotationType} activeAnnotationType={null} />)
+    render(<FloorPlanSidebar onAddObject={vi.fn()} onAddCustomTemplate={vi.fn()} onAddCustomShape={vi.fn()} onSetAnnotationType={onSetAnnotationType} activeAnnotationType={null} />)
     await user.click(screen.getByText('Wall to Hack'))
     expect(onSetAnnotationType).toHaveBeenCalledWith('wall-hack')
   })
@@ -1486,21 +1592,23 @@ describe('FloorPlanSidebar', () => {
   it('clicking Floor to Tile calls onSetAnnotationType with tile-zone', async () => {
     const onSetAnnotationType = vi.fn()
     const user = userEvent.setup()
-    render(<FloorPlanSidebar onAddObject={vi.fn()} onAddCustomShape={vi.fn()} onSetAnnotationType={onSetAnnotationType} activeAnnotationType={null} />)
+    render(<FloorPlanSidebar onAddObject={vi.fn()} onAddCustomTemplate={vi.fn()} onAddCustomShape={vi.fn()} onSetAnnotationType={onSetAnnotationType} activeAnnotationType={null} />)
     await user.click(screen.getByText('Floor to Tile'))
     expect(onSetAnnotationType).toHaveBeenCalledWith('tile-zone')
   })
 
-  it('active annotation type button shows as active', () => {
-    render(<FloorPlanSidebar onAddObject={vi.fn()} onAddCustomShape={vi.fn()} onSetAnnotationType={vi.fn()} activeAnnotationType="wall-hack" />)
-    const btn = screen.getByText('Wall to Hack').closest('button')!
-    expect(btn.className).toContain('bg-accent')
+  it('active annotation type button uses aria-pressed', () => {
+    render(<FloorPlanSidebar onAddObject={vi.fn()} onAddCustomTemplate={vi.fn()} onAddCustomShape={vi.fn()} onSetAnnotationType={vi.fn()} activeAnnotationType="wall-hack" />)
+    expect(screen.getByRole('button', { name: /wall to hack/i })).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('clicking Add Custom Shape calls onAddCustomShape', async () => {
+  it('renders saved custom templates and custom-shape action', async () => {
+    const onAddCustomTemplate = vi.fn()
     const onAddCustomShape = vi.fn()
     const user = userEvent.setup()
-    render(<FloorPlanSidebar onAddObject={vi.fn()} onAddCustomShape={onAddCustomShape} onSetAnnotationType={vi.fn()} activeAnnotationType={null} />)
+    render(<FloorPlanSidebar onAddObject={vi.fn()} onAddCustomTemplate={onAddCustomTemplate} onAddCustomShape={onAddCustomShape} onSetAnnotationType={vi.fn()} activeAnnotationType={null} />)
+    await user.click(screen.getByText('Study Nook'))
+    expect(onAddCustomTemplate).toHaveBeenCalledWith('ct1')
     await user.click(screen.getByText('+ Add Custom Shape'))
     expect(onAddCustomShape).toHaveBeenCalled()
   })
@@ -1518,11 +1626,13 @@ Expected: FAIL — "Cannot find module './FloorPlanSidebar'"
 - [ ] **Step 3: Create `src/components/FloorPlan/FloorPlanSidebar.tsx`**
 
 ```typescript
+import { useStore } from '../../store/store'
 import type { AnnotationType, FloorPlanObjectType } from '../../types'
 import { OBJECT_CATALOG, OBJECT_CATEGORIES, type ObjectCategory } from '../../data/floorPlanObjects'
 
 interface Props {
   onAddObject: (type: FloorPlanObjectType) => void
+  onAddCustomTemplate: (id: string) => void
   onAddCustomShape: () => void
   onSetAnnotationType: (type: AnnotationType | null) => void
   activeAnnotationType: AnnotationType | null
@@ -1537,7 +1647,9 @@ const CATEGORY_ICONS: Record<ObjectCategory, string> = {
   'Carpentry': '🏗',
 }
 
-export default function FloorPlanSidebar({ onAddObject, onAddCustomShape, onSetAnnotationType, activeAnnotationType }: Props) {
+export default function FloorPlanSidebar({ onAddObject, onAddCustomTemplate, onAddCustomShape, onSetAnnotationType, activeAnnotationType }: Props) {
+  const customTemplates = useStore(s => s.floorPlan.customTemplates)
+
   return (
     <aside className="flex w-48 flex-col overflow-y-auto border-r border-divider bg-panel text-xs">
       <div className="px-3 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-text-muted">
@@ -1565,12 +1677,12 @@ export default function FloorPlanSidebar({ onAddObject, onAddCustomShape, onSetA
         </div>
       ))}
 
-      {/* Annotation tools */}
       <div className="mt-2 border-t border-divider px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-text-muted">
         Annotations
       </div>
       <button
         type="button"
+        aria-pressed={activeAnnotationType === 'wall-hack'}
         onClick={() => onSetAnnotationType(activeAnnotationType === 'wall-hack' ? null : 'wall-hack')}
         className={`mx-2 mb-1 rounded border px-2 py-1 text-left text-xs ${
           activeAnnotationType === 'wall-hack'
@@ -1582,6 +1694,7 @@ export default function FloorPlanSidebar({ onAddObject, onAddCustomShape, onSetA
       </button>
       <button
         type="button"
+        aria-pressed={activeAnnotationType === 'tile-zone'}
         onClick={() => onSetAnnotationType(activeAnnotationType === 'tile-zone' ? null : 'tile-zone')}
         className={`mx-2 mb-1 rounded border px-2 py-1 text-left text-xs ${
           activeAnnotationType === 'tile-zone'
@@ -1592,10 +1705,19 @@ export default function FloorPlanSidebar({ onAddObject, onAddCustomShape, onSetA
         🟦 Floor to Tile
       </button>
 
-      {/* Custom shape */}
       <div className="mt-2 border-t border-divider px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-text-muted">
         Custom
       </div>
+      {customTemplates.map(template => (
+        <button
+          key={template.id}
+          type="button"
+          onClick={() => onAddCustomTemplate(template.id)}
+          className="mx-2 mb-1 rounded border border-divider px-2 py-1 text-left text-text-muted hover:bg-surface-raised hover:text-text-primary"
+        >
+          {template.label}
+        </button>
+      ))}
       <button
         type="button"
         onClick={onAddCustomShape}
@@ -1746,7 +1868,7 @@ export default function FloorPlanProperties({ obj, onUpdate, onDelete }: Props) 
         className="mb-3 rounded border border-divider bg-surface px-2 py-1 text-text-primary"
       />
 
-      <label className="mb-1 text-text-muted" htmlFor="fp-width" aria-label="Width">Width (mm)</label>
+      <label className="mb-1 text-text-muted" htmlFor="fp-width">Width (mm)</label>
       <input
         id="fp-width"
         type="number"
@@ -1848,7 +1970,7 @@ describe('CustomShapeModal', () => {
     await user.type(screen.getByLabelText(/width/i), '1200')
     await user.clear(screen.getByLabelText(/depth/i))
     await user.type(screen.getByLabelText(/depth/i), '900')
-    await user.click(screen.getByRole('button', { name: /add/i }))
+    await user.click(screen.getByRole('button', { name: /save/i }))
 
     expect(onConfirm).toHaveBeenCalledWith('Study Nook', 1200, 900)
   })
@@ -1886,7 +2008,7 @@ export default function CustomShapeModal({ onConfirm, onClose }: Props) {
   const [w, setW] = useState(1000)
   const [h, setH] = useState(1000)
 
-  function handleAdd() {
+  function handleConfirm() {
     const trimmed = label.trim()
     if (!trimmed || w <= 0 || h <= 0) return
     onConfirm(trimmed, w, h)
@@ -1895,7 +2017,7 @@ export default function CustomShapeModal({ onConfirm, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-80 rounded-lg bg-panel p-6 shadow-xl border border-divider">
-        <h2 className="mb-4 text-lg font-semibold text-text-primary">Add Custom Shape</h2>
+        <h2 className="mb-4 text-lg font-semibold text-text-primary">Save Custom Template</h2>
 
         <label className="mb-1 block text-sm text-text-muted" htmlFor="cs-label">Label</label>
         <input
@@ -1931,10 +2053,10 @@ export default function CustomShapeModal({ onConfirm, onClose }: Props) {
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={handleAdd}
+            onClick={handleConfirm}
             className="flex-1 rounded bg-accent py-2 text-sm font-medium text-white hover:bg-accent-hover"
           >
-            Add Shape
+            Save Template
           </button>
           <button
             type="button"
@@ -1988,7 +2110,8 @@ function resetStore() {
   useStore.setState({
     projects: [{ id: 'p1', name: 'Test', units: [{ type: 'cabinet', id: 'u1', label: 'Unit 1', x: 0, y: 0, settings: { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, material: 'oak' }, root: { id: 'r1', elementType: 'void' } }] }],
     activeProjectId: 'p1', selectedId: null, snapGrid: 5, activeUnitId: 'u1',
-    floorPlan: { image: null, pixelsPerMm: null, objects: [], annotations: [] },
+    floorPlanSelectedId: null,
+    floorPlan: { image: null, pixelsPerMm: null, objects: [], annotations: [], customTemplates: [] },
   })
 }
 
@@ -2045,6 +2168,7 @@ export function downloadFloorPlanJSON(data: FloorPlanData, name: string): void {
     imageHeightPx: data.image?.heightPx ?? null,
     objects: data.objects,
     annotations: data.annotations,
+    customTemplates: data.customTemplates,
   }
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
@@ -2076,32 +2200,61 @@ import CustomShapeModal from './CustomShapeModal'
 
 export default function FloorPlanPage() {
   const svgRef = useRef<SVGSVGElement>(null)
-  const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null)
   const [isCalibrating, setIsCalibrating] = useState(false)
   const [pendingDistancePx, setPendingDistancePx] = useState<number | null>(null)
   const [activeAnnotationType, setActiveAnnotationType] = useState<AnnotationType | null>(null)
   const [showCustomShape, setShowCustomShape] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   const floorPlan = useStore(s => s.floorPlan)
+  const floorPlanSelectedId = useStore(s => s.floorPlanSelectedId)
   const setFloorPlanImage = useStore(s => s.setFloorPlanImage)
   const setFloorPlanScale = useStore(s => s.setFloorPlanScale)
   const addFloorPlanObject = useStore(s => s.addFloorPlanObject)
   const updateFloorPlanObject = useStore(s => s.updateFloorPlanObject)
   const removeFloorPlanObject = useStore(s => s.removeFloorPlanObject)
   const addAnnotation = useStore(s => s.addAnnotation)
+  const addCustomTemplate = useStore(s => s.addCustomTemplate)
+  const selectFloorPlanObject = useStore(s => s.selectFloorPlanObject)
 
-  const selectedObject = floorPlan.objects.find(o => o.id === selectedObjectId) ?? null
+  const selectedObject = floorPlan.objects.find(o => o.id === floorPlanSelectedId) ?? null
 
   function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
+    const input = e.currentTarget
+    const file = input.files?.[0]
     if (!file) return
+
+    setUploadError(null)
+
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Please choose a valid image file.')
+      input.value = ''
+      return
+    }
+
     const reader = new FileReader()
+    reader.onerror = () => {
+      setUploadError('Could not read that image file.')
+      input.value = ''
+    }
     reader.onload = () => {
+      const result = reader.result
+      if (typeof result !== 'string') {
+        setUploadError('Could not decode that image file.')
+        input.value = ''
+        return
+      }
+
       const img = new Image()
       img.onload = () => {
-        setFloorPlanImage({ dataUrl: reader.result as string, widthPx: img.width, heightPx: img.height })
+        setFloorPlanImage({ dataUrl: result, widthPx: img.naturalWidth, heightPx: img.naturalHeight })
+        input.value = ''
       }
-      img.src = reader.result as string
+      img.onerror = () => {
+        setUploadError('The uploaded file is not a valid image.')
+        input.value = ''
+      }
+      img.src = result
     }
     reader.readAsDataURL(file)
   }
@@ -2121,24 +2274,37 @@ export default function FloorPlanPage() {
       color: def.color,
     }
     addFloorPlanObject(obj)
-    setSelectedObjectId(obj.id)
+    selectFloorPlanObject(obj.id)
   }
 
-  function handleAddCustomShape(label: string, w: number, h: number) {
+  function handleAddCustomTemplate(templateId: string) {
+    const template = floorPlan.customTemplates.find(t => t.id === templateId)
+    if (!template) return
+
     const obj: FloorPlanObject = {
       id: nanoid(),
       type: 'custom',
-      label,
+      label: template.label,
       x: 100,
       y: 100,
-      w,
-      h,
+      w: template.defaultW,
+      h: template.defaultH,
       rotation: 0,
-      color: '#f59e0b',
+      color: template.color,
       isCustom: true,
     }
     addFloorPlanObject(obj)
-    setSelectedObjectId(obj.id)
+    selectFloorPlanObject(obj.id)
+  }
+
+  function handleSaveCustomShape(label: string, w: number, h: number) {
+    addCustomTemplate({
+      id: nanoid(),
+      label,
+      defaultW: w,
+      defaultH: h,
+      color: '#f59e0b',
+    })
     setShowCustomShape(false)
   }
 
@@ -2156,22 +2322,13 @@ export default function FloorPlanPage() {
     addAnnotation(ann)
   }
 
-  function handleMoveObject(id: string, x: number, y: number) {
-    updateFloorPlanObject(id, { x, y })
-  }
-
-  function handleResizeObject(id: string, w: number, h: number) {
-    updateFloorPlanObject(id, { w, h })
-  }
-
   function handleDeleteObject(id: string) {
     removeFloorPlanObject(id)
-    setSelectedObjectId(null)
+    selectFloorPlanObject(null)
   }
 
   return (
     <div className="flex h-full flex-col">
-      {/* Toolbar */}
       <div className="flex items-center gap-2 border-b border-divider bg-panel px-4 py-2">
         <label className="cursor-pointer rounded border border-divider bg-surface px-3 py-1 text-sm text-text-primary hover:bg-surface-raised">
           📷 Upload Image
@@ -2208,10 +2365,27 @@ export default function FloorPlanPage() {
         </button>
       </div>
 
-      {/* Main layout */}
+      {/* Shared floor plan banner */}
+      <div className="border-b border-divider bg-panel px-4 py-2 text-sm text-text-muted">
+        <span className="mr-1 text-accent">ℹ</span>
+        Floor plan is shared across all projects.
+      </div>
+
+      {uploadError && (
+        <div role="alert" className="border-b border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200">
+          {uploadError}
+        </div>
+      )}
+      {floorPlan.image && !floorPlan.pixelsPerMm && (
+        <div className="border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-100">
+          Image uploaded. Calibrate scale before trusting dimensions or exports.
+        </div>
+      )}
+
       <div className="flex flex-1 overflow-hidden">
         <FloorPlanSidebar
           onAddObject={handleAddObject}
+          onAddCustomTemplate={handleAddCustomTemplate}
           onAddCustomShape={() => setShowCustomShape(true)}
           onSetAnnotationType={setActiveAnnotationType}
           activeAnnotationType={activeAnnotationType}
@@ -2219,13 +2393,9 @@ export default function FloorPlanPage() {
         <FloorPlanCanvas
           floorPlan={floorPlan}
           svgRef={svgRef}
-          selectedObjectId={selectedObjectId}
           isCalibrating={isCalibrating}
           activeAnnotationType={activeAnnotationType}
           onCalibrationPoints={handleCalibrationPoints}
-          onSelectObject={setSelectedObjectId}
-          onMoveObject={handleMoveObject}
-          onResizeObject={handleResizeObject}
           onAddAnnotation={handleAddAnnotation}
         />
         <FloorPlanProperties
@@ -2244,7 +2414,7 @@ export default function FloorPlanPage() {
       )}
       {showCustomShape && (
         <CustomShapeModal
-          onConfirm={handleAddCustomShape}
+          onConfirm={handleSaveCustomShape}
           onClose={() => setShowCustomShape(false)}
         />
       )}
@@ -2396,7 +2566,8 @@ function resetStore() {
     selectedId: null,
     snapGrid: 5,
     activeUnitId: 'u1',
-    floorPlan: { image: null, pixelsPerMm: null, objects: [], annotations: [] },
+    floorPlanSelectedId: null,
+    floorPlan: { image: null, pixelsPerMm: null, objects: [], annotations: [], customTemplates: [] },
   })
   useStore.temporal.getState().clear()
 }
@@ -2426,7 +2597,8 @@ describe('Floor Plan E2E', () => {
       expect.arrayContaining(['sofa-2', 'bed-queen', 'toilet'])
     )
 
-    // 4. First object is selected — properties panel shows
+    // 4. Latest object is selected via store-backed selection — properties panel shows
+    expect(useStore.getState().floorPlanSelectedId).toBe(floorPlan.objects[2].id)
     expect(screen.queryByText(/select an object/i)).not.toBeInTheDocument()
 
     // 5. Set scale via store (file picker and SVG click can't be tested in jsdom)
@@ -2447,6 +2619,7 @@ describe('Floor Plan E2E', () => {
     const state = useStore.getState().floorPlan
     expect(state.objects).toHaveLength(3)
     expect(state.annotations).toHaveLength(1)
+    expect(state.customTemplates).toEqual([])
     expect(state.pixelsPerMm).toBe(0.5)
   })
 
@@ -2468,6 +2641,13 @@ describe('Floor Plan E2E', () => {
     const table = screen.getByRole('table')
     expect(within(table).getByText(/shelf/i)).toBeInTheDocument()
   })
+
+  it('shows the shared floor plan banner', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: /floor plan/i }))
+    expect(screen.getByText(/floor plan is shared across all projects/i)).toBeInTheDocument()
+  })
 })
 ```
 
@@ -2477,9 +2657,7 @@ describe('Floor Plan E2E', () => {
 npm test -- --run src/integration/floorPlanFlow.test.tsx 2>&1 | tail -8
 ```
 
-Expected: `Tests 2 passed`
-
-- [ ] **Step 3: Run full test suite**
+Expected: `Tests 3 passed`
 
 ```bash
 npm test -- --run 2>&1 | tail -10
