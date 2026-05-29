@@ -206,7 +206,7 @@ export default function FloorPlanPage() {
         />
         <FloorPlanProperties
           obj={selectedObject}
-          onUpdate={updateFloorPlanObject as (patch: Partial<FloorPlanObject>) => void}
+          onUpdate={updateFloorPlanObject as (id: string, patch: Partial<FloorPlanObject>) => void}
           onDelete={removeFloorPlanObject}
         />
       </div>
