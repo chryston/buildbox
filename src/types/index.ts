@@ -25,7 +25,7 @@ export interface GlobalSettings {
   thickness: number
   backThickness: number
   toeKick: ToeKick | null
-  defaultMaterial: CabinetMaterialId
+  material: CabinetMaterialId  // was defaultMaterial
 }
 
 export interface Accessory {
@@ -46,7 +46,8 @@ export interface CabinetNode {
   children?: [CabinetNode, CabinetNode]
   fixedSize?: number
   locked?: boolean
-  material?: CabinetMaterialId
+  // material removed — now a cabinet-level GlobalSettings field
+  spaceLabel?: string            // user-defined label for this void space
   elementType?: ElementType
   drawerConfig?: DrawerConfig
   dividers?: Divider[]
@@ -94,6 +95,12 @@ export interface LayoutVoid {
   drawerConfig?: DrawerConfig
   material: CabinetMaterialId
   accessories: Accessory[]
+  // New fields for editability and features:
+  heightControlNodeId?: string   // direct child of nearest h-split ancestor (used by handleCommitSize)
+  widthControlNodeId?: string    // direct child of nearest v-split ancestor
+  columnRootId?: string          // topmost h-split ancestor in current v-scope (used by distributeEvenly)
+  spaceLabel?: string            // forwarded from CabinetNode.spaceLabel
+  // Note: isPinned is derived inline as `node.locked && node.fixedSize != null` — not stored here
 }
 
 export interface LayoutDivider {
