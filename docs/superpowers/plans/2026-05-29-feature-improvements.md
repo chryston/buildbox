@@ -4,7 +4,7 @@
 
 **Goal:** Fix shelf-width editability, redesign the locking system, move material to cabinet-level, add space labels, magnetic cross-divider snap, even-spacing button, and fix dimension font size.
 
-**Architecture:** The layout engine gains `heightControlNodeId`/`widthControlNodeId`/`columnRootId` on `LayoutVoid` to eliminate tree-walking from the mutation layer. `columnRootId` is the topmost h-split ancestor in a void's vertical scope (used for "Even Space"). `pinNode`/`unpinNode` replace the broken `setLocked`+`setNodeSize` pair; `setNodeSize` no longer sets `locked`. `distributeEvenly` computes `splitRatio` values using the correct formula `e = mean(columnLeafHeights)` and sets ratios at each h-split level without locking side-effects.
+**Architecture:** The layout engine gains `heightControlNodeId`/`widthControlNodeId`/`columnRootId` on `LayoutVoid` to eliminate tree-walking from the mutation layer. `columnRootId` is the topmost h-split ancestor in a void's vertical scope (used for "Even Space"). `pinNode`/`unpinNode` replace the broken `setLocked`+`setNodeSize` pair; `setNodeSize` no longer sets `locked`. `distributeEvenly` computes `splitRatio` values using a clean recursive formula and sets ratios at each h-split level without locking side-effects. `isPinned` is computed inline in `DimensionLabels` (not stored on `LayoutVoid`).
 
 **Tech Stack:** React 19, TypeScript, Zustand (immer + zundo), Vitest + Testing Library, Tailwind CSS.
 
@@ -15,15 +15,15 @@
 | File | What changes |
 |------|-------------|
 | `src/types/index.ts` | `GlobalSettings.defaultMaterial→material`; `LayoutVoid` +5 fields; `CabinetNode` -`material` +`spaceLabel` |
-| `src/engine/layoutEngine.ts` | Compute control node IDs + `columnRootId` + `spaceLabel` + `isPinned`; `defaultMaterial→material` with runtime fallback; `buildOuterPanels` signature update |
+| `src/engine/layoutEngine.ts` | Compute control node IDs + `columnRootId` + `spaceLabel`; `defaultMaterial→material` with runtime fallback; `buildOuterPanels` signature update |
 | `src/engine/treeMutations.ts` | `setNodeSize` no longer sets `locked`; add `pinNode`, `unpinNode`, `setNodeLabel`, `distributeEvenly` (splitRatio-based); remove `setMaterial`, `setLocked`; clear `spaceLabel` on split |
 | `src/engine/cutList.ts` | `defaultMaterial→material` |
-| `src/store/store.ts` | `defaultMaterial→material` everywhere; persist `version:2` migration; add `pinNode`, `unpinNode`, `setNodeLabel`, `distributeEvenly`, `setCabinetMaterial`, `setVoidDimension`; remove `setMaterial`, `setLocked` |
+| `src/store/store.ts` | `defaultMaterial→material` everywhere; persist `version:2` migration; add `pinNode`, `unpinNode`, `setNodeLabel`, `distributeEvenly`, `setCabinetMaterial`; remove `setMaterial`, `setLocked` |
 | `src/components/CabinetCanvas/DimensionLabels.tsx` | Use `v.heightControlNodeId`/`widthControlNodeId` for editability; add `spaceLabel` overlay; font `Math.max(12/zoom,8)` |
-| `src/components/CabinetCanvas/DragHandles.tsx` | Export `snapToAlignment`; accept `allDividers`; cache `alignmentYs` at `pointerDown` |
-| `src/components/CabinetCanvas/CabinetCanvas.tsx` | `handleCommitSize` looks up control node; pass `allDividers` to DragHandles |
+| `src/components/CabinetCanvas/DragHandles.tsx` | Export `snapToAlignment`; cache `alignmentYs` at `pointerDown` in parent-relative coords |
+| `src/components/CabinetCanvas/CabinetCanvas.tsx` | `handleCommitSize` looks up control node from `unitLayout` voids; wire `onCommitLabel` |
 | `src/components/Sidebar/Sidebar.tsx` | Material swatch at top (global); `selectedVoid` prop; "Even Space" button; `onSetCabinetMaterial`, `onDistributeEvenly` |
-| `src/App.tsx` | Replace `setLocked`/`setMaterial`; add `pinNode`, `setCabinetMaterial`, `distributeEvenly`; derive `selectedVoid` + `columnLeafHeights`; update `onToggleLock` |
+| `src/App.tsx` | Replace `setLocked`/`setMaterial`; add `pinNode`, `setCabinetMaterial`, `distributeEvenly`; derive `selectedVoid` + `evenH`; update `onToggleLock` |
 | `src/integration/cabinetFlow.test.tsx` | Add `describe('Feature improvements E2E')` |
 | Test fixtures (17 files) | `defaultMaterial→material` |
 
@@ -74,11 +74,11 @@ export interface LayoutVoid {
   material: CabinetMaterialId
   accessories: Accessory[]
   // New fields for editability and features:
-  heightControlNodeId?: string   // direct child of nearest h-split ancestor (used by setVoidDimension)
+  heightControlNodeId?: string   // direct child of nearest h-split ancestor (used by handleCommitSize)
   widthControlNodeId?: string    // direct child of nearest v-split ancestor
   columnRootId?: string          // topmost h-split ancestor in current v-scope (used by distributeEvenly)
   spaceLabel?: string            // forwarded from CabinetNode.spaceLabel
-  isPinned: boolean              // true when node.locked && node.fixedSize != null
+  // Note: isPinned is derived inline as `node.locked && node.fixedSize != null` — not stored here
 }
 ```
 
@@ -94,7 +94,7 @@ Expected: many errors referencing `defaultMaterial` — those get fixed in subse
 
 ```bash
 git add src/types/index.ts
-git commit -m "feat(types): add control node IDs, spaceLabel, isPinned to LayoutVoid; material rename; remove CabinetNode.material"
+git commit -m "feat(types): add control node IDs, spaceLabel to LayoutVoid; material rename; remove CabinetNode.material; remove isPinned (computed inline)"
 ```
 
 ---
@@ -193,9 +193,9 @@ describe('distributeEvenly', () => {
     // a: fixedSize cleared, locked cleared; root.splitRatio set for correct ratio
     expect(findNode(next, 'a')).toMatchObject({ fixedSize: undefined, locked: false })
     expect(findNode(next, 'd')).toMatchObject({ fixedSize: undefined, locked: false })
-    // root's splitRatio: leftH=1*300+0*18=300, rightH=2*300+1*18=618, available=918
+    // subtreeH formula: subtreeH(a)=300, subtreeH(b)=300+18+300=618, available=918
     expect(next.splitRatio).toBeCloseTo(300 / 918, 5)
-    // b's splitRatio: leftCount=1,rightCount=1 → 0.5
+    // b's splitRatio: subtreeH(c)=300, subtreeH(d)=300, available=600 → 0.5
     expect(findNode(next, 'b')?.splitRatio).toBeCloseTo(0.5, 5)
   })
 
@@ -287,9 +287,8 @@ export function setNodeLabel(root: CabinetNode, targetId: string, label: string)
 }
 
 // 7. distributeEvenly: set splitRatio at each h-split level for equal leaf heights.
-// Uses the formula: splitRatio = leftSubtreeH / (leftSubtreeH + rightSubtreeH)
-// where subtreeH = leafCount * evenH + (leafCount-1) * thickness.
-// Stops recursing at vertical splits (those are treated as single column leaves).
+// Uses a single recursive helper: subtreeH computes the height for a given subtree
+// when all its column leaves have height evenH.
 export function distributeEvenly(
   root: CabinetNode,
   columnRootId: string,
@@ -302,15 +301,10 @@ export function distributeEvenly(
   })
 }
 
-/** Count the number of column leaves (stopping at v-splits). */
-function countColumnLeaves(node: CabinetNode): number {
-  if (!node.splitAxis || node.splitAxis === 'vertical') return 1
-  return countColumnLeaves(node.children![0]) + countColumnLeaves(node.children![1])
-}
-
-/** Compute column subtree height for n leaves with given evenH and thickness. */
-function columnSubtreeH(leafCount: number, evenH: number, thickness: number): number {
-  return leafCount * evenH + Math.max(leafCount - 1, 0) * thickness
+/** Height of this subtree when all column leaves are evenH tall (separated by thickness dividers). */
+function subtreeH(node: CabinetNode, evenH: number, t: number): number {
+  if (!node.splitAxis || node.splitAxis === 'vertical') return evenH
+  return subtreeH(node.children![0], evenH, t) + t + subtreeH(node.children![1], evenH, t)
 }
 
 /** Recursively set splitRatio for even distribution; clear fixedSize/locked. */
@@ -323,10 +317,8 @@ function setColumnSplitRatios(node: CabinetNode, evenH: number, thickness: numbe
   }
 
   const [childA, childB] = node.children!
-  const leftCount = countColumnLeaves(childA)
-  const rightCount = countColumnLeaves(childB)
-  const leftH = columnSubtreeH(leftCount, evenH, thickness)
-  const rightH = columnSubtreeH(rightCount, evenH, thickness)
+  const leftH = subtreeH(childA, evenH, thickness)
+  const rightH = subtreeH(childB, evenH, thickness)
   const available = leftH + rightH
 
   return {
@@ -409,7 +401,7 @@ describe('LayoutVoid control node IDs', () => {
     expect(v.heightControlNodeId).toBeUndefined()
     expect(v.widthControlNodeId).toBeUndefined()
     expect(v.columnRootId).toBeUndefined()
-    expect(v.isPinned).toBe(false)
+    // isPinned is not on LayoutVoid — derived inline in DimensionLabels
   })
 
   it('direct child of h-split has heightControlNodeId=self and columnRootId=parent', () => {
@@ -463,20 +455,6 @@ describe('LayoutVoid control node IDs', () => {
     expect(layout.voids.find(v => v.nodeId === 'a')?.columnRootId).toBe('root')
     expect(layout.voids.find(v => v.nodeId === 'c')?.columnRootId).toBe('root')
     expect(layout.voids.find(v => v.nodeId === 'd')?.columnRootId).toBe('root')
-  })
-
-  it('isPinned reflects node locked+fixedSize state', () => {
-    const settings = makeSettings()
-    const root: CabinetNode = {
-      id: 'root', splitAxis: 'horizontal', splitRatio: 0.5,
-      children: [
-        { id: 'a', elementType: 'void', locked: true, fixedSize: 300 },
-        { id: 'b', elementType: 'void' },
-      ]
-    }
-    const layout = computeUnitLayout(settings, root)
-    expect(layout.voids.find(v => v.nodeId === 'a')?.isPinned).toBe(true)
-    expect(layout.voids.find(v => v.nodeId === 'b')?.isPinned).toBe(false)
   })
 
   it('spaceLabel forwarded from CabinetNode', () => {
@@ -548,7 +526,7 @@ function layoutNode(
       widthControlNodeId: vControlNodeId,
       columnRootId,
       spaceLabel: node.spaceLabel,
-      isPinned: node.locked === true && node.fixedSize != null,
+      // isPinned not stored on LayoutVoid — DimensionLabels derives it inline
     })
     return
   }
@@ -612,7 +590,7 @@ Expected: All engine tests pass.
 
 ```bash
 git add src/engine/layoutEngine.ts src/engine/layoutEngine.test.ts
-git commit -m "feat(layoutEngine): emit heightControlNodeId, widthControlNodeId, spaceLabel, isPinned on LayoutVoid; material rename with runtime fallback"
+git commit -m "feat(layoutEngine): emit heightControlNodeId, widthControlNodeId, columnRootId, spaceLabel on LayoutVoid; material rename with runtime fallback"
 ```
 
 ---
@@ -716,12 +694,8 @@ Update `StoreState` interface — replace `setMaterial`, `setLocked`, `unlockNod
   setCabinetMaterial: (material: CabinetMaterialId) => void
   setNodeLabel: (nodeId: string, label: string) => void
   distributeEvenly: (columnRootId: string, evenH: number) => void
-  setVoidDimension: (voidId: string, axis: 'h' | 'w', mm: number) => void
-```
-
-Also add `computeUnitLayout` to imports:
-```ts
-import { computeUnitLayout } from '../engine/layoutEngine'
+  // Note: setVoidDimension is NOT in the store — CabinetCanvas handles control-node
+  //       lookup inline from the already-computed unitLayout, then calls setNodeSize.
 ```
 
 Check where `UIState` is defined:
@@ -755,21 +729,6 @@ distributeEvenly: (columnRootId, evenH) => set(s => {
     ...u, root: treeMutDistributeEvenly(u.root, columnRootId, evenH, u.settings.thickness),
   }))
 }),
-
-// setVoidDimension: looks up control node from a fresh layout, then calls setNodeSize.
-// This is the spec's clean API for canvas label edits (editing does NOT lock the node).
-setVoidDimension: (voidId, axis, mm) => {
-  const s = get()
-  const project = s.projects[s.activeProjectId]
-  const unit = project?.units.find(u => u.id === s.activeUnitId)
-  if (!unit) return
-  const layout = computeUnitLayout(unit.settings, unit.root)
-  const void_ = layout.voids.find(v => v.nodeId === voidId)
-  if (!void_) return
-  const controlId = axis === 'h' ? void_.heightControlNodeId : void_.widthControlNodeId
-  if (!controlId) return
-  get().setNodeSize(controlId, mm)
-},
 
 // Remove setNodeSize's old store wrapper (was incorrectly locking) — keep it but fix:
 setNodeSize: (nodeId, sizeMm) => set(s => {
@@ -831,10 +790,11 @@ describe('editability using control node IDs', () => {
     return {
       nodeId: 'v1', x: 50, y: 50, w: 200, h: 200,
       elementType: 'void', material: 'oak', accessories: [],
-      isPinned: false,
       ...overrides,
     }
   }
+  // Note: isPinned is not a LayoutVoid field — it's derived from the CabinetNode passed as prop.
+  // DimensionLabels receives selectedNode to compute isPinned inline.
 
   it('width label is clickable when widthControlNodeId is set', () => {
     const onCommit = vi.fn()
@@ -849,8 +809,11 @@ describe('editability using control node IDs', () => {
     expect(screen.getByTestId('lock-icon-v1-w')).toBeInTheDocument()
   })
 
-  it('isPinned shows lock icons on both labels', () => {
-    render(<DimensionLabels voids={[makeVoid({ heightControlNodeId: 'v1', isPinned: true })]}
+  it('pinned void shows lock icons on both labels (via selectedNode prop)', () => {
+    const pinnedNode = { id: 'v1', elementType: 'void' as const, locked: true, fixedSize: 200 }
+    render(<DimensionLabels
+      voids={[makeVoid({ heightControlNodeId: 'v1', widthControlNodeId: 'v1' })]}
+      selectedNode={pinnedNode}
       unit="mm" onCommitSize={vi.fn()} zoom={1} />)
     expect(screen.getByTestId('lock-icon-v1-h')).toBeInTheDocument()
     expect(screen.getByTestId('lock-icon-v1-w')).toBeInTheDocument()
@@ -862,7 +825,7 @@ describe('spaceLabel overlay', () => {
     const v: LayoutVoid = {
       nodeId: 'v1', x: 50, y: 50, w: 200, h: 200,
       elementType: 'void', material: 'oak', accessories: [],
-      isPinned: false, spaceLabel: 'Pots',
+      spaceLabel: 'Pots',
     }
     render(<DimensionLabels voids={[v]} unit="mm" onCommitSize={vi.fn()} zoom={1} />)
     expect(screen.getByTestId('space-label-v1')).toHaveTextContent('Pots')
@@ -884,19 +847,20 @@ node_modules/.bin/vitest run src/components/CabinetCanvas/DimensionLabels.test.t
 // 1. Font fix
 const fontSize = Math.max(12 / zoom, 8)
 
-// 2. Editability from control node IDs (not parentSplitAxis)
-const canEditH = !!v.heightControlNodeId && !v.isPinned
-const canEditW = !!v.widthControlNodeId && !v.isPinned
+// 2. Editability from control node IDs; isPinned computed inline (not a LayoutVoid field)
+const isPinned = selectedNode?.locked === true && selectedNode?.fixedSize != null
+// (selectedNode comes from the store or is passed as a prop; see App.tsx wiring)
+const canEditH = !!v.heightControlNodeId && !isPinned
+const canEditW = !!v.widthControlNodeId && !isPinned
 
-// 3. Lock icon for both W and H when isPinned
-// Replace the existing lock-icon guards:
-{(!canEditW || v.isPinned) && (
-  <g data-testid={`lock-icon-v1-w`} ...>  // use v.nodeId in real code
+// 3. Lock icon for both W and H when isPinned or no control node
+{(!canEditW) && (
+  <g data-testid={`lock-icon-${v.nodeId}-w`} ...>
     <LockIcon color="#9ca3af" />
   </g>
 )}
-{(!canEditH || v.isPinned) && (
-  <g data-testid={`lock-icon-v1-h`} ...>
+{(!canEditH) && (
+  <g data-testid={`lock-icon-${v.nodeId}-h`} ...>
     <LockIcon color="#9ca3af" />
   </g>
 )}
@@ -963,7 +927,7 @@ node_modules/.bin/vitest run src/components/CabinetCanvas/DimensionLabels.test.t
 
 ```bash
 git add src/components/CabinetCanvas/DimensionLabels.tsx src/components/CabinetCanvas/DimensionLabels.test.tsx
-git commit -m "feat(DimensionLabels): use heightControlNodeId/widthControlNodeId; spaceLabel overlay; isPinned lock icons; font Math.max(12/zoom,8)"
+git commit -m "feat(DimensionLabels): use heightControlNodeId/widthControlNodeId; spaceLabel overlay; lock icons; font Math.max(12/zoom,8)"
 ```
 
 ---
@@ -1017,10 +981,10 @@ export function snapToAlignment(y: number, candidates: number[], threshold: numb
   return Math.abs(nearest - y) <= threshold ? nearest : y
 }
 
-// 2. Update Props to accept allDividers:
+// 2. Props interface — no new props needed (allDividers is just dividers):
 interface Props {
   dividers: LayoutDivider[]
-  allDividers: LayoutDivider[]  // NEW: all horizontal dividers in the unit (for alignment snap)
+  // Note: allDividers NOT added — magnetic snap uses the same unit's existing dividers prop.
   snapGrid: number
   svgRef: React.RefObject<SVGSVGElement | null>
   zoom: number
@@ -1037,7 +1001,7 @@ function onPointerDown(e: React.PointerEvent<SVGRectElement>, divider: LayoutDiv
   const parentStartY = divider.y - originSizeA
 
   // Cache alignment y-values converted to parent-relative mm (same coordinate space as candidateMm):
-  alignmentYs.current = allDividers
+  alignmentYs.current = dividers   // uses the component's existing dividers prop
     .filter(d => d.axis === 'horizontal' && d.nodeId !== divider.nodeId)
     .map(d => d.y + d.h / 2 - parentStartY)   // convert absolute → parent-relative
     .filter(y => y > 0)                         // only positions above parent's top are valid
@@ -1090,17 +1054,17 @@ import type { LayoutVoid } from '../../types'
 const mockVoid: LayoutVoid = {
   nodeId: 'v1', x: 0, y: 0, w: 200, h: 200,
   elementType: 'void', material: 'oak', accessories: [],
-  isPinned: false,
   heightControlNodeId: 'v1',
   columnRootId: 'parent',
 }
 
-it('shows Even Space button when selectedVoid has columnRootId', () => {
+it('shows Even Space button when selectedVoid has columnRootId and evenH is provided', () => {
   render(
     <Sidebar
       selectedId="v1"
       selectedNode={{ id: 'v1', elementType: 'void' }}
       selectedVoid={mockVoid}
+      evenH={200}
       onAddShelf={vi.fn()} onAddDivider={vi.fn()} onDelete={vi.fn()}
       onToggleLock={vi.fn()} onSetCabinetMaterial={vi.fn()} onDistributeEvenly={vi.fn()}
       onSetElementType={vi.fn()} onSetDrawerConfig={vi.fn()}
@@ -1121,6 +1085,7 @@ Key changes to `Props` interface:
 interface Props {
   // ... keep existing props ...
   selectedVoid: LayoutVoid | null         // NEW
+  evenH: number | null                    // NEW: mean column leaf height (for Even Space button)
   onSetCabinetMaterial: (mat: CabinetMaterialId) => void  // replaces onSetMaterial
   onDistributeEvenly: (columnRootId: string, evenH: number) => void  // NEW
   currentMaterial: CabinetMaterialId     // NEW: active unit's current material
@@ -1132,12 +1097,9 @@ Move material swatch to the top of the sidebar (before the Add Shelf/Divider but
 
 Add the "Even Space" button:
 ```tsx
-{selectedVoid?.columnRootId && (
+{selectedVoid?.columnRootId && evenH !== null && (
   <button
-    onClick={() => {
-      const colLeaves = // passed via props or computed inline
-      onDistributeEvenly(selectedVoid.columnRootId!, evenH)
-    }}
+    onClick={() => onDistributeEvenly(selectedVoid.columnRootId!, evenH!)}
     className="w-full text-left px-3 py-1.5 text-sm bg-panel hover:bg-gray-100 rounded"
   >
     Even Space
@@ -1145,15 +1107,13 @@ Add the "Even Space" button:
 )}
 ```
 
-The `evenH` for "Even Space" needs the column leaf heights. The simplest approach: pass `columnLeafHeights: number[]` as a prop from App.tsx (which has the sceneLayout):
+App.tsx computes and passes `evenH` as a single number (the mean of column leaf heights). This keeps the interface clean — Sidebar needs just the computed value, not the raw array:
 ```tsx
 interface Props {
   // ...
-  columnLeafHeights: number[]  // heights of all leaf voids in selected void's column
+  evenH: number | null  // mean of column leaf heights; null if no column selected
 }
 ```
-
-Then: `const evenH = columnLeafHeights.reduce((s, h) => s + h, 0) / (columnLeafHeights.length || 1)`
 
 - [ ] **Step 4: Run tests**
 
@@ -1178,23 +1138,26 @@ git commit -m "feat(Sidebar): global material swatch; Even Space button; selecte
 
 - [ ] **Step 1: Update `CabinetCanvas.tsx`**
 
-Fix `handleCommitSize` to call the store's `setVoidDimension` action:
+Fix `handleCommitSize` to look up control node IDs from the already-computed `unitLayout`:
 
 ```tsx
-// CabinetCanvas receives storeSetVoidDimension as a prop or binds it directly:
-const storeSetVoidDimension = useStore((state) => state.setVoidDimension)
+// CabinetCanvas already has unitLayout (it renders it).
+// No need for a new store action — read the control node ID directly.
 
 function handleCommitSize(voidId: string, mm: number, axis: 'w' | 'h') {
-  storeSetVoidDimension(voidId, axis, mm)
-  // No inline control-node lookup needed — store handles it
+  const void_ = voids.find(v => v.nodeId === voidId)
+  const controlId = axis === 'h'
+    ? void_?.heightControlNodeId
+    : void_?.widthControlNodeId
+  if (controlId) storeSetNodeSize(controlId, mm)
+  // setNodeSize does NOT set locked — editing via canvas label is NOT a pin
 }
 ```
 
-Pass `allDividers` to `DragHandles`:
+Pass `dividers` to `DragHandles` (no change needed — it already has `dividers`):
 ```tsx
 <DragHandles
   dividers={unitLayout.dividers}
-  allDividers={unitLayout.dividers}  // for now same unit; can extend to all units later
   snapGrid={snapGrid}
   svgRef={svgRef}
   zoom={zoom}
@@ -1230,14 +1193,16 @@ const selectedVoid = useMemo(
   [sceneLayout, selectedId],
 )
 
-// Compute column leaf heights for Even Space:
-const columnLeafHeights = useMemo(() => {
-  if (!selectedVoid?.columnRootId || !sceneLayout) return []
+// Compute evenH for Even Space: mean of column leaf heights in selected void's column.
+// These are the voids that share the same columnRootId (all direct column leaves).
+const evenH = useMemo(() => {
+  if (!selectedVoid?.columnRootId || !sceneLayout) return null
   const colRootId = selectedVoid.columnRootId
-  return sceneLayout.units
+  const colLeaves = sceneLayout.units
     .flatMap(u => u.voids)
     .filter(v => v.columnRootId === colRootId)
-    .map(v => v.h)
+  if (colLeaves.length === 0) return null
+  return colLeaves.reduce((s, v) => s + v.h, 0) / colLeaves.length
 }, [selectedVoid, sceneLayout])
 
 // Update onToggleLock:
@@ -1257,7 +1222,7 @@ onSetCabinetMaterial={storeSetCabinetMaterial}
 onDistributeEvenly={(columnRootId, evenH) => storeDistributeEvenly(columnRootId, evenH)}
 selectedVoid={selectedVoid}
 currentMaterial={activeUnit?.settings.material ?? 'oak'}
-columnLeafHeights={columnLeafHeights}
+evenH={evenH}
 ```
 
 - [ ] **Step 3: Run full test suite**
@@ -1272,7 +1237,7 @@ Expected: All tests pass.
 
 ```bash
 git add src/components/CabinetCanvas/CabinetCanvas.tsx src/App.tsx
-git commit -m "feat(CabinetCanvas/App): wire setVoidDimension via control node IDs; allDividers to DragHandles; pinNode/unpinNode in onToggleLock; selectedVoid + columnLeafHeights"
+git commit -m "feat(CabinetCanvas/App): handleCommitSize via control node IDs; pinNode/unpinNode in onToggleLock; selectedVoid + evenH derivation"
 ```
 
 ---
@@ -1311,34 +1276,33 @@ describe('Feature improvements E2E', () => {
     expect(innerLeft!.widthControlNodeId).toBeDefined()
   })
 
-  it('setVoidDimension resizes without locking', () => {
-    const { addShelf, setVoidDimension, getState } = useStore.getState()
+  it('canvas label edit resizes without locking (setNodeSize not setLocked)', () => {
+    const { addShelf, setNodeSize, getState } = useStore.getState()
     const rootId = getState().projects[0].units[0].root.id
     addShelf(rootId)
     const layout1 = computeSceneLayout(
       getState().projects[0].units, getState().activeUnitId,
     )
     const topVoid = layout1.units[0].voids[0]
-    const originalH = topVoid.h
 
-    // Resize via setVoidDimension — should NOT lock the void
-    setVoidDimension(topVoid.nodeId, 'h', 200)
+    // Simulate what handleCommitSize does: read heightControlNodeId from layout, call setNodeSize
+    const controlId = topVoid.heightControlNodeId ?? topVoid.nodeId
+    setNodeSize(controlId, 200)
 
     const newUnit = getState().projects[0].units.find(u => u.id === getState().activeUnitId)!
-    const topNode = findNode(newUnit.root, topVoid.heightControlNodeId ?? topVoid.nodeId)
-    expect(topNode?.fixedSize).toBe(200)
-    expect(topNode?.locked).not.toBe(true)  // editing sets fixedSize but NOT locked
+    const controlNode = newUnit.root.id === controlId ? newUnit.root
+      : newUnit.root.children?.find(c => c.id === controlId)
+    expect(controlNode?.fixedSize).toBe(200)
+    expect(controlNode?.locked).not.toBe(true)  // setNodeSize does NOT lock
 
-    // Canvas label height editable state unchanged — it can still absorb changes
     const layout2 = computeSceneLayout(
       getState().projects[0].units, getState().activeUnitId,
     )
-    const resized = layout2.units[0].voids.find(v => v.nodeId === topVoid.nodeId)!
-    expect(resized.h).toBe(200)
+    expect(layout2.units[0].voids.find(v => v.nodeId === topVoid.nodeId)!.h).toBe(200)
   })
 
   it('pinned void size unchanged when sibling is resized', () => {
-    const { addShelf, pinNode, setVoidDimension, getState } = useStore.getState()
+    const { addShelf, pinNode, setNodeSize, getState } = useStore.getState()
     const rootId = getState().projects[0].units[0].root.id
     addShelf(rootId)
     const layout1 = computeSceneLayout(
@@ -1351,8 +1315,8 @@ describe('Feature improvements E2E', () => {
     // Pin the top void
     pinNode(topVoid.nodeId, topVoid.h)
 
-    // Resize bottom via setVoidDimension (should not affect pinned top)
-    setVoidDimension(bottomVoid.nodeId, 'h', 100)
+    // Resize bottom (should not affect pinned top)
+    setNodeSize(bottomVoid.heightControlNodeId ?? bottomVoid.nodeId, 100)
     const layout2 = computeSceneLayout(
       getState().projects[0].units, getState().activeUnitId,
     )
