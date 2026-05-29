@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import { useStore } from '../store/store'
+import { computeSceneLayout } from '../engine/layoutEngine'
 import type { Design } from '../types'
 
 function createDesign(): Design {
@@ -208,5 +209,116 @@ describe('Polish features E2E', () => {
     render(<App />)
     expect(screen.getByLabelText('Fit to screen')).toBeInTheDocument()
     expect(screen.getByTestId('cabinet-canvas')).toHaveAttribute('preserveAspectRatio', 'xMidYMid meet')
+  })
+})
+
+describe('Feature improvements E2E', () => {
+  beforeEach(resetStore)
+
+  it('shelf width becomes editable after adding a divider', () => {
+    const state = useStore.getState()
+    const rootId = state.projects[0].units[0].root.id
+    state.addShelf(rootId)
+
+    const layout1 = computeSceneLayout(
+      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
+    )
+    const topVoid = layout1.units[0].voids[0]
+    expect(topVoid.widthControlNodeId).toBeUndefined()
+
+    state.addDivider(topVoid.nodeId)
+    const layout2 = computeSceneLayout(
+      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
+    )
+    const innerLeft = layout2.units[0].voids.find(v => v.widthControlNodeId !== undefined)
+    expect(innerLeft).toBeDefined()
+    expect(innerLeft!.widthControlNodeId).toBeDefined()
+  })
+
+  it('canvas label edit resizes without locking (setNodeSize does not lock)', () => {
+    const state = useStore.getState()
+    const rootId = state.projects[0].units[0].root.id
+    state.addShelf(rootId)
+
+    const layout1 = computeSceneLayout(
+      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
+    )
+    const topVoid = layout1.units[0].voids[0]
+    const controlId = topVoid.heightControlNodeId ?? topVoid.nodeId
+    useStore.getState().setNodeSize(controlId, 200)
+
+    const unit = useStore.getState().projects[0].units.find(u => u.id === useStore.getState().activeUnitId)!
+    const controlNode = unit.root.id === controlId ? unit.root
+      : unit.root.children?.find(c => c.id === controlId)
+    expect(controlNode?.fixedSize).toBe(200)
+    expect(controlNode?.locked).not.toBe(true)
+
+    const layout2 = computeSceneLayout(
+      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
+    )
+    expect(layout2.units[0].voids.find(v => v.nodeId === topVoid.nodeId)!.h).toBe(200)
+  })
+
+  it('pinned void size unchanged when sibling is resized', () => {
+    const state = useStore.getState()
+    const rootId = state.projects[0].units[0].root.id
+    state.addShelf(rootId)
+
+    const layout1 = computeSceneLayout(
+      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
+    )
+    const topVoid = layout1.units[0].voids[0]
+    const bottomVoid = layout1.units[0].voids[1]
+    const originalTopH = topVoid.h
+
+    useStore.getState().pinNode(topVoid.nodeId, topVoid.h)
+    useStore.getState().setNodeSize(bottomVoid.heightControlNodeId ?? bottomVoid.nodeId, 100)
+
+    const layout2 = computeSceneLayout(
+      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
+    )
+    expect(layout2.units[0].voids.find(v => v.nodeId === topVoid.nodeId)!.h).toBe(originalTopH)
+  })
+
+  it('setCabinetMaterial changes material for all panels and voids', () => {
+    useStore.getState().setCabinetMaterial('walnut')
+    const layout = computeSceneLayout(
+      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
+    )
+    layout.units[0].voids.forEach(v => expect(v.material).toBe('walnut'))
+    layout.units[0].panels.forEach(p => expect(p.material).toBe('walnut'))
+  })
+
+  it('setNodeLabel makes spaceLabel visible in layout', () => {
+    const rootId = useStore.getState().projects[0].units[0].root.id
+    useStore.getState().setNodeLabel(rootId, 'Storage')
+    const layout = computeSceneLayout(
+      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
+    )
+    expect(layout.units[0].voids[0].spaceLabel).toBe('Storage')
+  })
+
+  it('distributeEvenly gives all column voids equal height', () => {
+    const rootId = useStore.getState().projects[0].units[0].root.id
+    useStore.getState().addShelf(rootId)
+
+    const layout1 = computeSceneLayout(
+      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
+    )
+    useStore.getState().addShelf(layout1.units[0].voids[1].nodeId)
+
+    const layout2 = computeSceneLayout(
+      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
+    )
+    expect(layout2.units[0].voids).toHaveLength(3)
+    const voids = layout2.units[0].voids
+    const evenH = voids.reduce((sum, v) => sum + v.h, 0) / 3
+    useStore.getState().distributeEvenly(voids[0].columnRootId!, evenH)
+
+    const layout3 = computeSceneLayout(
+      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
+    )
+    const heights = layout3.units[0].voids.map(v => Math.round(v.h))
+    expect(Math.max(...heights) - Math.min(...heights)).toBeLessThan(2)
   })
 })
