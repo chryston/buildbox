@@ -200,7 +200,7 @@ export default function App() {
                 if (selectedNode?.locked) storeUnpinNode(id)
                 else {
                   const sizeMm = selectedVoid?.parentSplitAxis === 'vertical' ? selectedVoid.w : (selectedVoid?.h ?? selectedNode?.fixedSize ?? 0)
-                  storePinNode(id, sizeMm)
+                  if (sizeMm > 0) storePinNode(id, sizeMm)
                 }
               }}
               onSetCabinetMaterial={storeSetCabinetMaterial}

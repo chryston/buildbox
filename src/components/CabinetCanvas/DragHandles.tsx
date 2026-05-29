@@ -92,7 +92,7 @@ export default function DragHandles({ dividers, snapGrid, svgRef, zoom }: Props)
     if (axis === 'horizontal') {
       handle.setAttribute('y', String(initialHandleY + (candidateMm - originSizeA)))
     } else {
-      handle.setAttribute('x', String(initialHandleX + mmDelta))
+      handle.setAttribute('x', String(initialHandleX + (candidateMm - originSizeA)))
     }
 
     void candidateMm

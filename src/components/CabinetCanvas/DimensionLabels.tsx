@@ -34,7 +34,9 @@ interface Editing {
 
 interface LabelEditing {
   nodeId: string
-  anchor: { x: number; y: number; width: number; height: number }
+  svgX: number
+  svgY: number
+  svgW: number
   current: string
 }
 
@@ -153,11 +155,12 @@ export default function DimensionLabels(props: Props) {
                 height={v.h / 2}
                 fill="transparent"
                 style={{ cursor: 'text' }}
-                onDoubleClick={(e) => {
-                  const rect = (e.currentTarget as SVGRectElement).getBoundingClientRect()
+                onDoubleClick={() => {
                   setLabelEditing({
                     nodeId: v.nodeId,
-                    anchor: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+                    svgX: v.x + v.w / 4,
+                    svgY: v.y + v.h / 4,
+                    svgW: v.w / 2,
                     current: v.spaceLabel ?? '',
                   })
                 }}
@@ -209,10 +212,10 @@ export default function DimensionLabels(props: Props) {
 
       {labelEditing && onCommitLabel && (
         <foreignObject
-          x={labelEditing.anchor.x}
-          y={labelEditing.anchor.y}
-          width={labelEditing.anchor.width || 120}
-          height={labelEditing.anchor.height || 32}
+          x={labelEditing.svgX}
+          y={labelEditing.svgY}
+          width={labelEditing.svgW}
+          height={24 / zoom}
           style={{ overflow: 'visible' }}
         >
           <input
@@ -224,7 +227,7 @@ export default function DimensionLabels(props: Props) {
               width: '100%',
               height: '100%',
               padding: '2px 4px',
-              fontSize: 12,
+              fontSize: 12 / zoom,
               border: '1px solid var(--color-accent)',
               borderRadius: 3,
               background: 'var(--color-surface)',
