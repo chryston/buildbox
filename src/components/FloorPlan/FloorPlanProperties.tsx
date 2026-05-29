@@ -7,22 +7,20 @@ interface Props {
   onDelete: (id: string) => void
 }
 
+interface EditorProps {
+  obj: FloorPlanObject
+  onUpdate: (id: string, patch: Partial<FloorPlanObject>) => void
+  onDelete: (id: string) => void
+}
+
 const COLORS = ['#6366f1', '#10b981', '#0ea5e9', '#f59e0b', '#ef4444', '#8b5cf6', '#92400e', '#374151']
 
-export default function FloorPlanProperties({ obj, onUpdate, onDelete }: Props) {
-  if (!obj) {
-    return (
-      <aside className="flex w-44 flex-col border-l border-divider bg-panel p-3 text-xs text-text-muted">
-        <p className="mt-4 text-center">Select an object to edit its properties</p>
-      </aside>
-    )
-  }
-
+function ObjectEditor({ obj, onUpdate, onDelete }: EditorProps) {
   const [wVal, setWVal] = useState(String(Math.round(obj.w)))
   const [hVal, setHVal] = useState(String(Math.round(obj.h)))
 
-  useEffect(() => { setWVal(String(Math.round(obj.w))) }, [obj.w])
-  useEffect(() => { setHVal(String(Math.round(obj.h))) }, [obj.h])
+  useEffect(() => { setWVal(String(Math.round(obj.w))) }, [obj.id, obj.w])
+  useEffect(() => { setHVal(String(Math.round(obj.h))) }, [obj.id, obj.h])
 
   return (
     <aside className="flex w-44 flex-col overflow-y-auto border-l border-divider bg-panel p-3 text-xs">
@@ -45,7 +43,11 @@ export default function FloorPlanProperties({ obj, onUpdate, onDelete }: Props) 
         min={10}
         value={wVal}
         onChange={e => setWVal(e.target.value)}
-        onBlur={e => onUpdate(obj.id, { w: Math.max(10, Number(e.target.value)) })}
+        onBlur={e => {
+          const clamped = Math.max(10, Number(e.target.value))
+          setWVal(String(clamped))
+          onUpdate(obj.id, { w: clamped })
+        }}
         className="mb-3 rounded border border-divider bg-surface px-2 py-1 text-text-primary"
       />
 
@@ -56,7 +58,11 @@ export default function FloorPlanProperties({ obj, onUpdate, onDelete }: Props) 
         min={10}
         value={hVal}
         onChange={e => setHVal(e.target.value)}
-        onBlur={e => onUpdate(obj.id, { h: Math.max(10, Number(e.target.value)) })}
+        onBlur={e => {
+          const clamped = Math.max(10, Number(e.target.value))
+          setHVal(String(clamped))
+          onUpdate(obj.id, { h: clamped })
+        }}
         className="mb-3 rounded border border-divider bg-surface px-2 py-1 text-text-primary"
       />
 
@@ -94,4 +100,16 @@ export default function FloorPlanProperties({ obj, onUpdate, onDelete }: Props) 
       </button>
     </aside>
   )
+}
+
+export default function FloorPlanProperties({ obj, onUpdate, onDelete }: Props) {
+  if (!obj) {
+    return (
+      <aside className="flex w-44 flex-col border-l border-divider bg-panel p-3 text-xs text-text-muted">
+        <p className="mt-4 text-center">Select an object to edit its properties</p>
+      </aside>
+    )
+  }
+
+  return <ObjectEditor key={obj.id} obj={obj} onUpdate={onUpdate} onDelete={onDelete} />
 }
