@@ -18,14 +18,14 @@
 | `src/engine/layoutEngine.ts` | Compute control node IDs + `columnRootId` + `spaceLabel` + `isPinned`; `defaultMaterial→material` with runtime fallback; `buildOuterPanels` signature update |
 | `src/engine/treeMutations.ts` | `setNodeSize` no longer sets `locked`; add `pinNode`, `unpinNode`, `setNodeLabel`, `distributeEvenly` (splitRatio-based); remove `setMaterial`, `setLocked`; clear `spaceLabel` on split |
 | `src/engine/cutList.ts` | `defaultMaterial→material` |
-| `src/store/store.ts` | `defaultMaterial→material` everywhere; persist `version:2` migration; add `pinNode`, `unpinNode`, `setNodeLabel`, `distributeEvenly`, `setCabinetMaterial`; remove `setMaterial`, `setLocked` |
+| `src/store/store.ts` | `defaultMaterial→material` everywhere; persist `version:2` migration; add `pinNode`, `unpinNode`, `setNodeLabel`, `distributeEvenly`, `setCabinetMaterial`, `setVoidDimension`; remove `setMaterial`, `setLocked` |
 | `src/components/CabinetCanvas/DimensionLabels.tsx` | Use `v.heightControlNodeId`/`widthControlNodeId` for editability; add `spaceLabel` overlay; font `Math.max(12/zoom,8)` |
 | `src/components/CabinetCanvas/DragHandles.tsx` | Export `snapToAlignment`; accept `allDividers`; cache `alignmentYs` at `pointerDown` |
 | `src/components/CabinetCanvas/CabinetCanvas.tsx` | `handleCommitSize` looks up control node; pass `allDividers` to DragHandles |
 | `src/components/Sidebar/Sidebar.tsx` | Material swatch at top (global); `selectedVoid` prop; "Even Space" button; `onSetCabinetMaterial`, `onDistributeEvenly` |
 | `src/App.tsx` | Replace `setLocked`/`setMaterial`; add `pinNode`, `setCabinetMaterial`, `distributeEvenly`; derive `selectedVoid` + `columnLeafHeights`; update `onToggleLock` |
 | `src/integration/cabinetFlow.test.tsx` | Add `describe('Feature improvements E2E')` |
-| Test fixtures (13 files) | `defaultMaterial→material` |
+| Test fixtures (17 files) | `defaultMaterial→material` |
 
 ---
 
@@ -155,11 +155,18 @@ describe('setNodeLabel', () => {
   })
 })
 
-describe('splitNode clears spaceLabel', () => {
+describe('splitNode clears spaceLabel and fixedSize/locked', () => {
   it('clears spaceLabel when a labeled void is split', () => {
     const root: CabinetNode = { id: 'root', elementType: 'void', spaceLabel: 'Books' }
     const next = addShelf(root, 'root')
     expect(next.spaceLabel).toBeUndefined()
+  })
+
+  it('clears fixedSize and locked when a pinned void is split (prevents constraint leakage)', () => {
+    const root: CabinetNode = { id: 'root', elementType: 'void', fixedSize: 300, locked: true }
+    const next = addShelf(root, 'root')
+    expect(next.fixedSize).toBeUndefined()
+    expect(next.locked).toBe(false)
   })
 })
 
@@ -214,7 +221,20 @@ describe('distributeEvenly', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to confirm they fail**
+- [ ] **Step 2: Delete old `setLocked`/`setMaterial`/`unlockNode` tests from treeMutations.test.ts**
+
+The existing test file imports and tests `setLocked`, `setMaterial`, and `unlockNode`. These will be deleted in Step 3. Before adding new tests, remove the old ones to prevent compile errors:
+
+```bash
+# Check what tests reference the removed functions:
+grep -n "setLocked\|setMaterial\|unlockNode" src/engine/treeMutations.test.ts
+```
+
+Open `src/engine/treeMutations.test.ts` and delete:
+- The import line for `setLocked`, `setMaterial`, `unlockNode`
+- Any `describe` / `it` blocks that call these functions
+
+- [ ] **Step 3: Run tests to confirm they fail**
 
 ```bash
 cd worktree && node_modules/.bin/vitest run src/engine/treeMutations.test.ts 2>&1 | tail -15
@@ -319,9 +339,11 @@ function setColumnSplitRatios(node: CabinetNode, evenH: number, thickness: numbe
   }
 }
 
-// 8. splitNode: clear spaceLabel on the target node when splitting
+// 8. splitNode: clear spaceLabel AND fixedSize/locked on the target node when splitting.
+// Clearing fixedSize/locked prevents a pinned void's constraints from leaking to the new
+// parent node and corrupting its grandparent's layout calculation.
 // In the existing splitNode function, add to the return object:
-// { ...node, splitAxis: axis, spaceLabel: undefined, children: [...] }
+// { ...node, splitAxis: axis, spaceLabel: undefined, fixedSize: undefined, locked: false, children: [...] }
 ```
 
 For `splitNode`, the existing function body:
@@ -330,7 +352,9 @@ found = true
 return {
   ...node,
   splitAxis: axis,
-  spaceLabel: undefined,   // ADD THIS LINE
+  spaceLabel: undefined,       // clear label — it no longer belongs to this void
+  fixedSize: undefined,        // clear pin — this node is now a split parent, not a leaf
+  locked: false,               // same
   children: [
     { id: nanoid(8), elementType: 'void' as ElementType },
     { id: nanoid(8), elementType: 'void' as ElementType },
@@ -401,8 +425,9 @@ describe('LayoutVoid control node IDs', () => {
     expect(va.widthControlNodeId).toBeUndefined()
   })
 
-  it('grandchild through v-split: heightControlNodeId=v-split child, columnRootId=h-split', () => {
+  it('grandchild through v-split: heightControlNodeId=v-split child, columnRootId=undefined', () => {
     // root(h) -> [a(leaf), b(v) -> [c(leaf), d(leaf)]]
+    // Entering a v-split resets columnRootId — voids inside v-splits cannot use Even Space
     const settings = makeSettings()
     const root: CabinetNode = {
       id: 'root', splitAxis: 'horizontal', splitRatio: 0.5,
@@ -416,11 +441,10 @@ describe('LayoutVoid control node IDs', () => {
     const vc = layout.voids.find(v => v.nodeId === 'c')!
     // c's height is controlled by b (b is the direct child of root h-split)
     expect(vc.heightControlNodeId).toBe('b')
-    expect(vc.columnRootId).toBe('root')
+    // v-split resets the column scope — c is inside a vertical subdivision
+    expect(vc.columnRootId).toBeUndefined()
     // c's width is controlled by c itself (c is a direct child of b v-split)
     expect(vc.widthControlNodeId).toBe('c')
-    // entering v-split resets columnRootId for children — they have their own column scope
-    // (c and d share the same column scope within b, but there's no h-split above them in this scope)
   })
 
   it('nested h-split: columnRootId stays the outermost h-split in the v-scope', () => {
@@ -598,7 +622,7 @@ git commit -m "feat(layoutEngine): emit heightControlNodeId, widthControlNodeId,
 **Files:**
 - Modify: `src/engine/cutList.ts`
 - Modify: `src/engine/cutList.test.ts`
-- Modify: 13 fixture files (mass rename)
+- Modify: 17 files total (12 test files + 5 source files) — mass rename via `sed`
 
 - [ ] **Step 1: Update `cutList.ts`**
 
@@ -692,6 +716,12 @@ Update `StoreState` interface — replace `setMaterial`, `setLocked`, `unlockNod
   setCabinetMaterial: (material: CabinetMaterialId) => void
   setNodeLabel: (nodeId: string, label: string) => void
   distributeEvenly: (columnRootId: string, evenH: number) => void
+  setVoidDimension: (voidId: string, axis: 'h' | 'w', mm: number) => void
+```
+
+Also add `computeUnitLayout` to imports:
+```ts
+import { computeUnitLayout } from '../engine/layoutEngine'
 ```
 
 Check where `UIState` is defined:
@@ -725,6 +755,21 @@ distributeEvenly: (columnRootId, evenH) => set(s => {
     ...u, root: treeMutDistributeEvenly(u.root, columnRootId, evenH, u.settings.thickness),
   }))
 }),
+
+// setVoidDimension: looks up control node from a fresh layout, then calls setNodeSize.
+// This is the spec's clean API for canvas label edits (editing does NOT lock the node).
+setVoidDimension: (voidId, axis, mm) => {
+  const s = get()
+  const project = s.projects[s.activeProjectId]
+  const unit = project?.units.find(u => u.id === s.activeUnitId)
+  if (!unit) return
+  const layout = computeUnitLayout(unit.settings, unit.root)
+  const void_ = layout.voids.find(v => v.nodeId === voidId)
+  if (!void_) return
+  const controlId = axis === 'h' ? void_.heightControlNodeId : void_.widthControlNodeId
+  if (!controlId) return
+  get().setNodeSize(controlId, mm)
+},
 
 // Remove setNodeSize's old store wrapper (was incorrectly locking) — keep it but fix:
 setNodeSize: (nodeId, sizeMm) => set(s => {
@@ -981,15 +1026,21 @@ interface Props {
   zoom: number
 }
 
-// 3. In onPointerDown, cache alignmentYs (excluding the dragged divider):
+// 3. In onPointerDown, cache alignmentYs in parent-relative coordinates (excluding the dragged divider):
 const alignmentYs = useRef<number[]>([])
 
 function onPointerDown(e: React.PointerEvent<SVGRectElement>, divider: LayoutDivider) {
-  // ... existing setup ...
-  // Cache horizontal alignment positions (excluding self):
+  // ... existing setup that computes originSizeA ...
+  // originSizeA = initial size of the region ABOVE the dragged divider (relative to its parent top)
+  // divider.y = absolute cabinet-y of the divider's top edge
+  // parentStartY = divider.y - originSizeA  (absolute y where the parent void begins)
+  const parentStartY = divider.y - originSizeA
+
+  // Cache alignment y-values converted to parent-relative mm (same coordinate space as candidateMm):
   alignmentYs.current = allDividers
     .filter(d => d.axis === 'horizontal' && d.nodeId !== divider.nodeId)
-    .map(d => d.y + d.h / 2)
+    .map(d => d.y + d.h / 2 - parentStartY)   // convert absolute → parent-relative
+    .filter(y => y > 0)                         // only positions above parent's top are valid
   dragging.current = { ... }
 }
 
@@ -998,9 +1049,9 @@ function onPointerMove(e: React.PointerEvent<SVGRectElement>) {
   if (!dragging.current) return
   // ... existing delta computation ...
   
-  let candidateMm = snap(rawMm)  // grid snap first
+  let candidateMm = snap(rawMm)  // grid snap first (candidateMm is parent-relative sizeA)
   if (dragging.current.axis === 'horizontal') {
-    // Convert alignmentYs from SVG coords to mm relative to drag origin
+    // alignmentYs are already in parent-relative coordinates — same space as candidateMm
     candidateMm = snapToAlignment(candidateMm, alignmentYs.current, 20)
   }
   // ... rest of move logic using candidateMm ...
@@ -1127,19 +1178,15 @@ git commit -m "feat(Sidebar): global material swatch; Even Space button; selecte
 
 - [ ] **Step 1: Update `CabinetCanvas.tsx`**
 
-Fix `handleCommitSize` to look up control node IDs from the layout:
+Fix `handleCommitSize` to call the store's `setVoidDimension` action:
 
 ```tsx
-// Add sceneLayout or activeUnitLayout prop to CabinetCanvas, OR:
-// Compute control node ID lookup inline from the voids prop.
-// CabinetCanvas already receives voids via sceneLayout.units[i].voids.
+// CabinetCanvas receives storeSetVoidDimension as a prop or binds it directly:
+const storeSetVoidDimension = useStore((state) => state.setVoidDimension)
 
 function handleCommitSize(voidId: string, mm: number, axis: 'w' | 'h') {
-  const void_ = voids.find(v => v.nodeId === voidId)  // voids = layout.voids
-  const controlId = axis === 'h'
-    ? void_?.heightControlNodeId
-    : void_?.widthControlNodeId
-  if (controlId) storeSetNodeSize(controlId, mm)
+  storeSetVoidDimension(voidId, axis, mm)
+  // No inline control-node lookup needed — store handles it
 }
 ```
 
@@ -1264,8 +1311,34 @@ describe('Feature improvements E2E', () => {
     expect(innerLeft!.widthControlNodeId).toBeDefined()
   })
 
+  it('setVoidDimension resizes without locking', () => {
+    const { addShelf, setVoidDimension, getState } = useStore.getState()
+    const rootId = getState().projects[0].units[0].root.id
+    addShelf(rootId)
+    const layout1 = computeSceneLayout(
+      getState().projects[0].units, getState().activeUnitId,
+    )
+    const topVoid = layout1.units[0].voids[0]
+    const originalH = topVoid.h
+
+    // Resize via setVoidDimension — should NOT lock the void
+    setVoidDimension(topVoid.nodeId, 'h', 200)
+
+    const newUnit = getState().projects[0].units.find(u => u.id === getState().activeUnitId)!
+    const topNode = findNode(newUnit.root, topVoid.heightControlNodeId ?? topVoid.nodeId)
+    expect(topNode?.fixedSize).toBe(200)
+    expect(topNode?.locked).not.toBe(true)  // editing sets fixedSize but NOT locked
+
+    // Canvas label height editable state unchanged — it can still absorb changes
+    const layout2 = computeSceneLayout(
+      getState().projects[0].units, getState().activeUnitId,
+    )
+    const resized = layout2.units[0].voids.find(v => v.nodeId === topVoid.nodeId)!
+    expect(resized.h).toBe(200)
+  })
+
   it('pinned void size unchanged when sibling is resized', () => {
-    const { addShelf, pinNode, setNodeSize, getState } = useStore.getState()
+    const { addShelf, pinNode, setVoidDimension, getState } = useStore.getState()
     const rootId = getState().projects[0].units[0].root.id
     addShelf(rootId)
     const layout1 = computeSceneLayout(
@@ -1278,8 +1351,8 @@ describe('Feature improvements E2E', () => {
     // Pin the top void
     pinNode(topVoid.nodeId, topVoid.h)
 
-    // Resize bottom via setNodeSize (should not affect pinned top)
-    setNodeSize(bottomVoid.heightControlNodeId ?? bottomVoid.nodeId, 100)
+    // Resize bottom via setVoidDimension (should not affect pinned top)
+    setVoidDimension(bottomVoid.nodeId, 'h', 100)
     const layout2 = computeSceneLayout(
       getState().projects[0].units, getState().activeUnitId,
     )
