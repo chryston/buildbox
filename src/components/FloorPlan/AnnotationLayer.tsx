@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Annotation, AnnotationType } from '../../types'
 import { nanoid } from 'nanoid'
 
@@ -14,17 +14,26 @@ export default function AnnotationLayer({ annotations, activeType, zoom, onAddAn
   const [previewPoint, setPreviewPoint] = useState<{ x: number; y: number } | null>(null)
   const [tileStart, setTileStart] = useState<{ x: number; y: number } | null>(null)
 
+  useEffect(() => {
+    setInProgressPoints([])
+    setPreviewPoint(null)
+    setTileStart(null)
+  }, [activeType])
+
   function svgPoint(e: React.MouseEvent<SVGGElement>): { x: number; y: number } {
     const svg = e.currentTarget.ownerSVGElement as SVGSVGElement
     const pt = svg.createSVGPoint()
     pt.x = e.clientX
     pt.y = e.clientY
-    const xf = pt.matrixTransform(e.currentTarget.getScreenCTM()!.inverse())
+    const ctm = e.currentTarget.getScreenCTM()
+    if (!ctm) return { x: e.clientX, y: e.clientY }
+    const xf = pt.matrixTransform(ctm.inverse())
     return { x: xf.x, y: xf.y }
   }
 
   function handleClick(e: React.MouseEvent<SVGGElement>) {
     if (!activeType) return
+    if (e.detail === 2) return  // handled by handleDblClick
     e.stopPropagation()
     const pt = svgPoint(e)
 
@@ -42,9 +51,13 @@ export default function AnnotationLayer({ annotations, activeType, zoom, onAddAn
   }
 
   function handleDblClick(e: React.MouseEvent<SVGGElement>) {
-    if (activeType !== 'wall-hack' || inProgressPoints.length < 2) return
+    if (activeType !== 'wall-hack') return
+    // The first click of the dblclick sequence (detail:1) slips past the handleClick guard
+    // and adds a spurious point — strip it off before committing.
+    const pts = inProgressPoints.slice(0, -1)
+    if (pts.length < 2) return
     e.stopPropagation()
-    commitWallHack(inProgressPoints)
+    commitWallHack(pts)
     setInProgressPoints([])
     setPreviewPoint(null)
   }
