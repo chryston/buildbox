@@ -9,7 +9,7 @@ function bareDesign(): Design {
       type: 'cabinet', id: 'u1', label: 'Base', x: 0, y: 0,
       settings: {
         unit: 'mm', height: 800, width: 600, depth: 500,
-        thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak',
+        thickness: 18, backThickness: 6, toeKick: null, material: 'oak',
       },
       root: { id: 'root' },
     }],
@@ -191,7 +191,7 @@ function makeUnit(id: string, label: string, widthOverride?: number): CabinetSce
     type: 'cabinet', id, label, x: 0, y: 0,
     settings: {
       unit: 'mm', height: 800, width: widthOverride ?? 600, depth: 500,
-      thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak',
+      thickness: 18, backThickness: 6, toeKick: null, material: 'oak',
     },
     root: { id: `${id}-root`, elementType: 'void' },
   }

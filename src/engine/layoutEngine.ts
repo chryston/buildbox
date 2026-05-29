@@ -39,11 +39,11 @@ export function computeUnitLayout(settings: GlobalSettings, root: CabinetNode): 
       y: gs.height - thickness - toeKickHeight,
       w: gs.width - (2 * gs.toeKick.setback),
       h: toeKickHeight,
-      material: gs.defaultMaterial,
+      material: gs.material,
     })
   }
 
-  layoutNode(root, innerX, innerY, innerW, innerH, gs.defaultMaterial, undefined)
+  layoutNode(root, innerX, innerY, innerW, innerH, gs.material, undefined)
 
   return {
     panels,
@@ -255,7 +255,7 @@ function buildOuterPanels(gs: {
   width: number
   height: number
   thickness: number
-  defaultMaterial: CabinetMaterialId
+  material: CabinetMaterialId
 }): LayoutPanel[] {
   const thickness = gs.thickness
 
@@ -267,7 +267,7 @@ function buildOuterPanels(gs: {
       y: 0,
       w: gs.width,
       h: thickness,
-      material: gs.defaultMaterial,
+      material: gs.material,
     },
     {
       id: 'bottom',
@@ -276,7 +276,7 @@ function buildOuterPanels(gs: {
       y: gs.height - thickness,
       w: gs.width,
       h: thickness,
-      material: gs.defaultMaterial,
+      material: gs.material,
     },
     {
       id: 'left',
@@ -285,7 +285,7 @@ function buildOuterPanels(gs: {
       y: thickness,
       w: thickness,
       h: gs.height - (2 * thickness),
-      material: gs.defaultMaterial,
+      material: gs.material,
     },
     {
       id: 'right',
@@ -294,7 +294,7 @@ function buildOuterPanels(gs: {
       y: thickness,
       w: thickness,
       h: gs.height - (2 * thickness),
-      material: gs.defaultMaterial,
+      material: gs.material,
     },
   ]
 }

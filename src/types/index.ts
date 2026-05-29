@@ -25,7 +25,7 @@ export interface GlobalSettings {
   thickness: number
   backThickness: number
   toeKick: ToeKick | null
-  material: CabinetMaterialId  // was defaultMaterial
+  material: CabinetMaterialId  // was material
 }
 
 export interface Accessory {

@@ -7,7 +7,7 @@ import type { GlobalSettings } from '../../types'
 
 const settings: GlobalSettings = {
   unit: 'mm', height: 800, width: 600, depth: 500,
-  thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak',
+  thickness: 18, backThickness: 6, toeKick: null, material: 'oak',
 }
 
 describe('Toolbar', () => {

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import UnitSelector from './UnitSelector'
 import type { CabinetSceneUnit } from '../../types'
 
-const baseSettings = { unit: 'mm' as const, height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak' as const }
+const baseSettings = { unit: 'mm' as const, height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, material: 'oak' as const }
 
 function makeUnit(id: string, label: string): CabinetSceneUnit {
   return { type: 'cabinet', id, label, x: 0, y: 0, settings: baseSettings, root: { id: `r-${id}`, elementType: 'void' } }

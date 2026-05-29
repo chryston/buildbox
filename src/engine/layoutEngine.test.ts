@@ -8,7 +8,7 @@ function makeDesign(root: CabinetNode, settingsOverride?: Partial<GlobalSettings
     id: 'd1', name: 'Test',
     units: [{
       type: 'cabinet', id: unitId, label: 'Unit 1', x: 0, y: 0,
-      settings: { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak', ...settingsOverride },
+      settings: { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, material: 'oak', ...settingsOverride },
       root,
     }],
   }
@@ -23,7 +23,7 @@ function makeUnit(id: string, label: string, x: number, overrides: Partial<Globa
     y: 0,
     settings: {
       unit: 'mm', height: 800, width: 600, depth: 500,
-      thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak',
+      thickness: 18, backThickness: 6, toeKick: null, material: 'oak',
       ...overrides,
     },
     root: { id: `${id}-root`, elementType: 'void' },

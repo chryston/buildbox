@@ -69,7 +69,7 @@ function defaultDesign(): Design {
         thickness: 18,
         backThickness: 6,
         toeKick: null,
-        defaultMaterial: 'oak',
+        material: 'oak',
       },
       root: { id: nanoid(8), elementType: 'void' },
       x: 0,
@@ -170,7 +170,7 @@ export const useStore = create<StoreState>()(
             label: `Unit ${proj.units.length + 1}`,
             settings: baseSettings
               ? { ...baseSettings }
-              : { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, defaultMaterial: 'oak' },
+              : { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, material: 'oak' },
             root: { id: nanoid(8), elementType: 'void' },
             x: rightmost + 20,
             y: 0,

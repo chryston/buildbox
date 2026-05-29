@@ -23,7 +23,7 @@ const defaultSettings: GlobalSettings = {
   thickness: 18,
   backThickness: 6,
   toeKick: null,
-  defaultMaterial: 'oak',
+  material: 'oak',
 }
 
 export default function App() {

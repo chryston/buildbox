@@ -22,7 +22,7 @@ function createDesign(): Design {
           thickness: 18,
           backThickness: 6,
           toeKick: null,
-          defaultMaterial: 'oak',
+          material: 'oak',
         },
         root: { id: 'root', elementType: 'void' },
         x: 0,
