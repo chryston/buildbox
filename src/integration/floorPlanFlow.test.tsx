@@ -5,6 +5,7 @@ import App from '../App'
 import { useStore } from '../store/store'
 
 function resetStore() {
+  localStorage.clear()
   useStore.setState({
     projects: [{
       id: 'p1',
@@ -25,6 +26,7 @@ function resetStore() {
     floorPlanSelectedId: null,
     floorPlan: { image: null, pixelsPerMm: null, objects: [], annotations: [], customTemplates: [] },
   })
+  useStore.temporal.getState().clear()
 }
 
 describe('Floor plan integration', () => {
