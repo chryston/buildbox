@@ -16,15 +16,16 @@ export default function ScaleCalibrationModal({ distancePx, onConfirm, onClose }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-80 rounded-lg bg-panel p-6 shadow-xl border border-divider">
-        <h2 className="mb-4 text-lg font-semibold text-text-primary">Calibrate Scale</h2>
+      <div role="dialog" aria-modal="true" aria-labelledby="cal-modal-title" className="w-80 rounded-lg bg-panel p-6 shadow-xl border border-divider">
+        <h2 id="cal-modal-title" className="mb-4 text-lg font-semibold text-text-primary">Calibrate Scale</h2>
         <p className="mb-4 text-sm text-text-muted">
           You drew a line of <strong className="text-text-primary">{Math.round(distancePx)}px</strong>.<br />
           What is the real-world length of this line?
         </p>
         <div className="mb-6">
-          <label className="mb-1 block text-sm text-text-muted">Distance (mm)</label>
+          <label htmlFor="cal-mm" className="mb-1 block text-sm text-text-muted">Distance (mm)</label>
           <input
+            id="cal-mm"
             type="number"
             min={1}
             value={mm}

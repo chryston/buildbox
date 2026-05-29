@@ -27,10 +27,10 @@ export default function CalibrationOverlay({ zoom, pixelsPerMm, onMeasured }: Pr
     } else {
       const dx = pt.x - pointA.x
       const dy = pt.y - pointA.y
-      const distanceMm = Math.hypot(dx, dy)
+      const distanceLocal = Math.hypot(dx, dy)
       // When pixelsPerMm is already set, local coords are in mm — convert back to raw pixels.
       // When no scale yet, local coords are raw pixels already.
-      const rawDistancePx = pixelsPerMm ? distanceMm * pixelsPerMm : distanceMm
+      const rawDistancePx = pixelsPerMm ? distanceLocal * pixelsPerMm : distanceLocal
       onMeasured(rawDistancePx)
       setPointA(null)
       setPreview(null)
