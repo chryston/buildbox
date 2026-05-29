@@ -169,3 +169,58 @@ export interface UIState {
 }
 
 export type AppModule = 'cabinet' | 'floorplan'
+
+// --- Floor Plan types ---
+
+export type FloorPlanObjectType =
+  | 'sofa-2' | 'sofa-3' | 'armchair'
+  | 'bed-single' | 'bed-double' | 'bed-queen' | 'bed-king'
+  | 'fridge' | 'washer' | 'dryer' | 'water-heater' | 'robot-vacuum'
+  | 'toilet' | 'basin' | 'bathtub' | 'shower'
+  | 'ceiling-fan' | 'light' | 'tv' | 'curtain-rail'
+  | 'wardrobe' | 'kitchen-counter' | 'cabinet-unit'
+  | 'custom'
+
+export type AnnotationType = 'wall-hack' | 'tile-zone'
+
+export interface FloorPlanObject {
+  id: string
+  type: FloorPlanObjectType
+  label: string
+  x: number
+  y: number
+  w: number
+  h: number
+  rotation: 0 | 90 | 180 | 270
+  color: string
+  isCustom?: boolean
+}
+
+export interface Annotation {
+  id: string
+  type: AnnotationType
+  points: { x: number; y: number }[]
+  label?: string
+}
+
+export interface FloorPlanImage {
+  dataUrl: string
+  widthPx: number
+  heightPx: number
+}
+
+export interface CustomTemplate {
+  id: string
+  label: string
+  defaultW: number
+  defaultH: number
+  color: string
+}
+
+export interface FloorPlanData {
+  image: FloorPlanImage | null
+  pixelsPerMm: number | null
+  objects: FloorPlanObject[]
+  annotations: Annotation[]
+  customTemplates: CustomTemplate[]
+}
