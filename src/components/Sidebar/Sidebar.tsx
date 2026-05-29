@@ -3,12 +3,13 @@ import CutListPanel from '../CutListPanel/CutListPanel'
 import UnitSelector from './UnitSelector'
 import type {
   AccessoryType,
+  CabinetMaterialId,
   CabinetNode,
   CabinetUnit,
   CutListEntry,
   DrawerConfig,
   ElementType,
-  MaterialId,
+  LayoutVoid,
   SlideType,
 } from '../../types'
 import { MATERIALS } from '../../utils/materials'
@@ -17,11 +18,15 @@ interface Props {
   cutList?: CutListEntry[]
   selectedId: string | null
   selectedNode: CabinetNode | null
+  selectedVoid?: LayoutVoid | null
+  evenH?: number | null
+  currentMaterial?: CabinetMaterialId
   onAddShelf: (id: string) => void
   onAddDivider: (id: string) => void
   onDelete: (id: string) => void
   onToggleLock: (id: string) => void
-  onSetMaterial: (id: string, mat: MaterialId) => void
+  onSetCabinetMaterial: (mat: CabinetMaterialId) => void
+  onDistributeEvenly?: (columnRootId: string, evenH: number) => void
   onSetElementType: (id: string, type: ElementType) => void
   onSetDrawerConfig: (id: string, config: DrawerConfig) => void
   onAddAccessory: (nodeId: string, type: AccessoryType) => void
@@ -68,11 +73,15 @@ export default function Sidebar({
   cutList = [],
   selectedId,
   selectedNode,
+  selectedVoid = null,
+  evenH = null,
+  currentMaterial = 'oak',
   onAddShelf,
   onAddDivider,
   onDelete,
   onToggleLock,
-  onSetMaterial,
+  onSetCabinetMaterial,
+  onDistributeEvenly,
   onSetElementType,
   onSetDrawerConfig,
   onAddAccessory,
@@ -109,6 +118,25 @@ export default function Sidebar({
         onRemove={onRemoveUnit}
         onRename={onRenameUnit}
       />
+
+      {/* Global material swatch — always visible */}
+      <div className="p-3 border-b border-divider">
+        <p className="text-xs text-text-muted uppercase tracking-wide mb-2">Material</p>
+        <div className="flex flex-wrap gap-2">
+          {(Object.keys(MATERIALS) as CabinetMaterialId[]).map((key) => (
+            <button
+              key={key}
+              type="button"
+              title={MATERIALS[key].label}
+              aria-label={MATERIALS[key].label}
+              onClick={() => onSetCabinetMaterial(key)}
+              className={`w-8 h-8 rounded-full border-2 ${currentMaterial === key ? 'border-accent' : 'border-transparent'}`}
+              style={{ backgroundColor: MATERIALS[key].fill }}
+            />
+          ))}
+        </div>
+      </div>
+
       <div className="flex flex-col gap-1 p-3">
         <p className="text-xs text-text-muted uppercase tracking-wide mb-1">Actions</p>
         <Btn
@@ -132,26 +160,16 @@ export default function Sidebar({
             onClick={() => selectedId && onToggleLock(selectedId)}
           />
         )}
+        {selectedVoid?.columnRootId && evenH !== null && onDistributeEvenly && (
+          <button
+            type="button"
+            onClick={() => onDistributeEvenly(selectedVoid.columnRootId!, evenH!)}
+            className="w-full text-left px-3 py-1.5 text-sm bg-panel hover:bg-gray-100 rounded border border-divider text-text-primary"
+          >
+            Even Space
+          </button>
+        )}
       </div>
-
-      {selectedId && (
-        <div className="p-3 border-t border-divider">
-          <p className="text-xs text-text-muted uppercase tracking-wide mb-2">Material</p>
-          <div className="flex flex-wrap gap-2">
-            {(Object.keys(MATERIALS) as MaterialId[]).map((key) => (
-              <button
-                key={key}
-                type="button"
-                title={MATERIALS[key].label}
-                aria-label={MATERIALS[key].label}
-                onClick={() => onSetMaterial(selectedId, key)}
-                className={`w-8 h-8 rounded-full border-2 ${selectedNode?.material === key ? 'border-accent' : 'border-transparent'}`}
-                style={{ backgroundColor: MATERIALS[key].fill }}
-              />
-            ))}
-          </div>
-        </div>
-      )}
 
       {selectedId && (
         <div className="p-3 border-t border-divider">
