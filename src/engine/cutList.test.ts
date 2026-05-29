@@ -115,13 +115,13 @@ describe('computeCutList – mixed-height vertical dividers', () => {
         {
           id: 'top',
           splitAxis: 'vertical',
-          material: 'oak',
+          dividers: [{ id: 'd1', materialId: 'oak' }],
           children: [{ id: 'tl' }, { id: 'tr' }],
         },
         {
           id: 'bot',
           splitAxis: 'vertical',
-          material: 'walnut',
+          dividers: [{ id: 'd2', materialId: 'walnut' }],
           children: [{ id: 'bl' }, { id: 'br' }],
         },
       ],

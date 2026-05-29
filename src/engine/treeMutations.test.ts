@@ -8,9 +8,10 @@ import {
   setElementType,
   setNodeSize,
   setSplitRatio,
-  setLocked,
-  setMaterial,
-  unlockNode,
+  pinNode,
+  unpinNode,
+  setNodeLabel,
+  distributeEvenly,
 } from './treeMutations'
 import type { CabinetNode, DrawerConfig } from '../types'
 
@@ -79,7 +80,7 @@ describe('deleteBoard', () => {
 })
 
 describe('setNodeSize', () => {
-  it('sets fixedSize and locked: true on the target node', () => {
+  it('sets fixedSize but does NOT set locked', () => {
     const root: CabinetNode = {
       id: 'root',
       splitAxis: 'horizontal',
@@ -87,19 +88,19 @@ describe('setNodeSize', () => {
     }
     const next = setNodeSize(root, 'a', 200)
     expect(next.children![0].fixedSize).toBe(200)
-    expect(next.children![0].locked).toBe(true)
+    expect(next.children![0].locked).toBeFalsy()
   })
 })
 
-describe('unlockNode', () => {
+describe('unlockNode backward compat', () => {
   it('clears locked and fixedSize on the target node', () => {
     const root: CabinetNode = {
       id: 'root',
       splitAxis: 'horizontal',
       children: [{ id: 'a', fixedSize: 200, locked: true }, { id: 'b' }],
     }
-    const next = unlockNode(root, 'a')
-    expect(next.children![0].locked).toBe(false)
+    const next = unpinNode(root, 'a')
+    expect(next.children![0].locked).toBeFalsy()
     expect(next.children![0].fixedSize).toBeUndefined()
   })
 })
@@ -121,20 +122,6 @@ describe('other mutations', () => {
 
     const ratioNext = setSplitRatio(root, 'root', 0.25)
     expect(ratioNext.splitRatio).toBe(0.25)
-  })
-
-  it('sets locked and material on the target node', () => {
-    const root: CabinetNode = {
-      id: 'root',
-      splitAxis: 'horizontal',
-      children: [{ id: 'a' }, { id: 'b' }],
-    }
-
-    const lockedNext = setLocked(root, 'a', true)
-    expect(lockedNext.children![0].locked).toBe(true)
-
-    const materialNext = setMaterial(root, 'b', 'oak')
-    expect(materialNext.children![1].material).toBe('oak')
   })
 })
 
@@ -177,5 +164,100 @@ describe('findNode', () => {
 
     expect(findNode(root, 'a')?.id).toBe('a')
     expect(findNode(root, 'missing')).toBeNull()
+  })
+})
+
+describe('pinNode / unpinNode', () => {
+  it('pinNode sets both fixedSize and locked', () => {
+    const root: CabinetNode = { id: 'root', splitAxis: 'horizontal', splitRatio: 0.5,
+      children: [{ id: 'a', elementType: 'void' }, { id: 'b', elementType: 'void' }] }
+    const next = pinNode(root, 'a', 300)
+    expect(findNode(next, 'a')).toMatchObject({ fixedSize: 300, locked: true })
+  })
+
+  it('unpinNode clears both fixedSize and locked', () => {
+    const root: CabinetNode = { id: 'root', splitAxis: 'horizontal', splitRatio: 0.5,
+      children: [{ id: 'a', elementType: 'void', fixedSize: 300, locked: true }, { id: 'b', elementType: 'void' }] }
+    const next = unpinNode(root, 'a')
+    const a = findNode(next, 'a')
+    expect(a?.locked).toBeFalsy()
+    expect(a?.fixedSize).toBeUndefined()
+  })
+})
+
+describe('setNodeLabel', () => {
+  it('sets spaceLabel on the target node', () => {
+    const root: CabinetNode = { id: 'root', splitAxis: 'horizontal', splitRatio: 0.5,
+      children: [{ id: 'a', elementType: 'void' }, { id: 'b', elementType: 'void' }] }
+    const next = setNodeLabel(root, 'a', 'Pots')
+    expect(findNode(next, 'a')?.spaceLabel).toBe('Pots')
+  })
+
+  it('clears label when empty string passed', () => {
+    const root: CabinetNode = { id: 'root', splitAxis: 'horizontal', splitRatio: 0.5,
+      children: [{ id: 'a', elementType: 'void', spaceLabel: 'Pots' }, { id: 'b', elementType: 'void' }] }
+    const next = setNodeLabel(root, 'a', '')
+    expect(findNode(next, 'a')?.spaceLabel).toBeUndefined()
+  })
+})
+
+describe('splitNode clears spaceLabel and fixedSize/locked', () => {
+  it('clears spaceLabel when a labeled void is split', () => {
+    const root: CabinetNode = { id: 'root', elementType: 'void', spaceLabel: 'Books' }
+    const next = addShelf(root, 'root')
+    expect(next.spaceLabel).toBeUndefined()
+  })
+
+  it('clears fixedSize and locked when a pinned void is split (prevents constraint leakage)', () => {
+    const root: CabinetNode = { id: 'root', elementType: 'void', fixedSize: 300, locked: true }
+    const next = addShelf(root, 'root')
+    expect(next.fixedSize).toBeUndefined()
+    expect(next.locked).toBeFalsy()
+  })
+})
+
+describe('distributeEvenly', () => {
+  it('sets equal splitRatios so all column leaves get the same rendered height', () => {
+    const root: CabinetNode = {
+      id: 'root', splitAxis: 'horizontal',
+      children: [
+        { id: 'a', elementType: 'void', fixedSize: 400, locked: true },
+        { id: 'b', splitAxis: 'horizontal',
+          children: [
+            { id: 'c', elementType: 'void' },
+            { id: 'd', elementType: 'void', fixedSize: 100 },
+          ]
+        }
+      ]
+    }
+    const thickness = 18
+    const evenH = 300
+    const next = distributeEvenly(root, 'root', evenH, thickness)
+    expect(findNode(next, 'a')).toMatchObject({ fixedSize: undefined, locked: false })
+    expect(findNode(next, 'd')).toMatchObject({ fixedSize: undefined, locked: false })
+    // subtreeH(a)=300, subtreeH(b)=300+18+300=618, available=918
+    expect(next.splitRatio).toBeCloseTo(300 / 918, 5)
+    // b's splitRatio: subtreeH(c)=300, subtreeH(d)=300, available=600 → 0.5
+    expect(findNode(next, 'b')?.splitRatio).toBeCloseTo(0.5, 5)
+  })
+
+  it('does not touch nodes under vertical splits', () => {
+    const root: CabinetNode = {
+      id: 'root', splitAxis: 'horizontal',
+      children: [
+        { id: 'a', elementType: 'void' },
+        { id: 'b', splitAxis: 'vertical',
+          children: [
+            { id: 'c', elementType: 'void', fixedSize: 999, locked: true },
+            { id: 'd', elementType: 'void', fixedSize: 999 },
+          ]
+        }
+      ]
+    }
+    const next = distributeEvenly(root, 'root', 300, 18)
+    // b is v-split, treated as single leaf; its children are NOT touched
+    expect(findNode(next, 'c')?.fixedSize).toBe(999)
+    expect(findNode(next, 'd')?.fixedSize).toBe(999)
+    expect(findNode(next, 'c')?.locked).toBe(true)
   })
 })

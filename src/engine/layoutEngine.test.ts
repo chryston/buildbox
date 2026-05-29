@@ -184,3 +184,74 @@ describe('computeSceneLayout', () => {
     expect(leftPanel.x).toBe(0)
   })
 })
+
+import { computeUnitLayout } from './layoutEngine'
+
+function makeSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
+  return { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, material: 'oak', ...overrides }
+}
+
+describe('LayoutVoid control node IDs', () => {
+  it('root void has no control node IDs', () => {
+    const settings = makeSettings()
+    const root: CabinetNode = { id: 'root', elementType: 'void' }
+    const layout = computeUnitLayout(settings, root)
+    const v = layout.voids[0]
+    expect(v.heightControlNodeId).toBeUndefined()
+    expect(v.widthControlNodeId).toBeUndefined()
+    expect(v.columnRootId).toBeUndefined()
+  })
+
+  it('direct child of h-split has heightControlNodeId=self and columnRootId=parent', () => {
+    const settings = makeSettings()
+    const root: CabinetNode = {
+      id: 'root', splitAxis: 'horizontal', splitRatio: 0.5,
+      children: [{ id: 'a', elementType: 'void' }, { id: 'b', elementType: 'void' }],
+    }
+    const layout = computeUnitLayout(settings, root)
+    const va = layout.voids.find(v => v.nodeId === 'a')!
+    expect(va.heightControlNodeId).toBe('a')
+    expect(va.columnRootId).toBe('root')
+    expect(va.widthControlNodeId).toBeUndefined()
+  })
+
+  it('grandchild through v-split: heightControlNodeId=v-split child, columnRootId=undefined', () => {
+    const settings = makeSettings()
+    const root: CabinetNode = {
+      id: 'root', splitAxis: 'horizontal', splitRatio: 0.5,
+      children: [
+        { id: 'a', elementType: 'void' },
+        { id: 'b', splitAxis: 'vertical', splitRatio: 0.5,
+          children: [{ id: 'c', elementType: 'void' }, { id: 'd', elementType: 'void' }] }
+      ]
+    }
+    const layout = computeUnitLayout(settings, root)
+    const vc = layout.voids.find(v => v.nodeId === 'c')!
+    expect(vc.heightControlNodeId).toBe('b')
+    expect(vc.columnRootId).toBeUndefined()
+    expect(vc.widthControlNodeId).toBe('c')
+  })
+
+  it('nested h-split: columnRootId stays the outermost h-split in the v-scope', () => {
+    const settings = makeSettings()
+    const root: CabinetNode = {
+      id: 'root', splitAxis: 'horizontal', splitRatio: 0.5,
+      children: [
+        { id: 'a', elementType: 'void' },
+        { id: 'b', splitAxis: 'horizontal', splitRatio: 0.5,
+          children: [{ id: 'c', elementType: 'void' }, { id: 'd', elementType: 'void' }] }
+      ]
+    }
+    const layout = computeUnitLayout(settings, root)
+    expect(layout.voids.find(v => v.nodeId === 'a')?.columnRootId).toBe('root')
+    expect(layout.voids.find(v => v.nodeId === 'c')?.columnRootId).toBe('root')
+    expect(layout.voids.find(v => v.nodeId === 'd')?.columnRootId).toBe('root')
+  })
+
+  it('spaceLabel forwarded from CabinetNode', () => {
+    const settings = makeSettings()
+    const root: CabinetNode = { id: 'root', elementType: 'void', spaceLabel: 'Books' }
+    const layout = computeUnitLayout(settings, root)
+    expect(layout.voids[0].spaceLabel).toBe('Books')
+  })
+})
