@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { useStore } from '../../store/store'
 import { useShallow } from 'zustand/react/shallow'
@@ -37,10 +37,16 @@ export default function FloorPlanCanvas({
   const imgH = image ? (pixelsPerMm ? image.heightPx / pixelsPerMm : image.heightPx) : 600
   const viewBox = `${-PADDING} ${-PADDING} ${imgW + 2 * PADDING} ${imgH + 2 * PADDING}`
 
-  const onWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault()
-    setZoom(z => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * (e.deltaY < 0 ? 1.25 : 0.8))))
-  }, [])
+  useEffect(() => {
+    const el = svgRef.current
+    if (!el) return
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      setZoom(z => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * (e.deltaY < 0 ? 1.25 : 0.8))))
+    }
+    el.addEventListener('wheel', handleWheel, { passive: false })
+    return () => el.removeEventListener('wheel', handleWheel)
+  }, [svgRef])
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 1 && !e.altKey) return
@@ -54,7 +60,14 @@ export default function FloorPlanCanvas({
     const dx = e.clientX - lastPan.current.x
     const dy = e.clientY - lastPan.current.y
     lastPan.current = { x: e.clientX, y: e.clientY }
-    setPan(p => ({ x: p.x + dx, y: p.y + dy }))
+
+    const svg = (e.currentTarget as SVGSVGElement)
+    const ctm = svg.getScreenCTM()
+    if (ctm) {
+      setPan(p => ({ x: p.x + dx / ctm.a, y: p.y + dy / ctm.d }))
+    } else {
+      setPan(p => ({ x: p.x + dx, y: p.y + dy }))
+    }
   }, [])
 
   const onPointerUp = useCallback(() => { isPanning.current = false }, [])
@@ -64,9 +77,9 @@ export default function FloorPlanCanvas({
     const container = svgRef.current.parentElement
     if (!container) return
     const { width: cw, height: ch } = container.getBoundingClientRect()
-    const scaleX = (cw - 2 * PADDING) / imgW
-    const scaleY = (ch - 2 * PADDING) / imgH
-    const newZoom = Math.min(scaleX, scaleY, ZOOM_MAX)
+    const vbW = imgW + 2 * PADDING
+    const vbH = imgH + 2 * PADDING
+    const newZoom = Math.min(cw / vbW, ch / vbH, ZOOM_MAX)
     setZoom(newZoom)
     setPan({ x: 0, y: 0 })
   }
@@ -84,7 +97,6 @@ export default function FloorPlanCanvas({
         preserveAspectRatio="xMidYMid meet"
         className="h-full w-full"
         style={{ touchAction: 'none', cursor: isCalibrating ? 'crosshair' : 'default' }}
-        onWheel={onWheel}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
