@@ -59,7 +59,7 @@ interface StoreState extends PersistedState, UIState {
   setFloorPlanImage: (image: FloorPlanImage | null) => void
   setFloorPlanScale: (pixelsPerMm: number) => void
   addFloorPlanObject: (obj: FloorPlanObject) => void
-  updateFloorPlanObject: (id: string, patch: Partial<FloorPlanObject>) => void
+  updateFloorPlanObject: (id: string, patch: Omit<Partial<FloorPlanObject>, 'id'>) => void
   removeFloorPlanObject: (id: string) => void
   addAnnotation: (ann: Annotation) => void
   removeAnnotation: (id: string) => void
@@ -347,17 +347,9 @@ export const useStore = create<StoreState>()(
         version: 3,
         migrate: (persisted: unknown, fromVersion: number) => {
           const origVersion = fromVersion
-          if (fromVersion <= 2) {
-            ;(persisted as any).floorPlan ??= {
-              image: null,
-              pixelsPerMm: null,
-              objects: [],
-              annotations: [],
-              customTemplates: [],
-            }
-            ;(persisted as any).floorPlan.customTemplates ??= []
-            fromVersion = 3
-          }
+
+          // Apply structural project migrations first (v0→v1, v1→v2),
+          // then add floorPlan after any reassignment of `persisted`.
           if (origVersion === 0) {
             const old = persisted as {
               projects: Array<{ id: string; name: string; root: import('../types').CabinetNode; globalSettings: GlobalSettings }>
@@ -391,6 +383,18 @@ export const useStore = create<StoreState>()(
                 }
               }
             }
+          }
+          // Add floorPlan shape after structural migrations so it is not lost
+          // by any reassignment of `persisted` above.
+          if (origVersion <= 2) {
+            ;(persisted as any).floorPlan ??= {
+              image: null,
+              pixelsPerMm: null,
+              objects: [],
+              annotations: [],
+              customTemplates: [],
+            }
+            ;(persisted as any).floorPlan.customTemplates ??= []
           }
           return persisted
         },
