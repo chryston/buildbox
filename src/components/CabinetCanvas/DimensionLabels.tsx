@@ -54,7 +54,9 @@ export default function DimensionLabels(props: Props) {
 
   const fontSize = Math.max(12 / zoom, 8)
 
-  const isPinned = selectedNode?.locked === true && selectedNode?.fixedSize != null
+  const isPinnedId = selectedNode?.locked === true && selectedNode?.fixedSize != null
+    ? selectedNode.id
+    : null
 
   function openEditor(v: LayoutVoid, axis: 'w' | 'h', labelEl: SVGTextElement) {
     const rect = labelEl.getBoundingClientRect()
@@ -69,8 +71,9 @@ export default function DimensionLabels(props: Props) {
   return (
     <g data-layer="dimension-labels">
       {voids.map((v) => {
-        const canEditH = !!v.heightControlNodeId && !isPinned
-        const canEditW = !!v.widthControlNodeId && !isPinned
+        const voidIsPinned = v.nodeId === isPinnedId
+        const canEditH = !!v.heightControlNodeId && !voidIsPinned
+        const canEditW = !!v.widthControlNodeId && !voidIsPinned
 
         return (
           <g key={v.nodeId}>
@@ -204,14 +207,42 @@ export default function DimensionLabels(props: Props) {
         />
       )}
 
-      {labelEditing && (
-        <DimensionEditor
-          anchor={labelEditing.anchor}
-          currentMm={0}
-          unit={unit}
-          onCommit={() => setLabelEditing(null)}
-          onClose={() => setLabelEditing(null)}
-        />
+      {labelEditing && onCommitLabel && (
+        <foreignObject
+          x={labelEditing.anchor.x}
+          y={labelEditing.anchor.y}
+          width={labelEditing.anchor.width || 120}
+          height={labelEditing.anchor.height || 32}
+          style={{ overflow: 'visible' }}
+        >
+          <input
+            // @ts-expect-error — xmlns required for foreignObject in SVG
+            xmlns="http://www.w3.org/1999/xhtml"
+            autoFocus
+            defaultValue={labelEditing.current}
+            style={{
+              width: '100%',
+              height: '100%',
+              padding: '2px 4px',
+              fontSize: 12,
+              border: '1px solid var(--color-accent)',
+              borderRadius: 3,
+              background: 'var(--color-surface)',
+              color: 'var(--color-text-primary)',
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                onCommitLabel(labelEditing.nodeId, (e.target as HTMLInputElement).value)
+                setLabelEditing(null)
+              }
+              if (e.key === 'Escape') setLabelEditing(null)
+            }}
+            onBlur={(e) => {
+              onCommitLabel(labelEditing.nodeId, e.target.value)
+              setLabelEditing(null)
+            }}
+          />
+        </foreignObject>
       )}
     </g>
   )

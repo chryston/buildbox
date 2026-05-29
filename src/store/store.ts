@@ -309,7 +309,7 @@ export const useStore = create<StoreState>()(
               projects: Array<{ id: string; name: string; root: import('../types').CabinetNode; globalSettings: GlobalSettings }>
               activeProjectId: string | null
             }
-            return {
+            persisted = {
               projects: old.projects.map(d => ({
                 id: d.id,
                 name: d.name,
@@ -325,8 +325,9 @@ export const useStore = create<StoreState>()(
               })),
               activeProjectId: old.activeProjectId,
             }
+            // fall through to apply v1→v2 rename
           }
-          if (fromVersion === 1) {
+          if (fromVersion <= 1) {
             const state = persisted as { projects: Array<{ units: Array<{ settings: Record<string, unknown> }> }> }
             for (const project of state.projects ?? []) {
               for (const unit of project.units ?? []) {

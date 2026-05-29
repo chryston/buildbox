@@ -198,7 +198,10 @@ export default function App() {
               onDelete={storeDeleteBoard}
               onToggleLock={(id) => {
                 if (selectedNode?.locked) storeUnpinNode(id)
-                else storePinNode(id, selectedNode?.fixedSize ?? selectedVoid?.h ?? 0)
+                else {
+                  const sizeMm = selectedVoid?.parentSplitAxis === 'vertical' ? selectedVoid.w : (selectedVoid?.h ?? selectedNode?.fixedSize ?? 0)
+                  storePinNode(id, sizeMm)
+                }
               }}
               onSetCabinetMaterial={storeSetCabinetMaterial}
               currentMaterial={activeUnit?.settings.material ?? 'oak'}

@@ -24,15 +24,15 @@ function computeCutListForUnit(unit: CabinetSceneUnit): CutListEntry[] {
   const layout = computeUnitLayout(gs, unit.root)
   const raw: Omit<CutListEntry, 'unitId' | 'unitLabel'>[] = []
 
-  raw.push({ label: 'Side panel', qty: 2, width: gs.height, height: gs.depth, depth: t, material: gs.material ?? (gs as any).material ?? 'oak' })
-  raw.push({ label: 'Top panel', qty: 1, width: gs.width - 2 * t, height: gs.depth, depth: t, material: gs.material ?? (gs as any).material ?? 'oak' })
-  raw.push({ label: 'Bottom panel', qty: 1, width: gs.width - 2 * t, height: gs.depth, depth: t, material: gs.material ?? (gs as any).material ?? 'oak' })
+  raw.push({ label: 'Side panel', qty: 2, width: gs.height, height: gs.depth, depth: t, material: gs.material ?? (gs as any).defaultMaterial ?? 'oak' })
+  raw.push({ label: 'Top panel', qty: 1, width: gs.width - 2 * t, height: gs.depth, depth: t, material: gs.material ?? (gs as any).defaultMaterial ?? 'oak' })
+  raw.push({ label: 'Bottom panel', qty: 1, width: gs.width - 2 * t, height: gs.depth, depth: t, material: gs.material ?? (gs as any).defaultMaterial ?? 'oak' })
 
   const backThickness = gs.backThickness ?? 6
-  raw.push({ label: 'Back panel', qty: 1, width: gs.width - 2 * t, height: gs.height - 2 * t, depth: backThickness, material: gs.material ?? (gs as any).material ?? 'oak', notes: `${backThickness}mm ply back` })
+  raw.push({ label: 'Back panel', qty: 1, width: gs.width - 2 * t, height: gs.height - 2 * t, depth: backThickness, material: gs.material ?? (gs as any).defaultMaterial ?? 'oak', notes: `${backThickness}mm ply back` })
 
   if (gs.toeKick) {
-    raw.push({ label: 'Toe-kick board', qty: 1, width: gs.width - 2 * gs.toeKick.setback, height: gs.toeKick.height, depth: t, material: gs.material ?? (gs as any).material ?? 'oak' })
+    raw.push({ label: 'Toe-kick board', qty: 1, width: gs.width - 2 * gs.toeKick.setback, height: gs.toeKick.height, depth: t, material: gs.material ?? (gs as any).defaultMaterial ?? 'oak' })
   }
 
   const shelves = layout.dividers.filter(d => d.axis === 'horizontal')
