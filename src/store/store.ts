@@ -4,8 +4,8 @@ import { immer } from 'zustand/middleware/immer'
 import { shallow } from 'zustand/shallow'
 import { temporal } from 'zundo'
 import { nanoid } from 'nanoid'
-import type { Accessory, CabinetSceneUnit, Design, GlobalSettings, MaterialId, DrawerConfig, UIState, ElementType } from '../types'
-import { addShelf, addDivider, deleteBoard as deleteBoardFn, setNodeSize, setLocked, setMaterial, setSplitRatio, unlockNode, setElementType as treeMutSetElementType, setDrawerConfig as treeMutSetDrawerConfig } from '../engine/treeMutations'
+import type { Accessory, CabinetMaterialId, CabinetSceneUnit, Design, GlobalSettings, DrawerConfig, UIState, ElementType } from '../types'
+import { addShelf, addDivider, deleteBoard as deleteBoardFn, setNodeSize, setSplitRatio, pinNode as treePinNode, unpinNode as treeUnpinNode, setNodeLabel as treeMutSetNodeLabel, distributeEvenly as treeMutDistributeEvenly, setElementType as treeMutSetElementType, setDrawerConfig as treeMutSetDrawerConfig } from '../engine/treeMutations'
 import { addAccessory as addAccessoryFn, removeAccessory as removeAccessoryFn } from '../engine/accessories'
 
 interface PersistedState {
@@ -38,8 +38,11 @@ interface StoreState extends PersistedState, UIState {
   deleteBoard: (nodeId: string) => void
   setNodeSize: (nodeId: string, sizeMm: number) => void
   unlockNode: (nodeId: string) => void
-  setLocked: (nodeId: string, locked: boolean) => void
-  setMaterial: (nodeId: string, material: MaterialId) => void
+  pinNode: (nodeId: string, sizeMm: number) => void
+  unpinNode: (nodeId: string) => void
+  setCabinetMaterial: (material: CabinetMaterialId) => void
+  setNodeLabel: (nodeId: string, label: string) => void
+  distributeEvenly: (columnRootId: string, evenH: number) => void
   setElementType: (nodeId: string, et: ElementType) => void
   setDrawerConfig: (nodeId: string, config: DrawerConfig) => void
   commitDrag: (parentNodeId: string, ratio: number) => void
@@ -226,15 +229,29 @@ export const useStore = create<StoreState>()(
         }),
 
         unlockNode: (nodeId) => set(s => {
-          mutateActiveUnit(s, u => ({ ...u, root: unlockNode(u.root, nodeId) }))
+          mutateActiveUnit(s, u => ({ ...u, root: treeUnpinNode(u.root, nodeId) }))
         }),
 
-        setLocked: (nodeId, locked) => set(s => {
-          mutateActiveUnit(s, u => ({ ...u, root: setLocked(u.root, nodeId, locked) }))
+        pinNode: (nodeId, sizeMm) => set(s => {
+          mutateActiveUnit(s, u => ({ ...u, root: treePinNode(u.root, nodeId, sizeMm) }))
         }),
 
-        setMaterial: (nodeId, material) => set(s => {
-          mutateActiveUnit(s, u => ({ ...u, root: setMaterial(u.root, nodeId, material) }))
+        unpinNode: (nodeId) => set(s => {
+          mutateActiveUnit(s, u => ({ ...u, root: treeUnpinNode(u.root, nodeId) }))
+        }),
+
+        setCabinetMaterial: (material) => set(s => {
+          mutateActiveUnit(s, u => ({ ...u, settings: { ...u.settings, material } }))
+        }),
+
+        setNodeLabel: (nodeId, label) => set(s => {
+          mutateActiveUnit(s, u => ({ ...u, root: treeMutSetNodeLabel(u.root, nodeId, label) }))
+        }),
+
+        distributeEvenly: (columnRootId, evenH) => set(s => {
+          mutateActiveUnit(s, u => ({
+            ...u, root: treeMutDistributeEvenly(u.root, columnRootId, evenH, u.settings.thickness),
+          }))
         }),
 
         setElementType: (nodeId, et) => set((s) => {
@@ -285,7 +302,7 @@ export const useStore = create<StoreState>()(
       {
         name: 'buildbox-store',
         partialize: partializeProjectState,
-        version: 1,
+        version: 2,
         migrate: (persisted: unknown, fromVersion: number) => {
           if (fromVersion === 0) {
             const old = persisted as {
@@ -307,6 +324,17 @@ export const useStore = create<StoreState>()(
                 }],
               })),
               activeProjectId: old.activeProjectId,
+            }
+          }
+          if (fromVersion === 1) {
+            const state = persisted as { projects: Array<{ units: Array<{ settings: Record<string, unknown> }> }> }
+            for (const project of state.projects ?? []) {
+              for (const unit of project.units ?? []) {
+                if ('defaultMaterial' in unit.settings) {
+                  unit.settings.material = unit.settings.defaultMaterial
+                  delete unit.settings.defaultMaterial
+                }
+              }
             }
           }
           return persisted
