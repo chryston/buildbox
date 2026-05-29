@@ -198,3 +198,23 @@ describe('DragHandles', () => {
     expect(state.projects[0].units[0].root.children?.[0].splitRatio).toBeUndefined()
   })
 })
+
+import { snapToAlignment } from './DragHandles'
+
+describe('snapToAlignment', () => {
+  it('snaps to nearest candidate within threshold', () => {
+    expect(snapToAlignment(198, [200, 400], 20)).toBe(200)
+  })
+
+  it('does not snap when outside threshold', () => {
+    expect(snapToAlignment(175, [200, 400], 20)).toBe(175)
+  })
+
+  it('returns y unchanged when candidates is empty', () => {
+    expect(snapToAlignment(100, [], 20)).toBe(100)
+  })
+
+  it('snaps to closest of multiple candidates', () => {
+    expect(snapToAlignment(199, [200, 195], 20)).toBe(200)
+  })
+})

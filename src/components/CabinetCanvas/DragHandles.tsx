@@ -9,8 +9,16 @@ interface Props {
   zoom: number
 }
 
+export function snapToAlignment(y: number, candidates: number[], threshold: number): number {
+  if (candidates.length === 0) return y
+  const nearest = candidates.reduce((best, c) =>
+    Math.abs(c - y) < Math.abs(best - y) ? c : best)
+  return Math.abs(nearest - y) <= threshold ? nearest : y
+}
+
 export default function DragHandles({ dividers, snapGrid, svgRef, zoom }: Props) {
   const commitDrag = useStore((s) => s.commitDrag)
+  const alignmentYs = useRef<number[]>([])
   const dragging = useRef<{
     dividerId: string
     axis: 'horizontal' | 'vertical'
@@ -46,12 +54,23 @@ export default function DragHandles({ dividers, snapGrid, svgRef, zoom }: Props)
     const initialHandleY = parseFloat(e.currentTarget.getAttribute('y') ?? '0')
     const mainBounds = divider.childABounds
     const adjacentBounds = divider.childBBounds
+    const originSizeA = divider.axis === 'horizontal' ? mainBounds.h : mainBounds.w
+
+    // Cache alignment positions in parent-relative coordinates at drag start
+    if (divider.axis === 'horizontal') {
+      const parentStartY = divider.y - originSizeA
+      alignmentYs.current = dividers
+        .filter(d => d.axis === 'horizontal' && d.nodeId !== divider.nodeId)
+        .map(d => d.y + d.h / 2 - parentStartY)
+        .filter(y => y > 0)
+    }
+
     dragging.current = {
       dividerId: divider.nodeId,
       axis: divider.axis,
       parentNodeId: divider.parentId,
       originClientPos: divider.axis === 'horizontal' ? e.clientY : e.clientX,
-      originSizeA: divider.axis === 'horizontal' ? mainBounds.h : mainBounds.w,
+      originSizeA,
       originSizeB: divider.axis === 'horizontal' ? adjacentBounds.h : adjacentBounds.w,
       initialHandleX,
       initialHandleY,
@@ -64,15 +83,19 @@ export default function DragHandles({ dividers, snapGrid, svgRef, zoom }: Props)
     const { axis, originClientPos, originSizeA, initialHandleX, initialHandleY, handle } = dragging.current
     const clientDelta = (axis === 'horizontal' ? e.clientY : e.clientX) - originClientPos
     const mmDelta = svgToMmScale(clientDelta)
-    const newSizeA = snap(Math.max(50, originSizeA + mmDelta))
+
+    let candidateMm = snap(Math.max(50, originSizeA + mmDelta))
+    if (axis === 'horizontal') {
+      candidateMm = snapToAlignment(candidateMm, alignmentYs.current, 20)
+    }
 
     if (axis === 'horizontal') {
-      handle.setAttribute('y', String(initialHandleY + mmDelta))
+      handle.setAttribute('y', String(initialHandleY + (candidateMm - originSizeA)))
     } else {
       handle.setAttribute('x', String(initialHandleX + mmDelta))
     }
 
-    void newSizeA
+    void candidateMm
   }
 
   function onPointerUp(e: React.PointerEvent<SVGRectElement>) {
@@ -80,12 +103,17 @@ export default function DragHandles({ dividers, snapGrid, svgRef, zoom }: Props)
     const { axis, originClientPos, originSizeA, originSizeB, parentNodeId } = dragging.current
     const clientDelta = (axis === 'horizontal' ? e.clientY : e.clientX) - originClientPos
     const mmDelta = svgToMmScale(clientDelta)
-    const finalSizeA = snap(Math.max(50, originSizeA + mmDelta))
+    let finalSizeA = snap(Math.max(50, originSizeA + mmDelta))
+    if (axis === 'horizontal') {
+      finalSizeA = snapToAlignment(finalSizeA, alignmentYs.current, 20)
+    }
+    finalSizeA = Math.max(50, finalSizeA)
     const effectiveDelta = finalSizeA - originSizeA
     const finalSizeB = Math.max(50, originSizeB - effectiveDelta)
     const ratio = finalSizeA / (finalSizeA + finalSizeB)
     commitDrag(parentNodeId, ratio)
     dragging.current = null
+    alignmentYs.current = []
   }
 
   return (
@@ -119,10 +147,4 @@ export default function DragHandles({ dividers, snapGrid, svgRef, zoom }: Props)
       })}
     </g>
   )
-}
-
-export function SnapGuide({ x, y, axis }: { x: number; y: number; axis: 'horizontal' | 'vertical' }) {
-  return axis === 'horizontal'
-    ? <line x1={-1000} y1={y} x2={10000} y2={y} stroke="#7c3aed" strokeWidth={0.5} strokeDasharray="4 4" pointerEvents="none" />
-    : <line x1={x} y1={-1000} x2={x} y2={10000} stroke="#7c3aed" strokeWidth={0.5} strokeDasharray="4 4" pointerEvents="none" />
 }
