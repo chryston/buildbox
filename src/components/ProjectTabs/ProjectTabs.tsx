@@ -13,7 +13,7 @@ export default function ProjectTabs({ projects, activeId, onSelect, onCreate, on
         <div
           key={project.id}
           className={`flex items-center gap-1 rounded-t px-3 py-1 text-sm select-none ${
-            project.id === activeId ? 'bg-white text-text-primary shadow-sm border border-divider' : 'text-text-muted hover:text-text-primary hover:bg-white'
+            project.id === activeId ? 'bg-surface-raised text-text-primary shadow-sm border border-divider' : 'text-text-muted hover:text-text-primary hover:bg-surface-raised'
           }`}
         >
           <button onClick={() => onSelect(project.id)}>{project.name}</button>

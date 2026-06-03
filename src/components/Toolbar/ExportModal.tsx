@@ -36,7 +36,7 @@ export default function ExportModal({ projects, activeProjectId, onClose }: Prop
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-72 rounded-lg bg-white p-4 shadow-xl">
+      <div className="w-72 rounded-lg bg-panel p-4 shadow-xl">
         <h2 className="mb-3 text-sm font-semibold text-text-primary">Export Workspace</h2>
         <div className="flex flex-col gap-2">
           <button
@@ -53,7 +53,7 @@ export default function ExportModal({ projects, activeProjectId, onClose }: Prop
           </button>
           <button
             onClick={onClose}
-            className="rounded border border-divider px-3 py-2 text-sm text-text-muted hover:bg-gray-100"
+            className="rounded border border-divider px-3 py-2 text-sm text-text-muted hover:bg-surface-raised"
           >
             Cancel
           </button>

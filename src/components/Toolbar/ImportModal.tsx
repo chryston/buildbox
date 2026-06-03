@@ -10,7 +10,7 @@ interface Props {
 export default function ImportModal({ incoming, onConfirm, onClose, error }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-80 rounded-lg bg-white p-4 shadow-xl">
+      <div className="w-80 rounded-lg bg-panel p-4 shadow-xl">
         <h2 className="mb-1 text-sm font-semibold text-text-primary">Import Workspace</h2>
         <p className="mb-3 text-xs text-text-muted">
           {incoming.projects.length} project{incoming.projects.length !== 1 ? 's' : ''} found
@@ -31,7 +31,7 @@ export default function ImportModal({ incoming, onConfirm, onClose, error }: Pro
           </button>
           <button
             onClick={onClose}
-            className="rounded border border-divider px-3 py-2 text-sm text-text-muted hover:bg-gray-100"
+            className="rounded border border-divider px-3 py-2 text-sm text-text-muted hover:bg-surface-raised"
           >
             Cancel
           </button>

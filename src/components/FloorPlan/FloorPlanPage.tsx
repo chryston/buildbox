@@ -89,7 +89,13 @@ export default function FloorPlanPage() {
   function handleExportSvg() {
     selectFloorPlanObject(null)
     setTimeout(() => {
-      if (svgRef.current) downloadSVG(svgRef.current, 'floor-plan')
+      if (!svgRef.current) return
+      const rect = svgRef.current.getBoundingClientRect()
+      svgRef.current.setAttribute('width', String(Math.round(rect.width)))
+      svgRef.current.setAttribute('height', String(Math.round(rect.height)))
+      downloadSVG(svgRef.current, 'floor-plan')
+      svgRef.current.removeAttribute('width')
+      svgRef.current.removeAttribute('height')
     }, 50)
   }
 

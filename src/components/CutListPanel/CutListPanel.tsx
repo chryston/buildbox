@@ -29,7 +29,7 @@ export default function CutListPanel({ entries }: Props) {
         </thead>
         <tbody>
           {entries.map((entry, index) => (
-            <tr key={index} className="border-b border-divider hover:bg-gray-50">
+            <tr key={index} className="border-b border-divider hover:bg-surface-raised">
               <td className="py-1">{entry.label}</td>
               <td className="py-1 text-right">{entry.qty}</td>
               <td className="py-1 text-right">{Math.round(entry.width)}</td>
