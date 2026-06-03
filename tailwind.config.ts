@@ -6,13 +6,14 @@ export default {
   theme: {
     extend: {
       colors: {
-        surface: '#ffffff',
-        panel: '#f8f9fa',
-        accent: '#2563eb',
-        'accent-hover': '#1d4ed8',
-        divider: '#e5e7eb',
-        'text-primary': '#111827',
-        'text-muted': '#6b7280',
+        surface: '#1c1c1e',
+        panel: '#2c2c2e',
+        'surface-raised': '#3a3a3c',
+        accent: '#0a84ff',
+        'accent-hover': '#1a93ff',
+        divider: '#38383a',
+        'text-primary': '#f5f5f7',
+        'text-muted': '#86868b',
       },
     },
   },

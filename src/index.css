@@ -3,6 +3,6 @@
 @tailwind utilities;
 
 :root {
-  --color-dim-label: #374151;
-  --color-accent: #2563eb;
+  --color-dim-label: #a1a1aa;
+  --color-accent: #0a84ff;
 }

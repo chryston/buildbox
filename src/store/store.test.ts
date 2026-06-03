@@ -163,3 +163,71 @@ describe('useStore temporal history', () => {
     expect(useStore.getState().projects[0]!.units[0].root.accessories).toEqual([])
   })
 })
+
+describe('floor plan store', () => {
+  beforeEach(() => {
+    useStore.setState({
+      projects: [{ id: 'proj1', name: 'Test', units: [{ type: 'cabinet', id: 'u1', label: 'Unit 1', x: 0, y: 0, settings: { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, material: 'oak' }, root: { id: 'r1', elementType: 'void' } }] }],
+      activeProjectId: 'proj1',
+      selectedId: null,
+      snapGrid: 5,
+      activeUnitId: 'u1',
+      floorPlanSelectedId: null,
+      floorPlan: { image: null, pixelsPerMm: null, objects: [], annotations: [], customTemplates: [] },
+    })
+  })
+
+  it('setFloorPlanImage stores image data', () => {
+    const { result } = renderHook(() => useStore())
+    const img = { dataUrl: 'data:image/png;base64,abc', widthPx: 1000, heightPx: 800 }
+    act(() => result.current.setFloorPlanImage(img))
+    expect(result.current.floorPlan.image).toEqual(img)
+  })
+
+  it('setFloorPlanScale stores pixelsPerMm', () => {
+    const { result } = renderHook(() => useStore())
+    act(() => result.current.setFloorPlanScale(0.5))
+    expect(result.current.floorPlan.pixelsPerMm).toBe(0.5)
+  })
+
+  it('addFloorPlanObject appends object', () => {
+    const { result } = renderHook(() => useStore())
+    const obj = { id: 'o1', type: 'sofa-2' as const, label: 'Sofa', x: 100, y: 200, w: 1500, h: 800, rotation: 0 as const, color: '#6366f1' }
+    act(() => result.current.addFloorPlanObject(obj))
+    expect(result.current.floorPlan.objects).toHaveLength(1)
+    expect(result.current.floorPlan.objects[0].id).toBe('o1')
+  })
+
+  it('updateFloorPlanObject patches object fields', () => {
+    const { result } = renderHook(() => useStore())
+    const obj = { id: 'o1', type: 'sofa-2' as const, label: 'Sofa', x: 100, y: 200, w: 1500, h: 800, rotation: 0 as const, color: '#6366f1' }
+    act(() => result.current.addFloorPlanObject(obj))
+    act(() => result.current.updateFloorPlanObject('o1', { label: 'My Sofa', w: 2000 }))
+    const updated = result.current.floorPlan.objects[0]
+    expect(updated.label).toBe('My Sofa')
+    expect(updated.w).toBe(2000)
+  })
+
+  it('removeFloorPlanObject deletes by id', () => {
+    const { result } = renderHook(() => useStore())
+    const obj = { id: 'o1', type: 'sofa-2' as const, label: 'Sofa', x: 0, y: 0, w: 1500, h: 800, rotation: 0 as const, color: '#6366f1' }
+    act(() => result.current.addFloorPlanObject(obj))
+    act(() => result.current.removeFloorPlanObject('o1'))
+    expect(result.current.floorPlan.objects).toHaveLength(0)
+  })
+
+  it('addAnnotation appends annotation', () => {
+    const { result } = renderHook(() => useStore())
+    const ann = { id: 'a1', type: 'wall-hack' as const, points: [{ x: 0, y: 0 }, { x: 100, y: 0 }] }
+    act(() => result.current.addAnnotation(ann))
+    expect(result.current.floorPlan.annotations).toHaveLength(1)
+  })
+
+  it('removeAnnotation deletes by id', () => {
+    const { result } = renderHook(() => useStore())
+    const ann = { id: 'a1', type: 'wall-hack' as const, points: [{ x: 0, y: 0 }] }
+    act(() => result.current.addAnnotation(ann))
+    act(() => result.current.removeAnnotation('a1'))
+    expect(result.current.floorPlan.annotations).toHaveLength(0)
+  })
+})

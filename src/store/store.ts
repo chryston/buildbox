@@ -4,13 +4,14 @@ import { immer } from 'zustand/middleware/immer'
 import { shallow } from 'zustand/shallow'
 import { temporal } from 'zundo'
 import { nanoid } from 'nanoid'
-import type { Accessory, CabinetMaterialId, CabinetSceneUnit, Design, GlobalSettings, DrawerConfig, UIState, ElementType } from '../types'
+import type { Accessory, CabinetMaterialId, CabinetSceneUnit, Design, GlobalSettings, DrawerConfig, UIState, ElementType, FloorPlanData, FloorPlanObject, Annotation, FloorPlanImage, CustomTemplate } from '../types'
 import { addShelf, addDivider, deleteBoard as deleteBoardFn, setNodeSize, setSplitRatio, pinNode as treePinNode, unpinNode as treeUnpinNode, setNodeLabel as treeMutSetNodeLabel, distributeEvenly as treeMutDistributeEvenly, setElementType as treeMutSetElementType, setDrawerConfig as treeMutSetDrawerConfig } from '../engine/treeMutations'
 import { addAccessory as addAccessoryFn, removeAccessory as removeAccessoryFn } from '../engine/accessories'
 
 interface PersistedState {
   projects: Design[]
   activeProjectId: string | null
+  floorPlan: FloorPlanData
 }
 
 type ActiveUnitState = PersistedState & { activeUnitId: string | null }
@@ -53,6 +54,19 @@ interface StoreState extends PersistedState, UIState {
   // UI (not persisted)
   setSelectedId: (id: string | null) => void
   setSnapGrid: (mm: number) => void
+
+  floorPlanSelectedId: string | null
+  setFloorPlanImage: (image: FloorPlanImage | null) => void
+  setFloorPlanScale: (pixelsPerMm: number) => void
+  addFloorPlanObject: (obj: FloorPlanObject) => void
+  updateFloorPlanObject: (id: string, patch: Omit<Partial<FloorPlanObject>, 'id'>) => void
+  removeFloorPlanObject: (id: string) => void
+  addAnnotation: (ann: Annotation) => void
+  removeAnnotation: (id: string) => void
+  addCustomTemplate: (template: CustomTemplate) => void
+  removeCustomTemplate: (id: string) => void
+  selectFloorPlanObject: (id: string | null) => void
+  clearFloorPlan: () => void
 }
 
 function defaultDesign(): Design {
@@ -110,6 +124,12 @@ const partializeProjectState = (state: PersistedState) => ({
   activeProjectId: state.activeProjectId,
 })
 
+const partializeForPersist = (state: PersistedState) => ({
+  projects: state.projects,
+  activeProjectId: state.activeProjectId,
+  floorPlan: state.floorPlan,
+})
+
 export const useStore = create<StoreState>()(
   temporal(
     persist(
@@ -121,6 +141,8 @@ export const useStore = create<StoreState>()(
         selectedId: null,
         snapGrid: 5,
         activeUnitId: _initialDesign.units[0]?.id ?? null,
+        floorPlan: { image: null, pixelsPerMm: null, objects: [], annotations: [], customTemplates: [] },
+        floorPlanSelectedId: null,
 
         createProject: () => set(s => {
           const d = defaultDesign()
@@ -298,13 +320,44 @@ export const useStore = create<StoreState>()(
 
         setSelectedId: (id) => set(s => { s.selectedId = id }),
         setSnapGrid: (mm) => set(s => { s.snapGrid = mm }),
+
+        setFloorPlanImage: (image) => set(s => { s.floorPlan.image = image }),
+        setFloorPlanScale: (pixelsPerMm) => set(s => { s.floorPlan.pixelsPerMm = pixelsPerMm }),
+        addFloorPlanObject: (obj) => set(s => { s.floorPlan.objects.push(obj) }),
+        updateFloorPlanObject: (id, patch) => set(s => {
+          const obj = s.floorPlan.objects.find(o => o.id === id)
+          if (obj) Object.assign(obj, patch)
+        }),
+        removeFloorPlanObject: (id) => set(s => {
+          s.floorPlan.objects = s.floorPlan.objects.filter(o => o.id !== id)
+          if (s.floorPlanSelectedId === id) s.floorPlanSelectedId = null
+        }),
+        addAnnotation: (ann) => set(s => { s.floorPlan.annotations.push(ann) }),
+        removeAnnotation: (id) => set(s => {
+          s.floorPlan.annotations = s.floorPlan.annotations.filter(a => a.id !== id)
+        }),
+        addCustomTemplate: (template) => set(s => { s.floorPlan.customTemplates.push(template) }),
+        removeCustomTemplate: (id) => set(s => {
+          s.floorPlan.customTemplates = s.floorPlan.customTemplates.filter(t => t.id !== id)
+        }),
+        selectFloorPlanObject: (id) => set(s => { s.floorPlanSelectedId = id }),
+        clearFloorPlan: () => set(s => {
+          s.floorPlan.objects = []
+          s.floorPlan.annotations = []
+          s.floorPlan.pixelsPerMm = null
+          s.floorPlanSelectedId = null
+        }),
       })),
       {
         name: 'buildbox-store',
-        partialize: partializeProjectState,
-        version: 2,
+        partialize: partializeForPersist,
+        version: 3,
         migrate: (persisted: unknown, fromVersion: number) => {
-          if (fromVersion === 0) {
+          const origVersion = fromVersion
+
+          // Apply structural project migrations first (v0→v1, v1→v2),
+          // then add floorPlan after any reassignment of `persisted`.
+          if (origVersion === 0) {
             const old = persisted as {
               projects: Array<{ id: string; name: string; root: import('../types').CabinetNode; globalSettings: GlobalSettings }>
               activeProjectId: string | null
@@ -327,7 +380,7 @@ export const useStore = create<StoreState>()(
             }
             // fall through to apply v1→v2 rename
           }
-          if (fromVersion <= 1) {
+          if (origVersion <= 1) {
             const state = persisted as { projects: Array<{ units: Array<{ settings: Record<string, unknown> }> }> }
             for (const project of state.projects ?? []) {
               for (const unit of project.units ?? []) {
@@ -337,6 +390,18 @@ export const useStore = create<StoreState>()(
                 }
               }
             }
+          }
+          // Add floorPlan shape after structural migrations so it is not lost
+          // by any reassignment of `persisted` above.
+          if (origVersion <= 2) {
+            ;(persisted as any).floorPlan ??= {
+              image: null,
+              pixelsPerMm: null,
+              objects: [],
+              annotations: [],
+              customTemplates: [],
+            }
+            ;(persisted as any).floorPlan.customTemplates ??= []
           }
           return persisted
         },

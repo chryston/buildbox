@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import CabinetCanvas from './components/CabinetCanvas/CabinetCanvas'
 import ErrorBoundary from './components/ErrorBoundary'
-import FloorPlanPlaceholder from './components/FloorPlanPlaceholder/FloorPlanPlaceholder'
+import FloorPlanPage from './components/FloorPlan/FloorPlanPage'
 import ModuleSwitcher from './components/ModuleSwitcher/ModuleSwitcher'
 import type { AppModule } from './types'
 import ProjectTabs from './components/ProjectTabs/ProjectTabs'
@@ -171,7 +171,7 @@ export default function App() {
       )}
       <main className="flex flex-1 overflow-hidden">
         {activeModule === 'floorplan' ? (
-          <FloorPlanPlaceholder />
+          <FloorPlanPage />
         ) : (
           <>
             {sceneLayout && (
