@@ -89,7 +89,13 @@ export default function FloorPlanPage() {
   function handleExportSvg() {
     selectFloorPlanObject(null)
     setTimeout(() => {
-      if (svgRef.current) downloadSVG(svgRef.current, 'floor-plan')
+      if (!svgRef.current) return
+      const rect = svgRef.current.getBoundingClientRect()
+      svgRef.current.setAttribute('width', String(Math.round(rect.width)))
+      svgRef.current.setAttribute('height', String(Math.round(rect.height)))
+      downloadSVG(svgRef.current, 'floor-plan')
+      svgRef.current.removeAttribute('width')
+      svgRef.current.removeAttribute('height')
     }, 50)
   }
 
@@ -153,7 +159,7 @@ export default function FloorPlanPage() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full w-full flex-col">
       <div className="flex items-center gap-2 border-b border-divider bg-panel px-4 py-2">
         <label className="cursor-pointer rounded border border-divider bg-surface px-3 py-1 text-sm text-text-primary hover:bg-surface-raised">
           📷 Upload Image
@@ -188,11 +194,6 @@ export default function FloorPlanPage() {
         >
           Export JSON
         </button>
-      </div>
-
-      <div className="border-b border-divider bg-panel px-4 py-2 text-sm text-text-muted">
-        <span className="mr-1 text-accent">ℹ</span>
-        Floor plan is shared across all projects.
       </div>
 
       {uploadError && (

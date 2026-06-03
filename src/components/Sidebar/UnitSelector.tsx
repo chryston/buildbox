@@ -51,7 +51,7 @@ export default function UnitSelector({ units, activeUnitId, onSelect, onAdd, onR
       {units.map(unit => (
         <div
           key={unit.id}
-          className={`flex items-center gap-1 rounded px-1 py-0.5 cursor-pointer ${unit.id === activeUnitId ? 'bg-accent/10 text-accent border-l-2 border-accent' : 'hover:bg-gray-100'}`}
+          className={`flex items-center gap-1 rounded px-1 py-0.5 cursor-pointer ${unit.id === activeUnitId ? 'bg-accent/10 text-accent border-l-2 border-accent' : 'hover:bg-surface-raised'}`}
           onClick={() => onSelect(unit.id)}
         >
           <input

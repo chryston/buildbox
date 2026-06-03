@@ -25,8 +25,11 @@ export default function FloorPlanCanvas({
 }: Props) {
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
   const isPanning = useRef(false)
   const lastPan = useRef({ x: 0, y: 0 })
+  const dragOrigin = useRef({ x: 0, y: 0 })
+  const hasMoved = useRef(false)
 
   const { image, pixelsPerMm, annotations } = floorPlan
   const objectIds = useStore(useShallow((s) => s.floorPlan.objects.map(o => o.id)))
@@ -35,56 +38,74 @@ export default function FloorPlanCanvas({
   // Image dimensions in SVG mm-space (or pixels if not calibrated)
   const imgW = image ? (pixelsPerMm ? image.widthPx / pixelsPerMm : image.widthPx) : 800
   const imgH = image ? (pixelsPerMm ? image.heightPx / pixelsPerMm : image.heightPx) : 600
-  const viewBox = `${-PADDING} ${-PADDING} ${imgW + 2 * PADDING} ${imgH + 2 * PADDING}`
+
+  const handleFitToScreen = useCallback(() => {
+    if (!svgRef.current) return
+    const container = svgRef.current.parentElement
+    if (!container) return
+    const { width: cw, height: ch } = container.getBoundingClientRect()
+    if (cw <= 0 || ch <= 0) return
+    const newZoom = Math.min(cw / (imgW + 2 * PADDING), ch / (imgH + 2 * PADDING), ZOOM_MAX)
+    setZoom(newZoom)
+    setPan({ x: (cw - imgW * newZoom) / 2, y: (ch - imgH * newZoom) / 2 })
+  }, [svgRef, imgW, imgH])
+
+  // Auto-fit whenever image or scale changes
+  useEffect(() => {
+    handleFitToScreen()
+  }, [handleFitToScreen])
 
   useEffect(() => {
     const el = svgRef.current
     if (!el) return
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault()
-      setZoom(z => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * (e.deltaY < 0 ? 1.25 : 0.8))))
+      const factor = e.deltaY < 0 ? 1.25 : 0.8
+      const rect = el.getBoundingClientRect()
+      const mx = e.clientX - rect.left
+      const my = e.clientY - rect.top
+      setZoom(prevZ => {
+        const newZ = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, prevZ * factor))
+        setPan(prevPan => ({
+          x: mx - (mx - prevPan.x) * newZ / prevZ,
+          y: my - (my - prevPan.y) * newZ / prevZ,
+        }))
+        return newZ
+      })
     }
     el.addEventListener('wheel', handleWheel, { passive: false })
     return () => el.removeEventListener('wheel', handleWheel)
   }, [svgRef])
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
-    if (e.button !== 1 && !e.altKey) return
+    const isPanButton = e.button === 1 || e.altKey
+    const isPanLeftClick = e.button === 0 && !isCalibrating && !activeAnnotationType
+    if (!isPanButton && !isPanLeftClick) return
     isPanning.current = true
+    hasMoved.current = false
+    dragOrigin.current = { x: e.clientX, y: e.clientY }
     lastPan.current = { x: e.clientX, y: e.clientY }
+    setIsDragging(true)
     ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
-  }, [])
+  }, [isCalibrating, activeAnnotationType])
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     if (!isPanning.current) return
+    const totalDist = Math.abs(e.clientX - dragOrigin.current.x) + Math.abs(e.clientY - dragOrigin.current.y)
+    if (totalDist > 4) hasMoved.current = true
     const dx = e.clientX - lastPan.current.x
     const dy = e.clientY - lastPan.current.y
     lastPan.current = { x: e.clientX, y: e.clientY }
-
-    const svg = (e.currentTarget as SVGSVGElement)
-    const ctm = svg.getScreenCTM()
-    if (ctm) {
-      setPan(p => ({ x: p.x + dx / ctm.a, y: p.y + dy / ctm.d }))
-    } else {
-      setPan(p => ({ x: p.x + dx, y: p.y + dy }))
-    }
+    setPan(p => ({ x: p.x + dx, y: p.y + dy }))
   }, [])
 
-  const onPointerUp = useCallback(() => { isPanning.current = false }, [])
-
-  function handleFitToScreen() {
-    if (!svgRef.current) return
-    const container = svgRef.current.parentElement
-    if (!container) return
-    const { width: cw, height: ch } = container.getBoundingClientRect()
-    const vbW = imgW + 2 * PADDING
-    const vbH = imgH + 2 * PADDING
-    const newZoom = Math.min(cw / vbW, ch / vbH, ZOOM_MAX)
-    setZoom(newZoom)
-    setPan({ x: 0, y: 0 })
-  }
+  const onPointerUp = useCallback(() => {
+    isPanning.current = false
+    setIsDragging(false)
+  }, [])
 
   function handleBackgroundClick() {
+    if (hasMoved.current) return
     if (!isCalibrating && !activeAnnotationType) selectFloorPlanObject(null)
   }
 
@@ -93,10 +114,8 @@ export default function FloorPlanCanvas({
       <svg
         ref={svgRef}
         data-testid="floor-plan-canvas"
-        viewBox={viewBox}
-        preserveAspectRatio="xMidYMid meet"
         className="h-full w-full"
-        style={{ touchAction: 'none', cursor: isCalibrating ? 'crosshair' : 'default' }}
+        style={{ touchAction: 'none', cursor: isDragging ? 'grabbing' : isCalibrating || activeAnnotationType ? 'crosshair' : 'grab' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

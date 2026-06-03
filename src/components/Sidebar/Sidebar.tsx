@@ -9,9 +9,12 @@ import type {
   CutListEntry,
   DrawerConfig,
   ElementType,
+  GlobalSettings,
   LayoutVoid,
   SlideType,
+  Unit,
 } from '../../types'
+import { fromMm, toMm } from '../../engine/unitConversion'
 import { MATERIALS } from '../../utils/materials'
 
 interface Props {
@@ -31,6 +34,9 @@ interface Props {
   onSetDrawerConfig: (id: string, config: DrawerConfig) => void
   onAddAccessory: (nodeId: string, type: AccessoryType) => void
   onRemoveAccessory: (nodeId: string, accessoryId: string) => void
+  // Cabinet dimension props (optional — only shown when an active unit is selected)
+  settings?: GlobalSettings
+  onSettingsChange?: (patch: Partial<GlobalSettings>) => void
   // Multi-unit props (optional for backward compatibility)
   units?: CabinetUnit[]
   activeUnitId?: string | null
@@ -48,6 +54,50 @@ const ELEMENT_TYPE_LABELS: Record<ElementType, string> = {
   microwave: 'Microwave',
 }
 
+function roundDisplay(mm: number, unit: Unit): number {
+  const v = fromMm(mm, unit)
+  if (unit === 'mm') return Math.round(v)
+  if (unit === 'cm') return parseFloat(v.toFixed(1))
+  return parseFloat(v.toFixed(4))
+}
+
+interface NumFieldProps {
+  label: string
+  settingsKey: keyof GlobalSettings
+  htmlFor: string
+  settings: GlobalSettings
+  onSettingsChange: (patch: Partial<GlobalSettings>) => void
+}
+
+function NumField({ label, settingsKey, htmlFor, settings, onSettingsChange }: NumFieldProps) {
+  const unit = settings.unit
+  const displayValue = String(roundDisplay(settings[settingsKey] as number, unit))
+  const [raw, setRaw] = useState(displayValue)
+
+  useEffect(() => { setRaw(displayValue) }, [displayValue])
+
+  return (
+    <label htmlFor={htmlFor} className="flex items-center justify-between gap-2 text-sm text-text-muted">
+      {label}
+      <input
+        id={htmlFor}
+        type="number"
+        value={raw}
+        onChange={(e) => setRaw(e.target.value)}
+        onBlur={(e) => {
+          const next = parseFloat(e.target.value)
+          if (!Number.isNaN(next) && next > 0) {
+            onSettingsChange({ [settingsKey]: toMm(next, unit) } as Partial<GlobalSettings>)
+          } else {
+            setRaw(displayValue)
+          }
+        }}
+        className="w-20 rounded border border-divider bg-surface px-1 py-0.5 text-right text-text-primary focus:border-accent"
+      />
+    </label>
+  )
+}
+
 function Btn({
   label,
   onClick,
@@ -62,7 +112,7 @@ function Btn({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="w-full text-left px-3 py-2 rounded text-sm bg-panel hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed border border-divider text-text-primary"
+      className="w-full text-left px-3 py-2 rounded text-sm bg-panel hover:bg-surface-raised disabled:opacity-40 disabled:cursor-not-allowed border border-divider text-text-primary"
     >
       {label}
     </button>
@@ -86,6 +136,8 @@ export default function Sidebar({
   onSetDrawerConfig,
   onAddAccessory,
   onRemoveAccessory,
+  settings,
+  onSettingsChange,
   units = [],
   activeUnitId = null,
   onAddUnit = () => {},
@@ -137,6 +189,19 @@ export default function Sidebar({
         </div>
       </div>
 
+      {/* Cabinet dimensions — per active unit */}
+      {settings && onSettingsChange && (
+        <div className="p-3 border-b border-divider">
+          <p className="text-xs text-text-muted uppercase tracking-wide mb-2">Cabinet Dimensions</p>
+          <div className="flex flex-col gap-2">
+            <NumField label="Height" settingsKey="height" htmlFor="sb-height" settings={settings} onSettingsChange={onSettingsChange} />
+            <NumField label="Width" settingsKey="width" htmlFor="sb-width" settings={settings} onSettingsChange={onSettingsChange} />
+            <NumField label="Depth" settingsKey="depth" htmlFor="sb-depth" settings={settings} onSettingsChange={onSettingsChange} />
+            <NumField label="Thickness" settingsKey="thickness" htmlFor="sb-thickness" settings={settings} onSettingsChange={onSettingsChange} />
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col gap-1 p-3">
         <p className="text-xs text-text-muted uppercase tracking-wide mb-1">Actions</p>
         <Btn
@@ -164,7 +229,7 @@ export default function Sidebar({
           <button
             type="button"
             onClick={() => onDistributeEvenly(selectedVoid.columnRootId!, evenH!)}
-            className="w-full text-left px-3 py-1.5 text-sm bg-panel hover:bg-gray-100 rounded border border-divider text-text-primary"
+            className="w-full text-left px-3 py-1.5 text-sm bg-panel hover:bg-surface-raised rounded border border-divider text-text-primary"
           >
             Even Space
           </button>
@@ -180,7 +245,7 @@ export default function Sidebar({
                 key={t}
                 type="button"
                 onClick={() => onSetElementType(selectedId, t)}
-                className={`text-left px-3 py-1.5 rounded text-sm ${selectedNode?.elementType === t ? 'bg-accent text-white' : 'bg-panel hover:bg-gray-100 text-text-muted'}`}
+                className={`text-left px-3 py-1.5 rounded text-sm ${selectedNode?.elementType === t ? 'bg-accent text-white' : 'bg-panel hover:bg-surface-raised text-text-muted'}`}
               >
                 {ELEMENT_TYPE_LABELS[t]}
               </button>
@@ -202,7 +267,7 @@ export default function Sidebar({
                   slideType: e.target.value as SlideType,
                 })
               }
-              className="bg-white border border-divider rounded px-1 py-0.5 text-text-primary text-sm"
+              className="bg-surface border border-divider rounded px-1 py-0.5 text-text-primary text-sm"
             >
               <option value="side-mount">Side-mount</option>
               <option value="undermount">Undermount</option>
@@ -223,7 +288,7 @@ export default function Sidebar({
                   })
                 }
               }}
-              className="w-16 bg-white border border-divider rounded px-1 py-0.5 text-text-primary text-sm text-right"
+              className="w-16 bg-surface border border-divider rounded px-1 py-0.5 text-text-primary text-sm text-right"
             />
           </label>
         </div>
@@ -238,7 +303,7 @@ export default function Sidebar({
                 key={type}
                 type="button"
                 onClick={() => onAddAccessory(selectedId, type)}
-                className="rounded bg-gray-100 px-2 py-0.5 text-xs text-text-muted hover:bg-gray-200"
+                className="rounded bg-surface-raised px-2 py-0.5 text-xs text-text-muted hover:bg-panel"
               >
                 + {type}
               </button>

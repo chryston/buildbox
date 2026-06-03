@@ -17,7 +17,7 @@ export default class ErrorBoundary extends Component<{ children: ReactNode }, St
             <p className="text-lg font-semibold text-text-primary">Something went wrong</p>
             <p>{this.state.message}</p>
             <button
-              className="mt-4 px-4 py-2 rounded border border-divider bg-white hover:bg-gray-100"
+              className="mt-4 px-4 py-2 rounded border border-divider bg-panel hover:bg-surface-raised"
               onClick={() => this.setState({ hasError: false, message: '' })}
             >
               Try again

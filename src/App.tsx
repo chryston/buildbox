@@ -212,6 +212,8 @@ export default function App() {
               onSetDrawerConfig={storeDrawerConfig}
               onAddAccessory={(nodeId, type) => storeAddAccessory(nodeId, { id: crypto.randomUUID(), type })}
               onRemoveAccessory={storeRemoveAccessory}
+              settings={activeUnit?.settings}
+              onSettingsChange={(patch) => activeUnit && updateUnitSettings(activeUnit.id, patch)}
             />
           </>
         )}

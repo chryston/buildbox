@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Design, GlobalSettings, Unit } from '../../types'
-import { fromMm, toMm } from '../../engine/unitConversion'
 import ExportModal from './ExportModal'
 import ImportModal from './ImportModal'
 import UndoRedo from './UndoRedo'
@@ -20,53 +19,6 @@ interface Props {
 }
 
 const UNITS: Unit[] = ['mm', 'cm', 'in']
-
-function roundDisplay(mm: number, unit: Unit): number {
-  const value = fromMm(mm, unit)
-  if (unit === 'mm') return Math.round(value)
-  if (unit === 'cm') return parseFloat(value.toFixed(1))
-  return parseFloat(value.toFixed(4))
-}
-
-interface NumFieldProps {
-  label: string
-  settingsKey: keyof GlobalSettings
-  htmlFor: string
-  settings: GlobalSettings
-  onSettingsChange: (patch: Partial<GlobalSettings>) => void
-}
-
-function NumField({ label, settingsKey, htmlFor, settings, onSettingsChange }: NumFieldProps) {
-  const unit = settings.unit
-  const displayValue = String(roundDisplay(settings[settingsKey] as number, unit))
-  const [raw, setRaw] = useState(displayValue)
-
-  useEffect(() => {
-    setRaw(displayValue)
-  }, [displayValue])
-
-  return (
-    <label htmlFor={htmlFor} className="flex items-center gap-1 text-sm text-text-muted">
-      {label}
-      <input
-        id={htmlFor}
-        type="number"
-        value={raw}
-        onChange={(e) => setRaw(e.target.value)}
-        onBlur={(e) => {
-          const nextValue = parseFloat(e.target.value)
-          if (!Number.isNaN(nextValue) && nextValue > 0) {
-            onSettingsChange({ [settingsKey]: toMm(nextValue, unit) } as Partial<GlobalSettings>)
-            return
-          }
-
-          setRaw(displayValue)
-        }}
-        className="w-20 rounded border border-divider bg-white px-1 py-0.5 text-right text-text-primary focus:border-accent"
-      />
-    </label>
-  )
-}
 
 export default function Toolbar({
   settings,
@@ -121,11 +73,6 @@ export default function Toolbar({
           </button>
         ))}
       </div>
-
-      <NumField label="Height" settingsKey="height" htmlFor="tb-height" settings={settings} onSettingsChange={onSettingsChange} />
-      <NumField label="Width" settingsKey="width" htmlFor="tb-width" settings={settings} onSettingsChange={onSettingsChange} />
-      <NumField label="Depth" settingsKey="depth" htmlFor="tb-depth" settings={settings} onSettingsChange={onSettingsChange} />
-      <NumField label="Thickness" settingsKey="thickness" htmlFor="tb-thickness" settings={settings} onSettingsChange={onSettingsChange} />
 
       <div className="ml-auto flex items-center gap-2">
         <UndoRedo canUndo={canUndo} onUndo={onUndo ?? (() => {})} canRedo={canRedo} onRedo={onRedo ?? (() => {})} />

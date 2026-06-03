@@ -69,7 +69,7 @@ export default function DimensionEditor({ anchor, currentMm, unit, onCommit, onC
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={onKeyDown}
         onBlur={commit}
-        className="w-full rounded border border-divider bg-white px-2 py-1 text-center text-sm text-text-primary focus:border-accent"
+        className="w-full rounded border border-divider bg-surface px-2 py-1 text-center text-sm text-text-primary focus:border-accent"
       />
     </div>,
     document.body,
