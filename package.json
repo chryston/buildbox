@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "prototype:library": "vite --host 127.0.0.1 --open /prototype-project-library.html"
+    "prototype:library": "vite --host 127.0.0.1 --open /prototype-project-library.html",
+    "prototype:library:build": "vite build --config vite.prototype.config.ts"
   },
   "dependencies": {
     "immer": "^10.1.1",
