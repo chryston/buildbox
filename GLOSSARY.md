@@ -43,3 +43,23 @@ _Avoid_: Export, local save, workspace JSON
 **Recovery Point**:
 A bounded local snapshot used to return a project to an earlier valid state. It is browser-managed recovery history, not a project backup.
 _Avoid_: Backup, design option, undo step
+
+**Floor Datum**:
+The vertical reference plane for a floor, normally its finished floor surface, from which floor-relative elevations are measured.
+_Avoid_: Ground level, project zero, floor height
+
+**Vertical Extent**:
+The bottom-to-top interval occupied by an entity relative to its floor datum.
+_Avoid_: Height, elevation
+
+**Plan View Range**:
+The vertical interval that a plan view presents as its primary visible content, with relevant content above or below shown as context.
+_Avoid_: Layer, floor bounds, clipping plane
+
+**Elevation View**:
+A named orthographic 2D projection defined from a plan viewing line, direction, and finite depth.
+_Avoid_: 3D view, side image, item preview
+
+**Clearance Envelope**:
+An explicit user- or manufacturer-supplied volume that should remain free around an entity.
+_Avoid_: Building-code rule, structural check, visual padding
