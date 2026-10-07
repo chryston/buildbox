@@ -24,6 +24,14 @@ _Avoid_: Base option, original design, existing layer
 A fixed part of the property represented in the existing model or introduced by a design option, such as a wall, opening, beam, skirting, or documented pipe.
 _Avoid_: Item, annotation, furniture
 
+**Room**:
+A named spatial area on one floor, represented in the existing model or changed by a design option.
+_Avoid_: Building element, floor, annotation, wall enclosure
+
+**Room Outline**:
+The closed measured boundary that defines a room's floor-local area.
+_Avoid_: Wall, partition, fill, visual overlay
+
 **Design Option**:
 A named, project-wide renovation alternative containing demolition and proposed changes relative to the shared existing model. A project may have no design options.
 _Avoid_: Design, version, floor variant, layer
@@ -31,6 +39,14 @@ _Avoid_: Design, version, floor variant, layer
 **Item Design**:
 A project-owned definition of a designed or selected item, such as a cabinet, that can be reused by multiple placements.
 _Avoid_: Item instance, template, global catalog item
+
+**Item Footprint**:
+The closed measured plan boundary of an item design in its local coordinates.
+_Avoid_: Plan symbol, placed-item bounding box, icon
+
+**Item Origin**:
+The local reference point of an item design used to position and rotate its placed items.
+_Avoid_: Floor origin, visual center, placement position
 
 **Placed Item**:
 A placement of an item design on a floor and within a design option. It owns placement context, not a copy of the item design.
