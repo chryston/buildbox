@@ -9,8 +9,8 @@ The complete portable record for one property, including its floors, existing mo
 _Avoid_: Workspace, cabinet project, property file
 
 **Floor**:
-A distinct building level within a project.
-_Avoid_: Plan image, floor plan image, storey drawing
+A distinct, independently modelled building level within a project, with its own spatial context and optional plan image.
+_Avoid_: Plan image, floor plan image, storey drawing, layout alternative
 
 **Plan Image**:
 An optional calibrated reference image attached to a floor and displayed beneath editable model data. It is evidence for modelling, not canonical geometry.
@@ -56,9 +56,13 @@ _Avoid_: Height, elevation
 The vertical interval that a plan view presents as its primary visible content, with relevant content above or below shown as context.
 _Avoid_: Layer, floor bounds, clipping plane
 
+**Plan View**:
+A saved 2D projection of one floor, with its own presentation and visibility context.
+_Avoid_: Floor, plan image, design option
+
 **Elevation View**:
-A named orthographic 2D projection defined from a plan viewing line, direction, and finite depth.
-_Avoid_: 3D view, side image, item preview
+A named orthographic 2D projection of one floor, defined from a plan viewing line, direction, and finite depth.
+_Avoid_: 3D view, multi-floor view, side image, item preview
 
 **Clearance Envelope**:
 An explicit user- or manufacturer-supplied volume that should remain free around an entity.
