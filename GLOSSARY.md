@@ -35,3 +35,11 @@ _Avoid_: Item instance, template, global catalog item
 **Placed Item**:
 A placement of an item design on a floor and within a design option. It owns placement context, not a copy of the item design.
 _Avoid_: Item design, cabinet project
+
+**Project Backup**:
+A complete, user-owned `.buildbox` file from which one project and all of its assets can be restored independently of browser storage.
+_Avoid_: Export, local save, workspace JSON
+
+**Recovery Point**:
+A bounded local snapshot used to return a project to an earlier valid state. It is browser-managed recovery history, not a project backup.
+_Avoid_: Backup, design option, undo step
