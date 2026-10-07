@@ -52,6 +52,22 @@ _Avoid_: Floor origin, visual center, placement position
 A placement of an item design on a floor and within a design option. It owns placement context, not a copy of the item design.
 _Avoid_: Item design, cabinet project
 
+**Comment**:
+A structured textual project note attached through one stable anchor, with its own priority and open or resolved status.
+_Avoid_: Annotation, discussion thread, warning, task assignment
+
+**Annotation**:
+Authored drawing content placed in one saved view for visual communication, such as text, a leader, arrow, revision cloud, or reference marker.
+_Avoid_: Comment, building element, room, warning
+
+**Anchor**:
+The single stable project subject or floor-local location to which a comment or annotation endpoint refers.
+_Avoid_: Visual position, nearest object, drawing layer
+
+**Comment Register**:
+A project report of comments and their references, statuses, priorities, scopes, and targets.
+_Avoid_: Drawing export, issue tracker, activity log
+
 **Project Backup**:
 A complete, user-owned `.buildbox` file from which one project and all of its assets can be restored independently of browser storage.
 _Avoid_: Export, local save, workspace JSON
