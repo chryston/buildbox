@@ -12,7 +12,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "prototype:library": "vite --host 127.0.0.1 --open /prototype-project-library.html"
   },
   "dependencies": {
     "immer": "^10.1.1",
