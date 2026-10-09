@@ -36,6 +36,18 @@ _Avoid_: Wall, partition, fill, visual overlay
 A named, project-wide renovation alternative containing demolition and proposed changes relative to the shared existing model. A project may have no design options.
 _Avoid_: Design, version, floor variant, layer
 
+**Renovation State**:
+The derived role an entity has in one design option: retained existing work, demolition of an existing entity, or proposed work introduced by that option.
+_Avoid_: Phase tag, drawing layer, design option
+
+**Renovation Display**:
+A saved view's prescribed presentation of existing, demolition, and proposed renovation states.
+_Avoid_: Drawing layer, design option, arbitrary phase filter
+
+**Drawing Layer**:
+A project-owned presentation group that controls how drawable content is organised and shown without determining its renovation state or design option.
+_Avoid_: Renovation state, design option, floor
+
 **Item Design**:
 A project-owned definition of a designed or selected item, such as a cabinet, that can be reused by multiple placements.
 _Avoid_: Item instance, template, global catalog item
