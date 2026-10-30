@@ -88,6 +88,10 @@ _Avoid_: Export, local save, workspace JSON
 A bounded local snapshot used to return a project to an earlier valid state. It is browser-managed recovery history, not a project backup.
 _Avoid_: Backup, design option, undo step
 
+**Edit Transaction**:
+One complete user intent that changes a project's content, committed whole or not at all, and undone or redone as a single step.
+_Avoid_: Recovery point, save, keystroke
+
 **Floor Datum**:
 The vertical reference plane for a floor, normally its finished floor surface, from which floor-relative elevations are measured.
 _Avoid_: Ground level, project zero, floor height
