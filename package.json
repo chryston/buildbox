@@ -12,7 +12,9 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "prototype:notes": "vite --host 127.0.0.1 --open /prototype-notes-annotations.html",
+    "prototype:notes:build": "vite build --config vite.prototype.config.ts"
   },
   "dependencies": {
     "immer": "^10.1.1",
