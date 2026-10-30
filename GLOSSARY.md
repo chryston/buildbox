@@ -24,6 +24,18 @@ _Avoid_: Base option, original design, existing layer
 A fixed part of the property represented in the existing model or introduced by a design option, such as a wall, opening, beam, skirting, or documented pipe.
 _Avoid_: Item, annotation, furniture
 
+**Wall**:
+A building element defined by a straight or circular-arc reference line, its own constant thickness, and a justification that places its faces relative to that line.
+_Avoid_: Partition, wall to hack, room boundary
+
+**Wall Junction**:
+A shared connection point where walls end or attach to another wall, determining how their faces join.
+_Avoid_: Wall vertex, intersection, overlap
+
+**Opening**:
+A building element hosted by one wall that leaves a gap through it: a door, window, or removed wall section.
+_Avoid_: Wall property, door accessory, hole
+
 **Room**:
 A named spatial area on one floor, represented in the existing model or changed by a design option.
 _Avoid_: Building element, floor, annotation, wall enclosure
