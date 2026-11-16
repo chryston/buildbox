@@ -24,6 +24,10 @@ _Avoid_: Base option, original design, existing layer
 A fixed part of the property represented in the existing model or introduced by a design option, such as a wall, opening, beam, skirting, or documented pipe.
 _Avoid_: Item, annotation, furniture
 
+**Beam**:
+A Building Element representing a documented horizontal member with a constant section and Vertical Extent, recorded for coordination rather than structural analysis. Has its own straight reference line, width, and justification, no host, and snap-only relationships. Height is shown to users as Depth, with Underside and Top measured from the Floor Datum.
+_Avoid_: Structural Beam, Girder, Lintel, Header, Load-bearing member, Support, Drop, Bulkhead, Column
+
 **Wall**:
 A building element defined by a straight or circular-arc reference line, its own constant thickness, and a justification that places its faces relative to that line.
 _Avoid_: Partition, wall to hack, room boundary
