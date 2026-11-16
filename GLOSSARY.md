@@ -21,12 +21,24 @@ The single shared representation of the property as surveyed before proposed ren
 _Avoid_: Base option, original design, existing layer
 
 **Building Element**:
-A fixed part of the property represented in the existing model or introduced by a design option, such as a wall, opening, beam, skirting, or documented pipe.
+A fixed part of the property represented in the existing model or introduced by a design option, such as a wall, opening, beam, skirting, or documented service.
 _Avoid_: Item, annotation, furniture
 
 **Beam**:
 A Building Element representing a documented horizontal member with a constant section and Vertical Extent, recorded for coordination rather than structural analysis. Has its own straight reference line, width, and justification, no host, and snap-only relationships. Height is shown to users as Depth, with Underside and Top measured from the Floor Datum.
 _Avoid_: Structural Beam, Girder, Lintel, Header, Load-bearing member, Support, Drop, Bulkhead, Column
+
+**Skirting**:
+A Building Element hosted on one face of one Wall over a measured range, with its own constant height and thickness, interrupted where an Opening or joined Wall on that face overlaps it.
+_Avoid_: Baseboard, Skirting Board, Trim, Moulding, Wall Finish, Room edge
+
+**Service**:
+A Building Element documenting one straight horizontal Run or one vertical Riser of pipe, conduit, duct, or trunking with a constant round or rectangular section, recorded for coordination rather than engineering.
+_Avoid_: Pipe network, Plumbing, MEP, Utility, System, Fitting, Line, Duct system
+
+**Service Kind**:
+The descriptive category of a Service (water, drain, gas, electrical, air-con, or other) that labels it without changing its geometry or behaviour.
+_Avoid_: Service type, Discipline, System, Drawing Layer
 
 **Wall**:
 A building element defined by a straight or circular-arc reference line, its own constant thickness, and a justification that places its faces relative to that line.
