@@ -89,7 +89,7 @@ The local reference point of an item design used to position and rotate its plac
 _Avoid_: Floor origin, visual center, placement position
 
 **Placed Item**:
-A placement of an item design on a floor and within a design option. It owns placement context, not a copy of the item design.
+A placement of an item design on a floor, in the Existing Model or within a design option. It owns placement context, not a copy of the item design.
 _Avoid_: Item design, cabinet project
 
 **Comment**:
