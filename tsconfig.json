@@ -28,6 +28,7 @@
     "src",
     "e2e",
     "playwright.config.ts",
+    "playwright.screenshots.config.ts",
     "vite.config.ts",
     "tailwind.config.ts"
   ]
