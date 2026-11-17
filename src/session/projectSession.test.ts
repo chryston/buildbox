@@ -263,6 +263,22 @@ describe('the single-flight writer', () => {
     })
   })
 
+  it('waits for a write in flight before writing the close Recovery Point', async () => {
+    const { session, ports, gate } = await openFixture({ gate: true })
+    if (gate === null) throw new Error('the fixture has no gate')
+    session.dispatch(rename('In Flight'))
+    expect(gate.waiting()).toBe(true)
+
+    const closing = session.close()
+    await gate.release()
+    expect((await closing).ok).toBe(true)
+
+    const [close] = await pointsOfKind(ports, PROJECT_ID, 'close')
+    if (close === undefined) throw new Error('no close Recovery Point was stored')
+    // The point holds the state the write was carrying, not the one before it (#14).
+    expect(close.revision).toBe(2)
+  })
+
   it('stops writing after a failure and waits for the user', async () => {
     const { session, gate } = await openFixture({ gate: true, fault: quotaTimes(1) })
     if (gate === null) throw new Error('the fixture has no gate')

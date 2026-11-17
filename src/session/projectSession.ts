@@ -116,6 +116,9 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
   let handle: LockHandle | null = firstHandle
   let closed = false
   let writing = false
+  /** Set while a commit is in flight, so a boundary can wait for it instead of racing it. */
+  let writerIdle: Promise<void> | null = null
+  let writerIdleDone: (() => void) | null = null
   /** The revision the newest Recovery Point holds. `close` only writes a point when this has moved. */
   let lastRecoveryRevision = record.revision
   let cancelIdle: (() => void) | null = null
@@ -170,6 +173,9 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
   async function drain(): Promise<void> {
     if (writing) return
     writing = true
+    writerIdle = new Promise<void>((resolve) => {
+      writerIdleDone = resolve
+    })
     try {
       while (!closed && revision !== persistedRevision) {
         const carried = [...heldAssets.values()]
@@ -190,6 +196,10 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
       }
     } finally {
       writing = false
+      const settled = writerIdleDone
+      writerIdle = null
+      writerIdleDone = null
+      settled?.()
       if (save.kind === 'saving' && revision === persistedRevision) {
         save = { kind: 'saved', at: lastSavedAt ?? clock.now() }
         guard = { blocked: false, resolvedBy: null }
@@ -197,6 +207,15 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
       }
       notify()
     }
+  }
+
+  /**
+   * Wait for a commit in flight. Every boundary reads the persisted state — the close point,
+   * the discard, the revision a restore commits against — and reading it while a write is
+   * still moving it would store, or replace, the state that write is about to land (#14).
+   */
+  async function settleWriter(): Promise<void> {
+    if (writerIdle !== null) await writerIdle
   }
 
   // ------------------------------------------------------- Recovery Points
@@ -353,6 +372,7 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
 
   async function discardUnsaved(): Promise<Result<void, SessionError>> {
     if (readOnly || closed) return err('read-only')
+    await settleWriter()
     // Best effort, and from the in-memory state — the whole point is to keep what is about
     // to be thrown away. Under a full quota this fails, and that never blocks a discard
     // the user asked for explicitly (#14).
@@ -388,6 +408,7 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
    */
   async function checkpoint(kind: PreBoundaryKind): Promise<Result<void, SessionError>> {
     if (readOnly || closed) return err('read-only')
+    await settleWriter()
     const created = await createPoint(kind, persisted.project, persisted.revision)
     if (!created.ok) return created
     lastRecoveryRevision = persisted.revision
@@ -443,6 +464,10 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
 
   async function close(): Promise<Result<void, SessionError>> {
     if (closed) return ok(undefined)
+    if (guard.blocked) return err('guarded')
+    // A commit still in flight is about to move the state the close point would hold, and if
+    // it fails the Project is guarded again — both are decided before anything is written.
+    await settleWriter()
     if (guard.blocked) return err('guarded')
     if (persisted.revision !== lastRecoveryRevision) {
       const created = await createPoint('close', persisted.project, persisted.revision)

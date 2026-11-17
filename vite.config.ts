@@ -43,6 +43,10 @@ export default defineConfig({
   plugins: [react()],
   test: {
     globals: true,
+    // `src/session/history.bench.ts` measures retained bytes, which needs a collection the
+    // bench can ask the engine for (#48). Inline projects may not set `execArgv` themselves,
+    // so it comes from the root config that every project extends.
+    poolOptions: { forks: { execArgv: ['--expose-gc'] } },
     projects: [
       {
         extends: true,
