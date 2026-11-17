@@ -22,18 +22,24 @@ BuildBox is an interactive 2D cabinet design configurator for laying out cabinet
 
 ## Development
 
+Node 24 or newer is required (`engines.node` is `>=24`).
+
 ```bash
 npm install
 npm run dev
 ```
 
-## Testing
+## Checks
 
 ```bash
-npm test
-# or
-npx vitest run
+npm run typecheck
+npm run lint
+npm test              # single run; use npm run test:watch while working
+npm run build         # also checks the app-shell size budget
 ```
+
+CI runs all of these on every pull request and on `main`; GitHub Pages deploys only
+after a green CI run on `main`.
 
 ## Build
 

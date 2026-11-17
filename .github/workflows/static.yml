@@ -1,8 +1,21 @@
+# Pages deploy, gated on CI (#35).
+#
+# This workflow never runs on its own. It starts when a CI run on main completes and
+# deploys only when that run passed and was triggered by a push, so a red CI on main
+# ships nothing. It checks out the commit that CI verified
+# (github.event.workflow_run.head_sha), never "whatever main points at now".
+#
+# To redeploy by hand, re-run the CI run for that commit: Actions -> CI -> the run on
+# main -> Re-run jobs. A workflow_dispatch here would not help, because workflow_run
+# always executes the workflow file from the default branch.
+
 name: Deploy to GitHub Pages
+
 on:
-  push:
-    branches: ["main"]
-  workflow_dispatch:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: read
@@ -15,15 +28,18 @@ concurrency:
 
 jobs:
   build-and-deploy:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
       - run: npm ci
       - run: npm run build

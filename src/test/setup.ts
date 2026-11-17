@@ -16,7 +16,7 @@ if (typeof SVGSVGElement !== 'undefined') {
     const pt = {
       x: 0,
       y: 0,
-      matrixTransform: (m: DOMMatrix) => ({ x: pt.x, y: pt.y })
+      matrixTransform: () => ({ x: pt.x, y: pt.y })
     };
     return pt as unknown as DOMPoint;
   };
