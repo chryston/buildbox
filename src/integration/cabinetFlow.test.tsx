@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import { useStore } from '../store/store'
 import { computeSceneLayout } from '../engine/layoutEngine'
+import { exportWorkspace } from '../utils/workspaceIO'
 import type { Design } from '../types'
 
 function createDesign(): Design {
@@ -152,7 +153,7 @@ describe('Cabinet design flow', () => {
 
   it('shows export and import buttons in toolbar and merge increases project count', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    const { container } = render(<App />)
 
     // Export and Import buttons are present in the toolbar
     expect(screen.getByRole('button', { name: /export workspace/i })).toBeInTheDocument()
@@ -168,11 +169,27 @@ describe('Cabinet design flow', () => {
     await user.click(screen.getByRole('button', { name: /cancel/i }))
     expect(screen.queryByRole('button', { name: /active project/i })).not.toBeInTheDocument()
 
-    // Merge via direct store call (file picker can't be tested in jsdom)
-    const { projects, activeProjectId, importWorkspace: storeImport } = useStore.getState()
+    // Import the active project back through the toolbar's file input and merge it.
+    // user.upload() drives the hidden <input type="file">, so the real import path
+    // (FileReader -> ImportModal -> store merge) is exercised.
+    const { projects, activeProjectId } = useStore.getState()
     const active = projects.find((p) => p.id === activeProjectId)!
     const initialCount = projects.length
-    storeImport([active], 'merge')
+    const file = new File(
+      [exportWorkspace([active], active.id)],
+      'workspace.buildbox.json',
+      { type: 'application/json' },
+    )
+
+    const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]')!
+    await user.upload(fileInput, file)
+
+    // FileReader.onload lands after the upload resolves, so await the modal.
+    await user.click(await screen.findByRole('button', { name: /merge projects/i }))
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: 'Cabinet 1' })).toHaveLength(initialCount + 1)
+    })
     expect(useStore.getState().projects.length).toBe(initialCount + 1)
   })
 })
