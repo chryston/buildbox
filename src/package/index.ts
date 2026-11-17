@@ -1,11 +1,33 @@
 /**
- * The public face of the `package` element (#40 §1, #20 §2): the only module outside
- * this folder that may be imported. `package` is pure — no DOM, no React, no state
- * library, no randomness — and imports nothing but `domain` and `lib`.
+ * The public face of the `package` element (#40 §1, #44 §1, #20 §2): the only module
+ * outside this folder that may be imported. `package` is pure — no DOM, no React, no
+ * state library, no randomness — and imports nothing but `domain` and `lib`.
  *
- * Today it holds the frozen legacy reader and the legacy → domain v1 converter. S2 adds
- * the `.buildbox` package codec beside them.
+ * It holds the frozen legacy reader, the legacy → domain v1 converter, and the
+ * `.buildbox` codec: `encodeProject` writes one deterministic Project Backup,
+ * `stageImport` reads an untrusted one as far as a staged Project (#44 steps 1–6). The
+ * codec is dark until #50 wires it into Download Backup and Restore Backup.
  */
+export { PACKAGE_FORMAT_VERSION, PACKAGE_LIMITS } from './constants'
+export { encodeProject, type AssetSource, type PackageMeta } from './encode'
+export {
+  stageImport,
+  type StageImportContext,
+  type StageImportResult,
+  type StagedAsset,
+  type StagedPackage,
+} from './import'
+export {
+  parseManifest,
+  type ManifestRead,
+  type PackageManifest,
+  type PackageManifestEntry,
+} from './manifest'
+export {
+  PACKAGE_PROBLEM_CODES,
+  type PackageProblem,
+  type PackageProblemCode,
+} from './problems'
 export {
   MAX_TREE_DEPTH,
   validateLegacyDesigns,
