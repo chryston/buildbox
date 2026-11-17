@@ -1,0 +1,284 @@
+/**
+ * The second entry point of `session`, for test files only (#42 §7).
+ *
+ * Everything the suites need to drive a session under Node with no browser: a clock the
+ * test advances by hand, a lock the test holds on another tab's behalf, an adapter whose
+ * commits stop at a gate the test opens, and a Project already in the store to open.
+ *
+ * The fake clock is the important one. #26's idle Recovery Point is "two minutes after the
+ * last dispatch", which no test may wait for, and #14's backup reminder is "seven days
+ * after the last one" — both are only worth asserting if time is data the test owns.
+ */
+import { createProject } from '../edit'
+import type { CommitInput, FaultRule, Ports, RecoveryPointMeta } from '../persistence'
+import type { Project } from '../domain'
+import { sha256Hex } from '../lib'
+import type { SessionDeps } from './projectSession'
+import { createSessionRegistry } from './registry'
+import type { IdSource, LockHandle, LockPort } from './ports'
+import type { SessionAsset, SessionRegistry } from './types'
+
+/** The instant every fixture starts its clock at, so a stored `savedAt` is predictable. */
+export const TEST_NOW = '2026-01-01T00:00:00.000Z'
+
+/**
+ * A fault plan that keeps failing: `withFaults` fires each rule at most once, so a rule per
+ * call is how a test makes a fault stick across writes (#45).
+ */
+export function quotaTimes(count: number): FaultRule[] {
+  return Array.from({ length: count }, (_, index) => ({ method: 'commit', nth: index + 1, fault: 'quota' }))
+}
+
+/** Let every promise the current turn queued run to completion. */
+export async function flush(): Promise<void> {
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0)
+  })
+}
+
+/** The clock a test drives: `advance(120_000)` is two minutes of user silence. */
+export interface FakeClock {
+  now(): string
+  dayKey(iso: string): string
+  setTimer(ms: number, fn: () => void): () => void
+  /** Move time forward, firing each timer that comes due, and let its work finish. */
+  advance(ms: number): Promise<void>
+  /** Timers still waiting, for a test that wants to prove nothing was armed. */
+  pending(): number
+}
+
+interface FakeTimer {
+  at: number
+  fn: () => void
+  cancelled: boolean
+}
+
+export function createFakeClock(start = TEST_NOW): FakeClock {
+  let current = Date.parse(start)
+  const timers: FakeTimer[] = []
+
+  return {
+    now: () => new Date(current).toISOString(),
+    dayKey: (iso) => iso.slice(0, 10),
+    setTimer(ms, fn) {
+      const timer: FakeTimer = { at: current + ms, fn, cancelled: false }
+      timers.push(timer)
+      return () => {
+        timer.cancelled = true
+      }
+    },
+    async advance(ms) {
+      const target = current + ms
+      for (;;) {
+        const due = timers
+          .filter((timer) => !timer.cancelled && timer.at <= target)
+          .sort((left, right) => left.at - right.at)[0]
+        if (due === undefined) break
+        due.cancelled = true
+        current = due.at
+        due.fn()
+        // A timer's work is asynchronous — the idle Recovery Point awaits two port calls —
+        // so each one gets the turn to finish before the next fires.
+        await flush()
+      }
+      for (let index = timers.length - 1; index >= 0; index -= 1) {
+        if (timers[index]?.cancelled === true) timers.splice(index, 1)
+      }
+      current = target
+      await flush()
+    },
+    pending: () => timers.filter((timer) => !timer.cancelled).length,
+  }
+}
+
+/** The lock a test can hold from "another tab". */
+export interface FakeLock extends LockPort {
+  /** Take a Project as if another tab had it open; the result gives it back. */
+  hold(projectId: string): () => void
+  held(): string[]
+}
+
+export function createFakeLock(): FakeLock {
+  const held = new Set<string>()
+  const waiting = new Map<string, Array<(handle: LockHandle) => void>>()
+
+  function take(projectId: string): LockHandle {
+    held.add(projectId)
+    return {
+      release: () => {
+        held.delete(projectId)
+        const next = waiting.get(projectId)?.shift()
+        if (next !== undefined) next(take(projectId))
+      },
+    }
+  }
+
+  return {
+    async acquire(projectId) {
+      if (held.has(projectId)) return null
+      return take(projectId)
+    },
+    async waitFor(projectId) {
+      if (!held.has(projectId)) return take(projectId)
+      return new Promise((resolve) => {
+        const queue = waiting.get(projectId) ?? []
+        queue.push(resolve)
+        waiting.set(projectId, queue)
+      })
+    },
+    hold(projectId) {
+      held.add(projectId)
+      return () => {
+        held.delete(projectId)
+        const next = waiting.get(projectId)?.shift()
+        if (next !== undefined) next(take(projectId))
+      }
+    },
+    held: () => [...held],
+  }
+}
+
+/** `ids(2)` is the next two IDs, in order, each naming the prefix that issued it (#42 §3). */
+export function idSource(prefix: string): IdSource {
+  let issued = 0
+  return (count = 1) => Array.from({ length: count }, () => `${prefix}-${++issued}`)
+}
+
+/** The ports, clock, lock, IDs and registry one test needs, with a fresh in-memory store. */
+export interface TestDeps {
+  deps: SessionDeps
+  ports: Ports
+  clock: FakeClock
+  lock: FakeLock
+  registry: SessionRegistry
+  ids: IdSource
+}
+
+export function createTestDeps(ports: Ports, options?: { now?: string; prefix?: string }): TestDeps {
+  const clock = createFakeClock(options?.now)
+  const lock = createFakeLock()
+  const ids = idSource(options?.prefix ?? 'session')
+  const registry = createSessionRegistry()
+  return { deps: { ports, clock, lock, ids, registry }, ports, clock, lock, registry, ids }
+}
+
+/** One recorded commit: what the writer asked the store to write, and against which revision. */
+export interface CommitCall {
+  input: CommitInput
+  expectedRevision: number | null
+}
+
+/**
+ * `ports` with every commit stopped at a gate, so a test can watch the single-flight writer
+ * from the outside: how many commits it started, what the newest one carried, and whether a
+ * rejected Intent started none at all (#20 §13.8, §13.9).
+ */
+export interface GatedPorts {
+  ports: Ports
+  calls: CommitCall[]
+  /** A commit is parked at the gate right now. */
+  waiting(): boolean
+  /** Open the gate for everything parked, and let those writes reach the store. */
+  release(): Promise<void>
+  /** Stop gating: later commits go straight through. */
+  openGate(): void
+}
+
+export function gateCommits(ports: Ports): GatedPorts {
+  const calls: CommitCall[] = []
+  let parked: Array<() => void> = []
+  let open = false
+
+  const gated: Ports = {
+    ...ports,
+    projects: {
+      ...ports.projects,
+      async commit(input, expectedRevision) {
+        calls.push({ input, expectedRevision })
+        if (!open) await new Promise<void>((resolve) => parked.push(resolve))
+        return ports.projects.commit(input, expectedRevision)
+      },
+    },
+  }
+
+  return {
+    ports: gated,
+    calls,
+    waiting: () => parked.length > 0,
+    async release() {
+      const ready = parked
+      parked = []
+      for (const resolve of ready) resolve()
+      await flush()
+    },
+    openGate() {
+      open = true
+    },
+  }
+}
+
+/**
+ * A New Project with the five IDs `edit.createProject` spends, named by the test, so two
+ * Projects in one suite have IDs the assertions can read (#42 §3).
+ */
+export function testProject(id: string, name = 'Kitchen'): Project {
+  return createProject({
+    ids: [id, `${id}-floor`, `${id}-design`, `${id}-place`, `${id}-root`],
+    now: TEST_NOW,
+    name,
+  })
+}
+
+/** Write a Project into the store so there is something to open. */
+export async function seedProject(
+  ports: Ports,
+  project: Project,
+  options?: { revision?: number; savedAt?: string },
+): Promise<void> {
+  const committed = await ports.projects.commit(
+    { project, revision: options?.revision ?? 1, savedAt: options?.savedAt ?? TEST_NOW },
+    null,
+  )
+  if (!committed.ok) throw new Error(`seedProject: ${committed.error.kind}`)
+}
+
+/** Deterministic image bytes and the hash they are stored under (#44's content address). */
+export async function heldAsset(seed: number): Promise<SessionAsset> {
+  const bytes = new Uint8Array(64)
+  for (let index = 0; index < bytes.length; index += 1) bytes[index] = (seed * 37 + index * 11) % 256
+  const blob = new Blob([bytes])
+  return {
+    sha256: await sha256Hex(bytes),
+    bytes: blob,
+    mediaType: 'image/png',
+    widthPx: 640,
+    heightPx: 480,
+  }
+}
+
+/** `ports` with every `recovery.prune` recorded, so a test can prove the schedule ran (#26). */
+export function countPrunes(ports: Ports): { ports: Ports; prunes: string[] } {
+  const prunes: string[] = []
+  const counted: Ports = {
+    ...ports,
+    recovery: {
+      ...ports.recovery,
+      async prune(projectId, clock) {
+        prunes.push(projectId)
+        return ports.recovery.prune(projectId, clock)
+      },
+    },
+  }
+  return { ports: counted, prunes }
+}
+
+/** Every Recovery Point of one kind, newest first. */
+export async function pointsOfKind(
+  ports: Ports,
+  projectId: string,
+  kind: RecoveryPointMeta['kind'],
+): Promise<RecoveryPointMeta[]> {
+  const listed = await ports.recovery.list(projectId)
+  if (!listed.ok) throw new Error(`recovery.list: ${listed.error.kind}`)
+  return listed.value.filter((point) => point.kind === kind)
+}
