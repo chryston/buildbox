@@ -146,6 +146,10 @@ const pureFiles = (moduleNames) => [
   ...PURE_LEGACY_ELEMENTS.flatMap((element) => folderPatterns(element.pattern)),
 ]
 
+// The adapter's own files, claimed out of the pure set below: it is the one part of
+// `persistence` allowed `idb`, the DOM globals and a real browser (#46).
+const ADAPTER_FILES = folderPatterns(['src/persistence/indexeddb'])
+
 // #42 §3: a pure module never creates an ID and never reads the clock. IDs and time
 // arrive as data — pre-allocated in an Intent (#20 §4), or through an injected `newId`
 // or `now` parameter, the way `package/legacy` already does.
@@ -188,6 +192,14 @@ const CONTRACT_IMPORT_PATTERN = {
   message: 'src/persistence/contract is importable only from a *.test.ts(x) file (#45).',
 }
 
+// #46 criterion 9: `idb` belongs to the IndexedDB adapter alone. The pure set already bans
+// it with React and the state libraries; this is the other half, so that a second module
+// cannot open a database of its own.
+const IDB_IMPORT_PATTERN = {
+  group: ['idb'],
+  message: 'Only src/persistence/indexeddb talks to idb (#46).',
+}
+
 // One descriptor per immer policy: `edit` builds Edit Transactions on immer patches
 // (#20 §4), every other pure module bans it along with React, the state libraries and idb.
 // Two descriptors per policy, because the testing ban has to skip test files and a rule
@@ -201,7 +213,9 @@ function pureDescriptor(moduleNames, { allowImmer }) {
   return [
     {
       files,
-      ignores: NON_PURE_FILE_PATTERNS,
+      // The IndexedDB adapter lives inside `src/persistence` and is not pure: it imports
+      // `idb`, reads `globalThis.indexedDB` and runs in a browser (#46).
+      ignores: [...NON_PURE_FILE_PATTERNS, ...ADAPTER_FILES],
       rules: {
         'no-restricted-globals': [
           'error',
@@ -217,7 +231,7 @@ function pureDescriptor(moduleNames, { allowImmer }) {
     },
     {
       files,
-      ignores: [...NON_PURE_FILE_PATTERNS, ...TEST_FILE_PATTERNS],
+      ignores: [...NON_PURE_FILE_PATTERNS, ...ADAPTER_FILES, ...TEST_FILE_PATTERNS],
       rules: {
         'no-restricted-imports': ['error', { patterns: [...pureImportBan.patterns, TESTING_IMPORT_PATTERN, CONTRACT_IMPORT_PATTERN] }],
       },
@@ -236,12 +250,26 @@ const testingBanForImpureFiles = {
     ...TEST_FILE_PATTERNS,
   ],
   rules: {
+    'no-restricted-imports': ['error', { patterns: [TESTING_IMPORT_PATTERN, CONTRACT_IMPORT_PATTERN, IDB_IMPORT_PATTERN] }],
+  },
+}
+
+// The adapter left the pure set, so the test-only import bans are restated for it: the
+// contract suite is reachable from its test files and from nothing else (#46).
+const adapterDescriptor = {
+  files: ADAPTER_FILES,
+  ignores: TEST_FILE_PATTERNS,
+  rules: {
     'no-restricted-imports': ['error', { patterns: [TESTING_IMPORT_PATTERN, CONTRACT_IMPORT_PATTERN] }],
   },
 }
 
 // Inward-only. An empty `allow` is already the default disallow, so those rows drop out.
 const elementTypeRules = [
+  // The IndexedDB adapter is a browser module that implements the ports of `persistence`:
+  // the port declarations, `domain` and `lib` are what it is built from, and no other
+  // module may be reached from it (#46).
+  { from: [ADAPTER_ELEMENT.type], allow: ['persistence', 'domain', 'lib', ADAPTER_ELEMENT.type] },
   // Type-only exceptions first: a value import of the same target falls through to the
   // module's own row below and is rejected there.
   ...TARGET_MODULES.filter((module) => module.typeOnly).map((module) => ({
@@ -333,4 +361,5 @@ export default tseslint.config(
     { allowImmer: true },
   ),
   testingBanForImpureFiles,
+  adapterDescriptor,
 )

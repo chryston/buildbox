@@ -6,7 +6,8 @@
  * sibling folder that `app` alone imports.
  *
  * It holds the five repository ports and their record shapes, the typed failures that come
- * back instead of an exception, the in-memory adapter, and the fault-injecting decorator.
+ * back instead of an exception, the in-memory adapter, the fault-injecting decorator, and
+ * `collectLiveHashes`, the live-hash walk a garbage collection is given.
  * `src/persistence/contract/index.ts` is the second entry point, for test files only: it
  * is the one behaviour suite every adapter must pass.
  *
@@ -21,6 +22,7 @@ export {
   type FaultMethod,
   type FaultRule,
 } from './faults'
+export { collectLiveHashes } from './liveHashes'
 export { createMemoryAdapter } from './memory'
 export {
   ASSET_GC_GRACE_MS,

@@ -43,6 +43,10 @@ jobs:
         run: npm run typecheck
       - name: lint
         run: npm run lint
+      - name: browser
+        # `npm test` includes the `persistence-browser` project, which drives real Chromium
+        # through @vitest/browser (#46). The e2e job installs its own copy.
+        run: npx playwright install --with-deps chromium
       - name: test
         run: npm test
       - name: build
