@@ -25,16 +25,16 @@ function makeDesign(overrides: Partial<Design> = {}): Design {
 
 describe('exportWorkspace', () => {
   it('serializes projects with version 1 and exportedAt', () => {
-    const json = exportWorkspace([makeDesign()], 'test-id')
+    const json = exportWorkspace([makeDesign()], 'test-id', '2026-11-17T09:00:00.000Z')
     const parsed = JSON.parse(json)
     expect(parsed.version).toBe(1)
-    expect(parsed.exportedAt).toBeTruthy()
+    expect(parsed.exportedAt).toBe('2026-11-17T09:00:00.000Z')
     expect(parsed.projects).toHaveLength(1)
     expect(parsed.activeProjectId).toBe('test-id')
   })
 
   it('serializes multiple projects', () => {
-    const json = exportWorkspace([makeDesign({ id: 'a' }), makeDesign({ id: 'b' })], 'a')
+    const json = exportWorkspace([makeDesign({ id: 'a' }), makeDesign({ id: 'b' })], 'a', '2026-11-17T09:00:00.000Z')
     const parsed = JSON.parse(json)
     expect(parsed.projects).toHaveLength(2)
   })
@@ -43,7 +43,10 @@ describe('exportWorkspace', () => {
   // not import `utils`, so the round trip is written from this side of the boundary.
   it('round-trips through the legacy reader', () => {
     const projects = [makeDesign(), makeDesign({ id: 'other', name: 'Other' })]
-    const read = readLegacyWorkspaceFile(exportWorkspace(projects, 'test-id'), () => 'unused-id')
+    const read = readLegacyWorkspaceFile(
+      exportWorkspace(projects, 'test-id', '2026-11-17T09:00:00.000Z'),
+      () => 'unused-id',
+    )
     expect(read.ok ? read.file.projects : read.problems).toEqual(projects)
     expect(read.ok && read.file.activeProjectId).toBe('test-id')
   })

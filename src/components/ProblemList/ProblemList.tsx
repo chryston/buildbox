@@ -1,4 +1,4 @@
-import { ROOT_PATH, type ValidationProblem } from '../../package'
+import { ROOT_PATH, type ValidationProblem } from '../../lib'
 
 /** How many problems an error surface lists before collapsing the rest (#40 §2). */
 export const MAX_VISIBLE_PROBLEMS = 20

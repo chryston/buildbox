@@ -23,13 +23,13 @@ export default function ExportModal({ projects, activeProjectId, onClose }: Prop
   function handleExportActive(): void {
     const active = projects.find((p) => p.id === activeProjectId)
     if (!active) return
-    const json = exportWorkspace([active], activeProjectId)
+    const json = exportWorkspace([active], activeProjectId, new Date().toISOString())
     triggerDownload(json, `${active.name.replace(/\s+/g, '-').toLowerCase()}.buildbox.json`)
     onClose()
   }
 
   function handleExportAll(): void {
-    const json = exportWorkspace(projects, activeProjectId)
+    const json = exportWorkspace(projects, activeProjectId, new Date().toISOString())
     triggerDownload(json, 'buildbox-workspace.buildbox.json')
     onClose()
   }

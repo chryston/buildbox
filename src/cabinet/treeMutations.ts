@@ -1,5 +1,6 @@
 import { nanoid } from 'nanoid'
 
+import { MAX_TREE_DEPTH } from '../domain'
 import type {
   CabinetNode,
   DrawerConfig,
@@ -135,8 +136,6 @@ export function findNode(root: CabinetNode, id: string): CabinetNode | null {
 
   return null
 }
-
-export const MAX_TREE_DEPTH = 12
 
 function treeDepth(root: CabinetNode, targetId: string, depth = 0): number {
   if (root.id === targetId) return depth
