@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { formatDisplay } from '../../engine/unitConversion'
-import type { CabinetNode, LayoutVoid, Unit } from '../../types'
+import { formatDisplay } from '../../domain'
+import type { CabinetNode, Unit } from '../../domain'
+import type { LayoutVoid } from '../../cabinet'
 import DimensionEditor from '../DimensionEditor/DimensionEditor'
 
 const LOCKED_OPACITY = 0.4

@@ -1,4 +1,4 @@
-import type { LayoutDivider, LayoutPanel, LayoutVoid } from '../../types'
+import type { LayoutDivider, LayoutPanel, LayoutVoid } from '../../cabinet'
 import { MATERIALS } from '../../utils/materials'
 
 interface Props {

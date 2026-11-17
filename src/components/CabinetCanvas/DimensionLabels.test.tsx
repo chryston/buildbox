@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { CabinetNode, LayoutVoid } from '../../types'
+import type { CabinetNode } from '../../domain'
+import type { LayoutVoid } from '../../cabinet'
 import DimensionLabels from './DimensionLabels'
 
 function makeVoid(overrides: Partial<LayoutVoid> = {}): LayoutVoid {

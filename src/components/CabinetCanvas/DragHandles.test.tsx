@@ -1,7 +1,8 @@
 import { createRef } from 'react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
-import type { Design, LayoutDivider } from '../../types'
+import type { Design } from '../../types'
+import type { LayoutDivider } from '../../cabinet'
 import { useStore } from '../../store/store'
 import DragHandles from './DragHandles'
 

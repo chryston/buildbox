@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { useStore } from '../../store/store'
-import type { SceneLayout } from '../../types'
+import type { SceneLayout } from '../../cabinet'
+import type { CabinetNode } from '../../domain'
 import CanvasLayers from './CanvasLayers'
 import DragHandles from './DragHandles'
 import DimensionLabels from './DimensionLabels'
@@ -12,7 +13,7 @@ interface Props {
   svgRef: RefObject<SVGSVGElement | null>
   onUnlockNode: (nodeId: string) => void
   onUnitClick: (unitId: string) => void
-  selectedNode?: import('../../types').CabinetNode | null
+  selectedNode?: CabinetNode | null
 }
 
 const PADDING = 40

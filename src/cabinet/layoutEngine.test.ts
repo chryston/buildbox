@@ -1,17 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { computeLayout, computeSceneLayout } from './layoutEngine'
-import type { CabinetSceneUnit, Design, CabinetNode, GlobalSettings } from '../types'
+import { computeSceneLayout, computeUnitLayout } from './layoutEngine'
+import type { CabinetSceneUnit } from './types'
+import type { CabinetNode, GlobalSettings } from '../domain'
 
-function makeDesign(root: CabinetNode, settingsOverride?: Partial<GlobalSettings>): Design {
-  const unitId = 'u1'
-  return {
-    id: 'd1', name: 'Test',
-    units: [{
-      type: 'cabinet', id: unitId, label: 'Unit 1', x: 0, y: 0,
-      settings: { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, material: 'oak', ...settingsOverride },
-      root,
-    }],
-  }
+function makeSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
+  return { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, material: 'oak', ...overrides }
 }
 
 function makeUnit(id: string, label: string, x: number, overrides: Partial<GlobalSettings> = {}): CabinetSceneUnit {
@@ -30,9 +23,9 @@ function makeUnit(id: string, label: string, x: number, overrides: Partial<Globa
   }
 }
 
-describe('computeLayout – bare cabinet (no splits)', () => {
+describe('computeUnitLayout – bare cabinet (no splits)', () => {
   it('produces 4 outer panels', () => {
-    const result = computeLayout(makeDesign({ id: 'root' }))
+    const result = computeUnitLayout(makeSettings(), { id: 'root' })
     const roles = result.panels.map(p => p.role)
     expect(roles).toContain('top')
     expect(roles).toContain('bottom')
@@ -41,7 +34,7 @@ describe('computeLayout – bare cabinet (no splits)', () => {
   })
 
   it('produces 1 void spanning inner dimensions', () => {
-    const result = computeLayout(makeDesign({ id: 'root' }))
+    const result = computeUnitLayout(makeSettings(), { id: 'root' })
     expect(result.voids).toHaveLength(1)
     const v = result.voids[0]
     expect(v.w).toBe(564)
@@ -49,7 +42,7 @@ describe('computeLayout – bare cabinet (no splits)', () => {
   })
 })
 
-describe('computeLayout – one shelf', () => {
+describe('computeUnitLayout – one shelf', () => {
   const root: CabinetNode = {
     id: 'root',
     splitAxis: 'horizontal',
@@ -60,26 +53,26 @@ describe('computeLayout – one shelf', () => {
   }
 
   it('produces 2 voids of equal height after accounting for shelf thickness', () => {
-    const result = computeLayout(makeDesign(root))
+    const result = computeUnitLayout(makeSettings(), root)
     expect(result.voids).toHaveLength(2)
     result.voids.forEach(v => expect(v.h).toBe(373))
   })
 
   it('produces 1 shelf divider', () => {
-    const result = computeLayout(makeDesign(root))
+    const result = computeUnitLayout(makeSettings(), root)
     const shelves = result.dividers.filter(d => d.axis === 'horizontal')
     expect(shelves).toHaveLength(1)
     expect(shelves[0].h).toBe(18)
   })
 
   it('tracks the split parent id on the divider', () => {
-    const result = computeLayout(makeDesign(root))
+    const result = computeUnitLayout(makeSettings(), root)
     const shelves = result.dividers.filter(d => d.axis === 'horizontal')
     expect(shelves[0]).toMatchObject({ parentId: 'root' })
   })
 })
 
-describe('computeLayout – locked void', () => {
+describe('computeUnitLayout – locked void', () => {
   const root: CabinetNode = {
     id: 'root',
     splitAxis: 'horizontal',
@@ -90,7 +83,7 @@ describe('computeLayout – locked void', () => {
   }
 
   it('top void gets exactly 200mm, bottom absorbs the rest', () => {
-    const result = computeLayout(makeDesign(root))
+    const result = computeUnitLayout(makeSettings(), root)
     const top = result.voids.find(v => v.nodeId === 'top-void')!
     const bot = result.voids.find(v => v.nodeId === 'bot-void')!
     expect(top.h).toBe(200)
@@ -98,7 +91,7 @@ describe('computeLayout – locked void', () => {
   })
 })
 
-describe('computeLayout – over-constrained', () => {
+describe('computeUnitLayout – over-constrained', () => {
   const root: CabinetNode = {
     id: 'root',
     splitAxis: 'horizontal',
@@ -109,13 +102,13 @@ describe('computeLayout – over-constrained', () => {
   }
 
   it('marks both nodes as overConstrained when sizes exceed available space', () => {
-    const result = computeLayout(makeDesign(root))
+    const result = computeUnitLayout(makeSettings(), root)
     expect(result.overConstrainedIds).toContain('a')
     expect(result.overConstrainedIds).toContain('b')
   })
 })
 
-describe('computeLayout – both locked, both fit', () => {
+describe('computeUnitLayout – both locked, both fit', () => {
   const root: CabinetNode = {
     id: 'root',
     splitAxis: 'horizontal',
@@ -126,7 +119,7 @@ describe('computeLayout – both locked, both fit', () => {
   }
 
   it('each void gets its exact fixedSize when combined sizes fit', () => {
-    const result = computeLayout(makeDesign(root))
+    const result = computeUnitLayout(makeSettings(), root)
     const a = result.voids.find(v => v.nodeId === 'a')!
     const b = result.voids.find(v => v.nodeId === 'b')!
     expect(a.h).toBe(300)
@@ -135,10 +128,9 @@ describe('computeLayout – both locked, both fit', () => {
   })
 })
 
-describe('computeLayout – toe-kick', () => {
+describe('computeUnitLayout – toe-kick', () => {
   it('subtracts toe-kick height from inner height and adds toe-kick panel', () => {
-    const design = makeDesign({ id: 'root' }, { toeKick: { height: 100, setback: 20 } })
-    const result = computeLayout(design)
+    const result = computeUnitLayout(makeSettings({ toeKick: { height: 100, setback: 20 } }), { id: 'root' })
     const tk = result.panels.find(p => p.role === 'toe-kick-board')
     expect(tk).toBeDefined()
     expect(tk!.h).toBe(100)
@@ -184,12 +176,6 @@ describe('computeSceneLayout', () => {
     expect(leftPanel.x).toBe(0)
   })
 })
-
-import { computeUnitLayout } from './layoutEngine'
-
-function makeSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
-  return { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, material: 'oak', ...overrides }
-}
 
 describe('LayoutVoid control node IDs', () => {
   it('root void has no control node IDs', () => {

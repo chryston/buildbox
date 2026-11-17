@@ -1,4 +1,4 @@
-import type { Unit } from '../types'
+import type { Unit } from '../cabinetPayload'
 
 const MM_PER_INCH = 25.4
 

@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react'
-import type { LayoutDivider } from '../../types'
+import type { LayoutDivider } from '../../cabinet'
 import { useStore } from '../../store/store'
 
 interface Props {

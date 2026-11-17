@@ -1,4 +1,3 @@
-// @vitest-environment node
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { checkLegacyStore, readLegacyWorkspaceFile, type LegacyStoreCheck, type LegacyWorkspaceRead } from './read'

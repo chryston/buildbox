@@ -13,7 +13,7 @@ import {
   setNodeLabel,
   distributeEvenly,
 } from './treeMutations'
-import type { CabinetNode, DrawerConfig } from '../types'
+import type { CabinetNode, DrawerConfig } from '../domain'
 
 const leaf = (): CabinetNode => ({ id: 'root' })
 
@@ -92,7 +92,7 @@ describe('setNodeSize', () => {
   })
 })
 
-describe('unlockNode backward compat', () => {
+describe('unpinNode', () => {
   it('clears locked and fixedSize on the target node', () => {
     const root: CabinetNode = {
       id: 'root',

@@ -1,24 +1,21 @@
 import { describe, it, expect } from 'vitest'
-import { computeCutList, computeCutListForUnits } from './cutList'
-import type { CabinetSceneUnit, Design } from '../types'
+import { computeCutListForUnits } from './cutList'
+import type { CabinetSceneUnit } from './types'
 
-function bareDesign(): Design {
+function bareUnit(): CabinetSceneUnit {
   return {
-    id: 'd1', name: 'Test',
-    units: [{
-      type: 'cabinet', id: 'u1', label: 'Base', x: 0, y: 0,
-      settings: {
-        unit: 'mm', height: 800, width: 600, depth: 500,
-        thickness: 18, backThickness: 6, toeKick: null, material: 'oak',
-      },
-      root: { id: 'root' },
-    }],
+    type: 'cabinet', id: 'u1', label: 'Base', x: 0, y: 0,
+    settings: {
+      unit: 'mm', height: 800, width: 600, depth: 500,
+      thickness: 18, backThickness: 6, toeKick: null, material: 'oak',
+    },
+    root: { id: 'root' },
   }
 }
 
-describe('computeCutList – bare cabinet', () => {
+describe('computeCutListForUnits – bare cabinet', () => {
   it('produces 2 side panels, 1 top, 1 bottom', () => {
-    const entries = computeCutList(bareDesign())
+    const entries = computeCutListForUnits([bareUnit()])
     const labels = entries.map(e => e.label)
     expect(labels).toContain('Top panel')
     expect(labels).toContain('Bottom panel')
@@ -27,7 +24,7 @@ describe('computeCutList – bare cabinet', () => {
   })
 
   it('side panels are height  depth', () => {
-    const entries = computeCutList(bareDesign())
+    const entries = computeCutListForUnits([bareUnit()])
     const side = entries.find(e => e.label === 'Side panel')!
     expect(side.width).toBe(800)
     expect(side.height).toBe(500)
@@ -35,33 +32,33 @@ describe('computeCutList – bare cabinet', () => {
   })
 
   it('top/bottom panels are (width - 2×thickness) × depth', () => {
-    const entries = computeCutList(bareDesign())
+    const entries = computeCutListForUnits([bareUnit()])
     const top = entries.find(e => e.label === 'Top panel')!
     expect(top.width).toBe(564)
     expect(top.height).toBe(500)
   })
 })
 
-describe('computeCutList – with shelf', () => {
+describe('computeCutListForUnits – with shelf', () => {
   it('adds 1 shelf entry', () => {
-    const design = bareDesign()
-    design.units[0].root = {
+    const unit = bareUnit()
+    unit.root = {
       id: 'root',
       splitAxis: 'horizontal',
       children: [{ id: 'a' }, { id: 'b' }],
     }
-    const entries = computeCutList(design)
+    const entries = computeCutListForUnits([unit])
     const shelves = entries.filter(e => e.label === 'Shelf')
     expect(shelves[0].qty).toBe(1)
     expect(shelves[0].width).toBe(564)
   })
 })
 
-describe('computeCutList – with toe-kick', () => {
+describe('computeCutListForUnits – with toe-kick', () => {
   it('adds toe-kick board to cut list', () => {
-    const design = bareDesign()
-    design.units[0].settings.toeKick = { height: 100, setback: 20 }
-    const entries = computeCutList(design)
+    const unit = bareUnit()
+    unit.settings.toeKick = { height: 100, setback: 20 }
+    const entries = computeCutListForUnits([unit])
     const tk = entries.find(e => e.label === 'Toe-kick board')
     expect(tk).toBeDefined()
     expect(tk!.width).toBe(600 - 2 * 20)
@@ -69,9 +66,9 @@ describe('computeCutList – with toe-kick', () => {
   })
 })
 
-describe('computeCutList – with back panel', () => {
+describe('computeCutListForUnits – with back panel', () => {
   it('includes a back panel entry', () => {
-    const entries = computeCutList(bareDesign())
+    const entries = computeCutListForUnits([bareUnit()])
     const back = entries.find(e => e.label === 'Back panel')
     expect(back).toBeDefined()
     expect(back!.width).toBe(600 - 2 * 18)
@@ -79,10 +76,10 @@ describe('computeCutList – with back panel', () => {
   })
 })
 
-describe('computeCutList – mixed-height vertical dividers', () => {
+describe('computeCutListForUnits – mixed-height vertical dividers', () => {
   it('produces separate entries for dividers of different heights', () => {
-    const design = bareDesign()
-    design.units[0].root = {
+    const unit = bareUnit()
+    unit.root = {
       id: 'root',
       splitAxis: 'horizontal',
       splitRatio: 0.5,
@@ -99,15 +96,15 @@ describe('computeCutList – mixed-height vertical dividers', () => {
         },
       ],
     }
-    const entries = computeCutList(design)
+    const entries = computeCutListForUnits([unit])
     const dividers = entries.filter(e => e.label === 'Divider')
     const totalQty = dividers.reduce((sum, entry) => sum + entry.qty, 0)
     expect(totalQty).toBe(2)
   })
 
   it('produces two entries for dividers at different spans', () => {
-    const design = bareDesign()
-    design.units[0].root = {
+    const unit = bareUnit()
+    unit.root = {
       id: 'root',
       splitAxis: 'horizontal',
       splitRatio: 0.5,
@@ -126,30 +123,30 @@ describe('computeCutList – mixed-height vertical dividers', () => {
         },
       ],
     }
-    const entries = computeCutList(design)
+    const entries = computeCutListForUnits([unit])
     const dividers = entries.filter(e => e.label === 'Divider')
     expect(dividers.length).toBe(2)
   })
 })
 
-describe('computeCutList – drawer box', () => {
+describe('computeCutListForUnits – drawer box', () => {
   it('adds drawer box dimensions for side-mount drawer', () => {
-    const design = bareDesign()
-    design.units[0].root = {
+    const unit = bareUnit()
+    unit.root = {
       id: 'root',
       elementType: 'drawer',
       drawerConfig: { slideType: 'side-mount', reveal: 3 },
     }
-    const entries = computeCutList(design)
+    const entries = computeCutListForUnits([unit])
     const drawerBox = entries.find(e => e.label === 'Drawer box (side-mount)')
     expect(drawerBox).toBeDefined()
   })
 })
 
-describe('computeCutList – accessories', () => {
+describe('computeCutListForUnits – accessories', () => {
   it('adds door and drawer front entries from void accessories', () => {
-    const design = bareDesign()
-    design.units[0].root = {
+    const unit = bareUnit()
+    unit.root = {
       id: 'root',
       splitAxis: 'vertical',
       children: [
@@ -158,17 +155,17 @@ describe('computeCutList – accessories', () => {
       ],
     }
 
-    const entries = computeCutList(design)
+    const entries = computeCutListForUnits([unit])
 
     expect(entries.find(e => e.label === 'Door panel')?.qty).toBe(1)
     expect(entries.find(e => e.label === 'Drawer front')?.qty).toBe(1)
   })
 })
 
-describe('computeCutList – door accessories', () => {
+describe('computeCutListForUnits – door accessories', () => {
   it('produces separate entries for doors of different heights', () => {
-    const design = bareDesign()
-    design.units[0].root = {
+    const unit = bareUnit()
+    unit.root = {
       id: 'root',
       splitAxis: 'horizontal',
       splitRatio: 0.4,
@@ -178,7 +175,7 @@ describe('computeCutList – door accessories', () => {
       ],
     }
 
-    const entries = computeCutList(design)
+    const entries = computeCutListForUnits([unit])
     const doors = entries.filter(e => e.label === 'Door panel')
     expect(doors.length).toBe(2)
     const totalQty = doors.reduce((sum, entry) => sum + entry.qty, 0)
