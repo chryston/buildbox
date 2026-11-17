@@ -134,34 +134,91 @@ const pureFiles = (moduleNames) => [
   ...PURE_LEGACY_ELEMENTS.flatMap((element) => folderPatterns(element.pattern)),
 ]
 
+// #42 §3: a pure module never creates an ID and never reads the clock. IDs and time
+// arrive as data — pre-allocated in an Intent (#20 §4), or through an injected `newId`
+// or `now` parameter, the way `package/legacy` already does.
+const NON_DETERMINISTIC_PROPERTIES = [
+  {
+    object: 'crypto',
+    property: 'randomUUID',
+    message: 'Pure module: IDs arrive as data, never generated here (#42 §3).',
+  },
+  {
+    object: 'Math',
+    property: 'random',
+    message: 'Pure module: IDs arrive as data, never generated here (#42 §3).',
+  },
+  {
+    object: 'Date',
+    property: 'now',
+    message: 'Pure module: time arrives as data, never read from the clock (#42 §3).',
+  },
+]
+
+// `new Date(2020, 0, 1)` is a value, `new Date()` is the clock.
+const NO_CLOCK_READ = {
+  selector: "NewExpression[callee.name='Date'][arguments.length=0]",
+  message: 'Pure module: time arrives as data, never read from the clock (#42 §3).',
+}
+
+// #42 §7: `src/<module>/testing.ts` is a module's second entry point, and only a test
+// file may reach it.
+const TEST_FILE_PATTERNS = ['src/**/*.test.ts', 'src/**/*.test.tsx']
+const TESTING_IMPORT_PATTERN = {
+  group: ['**/testing', '**/testing/*'],
+  message: 'src/<module>/testing.ts is importable only from a *.test.ts(x) file (#42 §7).',
+}
+
 // One descriptor per immer policy: `edit` builds Edit Transactions on immer patches
 // (#20 §4), every other pure module bans it along with React, the state libraries and idb.
+// Two descriptors per policy, because the testing ban has to skip test files and a rule
+// cannot vary its config per file: the second restates the import bans plus the ban.
 function pureDescriptor(moduleNames, { allowImmer }) {
   const bannedImports = allowImmer ? NON_PURE_IMPORTS : [...NON_PURE_IMPORTS, 'immer']
-  return {
-    files: pureFiles(moduleNames),
-    ignores: NON_PURE_FILE_PATTERNS,
-    rules: {
-      'no-restricted-globals': [
-        'error',
-        ...DOM_GLOBALS.map((name) => ({
-          name,
-          message: 'Pure module: no DOM globals (#20 §2).',
-        })),
-      ],
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              group: bannedImports,
-              message: 'Pure module: no React, state-library or idb imports (#20 §2).',
-            },
-          ],
-        },
-      ],
-    },
+  const pureImportBan = {
+    patterns: [{ group: bannedImports, message: 'Pure module: no React, state-library or idb imports (#20 §2).' }],
   }
+  const files = pureFiles(moduleNames)
+  return [
+    {
+      files,
+      ignores: NON_PURE_FILE_PATTERNS,
+      rules: {
+        'no-restricted-globals': [
+          'error',
+          ...DOM_GLOBALS.map((name) => ({
+            name,
+            message: 'Pure module: no DOM globals (#20 §2).',
+          })),
+        ],
+        'no-restricted-imports': ['error', pureImportBan],
+        'no-restricted-properties': ['error', ...NON_DETERMINISTIC_PROPERTIES],
+        'no-restricted-syntax': ['error', NO_CLOCK_READ],
+      },
+    },
+    {
+      files,
+      ignores: [...NON_PURE_FILE_PATTERNS, ...TEST_FILE_PATTERNS],
+      rules: {
+        'no-restricted-imports': ['error', { patterns: [...pureImportBan.patterns, TESTING_IMPORT_PATTERN] }],
+      },
+    },
+  ]
+}
+
+// The same testing ban for the files outside the pure set: `ui`, `app`, `platform` and
+// the impure legacy folders. The S0 `utils` download helpers are claimed out of the pure
+// folder by `legacy-utils-dom` and stay outside both lists.
+const testingBanForImpureFiles = {
+  files: ['src/**/*.{ts,tsx}'],
+  ignores: [
+    ...pureFiles(PURE_TARGET_MODULES.map((module) => module.name)),
+    ...NON_PURE_FILE_PATTERNS,
+    ...TEST_FILE_PATTERNS,
+  ],
+  rules: {
+    'no-restricted-imports': ['error', { patterns: [TESTING_IMPORT_PATTERN] }],
+  },
 }
 
 // Inward-only. An empty `allow` is already the default disallow, so those rows drop out.
@@ -233,7 +290,9 @@ export default tseslint.config(
           default: 'disallow',
           message: 'Target modules are imported through src/<module>/index.ts (#20 §2).',
           rules: [
-            { target: TARGET_MODULE_NAMES, allow: ['index.ts'] },
+            // `testing.ts` is a module's second entry point (#42 §7); the ban on importing
+            // it from anywhere but a test file is a separate descriptor.
+            { target: TARGET_MODULE_NAMES, allow: ['index.ts', 'testing.ts'] },
             // Legacy elements and the adapters have no entry point yet (#20 §1): the
             // adapter is reached file-by-file by `app`, legacy code by everything legacy.
             { target: OPEN_ENTRY_ELEMENT_NAMES, allow: ['**'] },
@@ -244,12 +303,13 @@ export default tseslint.config(
     },
   },
 
-  pureDescriptor(
+  ...pureDescriptor(
     PURE_TARGET_MODULES.filter((module) => !module.immerAllowed).map((module) => module.name),
     { allowImmer: false },
   ),
-  pureDescriptor(
+  ...pureDescriptor(
     PURE_TARGET_MODULES.filter((module) => module.immerAllowed).map((module) => module.name),
     { allowImmer: true },
   ),
+  testingBanForImpureFiles,
 )

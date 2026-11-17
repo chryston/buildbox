@@ -2,7 +2,7 @@ import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { checkLegacyStore } from './read'
 import { validateLegacyDesigns, validateLegacyFloorPlan, validateLegacyPersistedState } from './validate'
-import type { ValidationProblem } from './problems'
+import type { ValidationProblem } from '../../lib'
 
 /**
  * The fuzz property of #40 §6: whatever a hostile file or a corrupted browser holds, the

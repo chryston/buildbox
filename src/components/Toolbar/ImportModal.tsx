@@ -1,5 +1,5 @@
 import type { Design } from '../../types'
-import type { ValidationProblem } from '../../package'
+import type { ValidationProblem } from '../../lib'
 import ProblemList from '../ProblemList/ProblemList'
 
 interface Props {

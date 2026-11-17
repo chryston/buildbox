@@ -11,10 +11,11 @@
  * domain v1, not to the legacy reader.
  */
 import { isAbsent, isFiniteNumber, isRecord } from './guards'
-import { problem, type ValidationProblem } from './problems'
+import { problem, type ValidationProblem } from '../../lib'
 import type { LegacyFloorPlanObjectType } from './types'
 
-/** Mirrors `MAX_TREE_DEPTH` in `cabinet/treeMutations`; `package` may not import it (#40 §4). */
+/** The legacy reader's own depth bound, the same number as `MAX_TREE_DEPTH` in
+ * `domain/cabinetPayload`; #40 §4 keeps the two readers independent. */
 export const MAX_TREE_DEPTH = 12
 
 /** The root path `validateLegacyPersistedState` reports against, matching the persist envelope. */

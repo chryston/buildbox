@@ -11,10 +11,18 @@ export interface WorkspaceFile {
   activeProjectId: string | null
 }
 
-export function exportWorkspace(projects: Design[], activeProjectId: string | null): string {
+/**
+ * `exportedAt` is the wall-clock stamp, supplied by the caller: `utils` is in the pure
+ * set, where time arrives as data (#42 §3).
+ */
+export function exportWorkspace(
+  projects: Design[],
+  activeProjectId: string | null,
+  exportedAt: string,
+): string {
   const file: WorkspaceFile = {
     version: 1,
-    exportedAt: new Date().toISOString(),
+    exportedAt,
     projects,
     activeProjectId,
   }

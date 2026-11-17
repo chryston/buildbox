@@ -8,7 +8,6 @@
  */
 export { computeSceneLayout, computeUnitLayout } from './layoutEngine'
 export {
-  MAX_TREE_DEPTH,
   addDivider,
   addShelf,
   deleteBoard,

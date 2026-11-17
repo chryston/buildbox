@@ -3,8 +3,15 @@
  * this folder. `lib` is the innermost module — it imports nothing at all, not even
  * another target module — and is pure: no DOM, no React, no state library.
  *
- * Byte-stable primitives only. ZIP (`fflate`) joins it in the package-codec issue.
+ * Byte-stable primitives and the shared `ValidationProblem` shape (#42 §1). ZIP
+ * (`fflate`) joins it in the package-codec issue.
  */
 export { CanonicalJsonError, canonicalJson, canonicalJsonBytes } from './canonicalJson'
 export { sha256Hex } from './sha256Hex'
 export { stableSort } from './stableSort'
+export {
+  ROOT_PATH,
+  childPath,
+  problem,
+  type ValidationProblem,
+} from './validation'

@@ -6,7 +6,6 @@
  * Today it holds the frozen legacy reader only. S2 adds the `.buildbox` package codec
  * and the legacy → domain converter beside it.
  */
-export { ROOT_PATH, type ValidationProblem } from './legacy/problems'
 export {
   MAX_TREE_DEPTH,
   validateLegacyDesigns,

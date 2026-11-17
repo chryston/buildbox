@@ -8,7 +8,8 @@
  * happens to them. `main.tsx` reads the failure slot and shows the recovery screen.
  */
 import type { StateStorage } from 'zustand/middleware'
-import { checkLegacyStore, type ValidationProblem } from '../package'
+import { checkLegacyStore } from '../package'
+import type { ValidationProblem } from '../lib'
 
 /** The persist key, and the only key this guard is asked about. */
 export const STORE_KEY = 'buildbox-store'

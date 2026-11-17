@@ -140,7 +140,7 @@ describe('canonicalJson', () => {
   })
 
   it('rejects anything that is not a plain object', () => {
-    expect(rejectionPath(() => canonicalJson(new Date()))).toBe('$')
+    expect(rejectionPath(() => canonicalJson(new Date(0)))).toBe('$')
     expect(rejectionPath(() => canonicalJson(new Map()))).toBe('$')
     expect(rejectionPath(() => canonicalJson(new Set([1])))).toBe('$')
     expect(rejectionPath(() => canonicalJson(new Uint8Array(2)))).toBe('$')

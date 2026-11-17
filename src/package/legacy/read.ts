@@ -7,7 +7,7 @@
  */
 import { isRecord } from './guards'
 import { migrateLegacyState, upgradeLegacyDesign } from './migrate'
-import { ROOT_PATH, problem, type ValidationProblem } from './problems'
+import { ROOT_PATH, problem, type ValidationProblem } from '../../lib'
 import { validateLegacyDesigns, validateLegacyPersistedState } from './validate'
 import type { LegacyDesign, LegacyWorkspaceFile } from './types'
 

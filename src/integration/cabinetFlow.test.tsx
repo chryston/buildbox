@@ -176,7 +176,7 @@ describe('Cabinet design flow', () => {
     const active = projects.find((p) => p.id === activeProjectId)!
     const initialCount = projects.length
     const file = new File(
-      [exportWorkspace([active], active.id)],
+      [exportWorkspace([active], active.id, '2026-11-17T09:00:00.000Z')],
       'workspace.buildbox.json',
       { type: 'application/json' },
     )

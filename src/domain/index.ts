@@ -3,9 +3,12 @@
  * outside this folder. `domain` is pure — no DOM, no React, no state library — and may
  * import only `geometry` and `lib`.
  *
- * Today it holds the cabinet Item Design payload vocabulary and unit conversion. S2's
- * domain schema v1, validators and migrators land beside them (#42).
+ * It holds the domain schema v1 types, the strict validator, the version and its
+ * migrator chain, the cabinet Item Design payload vocabulary and unit conversion. It
+ * never creates an ID or reads the clock (#42 §3): IDs and time arrive as data.
+ * `src/domain/testing.ts` is the second entry point, for test files only.
  */
+export { MAX_TREE_DEPTH } from './cabinetPayload'
 export type {
   Accessory,
   AccessoryType,
@@ -20,4 +23,33 @@ export type {
   ToeKick,
   Unit,
 } from './cabinetPayload'
+export { designFootprintSize, designHeight, designOrigin } from './itemDesign'
+export {
+  DOMAIN_SCHEMA_VERSION,
+  MIGRATORS,
+  migrateProject,
+  runMigrationChain,
+  type Migrator,
+  type MigrateError,
+  type MigrateResult,
+} from './migrate'
+export type {
+  CabinetItemDesign,
+  DisplayUnit,
+  EntityId,
+  ExistingModel,
+  Floor,
+  GenericItemDesign,
+  ItemDesign,
+  ItemFootprint,
+  PlanImage,
+  PlanImageMediaType,
+  PlacedItem,
+  Point2,
+  Project,
+  ProjectMeta,
+  ProjectPreferences,
+  RectangleFootprint,
+} from './project'
 export { formatDisplay, fromMm, toMm } from './units/unitConversion'
+export { validateProject, type ValidateProjectResult } from './validate'

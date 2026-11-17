@@ -14,6 +14,13 @@ export type ElementType = 'void' | 'drawer' | 'hanging-space' | 'microwave'
 export type SlideType = 'side-mount' | 'undermount'
 export type AccessoryType = 'door' | 'drawer-front' | 'pull' | 'hinge'
 
+/**
+ * How many splits deep a cabinet tree may go, root at depth 0 (#42 §4). It lives with
+ * the payload vocabulary so `domain` can validate a depth it does not have to import
+ * from `cabinet`, which `domain` may not depend on.
+ */
+export const MAX_TREE_DEPTH = 12
+
 export interface ToeKick {
   height: number
   setback: number
