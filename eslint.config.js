@@ -66,7 +66,9 @@ export default tseslint.config(
   },
 
   {
-    files: ['src/**/*.{ts,tsx}', 'vite.config.ts', 'tailwind.config.ts'],
+    // e2e/ and playwright.config.ts are Playwright's (#38): browser + node globals,
+    // no boundaries plugin — that descriptor models src/ layers only.
+    files: ['src/**/*.{ts,tsx}', 'e2e/**/*.ts', 'playwright.config.ts', 'vite.config.ts', 'tailwind.config.ts'],
     extends: [js.configs.recommended, tseslint.configs.recommended],
     languageOptions: {
       ecmaVersion: 'latest',

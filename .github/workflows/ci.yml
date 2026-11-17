@@ -2,7 +2,8 @@ name: CI
 
 # PR checks and the run the Pages deploy waits on (#35, #20 §12).
 # Later steps land here rather than in a second workflow:
-#   npm run test:e2e (#38), npm run test:screenshots (#39), npm run bench (benchmarks issue).
+#   npm run test:screenshots (#39), npm run bench (benchmarks issue).
+# Firefox and WebKit are nightly-only (#38, #20 §9.4): see nightly.yml.
 
 on:
   pull_request:
@@ -43,3 +44,32 @@ jobs:
         with:
           name: dist
           path: dist
+
+  # Real-browser smoke on Chromium against `vite preview` of the build verify produced
+  # (#38, #20 §9.4). Add "CI / e2e-chromium" to the branch's required status checks
+  # alongside "CI / verify".
+  e2e-chromium:
+    name: e2e-chromium
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: install
+        run: npm ci
+      - name: browser
+        run: npx playwright install --with-deps chromium
+      - name: build
+        run: npm run build
+      - name: e2e
+        run: npm run test:e2e -- --project=chromium
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results-chromium
+          path: |
+            playwright-report/
+            test-results/

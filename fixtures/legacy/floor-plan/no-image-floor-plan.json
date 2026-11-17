@@ -1,0 +1,141 @@
+{
+  "pixelsPerMm": null,
+  "image": null,
+  "objects": [
+    {
+      "id": "fp-sofa",
+      "type": "sofa-3",
+      "label": "Sofa (3-seat)",
+      "x": 120,
+      "y": 340,
+      "w": 600,
+      "h": 220,
+      "rotation": 0,
+      "color": "#7c9cbf"
+    },
+    {
+      "id": "fp-fridge",
+      "type": "fridge",
+      "label": "Fridge",
+      "x": 1500,
+      "y": 120,
+      "w": 180,
+      "h": 180,
+      "rotation": 90,
+      "color": "#b0bec5"
+    },
+    {
+      "id": "fp-washer",
+      "type": "washer",
+      "label": "Washer",
+      "x": 1720,
+      "y": 120,
+      "w": 120,
+      "h": 120,
+      "rotation": 180,
+      "color": "#b0bec5"
+    },
+    {
+      "id": "fp-toilet",
+      "type": "toilet",
+      "label": "Toilet",
+      "x": 1900,
+      "y": 400,
+      "w": 100,
+      "h": 140,
+      "rotation": 270,
+      "color": "#eceff1"
+    },
+    {
+      "id": "fp-wardrobe",
+      "type": "wardrobe",
+      "label": "Wardrobe",
+      "x": 2000,
+      "y": 600,
+      "w": 300,
+      "h": 120,
+      "rotation": 90,
+      "color": "#a1887f"
+    },
+    {
+      "id": "fp-counter",
+      "type": "kitchen-counter",
+      "label": "Kitchen counter",
+      "x": 1400,
+      "y": 800,
+      "w": 900,
+      "h": 150,
+      "rotation": 0,
+      "color": "#d7ccc8"
+    },
+    {
+      "id": "fp-island",
+      "type": "custom",
+      "label": "Island (custom)",
+      "x": 900,
+      "y": 700,
+      "w": 500,
+      "h": 300,
+      "rotation": 180,
+      "color": "#f0a202",
+      "isCustom": true
+    }
+  ],
+  "annotations": [
+    {
+      "id": "ann-wall-1",
+      "type": "wall-hack",
+      "label": "North wall",
+      "points": [
+        {
+          "x": 100,
+          "y": 100
+        },
+        {
+          "x": 900,
+          "y": 100
+        },
+        {
+          "x": 900,
+          "y": 520
+        },
+        {
+          "x": 1500,
+          "y": 520
+        }
+      ]
+    },
+    {
+      "id": "ann-tile-1",
+      "type": "tile-zone",
+      "label": "Splashback",
+      "points": [
+        {
+          "x": 1400,
+          "y": 760
+        },
+        {
+          "x": 2300,
+          "y": 760
+        },
+        {
+          "x": 2300,
+          "y": 950
+        },
+        {
+          "x": 1400,
+          "y": 950
+        }
+      ]
+    }
+  ],
+  "customTemplates": [
+    {
+      "id": "tpl-island",
+      "label": "Kitchen island",
+      "defaultW": 500,
+      "defaultH": 300,
+      "color": "#f0a202"
+    }
+  ]
+}

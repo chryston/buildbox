@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "exportedAt": "2026-05-29T09:00:00.000Z",
+  "projects": [
+    {
+      "id": "proj-legacy-closet",
+      "name": "Legacy Closet",
+      "root": {
+        "id": "n0",
+        "splitAxis": "x",
+        "splitRatio": 0.6,
+        "children": [
+          {
+            "id": "n1",
+            "splitAxis": "y",
+            "splitRatio": 0.75,
+            "children": [
+              { "id": "n2", "elementType": "hanging-space", "spaceLabel": "Hanging" },
+              {
+                "id": "n3",
+                "elementType": "drawer",
+                "spaceLabel": "Drawers",
+                "drawerConfig": { "count": 3, "mount": "side" }
+              }
+            ]
+          },
+          {
+            "id": "n4",
+            "elementType": "void",
+            "material": "walnut",
+            "locked": true,
+            "fixedSize": 180,
+            "spaceLabel": "Pinned shelf"
+          }
+        ]
+      },
+      "globalSettings": {
+        "unit": "mm",
+        "width": 900,
+        "height": 2400,
+        "depth": 600,
+        "thickness": 18,
+        "backThickness": 12,
+        "defaultMaterial": "oak",
+        "toeKick": { "height": 100, "setback": 50 }
+      }
+    }
+  ],
+  "activeProjectId": "proj-legacy-closet"
+}
