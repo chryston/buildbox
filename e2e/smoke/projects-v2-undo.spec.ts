@@ -60,32 +60,33 @@ test('each Project has its own floor plan, and a switch starts an empty history'
   // Two Projects with nothing in them, so "only the bed" means exactly that.
   await page.getByRole('button', { name: 'New project' }).click()
   await showFloorPlan(page)
-  await expect(floorPlanObjectIds(page)).resolves.toHaveLength(0)
+  await expect.poll(() => floorPlanObjectIds(page)).toHaveLength(0)
   const bedId = await addFloorPlanObject(page, 'Single Bed')
   await expect(undoButton(page)).toBeEnabled()
 
   await page.getByRole('button', { name: 'New project' }).click()
-  await expect(floorPlanObjectIds(page)).resolves.toHaveLength(0)
+  await expect.poll(() => floorPlanObjectIds(page)).toHaveLength(0)
   const fridgeId = await addFloorPlanObject(page, 'Fridge')
 
   const tabs = page.getByRole('button', { name: /^Cabinet \d+$/ })
   const names = await tabs.evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim() ?? ''))
-  const [projectA, projectB] = names.slice(-2)
+  // The Library lists Projects newest-saved first, so the two just created are the first two
+  // tabs — and in the opposite order to the one they were made in.
+  expect(names).toHaveLength(2)
+  const [projectB, projectA] = names
 
   await openProjectTab(page, projectA)
-  const bedOnly = await floorPlanObjectIds(page)
-  expect(bedOnly).toEqual([bedId])
+  await expect.poll(() => floorPlanObjectIds(page)).toEqual([bedId])
   // A new Project session has no history to walk back into (#26).
   await expect(undoButton(page)).toBeDisabled()
   await expect(redoButton(page)).toBeDisabled()
 
   await openProjectTab(page, projectB)
-  const fridgeOnly = await floorPlanObjectIds(page)
-  expect(fridgeOnly).toEqual([fridgeId])
+  await expect.poll(() => floorPlanObjectIds(page)).toEqual([fridgeId])
   await expect(undoButton(page)).toBeDisabled()
 
   await openProjectTab(page, projectA)
-  expect(await floorPlanObjectIds(page)).toEqual([bedId])
+  await expect.poll(() => floorPlanObjectIds(page)).toEqual([bedId])
 })
 
 test('the seeded Projects keep their own floor plans', async ({ page }) => {
@@ -95,8 +96,8 @@ test('the seeded Projects keep their own floor plans', async ({ page }) => {
   expect(kitchenObjects.length).toBeGreaterThan(0)
 
   await openProjectTab(page, secondProject)
-  expect(await floorPlanObjectIds(page)).toHaveLength(0)
+  await expect.poll(() => floorPlanObjectIds(page)).toHaveLength(0)
 
   await openProjectTab(page, firstProject)
-  expect(await floorPlanObjectIds(page)).toEqual(kitchenObjects)
+  await expect.poll(() => floorPlanObjectIds(page)).toEqual(kitchenObjects)
 })

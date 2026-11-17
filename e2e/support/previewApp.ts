@@ -68,8 +68,12 @@ export const redoButton = (page: Page): Locator => page.getByRole('button', { na
 /** The save status the session reports (#14), rendered before Undo in the toolbar. */
 export const saveStatus = (page: Page): Locator => page.getByRole('status')
 
-/** Select a Project by its tab. */
+/**
+ * Select a Project by its tab and wait for the view to follow. A Project with no cabinet
+ * design has no cabinet canvas, and switching Projects keeps the module the user is in, so
+ * the view following means one of the two canvases is on screen again.
+ */
 export async function openProjectTab(page: Page, name: string): Promise<void> {
   await page.getByRole('button', { name, exact: true }).click()
-  await expect(cabinetCanvas(page)).toBeVisible()
+  await expect(cabinetCanvas(page).or(floorPlanCanvas(page)).first()).toBeVisible()
 }

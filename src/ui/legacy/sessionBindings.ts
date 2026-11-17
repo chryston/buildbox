@@ -19,10 +19,11 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'r
 import type { CabinetMaterialId, DrawerConfig, ElementType, GlobalSettings, Project } from '../../domain'
 import type { Intent, IntentType, Locator, PayloadOf } from '../../edit'
 import type { ProjectSession, SaveState, SessionAsset } from '../../session'
-import type { FloorPlanObjectType } from '../../types'
+import type { FloorPlanData, FloorPlanObjectType } from '../../types'
 import { useLibrary, useLibrarySelector } from './useLibrary'
 import { useProject, useProjectSelector, useSession } from './useProject'
-import { useUi } from './uiStore'
+import { uiStore, useUi } from './uiStore'
+import type { DragPreview } from './uiStore'
 import type { LegacyBindings, PlanImageAsset, PlanImageRead } from './bindings'
 import { firstFloorId, projectFloorPlan, projectTabs, projectUnits } from './projectView'
 
@@ -66,6 +67,19 @@ function lastPlacedId(project: Project, floorId: string): string | null {
   return null
 }
 
+/**
+ * The live drag, overlaid on the Floor's objects. The pointer has moved and the Intent has
+ * not: today's store wrote on every pointer move, so a preview the view did not follow would
+ * read as a frozen canvas (#49).
+ */
+function withDragPreview(plan: FloorPlanData, preview: DragPreview | null): FloorPlanData {
+  if (preview === null) return plan
+  return {
+    ...plan,
+    objects: plan.objects.map((object) => (object.id === preview.id ? { ...object, ...preview.patch } : object)),
+  }
+}
+
 /** The words under the undo button (#14, #49 deviation 3). */
 function saveStatusOf(save: SaveState | null): LegacyBindings['saveStatus'] {
   if (save === null) return null
@@ -95,8 +109,7 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
 
   const assetHash = project.floors[0]?.planImage?.assetHash ?? null
   const imageSrc = useAssetUrl(services, assetHash)
-  const floorPlan = useProjectSelector((current) => projectFloorPlan(current, imageSrc))
-  const itemDesignId = units.find((unit) => unit.id === activeItemDesignId)?.id ?? units[0]?.id ?? null
+  const baseFloorPlan = useProjectSelector((current) => projectFloorPlan(current, imageSrc))
 
   const activeItemDesignId = useUi((state) => state.activeItemDesignId)
   const selectedNodeId = useUi((state) => state.selectedNodeId)
@@ -111,6 +124,11 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
   const setTool = useUi((state) => state.setTool)
   const setDragPreview = useUi((state) => state.setDragPreview)
   const setActiveModule = useUi((state) => state.setActiveModule)
+
+  // The cabinet view shows a Design by id and falls back to the first one when nothing is
+  // selected; the session holds no such pointer, so the projection decides it (#49).
+  const itemDesignId = units.find((unit) => unit.id === activeItemDesignId)?.id ?? units[0]?.id ?? null
+  const floorPlan = useMemo(() => withDragPreview(baseFloorPlan, dragPreview), [baseFloorPlan, dragPreview])
 
   // Undo and redo name the Floor and view their Intent landed on; #14's session publishes
   // that as navigation, and the legacy view's only notion of it is which tab is showing.
@@ -276,7 +294,9 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
     // A drag is transient until the pointer comes up: one Intent then, so one undo step (#26).
     dragFloorPlanObject: (id, patch) => setDragPreview({ id, patch }),
     endFloorPlanDrag: (id) => {
-      const preview = dragPreview
+      // The pointer-up listener belongs to the render that began the drag, so the preview is
+      // read from the store: this closure's `dragPreview` is the one from before it moved.
+      const preview = uiStore.getState().dragPreview
       setDragPreview(null)
       if (preview === null || preview.id !== id) return
       send('plan.updateObject', { placedItemId: id, patch: preview.patch })
@@ -338,7 +358,6 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
     selectFloorPlanObject,
     tool,
     setTool,
-    dragPreview,
     setDragPreview,
     activeModule,
     setActiveModule,

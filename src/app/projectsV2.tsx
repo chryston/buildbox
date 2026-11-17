@@ -82,6 +82,18 @@ export function createSessionServices(
  * the catalogue's business, so they are derived here rather than spelled out at 35 call
  * sites that could each get one wrong.
  */
+/**
+ * `INTENT_ID_ORDER` marks the Intents whose new-node count depends on the tree they land in
+ * with a trailing ellipsis: a split turns one space into two and adds one board, so it spends
+ * two pre-allocated IDs however the tree is shaped (#49).
+ */
+const VARIADIC_IDS = 2
+
+function idsFor(type: IntentType): number {
+  const order = INTENT_ID_ORDER[type]
+  return order[order.length - 1]?.endsWith('…') === true ? VARIADIC_IDS : order.length
+}
+
 export function createIntentFactory(clock: ClockPort, ids: IdSource): IntentBuilder {
   return {
     build<T extends IntentType>(type: T, payload: PayloadOf<T>): Intent {
@@ -89,7 +101,7 @@ export function createIntentFactory(clock: ClockPort, ids: IdSource): IntentBuil
         type,
         payload,
         label: labelOf(type, payload),
-        ids: ids(INTENT_ID_ORDER[type].length),
+        ids: ids(idsFor(type)),
         now: clock.now(),
       } as Intent
     },

@@ -3,8 +3,8 @@ import type { Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { addFloorPlanObject, openPreviewApp, showFloorPlan } from '../support/previewApp'
-import { databaseNames } from '../support/seedPreviewDb'
+import { addFloorPlanObject, openPreviewApp, previewSeed, showFloorPlan } from '../support/previewApp'
+import { databaseNames, projectRevision } from '../support/seedPreviewDb'
 
 // Criterion 8 (#49): the flagged build writes only `buildbox-preview`. Today's app persists
 // through `localStorage['buildbox-store']`, and a build that wrote both would put two
@@ -36,10 +36,13 @@ test('editing writes no localStorage key and opens no other database', async ({ 
   await openPreviewApp(page)
   const before = await localStorageSnapshot(page)
 
-  await page.getByTestId(/^void-/).first().click({ position: { x: 10, y: 10 } })
+  await page.getByTestId('void-unit-kitchen-base-hanging').click({ position: { x: 10, y: 10 } })
   await page.getByRole('button', { name: 'Add Shelf' }).click()
   await showFloorPlan(page)
   await addFloorPlanObject(page, 'Fridge')
+
+  // Both edits have to be on disk before "nothing else changed" says anything.
+  await expect.poll(() => projectRevision(page, previewSeed.projects[0].id)).toBeGreaterThanOrEqual(3)
 
   expect(await localStorageSnapshot(page)).toBe(before)
   await expect.poll(() => databaseNames(page)).toEqual(['buildbox-preview'])

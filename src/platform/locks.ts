@@ -32,18 +32,23 @@ async function request(name: string, ifAvailable: boolean): Promise<LockHandle |
       giveUp()
     },
   }
-  // `lib.dom` types the callback as returning `T` and `request` as resolving to `T`, which
-  // cannot say what actually happens: the browser awaits whatever the callback returns, so
-  // the promise below is the one `request` settles. Awaiting it here unwraps it once.
-  return globalThis.navigator.locks.request<Promise<LockHandle | null>>(
-    name,
-    ifAvailable ? { ifAvailable: true } : {},
-    async (lock) => {
-      if (lock === null) return null
-      await held
-      return handle
-    },
-  )
+  // `request` settles only once the callback has returned — which here means once the lock
+  // is given up — so it cannot also carry the handle. The handle travels on its own promise,
+  // settled the moment the browser calls the callback, and the request is left pending as
+  // the proof of ownership. A request that comes back rejected has lost the lock, and a
+  // session that lost its lock reports it on its next write rather than here.
+  return new Promise<LockHandle | null>((resolve) => {
+    void globalThis.navigator.locks
+      .request(name, ifAvailable ? { ifAvailable: true } : {}, async (lock) => {
+        if (lock === null) {
+          resolve(null)
+          return
+        }
+        resolve(handle)
+        await held
+      })
+      .catch(() => {})
+  })
 }
 
 /**

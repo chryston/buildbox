@@ -45,8 +45,16 @@ function writeSeed(seed: PreviewSeed): Promise<void> {
   return new Promise((resolveSeed, rejectSeed) => {
     const request = indexedDB.open(seed.dbName, 1)
 
+    // The records go in with the version-change transaction rather than after the open: this
+    // runs as an init script, so it also runs on the reload a spec performs — and re-putting
+    // the seed there would overwrite the very edit the reload is meant to find.
     request.onupgradeneeded = () => {
       const db = request.result
+      const version = request.transaction
+      if (version === null) {
+        rejectSeed(new Error(`no version-change transaction while creating ${seed.dbName}`))
+        return
+      }
       db.createObjectStore('projects', { keyPath: 'id' })
       const library = db.createObjectStore('library', { keyPath: 'id' })
       library.createIndex('savedAt', 'savedAt')
@@ -58,25 +66,28 @@ function writeSeed(seed: PreviewSeed): Promise<void> {
       recovery.createIndex('projectCreatedAt', ['projectId', 'createdAt'])
       db.createObjectStore('meta', { keyPath: 'key' })
       db.createObjectStore('prefs', { keyPath: 'key' })
+
+      version.oncomplete = () => {
+        db.close()
+        resolveSeed()
+      }
+      version.onabort = () => rejectSeed(new Error(`seeding ${seed.dbName} aborted: ${version.error?.message}`))
+
+      for (const record of seed.projects) version.objectStore('projects').put(record)
+      for (const record of seed.library) version.objectStore('library').put(record)
+      for (const asset of seed.assets) {
+        const { base64, ...record } = asset
+        const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))
+        version.objectStore('assets').put({ ...record, blob: new Blob([bytes], { type: record.mediaType }) })
+      }
     }
     request.onerror = () => rejectSeed(new Error(`opening ${seed.dbName} failed: ${request.error?.message}`))
 
     request.onsuccess = () => {
-      const db = request.result
-      const tx = db.transaction(['projects', 'library', 'assets'], 'readwrite')
-      tx.oncomplete = () => {
-        db.close()
-        resolveSeed()
-      }
-      tx.onabort = () => rejectSeed(new Error(`seeding ${seed.dbName} aborted: ${tx.error?.message}`))
-
-      for (const record of seed.projects) tx.objectStore('projects').put(record)
-      for (const record of seed.library) tx.objectStore('library').put(record)
-      for (const asset of seed.assets) {
-        const { base64, ...record } = asset
-        const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))
-        tx.objectStore('assets').put({ ...record, blob: new Blob([bytes], { type: record.mediaType }) })
-      }
+      // The database already exists, which means it already holds the seed and whatever the
+      // spec has saved on top of it since.
+      request.result.close()
+      resolveSeed()
     }
   })
 }
@@ -87,4 +98,29 @@ export async function databaseNames(page: Page): Promise<string[]> {
     const databases = await indexedDB.databases()
     return databases.map((database) => database.name ?? '')
   })
+}
+
+/**
+ * The revision stored for one Project: the proof a write has landed, which a spec needs before
+ * it can say anything about what did *not* change elsewhere.
+ */
+export async function projectRevision(page: Page, projectId: string): Promise<number> {
+  return page.evaluate(
+    ([dbName, id]) =>
+      new Promise<number>((resolveRevision, rejectRevision) => {
+        const open = indexedDB.open(dbName, 1)
+        open.onerror = () => rejectRevision(new Error(`opening ${dbName} failed`))
+        open.onsuccess = () => {
+          const db = open.result
+          const read = db.transaction('projects', 'readonly').objectStore('projects').get(id)
+          read.onsuccess = () => {
+            db.close()
+            const record = read.result as { revision?: number } | undefined
+            resolveRevision(record?.revision ?? 0)
+          }
+          read.onerror = () => rejectRevision(new Error(`reading ${id} failed`))
+        }
+      }),
+    [PREVIEW_DB_NAME, projectId],
+  )
 }
