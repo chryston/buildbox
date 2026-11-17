@@ -7,6 +7,8 @@ import { defineConfig, devices } from '@playwright/test'
 //
 // `vite preview` of the local build, same server as the smoke config.
 const baseURL = 'http://localhost:4173/buildbox/'
+// `npm run build:preview` output, served beside the production preview (#49).
+const previewBaseURL = 'http://localhost:4174/buildbox/'
 const viewport = { width: 1440, height: 1000 }
 
 export default defineConfig({
@@ -48,12 +50,29 @@ export default defineConfig({
     },
   },
 
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport, deviceScaleFactor: 1 } }],
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport, deviceScaleFactor: 1 } },
+    {
+      // The same spec, the same baselines, the flag-on artifact (#49 criterion 1): the
+      // snapshot template has no project segment, so both projects resolve the same PNGs
+      // and a difference is a real visual difference. The spec swaps only its seeding step.
+      name: 'projects-v2',
+      use: { ...devices['Desktop Chrome'], viewport, deviceScaleFactor: 1, baseURL: previewBaseURL },
+    },
+  ],
 
-  webServer: {
-    command: 'npx vite preview --port 4173 --strictPort',
-    url: baseURL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
-  },
+  webServer: [
+    {
+      command: 'npx vite preview --port 4173 --strictPort',
+      url: baseURL,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+    {
+      command: 'npx vite preview --outDir dist-preview --port 4174 --strictPort',
+      url: previewBaseURL,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+  ],
 })

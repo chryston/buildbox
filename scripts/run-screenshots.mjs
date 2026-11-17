@@ -168,9 +168,10 @@ const test = `npx playwright test -c ${CONFIG}${passthrough.map((arg) => ` ${she
   update ? ' --update-snapshots' : ''
 }`
 const handBack =
-  'for p in e2e/screenshots/__snapshots__ test-results playwright-report dist; do ' +
+  'for p in e2e/screenshots/__snapshots__ test-results playwright-report dist dist-preview; do ' +
   `[ -e "/work/$p" ] && chown -R ${process.getuid()}:${process.getgid()} "/work/$p"; done; true`
-const inner = `npm ci && npm run build && ${test}; rc=$?; ${handBack}; exit $rc`
+// Both artifacts: the `projects-v2` screenshot project captures the flag-on build (#49).
+const inner = `npm ci && npm run build && npm run build:preview && ${test}; rc=$?; ${handBack}; exit $rc`
 
 console.log(`run-screenshots: ${image} (${update ? 'updating' : 'checking'} baselines)`)
 const docker = runOrFail(

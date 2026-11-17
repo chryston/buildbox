@@ -14,9 +14,18 @@ const engines = {
   webkit: devices['Desktop Safari'],
 }
 
+// The flag-on artifact is a second build on a second port (#49): `npm run build:preview`
+// writes `dist-preview/`, and only the `projects-v2` project is pointed at it.
+const previewBaseURL = 'http://localhost:4174/buildbox/'
+
+// The flag-on specs assert against that artifact; the flag-off engines have nothing to
+// assert there, and vice versa.
+const PREVIEW_ONLY = /projects-v2-/
+
 const desktopProjects = Object.entries(engines).map(([name, device]) => ({
   name,
   use: { ...device, viewport: { width: 1440, height: 1000 } },
+  testIgnore: PREVIEW_ONLY,
 }))
 
 export default defineConfig({
@@ -32,16 +41,34 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
 
-  projects: desktopProjects,
+  projects: [
+    ...desktopProjects,
+    {
+      name: 'projects-v2',
+      // Chromium only, like the screenshot project: this is one artifact on one engine, and
+      // nightly owns the other engines (#38).
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 1000 }, baseURL: previewBaseURL },
+      testMatch: PREVIEW_ONLY,
+    },
+  ],
 
   // Against a deployed URL there is nothing to serve; locally `vite preview` needs a
-  // prior `npm run build`, which the test:e2e script does not run — run it first.
+  // prior `npm run build`, which the test:e2e script does not run — run it first, and
+  // `npm run build:preview` for the flag-on server.
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
-    : {
-        command: 'npx vite preview --port 4173 --strictPort',
-        url: 'http://localhost:4173/buildbox/',
-        reuseExistingServer: !process.env.CI,
-        timeout: 60_000,
-      },
+    : [
+        {
+          command: 'npx vite preview --port 4173 --strictPort',
+          url: 'http://localhost:4173/buildbox/',
+          reuseExistingServer: !process.env.CI,
+          timeout: 60_000,
+        },
+        {
+          command: 'npx vite preview --outDir dist-preview --port 4174 --strictPort',
+          url: previewBaseURL,
+          reuseExistingServer: !process.env.CI,
+          timeout: 60_000,
+        },
+      ],
 })
