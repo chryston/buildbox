@@ -1,7 +1,7 @@
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Locator, Page } from '@playwright/test'
+import type { Locator, Page, TestInfo } from '@playwright/test'
 import { expect, test } from '../support/fixtures'
 import { seedLegacyStore } from '../support/legacyStore'
 import { seedPreviewDb, type PreviewSeed } from '../support/seedPreviewDb'
@@ -152,6 +152,83 @@ async function padProbes(probes: readonly Locator[]): Promise<void> {
   }
 }
 
+/** A box in the canvas's own whole pixels, which is the only place a screenshot has any. */
+interface PixelBox {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/** Each probe's box in canvas pixels, grown outward to whole pixels so no mask edge is blended. */
+function probeBoxes(canvas: Locator): Promise<PixelBox[]> {
+  return canvas.evaluate((svg) => {
+    const host = svg.getBoundingClientRect()
+    const originX = Math.round(host.left)
+    const originY = Math.round(host.top)
+    return [...svg.querySelectorAll('[data-testid^="sketch-probe-"]')].map((probe) => {
+      const box = probe.getBoundingClientRect()
+      const x0 = Math.max(0, Math.floor(box.left - originX))
+      const y0 = Math.max(0, Math.floor(box.top - originY))
+      const x1 = Math.min(Math.round(host.width), Math.ceil(box.right - originX))
+      const y1 = Math.min(Math.round(host.height), Math.ceil(box.bottom - originY))
+      return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }
+    })
+  })
+}
+
+const MASK_COLOR = '#ff00ff'
+
+/**
+ * Cover each box in the live page with the mask colour, so the capture shows it there.
+ *
+ * Playwright's own `mask` option only ever paints the *captured* image, and the baseline is
+ * the S0 PNG, which has the sketches in it and must stay as it is. Painting the page instead
+ * lets the same boxes be painted on the baseline's pixels (`maskedBaseline`) and the two
+ * compared like for like.
+ */
+async function paintMask(canvas: Locator, boxes: readonly PixelBox[]): Promise<void> {
+  await canvas.evaluate((svg, { boxList, color }) => {
+    const host = svg.getBoundingClientRect()
+    for (const box of boxList) {
+      const cover = document.createElement('div')
+      cover.dataset.testid = 'sketch-mask'
+      cover.style.cssText =
+        `position:fixed;z-index:2147483647;pointer-events:none;background:${color};` +
+        `left:${Math.round(host.left) + box.x}px;top:${Math.round(host.top) + box.y}px;` +
+        `width:${box.width}px;height:${box.height}px`
+      document.body.appendChild(cover)
+    }
+  }, { boxList: boxes, color: MASK_COLOR })
+}
+
+/**
+ * The S0 baseline with the same boxes painted over it, written beside it (gitignored) under
+ * the name the masked comparison reads. The committed baseline is only ever read.
+ */
+async function maskedBaseline(page: Page, testInfo: TestInfo, boxes: readonly PixelBox[]): Promise<string> {
+  const source = readFileSync(testInfo.snapshotPath('floor-plan-scene.png')).toString('base64')
+  const masked = await page.evaluate(async ({ png, boxList, color }) => {
+    const picture = new Image()
+    picture.src = `data:image/png;base64,${png}`
+    await picture.decode()
+    const surface = document.createElement('canvas')
+    surface.width = picture.naturalWidth
+    surface.height = picture.naturalHeight
+    const context = surface.getContext('2d')
+    if (context === null) throw new Error('no 2d context to paint the baseline mask on')
+    context.drawImage(picture, 0, 0)
+    context.fillStyle = color
+    for (const box of boxList) context.fillRect(box.x, box.y, box.width, box.height)
+    return surface.toDataURL('image/png').split(',')[1]
+  }, { png: source, boxList: boxes, color: MASK_COLOR })
+  const name = 'floor-plan-scene-masked.png'
+  const target = testInfo.snapshotPath(name)
+  mkdirSync(dirname(target), { recursive: true })
+  writeFileSync(target, Buffer.from(masked, 'base64'))
+  return name
+}
+
 test('floor plan scene', async ({ page }, testInfo) => {
   await page.getByRole('button', { name: /floor plan/i }).click()
 
@@ -165,10 +242,16 @@ test('floor plan scene', async ({ page }, testInfo) => {
   await waitForStablePaint(canvas.locator('g').first())
   const probes = isPreview(testInfo.project.name) ? await sketchProbes(canvas) : []
   await zoomUntilSceneFits(page, canvas)
-  if (probes.length > 0) await padProbes(probes)
 
   // Calibrated image, placed objects in all four rotations, the custom shape, the
   // wall-hack polyline and the tile-zone rectangle — the last two only in the build that
   // still has sketch tools, so only there are they unmasked.
-  await expect(canvas).toHaveScreenshot('floor-plan-scene.png', probes.length > 0 ? { mask: probes } : {})
+  if (probes.length === 0) {
+    await expect(canvas).toHaveScreenshot('floor-plan-scene.png')
+    return
+  }
+  await padProbes(probes)
+  const boxes = await probeBoxes(canvas)
+  await paintMask(canvas, boxes)
+  await expect(canvas).toHaveScreenshot(await maskedBaseline(page, testInfo, boxes))
 })

@@ -128,6 +128,17 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
   // The cabinet view shows a Design by id and falls back to the first one when nothing is
   // selected; the session holds no such pointer, so the projection decides it (#49).
   const itemDesignId = units.find((unit) => unit.id === activeItemDesignId)?.id ?? units[0]?.id ?? null
+
+  // Opening another Project makes its first cabinet the active one, as `setActiveProject`
+  // did. The first Project of a launch starts with none: today's store rehydrates with an
+  // `activeUnitId` that matches no saved cabinet, so no outline is drawn until one is clicked.
+  // The scene's pixels depend on it (#49 criterion 1).
+  const shownSessionId = useRef(session.id)
+  useEffect(() => {
+    if (shownSessionId.current === session.id) return
+    shownSessionId.current = session.id
+    setActiveItemDesign(units[0]?.id ?? null)
+  }, [session.id, units, setActiveItemDesign])
   const floorPlan = useMemo(() => withDragPreview(baseFloorPlan, dragPreview), [baseFloorPlan, dragPreview])
 
   // Undo and redo name the Floor and view their Intent landed on; #14's session publishes
@@ -196,7 +207,8 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
     redo: () => session.redo(),
 
     units,
-    activeItemDesignId: itemDesignId,
+    // What was chosen, not the fallback: the scene outlines only a cabinet that was picked.
+    activeItemDesignId,
     setActiveItemDesign,
     selectedNodeId,
     selectNode,
@@ -349,6 +361,7 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
     units,
     floorPlan,
     floorId,
+    activeItemDesignId,
     itemDesignId,
     setActiveItemDesign,
     selectedNodeId,

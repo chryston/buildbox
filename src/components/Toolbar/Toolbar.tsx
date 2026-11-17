@@ -78,7 +78,10 @@ export default function Toolbar({
         ))}
       </div>
 
-      <div className="ml-auto flex items-center gap-2">
+      {/* Without the workspace buttons the row loses the 2 px their ↓/↑ glyphs add to it
+          (fallback-font ascent: 34 px against Export SVG's 32), and every view below it
+          would sit 2 px higher than today's. #49 keeps the pixels, so the row keeps the height. */}
+      <div className={`ml-auto flex items-center gap-2${workspace ? '' : ' min-h-[34px]'}`}>
         {saveStatus && (
           <span
             className={`text-sm ${saveStatus.failed ? 'text-red-400' : 'text-text-muted'}`}

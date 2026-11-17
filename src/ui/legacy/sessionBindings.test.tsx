@@ -12,7 +12,7 @@
  */
 import { act, render } from '@testing-library/react'
 import { useEffect } from 'react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { INTENT_LABELS, intentIdCount } from '../../edit'
 import type { Intent, IntentType, PayloadOf } from '../../edit'
 import { createMemoryAdapter } from '../../persistence'
@@ -25,15 +25,19 @@ import type { AssetUrlSource, IntentBuilder, SessionViewServices } from './sessi
 
 /** The app's own rule: the catalogue says how many IDs an Intent spends, and in what order. */
 let issued = 0
+/** Every Intent the bindings built, in order: what a callback *asked for*, accepted or not. */
+const built: IntentType[] = []
 const testIntents: IntentBuilder = {
-  build: <T extends IntentType>(type: T, payload: PayloadOf<T>): Intent =>
-    ({
+  build: <T extends IntentType>(type: T, payload: PayloadOf<T>): Intent => {
+    built.push(type)
+    return ({
       type,
       payload,
       label: INTENT_LABELS[type],
       ids: Array.from({ length: intentIdCount(type) }, () => `test-${(issued += 1)}`),
       now: TEST_NOW,
-    }) as Intent,
+    }) as Intent
+  },
 }
 
 /** No test here loads a Plan Image, so no URL is ever asked for or handed out. */
@@ -162,5 +166,84 @@ describe('the session bindings, dragging a floor-plan object', () => {
     await settle()
     expect(placed(bindings()).x).toBe(spawn.x)
     expect(session.getSnapshot().history.canRedo).toBe(true)
+  })
+})
+
+/**
+ * The mapping the flagged app stands on (#49): every callback that changes the document builds
+ * exactly one Intent of the type the legacy action stood for, and nothing else. Selection,
+ * tool, module and snap callbacks change the UI session only and are absent on purpose.
+ *
+ * The payloads are placeholders — the Project holds no such node — so the session refuses
+ * most of them. That is fine: this asserts what the binding *asked for*, which is the
+ * contract; whether the handler accepts it is `edit`'s own suite.
+ */
+const INTENT_TABLE: readonly (readonly [string, (bindings: LegacyBindings) => void, IntentType])[] = [
+  ['updateUnitSettings', (b) => b.updateUnitSettings('d', { height: 900 }), 'cabinet.updateSettings'],
+  ['setCabinetMaterial', (b) => b.setCabinetMaterial('oak'), 'cabinet.setMaterial'],
+  ['addUnit', (b) => b.addUnit(), 'cabinet.addUnit'],
+  ['removeUnit', (b) => b.removeUnit('d'), 'cabinet.removeUnit'],
+  ['renameUnit', (b) => b.renameUnit('d', 'Tall'), 'cabinet.renameUnit'],
+  ['addShelf', (b) => b.addShelf('n'), 'cabinet.addShelf'],
+  ['addDivider', (b) => b.addDivider('n'), 'cabinet.addDivider'],
+  ['deleteBoard', (b) => b.deleteBoard('n'), 'cabinet.deleteBoard'],
+  ['setNodeSize', (b) => b.setNodeSize('n', 300), 'cabinet.setNodeSize'],
+  ['pinNode', (b) => b.pinNode('n', 300), 'cabinet.pinNode'],
+  ['unpinNode', (b) => b.unpinNode('n'), 'cabinet.unpinNode'],
+  ['unlockNode', (b) => b.unlockNode('n'), 'cabinet.unpinNode'],
+  ['setNodeLabel', (b) => b.setNodeLabel('n', 'Shoes'), 'cabinet.setNodeLabel'],
+  ['distributeEvenly', (b) => b.distributeEvenly('n', 200), 'cabinet.distributeEvenly'],
+  ['setElementType', (b) => b.setElementType('n', 'drawer'), 'cabinet.setElementType'],
+  ['setDrawerConfig', (b) => b.setDrawerConfig('n', { slideType: 'side-mount', reveal: 2 }), 'cabinet.setDrawerConfig'],
+  ['addAccessory', (b) => b.addAccessory('n', 'door'), 'cabinet.addAccessory'],
+  ['removeAccessory', (b) => b.removeAccessory('n', 'a'), 'cabinet.removeAccessory'],
+  ['commitDrag', (b) => b.commitDrag('n', 0.5), 'cabinet.setSplitRatio'],
+  ['addFloorPlanObject', (b) => b.addFloorPlanObject('sofa-3'), 'plan.addObject'],
+  ['addFloorPlanFromTemplate', (b) => b.addFloorPlanFromTemplate('t'), 'plan.addFromTemplate'],
+  [
+    'addCustomTemplate',
+    (b) => b.addCustomTemplate({ label: 'Island', defaultW: 800, defaultH: 600, color: '#ffaa00' }),
+    'plan.addTemplate',
+  ],
+  ['updateFloorPlanObject', (b) => b.updateFloorPlanObject('o', { x: 10 }), 'plan.updateObject'],
+  ['removeFloorPlanObject', (b) => b.removeFloorPlanObject('o'), 'plan.removeObject'],
+  ['setFloorPlanScale', (b) => b.setFloorPlanScale(0.25), 'plan.calibrate'],
+  ['clearFloorPlan', (b) => b.clearFloorPlan(), 'plan.clear'],
+  [
+    'setPlanImage',
+    (b) => b.setPlanImage(
+      {
+        src: 'blob:x',
+        widthPx: 640,
+        heightPx: 480,
+        asset: { bytes: new Blob(['x']), sha256: 'a'.repeat(64), mediaType: 'image/png', widthPx: 640, heightPx: 480 },
+      },
+      { clearExisting: false },
+    ),
+    'plan.setImage',
+  ],
+]
+
+describe('the session bindings, one Intent per document callback', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it.each(INTENT_TABLE)('%s builds %s', async (_name, call, expected) => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { bindings } = await renderSession()
+    built.length = 0
+    act(() => call(bindings()))
+    expect(built).toEqual([expected])
+  })
+
+  it('dispatches a drag as plan.updateObject on pointer-up and not before', async () => {
+    const { bindings, settle } = await renderSession()
+    act(() => bindings().addFloorPlanObject('sofa-3'))
+    await settle()
+    const { id } = placed(bindings())
+    built.length = 0
+    act(() => bindings().dragFloorPlanObject(id, { x: 400, y: 0 }))
+    expect(built).toEqual([])
+    act(() => bindings().endFloorPlanDrag(id))
+    expect(built).toEqual(['plan.updateObject'])
   })
 })
