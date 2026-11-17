@@ -56,6 +56,16 @@ const LEGACY_ELEMENTS = [
   },
   { name: 'legacy-types', pattern: ['src/types'], mode: 'folder', allow: ['legacy-types'], pure: true },
   {
+    // #49's test of the session-backed bindings: it opens a real session over the in-memory
+    // store to count what one drag writes, and `persistence` is no source file of
+    // `legacy-view`'s business — `app` alone opens a database. It is a test file, so it ships
+    // nothing.
+    name: 'legacy-session-bindings-test',
+    pattern: ['src/ui/legacy/sessionBindings.test.tsx'],
+    mode: 'file',
+    allow: ['*'],
+  },
+  {
     name: 'legacy-view',
     // The adapter layer of #49: the `LegacyBindings` seam, the two implementations of it, and
     // the UI state that is not project data. It claims `src/ui/legacy`

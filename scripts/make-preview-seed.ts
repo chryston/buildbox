@@ -111,7 +111,7 @@ writeFileSync(OUT, `${JSON.stringify(fixture, null, 2)}\n`)
 
 console.log(
   `make-preview-seed: ${OUT}\n` +
-    `  projects: ${records.map((r) => `${r.data.name}@r${r.revision}`).join(', ')}\n` +
+    `  projects: ${records.map((r) => `${r.data.meta.name}@r${r.revision}`).join(', ')}\n` +
     `  assets: ${assets.map((a) => `${a.sha256.slice(0, 12)}(${a.byteLength}B)`).join(', ')}\n` +
     `  ids minted: ${nextId}`,
 )

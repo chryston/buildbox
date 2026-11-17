@@ -16,6 +16,7 @@ export { createProject, type CreateProjectArgs } from './create'
 export { LEGACY_DEFAULT_SETTINGS } from './defaults'
 export {
   INTENT_ID_ORDER,
+  intentIdCount,
   type AddAccessory,
   type AddDivider,
   type AddPlanFromTemplate,

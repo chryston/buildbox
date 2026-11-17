@@ -291,6 +291,18 @@ export const INTENT_ID_ORDER: Record<IntentType, readonly string[]> = {
   'plan.clear': [],
 }
 
+/**
+ * How many IDs an Intent spends. An entry ending in `…` stands for a count that depends on
+ * the tree the Intent lands in: a split turns one space into two and adds one board, so it
+ * spends two however that tree is shaped.
+ */
+const VARIADIC_ID_COUNT = 2
+
+export function intentIdCount(type: IntentType): number {
+  const order = INTENT_ID_ORDER[type]
+  return order[order.length - 1]?.endsWith('…') === true ? VARIADIC_ID_COUNT : order.length
+}
+
 /** Where an edit landed, so undo can navigate to it (#48). */
 export interface Locator {
   /** `null` when the edit belongs to no Floor — a Project or template change. */
