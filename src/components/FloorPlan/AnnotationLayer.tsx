@@ -6,7 +6,7 @@ interface Props {
   annotations: Annotation[]
   activeType: AnnotationType | null
   zoom: number
-  onAddAnnotation: (ann: Annotation) => void
+  onAddAnnotation?: (ann: Annotation) => void
 }
 
 export default function AnnotationLayer({ annotations, activeType, zoom, onAddAnnotation }: Props) {
@@ -70,7 +70,7 @@ export default function AnnotationLayer({ annotations, activeType, zoom, onAddAn
   }
 
   function commitWallHack(points: { x: number; y: number }[]) {
-    onAddAnnotation({ id: nanoid(), type: 'wall-hack', points })
+    onAddAnnotation?.({ id: nanoid(), type: 'wall-hack', points })
   }
 
   function commitTileZone(a: { x: number; y: number }, b: { x: number; y: number }) {
@@ -81,7 +81,7 @@ export default function AnnotationLayer({ annotations, activeType, zoom, onAddAn
 
     if (right - left < 1 || bottom - top < 1) return
 
-    onAddAnnotation({
+    onAddAnnotation?.({
       id: nanoid(), type: 'tile-zone',
       points: [
         { x: left, y: top },

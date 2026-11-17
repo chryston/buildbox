@@ -15,6 +15,9 @@ const fileInput = (): HTMLInputElement => {
   return input
 }
 
+/** The toolbar only offers Export and Import to an app that can read workspace JSON (#49). */
+const workspace = (onImport = vi.fn()) => ({ projects: [], activeProjectId: null, onImport })
+
 const upload = (body: unknown, name = 'workspace.buildbox.json'): File =>
   new File([typeof body === 'string' ? body : JSON.stringify(body)], name, { type: 'application/json' })
 
@@ -42,7 +45,7 @@ describe('Toolbar', () => {
 
   it('refuses a malformed file and never reaches the store', async () => {
     const onImport = vi.fn()
-    render(<Toolbar settings={settings} onSettingsChange={vi.fn()} onImportWorkspace={onImport} />)
+    render(<Toolbar settings={settings} onSettingsChange={vi.fn()} workspace={workspace(onImport)} />)
     fireEvent.change(fileInput(), { target: { files: [upload({ version: 1, projects: [{}] })] } })
 
     expect(await screen.findByRole('heading', { name: /can't be imported/i })).toBeInTheDocument()
@@ -55,20 +58,20 @@ describe('Toolbar', () => {
   })
 
   it('refuses a file from a newer BuildBox', async () => {
-    render(<Toolbar settings={settings} onSettingsChange={vi.fn()} />)
+    render(<Toolbar settings={settings} onSettingsChange={vi.fn()} workspace={workspace()} />)
     fireEvent.change(fileInput(), { target: { files: [upload({ version: 2, projects: [goodDesign] })] } })
     expect(await screen.findByTestId('problem-list')).toHaveTextContent('version — This file was written by a newer version of BuildBox.')
   })
 
   it('refuses a file that is not JSON at all', async () => {
-    render(<Toolbar settings={settings} onSettingsChange={vi.fn()} />)
+    render(<Toolbar settings={settings} onSettingsChange={vi.fn()} workspace={workspace()} />)
     fireEvent.change(fileInput(), { target: { files: [upload('{')] } })
     expect(await screen.findByTestId('problem-list')).toHaveTextContent('The file is not valid JSON.')
   })
 
   it('still offers Replace and Merge for a file the reader accepts', async () => {
     const onImport = vi.fn()
-    render(<Toolbar settings={settings} onSettingsChange={vi.fn()} onImportWorkspace={onImport} />)
+    render(<Toolbar settings={settings} onSettingsChange={vi.fn()} workspace={workspace(onImport)} />)
     fireEvent.change(fileInput(), { target: { files: [upload({ version: 1, projects: [goodDesign], activeProjectId: 'p1' })] } })
 
     const replace = await screen.findByRole('button', { name: /replace workspace/i })

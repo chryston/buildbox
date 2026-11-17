@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, screen } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 
 beforeEach(() => {
@@ -9,6 +9,9 @@ beforeEach(() => {
 test('renders the BuildBox app shell title and ignores undo shortcuts in focused inputs', async () => {
   const { useStore } = await import('./store/store')
   const { default: App } = await import('./App')
+  // `resetModules` above means the seam has to be imported from this generation too, or the
+  // context the render provides is not the one the freshly imported App reads.
+  const { renderWithBindings: render } = await import('./ui/legacy/testing')
 
   render(<App />)
 
@@ -29,6 +32,9 @@ test('renders the BuildBox app shell title and ignores undo shortcuts in focused
 test('unlocking from the sidebar clears fixedSize on the selected node', async () => {
   const { useStore } = await import('./store/store')
   const { default: App } = await import('./App')
+  // `resetModules` above means the seam has to be imported from this generation too, or the
+  // context the render provides is not the one the freshly imported App reads.
+  const { renderWithBindings: render } = await import('./ui/legacy/testing')
 
   const state = useStore.getState()
   const activeProjectId = state.activeProjectId!

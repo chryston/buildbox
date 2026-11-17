@@ -1,18 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import CabinetCanvas from './components/CabinetCanvas/CabinetCanvas'
 import ErrorBoundary from './components/ErrorBoundary'
 import FloorPlanPage from './components/FloorPlan/FloorPlanPage'
 import ModuleSwitcher from './components/ModuleSwitcher/ModuleSwitcher'
-import type { AppModule } from './types'
 import ProjectTabs from './components/ProjectTabs/ProjectTabs'
 import Sidebar from './components/Sidebar/Sidebar'
 import Toolbar from './components/Toolbar/Toolbar'
 import WarningBanner from './components/WarningBanner/WarningBanner'
 import { computeCutListForUnits, computeSceneLayout, findNode } from './cabinet'
-import { downloadSVG } from './utils/exportSVG'
-import { useStore } from './store/store'
 import type { LayoutVoid } from './cabinet'
 import type { GlobalSettings } from './domain'
+import { downloadSVG } from './utils/exportSVG'
+import { useLegacyBindings } from './ui/legacy/bindings'
 
 const defaultSettings: GlobalSettings = {
   unit: 'mm',
@@ -26,61 +25,33 @@ const defaultSettings: GlobalSettings = {
 }
 
 export default function App() {
-  const projects = useStore((state) => state.projects)
-  const activeProjectId = useStore((state) => state.activeProjectId)
-  const activeUnitId = useStore((state) => state.activeUnitId)
-  const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0]
-  const activeUnit = activeProject?.units.find(u => u.id === activeUnitId) ?? activeProject?.units[0]
-  const [canUndo, setCanUndo] = useState(false)
-  const [canRedo, setCanRedo] = useState(false)
-  const [activeModule, setActiveModule] = useState<AppModule>('cabinet')
-
-  const createProject = useStore((state) => state.createProject)
-  const deleteProject = useStore((state) => state.deleteProject)
-  const setActiveProject = useStore((state) => state.setActiveProject)
-  const updateUnitSettings = useStore((state) => state.updateUnitSettings)
-  const storeAddShelf = useStore((state) => state.addShelf)
-  const storeAddDivider = useStore((state) => state.addDivider)
-  const storeDeleteBoard = useStore((state) => state.deleteBoard)
-  const storeUnpinNode = useStore((state) => state.unpinNode)
-  const storePinNode = useStore((state) => state.pinNode)
-  const storeUnlockNode = useStore((state) => state.unlockNode)
-  const storeSetCabinetMaterial = useStore((state) => state.setCabinetMaterial)
-  const storeDistributeEvenly = useStore((state) => state.distributeEvenly)
-  const storeDrawerConfig = useStore((state) => state.setDrawerConfig)
-  const storeSetElementType = useStore((state) => state.setElementType)
-  const storeAddAccessory = useStore((state) => state.addAccessory)
-  const storeRemoveAccessory = useStore((state) => state.removeAccessory)
-  const addUnit = useStore((state) => state.addUnit)
-  const removeUnit = useStore((state) => state.removeUnit)
-  const setActiveUnit = useStore((state) => state.setActiveUnit)
-  const renameUnit = useStore((state) => state.renameUnit)
-  const selectedId = useStore((state) => state.selectedId)
-
-  const storeImportWorkspace = useStore((state) => state.importWorkspace)
+  const bindings = useLegacyBindings()
+  const { units, activeItemDesignId, selectedNodeId, activeModule } = bindings
+  const activeUnit = units.find((unit) => unit.id === activeItemDesignId) ?? units[0]
   const svgRef = useRef<SVGSVGElement>(null)
+
   const selectedNode = useMemo(
-    () => (selectedId && activeUnit ? findNode(activeUnit.root, selectedId) ?? null : null),
-    [selectedId, activeUnit],
+    () => (selectedNodeId && activeUnit ? findNode(activeUnit.root, selectedNodeId) ?? null : null),
+    [selectedNodeId, activeUnit],
   )
   const cutList = useMemo(
-    () => (activeProject ? computeCutListForUnits(activeProject.units) : []),
-    [activeProject]
+    () => (units.length > 0 ? computeCutListForUnits(units) : []),
+    [units]
   )
   const sceneLayout = useMemo(
-    () => (activeProject ? computeSceneLayout(activeProject.units, activeUnitId) : null),
-    [activeProject, activeUnitId]
+    () => (units.length > 0 ? computeSceneLayout(units, activeItemDesignId) : null),
+    [units, activeItemDesignId]
   )
   const overConstrainedIds = sceneLayout?.units.flatMap(u => u.overConstrainedIds) ?? []
 
   const selectedVoid = useMemo<LayoutVoid | null>(() => {
-    if (!selectedId || !sceneLayout) return null
+    if (!selectedNodeId || !sceneLayout) return null
     for (const unit of sceneLayout.units) {
-      const v = unit.voids.find(v => v.nodeId === selectedId)
+      const v = unit.voids.find(v => v.nodeId === selectedNodeId)
       if (v) return v
     }
     return null
-  }, [selectedId, sceneLayout])
+  }, [selectedNodeId, sceneLayout])
 
   const evenH = useMemo<number | null>(() => {
     if (!selectedVoid?.columnRootId || !sceneLayout) return null
@@ -89,19 +60,6 @@ export default function App() {
     if (siblings.length === 0) return null
     return siblings.reduce((sum, v) => sum + v.h, 0) / siblings.length
   }, [selectedVoid, sceneLayout])
-
-  useEffect(() => {
-    const syncTemporalState = () => {
-      const state = useStore.temporal.getState()
-      setCanUndo(state.pastStates.length > 0)
-      setCanRedo(state.futureStates.length > 0)
-    }
-
-    syncTemporalState()
-    const unsubscribe = useStore.temporal.subscribe(syncTemporalState)
-
-    return unsubscribe
-  }, [])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -115,20 +73,20 @@ export default function App() {
 
       if ((e.ctrlKey || e.metaKey) && key === 'z' && !e.shiftKey) {
         e.preventDefault()
-        useStore.temporal.getState().undo()
+        bindings.undo()
       }
 
       if ((e.ctrlKey || e.metaKey) && (key === 'y' || (key === 'z' && e.shiftKey))) {
         e.preventDefault()
-        useStore.temporal.getState().redo()
+        bindings.redo()
       }
     }
 
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [])
+  }, [bindings])
 
-  if (!activeProject) {
+  if (bindings.projects.length === 0) {
     return <div className="min-h-screen bg-surface text-text-primary">BuildBox</div>
   }
 
@@ -138,29 +96,28 @@ export default function App() {
       <Toolbar
         settings={activeUnit?.settings ?? defaultSettings}
         onSettingsChange={(patch) => {
-          const id = activeUnitId ?? activeProject?.units[0]?.id
-          if (id) updateUnitSettings(id, patch)
+          const id = activeItemDesignId ?? units[0]?.id
+          if (id) bindings.updateUnitSettings(id, patch)
         }}
-        canUndo={canUndo}
-        onUndo={() => useStore.temporal.getState().undo()}
-        canRedo={canRedo}
-        onRedo={() => useStore.temporal.getState().redo()}
+        canUndo={bindings.canUndo}
+        onUndo={bindings.undo}
+        canRedo={bindings.canRedo}
+        onRedo={bindings.redo}
         onExport={() => {
           if (svgRef.current) {
-            downloadSVG(svgRef.current, activeProject.name)
+            downloadSVG(svgRef.current, bindings.activeProjectName)
           }
         }}
-        projects={projects}
-        activeProjectId={activeProjectId}
-        onImportWorkspace={(incoming, mode) => storeImportWorkspace(incoming.projects, mode)}
+        workspace={bindings.workspace}
+        saveStatus={bindings.saveStatus}
       />
-      <ModuleSwitcher activeModule={activeModule} onChange={setActiveModule} />
+      <ModuleSwitcher activeModule={activeModule} onChange={bindings.setActiveModule} />
       <ProjectTabs
-        projects={projects}
-        activeId={activeProjectId}
-        onSelect={setActiveProject}
-        onCreate={createProject}
-        onDelete={deleteProject}
+        projects={bindings.projects}
+        activeId={bindings.activeProjectId}
+        onSelect={bindings.selectProject}
+        onCreate={bindings.createProject}
+        onDelete={bindings.deleteProject}
       />
       {activeModule === 'cabinet' && overConstrainedIds.length > 0 && (
         <div className="border-b border-divider bg-panel px-4 py-2">
@@ -176,42 +133,42 @@ export default function App() {
               <CabinetCanvas
                 sceneLayout={sceneLayout}
                 svgRef={svgRef}
-                onUnlockNode={storeUnlockNode}
-                onUnitClick={setActiveUnit}
+                onUnlockNode={bindings.unlockNode}
+                onUnitClick={bindings.setActiveItemDesign}
                 selectedNode={selectedNode}
               />
             )}
             <Sidebar
               cutList={cutList}
-              units={activeProject?.units ?? []}
-              activeUnitId={activeUnitId}
-              onAddUnit={addUnit}
-              onRemoveUnit={removeUnit}
-              onSelectUnit={setActiveUnit}
-              onRenameUnit={renameUnit}
-              selectedId={selectedId}
+              units={units}
+              activeUnitId={activeItemDesignId}
+              onAddUnit={bindings.addUnit}
+              onRemoveUnit={bindings.removeUnit}
+              onSelectUnit={bindings.setActiveItemDesign}
+              onRenameUnit={bindings.renameUnit}
+              selectedId={selectedNodeId}
               selectedNode={selectedNode}
-              onAddShelf={storeAddShelf}
-              onAddDivider={storeAddDivider}
-              onDelete={storeDeleteBoard}
+              onAddShelf={bindings.addShelf}
+              onAddDivider={bindings.addDivider}
+              onDelete={bindings.deleteBoard}
               onToggleLock={(id) => {
-                if (selectedNode?.locked) storeUnpinNode(id)
+                if (selectedNode?.locked) bindings.unpinNode(id)
                 else {
                   const sizeMm = selectedVoid?.parentSplitAxis === 'vertical' ? selectedVoid.w : (selectedVoid?.h ?? selectedNode?.fixedSize ?? 0)
-                  if (sizeMm > 0) storePinNode(id, sizeMm)
+                  if (sizeMm > 0) bindings.pinNode(id, sizeMm)
                 }
               }}
-              onSetCabinetMaterial={storeSetCabinetMaterial}
+              onSetCabinetMaterial={bindings.setCabinetMaterial}
               currentMaterial={activeUnit?.settings.material ?? 'oak'}
               selectedVoid={selectedVoid}
               evenH={evenH}
-              onDistributeEvenly={(colId, h) => storeDistributeEvenly(colId, h)}
-              onSetElementType={storeSetElementType}
-              onSetDrawerConfig={storeDrawerConfig}
-              onAddAccessory={(nodeId, type) => storeAddAccessory(nodeId, { id: crypto.randomUUID(), type })}
-              onRemoveAccessory={storeRemoveAccessory}
+              onDistributeEvenly={bindings.distributeEvenly}
+              onSetElementType={bindings.setElementType}
+              onSetDrawerConfig={bindings.setDrawerConfig}
+              onAddAccessory={bindings.addAccessory}
+              onRemoveAccessory={bindings.removeAccessory}
               settings={activeUnit?.settings}
-              onSettingsChange={(patch) => activeUnit && updateUnitSettings(activeUnit.id, patch)}
+              onSettingsChange={(patch) => activeUnit && bindings.updateUnitSettings(activeUnit.id, patch)}
             />
           </>
         )}

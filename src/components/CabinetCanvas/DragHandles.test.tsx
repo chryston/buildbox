@@ -1,6 +1,7 @@
 import { createRef } from 'react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
+import { renderWithBindings as render } from '../../ui/legacy/testing'
 import type { Design } from '../../types'
 import type { LayoutDivider } from '../../cabinet'
 import { useStore } from '../../store/store'

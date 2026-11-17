@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
-import { useStore } from '../../store/store'
-import { useShallow } from 'zustand/react/shallow'
 import type { Annotation, FloorPlanData } from '../../types'
+import { useLegacyBindings } from '../../ui/legacy/bindings'
 import AnnotationLayer from './AnnotationLayer'
 import PlacedObject from './PlacedObject'
 import CalibrationOverlay from './CalibrationOverlay'
@@ -17,7 +16,7 @@ interface Props {
   isCalibrating: boolean
   activeAnnotationType: 'wall-hack' | 'tile-zone' | null
   onCalibrationPoints: (distancePx: number) => void
-  onAddAnnotation: (ann: Annotation) => void
+  onAddAnnotation?: (ann: Annotation) => void
 }
 
 export default function FloorPlanCanvas({
@@ -32,8 +31,10 @@ export default function FloorPlanCanvas({
   const hasMoved = useRef(false)
 
   const { image, pixelsPerMm, annotations } = floorPlan
-  const objectIds = useStore(useShallow((s) => s.floorPlan.objects.map(o => o.id)))
-  const selectFloorPlanObject = useStore(s => s.selectFloorPlanObject)
+  const bindings = useLegacyBindings()
+  const selectFloorPlanObject = bindings.selectFloorPlanObject
+  // The floor plan projection is stable while the Project is, so this list is too.
+  const objectIds = useMemo(() => bindings.floorPlan.objects.map(o => o.id), [bindings.floorPlan])
 
   // Image dimensions in SVG mm-space (or pixels if not calibrated)
   const imgW = image ? (pixelsPerMm ? image.widthPx / pixelsPerMm : image.widthPx) : 800

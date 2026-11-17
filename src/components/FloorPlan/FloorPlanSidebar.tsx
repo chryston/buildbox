@@ -1,5 +1,5 @@
-import { useStore } from '../../store/store'
-import type { AnnotationType, FloorPlanObjectType } from '../../types'
+import type { Annotation, AnnotationType, FloorPlanObjectType } from '../../types'
+import { useLegacyBindings } from '../../ui/legacy/bindings'
 import { OBJECT_CATALOG, OBJECT_CATEGORIES } from '../../data/floorPlanObjects'
 
 interface Props {
@@ -8,6 +8,8 @@ interface Props {
   onAddCustomShape: () => void
   onSetAnnotationType: (type: AnnotationType | null) => void
   activeAnnotationType: AnnotationType | null
+  /** Present only where sketch annotations can be saved; absent hides the tools (#49). */
+  onAddAnnotation?: (annotation: Annotation) => void
 }
 
 const CATEGORY_ICONS: Record<keyof typeof OBJECT_CATEGORIES, string> = {
@@ -19,8 +21,9 @@ const CATEGORY_ICONS: Record<keyof typeof OBJECT_CATEGORIES, string> = {
   'Carpentry': '🏗',
 }
 
-export default function FloorPlanSidebar({ onAddObject, onAddCustomTemplate, onAddCustomShape, onSetAnnotationType, activeAnnotationType }: Props) {
-  const customTemplates = useStore(s => s.floorPlan.customTemplates)
+export default function FloorPlanSidebar({ onAddObject, onAddCustomTemplate, onAddCustomShape, onSetAnnotationType, activeAnnotationType, onAddAnnotation }: Props) {
+  const { floorPlan } = useLegacyBindings()
+  const customTemplates = floorPlan.customTemplates
 
   return (
     <aside className="flex w-48 flex-col overflow-y-auto border-r border-divider bg-panel text-xs">
@@ -49,6 +52,8 @@ export default function FloorPlanSidebar({ onAddObject, onAddCustomTemplate, onA
         </div>
       ))}
 
+      {onAddAnnotation && (
+      <>
       <div className="mt-2 border-t border-divider px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-text-muted">
         Annotations
       </div>
@@ -76,6 +81,8 @@ export default function FloorPlanSidebar({ onAddObject, onAddCustomTemplate, onA
       >
         🟦 <span>Floor to Tile</span>
       </button>
+      </>
+      )}
 
       <div className="mt-2 border-t border-divider px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-text-muted">
         Custom

@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react'
-import { useStore } from '../../store/store'
 import type { FloorPlanObject } from '../../types'
+import { useLegacyBindings } from '../../ui/legacy/bindings'
 
 const HANDLE_SIZE = 8  // px at zoom=1 (scaled by 1/zoom)
 
@@ -10,10 +10,13 @@ interface Props {
 }
 
 export default function PlacedObject({ id, zoom }: Props) {
-  const obj = useStore(s => s.floorPlan.objects.find(o => o.id === id) ?? null)
-  const selectedId = useStore(s => s.floorPlanSelectedId)
-  const updateFloorPlanObject = useStore(s => s.updateFloorPlanObject)
-  const selectFloorPlanObject = useStore(s => s.selectFloorPlanObject)
+  const bindings = useLegacyBindings()
+  const obj = bindings.floorPlan.objects.find(o => o.id === id) ?? null
+  const selectedId = bindings.floorPlanSelectedId
+  const selectFloorPlanObject = bindings.selectFloorPlanObject
+  // A drag writes nothing until the pointer comes up: one Intent at the end, so one undo
+  // step and one commit for the whole drag (#49 criterion 4).
+  const updateFloorPlanObject = bindings.dragFloorPlanObject
 
   if (!obj) return null
 
@@ -49,7 +52,10 @@ export default function PlacedObject({ id, zoom }: Props) {
     }
 
     window.addEventListener('pointermove', onMove_, { signal: controller.signal })
-    window.addEventListener('pointerup', () => controller.abort(), { signal: controller.signal })
+    window.addEventListener('pointerup', () => {
+      bindings.endFloorPlanDrag(id)
+      controller.abort()
+    }, { signal: controller.signal })
     ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
   }
 
@@ -92,7 +98,10 @@ export default function PlacedObject({ id, zoom }: Props) {
       }
 
       window.addEventListener('pointermove', onMove_, { signal: controller.signal })
-      window.addEventListener('pointerup', () => controller.abort(), { signal: controller.signal })
+      window.addEventListener('pointerup', () => {
+        bindings.endFloorPlanDrag(id)
+        controller.abort()
+      }, { signal: controller.signal })
       ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
     }
   }

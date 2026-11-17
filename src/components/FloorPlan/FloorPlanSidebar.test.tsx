@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
+import { renderWithBindings as render } from '../../ui/legacy/testing'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useStore } from '../../store/store'
@@ -48,13 +49,19 @@ describe('FloorPlanSidebar', () => {
   it('clicking Wall to Hack calls onSetAnnotationType with wall-hack', async () => {
     const onSetAnnotationType = vi.fn()
     const user = userEvent.setup()
-    render(<FloorPlanSidebar onAddObject={vi.fn()} onAddCustomTemplate={vi.fn()} onAddCustomShape={vi.fn()} onSetAnnotationType={onSetAnnotationType} activeAnnotationType={null} />)
+    render(<FloorPlanSidebar onAddObject={vi.fn()} onAddCustomTemplate={vi.fn()} onAddCustomShape={vi.fn()} onSetAnnotationType={onSetAnnotationType} activeAnnotationType={null} onAddAnnotation={vi.fn()} />)
     await user.click(screen.getByText('Wall to Hack'))
     expect(onSetAnnotationType).toHaveBeenCalledWith('wall-hack')
   })
 
+  it('hides the sketch tools where the app cannot save an annotation', () => {
+    render(<FloorPlanSidebar onAddObject={vi.fn()} onAddCustomTemplate={vi.fn()} onAddCustomShape={vi.fn()} onSetAnnotationType={vi.fn()} activeAnnotationType={null} />)
+    expect(screen.queryByRole('button', { name: /wall to hack/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /floor to tile/i })).not.toBeInTheDocument()
+  })
+
   it('active annotation type button uses aria-pressed', () => {
-    render(<FloorPlanSidebar onAddObject={vi.fn()} onAddCustomTemplate={vi.fn()} onAddCustomShape={vi.fn()} onSetAnnotationType={vi.fn()} activeAnnotationType="wall-hack" />)
+    render(<FloorPlanSidebar onAddObject={vi.fn()} onAddCustomTemplate={vi.fn()} onAddCustomShape={vi.fn()} onSetAnnotationType={vi.fn()} activeAnnotationType="wall-hack" onAddAnnotation={vi.fn()} />)
     expect(screen.getByRole('button', { name: /wall to hack/i })).toHaveAttribute('aria-pressed', 'true')
   })
 

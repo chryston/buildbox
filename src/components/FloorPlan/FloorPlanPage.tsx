@@ -1,10 +1,8 @@
 import { useRef, useState } from 'react'
-import { nanoid } from 'nanoid'
-import { useStore } from '../../store/store'
-import { OBJECT_CATALOG } from '../../data/floorPlanObjects'
 import { downloadFloorPlanJSON } from '../../utils/floorPlanExport'
 import { downloadSVG } from '../../utils/exportSVG'
-import type { AnnotationType, FloorPlanObject, FloorPlanObjectType } from '../../types'
+import type { FloorPlanObject, FloorPlanObjectType } from '../../types'
+import { useLegacyBindings, type PreparedPlanImage } from '../../ui/legacy/bindings'
 import FloorPlanCanvas from './FloorPlanCanvas'
 import FloorPlanSidebar from './FloorPlanSidebar'
 import FloorPlanProperties from './FloorPlanProperties'
@@ -13,28 +11,19 @@ import CustomShapeModal from './CustomShapeModal'
 
 export default function FloorPlanPage() {
   const svgRef = useRef<SVGSVGElement>(null)
+  const bindings = useLegacyBindings()
   const [isCalibrating, setIsCalibrating] = useState(false)
   const [pendingDistancePx, setPendingDistancePx] = useState<number | null>(null)
-  const [activeAnnotationType, setActiveAnnotationType] = useState<AnnotationType | null>(null)
   const [showCustomShape, setShowCustomShape] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
-  const [pendingImageUpload, setPendingImageUpload] = useState<{ dataUrl: string; widthPx: number; heightPx: number } | null>(null)
+  const [pendingImageUpload, setPendingImageUpload] = useState<PreparedPlanImage | null>(null)
 
-  const floorPlan = useStore(s => s.floorPlan)
-  const floorPlanSelectedId = useStore(s => s.floorPlanSelectedId)
-  const setFloorPlanImage = useStore(s => s.setFloorPlanImage)
-  const setFloorPlanScale = useStore(s => s.setFloorPlanScale)
-  const addFloorPlanObject = useStore(s => s.addFloorPlanObject)
-  const updateFloorPlanObject = useStore(s => s.updateFloorPlanObject)
-  const removeFloorPlanObject = useStore(s => s.removeFloorPlanObject)
-  const addAnnotation = useStore(s => s.addAnnotation)
-  const addCustomTemplate = useStore(s => s.addCustomTemplate)
-  const selectFloorPlanObject = useStore(s => s.selectFloorPlanObject)
-  const clearFloorPlan = useStore(s => s.clearFloorPlan)
+  const { floorPlan, tool: activeAnnotationType, setTool: setActiveAnnotationType } = bindings
+  const floorPlanSelectedId = bindings.floorPlanSelectedId
 
   const selectedObject = floorPlan.objects.find(o => o.id === floorPlanSelectedId) ?? null
 
-  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const input = e.currentTarget
     const file = input.files?.[0]
     if (!file) return
@@ -47,47 +36,28 @@ export default function FloorPlanPage() {
       return
     }
 
-    const reader = new FileReader()
-    reader.onerror = () => {
-      setUploadError('Could not read that image file.')
-      input.value = ''
+    // Decoding, measuring and hashing the bytes is the bindings' job: under the flag that is
+    // what turns the upload into an Asset, and the words for a file that will not do.
+    const read = await bindings.readPlanImage(file)
+    input.value = ''
+    if ('message' in read) {
+      setUploadError(read.message)
+      return
     }
-    reader.onload = () => {
-      const result = reader.result
-      if (typeof result !== 'string') {
-        setUploadError('Could not decode that image file.')
-        input.value = ''
-        return
-      }
 
-      const img = new Image()
-      img.onload = () => {
-        const hasExistingData = floorPlan.objects.length > 0 || floorPlan.annotations.length > 0
-        if (hasExistingData) {
-          setPendingImageUpload({ dataUrl: result, widthPx: img.naturalWidth, heightPx: img.naturalHeight })
-        } else {
-          setFloorPlanImage({ dataUrl: result, widthPx: img.naturalWidth, heightPx: img.naturalHeight })
-        }
-        input.value = ''
-      }
-      img.onerror = () => {
-        setUploadError('The uploaded file is not a valid image.')
-        input.value = ''
-      }
-      img.src = result
-    }
-    reader.readAsDataURL(file)
+    const hasExistingData = floorPlan.objects.length > 0 || floorPlan.annotations.length > 0
+    if (hasExistingData) setPendingImageUpload(read.image)
+    else bindings.setPlanImage(read.image, { clearExisting: false })
   }
 
   function confirmImageUpload() {
     if (!pendingImageUpload) return
-    clearFloorPlan()
-    setFloorPlanImage(pendingImageUpload)
+    bindings.setPlanImage(pendingImageUpload, { clearExisting: true })
     setPendingImageUpload(null)
   }
 
   function handleExportSvg() {
-    selectFloorPlanObject(null)
+    bindings.selectFloorPlanObject(null)
     setTimeout(() => {
       if (!svgRef.current) return
       const rect = svgRef.current.getBoundingClientRect()
@@ -99,52 +69,8 @@ export default function FloorPlanPage() {
     }, 50)
   }
 
-  function handleAddObject(type: FloorPlanObjectType) {
-    const def = OBJECT_CATALOG.find(o => o.type === type)
-    if (!def) return
-    const obj: FloorPlanObject = {
-      id: nanoid(),
-      type,
-      label: def.label,
-      x: 100,
-      y: 100,
-      w: def.defaultW,
-      h: def.defaultH,
-      rotation: 0,
-      color: def.color,
-    }
-    addFloorPlanObject(obj)
-    selectFloorPlanObject(obj.id)
-  }
-
-  function handleAddCustomTemplate(templateId: string) {
-    const template = floorPlan.customTemplates.find(t => t.id === templateId)
-    if (!template) return
-
-    const obj: FloorPlanObject = {
-      id: nanoid(),
-      type: 'custom',
-      label: template.label,
-      x: 100,
-      y: 100,
-      w: template.defaultW,
-      h: template.defaultH,
-      rotation: 0,
-      color: template.color,
-      isCustom: true,
-    }
-    addFloorPlanObject(obj)
-    selectFloorPlanObject(obj.id)
-  }
-
   function handleSaveCustomShape(label: string, w: number, h: number) {
-    addCustomTemplate({
-      id: nanoid(),
-      label,
-      defaultW: w,
-      defaultH: h,
-      color: '#f59e0b',
-    })
+    bindings.addCustomTemplate({ label, defaultW: w, defaultH: h, color: '#f59e0b' })
     setShowCustomShape(false)
   }
 
@@ -154,7 +80,7 @@ export default function FloorPlanPage() {
   }
 
   function handleScaleConfirm(pixelsPerMm: number) {
-    setFloorPlanScale(pixelsPerMm)
+    bindings.setFloorPlanScale(pixelsPerMm)
     setPendingDistancePx(null)
   }
 
@@ -163,7 +89,7 @@ export default function FloorPlanPage() {
       <div className="flex items-center gap-2 border-b border-divider bg-panel px-4 py-2">
         <label className="cursor-pointer rounded border border-divider bg-surface px-3 py-1 text-sm text-text-primary hover:bg-surface-raised">
           📷 Upload Image
-          <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+          <input type="file" accept={bindings.planImageAccept} className="hidden" onChange={handleImageUpload} />
         </label>
         <button
           type="button"
@@ -187,13 +113,15 @@ export default function FloorPlanPage() {
         >
           Export SVG
         </button>
-        <button
-          type="button"
-          onClick={() => downloadFloorPlanJSON(floorPlan, 'floor-plan')}
-          className="rounded border border-divider bg-surface px-3 py-1 text-sm text-text-primary hover:bg-surface-raised"
-        >
-          Export JSON
-        </button>
+        {bindings.workspace && (
+          <button
+            type="button"
+            onClick={() => downloadFloorPlanJSON(floorPlan, 'floor-plan')}
+            className="rounded border border-divider bg-surface px-3 py-1 text-sm text-text-primary hover:bg-surface-raised"
+          >
+            Export JSON
+          </button>
+        )}
       </div>
 
       {uploadError && (
@@ -224,11 +152,12 @@ export default function FloorPlanPage() {
 
       <div className="flex flex-1 overflow-hidden">
         <FloorPlanSidebar
-          onAddObject={handleAddObject}
-          onAddCustomTemplate={handleAddCustomTemplate}
+          onAddObject={(type: FloorPlanObjectType) => bindings.addFloorPlanObject(type)}
+          onAddCustomTemplate={(templateId: string) => bindings.addFloorPlanFromTemplate(templateId)}
           onAddCustomShape={() => setShowCustomShape(true)}
           onSetAnnotationType={setActiveAnnotationType}
           activeAnnotationType={activeAnnotationType}
+          onAddAnnotation={bindings.addAnnotation}
         />
         <FloorPlanCanvas
           floorPlan={floorPlan}
@@ -236,12 +165,12 @@ export default function FloorPlanPage() {
           isCalibrating={isCalibrating}
           activeAnnotationType={activeAnnotationType}
           onCalibrationPoints={handleCalibrationPoints}
-          onAddAnnotation={addAnnotation}
+          onAddAnnotation={bindings.addAnnotation}
         />
         <FloorPlanProperties
           obj={selectedObject}
-          onUpdate={updateFloorPlanObject as (id: string, patch: Partial<FloorPlanObject>) => void}
-          onDelete={removeFloorPlanObject}
+          onUpdate={bindings.updateFloorPlanObject as (id: string, patch: Partial<FloorPlanObject>) => void}
+          onDelete={bindings.removeFloorPlanObject}
         />
       </div>
 
