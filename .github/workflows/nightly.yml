@@ -1,0 +1,48 @@
+# Firefox and WebKit smoke, nightly (#38, #20 §9.4). There is no release process beyond
+# deploys from main, so the nightly sweep — not a pre-release gate — covers the other
+# two engines. 19:00 UTC is 03:00 SGT.
+
+name: Nightly browsers
+
+on:
+  schedule:
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: e2e-${{ matrix.browser }}
+    runs-on: ubuntu-latest
+    strategy:
+      # One engine failing must not hide the other engine's result.
+      fail-fast: false
+      matrix:
+        browser: [firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: install
+        run: npm ci
+      - name: browser
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: build
+        run: npm run build
+      - name: e2e
+        run: npm run test:e2e -- --project=${{ matrix.browser }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results-${{ matrix.browser }}
+          path: |
+            playwright-report/
+            test-results/

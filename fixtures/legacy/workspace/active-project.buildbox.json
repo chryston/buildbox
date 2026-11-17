@@ -1,0 +1,241 @@
+{
+  "version": 1,
+  "exportedAt": "2026-11-17T06:24:32.680Z",
+  "projects": [
+    {
+      "id": "proj-kitchen-wall",
+      "name": "Kitchen Wall",
+      "units": [
+        {
+          "type": "cabinet",
+          "id": "unit-kitchen-base",
+          "label": "Base Unit",
+          "x": 0,
+          "y": 0,
+          "settings": {
+            "unit": "mm",
+            "height": 800,
+            "width": 600,
+            "depth": 500,
+            "thickness": 18,
+            "backThickness": 6,
+            "toeKick": {
+              "height": 100,
+              "setback": 50
+            },
+            "material": "walnut"
+          },
+          "root": {
+            "id": "unit-kitchen-base-root",
+            "splitAxis": "horizontal",
+            "splitRatio": 0.72,
+            "children": [
+              {
+                "id": "unit-kitchen-base-upper",
+                "splitAxis": "vertical",
+                "splitRatio": 0.55,
+                "children": [
+                  {
+                    "id": "unit-kitchen-base-drawers",
+                    "elementType": "drawer",
+                    "drawerConfig": {
+                      "slideType": "side-mount",
+                      "reveal": 2
+                    },
+                    "fixedSize": 180,
+                    "locked": true,
+                    "spaceLabel": "Side-mount drawers",
+                    "accessories": [
+                      {
+                        "id": "unit-kitchen-base-acc-front",
+                        "type": "drawer-front",
+                        "label": "Drawer front"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "unit-kitchen-base-open",
+                    "splitAxis": "vertical",
+                    "splitRatio": 0.5,
+                    "children": [
+                      {
+                        "id": "unit-kitchen-base-hanging",
+                        "elementType": "hanging-space",
+                        "spaceLabel": "Hanging rail",
+                        "dividers": [
+                          {
+                            "id": "unit-kitchen-base-div-1",
+                            "materialId": "walnut"
+                          }
+                        ]
+                      },
+                      {
+                        "id": "unit-kitchen-base-shelf",
+                        "elementType": "void",
+                        "spaceLabel": "Open shelf",
+                        "accessories": [
+                          {
+                            "id": "unit-kitchen-base-acc-door",
+                            "type": "door",
+                            "label": "Left door"
+                          },
+                          {
+                            "id": "unit-kitchen-base-acc-pull",
+                            "type": "pull",
+                            "label": "Knob"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "unit-kitchen-base-lower",
+                "splitAxis": "horizontal",
+                "splitRatio": 0.45,
+                "children": [
+                  {
+                    "id": "unit-kitchen-base-microwave",
+                    "elementType": "microwave",
+                    "spaceLabel": "Microwave bay"
+                  },
+                  {
+                    "id": "unit-kitchen-base-undermount",
+                    "elementType": "drawer",
+                    "drawerConfig": {
+                      "slideType": "undermount",
+                      "reveal": 3
+                    },
+                    "spaceLabel": "Undermount drawers",
+                    "dividers": [
+                      {
+                        "id": "unit-kitchen-base-div-2",
+                        "materialId": "birch"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "cabinet",
+          "id": "unit-kitchen-tall",
+          "label": "Tall Unit",
+          "x": 700,
+          "y": 0,
+          "settings": {
+            "unit": "cm",
+            "height": 2100,
+            "width": 600,
+            "depth": 560,
+            "thickness": 18,
+            "backThickness": 6,
+            "toeKick": {
+              "height": 100,
+              "setback": 50
+            },
+            "material": "white"
+          },
+          "root": {
+            "id": "unit-kitchen-tall-root",
+            "splitAxis": "horizontal",
+            "splitRatio": 0.72,
+            "children": [
+              {
+                "id": "unit-kitchen-tall-upper",
+                "splitAxis": "vertical",
+                "splitRatio": 0.55,
+                "children": [
+                  {
+                    "id": "unit-kitchen-tall-drawers",
+                    "elementType": "drawer",
+                    "drawerConfig": {
+                      "slideType": "side-mount",
+                      "reveal": 2
+                    },
+                    "fixedSize": 180,
+                    "locked": true,
+                    "spaceLabel": "Side-mount drawers",
+                    "accessories": [
+                      {
+                        "id": "unit-kitchen-tall-acc-front",
+                        "type": "drawer-front",
+                        "label": "Drawer front"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "unit-kitchen-tall-open",
+                    "splitAxis": "vertical",
+                    "splitRatio": 0.5,
+                    "children": [
+                      {
+                        "id": "unit-kitchen-tall-hanging",
+                        "elementType": "hanging-space",
+                        "spaceLabel": "Hanging rail",
+                        "dividers": [
+                          {
+                            "id": "unit-kitchen-tall-div-1",
+                            "materialId": "walnut"
+                          }
+                        ]
+                      },
+                      {
+                        "id": "unit-kitchen-tall-shelf",
+                        "elementType": "void",
+                        "spaceLabel": "Open shelf",
+                        "accessories": [
+                          {
+                            "id": "unit-kitchen-tall-acc-door",
+                            "type": "door",
+                            "label": "Left door"
+                          },
+                          {
+                            "id": "unit-kitchen-tall-acc-pull",
+                            "type": "pull",
+                            "label": "Knob"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "unit-kitchen-tall-lower",
+                "splitAxis": "horizontal",
+                "splitRatio": 0.45,
+                "children": [
+                  {
+                    "id": "unit-kitchen-tall-microwave",
+                    "elementType": "microwave",
+                    "spaceLabel": "Microwave bay"
+                  },
+                  {
+                    "id": "unit-kitchen-tall-undermount",
+                    "elementType": "drawer",
+                    "drawerConfig": {
+                      "slideType": "undermount",
+                      "reveal": 3
+                    },
+                    "spaceLabel": "Undermount drawers",
+                    "dividers": [
+                      {
+                        "id": "unit-kitchen-tall-div-2",
+                        "materialId": "birch"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "activeProjectId": "proj-kitchen-wall"
+}

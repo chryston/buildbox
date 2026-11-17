@@ -29,6 +29,9 @@ concurrency:
 jobs:
   build-and-deploy:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    outputs:
+      # smoke-live polls this to prove the CDN is serving the build it just shipped.
+      page_url: ${{ steps.deployment.outputs.page_url }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -49,3 +52,58 @@ jobs:
           path: './dist'
       - id: deployment
         uses: actions/deploy-pages@v5
+
+  # Post-deploy smoke against the live URL (#38, #20 §9.4). GitHub Pages can serve a
+  # stale page for a few seconds after a deploy, so the job first waits until the live
+  # index.html references the entry chunk this commit builds — the same head_sha, so
+  # the hashed file name is deterministic.
+  smoke-live:
+    name: smoke-live
+    needs: build-and-deploy
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    outputs:
+      entry: ${{ steps.entry.outputs.script }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+      - run: npm ci
+      - name: browser
+        run: npx playwright install --with-deps chromium
+      - name: build
+        run: npm run build
+      - name: entry chunk of this build
+        id: entry
+        run: |
+          script=$(node -e 'const h = require("fs").readFileSync("dist/index.html", "utf8"); const m = h.match(/assets\/(index-[^"]+\.js)/); if (!m) { console.error("no entry chunk in dist/index.html"); process.exit(1) } process.stdout.write(m[1])')
+          echo "script=$script" >> "$GITHUB_OUTPUT"
+          echo "expecting $script on the live page"
+      - name: wait for the live page to serve this build
+        run: |
+          page_url="${{ needs.build-and-deploy.outputs.page_url }}"
+          page_url="${page_url%/}/"
+          for _ in $(seq 1 60); do
+            if curl -fsS "${page_url}index.html" | grep -q "${{ steps.entry.outputs.script }}"; then
+              echo "live page is serving ${{ steps.entry.outputs.script }}"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "live page did not serve ${{ steps.entry.outputs.script }} within 120s" >&2
+          exit 1
+      - name: smoke
+        run: |
+          page_url="${{ needs.build-and-deploy.outputs.page_url }}"
+          PLAYWRIGHT_BASE_URL="${page_url%/}/" npm run test:e2e -- --project=chromium --grep-invert @local-only
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results-live
+          path: |
+            playwright-report/
+            test-results/
