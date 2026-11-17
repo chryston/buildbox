@@ -103,6 +103,17 @@ const LEGACY_ELEMENTS = [
     allow: ['*'],
     pure: true,
   },
+  {
+    // The two `edit` tests that hold both sides of the parity check (#47 criterion 4) and
+    // the converted fixtures the random sequences start from (criterion 1): each needs the
+    // legacy store or the legacy converter next to `edit`, which no source file of `edit`
+    // may import (#20 §2). They are test files, they stay pure, and they ship nothing.
+    name: 'edit-parity-test',
+    pattern: ['src/edit/legacyParity.test.ts', 'src/edit/apply.property.test.ts'],
+    mode: 'file',
+    allow: ['*'],
+    pure: true,
+  },
 ]
 
 // The IndexedDB adapter is the one part of `persistence` allowed a DOM: the only element
