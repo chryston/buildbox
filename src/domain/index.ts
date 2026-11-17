@@ -4,7 +4,8 @@
  * import only `geometry` and `lib`.
  *
  * It holds the domain schema v1 types, the strict validator, the version and its
- * migrator chain, the cabinet Item Design payload vocabulary and unit conversion. It
+ * migrator chain, the cabinet Item Design payload vocabulary, the Library's Project
+ * Summary (#45) and unit conversion. It
  * never creates an ID or reads the clock (#42 §3): IDs and time arrive as data.
  * `src/domain/testing.ts` is the second entry point, for test files only.
  */
@@ -51,5 +52,14 @@ export type {
   ProjectPreferences,
   RectangleFootprint,
 } from './project'
+export {
+  MAX_OUTLINE_RECTS,
+  referencedAssetHashes,
+  summarizeProject,
+  type OutlineBounds,
+  type OutlineRect,
+  type ProjectOutline,
+  type ProjectSummary,
+} from './summarizeProject'
 export { formatDisplay, fromMm, toMm } from './units/unitConversion'
 export { validateProject, type ValidateProjectResult } from './validate'
