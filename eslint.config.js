@@ -16,6 +16,9 @@ const ELEMENTS = [
     mode: 'file',
   },
   { type: 'types', pattern: ['src/types'], mode: 'folder' },
+  // The frozen legacy reader (#40). Its index.ts is the only way in, and it imports
+  // nothing but itself.
+  { type: 'package', pattern: ['src/package'], mode: 'folder' },
   { type: 'engine', pattern: ['src/engine'], mode: 'folder' },
   { type: 'data', pattern: ['src/data'], mode: 'folder' },
   { type: 'utils', pattern: ['src/utils'], mode: 'folder' },
@@ -26,23 +29,32 @@ const ELEMENTS = [
 ]
 
 // Element types that must stay free of DOM globals and UI/state imports (#20 §2).
-const PURE_ELEMENTS = ['types', 'engine', 'data', 'utils']
+const PURE_ELEMENTS = ['types', 'engine', 'data', 'utils', 'package']
 
 const DOM_GLOBALS = ['window', 'document', 'localStorage', 'indexedDB', 'navigator']
 
 const NON_PURE_IMPORTS = ['react', 'react-dom', 'react/*', 'zustand', 'zundo', 'idb']
 
+// `package` has one entry point: its index. Deep imports would let a caller reach past
+// the API and depend on the frozen reader's internals (#40 §1).
+const PACKAGE_ENTRY = {
+  group: ['**/package/*', '**/package/**'],
+  message: 'The package element is imported through src/package/index.ts (#40 §1).',
+}
+
 // Inward-only allow-list. An empty `allow` is already the default disallow.
 const ELEMENT_TYPE_RULES = [
   { from: ['types'], allow: [] },
+  // Pure, and imports nothing but itself (#20 §2, #40 §4).
+  { from: ['package'], allow: ['package'] },
   { from: ['engine'], allow: ['types', 'engine'] },
   { from: ['data'], allow: ['types'] },
-  { from: ['utils'], allow: ['types', 'data', 'engine'] },
+  { from: ['utils'], allow: ['types', 'data', 'engine', 'package'] },
   // utils-dom is a file element, so each helper (and the test that drives one through
   // jsdom) is its own element: the type has to be allowed to reference itself.
   { from: ['utils-dom'], allow: ['types', 'utils-dom'] },
-  { from: ['store'], allow: ['types', 'engine', 'utils', 'data'] },
-  { from: ['components'], allow: ['components', 'store', 'engine', 'utils', 'utils-dom', 'data', 'types'] },
+  { from: ['store'], allow: ['types', 'engine', 'utils', 'data', 'package'] },
+  { from: ['components'], allow: ['components', 'store', 'engine', 'utils', 'utils-dom', 'data', 'types', 'package'] },
   { from: ['app', 'test-support'], allow: ['*'] },
 ]
 
@@ -93,6 +105,7 @@ export default tseslint.config(
         'error',
         { default: 'disallow', rules: ELEMENT_TYPE_RULES.filter((rule) => rule.allow.length > 0) },
       ],
+      'no-restricted-imports': ['error', { patterns: [PACKAGE_ENTRY] }],
     },
   },
 
@@ -109,7 +122,12 @@ export default tseslint.config(
       ],
       'no-restricted-imports': [
         'error',
-        { patterns: [{ group: NON_PURE_IMPORTS, message: 'Pure module: no React or state-library imports (#20 §2).' }] },
+        {
+          patterns: [
+            { group: NON_PURE_IMPORTS, message: 'Pure module: no React or state-library imports (#20 §2).' },
+            PACKAGE_ENTRY,
+          ],
+        },
       ],
     },
   },

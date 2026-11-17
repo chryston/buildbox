@@ -30,9 +30,26 @@ describe('ImportModal', () => {
     expect(onConfirm).toHaveBeenCalledWith('merge')
   })
 
-  it('displays error message when error prop provided', () => {
-    render(<ImportModal incoming={mockIncoming} onConfirm={vi.fn()} onClose={vi.fn()} error="Invalid file" />)
-    expect(screen.getByText(/invalid file/i)).toBeInTheDocument()
+  it('lists the problems of a file it refused, with no way to import it', () => {
+    const problems = [
+      { path: 'projects[0].id', code: 'missing-field', message: 'Missing an id.' },
+      { path: 'projects[0].units', code: 'missing-field', message: 'Missing the cabinets in this project.' },
+    ]
+    render(<ImportModal problems={problems} onClose={vi.fn()} />)
+    expect(screen.getByRole('heading', { name: /can't be imported/i })).toBeInTheDocument()
+    expect(screen.getByText('Nothing was changed. BuildBox found these problems:')).toBeInTheDocument()
+    expect(screen.getAllByTestId('problem')).toHaveLength(2)
+    expect(screen.getByTestId('problem-list')).toHaveTextContent('projects[0].id — Missing an id.')
+    expect(screen.queryByRole('button', { name: /replace workspace/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /merge projects/i })).not.toBeInTheDocument()
+  })
+
+  it('closes a refused file without importing anything', async () => {
+    const onClose = vi.fn()
+    render(<ImportModal problems={[{ path: '', code: 'bad-json', message: 'The file is not valid JSON.' }]} onClose={onClose} />)
+    expect(screen.getByText('The file is not valid JSON.')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /close/i }))
+    expect(onClose).toHaveBeenCalledOnce()
   })
 
   it('calls onClose when cancelled', async () => {

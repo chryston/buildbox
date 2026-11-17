@@ -126,10 +126,16 @@ Same modal, **All projects**: both projects plus `activeProjectId`.
 
 A `WorkspaceFile` whose single project is still in the pre-`units` `Design` shape
 (`{id, name, root, globalSettings}` with `defaultMaterial`), which is what
-`importWorkspace` → `migrateDesign` has to accept. The workspace export path never
-produced this shape — it postdates the units migration — so it is written by hand rather
-than captured. *Legacy Closet*: depth-3 tree on both axes, a hanging space, a 3-drawer
-bank, one pinned node, mm settings.
+`readLegacyWorkspaceFile` → `upgradeLegacyDesign` has to accept. The workspace export path
+never produced this shape — it postdates the units migration — so it is written by hand
+rather than captured. *Legacy Closet*: depth-3 tree on both axes, a hanging space, a
+3-drawer bank, one pinned node, mm settings.
+
+#40 corrected the node fields to the vocabulary the app has always written
+(`splitAxis: horizontal|vertical`, `drawerConfig: {slideType, reveal}`). The first
+hand-authored copy invented `splitAxis: "x"/"y"` and `drawerConfig: {count, mount}`, which
+no BuildBox version ever wrote and the engine cannot read; the frozen legacy reader rejects
+them, so the fixture was wrong rather than the rule. The hash below is the corrected file.
 
 ### `floor-plan/with-image-floor-plan.json` — captured, `8071580`
 
@@ -155,6 +161,6 @@ asserts both directions: every file here has a row, and every row matches its fi
 | `v3-large-image/buildbox-store.json` | `393d2b12cf2c2e227aee5f2c66ae0d92c1f4df115c0cab3099223a1a40ece3da` |
 | `workspace/active-project.buildbox.json` | `aa93e988b5cdbaf5008e8f8a18dfb6a1ce5c9071b420144bf4509d78e2d8028f` |
 | `workspace/all-projects.buildbox.json` | `961eaf9c41acf1a80d1caf5f9b225a3574f9e4b297cf6ea8e747b62f3b114754` |
-| `workspace/v0-design-shape.buildbox.json` | `1b5365f057bb8e2f3be9bf317a3bd4da5fd64628909d2d8e5f522c4085c96594` |
+| `workspace/v0-design-shape.buildbox.json` | `658b081497c1ba916a258f94e4fa4a1fe89591972de3573d4d70bd9ec44e3481` |
 | `floor-plan/with-image-floor-plan.json` | `d06be40f669fd93f0d8242a2121096d35b51c36c255e539ca7fad1a5dd2b96c4` |
 | `floor-plan/no-image-floor-plan.json` | `0c230edfde597c27e325708ece8403694aaf0a70e680ee1990c041ec697b7b13` |
