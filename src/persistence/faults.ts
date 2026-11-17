@@ -119,5 +119,8 @@ export function withFaults(adapter: Ports, plan: readonly FaultRule[]): Ports {
       get: (key) => adapter.meta.get(key),
       set: (key, value) => guard('set', () => adapter.meta.set(key, value)),
     },
+    // A read, so it passes straight through — but it has to be passed on, or wrapping an
+    // adapter would silently drop the cheaper live-hash walk it brought with it.
+    collectLiveHashes: adapter.collectLiveHashes?.bind(adapter),
   }
 }

@@ -231,4 +231,11 @@ export interface Ports {
   recovery: RecoveryRepository
   prefs: PrefsRepository
   meta: MetaRepository
+  /**
+   * Every asset hash still referenced by a saved Project or Recovery Point — the input
+   * `assets.gc` takes. `collectLiveHashes` in `./liveHashes` builds it by walking the five
+   * ports, which an adapter may replace with a cheaper one of its own: the IndexedDB
+   * adapter reads the same set off cursors, one record at a time (#46).
+   */
+  collectLiveHashes?(): Promise<Result<LiveHashes, PersistenceError>>
 }
