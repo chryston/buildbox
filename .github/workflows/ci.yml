@@ -2,11 +2,15 @@ name: CI
 
 # PR checks and the run the Pages deploy waits on (#35, #20 §12).
 # Later steps land here rather than in a second workflow:
-#   npm run test:screenshots (#39), npm run bench (benchmarks issue).
+#   npm run bench (benchmarks issue).
+# Screenshot baselines and their label guard are here too (#39).
 # Firefox and WebKit are nightly-only (#38, #20 §9.4): see nightly.yml.
 
 on:
   pull_request:
+    # labeled/unlabeled exist for screenshot-guard alone (#39 §4): applying the
+    # update-snapshots label has to re-run the check that reads it.
+    types: ["opened", "synchronize", "reopened", "labeled", "unlabeled"]
   push:
     branches: ["main"]
   workflow_dispatch:
@@ -22,6 +26,9 @@ jobs:
   verify:
     name: verify
     runs-on: ubuntu-latest
+    # A label change is only interesting to screenshot-guard; e2e-chromium and screenshots
+    # hang off this job, so skipping it skips them too.
+    if: ${{ !contains(fromJSON('["labeled", "unlabeled"]'), github.event.action) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -73,3 +80,54 @@ jobs:
           path: |
             playwright-report/
             test-results/
+
+  # Screenshot baselines in the pinned Playwright container (#39, #20 §9.5, §13.15).
+  # Add "CI / screenshots" to the branch's required status checks. fetch-depth: 0 so the
+  # prototype commits the comparison helper renders are reachable; the runner image already
+  # ships Docker. The artifact is always uploaded: it carries the diff images of a failed
+  # run and the prototype-compare/ renders reviewers sign off on.
+  screenshots:
+    name: screenshots
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: screenshots
+        run: npm run test:screenshots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: test-results/
+
+  # Baselines move only in a PR that says so (#39 §4). Add "CI / screenshot-guard" to the
+  # required status checks: it passes trivially when no baseline changed, and fails when one
+  # did and the update-snapshots label is missing.
+  screenshot-guard:
+    name: screenshot-guard
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: baselines need the update-snapshots label
+        env:
+          BASE_REF: origin/${{ github.base_ref }}
+          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'update-snapshots') }}
+        run: |
+          changed=$(git diff --name-only "${BASE_REF}"...HEAD -- 'e2e/screenshots/__snapshots__/**')
+          if [ -n "${changed}" ] && [ "${HAS_LABEL}" != 'true' ]; then
+            echo "::error::Screenshot baselines changed without the update-snapshots label"
+            echo "Changed baselines:"
+            echo "${changed}"
+            echo "Only an intentional visual change may do this, with the reason in the PR"
+            echo "description; see e2e/README.md for how to regenerate and label it."
+            exit 1
+          fi
+          echo "changed baselines: $(echo "${changed}" | grep -c . || true); update-snapshots label: ${HAS_LABEL}"

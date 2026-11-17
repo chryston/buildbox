@@ -56,7 +56,9 @@ const pureElementExempts = ELEMENTS.filter(
 ).flatMap((element) => element.pattern)
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'coverage/**', 'node_modules/**'] },
+  // .prototype-cache holds the published prototype bytes scripts/run-screenshots.mjs stages
+  // (#39): compared against, never linted or fixed.
+  { ignores: ['dist/**', 'coverage/**', 'node_modules/**', '.prototype-cache/**'] },
 
   // Plain JS: root config files and scripts, JS recommended rules only.
   {
@@ -68,7 +70,7 @@ export default tseslint.config(
   {
     // e2e/ and playwright.config.ts are Playwright's (#38): browser + node globals,
     // no boundaries plugin — that descriptor models src/ layers only.
-    files: ['src/**/*.{ts,tsx}', 'e2e/**/*.ts', 'playwright.config.ts', 'vite.config.ts', 'tailwind.config.ts'],
+    files: ['src/**/*.{ts,tsx}', 'e2e/**/*.ts', 'playwright.config.ts', 'playwright.screenshots.config.ts', 'vite.config.ts', 'tailwind.config.ts'],
     extends: [js.configs.recommended, tseslint.configs.recommended],
     languageOptions: {
       ecmaVersion: 'latest',
