@@ -320,7 +320,7 @@ const elementTypeRules = [
 export default tseslint.config(
   // .prototype-cache holds the published prototype bytes scripts/run-screenshots.mjs stages
   // (#39): compared against, never linted or fixed.
-  { ignores: ['dist/**', 'coverage/**', 'node_modules/**', '.prototype-cache/**'] },
+  { ignores: ['dist/**', 'dist-preview/**', 'coverage/**', 'node_modules/**', '.prototype-cache/**'] },
 
   // Plain JS: root config files and scripts, JS recommended rules only.
   {
