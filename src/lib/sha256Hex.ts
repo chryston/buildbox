@@ -4,10 +4,13 @@
  * the browser bundle with no polyfill.
  */
 
-/** Lowercase hex SHA-256 digest of `data`. */
-export async function sha256Hex(data: Uint8Array<ArrayBuffer> | ArrayBuffer): Promise<string> {
+/** Lowercase hex SHA-256 digest of `data`. Nothing is copied or retained. */
+export async function sha256Hex(data: Uint8Array | ArrayBuffer): Promise<string> {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data)
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes)
+  // `BufferSource` still names the pre-generic `ArrayBufferView<ArrayBuffer>`, so a plain
+  // `Uint8Array` view has to be named at this boundary. Nothing in BuildBox produces a
+  // SharedArrayBuffer, and the digest reads the bytes without retaining them.
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes as Uint8Array<ArrayBuffer>)
   let hex = ''
   for (const byte of new Uint8Array(digest)) hex += byte.toString(16).padStart(2, '0')
   return hex
