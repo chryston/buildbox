@@ -13,6 +13,7 @@
     "build": "npm run typecheck && vite build && node scripts/check-size-budget.mjs",
     "preview": "vite preview",
     "test": "vitest run",
+    "bench": "vitest bench --run --project pure",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
