@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import { useStore } from '../store/store'
-import { computeSceneLayout } from '../engine/layoutEngine'
+import { computeSceneLayout } from '../cabinet'
 import { exportWorkspace } from '../utils/workspaceIO'
 import type { Design } from '../types'
 

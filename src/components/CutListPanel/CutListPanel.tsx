@@ -1,4 +1,4 @@
-import type { CutListEntry } from '../../types'
+import type { CutListEntry } from '../../cabinet'
 
 interface Props {
   entries: CutListEntry[]

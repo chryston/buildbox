@@ -1,6 +1,6 @@
-import type { MaterialId } from '../types'
+import type { CabinetMaterialId } from '../domain'
 
-export const MATERIALS: Record<MaterialId, { label: string; fill: string; stroke: string }> = {
+export const MATERIALS: Record<CabinetMaterialId, { label: string; fill: string; stroke: string }> = {
   oak: { label: 'Oak', fill: '#C8A96E', stroke: '#8B6914' },
   walnut: { label: 'Walnut', fill: '#5C3D1E', stroke: '#3B2410' },
   white: { label: 'White', fill: '#F5F5F0', stroke: '#D0CEC8' },

@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import Sidebar from './Sidebar'
-import type { AccessoryType, CabinetNode } from '../../types'
+import type { AccessoryType, CabinetNode } from '../../domain'
 
 const baseProps = {
   selectedId: 'v1',
@@ -95,7 +95,7 @@ describe('Sidebar', () => {
   })
 })
 
-import type { LayoutVoid } from '../../types'
+import type { LayoutVoid } from '../../cabinet'
 
 const mockVoid: LayoutVoid = {
   nodeId: 'v1', x: 0, y: 0, w: 200, h: 200,

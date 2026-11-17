@@ -4,11 +4,12 @@ import { immer } from 'zustand/middleware/immer'
 import { shallow } from 'zustand/shallow'
 import { temporal } from 'zundo'
 import { nanoid } from 'nanoid'
-import type { Accessory, CabinetMaterialId, CabinetSceneUnit, Design, GlobalSettings, DrawerConfig, UIState, ElementType, FloorPlanData, FloorPlanObject, Annotation, FloorPlanImage, CustomTemplate } from '../types'
+import type { Design, UIState, FloorPlanData, FloorPlanObject, Annotation, FloorPlanImage, CustomTemplate } from '../types'
+import type { CabinetSceneUnit } from '../cabinet'
+import type { Accessory, CabinetMaterialId, GlobalSettings, DrawerConfig, ElementType } from '../domain'
 import { migrateLegacyState } from '../package'
 import { guardedStorage, STORE_KEY } from './guardedStorage'
-import { addShelf, addDivider, deleteBoard as deleteBoardFn, setNodeSize, setSplitRatio, pinNode as treePinNode, unpinNode as treeUnpinNode, setNodeLabel as treeMutSetNodeLabel, distributeEvenly as treeMutDistributeEvenly, setElementType as treeMutSetElementType, setDrawerConfig as treeMutSetDrawerConfig } from '../engine/treeMutations'
-import { addAccessory as addAccessoryFn, removeAccessory as removeAccessoryFn } from '../engine/accessories'
+import { addAccessory as addAccessoryFn, addDivider, addShelf, deleteBoard as deleteBoardFn, distributeEvenly as treeMutDistributeEvenly, removeAccessory as removeAccessoryFn, setDrawerConfig as treeMutSetDrawerConfig, setElementType as treeMutSetElementType, setNodeLabel as treeMutSetNodeLabel, setNodeSize, setSplitRatio, pinNode as treePinNode, unpinNode as treeUnpinNode } from '../cabinet'
 
 interface PersistedState {
   projects: Design[]

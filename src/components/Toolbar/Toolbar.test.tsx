@@ -2,7 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi } from 'vitest'
 import Toolbar from './Toolbar'
-import type { GlobalSettings } from '../../types'
+import type { GlobalSettings } from '../../domain'
 
 const settings: GlobalSettings = {
   unit: 'mm', height: 800, width: 600, depth: 500,

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
-import type { Design, GlobalSettings, Unit } from '../../types'
+import type { Design } from '../../types'
+import type { GlobalSettings, Unit } from '../../domain'
 import { readLegacyWorkspaceFile, type ValidationProblem } from '../../package'
 import ExportModal from './ExportModal'
 import ImportModal from './ImportModal'

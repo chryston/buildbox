@@ -1,17 +1,13 @@
+import type { CabinetNode, CabinetMaterialId, GlobalSettings, SplitAxis } from '../domain'
 import type {
-  CabinetNode,
   CabinetUnit,
-  Design,
-  GlobalSettings,
   LayoutDivider,
   LayoutPanel,
   LayoutResult,
   LayoutVoid,
-  CabinetMaterialId,
   SceneLayout,
-  SplitAxis,
   UnitLayoutResult,
-} from '../types'
+} from './types'
 
 const MIN_SECTION_SIZE = 50
 
@@ -199,13 +195,6 @@ function computeBoundingBox(units: CabinetUnit[]): SceneLayout['boundingBox'] {
     maxY = Math.max(maxY, u.y + u.settings.height)
   }
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
-}
-
-// Backward-compat shim for tests and existing callers
-export function computeLayout(design: Design): LayoutResult {
-  if (design.units.length === 0) return { panels: [], voids: [], dividers: [], overConstrainedIds: [] }
-  const first = design.units[0]
-  return computeUnitLayout(first.settings, first.root)
 }
 
 function distributeTwo(

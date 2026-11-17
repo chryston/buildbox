@@ -5,16 +5,14 @@ import type {
   AccessoryType,
   CabinetMaterialId,
   CabinetNode,
-  CabinetUnit,
-  CutListEntry,
   DrawerConfig,
   ElementType,
   GlobalSettings,
-  LayoutVoid,
   SlideType,
   Unit,
-} from '../../types'
-import { fromMm, toMm } from '../../engine/unitConversion'
+} from '../../domain'
+import type { CabinetUnit, CutListEntry, LayoutVoid } from '../../cabinet'
+import { fromMm, toMm } from '../../domain'
 import { MATERIALS } from '../../utils/materials'
 
 interface Props {

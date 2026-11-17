@@ -5,7 +5,7 @@ import type {
   DrawerConfig,
   ElementType,
   SplitAxis,
-} from '../types'
+} from '../domain'
 
 export function addShelf(root: CabinetNode, targetId: string): CabinetNode {
   return splitNode(root, targetId, 'horizontal')
@@ -92,9 +92,6 @@ function setColumnSplitRatios(node: CabinetNode, evenH: number, thickness: numbe
     ],
   }
 }
-
-// Kept for backward compat with store callers
-export const unlockNode = unpinNode
 
 export function setSplitRatio(root: CabinetNode, nodeId: string, ratio: number): CabinetNode {
   return mapNode(root, (node) => (node.id === nodeId ? { ...node, splitRatio: ratio } : node))

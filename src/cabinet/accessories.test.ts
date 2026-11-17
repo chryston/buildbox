@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { addAccessory, removeAccessory, getAccessories } from './accessories'
-import type { CabinetNode } from '../types'
+import type { CabinetNode } from '../domain'
 
 const leaf: CabinetNode = { id: 'v1' }
 

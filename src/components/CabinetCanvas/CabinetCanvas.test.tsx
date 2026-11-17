@@ -1,8 +1,8 @@
 import { createRef } from 'react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
-import type { Design, SceneLayout } from '../../types'
-import { computeLayout } from '../../engine/layoutEngine'
+import type { Design } from '../../types'
+import { computeUnitLayout, type SceneLayout } from '../../cabinet'
 import CabinetCanvas from './CabinetCanvas'
 
 function createDesign(): Design {
@@ -58,8 +58,8 @@ function makeSceneLayout(unitCount: number): SceneLayout {
 }
 
 function designToSceneLayout(design: Design): SceneLayout {
-  const layout = computeLayout(design)
   const firstUnit = design.units[0]
+  const layout = computeUnitLayout(firstUnit.settings, firstUnit.root)
   const { width: w, height: h, unit } = firstUnit.settings
   return {
     units: [

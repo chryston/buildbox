@@ -1,4 +1,3 @@
-// @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { MAX_TREE_DEPTH, validateLegacyDesigns, validateLegacyFloorPlan, validateLegacyPersistedState } from './validate'
 import type { ValidationProblem } from './problems'

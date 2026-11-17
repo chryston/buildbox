@@ -1,5 +1,4 @@
-// @vitest-environment node
-// Filesystem only, and the node environment keeps import.meta.url a file URL.
+// Filesystem only; import.meta.url stays a file URL under both Vitest projects.
 import { createHash } from 'node:crypto'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'

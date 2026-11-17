@@ -1,4 +1,5 @@
-import type { CabinetSceneUnit, Design, UIState, CutListEntry } from './index'
+import type { Design, UIState } from './index'
+import type { CabinetSceneUnit, CutListEntry } from '../cabinet'
 
 it('CabinetUnit has id, label, type, settings, root, x, y', () => {
   const unit: CabinetSceneUnit = {

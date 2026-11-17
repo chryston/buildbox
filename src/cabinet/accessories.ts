@@ -1,4 +1,4 @@
-import type { Accessory, CabinetNode } from '../types'
+import type { Accessory, CabinetNode } from '../domain'
 import { mapNode } from './treeMutations'
 
 export function addAccessory(root: CabinetNode, nodeId: string, accessory: Accessory): CabinetNode {

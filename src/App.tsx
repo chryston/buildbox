@@ -8,12 +8,11 @@ import ProjectTabs from './components/ProjectTabs/ProjectTabs'
 import Sidebar from './components/Sidebar/Sidebar'
 import Toolbar from './components/Toolbar/Toolbar'
 import WarningBanner from './components/WarningBanner/WarningBanner'
-import { computeCutListForUnits } from './engine/cutList'
-import { computeSceneLayout } from './engine/layoutEngine'
-import { findNode } from './engine/treeMutations'
+import { computeCutListForUnits, computeSceneLayout, findNode } from './cabinet'
 import { downloadSVG } from './utils/exportSVG'
 import { useStore } from './store/store'
-import type { GlobalSettings, LayoutVoid } from './types'
+import type { LayoutVoid } from './cabinet'
+import type { GlobalSettings } from './domain'
 
 const defaultSettings: GlobalSettings = {
   unit: 'mm',

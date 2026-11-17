@@ -1,12 +1,8 @@
-import type { CabinetUnit, CabinetSceneUnit, CutListEntry, Design, MaterialId } from '../types'
+import type { CabinetMaterialId } from '../domain'
+import type { CabinetUnit, CabinetSceneUnit, CutListEntry } from './types'
 import { computeUnitLayout, legacyDefaultMaterial } from './layoutEngine'
 
 const DRAWER_BOX_TOP_CLEARANCE_MM = 12
-
-// Backward-compat shim
-export function computeCutList(design: Design): CutListEntry[] {
-  return computeCutListForUnits(design.units)
-}
 
 // IMPORTANT: use the type discriminant, NOT `as CabinetSceneUnit`. This makes Phase C
 // extension safe — TypeScript will error if a CountertopSceneUnit is passed without handling.
@@ -36,7 +32,7 @@ function computeCutListForUnit(unit: CabinetSceneUnit): CutListEntry[] {
   }
 
   const shelves = layout.dividers.filter(d => d.axis === 'horizontal')
-  const shelfGroups = new Map<string, { qty: number, w: number, mat: MaterialId }>()
+  const shelfGroups = new Map<string, { qty: number, w: number, mat: CabinetMaterialId }>()
   for (const shelf of shelves) {
     const key = `${Math.round(shelf.w)}×${shelf.material}`
     const group = shelfGroups.get(key) ?? { qty: 0, w: shelf.w, mat: shelf.material }
@@ -47,7 +43,7 @@ function computeCutListForUnit(unit: CabinetSceneUnit): CutListEntry[] {
   }
 
   const verticalDividers = layout.dividers.filter(d => d.axis === 'vertical')
-  const dividerGroups = new Map<string, { qty: number, h: number, mat: MaterialId }>()
+  const dividerGroups = new Map<string, { qty: number, h: number, mat: CabinetMaterialId }>()
   for (const divider of verticalDividers) {
     const key = `${Math.round(divider.h)}×${divider.material}`
     const group = dividerGroups.get(key) ?? { qty: 0, h: divider.h, mat: divider.material }
@@ -68,7 +64,7 @@ function computeCutListForUnit(unit: CabinetSceneUnit): CutListEntry[] {
       raw.push({ label: `Drawer box (${cfg.slideType})`, qty: 1, width: boxW, height: boxH, depth: gs.depth - t, material: v.material, notes: `Face: ${v.w}×${faceH}mm` })
     })
 
-  const doorGroups = new Map<string, { qty: number, w: number, h: number, mat: MaterialId }>()
+  const doorGroups = new Map<string, { qty: number, w: number, h: number, mat: CabinetMaterialId }>()
   for (const v of layout.voids) {
     if (v.accessories.some(a => a.type === 'door')) {
       const key = `${Math.round(v.w)}×${Math.round(v.h)}×${v.material}`
@@ -80,7 +76,7 @@ function computeCutListForUnit(unit: CabinetSceneUnit): CutListEntry[] {
     raw.push({ label: 'Door panel', qty: group.qty, width: group.w, height: group.h, depth: t, material: group.mat, notes: 'full overlay' })
   }
 
-  const drawerFrontGroups = new Map<string, { qty: number, w: number, h: number, mat: MaterialId }>()
+  const drawerFrontGroups = new Map<string, { qty: number, w: number, h: number, mat: CabinetMaterialId }>()
   for (const v of layout.voids) {
     if (v.accessories.some(a => a.type === 'drawer-front')) {
       const key = `${Math.round(v.w)}×${Math.round(v.h)}×${v.material}`

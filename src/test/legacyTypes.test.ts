@@ -1,27 +1,29 @@
 import { expectTypeOf, it } from 'vitest'
 import type {
-  Accessory,
-  AccessoryType,
   Annotation,
   AnnotationType,
-  CabinetMaterialId,
-  CabinetNode,
-  CabinetSceneUnit,
   CustomTemplate,
   Design,
-  Divider,
-  DrawerConfig,
-  ElementType,
   FloorPlanData,
   FloorPlanImage,
   FloorPlanObject,
   FloorPlanObjectType,
+} from '../types'
+import type { CabinetSceneUnit } from '../cabinet'
+import type {
+  Accessory,
+  AccessoryType,
+  CabinetMaterialId,
+  CabinetNode,
+  Divider,
+  DrawerConfig,
+  ElementType,
   GlobalSettings,
   SlideType,
   SplitAxis,
   ToeKick,
   Unit,
-} from '../types'
+} from '../domain'
 import type {
   LegacyAccessory,
   LegacyAccessoryType,

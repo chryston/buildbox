@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { CabinetUnit } from '../../types'
+import type { CabinetUnit } from '../../cabinet'
 
 interface Props {
   units: CabinetUnit[]
