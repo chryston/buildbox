@@ -91,6 +91,18 @@ const LEGACY_ELEMENTS = [
   // Renamed from S0's `app` so it does not collide with the target `app` module.
   { name: 'legacy-root', pattern: ['src/App.tsx', 'src/main.tsx'], mode: 'file', allow: ['*'] },
   { name: 'test-support', pattern: ['src/test', 'src/integration'], mode: 'folder', allow: ['*'] },
+  {
+    // The one file in `package` allowed to reach `cabinet` and `derive`: #43's parity test
+    // has to hold the converter, the layout and cut-list engine it is compared against,
+    // and the `derive` projection back into cabinet vocabulary in a single scope. It is a
+    // test file, so it ships nothing — every real source file under `src/package` still
+    // imports nothing but `domain` and `lib`.
+    name: 'legacy-parity-test',
+    pattern: ['src/package/legacy/parity.test.ts'],
+    mode: 'file',
+    allow: ['*'],
+    pure: true,
+  },
 ]
 
 // The IndexedDB adapter is the one part of `persistence` allowed a DOM: the only element

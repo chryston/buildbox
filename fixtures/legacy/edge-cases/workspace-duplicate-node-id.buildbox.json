@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "exportedAt": "2026-11-17T06:24:32.680Z",
+  "projects": [
+    {
+      "id": "proj-dup-space",
+      "name": "Repeating Space Name",
+      "units": [
+        {
+          "type": "cabinet",
+          "id": "unit-dup",
+          "label": "Dup Unit",
+          "x": 0,
+          "y": 0,
+          "settings": {
+            "unit": "mm",
+            "height": 900,
+            "width": 500,
+            "depth": 450,
+            "thickness": 18,
+            "backThickness": 6,
+            "toeKick": {
+              "height": 100,
+              "setback": 50
+            },
+            "material": "birch"
+          },
+          "root": {
+            "id": "dup-root",
+            "splitAxis": "vertical",
+            "splitRatio": 0.5,
+            "children": [
+              {
+                "id": "space-shared",
+                "elementType": "hanging-space",
+                "spaceLabel": "Left of the shared name"
+              },
+              {
+                "id": "space-shared",
+                "elementType": "void",
+                "spaceLabel": "Right of the shared name"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "proj-dup-unit",
+      "name": "Repeating Unit Name",
+      "units": [
+        {
+          "type": "cabinet",
+          "id": "unit-twin",
+          "label": "First twin",
+          "x": 0,
+          "y": 0,
+          "settings": {
+            "unit": "mm",
+            "height": 700,
+            "width": 400,
+            "depth": 400,
+            "thickness": 18,
+            "backThickness": 6,
+            "toeKick": null,
+            "material": "oak"
+          },
+          "root": {
+            "id": "twin-a-root",
+            "elementType": "void",
+            "spaceLabel": "Open"
+          }
+        },
+        {
+          "type": "cabinet",
+          "id": "unit-twin",
+          "label": "Second twin",
+          "x": 450,
+          "y": 120,
+          "settings": {
+            "unit": "mm",
+            "height": 700,
+            "width": 400,
+            "depth": 400,
+            "thickness": 18,
+            "backThickness": 6,
+            "toeKick": null,
+            "material": "oak"
+          },
+          "root": {
+            "id": "twin-b-root",
+            "elementType": "void",
+            "spaceLabel": "Also open"
+          }
+        }
+      ]
+    }
+  ],
+  "activeProjectId": "proj-dup-unit"
+}

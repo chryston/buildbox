@@ -1,10 +1,10 @@
 /**
  * The public face of the `package` element (#40 §1, #20 §2): the only module outside
  * this folder that may be imported. `package` is pure — no DOM, no React, no state
- * library, no randomness — and imports nothing but itself.
+ * library, no randomness — and imports nothing but `domain` and `lib`.
  *
- * Today it holds the frozen legacy reader only. S2 adds the `.buildbox` package codec
- * and the legacy → domain converter beside it.
+ * Today it holds the frozen legacy reader and the legacy → domain v1 converter. S2 adds
+ * the `.buildbox` package codec beside them.
  */
 export {
   MAX_TREE_DEPTH,
@@ -21,6 +21,26 @@ export {
   type LegacyStoreCheck,
   type LegacyWorkspaceRead,
 } from './legacy/read'
+export { convertLegacy, type LegacyConvertOptions } from './legacy/convert'
+export {
+  attachFloorPlan,
+  floorPlanAsProject,
+  type AttachFloorPlanOptions,
+  type FloorPlanAttachmentResult,
+  type FloorPlanProjectOptions,
+} from './legacy/attach'
+export type {
+  IdRegeneration,
+  IdRegenerationScope,
+  LegacyAsset,
+  LegacyConversion,
+  LegacyConversionResult,
+  LegacyConversionSource,
+  LegacyDiscardedSketches,
+  LegacyFloorPlanContent,
+  LegacyFloorPlanConversion,
+  LegacyProjectProposal,
+} from './legacy/conversion'
 export type {
   LegacyAccessory,
   LegacyAccessoryType,

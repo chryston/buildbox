@@ -147,6 +147,38 @@ Downloaded from Floor Plan → **Export JSON** with the v3 state loaded: the 256
 The same export path with `image` and `pixelsPerMm` nulled in the seeded state before
 export, so the file is what the app writes for an uncalibrated, imageless plan.
 
+## Edge cases (#43)
+
+Hand-authored, one converter edge each. They live in their own directory rather than in
+`workspace/` because that one is asserted *clean* — `src/test/legacyFixtures.test.ts`
+requires every `workspace/*.buildbox.json` to pass the frozen reader — and the duplicate-ID
+file below does not: the reader stops at the repeated unit ID, which is exactly the input
+#43 has to repair rather than refuse.
+
+### `edge-cases/floor-plan-sketches.json` — hand-authored
+
+A floor-plan export with no image, no calibration, one custom object, one custom template
+and nothing else but five wall-hack / tile-zone annotations. It is the plan whose entire
+annotation layer goes nowhere in domain v1 (#20 §3), so it is what #43 checks the
+"discarded" count against: the object and the template survive, the annotations are
+reported and dropped.
+
+### `edge-cases/workspace-duplicate-node-id.buildbox.json` — hand-authored
+
+Two projects that each reuse one ID inside themselves: `proj-dup-space` has two sibling
+nodes both called `space-shared`, and `proj-dup-unit` has two units both called `unit-twin`
+(the active project, so it is the one the review opens first). Domain v1 keeps one ID
+namespace per Project, so neither can be copied across as it stands — this is the input the
+ID-regeneration report is for.
+
+### `edge-cases/workspace-unknown-setting-field.buildbox.json` — hand-authored
+
+Two otherwise identical cabinets where the second carries `"colour": "#f4f1ea"` in its
+`settings` — a field no BuildBox version has ever written and nothing reads. The legacy
+reader says nothing about it (it ignores what it does not model); domain v1 rejects it. The
+pair shows both halves of #43: the good project converts, the bad one is rejected with a
+problem that names the field and where it sits.
+
 ## Integrity
 
 One row per file, SHA-256 of the file as committed. `src/test/legacyFixtures.test.ts`
@@ -164,3 +196,6 @@ asserts both directions: every file here has a row, and every row matches its fi
 | `workspace/v0-design-shape.buildbox.json` | `658b081497c1ba916a258f94e4fa4a1fe89591972de3573d4d70bd9ec44e3481` |
 | `floor-plan/with-image-floor-plan.json` | `d06be40f669fd93f0d8242a2121096d35b51c36c255e539ca7fad1a5dd2b96c4` |
 | `floor-plan/no-image-floor-plan.json` | `0c230edfde597c27e325708ece8403694aaf0a70e680ee1990c041ec697b7b13` |
+| `edge-cases/floor-plan-sketches.json` | `df9fce33d29e3be5cd6ce37ddff24fc6d82f814b218588e286b2701d7d53666b` |
+| `edge-cases/workspace-duplicate-node-id.buildbox.json` | `5f8fc2f8fb154946c9e8a6bc6956e860857d9dc9ffb545bc482cf96bb1f8b033` |
+| `edge-cases/workspace-unknown-setting-field.buildbox.json` | `b1afeec2cc5ed856c5f14e74e5ca0414736f51380b9112e3b6181027ee56e68b` |

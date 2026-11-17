@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "exportedAt": "2026-11-17T06:24:32.680Z",
+  "projects": [
+    {
+      "id": "proj-linen-cabinet",
+      "name": "Linen Cabinet",
+      "units": [
+        {
+          "type": "cabinet",
+          "id": "unit-linen",
+          "label": "Linen Unit",
+          "x": 0,
+          "y": 0,
+          "settings": {
+            "unit": "mm",
+            "height": 1800,
+            "width": 450,
+            "depth": 350,
+            "thickness": 18,
+            "backThickness": 6,
+            "toeKick": {
+              "height": 100,
+              "setback": 50
+            },
+            "material": "white"
+          },
+          "root": {
+            "id": "linen-root",
+            "elementType": "hanging-space",
+            "spaceLabel": "Linen storage"
+          }
+        }
+      ]
+    },
+    {
+      "id": "proj-painted-cabinet",
+      "name": "Painted Cabinet",
+      "units": [
+        {
+          "type": "cabinet",
+          "id": "unit-painted",
+          "label": "Painted Unit",
+          "x": 1200,
+          "y": 0,
+          "settings": {
+            "unit": "mm",
+            "height": 1800,
+            "width": 450,
+            "depth": 350,
+            "thickness": 18,
+            "backThickness": 6,
+            "toeKick": {
+              "height": 100,
+              "setback": 50
+            },
+            "material": "white",
+            "colour": "#f4f1ea"
+          },
+          "root": {
+            "id": "painted-root",
+            "elementType": "hanging-space",
+            "spaceLabel": "Painted storage"
+          }
+        }
+      ]
+    }
+  ],
+  "activeProjectId": "proj-linen-cabinet"
+}
