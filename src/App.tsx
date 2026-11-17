@@ -47,7 +47,6 @@ export default function App() {
   const storePinNode = useStore((state) => state.pinNode)
   const storeUnlockNode = useStore((state) => state.unlockNode)
   const storeSetCabinetMaterial = useStore((state) => state.setCabinetMaterial)
-  const storeSetNodeLabel = useStore((state) => state.setNodeLabel)
   const storeDistributeEvenly = useStore((state) => state.distributeEvenly)
   const storeDrawerConfig = useStore((state) => state.setDrawerConfig)
   const storeSetElementType = useStore((state) => state.setElementType)

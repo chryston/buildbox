@@ -15,6 +15,17 @@ import type {
 
 const MIN_SECTION_SIZE = 50
 
+const CABINET_MATERIAL_IDS: readonly CabinetMaterialId[] = ['oak', 'walnut', 'white', 'birch', 'mdf']
+
+// Settings persisted before the `material` rename may still carry `defaultMaterial`.
+// store.ts migrate rewrites it, so this only keeps an un-migrated in-memory shape
+// laying out exactly as before.
+export function legacyDefaultMaterial(gs: GlobalSettings): CabinetMaterialId | undefined {
+  if (!('defaultMaterial' in gs)) return undefined
+  const legacy: unknown = gs.defaultMaterial
+  return CABINET_MATERIAL_IDS.find((id) => id === legacy)
+}
+
 // Core per-unit layout. Panel/void/divider coords are relative to unit origin (0,0).
 export function computeUnitLayout(settings: GlobalSettings, root: CabinetNode): LayoutResult {
   const gs = settings
@@ -43,7 +54,7 @@ export function computeUnitLayout(settings: GlobalSettings, root: CabinetNode): 
     })
   }
 
-  layoutNode(root, innerX, innerY, innerW, innerH, gs.material ?? (gs as any).defaultMaterial ?? 'oak', undefined,
+  layoutNode(root, innerX, innerY, innerW, innerH, gs.material ?? legacyDefaultMaterial(gs) ?? 'oak', undefined,
     undefined, undefined, undefined)
 
   return {

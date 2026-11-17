@@ -394,14 +394,15 @@ export const useStore = create<StoreState>()(
           // Add floorPlan shape after structural migrations so it is not lost
           // by any reassignment of `persisted` above.
           if (origVersion <= 2) {
-            ;(persisted as any).floorPlan ??= {
+            const withFloorPlan = persisted as { floorPlan?: FloorPlanData }
+            withFloorPlan.floorPlan ??= {
               image: null,
               pixelsPerMm: null,
               objects: [],
               annotations: [],
               customTemplates: [],
             }
-            ;(persisted as any).floorPlan.customTemplates ??= []
+            withFloorPlan.floorPlan.customTemplates ??= []
           }
           return persisted
         },
