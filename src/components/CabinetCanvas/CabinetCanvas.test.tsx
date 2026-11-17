@@ -1,6 +1,7 @@
 import { createRef } from 'react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
+import { renderWithBindings as render } from '../../ui/legacy/testing'
 import type { Design } from '../../types'
 import { computeUnitLayout, type SceneLayout } from '../../cabinet'
 import CabinetCanvas from './CabinetCanvas'

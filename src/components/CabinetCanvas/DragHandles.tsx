@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react'
 import type { LayoutDivider } from '../../cabinet'
-import { useStore } from '../../store/store'
+import { useLegacyBindings } from '../../ui/legacy/bindings'
 
 interface Props {
   dividers: LayoutDivider[]
@@ -17,7 +17,7 @@ export function snapToAlignment(y: number, candidates: number[], threshold: numb
 }
 
 export default function DragHandles({ dividers, snapGrid, svgRef, zoom }: Props) {
-  const commitDrag = useStore((s) => s.commitDrag)
+  const { commitDrag } = useLegacyBindings()
   const alignmentYs = useRef<number[]>([])
   const dragging = useRef<{
     dividerId: string

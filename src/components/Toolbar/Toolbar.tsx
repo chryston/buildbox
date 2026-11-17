@@ -3,6 +3,7 @@ import type { Design } from '../../types'
 import type { GlobalSettings, Unit } from '../../domain'
 import { readLegacyWorkspaceFile } from '../../package'
 import type { ValidationProblem } from '../../lib'
+import type { LegacyWorkspace, SaveStatusText } from '../../ui/legacy/bindings'
 import ExportModal from './ExportModal'
 import ImportModal from './ImportModal'
 import UndoRedo from './UndoRedo'
@@ -15,9 +16,10 @@ interface Props {
   onUndo?: () => void
   canRedo?: boolean
   onRedo?: () => void
-  projects?: Design[]
-  activeProjectId?: string | null
-  onImportWorkspace?: (incoming: { projects: Design[]; activeProjectId: string | null }, mode: 'replace' | 'merge') => void
+  /** The workspace JSON this app can export and import; absent means neither control (#49). */
+  workspace?: LegacyWorkspace
+  /** Where the document is saved, when there is a save to report (#14, #49). */
+  saveStatus?: SaveStatusText | null
 }
 
 const UNITS: Unit[] = ['mm', 'cm', 'in']
@@ -30,9 +32,8 @@ export default function Toolbar({
   onUndo,
   canRedo = false,
   onRedo,
-  projects = [],
-  activeProjectId = null,
-  onImportWorkspace,
+  workspace,
+  saveStatus = null,
 }: Props) {
   const [showExport, setShowExport] = useState(false)
   const [importState, setImportState] = useState<
@@ -77,29 +78,44 @@ export default function Toolbar({
         ))}
       </div>
 
-      <div className="ml-auto flex items-center gap-2">
+      {/* Without the workspace buttons the row loses the 2 px their ↓/↑ glyphs add to it
+          (fallback-font ascent: 34 px against Export SVG's 32), and every view below it
+          would sit 2 px higher than today's. #49 keeps the pixels, so the row keeps the height. */}
+      <div className={`ml-auto flex items-center gap-2${workspace ? '' : ' min-h-[34px]'}`}>
+        {saveStatus && (
+          <span
+            className={`text-sm ${saveStatus.failed ? 'text-red-400' : 'text-text-muted'}`}
+            role="status"
+          >
+            {saveStatus.text}
+          </span>
+        )}
         <UndoRedo canUndo={canUndo} onUndo={onUndo ?? (() => {})} canRedo={canRedo} onRedo={onRedo ?? (() => {})} />
-        <button
-          onClick={() => setShowExport(true)}
-          className="rounded border border-divider px-3 py-1.5 text-sm text-text-muted hover:text-text-primary"
-          aria-label="Export workspace"
-        >
-          ↓ Export
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".buildbox.json"
-          className="hidden"
-          onChange={handleImportFile}
-        />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="rounded border border-divider px-3 py-1.5 text-sm text-text-muted hover:text-text-primary"
-          aria-label="Import workspace"
-        >
-          ↑ Import
-        </button>
+        {workspace && (
+          <>
+            <button
+              onClick={() => setShowExport(true)}
+              className="rounded border border-divider px-3 py-1.5 text-sm text-text-muted hover:text-text-primary"
+              aria-label="Export workspace"
+            >
+              ↓ Export
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".buildbox.json"
+              className="hidden"
+              onChange={handleImportFile}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="rounded border border-divider px-3 py-1.5 text-sm text-text-muted hover:text-text-primary"
+              aria-label="Import workspace"
+            >
+              ↑ Import
+            </button>
+          </>
+        )}
         <button
           onClick={onExport}
           className="rounded bg-accent px-3 py-1.5 text-sm text-white hover:bg-accent-hover"
@@ -108,10 +124,10 @@ export default function Toolbar({
         </button>
       </div>
     </header>
-    {showExport && (
+    {showExport && workspace && (
       <ExportModal
-        projects={projects}
-        activeProjectId={activeProjectId}
+        projects={workspace.projects}
+        activeProjectId={workspace.activeProjectId}
         onClose={() => setShowExport(false)}
       />
     )}
@@ -125,7 +141,7 @@ export default function Toolbar({
         incoming={importState.incoming}
         onConfirm={(mode) => {
           if (importState.incoming.projects.length > 0) {
-            onImportWorkspace?.(importState.incoming, mode)
+            workspace?.onImport(importState.incoming, mode)
           }
           setImportState(null)
         }}

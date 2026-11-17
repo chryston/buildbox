@@ -56,6 +56,30 @@ const LEGACY_ELEMENTS = [
   },
   { name: 'legacy-types', pattern: ['src/types'], mode: 'folder', allow: ['legacy-types'], pure: true },
   {
+    // #49's test of the session-backed bindings: it opens a real session over the in-memory
+    // store to count what one drag writes, and `persistence` is no source file of
+    // `legacy-view`'s business — `app` alone opens a database. It is a test file, so it ships
+    // nothing.
+    name: 'legacy-session-bindings-test',
+    pattern: ['src/ui/legacy/sessionBindings.test.tsx'],
+    mode: 'file',
+    allow: ['*'],
+  },
+  {
+    name: 'legacy-view',
+    // The adapter layer of #49: the `LegacyBindings` seam, the two implementations of it, and
+    // the UI state that is not project data. It claims `src/ui/legacy`
+    // out of the `ui` module because it is the one place allowed to reach the legacy store
+    // (`storeBindings`) and the legacy view-models — which is exactly why it must not be
+    // reachable *from* `ui`: the flagged graph has to stay free of `src/store`.
+    // `beforeTargets` puts it ahead of `ui` in `ELEMENTS`, being the more specific pattern.
+    pattern: ['src/ui/legacy'],
+    mode: 'folder',
+    beforeTargets: true,
+    allow: ['ui', 'session', 'derive', 'domain', 'legacy-store', 'legacy-types', 'legacy-data', 'legacy-view'],
+    typeOnly: ['edit'],
+  },
+  {
     name: 'legacy-utils',
     pattern: ['src/utils'],
     mode: 'folder',
@@ -81,6 +105,11 @@ const LEGACY_ELEMENTS = [
     mode: 'folder',
     allow: [
       'legacy-components',
+      // #49: the views read their state through `LegacyBindings` instead of the store, so the
+      // seam is one of their imports. `legacy-view` does not allow `legacy-components` back,
+      // so this is a one-way edge — and the components import only `bindings`, never one of
+      // its two implementations, which is what keeps `src/store` out of the flagged bundle.
+      'legacy-view',
       'legacy-store',
       'legacy-utils',
       'legacy-utils-dom',
@@ -131,9 +160,9 @@ const legacyElement = (element) => ({ type: element.name, pattern: element.patte
 // Most specific first: the plugin assigns the first element whose pattern matches.
 const ELEMENTS = [
   ADAPTER_ELEMENT,
-  ...LEGACY_ELEMENTS.filter((element) => element.mode === 'file').map(legacyElement),
+  ...LEGACY_ELEMENTS.filter((element) => element.mode === 'file' || element.beforeTargets).map(legacyElement),
   ...TARGET_MODULES.map((module) => ({ type: module.name, pattern: [`src/${module.name}`], mode: 'folder' })),
-  ...LEGACY_ELEMENTS.filter((element) => element.mode === 'folder').map(legacyElement),
+  ...LEGACY_ELEMENTS.filter((element) => element.mode === 'folder' && !element.beforeTargets).map(legacyElement),
 ]
 
 // Pure set (#20 §2): every target module except `platform`, `ui`, `app` and the IndexedDB
@@ -283,7 +312,7 @@ const elementTypeRules = [
   { from: [ADAPTER_ELEMENT.type], allow: ['persistence', 'domain', 'lib', ADAPTER_ELEMENT.type] },
   // Type-only exceptions first: a value import of the same target falls through to the
   // module's own row below and is rejected there.
-  ...TARGET_MODULES.filter((module) => module.typeOnly).map((module) => ({
+  ...[...TARGET_MODULES, ...LEGACY_ELEMENTS].filter((module) => module.typeOnly).map((module) => ({
     from: [module.name],
     allow: module.typeOnly,
     importKind: 'type',
@@ -301,7 +330,7 @@ const elementTypeRules = [
 export default tseslint.config(
   // .prototype-cache holds the published prototype bytes scripts/run-screenshots.mjs stages
   // (#39): compared against, never linted or fixed.
-  { ignores: ['dist/**', 'coverage/**', 'node_modules/**', '.prototype-cache/**'] },
+  { ignores: ['dist/**', 'dist-preview/**', 'coverage/**', 'node_modules/**', '.prototype-cache/**'] },
 
   // Plain JS: root config files and scripts, JS recommended rules only.
   {

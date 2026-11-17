@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import type { RefObject } from 'react'
-import { useStore } from '../../store/store'
+import { useLegacyBindings } from '../../ui/legacy/bindings'
 import type { SceneLayout } from '../../cabinet'
 import type { CabinetNode } from '../../domain'
 import CanvasLayers from './CanvasLayers'
@@ -23,11 +23,12 @@ export default function CabinetCanvas({ sceneLayout, svgRef, onUnlockNode, onUni
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const isPanning = useRef(false)
   const lastPan = useRef({ x: 0, y: 0 })
-  const selectedId = useStore((s) => s.selectedId)
-  const setSelectedId = useStore((s) => s.setSelectedId)
-  const storeSetNodeSize = useStore((s) => s.setNodeSize)
-  const storeSetNodeLabel = useStore((s) => s.setNodeLabel)
-  const snapGrid = useStore((s) => s.snapGrid)
+  const bindings = useLegacyBindings()
+  const selectedId = bindings.selectedNodeId
+  const setSelectedId = bindings.selectNode
+  const storeSetNodeSize = bindings.setNodeSize
+  const storeSetNodeLabel = bindings.setNodeLabel
+  const snapGrid = bindings.snapGrid
 
   const { boundingBox: bb } = sceneLayout
   const viewBox = `${bb.x - PADDING} ${bb.y - PADDING} ${bb.w + 2 * PADDING} ${bb.h + 2 * PADDING}`
