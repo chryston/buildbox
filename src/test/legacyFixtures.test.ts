@@ -5,7 +5,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { importWorkspace } from '../utils/workspaceIO'
+import { checkLegacyStore, readLegacyWorkspaceFile } from '../package'
 
 // Golden legacy fixtures (#38 §4) are never deleted or regenerated, so an accidental
 // edit has to fail loudly here rather than quietly change what S1, S2 and S4 compare
@@ -43,6 +43,19 @@ describe('legacy store fixtures', () => {
   })
 })
 
+describe('fixture acceptance', () => {
+  // #40 §3: the frozen reader is what has to keep reading every one of these. A fixture
+  // that stops loading is a reader bug, never a reason to touch the fixture.
+  it.each(listFiles(join(fixturesRoot, 'workspace')).map((file) => ({ file })))('workspace $file passes the reader', ({ file }) => {
+      const result = readLegacyWorkspaceFile(readFileSync(join(fixturesRoot, file), 'utf8'), () => 'unit-fixed-id')
+      expect(result.ok ? [] : result.problems).toEqual([])
+    })
+
+  it.each(storeFixtures.map((fixture) => ({ path: fixture.path })))('$path passes the store check', ({ path }) => {
+    expect(checkLegacyStore(readFileSync(join(fixturesRoot, path), 'utf8'))).toEqual({ ok: true })
+  })
+})
+
 describe('fixture integrity', () => {
   const readme = readFileSync(join(fixturesRoot, 'README.md'), 'utf8')
   const documented = new Map<string, string>()
@@ -66,9 +79,10 @@ describe('fixture integrity', () => {
 // project is still in the pre-units Design shape.
 describe('hand-authored v0 workspace fixture', () => {
   const json = readFileSync(join(fixturesRoot, 'workspace/v0-design-shape.buildbox.json'), 'utf8')
-  const file = importWorkspace(json)
+  const read = readLegacyWorkspaceFile(json, () => 'unit-fixed-id')
+  const projects = read.ok ? read.file.projects : []
 
-  it('is a bare Design before import', () => {
+  it('is a bare Design before the reader upgrades it', () => {
     const raw = JSON.parse(json) as Record<string, unknown>
     const [project] = raw.projects as Array<Record<string, unknown>>
     expect(project.units).toBeUndefined()
@@ -78,14 +92,16 @@ describe('hand-authored v0 workspace fixture', () => {
   })
 
   it('wraps the bare Design into one unit', () => {
-    expect(file.version).toBe(1)
-    expect(file.activeProjectId).toBe('proj-legacy-closet')
-    expect(file.projects).toHaveLength(1)
+    expect(read.ok).toBe(true)
+    if (!read.ok) return
+    expect(read.file.version).toBe(1)
+    expect(read.file.activeProjectId).toBe('proj-legacy-closet')
+    expect(projects).toHaveLength(1)
 
-    const [project] = file.projects
-    expect(project.units).toHaveLength(1)
+    const [project] = projects
     const [unit] = project.units
     expect(unit.label).toBe('Unit 1')
+    expect(unit.id).toBe('unit-fixed-id')
     expect(unit.settings.unit).toBe('mm')
     expect(unit.root.id).toBe('n0')
     expect(unit.root.children).toHaveLength(2)

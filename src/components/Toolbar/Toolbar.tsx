@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react'
 import type { Design, GlobalSettings, Unit } from '../../types'
+import { readLegacyWorkspaceFile, type ValidationProblem } from '../../package'
 import ExportModal from './ExportModal'
 import ImportModal from './ImportModal'
 import UndoRedo from './UndoRedo'
-import { importWorkspace } from '../../utils/workspaceIO'
 
 interface Props {
   settings: GlobalSettings
@@ -33,10 +33,11 @@ export default function Toolbar({
   onImportWorkspace,
 }: Props) {
   const [showExport, setShowExport] = useState(false)
-  const [importState, setImportState] = useState<{
-    incoming: { projects: Design[]; activeProjectId: string | null }
-    error?: string
-  } | null>(null)
+  const [importState, setImportState] = useState<
+    | { incoming: { projects: Design[]; activeProjectId: string | null } }
+    | { problems: ValidationProblem[] }
+    | null
+  >(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   function handleImportFile(e: React.ChangeEvent<HTMLInputElement>): void {
@@ -44,12 +45,12 @@ export default function Toolbar({
     if (!file) return
     const reader = new FileReader()
     reader.onload = (ev) => {
-      try {
-        const result = importWorkspace(ev.target?.result as string)
-        setImportState({ incoming: { projects: result.projects, activeProjectId: result.activeProjectId } })
-      } catch {
-        setImportState({ incoming: { projects: [], activeProjectId: null }, error: 'Invalid file — could not import workspace.' })
-      }
+      // Nothing reaches the store until the whole file has been read and validated, and
+      // the store applies what is left in one set() (#40 §2).
+      const result = readLegacyWorkspaceFile(ev.target?.result as string, () => crypto.randomUUID())
+      setImportState(result.ok
+        ? { incoming: { projects: result.file.projects, activeProjectId: result.file.activeProjectId } }
+        : { problems: result.problems })
     }
     reader.readAsText(file)
     e.target.value = ''
@@ -112,7 +113,12 @@ export default function Toolbar({
         onClose={() => setShowExport(false)}
       />
     )}
-    {importState && (
+    {importState && ('problems' in importState ? (
+      <ImportModal
+        problems={importState.problems}
+        onClose={() => setImportState(null)}
+      />
+    ) : (
       <ImportModal
         incoming={importState.incoming}
         onConfirm={(mode) => {
@@ -122,9 +128,8 @@ export default function Toolbar({
           setImportState(null)
         }}
         onClose={() => setImportState(null)}
-        error={importState.error}
       />
-    )}
+    ))}
     </>
   )
 }

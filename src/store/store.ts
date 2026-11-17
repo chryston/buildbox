@@ -1,10 +1,12 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { shallow } from 'zustand/shallow'
 import { temporal } from 'zundo'
 import { nanoid } from 'nanoid'
 import type { Accessory, CabinetMaterialId, CabinetSceneUnit, Design, GlobalSettings, DrawerConfig, UIState, ElementType, FloorPlanData, FloorPlanObject, Annotation, FloorPlanImage, CustomTemplate } from '../types'
+import { migrateLegacyState } from '../package'
+import { guardedStorage, STORE_KEY } from './guardedStorage'
 import { addShelf, addDivider, deleteBoard as deleteBoardFn, setNodeSize, setSplitRatio, pinNode as treePinNode, unpinNode as treeUnpinNode, setNodeLabel as treeMutSetNodeLabel, distributeEvenly as treeMutDistributeEvenly, setElementType as treeMutSetElementType, setDrawerConfig as treeMutSetDrawerConfig } from '../engine/treeMutations'
 import { addAccessory as addAccessoryFn, removeAccessory as removeAccessoryFn } from '../engine/accessories'
 
@@ -349,63 +351,14 @@ export const useStore = create<StoreState>()(
         }),
       })),
       {
-        name: 'buildbox-store',
+        name: STORE_KEY,
+        storage: createJSONStorage(() => guardedStorage),
         partialize: partializeForPersist,
         version: 3,
-        migrate: (persisted: unknown, fromVersion: number) => {
-          const origVersion = fromVersion
-
-          // Apply structural project migrations first (v0→v1, v1→v2),
-          // then add floorPlan after any reassignment of `persisted`.
-          if (origVersion === 0) {
-            const old = persisted as {
-              projects: Array<{ id: string; name: string; root: import('../types').CabinetNode; globalSettings: GlobalSettings }>
-              activeProjectId: string | null
-            }
-            persisted = {
-              projects: old.projects.map(d => ({
-                id: d.id,
-                name: d.name,
-                units: [{
-                  type: 'cabinet' as const,
-                  id: nanoid(8),
-                  label: 'Unit 1',
-                  settings: d.globalSettings,
-                  root: d.root,
-                  x: 0,
-                  y: 0,
-                }],
-              })),
-              activeProjectId: old.activeProjectId,
-            }
-            // fall through to apply v1→v2 rename
-          }
-          if (origVersion <= 1) {
-            const state = persisted as { projects: Array<{ units: Array<{ settings: Record<string, unknown> }> }> }
-            for (const project of state.projects ?? []) {
-              for (const unit of project.units ?? []) {
-                if ('defaultMaterial' in unit.settings) {
-                  unit.settings.material = unit.settings.defaultMaterial
-                  delete unit.settings.defaultMaterial
-                }
-              }
-            }
-          }
-          // Add floorPlan shape after structural migrations so it is not lost
-          // by any reassignment of `persisted` above.
-          if (origVersion <= 2) {
-            const withFloorPlan = persisted as { floorPlan?: FloorPlanData }
-            withFloorPlan.floorPlan ??= {
-              image: null,
-              pixelsPerMm: null,
-              objects: [],
-              annotations: [],
-              customTemplates: [],
-            }
-            withFloorPlan.floorPlan.customTemplates ??= []
-          }
-          return persisted
-        },
+        // The v0→v1→v2→v3 body lives in the frozen legacy reader now (#40 §1); `nanoid(8)`
+        // is the id source it had here before.
+        migrate: (persisted: unknown, fromVersion: number) =>
+          migrateLegacyState(persisted, fromVersion, () => nanoid(8)),
         onRehydrateStorage: () => (state, error) => {
           if (!error && state) {
             const proj = state.projects.find(p => p.id === state.activeProjectId)

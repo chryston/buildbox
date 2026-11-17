@@ -7,12 +7,12 @@
       "name": "Legacy Closet",
       "root": {
         "id": "n0",
-        "splitAxis": "x",
+        "splitAxis": "horizontal",
         "splitRatio": 0.6,
         "children": [
           {
             "id": "n1",
-            "splitAxis": "y",
+            "splitAxis": "vertical",
             "splitRatio": 0.75,
             "children": [
               { "id": "n2", "elementType": "hanging-space", "spaceLabel": "Hanging" },
@@ -20,7 +20,7 @@
                 "id": "n3",
                 "elementType": "drawer",
                 "spaceLabel": "Drawers",
-                "drawerConfig": { "count": 3, "mount": "side" }
+                "drawerConfig": { "slideType": "side-mount", "reveal": 2 }
               }
             ]
           },
