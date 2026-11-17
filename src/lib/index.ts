@@ -6,6 +6,7 @@
  * Byte-stable primitives and the shared `ValidationProblem` shape (#42 §1). ZIP
  * (`fflate`) joins it in the package-codec issue.
  */
+export { decodeBase64 } from './base64'
 export { CanonicalJsonError, canonicalJson, canonicalJsonBytes } from './canonicalJson'
 export { sha256Hex } from './sha256Hex'
 export { stableSort } from './stableSort'

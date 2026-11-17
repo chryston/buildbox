@@ -1,0 +1,74 @@
+{
+  "pixelsPerMm": null,
+  "image": null,
+  "objects": [
+    {
+      "id": "fp-desk",
+      "type": "custom",
+      "label": "Study desk",
+      "x": 1200,
+      "y": 400,
+      "w": 1400,
+      "h": 700,
+      "rotation": 90,
+      "color": "#8d6e63",
+      "isCustom": true
+    }
+  ],
+  "annotations": [
+    {
+      "id": "sk-wall-1",
+      "type": "wall-hack",
+      "points": [
+        { "x": 0, "y": 0 },
+        { "x": 1200, "y": 0 }
+      ],
+      "label": "Load bearing"
+    },
+    {
+      "id": "sk-wall-2",
+      "type": "wall-hack",
+      "points": [
+        { "x": 1200, "y": 0 },
+        { "x": 1200, "y": 900 }
+      ]
+    },
+    {
+      "id": "sk-wall-3",
+      "type": "wall-hack",
+      "points": [
+        { "x": 0, "y": 900 },
+        { "x": 900, "y": 900 }
+      ],
+      "label": "Take down"
+    },
+    {
+      "id": "sk-tile-1",
+      "type": "tile-zone",
+      "points": [
+        { "x": 100, "y": 100 },
+        { "x": 600, "y": 100 },
+        { "x": 600, "y": 500 },
+        { "x": 100, "y": 500 }
+      ],
+      "label": "Shower splash"
+    },
+    {
+      "id": "sk-tile-2",
+      "type": "tile-zone",
+      "points": [
+        { "x": 700, "y": 120 },
+        { "x": 1100, "y": 120 }
+      ]
+    }
+  ],
+  "customTemplates": [
+    {
+      "id": "tpl-niche",
+      "label": "Wall niche",
+      "defaultW": 600,
+      "defaultH": 300,
+      "color": "#26a69a"
+    }
+  ]
+}
