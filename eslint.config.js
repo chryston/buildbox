@@ -181,6 +181,13 @@ const TESTING_IMPORT_PATTERN = {
   message: 'src/<module>/testing.ts is importable only from a *.test.ts(x) file (#42 §7).',
 }
 
+// #45: the persistence contract suite is Vitest and behaviour only, so it is a module's
+// third kind of file — an entry point a test file may import and nothing else may.
+const CONTRACT_IMPORT_PATTERN = {
+  group: ['**/persistence/contract', '**/persistence/contract/*'],
+  message: 'src/persistence/contract is importable only from a *.test.ts(x) file (#45).',
+}
+
 // One descriptor per immer policy: `edit` builds Edit Transactions on immer patches
 // (#20 §4), every other pure module bans it along with React, the state libraries and idb.
 // Two descriptors per policy, because the testing ban has to skip test files and a rule
@@ -212,7 +219,7 @@ function pureDescriptor(moduleNames, { allowImmer }) {
       files,
       ignores: [...NON_PURE_FILE_PATTERNS, ...TEST_FILE_PATTERNS],
       rules: {
-        'no-restricted-imports': ['error', { patterns: [...pureImportBan.patterns, TESTING_IMPORT_PATTERN] }],
+        'no-restricted-imports': ['error', { patterns: [...pureImportBan.patterns, TESTING_IMPORT_PATTERN, CONTRACT_IMPORT_PATTERN] }],
       },
     },
   ]
@@ -229,7 +236,7 @@ const testingBanForImpureFiles = {
     ...TEST_FILE_PATTERNS,
   ],
   rules: {
-    'no-restricted-imports': ['error', { patterns: [TESTING_IMPORT_PATTERN] }],
+    'no-restricted-imports': ['error', { patterns: [TESTING_IMPORT_PATTERN, CONTRACT_IMPORT_PATTERN] }],
   },
 }
 
@@ -304,7 +311,9 @@ export default tseslint.config(
           rules: [
             // `testing.ts` is a module's second entry point (#42 §7); the ban on importing
             // it from anywhere but a test file is a separate descriptor.
-            { target: TARGET_MODULE_NAMES, allow: ['index.ts', 'testing.ts'] },
+            // `contract/index.ts` is `persistence`'s test-only entry point (#45), banned
+            // the same way as `testing.ts`.
+            { target: TARGET_MODULE_NAMES, allow: ['index.ts', 'testing.ts', 'contract/index.ts'] },
             // Legacy elements and the adapters have no entry point yet (#20 §1): the
             // adapter is reached file-by-file by `app`, legacy code by everything legacy.
             { target: OPEN_ENTRY_ELEMENT_NAMES, allow: ['**'] },
