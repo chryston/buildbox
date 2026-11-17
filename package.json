@@ -7,7 +7,6 @@
   "scripts": {
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
-    "start": "react-scripts start",
     "dev": "vite",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
