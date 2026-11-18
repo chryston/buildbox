@@ -16,6 +16,7 @@ import '@fontsource/dm-sans/700.css'
 import '@fontsource/manrope/500.css'
 import '@fontsource/manrope/600.css'
 import '@fontsource/manrope/700.css'
+import './theme/tokens.css'
 import './library/library.css'
 
 export { LibraryHome, type LibraryHomeProps, type LibraryServices } from './library/LibraryHome'
