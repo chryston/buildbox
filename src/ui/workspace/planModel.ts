@@ -39,13 +39,45 @@ export interface PlanImageView {
 }
 
 /**
- * The device-local cache key of one Plan View (#56 criterion 13).
+ * The device-local viewport key of one Plan View (#56 criterion 13).
  *
- * Every view — a Floor's default or a named one — has its own key, so two views of the
- * same Floor keep two viewports. #55 keyed this by Floor, which is why the old
- * `plan:<floorId>` entries are simply never read again.
+ * It names the Floor and the view's name rather than the view's id on purpose: opening a
+ * record written before the `views` collection migrates it in memory and mints fresh view IDs
+ * every time (#26 keeps IDs out of storage), so an id-keyed cache would miss on every reload
+ * of exactly the Projects that have a Plan Image to look at. Floor ids and view names are
+ * data, and a renamed view starting from `Fit` again is a lost camera, not a lost drawing.
  */
-export const planViewKey = (viewId: EntityId): string => `view:${viewId}`
+export const planViewKey = (view: PlanView): string => `view:${view.floorId}:${view.name}`
+
+/**
+ * The open view of each Floor as the device-local cache stores it: view names, for the same
+ * reason `planViewKey` uses them. An id the cache no longer recognises is dropped rather than
+ * guessed at.
+ */
+export function encodeActiveViews(
+  project: Project,
+  viewsByFloor: Record<string, string>,
+): Record<string, string> {
+  const names: Record<string, string> = {}
+  for (const [floorId, viewId] of Object.entries(viewsByFloor)) {
+    const view = project.views.find((candidate) => candidate.id === viewId && candidate.floorId === floorId)
+    if (view !== undefined) names[floorId] = view.name
+  }
+  return names
+}
+
+/** …and back to the live IDs, dropping any name this Project no longer has. */
+export function decodeActiveViews(
+  project: Project,
+  namesByFloor: Record<string, string>,
+): Record<string, string> {
+  const ids: Record<string, string> = {}
+  for (const [floorId, name] of Object.entries(namesByFloor)) {
+    const view = project.views.find((candidate) => candidate.floorId === floorId && candidate.name === name)
+    if (view !== undefined) ids[floorId] = view.id
+  }
+  return ids
+}
 
 /** The file input names the three formats a Plan Image may be (#49 deviation 4). */
 export const PLAN_IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp'

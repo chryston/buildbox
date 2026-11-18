@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import type { Download, Locator, Page } from '@playwright/test'
 import { expect } from '@playwright/test'
 import { E2E_DB_NAME, reseedPreviewDb, seedPreviewDb, type PreviewSeed } from './seedPreviewDb'
+import { migrateProject } from '../../src/domain'
 
 /**
  * The pieces the #50 Library specs share: open the flag-on build at the Library, drive the
@@ -135,6 +136,47 @@ export const toast = (page: Page): Locator => page.locator('.toast')
 export async function storedProject(page: Page, projectId: string): Promise<unknown> {
   const records = await readStore<{ id: string; data: unknown }>(page, 'projects')
   return records.find((record) => record.id === projectId)?.data ?? null
+}
+
+/**
+ * One stored Project record *with its envelope* (#56). The domain version a record was written
+ * at lives beside `data`, not inside it, so a spec that has to migrate what it read — the way
+ * the app does when it opens the Project — needs this rather than `storedProject`.
+ */
+export async function storedRecord(
+  page: Page,
+  projectId: string,
+): Promise<{ id: string; schemaVersion: number; revision: number; data: unknown } | null> {
+  const records = await readStore<{ id: string; schemaVersion: number; revision: number; data: unknown }>(page, 'projects')
+  return records.find((record) => record.id === projectId) ?? null
+}
+
+/**
+ * A Project as a spec compares it against something that came back through the app: the Plan
+ * View ids a migration minted are replaced by one placeholder, because opening a record that
+ * predates them mints fresh ones every single time. Nothing else is forgiven.
+ */
+export function withoutMintedViewIds(data: unknown): unknown {
+  if (typeof data !== 'object' || data === null || !('views' in data) || !Array.isArray(data.views)) {
+    throw new Error('a Project should carry its Plan Views')
+  }
+  const views: unknown[] = data.views.map((each) => {
+    if (typeof each !== 'object' || each === null || !('id' in each)) throw new Error('a Plan View should have an id')
+    return { ...each, id: 'minted' }
+  })
+  return { ...data, views }
+}
+
+/**
+ * The stored record a Backup was taken *from*, in the form the restored Project has to match:
+ * migrated to the version the app writes, exactly as opening it migrates it (#56), and with the
+ * view ids that migration minted set aside.
+ */
+export function migratedForComparison(data: unknown, schemaVersion: number): unknown {
+  const migrated = migrateProject(data, schemaVersion, (count) =>
+    Array.from({ length: count }, (_, index) => `minted-${index}`))
+  if (!migrated.ok) throw new Error(`the seed should migrate: ${migrated.error.message}`)
+  return withoutMintedViewIds(migrated.project)
 }
 
 /** Every Library row the database holds. */

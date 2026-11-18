@@ -172,7 +172,7 @@ export function createTestDeps(ports: Ports, options?: { now?: string; prefix?: 
   const registry = createSessionRegistry()
   const encoder = createFakeEncoder()
   const download = createFakeDownload()
-  const backup: BackupDeps = { clock, encoder, buildboxVersion: TEST_VERSION, preview: false }
+  const backup: BackupDeps = { clock, encoder, ids, buildboxVersion: TEST_VERSION, preview: false }
   return { deps: { ports, clock, lock, ids, registry, backup }, ports, clock, lock, registry, ids, encoder, download }
 }
 

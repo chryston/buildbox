@@ -8,6 +8,8 @@ import { describe, expect, it } from 'vitest'
 import type { GenericItemDesign, Project } from '../../domain'
 import {
   customTemplates,
+  decodeActiveViews,
+  encodeActiveViews,
   planImageForView,
   planItemsForFloor,
   planViewKey,
@@ -15,6 +17,16 @@ import {
   placedOrigin,
   resolvePlanView,
 } from './planModel'
+import type { PlanView } from '../../domain'
+
+const view = (id: string, floorId: string, name: string, isDefault = false): PlanView => ({
+  id,
+  kind: 'plan',
+  floorId,
+  name,
+  isDefault,
+  showPlanImage: true,
+})
 
 const genericDesign = (over: Partial<GenericItemDesign> = {}): GenericItemDesign => ({
   id: 'design-1',
@@ -165,8 +177,40 @@ describe('customTemplates', () => {
 
 describe('planViewKey', () => {
   it('is keyed by Plan View, so two views of one Floor keep separate viewports (#56)', () => {
-    expect(planViewKey('view-1')).toBe('view:view-1')
-    expect(planViewKey('view-2')).not.toBe(planViewKey('view-1'))
+    expect(planViewKey(view('view-1', 'floor-1', 'Flat', true)))
+      .toBe('view:floor-1:Flat')
+    expect(planViewKey(view('view-3', 'floor-1', 'Furniture'))).not.toBe(planViewKey(view('view-1', 'floor-1', 'Flat', true)))
+  })
+
+  it('survives a migration, which mints new view ids every time it runs (#56)', () => {
+    // The same Plan View as two sessions see it: the record predates `views`, so each open
+    // gives it a different id. The camera must not be one of the things that changes.
+    const first = view('minted-1', 'floor-1', 'Flat', true)
+    const second = view('minted-2', 'floor-1', 'Flat', true)
+    expect(planViewKey(second)).toBe(planViewKey(first))
+  })
+})
+
+describe('the device-local open view', () => {
+  const two = project({
+    floors: [{ id: 'floor-1', name: 'Flat', planImage: null }],
+    views: [
+      { id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Flat', isDefault: true, showPlanImage: true },
+      { id: 'view-2', kind: 'plan', floorId: 'floor-1', name: 'Furniture', isDefault: false, showPlanImage: true },
+    ],
+  })
+
+  it('is stored by name, because a migration mints view ids afresh (#56)', () => {
+    expect(encodeActiveViews(two, { 'floor-1': 'view-2' })).toEqual({ 'floor-1': 'Furniture' })
+  })
+
+  it('comes back as the live id of the view with that name', () => {
+    expect(decodeActiveViews(two, { 'floor-1': 'Furniture' })).toEqual({ 'floor-1': 'view-2' })
+  })
+
+  it('drops a name this Project no longer has, rather than opening a guess', () => {
+    expect(decodeActiveViews(two, { 'floor-1': 'Electrics', 'floor-9': 'Flat' })).toEqual({})
+    expect(encodeActiveViews(two, { 'floor-1': 'gone' })).toEqual({})
   })
 })
 

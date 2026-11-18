@@ -31,6 +31,8 @@ import {
 import type { PreparedPlanImage } from './WorkspaceRoot'
 import {
   customTemplates,
+  decodeActiveViews,
+  encodeActiveViews,
   planImageForView,
   planItemsForFloor,
   planViewKey,
@@ -116,7 +118,7 @@ export function FloorWorkspace(): ReactNode {
   const select = useWorkspace((state) => state.select)
   const dragPreview = useWorkspace((state) => state.dragPreview)
   const setDragPreview = useWorkspace((state) => state.setDragPreview)
-  const viewKey = view === null ? null : planViewKey(view.id)
+  const viewKey = view === null ? null : planViewKey(view)
   const viewport = useWorkspace((state) => (viewKey === null ? undefined : state.viewports[viewKey]))
   const hydrated = useWorkspace((state) => (viewKey === null ? true : state.hydrated[viewKey] === true))
   const railOpen = useWorkspace((state) => state.railOpen)
@@ -144,7 +146,10 @@ export function FloorWorkspace(): ReactNode {
     let live = true
     void services.viewportCache.readActive().then((active) => {
       if (!live) return
-      workspaceStore.getState().hydrateActive(active?.floorId ?? null, active?.viewsByFloor ?? {})
+      workspaceStore.getState().hydrateActive(
+        active?.floorId ?? null,
+        decodeActiveViews(session.getSnapshot().project, active?.viewsByFloor ?? {}),
+      )
     })
     return () => {
       live = false
@@ -154,16 +159,23 @@ export function FloorWorkspace(): ReactNode {
   // …and the open pair goes back the way it came: one record per Project, device-local.
   useEffect(() => {
     if (!activeHydrated) return
-    services.viewportCache.writeActive({ floorId, viewsByFloor })
-  }, [activeHydrated, floorId, viewsByFloor, services])
+    services.viewportCache.writeActive({ floorId, viewsByFloor: encodeActiveViews(project, viewsByFloor) })
+  }, [activeHydrated, floorId, viewsByFloor, project, services])
 
   // Undo and redo navigate to what they touched (#26): the Floor and view the edit was about.
+  // An Edit Transaction that touched no Floor — a Project preference — leaves the pointer
+  // where it was rather than blanking the Plan View, and arriving back at the pair already on
+  // screen is the common case, so it changes nothing at all: the Placed Item the transaction
+  // was about stays selected, which is what lets it be edited back.
   useEffect(() => {
-    const setActive = workspaceStore.getState().setActiveFloor
+    const openFloorId = floorId
+    const openViewId = view?.id ?? null
     return session.onNavigate((locator) => {
-      setActive(locator.floorId, locator.viewId)
+      if (locator.floorId === null) return
+      if (locator.floorId === openFloorId && (locator.viewId === null || locator.viewId === openViewId)) return
+      workspaceStore.getState().setActiveFloor(locator.floorId, locator.viewId)
     })
-  }, [session])
+  }, [session, floorId, view?.id])
 
   const setViewport = useCallback((next: Viewport) => {
     if (viewKey === null) return

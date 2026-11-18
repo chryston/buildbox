@@ -72,6 +72,19 @@ const INITIAL: WorkspaceState = {
   activeHydrated: false,
 }
 
+/**
+ * The part of a Floor/view move that touches the selection: `{ selection: null }` when the
+ * pair being opened is not the one already open, and nothing at all when it is.
+ */
+function movedAway(
+  state: WorkspaceSnapshot,
+  floorId: string | null,
+  viewsByFloor: Record<string, string>,
+): { selection: null } | Record<string, never> {
+  if (floorId === null || floorId !== state.activeFloorId) return { selection: null }
+  return viewsByFloor[floorId] === state.activeViewByFloor[floorId] ? {} : { selection: null }
+}
+
 export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
   ...INITIAL,
   setTool: (activeTool) => set({ activeTool }),
@@ -82,19 +95,26 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
   markHydrated: (viewKey) =>
     set((state) => ({ hydrated: { ...state.hydrated, [viewKey]: true } })),
   setRailOpen: (railOpen) => set({ railOpen }),
+  // A selection belongs to the Floor and Plan View it was made on, so moving to another pair
+  // drops it. Arriving back at the pair already open keeps it: undo and redo navigate to the
+  // very item they touched (#26), and a selection that vanished on Undo could not be edited
+  // back to what it was.
   setActiveFloor: (activeFloorId, viewId) =>
-    set((state) => ({
-      activeFloorId,
-      selection: null,
-      activeViewByFloor:
+    set((state) => {
+      const activeViewByFloor =
         activeFloorId === null || viewId === null
           ? state.activeViewByFloor
-          : { ...state.activeViewByFloor, [activeFloorId]: viewId },
-    })),
+          : { ...state.activeViewByFloor, [activeFloorId]: viewId }
+      return {
+        activeFloorId,
+        activeViewByFloor,
+        ...movedAway(state, activeFloorId, activeViewByFloor),
+      }
+    }),
   setActiveView: (floorId, viewId) =>
     set((state) => ({
-      selection: null,
       activeViewByFloor: { ...state.activeViewByFloor, [floorId]: viewId },
+      ...movedAway(state, state.activeFloorId, { ...state.activeViewByFloor, [floorId]: viewId }),
     })),
   hydrateActive: (activeFloorId, viewsByFloor) =>
     set((state) => ({

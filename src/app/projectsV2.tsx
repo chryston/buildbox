@@ -259,7 +259,7 @@ function createFlaggedDeps(ports: Ports, volatile: boolean): FlaggedDeps {
     // A preview build marks its Backup and is the only build allowed to read it back (#20 §11);
     // production writes unmarked Packages and refuses marked ones. `IS_PREVIEW` is the whole of
     // that decision, and `app/channel` says what makes a build a preview.
-    backup: { clock, encoder: createBackupEncoder(), buildboxVersion: __BUILDBOX_VERSION__, preview: IS_PREVIEW },
+    backup: { clock, encoder: createBackupEncoder(), ids, buildboxVersion: __BUILDBOX_VERSION__, preview: IS_PREVIEW },
     restore: { ports: announced, clock, ids, registry, images: createImageDecoder(), acceptPreview: IS_PREVIEW },
     download,
     assetUrls: createObjectUrlCache(ports.assets.get),

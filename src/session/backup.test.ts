@@ -56,6 +56,7 @@ function backupWorld(ports: Ports, options?: { preview?: boolean; download?: Fak
   const backup: BackupDeps = {
     clock: test.clock,
     encoder: test.encoder,
+    ids: test.ids,
     buildboxVersion: TEST_VERSION,
     preview: options?.preview ?? false,
   }

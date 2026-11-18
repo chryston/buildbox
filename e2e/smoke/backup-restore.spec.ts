@@ -4,12 +4,14 @@ import {
   canonical,
   downloadBackupOf,
   libraryHeading,
+  migratedForComparison,
   openLibrary,
   previewSeed,
   restoreFile,
   storedAssetHashes,
-  storedProject,
+  storedRecord,
   toast,
+  withoutMintedViewIds,
 } from '../support/libraryApp'
 
 /**
@@ -33,8 +35,8 @@ test('a Backup restored into an empty profile is the same Project', async ({ pag
   await openLibrary(page, previewSeed)
   await expect(card(page, PROJECT)).toBeVisible()
 
-  const original = await storedProject(page, 'proj-kitchen-wall')
-  expect(original).not.toBeNull()
+  const record = await storedRecord(page, 'proj-kitchen-wall')
+  if (record === null) throw new Error('the seed holds no Kitchen Wall record')
   const originalAssets = await storedAssetHashes(page)
   expect(originalAssets).toHaveLength(1)
 
@@ -56,7 +58,15 @@ test('a Backup restored into an empty profile is the same Project', async ({ pag
     await expect(toast(restored)).toContainText(`Restored ${PROJECT} from Backup.`)
     await expect(restored.locator('article.project-card').filter({ hasText: PROJECT })).toBeVisible()
 
-    expect(canonical(await storedProject(restored, 'proj-kitchen-wall'))).toBe(canonical(original))
+    // #56: a Backup is written at the domain version the app writes, so a record from before
+    // Floors comes back migrated — the same step opening the Project takes. Everything the
+    // migration cannot invent is still compared byte for byte; the Plan View ids it mints are
+    // compared as a shape, because opening an unmigrated record mints fresh ones every time.
+    const restoredRecord = await storedRecord(restored, 'proj-kitchen-wall')
+    if (restoredRecord === null) throw new Error('the restore wrote no record')
+    expect(restoredRecord.schemaVersion).toBe(2)
+    expect(canonical(withoutMintedViewIds(restoredRecord.data)))
+      .toBe(canonical(migratedForComparison(record.data, record.schemaVersion)))
     expect(await storedAssetHashes(restored)).toEqual(originalAssets)
     expect(problems).toEqual([])
   } finally {
