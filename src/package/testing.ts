@@ -3,7 +3,17 @@
  * from, and the meta the fixture was written with. Importable from `*.test.ts` only
  * (`eslint.config.js` boundaries), and never from `app`.
  */
-import type { CabinetNode, GlobalSettings, Project } from '../domain'
+import type { CabinetNode, EntityId, GlobalSettings, Project } from '../domain'
+
+/**
+ * The IDs `stageImport` hands a domain migration that has to name something new — the
+ * default Plan View of every Floor in a v1 file (#56). Sequential and prefixed, so a test
+ * that reads a migrated Project can say which ID came from where.
+ */
+export function allocateIds(prefix = 'migrated'): (count: number) => EntityId[] {
+  let issued = 0
+  return (count: number) => Array.from({ length: count }, () => `${prefix}-${(issued += 1)}`)
+}
 
 /** The fixture is written as if by BuildBox 0.0.0 at the epoch, so it never changes. */
 export const FIXTURE_EXPORTED_AT = '2026-01-01T00:00:00.000Z'
@@ -74,6 +84,10 @@ export function fixtureProject(): Project {
         },
       },
       { id: 'floor-1', name: 'Mezzanine', planImage: null },
+    ],
+    views: [
+      { id: 'view-0', kind: 'plan', floorId: 'floor-0', name: 'Floor 1', isDefault: true, showPlanImage: true },
+      { id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Mezzanine', isDefault: true, showPlanImage: true },
     ],
     itemDesigns: [
       { id: 'design-0', kind: 'cabinet', name: 'Base Cabinet', construction: { settings: SETTINGS, root: SPLIT_ROOT } },

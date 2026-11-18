@@ -88,7 +88,7 @@ export function previewIntent(
   const handler = handlerFor(intent.type)
   const affected: Locator =
     handler === undefined
-      ? { floorId: null, view: 'cabinet', itemDesignIds: [], placedItemIds: [] }
+      ? { floorId: null, viewId: null, view: 'cabinet', itemDesignIds: [], placedItemIds: [] }
       : handler.locate(project, intent)
   const result = applyIntent(project, intent)
   return { affected, rejection: result.ok ? null : result }

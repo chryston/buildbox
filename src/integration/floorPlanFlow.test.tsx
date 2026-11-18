@@ -12,7 +12,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import { PLAN_IMAGE_ACCEPT, WorkspaceProvider, type WorkspaceServices } from '../ui'
-import { firstFloorId, planItemsForFloor, workspaceStore } from '../ui'
+import { planItemsForFloor, workspaceStore } from '../ui'
 import type { Viewport, ViewportCache } from '../ui'
 import { openTestView, renderWithBindings as render, type TestView } from '../ui/legacy/testing'
 
@@ -23,6 +23,8 @@ function testWorkspaceServices(): WorkspaceServices {
     write: (viewKey, viewport) => {
       cache.set(viewKey, viewport)
     },
+    readActive: async () => null,
+    writeActive: () => {},
   }
   return {
     intent: view.services.intent,
@@ -76,7 +78,7 @@ describe('the Floor workspace', () => {
     await user.click(screen.getByTestId('add-item-menu'))
     await user.click(screen.getByTestId('add-sofa-2'))
 
-    const floorId = firstFloorId(view.project())
+    const floorId = view.project().floors[0]?.id ?? null
     expect(floorId).not.toBeNull()
     const items = planItemsForFloor(view.project(), floorId)
     expect(items).toHaveLength(1)
@@ -93,7 +95,7 @@ describe('the Floor workspace', () => {
     await user.click(screen.getByRole('button', { name: /floor plan/i }))
     await user.click(screen.getByTestId('add-item-menu'))
     await user.click(screen.getByTestId('add-sofa-2'))
-    const floorId = firstFloorId(view.project())
+    const floorId = view.project().floors[0]?.id ?? null
     expect(planItemsForFloor(view.project(), floorId)).toHaveLength(1)
 
     await user.click(screen.getByTestId('undo-button'))

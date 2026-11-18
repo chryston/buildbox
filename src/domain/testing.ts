@@ -29,9 +29,11 @@ import type {
 import type {
   CabinetItemDesign,
   Floor,
+  FloorLimits,
   GenericItemDesign,
   ItemDesign,
   PlanImageMediaType,
+  PlanView,
   PlacedItem,
   Project,
   ProjectMeta,
@@ -198,7 +200,24 @@ const arbFloorBody = fc.record({
   heightPx: fc.integer({ min: 1, max: 8000 }),
   pixelsPerMm: fc.option(fc.integer({ min: 1, max: 400 }).map((value) => value / 100), { nil: null }),
   hasPlanImage: fc.boolean(),
+  // Either bound of #56's limits on its own, and the pair is ordered below rather than
+  // filtered, so a Floor with both bounds is valid without rejecting samples.
+  lowerMm: fc.option(fc.integer({ min: -1000, max: 3000 }), { nil: undefined }),
+  upperMm: fc.option(fc.integer({ min: -1000, max: 3000 }), { nil: undefined }),
+  hasLimits: fc.boolean(),
 })
+
+/** The two bounds the generator drew, put the right way round and trimmed of nothing. */
+function arbLimits(body: { lowerMm?: number; upperMm?: number; hasLimits: boolean }): FloorLimits | undefined {
+  if (!body.hasLimits) return undefined
+  const { lowerMm, upperMm } = body
+  // A Floor with neither bound has no limits at all — an empty `limits` object is the one
+  // shape the validator rightly refuses.
+  if (lowerMm === undefined && upperMm === undefined) return undefined
+  if (lowerMm === undefined) return { upperMm }
+  if (upperMm === undefined) return { lowerMm }
+  return { lowerMm: Math.min(lowerMm, upperMm), upperMm: Math.max(lowerMm, upperMm) }
+}
 
 const arbPlacement = fc.record({
   design: fc.nat({ max: 31 }),
@@ -210,7 +229,8 @@ const arbPlacement = fc.record({
 
 /**
  * Valid domain v1 Projects: unique IDs across the whole Project namespace, references
- * that always resolve, cabinet trees no deeper than `MAX_TREE_DEPTH`, 0–4 Floors, and
+ * that always resolve, cabinet trees no deeper than `MAX_TREE_DEPTH`, 0–4 Floors each with
+ * its default Plan View, and
  * both Item Design kinds. Placed Items exist only once there is something to place and
  * a Floor to place it on, which is how a real Project gets here too.
  */
@@ -227,18 +247,33 @@ export function arbProject(): fc.Arbitrary<Project> {
       placements: fc.array(arbPlacement, { maxLength: 6 }),
     })
     .map((skeleton) => {
-      const floors: Floor[] = skeleton.floors.map((body, index) => ({
-        id: `floor-${index}`,
-        name: `Floor ${index + 1}`,
-        planImage: body.hasPlanImage
-          ? {
-              assetHash: body.assetHash,
-              mediaType: body.mediaType,
-              widthPx: body.widthPx,
-              heightPx: body.heightPx,
-              pixelsPerMm: body.pixelsPerMm,
-            }
-          : null,
+      const floors: Floor[] = skeleton.floors.map((body, index) => {
+        const limits = arbLimits(body)
+        return {
+          id: `floor-${index}`,
+          name: `Floor ${index + 1}`,
+          planImage: body.hasPlanImage
+            ? {
+                assetHash: body.assetHash,
+                mediaType: body.mediaType,
+                widthPx: body.widthPx,
+                heightPx: body.heightPx,
+                pixelsPerMm: body.pixelsPerMm,
+              }
+            : null,
+          ...(limits === undefined ? {} : { limits }),
+        }
+      })
+
+      // One default Plan View per Floor, named after it (#56): the shape a v1 Project
+      // arrives at through the migrator, which is what `arbProject` has to keep producing.
+      const views: PlanView[] = floors.map((floor, index) => ({
+        id: `view-${index}`,
+        kind: 'plan',
+        floorId: floor.id,
+        name: floor.name,
+        isDefault: true,
+        showPlanImage: true,
       }))
 
       const designs: ItemDesign[] = [
@@ -279,6 +314,7 @@ export function arbProject(): fc.Arbitrary<Project> {
         meta: { name: skeleton.name, address: skeleton.address },
         preferences: { displayUnit: skeleton.displayUnit, displayPrecision: skeleton.displayPrecision },
         floors,
+        views,
         itemDesigns: designs,
         existingModel: { placedItems },
       }
@@ -324,6 +360,18 @@ function injectedCabinetDesign(index: number, root: CabinetNode): CabinetItemDes
       },
       root,
     },
+  }
+}
+
+function injectedPlanView(index: number, floorId: string, overrides: Partial<PlanView> = {}): PlanView {
+  return {
+    id: `${INJECT}-view-${index}`,
+    kind: 'plan',
+    floorId,
+    name: `${INJECT} view ${index}`,
+    isDefault: false,
+    showPlanImage: true,
+    ...overrides,
   }
 }
 
@@ -423,6 +471,91 @@ const treeTooDeep: CorruptionMaker = (project) => {
   }
 }
 
+/** A Floor whose name another Floor already has, differing only in case and spacing. */
+const duplicateFloorName: CorruptionMaker = (project) => {
+  const floor = { ...injectedFloor(0), name: ' floor 1 ' }
+  const floors = [...project.floors, floor]
+  const clash = { ...floor, name: 'Floor 1' }
+  return {
+    project: { ...project, floors: [...floors.slice(0, 1), clash, ...floors.slice(1)] },
+    path: 'floors[1].name',
+    code: 'duplicate-name',
+  }
+}
+
+/** A Floor whose limits measure the other way round. */
+const unorderedLimits: CorruptionMaker = (project) => {
+  const floors = [...project.floors, { ...injectedFloor(0), limits: { lowerMm: 2400, upperMm: 300 } }]
+  return {
+    project: { ...project, floors },
+    path: `floors[${floors.length - 1}].limits.lowerMm`,
+    code: 'out-of-range',
+  }
+}
+
+/** A Floor that arrived without the default Plan View every Floor must carry. */
+const missingDefaultView: CorruptionMaker = (project) => ({
+  project: { ...project, floors: [...project.floors, injectedFloor(0)] },
+  path: 'views',
+  code: 'missing-field',
+})
+
+/** A Floor with two default Plan Views. */
+const duplicateDefaultView: CorruptionMaker = (project) => {
+  const floor = injectedFloor(0)
+  return {
+    project: {
+      ...project,
+      floors: [...project.floors, floor],
+      views: [...project.views, injectedPlanView(0, floor.id, { isDefault: true }), injectedPlanView(1, floor.id, { isDefault: true })],
+    },
+    path: 'views',
+    code: 'duplicate-id',
+  }
+}
+
+/** Two Plan Views of one Floor answering to the same name. */
+const duplicateViewName: CorruptionMaker = (project) => {
+  const floor = project.floors.length > 0 ? project.floors[0] : injectedFloor(0)
+  const floors = project.floors.length > 0 ? project.floors : [...project.floors, floor]
+  const views = [...project.views, injectedPlanView(0, floor.id, { name: ' Kitchen Plan ' }), injectedPlanView(1, floor.id, { name: 'kitchen plan' })]
+  return {
+    project: { ...project, floors, views },
+    path: `views[${views.length - 1}].name`,
+    code: 'duplicate-name',
+  }
+}
+
+/** A Plan View looking at a Floor this Project does not have. */
+const viewOnMissingFloor: CorruptionMaker = (project) => {
+  const views = [...project.views, injectedPlanView(0, `${INJECT}-missing-floor`)]
+  return {
+    project: { ...project, views },
+    path: `views[${views.length - 1}].floorId`,
+    code: 'dangling-reference',
+  }
+}
+
+/** A Plan Image claiming a scale of zero pixels per millimetre. */
+const zeroScale: CorruptionMaker = (project) => {
+  const floor = {
+    ...injectedFloor(0),
+    planImage: {
+      assetHash: 'a'.repeat(64),
+      mediaType: 'image/png' as const,
+      widthPx: 100,
+      heightPx: 100,
+      pixelsPerMm: 0,
+    },
+  }
+  const floors = [...project.floors, floor]
+  return {
+    project: { ...project, floors, views: [...project.views, injectedPlanView(0, floor.id, { isDefault: true })] },
+    path: `floors[${floors.length - 1}].planImage.pixelsPerMm`,
+    code: 'out-of-range',
+  }
+}
+
 const CORRUPTIONS: readonly CorruptionMaker[] = [
   duplicateId,
   danglingDesign,
@@ -430,6 +563,13 @@ const CORRUPTIONS: readonly CorruptionMaker[] = [
   splitRatioOutOfRange,
   unknownField,
   treeTooDeep,
+  duplicateFloorName,
+  unorderedLimits,
+  missingDefaultView,
+  duplicateDefaultView,
+  duplicateViewName,
+  viewOnMissingFloor,
+  zeroScale,
 ]
 
 /**

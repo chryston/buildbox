@@ -19,6 +19,7 @@
  */
 import { ROOT_PATH, childPath, problem, type ValidationProblem } from '../lib'
 import { MAX_TREE_DEPTH } from './cabinetPayload'
+import { nameKey } from './floorNames'
 import type { Project } from './project'
 
 export type ValidateProjectResult =
@@ -56,6 +57,7 @@ const MEDIA_TYPES = [
   'image/svg+xml',
 ] as const
 const DESIGN_KINDS = ['cabinet', 'generic'] as const
+const VIEW_KINDS = ['plan'] as const
 const FOOTPRINT_KINDS = ['rectangle'] as const
 const CABINET_UNITS = ['mm', 'cm', 'in'] as const
 const MATERIALS = ['oak', 'walnut', 'white', 'birch', 'mdf'] as const
@@ -66,10 +68,12 @@ const ACCESSORY_TYPES = ['door', 'drawer-front', 'pull', 'hinge'] as const
 
 // The field lists of §2, one per object level. `unknown-field` is reported against
 // anything else the input carries at that level.
-const PROJECT_FIELDS = ['id', 'meta', 'preferences', 'floors', 'itemDesigns', 'existingModel']
+const PROJECT_FIELDS = ['id', 'meta', 'preferences', 'floors', 'views', 'itemDesigns', 'existingModel']
 const META_FIELDS = ['name', 'address']
 const PREFERENCES_FIELDS = ['displayUnit', 'displayPrecision']
-const FLOOR_FIELDS = ['id', 'name', 'planImage']
+const FLOOR_FIELDS = ['id', 'name', 'planImage', 'limits']
+const FLOOR_LIMITS_FIELDS = ['lowerMm', 'upperMm']
+const PLAN_VIEW_FIELDS = ['id', 'kind', 'floorId', 'name', 'isDefault', 'showPlanImage']
 const PLAN_IMAGE_FIELDS = ['assetHash', 'mediaType', 'widthPx', 'heightPx', 'pixelsPerMm']
 const CABINET_DESIGN_FIELDS = ['id', 'kind', 'name', 'construction']
 const GENERIC_DESIGN_FIELDS = [
@@ -181,6 +185,11 @@ function checkNumber(value: unknown, path: string, what: string, add: Add): numb
     return null
   }
   return value
+}
+
+function checkOptionalNumber(value: unknown, path: string, what: string, add: Add): number | null {
+  if (value === undefined) return null
+  return checkNumber(value, path, what, add)
 }
 
 function checkPositive(value: unknown, path: string, what: string, add: Add): void {
@@ -317,6 +326,12 @@ function indexIds(root: Rec): IdIndex {
       if (typeof floor.id === 'string') floorIds.add(floor.id)
     })
   }
+  if (Array.isArray(root.views)) {
+    root.views.forEach((view, i) => {
+      if (!isRecord(view)) return
+      claim(view.id, childPath(childPath('views', i), 'id'))
+    })
+  }
   if (Array.isArray(root.itemDesigns)) {
     root.itemDesigns.forEach((design, i) => {
       if (!isRecord(design)) return
@@ -414,6 +429,31 @@ function validatePlanImage(raw: unknown, path: string, add: Add): void {
   checkUnknownFields(raw, path, PLAN_IMAGE_FIELDS, add)
 }
 
+/**
+ * The Floor's own vertical extent (#56): either bound optional, each a finite number of
+ * millimetres from the Floor Datum, and `lowerMm` never above `upperMm` when both are
+ * given. An empty `{}` is legal — it says the user opened the fields and set neither.
+ */
+function validateFloorLimits(raw: unknown, path: string, add: Add): void {
+  if (raw === undefined) return
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected the Floor limits as an object, or nothing at all.')
+    return
+  }
+  // Either bound on its own is a Floor with a limit; only a bound that is present has to
+  // be a number.
+  const lowerMm = checkOptionalNumber(raw.lowerMm, childPath(path, 'lowerMm'), 'the Floor lower limit in millimetres', add)
+  const upperMm = checkOptionalNumber(raw.upperMm, childPath(path, 'upperMm'), 'the Floor upper limit in millimetres', add)
+  if (lowerMm !== null && upperMm !== null && lowerMm > upperMm) {
+    add(
+      childPath(path, 'lowerMm'),
+      OUT_OF_RANGE,
+      'Expected the lower limit to be at or below the upper limit — this Floor measures the other way round.',
+    )
+  }
+  checkUnknownFields(raw, path, FLOOR_LIMITS_FIELDS, add)
+}
+
 function validateFloor(
   raw: unknown,
   path: string,
@@ -433,13 +473,14 @@ function validateFloor(
   const name = checkFilledText(raw.name, namePath, 'the Floor name', add)
   if (name !== null) {
     // Case-insensitive uniqueness, so "Floor 1" and " floor 1 " cannot coexist (#25).
-    const key = name.trim().normalize('NFC').toLowerCase()
+    const key = nameKey(name)
     const first = names.get(key)
     if (first === undefined) names.set(key, namePath)
     else add(namePath, DUPLICATE_NAME, `Expected a Floor name nobody else uses — ${first} already has this one.`)
   }
 
   validatePlanImage(raw.planImage, childPath(path, 'planImage'), add)
+  validateFloorLimits(raw.limits, childPath(path, 'limits'), add)
   checkUnknownFields(raw, path, FLOOR_FIELDS, add)
 }
 
@@ -449,6 +490,96 @@ function validateFloors(raw: unknown, path: string, index: IdIndex, add: Add): v
   // A Project with no Floors is valid (#13); the name index belongs to this one Project.
   const names = new Map<string, string>()
   floors.forEach((floor, i) => validateFloor(floor, childPath(path, i), index, names, add))
+}
+
+function validatePlanView(
+  raw: unknown,
+  path: string,
+  index: IdIndex,
+  names: Map<string, string>,
+  add: Add,
+): void {
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected a Plan View.')
+    return
+  }
+  const idPath = childPath(path, 'id')
+  const id = checkEntityId(raw.id, idPath, 'the Plan View ID', add)
+  if (id !== null) claimId(id, idPath, 'the Plan View ID', index, add)
+
+  checkOneOf(raw.kind, childPath(path, 'kind'), 'the Plan View kind', VIEW_KINDS, add)
+  const floorId = checkEntityId(raw.floorId, childPath(path, 'floorId'), 'the Plan View Floor ID', add)
+  if (floorId !== null && !index.floorIds.has(floorId)) {
+    add(
+      childPath(path, 'floorId'),
+      DANGLING_REFERENCE,
+      'Expected a Plan View to look at a Floor in this Project — no Floor has this ID.',
+    )
+  }
+
+  const namePath = childPath(path, 'name')
+  const name = checkFilledText(raw.name, namePath, 'the Plan View name', add)
+  if (name !== null) {
+    // Unique among the views of one Floor, ignoring case (#56): "Kitchen" and "kitchen"
+    // are the same choice twice. The Floor is part of the key because two Floors may each
+    // have a view called "Plan".
+    const key = `${floorId ?? ''}\u0000${nameKey(name)}`
+    const first = names.get(key)
+    if (first === undefined) names.set(key, namePath)
+    else
+      add(
+        namePath,
+        DUPLICATE_NAME,
+        `Expected a Plan View name this Floor does not already use — ${first} already has this one.`,
+      )
+  }
+
+  checkBoolean(raw.isDefault, childPath(path, 'isDefault'), 'whether this is the default Plan View of the Floor', add)
+  checkBoolean(raw.showPlanImage, childPath(path, 'showPlanImage'), 'whether this Plan View draws the Plan Image', add)
+  checkUnknownFields(raw, path, PLAN_VIEW_FIELDS, add)
+}
+
+/**
+ * The saved Plan Views (#56). Each references a Floor that exists, each Floor carries
+ * exactly one default view, and no two views of one Floor share a name. A Project with no
+ * Floors carries no views either, so an empty list is valid for the same reason #13 gives
+ * for empty Floors.
+ */
+function validateViews(raw: unknown, path: string, index: IdIndex, add: Add): void {
+  const views = checkArray(raw, path, 'the Plan Views', add)
+  if (views === null) return
+  const names = new Map<string, string>()
+  // Floor ID → how many default views point at it, counted in one pass so the report can
+  // name the Floor that has none as well as the one that has three.
+  const defaults = new Map<string, number>()
+  views.forEach((view, i) => validatePlanView(view, childPath(path, i), index, names, add))
+  views.forEach((view) => {
+    if (!isRecord(view) || typeof view.floorId !== 'string') return
+    if (view.isDefault === true) defaults.set(view.floorId, (defaults.get(view.floorId) ?? 0) + 1)
+  })
+  for (const floorId of index.floorIds) {
+    const count = defaults.get(floorId) ?? 0
+    if (count === 1) continue
+    add(
+      path,
+      count === 0 ? MISSING : DUPLICATE_ID,
+      count === 0
+        ? `Expected every Floor to have a default Plan View — the Floor "${floorId}" has none.`
+        : `Expected one default Plan View per Floor — the Floor "${floorId}" has ${count}.`,
+    )
+  }
+  views.forEach((view, i) => {
+    if (!isRecord(view)) return
+    if (view.isDefault !== true) return
+    const floorId = typeof view.floorId === 'string' ? view.floorId : ''
+    if ((defaults.get(floorId) ?? 0) > 1) {
+      add(
+        childPath(childPath(path, i), 'isDefault'),
+        DUPLICATE_ID,
+        `Expected one default Plan View per Floor — the Floor "${floorId}" has more than one.`,
+      )
+    }
+  })
 }
 
 // --- The cabinet payload ------------------------------------------------------
@@ -826,6 +957,7 @@ export function validateProject(value: unknown): ValidateProjectResult {
   validateMeta(value.meta, childPath(ROOT_PATH, 'meta'), add)
   validatePreferences(value.preferences, childPath(ROOT_PATH, 'preferences'), add)
   validateFloors(value.floors, childPath(ROOT_PATH, 'floors'), index, add)
+  validateViews(value.views, childPath(ROOT_PATH, 'views'), index, add)
   validateItemDesigns(value.itemDesigns, childPath(ROOT_PATH, 'itemDesigns'), index, add)
   validateExistingModel(value.existingModel, childPath(ROOT_PATH, 'existingModel'), index, add)
   checkUnknownFields(value, ROOT_PATH, PROJECT_FIELDS, add)

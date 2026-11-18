@@ -15,8 +15,8 @@ import { NOW, deepFreeze, expectDeterministic, expectRejection, expectRoundTrip,
 
 describe('createProject', () => {
   it('makes the Project "New Project" made, in domain vocabulary', () => {
-    const ids = idSource('create')(5)
-    const [projectId, floorId, itemDesignId, placedItemId, rootNodeId] = ids
+    const ids = idSource('create')(6)
+    const [projectId, floorId, viewId, itemDesignId, placedItemId, rootNodeId] = ids
     const project = createProject({ ids, now: NOW, name: 'Kitchen' })
 
     expect(validateProject(project).ok, JSON.stringify(validateProject(project))).toBe(true)
@@ -24,6 +24,8 @@ describe('createProject', () => {
       id: projectId,
       meta: { name: 'Kitchen' },
       floors: [{ id: floorId, name: 'Floor 1', planImage: null }],
+      // A Floor and the one Plan View that shows it are one decision (#56).
+      views: [{ id: viewId, kind: 'plan', floorId, name: 'Floor 1', isDefault: true, showPlanImage: true }],
       itemDesigns: [
         {
           id: itemDesignId,
@@ -46,13 +48,13 @@ describe('createProject', () => {
     ])
   })
 
-  it('spends exactly the five IDs it is given, in the order it states', () => {
+  it('spends exactly the six IDs it is given, in the order it states', () => {
     const ids = idSource('create')
-    const spent = [...ids(5)]
-    expect(canonicalJson(createProject({ ids: spent, now: NOW, name: 'A' }).existingModel.placedItems[0]!.id)).toBe(
-      JSON.stringify(spent[3]),
-    )
-    expect(() => createProject({ ids: ids(4), now: NOW, name: 'A' })).toThrowError(/spends 5 pre-allocated IDs/)
+    const spent = [...ids(6)]
+    const project = createProject({ ids: spent, now: NOW, name: 'A' })
+    expect(project.views[0]!.id).toBe(spent[2])
+    expect(canonicalJson(project.existingModel.placedItems[0]!.id)).toBe(JSON.stringify(spent[4]))
+    expect(() => createProject({ ids: ids(5), now: NOW, name: 'A' })).toThrowError(/spends 6 pre-allocated IDs/)
   })
 })
 
@@ -63,7 +65,7 @@ describe('project.rename', () => {
 
     expect(result.project.meta.name).toBe('Galley')
     expect(canonicalJson({ ...result.project, meta: project.meta })).toBe(canonicalJson(project))
-    expect(result.affected).toEqual({ floorId: null, view: 'cabinet', itemDesignIds: [], placedItemIds: [] })
+    expect(result.affected).toEqual({ floorId: null, viewId: null, view: 'cabinet', itemDesignIds: [], placedItemIds: [] })
     expect(result.patches).toEqual([{ op: 'replace', path: ['meta', 'name'], value: 'Galley' }])
   })
 
@@ -92,7 +94,7 @@ describe('project.setPreferences', () => {
     // Undo lands on the first Floor's Plan View, where the dialog was opened from (#55).
     expect(result.affected).toEqual({
       floorId: project.floors[0]!.id,
-      view: 'plan',
+      viewId: null, view: 'plan',
       itemDesignIds: [],
       placedItemIds: [],
     })

@@ -88,11 +88,17 @@ describe('Design → Project', () => {
   it('carries the id, the name, the v1 defaults, one Floor named "Floor 1" and nothing else', async () => {
     const project = await onlyProject(storeFile([design()]))
 
-    expect(Object.keys(project).sort()).toEqual(['existingModel', 'floors', 'id', 'itemDesigns', 'meta', 'preferences'])
+    expect(Object.keys(project).sort()).toEqual([
+      'existingModel', 'floors', 'id', 'itemDesigns', 'meta', 'preferences', 'views',
+    ])
     expect(project.id).toBe('proj-1')
     expect(project.meta).toEqual({ name: 'Kitchen Wall' })
     expect(project.preferences).toEqual({ displayUnit: 'mm', displayPrecision: 0 })
     expect(project.floors).toEqual([{ id: 'new-1', name: 'Floor 1', planImage: null }])
+    // The one Floor comes with the one Plan View that shows it (#56).
+    expect(project.views).toEqual([
+      { id: 'new-2', kind: 'plan', floorId: 'new-1', name: 'Floor 1', isDefault: true, showPlanImage: true },
+    ])
   })
 
   it('maps each unit to a cabinet Item Design with its settings copied byte-for-byte', async () => {
@@ -120,7 +126,7 @@ describe('Design → Project', () => {
 
     expect(project.existingModel.placedItems).toEqual([
       {
-        id: 'new-2',
+        id: 'new-3',
         itemDesignId: 'unit-1',
         floorId: 'new-1',
         // 120 + 600/2 and 500/2: the front sits on plan Y = 0, so depth/2 is the centre.
@@ -129,7 +135,7 @@ describe('Design → Project', () => {
         baseElevation: 60,
       },
       {
-        id: 'new-3',
+        id: 'new-4',
         itemDesignId: 'unit-2',
         floorId: 'new-1',
         translation: { x: 1100, y: 250 },

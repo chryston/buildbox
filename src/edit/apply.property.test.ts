@@ -263,11 +263,7 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
   (g) => {
     const floor = pick(g, g.project.floors)
     if (floor === undefined) return null
-    return intent('plan.setImage', {
-      floorId: floor.id,
-      image: bool(g) ? pick(g, IMAGE_POOL) ?? null : null,
-      clearExisting: bool(g),
-    })
+    return intent('plan.setImage', { floorId: floor.id, image: pick(g, IMAGE_POOL) ?? IMAGE_POOL[0] })
   },
   (g) => {
     const floor = pick(g, floorsWithImage(g))
@@ -276,6 +272,92 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
   (g) => {
     const floor = pick(g, g.project.floors)
     return floor === undefined ? null : intent('plan.clear', { floorId: floor.id })
+  },
+  // --- Floors and Plan Views (#56) ---------------------------------------------
+  (g) => {
+    const [floorId, viewId] = g.ids(2)
+    return intent('floor.create', { name: `Floor ${int(g, 1, 9999)}` }, [floorId!, viewId!])
+  },
+  (g) => {
+    const floor = pick(g, g.project.floors)
+    return floor === undefined ? null : intent('floor.rename', { floorId: floor.id, name: `Level ${int(g, 1, 9999)}` })
+  },
+  (g) => {
+    const floor = pick(g, g.project.floors)
+    if (floor === undefined || g.project.floors.length < 2) return null
+    return intent('floor.reorder', { floorId: floor.id, toIndex: int(g, 0, g.project.floors.length - 1) })
+  },
+  (g) => {
+    const floor = pick(g, g.project.floors)
+    if (floor === undefined) return null
+    // Either bound on its own, both the right way round, or both cleared.
+    const a = bool(g) ? real(g, -200, 4000) : null
+    const b = bool(g) ? real(g, -200, 4000) : null
+    const lower = a === null || b === null ? a ?? b : Math.min(a, b)
+    const upper = a === null || b === null ? null : Math.max(a, b)
+    return intent('floor.setLimits', { floorId: floor.id, lowerMm: lower, upperMm: upper })
+  },
+  (g) => {
+    const floor = pick(g, g.project.floors)
+    return floor === undefined ? null : intent('floor.delete', { floorId: floor.id })
+  },
+  (g) => {
+    const floor = pick(g, g.project.floors)
+    if (floor === undefined) return null
+    const onFloor = placements(g).filter((item) => item.floorId === floor.id)
+    const chosen = onFloor.filter(() => bool(g))
+    const ids = g.ids(2 + chosen.length)
+    return intent('floor.duplicate', {
+      floorId: floor.id,
+      name: `Copy of ${floor.name} ${int(g, 1, 9999)}`,
+      toIndex: int(g, 0, g.project.floors.length),
+      placedItemIds: chosen.map((item) => item.id),
+      includePlanImage: bool(g),
+    }, ids)
+  },
+  (g) => {
+    const floor = pick(g, g.project.floors)
+    if (floor === undefined) return null
+    const [viewId] = g.ids(1)
+    return intent('view.create', { floorId: floor.id, name: `View ${int(g, 1, 9999)}` }, [viewId!])
+  },
+  (g) => {
+    const view = pick(g, g.project.views)
+    return view === undefined ? null : intent('view.rename', { viewId: view.id, name: `View ${int(g, 1, 9999)}` })
+  },
+  (g) => {
+    const view = pick(g, g.project.views)
+    return view === undefined ? null : intent('view.delete', { viewId: view.id })
+  },
+  (g) => {
+    const view = pick(g, g.project.views)
+    return view === undefined ? null : intent('view.setShowPlanImage', { viewId: view.id, showPlanImage: bool(g) })
+  },
+  (g) => {
+    const floor = pick(g, floorsWithImage(g))
+    return floor === undefined ? null : intent('plan.removeImage', { floorId: floor.id })
+  },
+  (g) => {
+    const placed = pick(g, placements(g))
+    if (placed === undefined) return null
+    const destination = pick(g, g.project.floors.filter((floor) => floor.id !== placed.floorId))
+    if (destination === undefined) return null
+    const onFloor = placements(g).filter((item) => item.floorId === placed.floorId)
+    const chosen = onFloor.filter(() => bool(g))
+    const items = chosen.length > 0 ? chosen : [placed]
+    const copy = bool(g)
+    // The payload describes the first selected object; the rest keep their offsets (#56).
+    const first = items[0] as PlacedItem
+    return intent(
+      copy ? 'plan.copyToFloor' : 'plan.moveToFloor',
+      {
+        placedItemIds: items.map((item) => item.id),
+        toFloorId: destination.id,
+        translation: { x: first.translation.x + real(g, -200, 200), y: first.translation.y + real(g, -200, 200) },
+        baseElevation: first.baseElevation + real(g, -20, 20),
+      },
+      copy ? g.ids(items.length) : [],
+    )
   },
 ]
 
@@ -323,7 +405,7 @@ function runSequence(start: Project, seed: number, steps: number): Project {
 const STARTS: { name: string; project: Project }[] = []
 
 beforeAll(async () => {
-  STARTS.push({ name: 'createProject', project: createProject({ ids: idSource()(5), now: NOW, name: 'New kitchen' }) })
+  STARTS.push({ name: 'createProject', project: createProject({ ids: idSource()(6), now: NOW, name: 'New kitchen' }) })
   for (const rel of LEGACY_FIXTURES) {
     const result = await convertLegacy(read(rel), { newId: allocator() })
     if (!result.ok) throw new Error(`${rel}: ${JSON.stringify(result.problems)}`)

@@ -40,7 +40,6 @@ function upload(asset: SessionAsset, floorId: string): Intent {
   return intent('plan.setImage', {
     floorId,
     image: { assetHash: asset.sha256, mediaType: 'image/png', widthPx: 640, heightPx: 480 },
-    clearExisting: false,
   })
 }
 

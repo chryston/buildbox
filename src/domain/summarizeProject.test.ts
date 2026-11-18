@@ -55,6 +55,9 @@ function projectWithFourPlacements(): Project {
         },
       },
     ],
+    views: [
+      { id: 'view-0', kind: 'plan', floorId: 'floor-0', name: 'Floor 1', isDefault: true, showPlanImage: true },
+    ],
     itemDesigns: [
       genericDesign('design-0', 'King Bed', 1820, 1980, 910, 990),
       genericDesign('design-1', 'Runner Rug', 2400, 800, 1200, 400),

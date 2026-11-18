@@ -1,18 +1,24 @@
 /**
- * The Floor workspace (#55): the production Plan View and the chrome the issue
- * prescribes — header (`← Projects`, name, save status, Undo/Redo, Project settings),
- * one fixed-height toolbar, a left rail of view card above selection inspector, the
- * canvas, and slots for the draft bar and warning strip.
+ * The Floor workspace (#55, #56): the production Plan View and the chrome the issues
+ * prescribe — header (`← Projects`, name, save status, Undo/Redo, Project settings), one
+ * fixed-height toolbar, a left rail of view card above selection inspector, the canvas, and
+ * slots for the draft bar and warning strip.
  *
- * Every write is one Intent through the session, exactly as the flagged floor plan
- * wrote since #49: a drag is one `plan.updateObject` at the end of the gesture, an
- * upload is one `plan.setImage` with its Asset, a calibration is one `plan.calibrate`.
- * The viewport is the one thing that bypasses the session — device-local view state,
- * never history (#20 §4) — and it goes through the `ViewportCache` port instead.
+ * Every write is one Intent through the session, exactly as the flagged floor plan wrote
+ * since #49: a drag is one `plan.updateObject` at the end of the gesture, an upload is one
+ * `plan.setImage` with its Asset, a calibration is one `plan.calibrate`, a Floor rename is
+ * one `floor.rename`. The viewport and which Floor and view are open are the one thing that
+ * bypasses the session — device-local view state, never history (#20 §4) — and they go
+ * through the `ViewportCache` port instead.
+ *
+ * The Floor and Plan View the workspace is looking at are pointers into the Project, never
+ * owners of it (#25): every selector below takes the Floor id, so nothing drawn, snapped or
+ * selected can cross a Floor boundary.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Project } from '../../domain'
+import { summarizeFloorDependencies } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { IntentType, PayloadOf } from '../../edit'
 import {
@@ -23,7 +29,18 @@ import {
   useWorkspaceRoot,
 } from './WorkspaceRoot'
 import type { PreparedPlanImage } from './WorkspaceRoot'
-import { customTemplates, firstFloorId, planImageForFloor, planItemsForFloor, planViewKey } from './planModel'
+import {
+  customTemplates,
+  decodeActiveViews,
+  encodeActiveViews,
+  planImageForView,
+  planItemsForFloor,
+  planViewKey,
+  planViewsForFloor,
+  placedOrigin,
+  resolvePlanView,
+} from './planModel'
+import { CALIBRATION_REQUIRED_HINT, WORKSPACE_TOOLS, floorNeedsCalibration, toolIsGated } from './toolbarRegistry'
 import { fitViewport } from './viewport'
 import type { Viewport } from './viewport'
 import { useWorkspace, workspaceStore } from './workspaceStore'
@@ -35,9 +52,18 @@ import { SavedViewCard } from './SavedViewCard'
 import { SelectionInspector } from './SelectionInspector'
 import type { PlanObjectPatch } from './SelectionInspector'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
+import { ManageFloorsDialog } from './ManageFloorsDialog'
+import { DeleteFloorDialog } from './DeleteFloorDialog'
+import { DuplicateFloorDialog } from './DuplicateFloorDialog'
+import type { DuplicateFloorInput } from './DuplicateFloorDialog'
+import { TransferToFloorDialog } from './TransferToFloorDialog'
+import type { TransferTarget } from './TransferToFloorDialog'
 import { CalibrationOverlay } from './CalibrationOverlay'
 import { ScaleCalibrationModal } from './ScaleCalibrationModal'
 import { downloadSvg } from './exportSvg'
+
+/** The package's per-file limit (#6): the largest Plan Image a file may be. */
+const MAX_PLAN_IMAGE_BYTES = 50 * 1024 * 1024
 
 /** The last placement on this Floor: the one a just-committed add has made. */
 function lastPlacedId(project: Project, floorId: string): string | null {
@@ -69,11 +95,20 @@ export function FloorWorkspace(): ReactNode {
   const save = useSaveStatus(session)
   const history = session.getSnapshot().history
 
-  const floorId = firstFloorId(project)
+  // Which Floor and Plan View are open: device-local view state, resolved against the live
+  // Project so a Floor deleted underneath the pointer falls back instead of blanking.
+  const storedFloorId = useWorkspace((state) => state.activeFloorId)
+  const viewsByFloor = useWorkspace((state) => state.activeViewByFloor)
+  const activeHydrated = useWorkspace((state) => state.activeHydrated)
+  const floorId = project.floors.some((each) => each.id === storedFloorId)
+    ? storedFloorId
+    : project.floors[0]?.id ?? null
   const floor = project.floors.find((entry) => entry.id === floorId) ?? null
+  const views = planViewsForFloor(project, floorId)
+  const view = resolvePlanView(project, floorId, floorId === null ? null : viewsByFloor[floorId] ?? null)
   const planImage = floor?.planImage ?? null
   const imageSrc = usePlanImageSrc(services.assetUrls, planImage?.assetHash ?? null)
-  const image = planImageForFloor(project, floorId, imageSrc)
+  const image = planImageForView(project, view, imageSrc)
   const items = planItemsForFloor(project, floorId)
   const templates = customTemplates(project)
 
@@ -83,10 +118,9 @@ export function FloorWorkspace(): ReactNode {
   const select = useWorkspace((state) => state.select)
   const dragPreview = useWorkspace((state) => state.dragPreview)
   const setDragPreview = useWorkspace((state) => state.setDragPreview)
-  const viewport = useWorkspace((state) =>
-    floorId === null ? undefined : state.viewports[planViewKey(floorId)])
-  const hydrated = useWorkspace((state) =>
-    floorId === null ? true : state.hydrated[planViewKey(floorId)] === true)
+  const viewKey = view === null ? null : planViewKey(view)
+  const viewport = useWorkspace((state) => (viewKey === null ? undefined : state.viewports[viewKey]))
+  const hydrated = useWorkspace((state) => (viewKey === null ? true : state.hydrated[viewKey] === true))
   const railOpen = useWorkspace((state) => state.railOpen)
   const setRailOpen = useWorkspace((state) => state.setRailOpen)
 
@@ -97,16 +131,51 @@ export function FloorWorkspace(): ReactNode {
   const [isCalibrating, setIsCalibrating] = useState(false)
   const [pendingDistancePx, setPendingDistancePx] = useState<number | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
-  const [pendingImage, setPendingImage] = useState<PreparedPlanImage | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [manageFloorsOpen, setManageFloorsOpen] = useState(false)
+  const [deleteFloorId, setDeleteFloorId] = useState<string | null>(null)
+  const [duplicateFloorId, setDuplicateFloorId] = useState<string | null>(null)
+  const [transferOpen, setTransferOpen] = useState(false)
 
   const narrow = useNarrow()
-  const viewKey = floorId === null ? null : planViewKey(floorId)
+  const uncalibrated = floorNeedsCalibration(planImage)
 
-  // Another Project opened: its placements are not this one's to select.
+  // Another Project opened: its placements, Floors and open view are not this one's.
   useEffect(() => {
     workspaceStore.getState().reset()
-  }, [session.id])
+    let live = true
+    void services.viewportCache.readActive().then((active) => {
+      if (!live) return
+      workspaceStore.getState().hydrateActive(
+        active?.floorId ?? null,
+        decodeActiveViews(session.getSnapshot().project, active?.viewsByFloor ?? {}),
+      )
+    })
+    return () => {
+      live = false
+    }
+  }, [session.id, services])
+
+  // …and the open pair goes back the way it came: one record per Project, device-local.
+  useEffect(() => {
+    if (!activeHydrated) return
+    services.viewportCache.writeActive({ floorId, viewsByFloor: encodeActiveViews(project, viewsByFloor) })
+  }, [activeHydrated, floorId, viewsByFloor, project, services])
+
+  // Undo and redo navigate to what they touched (#26): the Floor and view the edit was about.
+  // An Edit Transaction that touched no Floor — a Project preference — leaves the pointer
+  // where it was rather than blanking the Plan View, and arriving back at the pair already on
+  // screen is the common case, so it changes nothing at all: the Placed Item the transaction
+  // was about stays selected, which is what lets it be edited back.
+  useEffect(() => {
+    const openFloorId = floorId
+    const openViewId = view?.id ?? null
+    return session.onNavigate((locator) => {
+      if (locator.floorId === null) return
+      if (locator.floorId === openFloorId && (locator.viewId === null || locator.viewId === openViewId)) return
+      workspaceStore.getState().setActiveFloor(locator.floorId, locator.viewId)
+    })
+  }, [session, floorId, view?.id])
 
   const setViewport = useCallback((next: Viewport) => {
     if (viewKey === null) return
@@ -159,7 +228,7 @@ export function FloorWorkspace(): ReactNode {
     select(lastPlacedId(session.getSnapshot().project, floorId))
   }
 
-  const commitImage = (prepared: PreparedPlanImage, clearExisting: boolean): void => {
+  const commitImage = (prepared: PreparedPlanImage): void => {
     const asset = prepared.asset
     if (asset === null || floorId === null) return
     services.assetUrls.put(asset.sha256, asset.bytes)
@@ -179,7 +248,6 @@ export function FloorWorkspace(): ReactNode {
           widthPx: asset.widthPx,
           heightPx: asset.heightPx,
         },
-        clearExisting,
       }),
       [sessionAsset],
     )
@@ -195,14 +263,20 @@ export function FloorWorkspace(): ReactNode {
       input.value = ''
       return
     }
+    if (file.size > MAX_PLAN_IMAGE_BYTES) {
+      setUploadError('A Plan Image can be at most 50 MB.')
+      input.value = ''
+      return
+    }
     const read = await services.readPlanImage(file)
     input.value = ''
     if ('message' in read) {
-      setUploadError(read.message)
+      setUploadError("This file couldn't be read as an image")
       return
     }
-    if (items.length > 0) setPendingImage(read.image)
-    else commitImage(read.image, false)
+    // A new picture never clears the objects drawn over it (#56): the upload is the upload.
+    // Replacing one resets the scale, because the old one described different pixels.
+    commitImage(read.image)
   }
 
   const handleExportSvg = (): void => {
@@ -219,6 +293,100 @@ export function FloorWorkspace(): ReactNode {
     }, 50)
   }
 
+  const openFloor = (nextFloorId: string): void => {
+    const next = resolvePlanView(project, nextFloorId, viewsByFloor[nextFloorId] ?? null)
+    workspaceStore.getState().setActiveFloor(nextFloorId, next?.id ?? null)
+  }
+
+  const openView = (viewId: string): void => {
+    if (floorId === null) return
+    workspaceStore.getState().setActiveView(floorId, viewId)
+  }
+
+  const addPlanView = (name: string): void => {
+    if (floorId === null) return
+    send('view.create', { floorId, name })
+    const created = session.getSnapshot().project.views.find(
+      (candidate) => candidate.floorId === floorId && candidate.name === name.trim(),
+    )
+    if (created !== undefined) workspaceStore.getState().setActiveView(floorId, created.id)
+  }
+
+  const addFloor = (): void => {
+    send('floor.create', {})
+    const floors = session.getSnapshot().project.floors
+    const created = floors[floors.length - 1]
+    if (created !== undefined) {
+      const createdView = session.getSnapshot().project.views.find(
+        (candidate) => candidate.floorId === created.id && candidate.isDefault,
+      )
+      workspaceStore.getState().setActiveFloor(created.id, createdView?.id ?? null)
+    }
+  }
+
+  const duplicateFloor = (input: DuplicateFloorInput): void => {
+    if (duplicateFloorId === null) return
+    send('floor.duplicate', { floorId: duplicateFloorId, ...input })
+    setDuplicateFloorId(null)
+    const after = session.getSnapshot().project
+    const created = after.floors.find((candidate) => candidate.name === input.name)
+    if (created !== undefined) {
+      const createdView = after.views.find((candidate) => candidate.floorId === created.id && candidate.isDefault)
+      workspaceStore.getState().setActiveFloor(created.id, createdView?.id ?? null)
+    }
+  }
+
+  const deleteFloor = (targetId: string): void => {
+    const index = project.floors.findIndex((candidate) => candidate.id === targetId)
+    send('floor.delete', { floorId: targetId })
+    setDeleteFloorId(null)
+    setManageFloorsOpen(false)
+    // The Floor is gone, so the pointer has to move somewhere that exists: the neighbour the
+    // deleted Floor sat next to, which is the one the person was reading past.
+    const remaining = session.getSnapshot().project.floors
+    const next = remaining[Math.min(Math.max(index, 0), remaining.length - 1)] ?? null
+    workspaceStore.getState().setActiveFloor(
+      next?.id ?? null,
+      next === null ? null : resolvePlanView(session.getSnapshot().project, next.id, null)?.id ?? null,
+    )
+  }
+
+  /** The delete dialog's `Show`: open the thing that is leaning on this Floor. */
+  const showDependant = (kindId: string): void => {
+    if (deleteFloorId === null) return
+    const target = session.getSnapshot().project
+    if (kindId === 'planViews') {
+      const named = target.views.find((candidate) => candidate.floorId === deleteFloorId && !candidate.isDefault)
+      workspaceStore.getState().setActiveFloor(deleteFloorId, named?.id ?? null)
+    } else {
+      const fallback = resolvePlanView(target, deleteFloorId, null)
+      workspaceStore.getState().setActiveFloor(deleteFloorId, fallback?.id ?? null)
+      if (kindId === 'placedItems') {
+        const first = target.existingModel.placedItems.find((item) => item.floorId === deleteFloorId)
+        select(first?.id ?? null)
+      }
+    }
+    setDeleteFloorId(null)
+    setManageFloorsOpen(false)
+  }
+
+  const transfer = (mode: 'copy' | 'move', target: TransferTarget): void => {
+    if (selection === null) return
+    send(mode === 'copy' ? 'plan.copyToFloor' : 'plan.moveToFloor', {
+      placedItemIds: [selection],
+      toFloorId: target.floorId,
+      translation: { x: target.x, y: target.y },
+      baseElevation: target.baseElevation,
+    })
+    setTransferOpen(false)
+    select(null)
+    const after = session.getSnapshot().project
+    workspaceStore.getState().setActiveFloor(
+      target.floorId,
+      resolvePlanView(after, target.floorId, null)?.id ?? null,
+    )
+  }
+
   const groups: ToolbarGroup[] = [
     {
       id: 'tools',
@@ -226,24 +394,23 @@ export function FloorWorkspace(): ReactNode {
       label: 'Tools',
       content: (
         <>
-          <button
-            type="button"
-            data-testid="tool-select"
-            aria-pressed={tool === 'select' ? 'true' : 'false'}
-            className="bb-workspace-tool-button"
-            onClick={() => setTool('select')}
-          >
-            Select
-          </button>
-          <button
-            type="button"
-            data-testid="tool-pan"
-            aria-pressed={tool === 'pan' ? 'true' : 'false'}
-            className="bb-workspace-tool-button"
-            onClick={() => setTool('pan')}
-          >
-            Pan
-          </button>
+          {WORKSPACE_TOOLS.map((definition) => {
+            const gated = toolIsGated(definition, planImage)
+            return (
+              <button
+                key={definition.id}
+                type="button"
+                data-testid={definition.testId}
+                aria-pressed={tool === definition.id ? 'true' : 'false'}
+                title={gated ? CALIBRATION_REQUIRED_HINT : undefined}
+                className="bb-workspace-tool-button"
+                disabled={gated}
+                onClick={() => setTool(definition.id)}
+              >
+                {definition.label}
+              </button>
+            )
+          })}
         </>
       ),
     },
@@ -280,12 +447,27 @@ export function FloorWorkspace(): ReactNode {
       content: (
         <ToolbarMenu label="Plan Image" testId="plan-image-menu">
           <ToolbarMenuItem
-            label="Upload Image"
+            label="Upload…"
             testId="upload-image"
+            disabled={planImage !== null}
             onSelect={() => fileInputRef.current?.click()}
           />
           <ToolbarMenuItem
-            label="Calibrate Scale"
+            label="Replace…"
+            testId="replace-image"
+            disabled={planImage === null}
+            onSelect={() => fileInputRef.current?.click()}
+          />
+          <ToolbarMenuItem
+            label="Remove"
+            testId="remove-plan-image"
+            disabled={planImage === null}
+            onSelect={() => {
+              if (floorId !== null) send('plan.removeImage', { floorId })
+            }}
+          />
+          <ToolbarMenuItem
+            label="Calibrate…"
             testId="calibrate-scale"
             disabled={planImage === null}
             onSelect={() => setIsCalibrating(true)}
@@ -328,7 +510,8 @@ export function FloorWorkspace(): ReactNode {
     })
   }
 
-  const uncalibratedHint = planImage !== null && planImage.pixelsPerMm === null
+  const deleteFloorTarget = project.floors.find((candidate) => candidate.id === deleteFloorId) ?? null
+  const origin = placedOrigin(project, selection)
 
   return (
     <>
@@ -396,13 +579,34 @@ export function FloorWorkspace(): ReactNode {
           </>
         }
         toolbar={<WorkspaceToolbar groups={groups} />}
-        viewCard={<SavedViewCard floorName={floor?.name ?? null} onFit={fit} />}
+        viewCard={
+          <SavedViewCard
+            project={project}
+            floor={floor}
+            views={views}
+            view={view}
+            planImage={planImage}
+            unit={project.preferences.displayUnit}
+            precision={project.preferences.displayPrecision}
+            onFloor={openFloor}
+            onView={openView}
+            onAddPlanView={addPlanView}
+            onManageFloors={() => setManageFloorsOpen(true)}
+            onShowPlanImage={(showPlanImage) => {
+              if (view !== null) send('view.setShowPlanImage', { viewId: view.id, showPlanImage })
+            }}
+            onCalibrate={() => setIsCalibrating(true)}
+            onFit={fit}
+          />
+        }
         inspector={
           <SelectionInspector
             item={selected}
             unit={project.preferences.displayUnit}
             precision={project.preferences.displayPrecision}
+            canTransfer={selected !== null && project.floors.length > 1}
             onUpdate={update}
+            onTransfer={() => setTransferOpen(true)}
             onDelete={() => {
               if (selection === null) return
               send('plan.removeObject', { placedItemId: selection })
@@ -446,41 +650,27 @@ export function FloorWorkspace(): ReactNode {
             />
           </>
         }
-        draftBar={pendingImage === null ? null : (
-          <>
-            <span>Uploading a new image will clear all placed objects. Continue?</span>
-            <button
-              type="button"
-              data-testid="confirm-image-upload"
-              className="bb-workspace-tool-button"
-              onClick={() => {
-                commitImage(pendingImage, true)
-                setPendingImage(null)
-              }}
-            >
-              Yes, clear and upload
-            </button>
-            <button
-              type="button"
-              data-testid="cancel-image-upload"
-              className="bb-workspace-tool-button"
-              onClick={() => setPendingImage(null)}
-            >
-              Cancel
-            </button>
-          </>
-        )}
         warningStrip={uploadError !== null ? (
           <span data-testid="upload-error" data-tone="error">{uploadError}</span>
-        ) : uncalibratedHint ? (
+        ) : uncalibrated ? (
           <span data-testid="uncalibrated-hint">
-            Image uploaded. Calibrate scale before trusting dimensions or exports.
+            {CALIBRATION_REQUIRED_HINT}
+            <button
+              type="button"
+              data-testid="calibrate-now"
+              className="bb-workspace-tool-button"
+              onClick={() => setIsCalibrating(true)}
+            >
+              Calibrate now
+            </button>
           </span>
         ) : null}
       />
       {pendingDistancePx !== null && floorId !== null && (
         <ScaleCalibrationModal
           distancePx={pendingDistancePx}
+          unit={project.preferences.displayUnit}
+          precision={project.preferences.displayPrecision}
           onConfirm={(pixelsPerMm) => {
             send('plan.calibrate', { floorId, pixelsPerMm })
             setPendingDistancePx(null)
@@ -497,6 +687,50 @@ export function FloorWorkspace(): ReactNode {
             setSettingsOpen(false)
           }}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+      {manageFloorsOpen && (
+        <ManageFloorsDialog
+          project={project}
+          activeFloorId={floorId}
+          unit={project.preferences.displayUnit}
+          precision={project.preferences.displayPrecision}
+          onRename={(targetId, name) => send('floor.rename', { floorId: targetId, name })}
+          onReorder={(targetId, toIndex) => send('floor.reorder', { floorId: targetId, toIndex })}
+          onSetLimits={(targetId, lowerMm, upperMm) => send('floor.setLimits', { floorId: targetId, lowerMm, upperMm })}
+          onAddFloor={addFloor}
+          onDuplicate={(targetId) => setDuplicateFloorId(targetId)}
+          onDelete={(targetId) => setDeleteFloorId(targetId)}
+          onClose={() => setManageFloorsOpen(false)}
+        />
+      )}
+      {deleteFloorTarget !== null && (
+        <DeleteFloorDialog
+          floor={deleteFloorTarget}
+          rows={summarizeFloorDependencies(project, deleteFloorTarget.id)}
+          onShow={showDependant}
+          onDelete={() => deleteFloor(deleteFloorTarget.id)}
+          onClose={() => setDeleteFloorId(null)}
+        />
+      )}
+      {duplicateFloorId !== null && (
+        <DuplicateFloorDialog
+          project={project}
+          sourceFloorId={duplicateFloorId}
+          onConfirm={duplicateFloor}
+          onClose={() => setDuplicateFloorId(null)}
+        />
+      )}
+      {transferOpen && origin !== null && floor !== null && (
+        <TransferToFloorDialog
+          floors={project.floors}
+          fromFloorName={floor.name}
+          initial={origin}
+          unit={project.preferences.displayUnit}
+          precision={project.preferences.displayPrecision}
+          onCopy={(target) => transfer('copy', target)}
+          onMove={(target) => transfer('move', target)}
+          onClose={() => setTransferOpen(false)}
         />
       )}
     </>

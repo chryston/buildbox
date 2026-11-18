@@ -13,13 +13,29 @@ export interface Viewport {
 }
 
 /**
+ * Which Floor is open, and the last Plan View used on each Floor (#56).
+ *
+ * This is device-local view state exactly like the viewport: the same Project opened on
+ * two machines may be looking at two different Floors, and nothing about it belongs in
+ * the document, a Backup or history.
+ */
+export interface ActiveViewState {
+  floorId: string | null
+  /** The last view used on each Floor, keyed by Floor id. */
+  viewsByFloor: Record<string, string>
+}
+
+/**
  * The device-local view-state cache, read and written through the `PrefsRepository` port
- * by `app` (#20 §4, conflict 15.7). Disposable: #56 switches view keys and old entries
- * are simply dropped, so this port has no delete and no migration.
+ * by `app` (#20 §4, conflict 15.7). Disposable: #56 switched view keys to `view:<viewId>`
+ * and the old `plan:<floorId>` entries are simply never read again, so this port has no
+ * delete and no migration.
  */
 export interface ViewportCache {
   read(viewKey: string): Promise<Viewport | undefined>
   write(viewKey: string, viewport: Viewport): void
+  readActive(): Promise<ActiveViewState | null>
+  writeActive(state: ActiveViewState): void
 }
 
 export const ZOOM_MIN = 0.1

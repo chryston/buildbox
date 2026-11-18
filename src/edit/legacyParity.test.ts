@@ -67,8 +67,28 @@ const NOT_INTENTS: readonly string[] = [
   'persist',
 ]
 
-/** The catalogue rows no single store action names: the template fork and #55's preference write. */
-const EXTRA_INTENTS = ['plan.addFromTemplate', 'project.setPreferences']
+/**
+ * The catalogue rows no single store action names: the template fork, #55's preference
+ * write, and the whole Floor and Plan View half of #56 — the legacy app had exactly one
+ * Floor and one way of looking at it, so there was no action there to map.
+ */
+const EXTRA_INTENTS = [
+  'plan.addFromTemplate',
+  'project.setPreferences',
+  'plan.removeImage',
+  'plan.copyToFloor',
+  'plan.moveToFloor',
+  'floor.create',
+  'floor.rename',
+  'floor.reorder',
+  'floor.setLimits',
+  'floor.delete',
+  'floor.duplicate',
+  'view.create',
+  'view.rename',
+  'view.delete',
+  'view.setShowPlanImage',
+]
 
 describe('action coverage', () => {
   it('names only Intents that exist, each with a label', () => {

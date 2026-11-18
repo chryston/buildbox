@@ -59,6 +59,6 @@ export {
   type UpdateCabinetSettings,
   type UpdatePlanObject,
 } from './intents'
-export { INTENT_LABELS, PLAN_REMOVE_IMAGE_LABEL, PLAN_UPDATE_LABELS } from './labels'
+export { INTENT_LABELS, PLAN_UPDATE_LABELS } from './labels'
 export { CUSTOM_PLAN_ENTRY, PLAN_CATALOGUE, type PlanCatalogueEntry } from './planCatalogue'
 export { INTENT_TYPES } from './registry'

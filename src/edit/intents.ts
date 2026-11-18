@@ -22,6 +22,7 @@ import type {
   EntityId,
   GlobalSettings,
   PlanImage,
+  Point2,
   Project,
 } from '../domain'
 import type { ValidationProblem } from '../lib'
@@ -55,8 +56,21 @@ export type IntentType =
   | 'plan.addTemplate'
   | 'plan.removeTemplate'
   | 'plan.setImage'
+  | 'plan.removeImage'
   | 'plan.calibrate'
   | 'plan.clear'
+  | 'plan.copyToFloor'
+  | 'plan.moveToFloor'
+  | 'floor.create'
+  | 'floor.rename'
+  | 'floor.reorder'
+  | 'floor.setLimits'
+  | 'floor.delete'
+  | 'floor.duplicate'
+  | 'view.create'
+  | 'view.rename'
+  | 'view.delete'
+  | 'view.setShowPlanImage'
 
 /** The payload each Intent type carries. */
 export interface RenameProject {
@@ -184,10 +198,11 @@ export interface RemovePlanTemplate {
 }
 export interface SetPlanImage {
   floorId: EntityId
-  /** `null` removes the Plan Image. The bytes are already in the Asset Repository. */
-  image: Omit<PlanImage, 'pixelsPerMm'> | null
-  /** The upload-confirm path: clear the floor plan in this same transaction first. */
-  clearExisting: boolean
+  /** The bytes are already in the Asset Repository; `null` is `plan.removeImage`'s job. */
+  image: Omit<PlanImage, 'pixelsPerMm'>
+}
+export interface RemovePlanImage {
+  floorId: EntityId
 }
 export interface CalibratePlan {
   floorId: EntityId
@@ -195,6 +210,86 @@ export interface CalibratePlan {
 }
 export interface ClearPlan {
   floorId: EntityId
+}
+
+/**
+ * Copy or Move a selection to another Floor (#56). The two share a payload because the
+ * preview is the same dialog: the destination X/Y and base elevation arrive as the values
+ * the user confirmed for the first selected item, and every other item keeps its offset
+ * from that one. Confirming without edits sends the source values, so nothing moves.
+ *
+ * Copy spends one new ID per Placed Item; Move keeps every ID and changes only `floorId`.
+ * Floors share no coordinates (#25), so no alignment is inferred from either Floor.
+ */
+export interface TransferPlanObjectsToFloor {
+  placedItemIds: EntityId[]
+  toFloorId: EntityId
+  /** Floor-local millimetres: where the first selected Item Origin lands. */
+  translation: Point2
+  /** Millimetres above the destination Floor Datum. */
+  baseElevation: number
+}
+export type CopyPlanObjectsToFloor = TransferPlanObjectsToFloor
+export type MovePlanObjectsToFloor = TransferPlanObjectsToFloor
+
+/** A new Floor (#56). `name` absent means the next free `Floor N`. */
+export interface CreateFloor {
+  name?: string
+}
+export interface RenameFloor {
+  floorId: EntityId
+  name: string
+}
+/**
+ * Move one Floor to another position in the Project's display order (#56). Array order is
+ * the order; no geometry and no reference changes, which is what criterion 2 measures.
+ */
+export interface ReorderFloor {
+  floorId: EntityId
+  /** Index in the list the Floor is removed from, so `toIndex` counts the other Floors. */
+  toIndex: number
+}
+/** The Floor's own coordination limits (#56); `null` clears that bound. */
+export interface SetFloorLimits {
+  floorId: EntityId
+  lowerMm: number | null
+  upperMm: number | null
+}
+export interface DeleteFloor {
+  floorId: EntityId
+}
+/**
+ * Duplicate a Floor (#56): the preview dialog has decided the name, where the copy sits in
+ * the order, which Placed Items come along, and whether the Plan Image is copied. Every
+ * copied entity takes a new ID; the copies keep their references to the project-owned Item
+ * Designs, which is what makes them reuse rather than forks.
+ */
+export interface DuplicateFloor {
+  floorId: EntityId
+  name: string
+  /** Position in the display order; the dialog defaults it to just after the source. */
+  toIndex: number
+  /** The checklist, already resolved to the Placed Items it covers. */
+  placedItemIds: EntityId[]
+  includePlanImage: boolean
+}
+
+/** A named Plan View on a Floor (#56). */
+export interface CreatePlanView {
+  floorId: EntityId
+  name: string
+}
+export interface RenamePlanView {
+  viewId: EntityId
+  name: string
+}
+export interface DeletePlanView {
+  viewId: EntityId
+}
+/** Whether this Plan View draws its Floor's Plan Image (#19 §4). */
+export interface SetPlanViewShowsPlanImage {
+  viewId: EntityId
+  showPlanImage: boolean
 }
 
 /** `type → payload`, the one place the catalogue's shape is written down. */
@@ -226,8 +321,21 @@ export interface IntentPayloads {
   'plan.addTemplate': AddPlanTemplate
   'plan.removeTemplate': RemovePlanTemplate
   'plan.setImage': SetPlanImage
+  'plan.removeImage': RemovePlanImage
   'plan.calibrate': CalibratePlan
   'plan.clear': ClearPlan
+  'plan.copyToFloor': CopyPlanObjectsToFloor
+  'plan.moveToFloor': MovePlanObjectsToFloor
+  'floor.create': CreateFloor
+  'floor.rename': RenameFloor
+  'floor.reorder': ReorderFloor
+  'floor.setLimits': SetFloorLimits
+  'floor.delete': DeleteFloor
+  'floor.duplicate': DuplicateFloor
+  'view.create': CreatePlanView
+  'view.rename': RenamePlanView
+  'view.delete': DeletePlanView
+  'view.setShowPlanImage': SetPlanViewShowsPlanImage
 }
 
 export type PayloadOf<T extends IntentType = IntentType> = IntentPayloads[T]
@@ -262,6 +370,8 @@ export type Intent<T extends IntentType = IntentType> = {
 export type ProjectIntent = Intent<'project.rename' | 'project.setPreferences'>
 export type CabinetIntent = Intent<Extract<IntentType, `cabinet.${string}`>>
 export type PlanIntent = Intent<Extract<IntentType, `plan.${string}`>>
+export type FloorIntent = Intent<Extract<IntentType, `floor.${string}`>>
+export type ViewIntent = Intent<Extract<IntentType, `view.${string}`>>
 
 /**
  * The IDs each Intent consumes, in order — the contract between the caller that
@@ -295,26 +405,57 @@ export const INTENT_ID_ORDER: Record<IntentType, readonly string[]> = {
   'plan.addTemplate': ['itemDesignId'],
   'plan.removeTemplate': [],
   'plan.setImage': [],
+  'plan.removeImage': [],
   'plan.calibrate': [],
   'plan.clear': [],
+  'plan.copyToFloor': ['placedItemId…'],
+  'plan.moveToFloor': [],
+  'floor.create': ['floorId', 'viewId'],
+  'floor.rename': [],
+  'floor.reorder': [],
+  'floor.setLimits': [],
+  'floor.delete': [],
+  'floor.duplicate': ['floorId', 'viewId', 'placedItemId…'],
+  'view.create': ['viewId'],
+  'view.rename': [],
+  'view.delete': [],
+  'view.setShowPlanImage': [],
 }
 
 /**
  * How many IDs an Intent spends. An entry ending in `…` stands for a count that depends on
- * the tree the Intent lands in: a split turns one space into two and adds one board, so it
- * spends two however that tree is shaped.
+ * the payload: a split turns one space into two and adds one board, so it spends two
+ * however that tree is shaped, while duplicating a Floor spends one ID per copied Placed
+ * Item on top of the Floor and its default view. Pass the payload to get the exact number;
+ * without one a variadic entry is read as the tree-shaped two, which is every case that
+ * predates #56.
  */
 const VARIADIC_ID_COUNT = 2
 
-export function intentIdCount(type: IntentType): number {
+export function intentIdCount(type: IntentType, payload?: PayloadOf): number {
   const order = INTENT_ID_ORDER[type]
-  return order[order.length - 1]?.endsWith('…') === true ? VARIADIC_ID_COUNT : order.length
+  if (order[order.length - 1]?.endsWith('…') !== true) return order.length
+  const fixed = order.length - 1
+  if (payload === undefined) return fixed + VARIADIC_ID_COUNT
+  switch (type) {
+    case 'floor.duplicate':
+      return fixed + (payload as DuplicateFloor).placedItemIds.length
+    case 'plan.copyToFloor':
+      return (payload as CopyPlanObjectsToFloor).placedItemIds.length
+    default:
+      return fixed + VARIADIC_ID_COUNT
+  }
 }
 
-/** Where an edit landed, so undo can navigate to it (#48). */
+/** Where an edit landed, so undo can navigate to it (#48, #56). */
 export interface Locator {
   /** `null` when the edit belongs to no Floor — a Project or template change. */
   floorId: EntityId | null
+  /**
+   * The saved Plan View the edit is about, when it is about one (#56). `null` means the
+   * edit is not a view's own — the reader stays in whatever view of that Floor it is in.
+   */
+  viewId: EntityId | null
   view: 'cabinet' | 'plan'
   itemDesignIds: EntityId[]
   placedItemIds: EntityId[]
@@ -331,6 +472,10 @@ export type RejectionCode =
   | 'invalid-project'
   /** The last cabinet on Floor 1, which the legacy store also refuses to remove. */
   | 'last-unit'
+  /** A Floor still has things on it, and nothing here deletes them implicitly (#56). */
+  | 'has-dependants'
+  /** A Floor's own default Plan View, which goes only with the Floor (#56). */
+  | 'default-view'
   /** A plan object below the legacy 10 mm minimum, which the UI clamps before sending. */
   | 'invalid-size'
   /** `cabinet` refused the tree operation: an already split or over-deep space. */

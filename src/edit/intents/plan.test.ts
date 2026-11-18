@@ -71,7 +71,7 @@ describe('plan.addObject', () => {
     })
     expect(applied.affected).toEqual({
       floorId: project.floors[0]!.id,
-      view: 'plan',
+      viewId: null, view: 'plan',
       itemDesignIds: [itemDesignId],
       placedItemIds: [placedItemId],
     })
@@ -210,7 +210,7 @@ describe('plan.addTemplate and plan.removeTemplate', () => {
       isCustom: true,
     })
     expect(applied.project.existingModel.placedItems.length).toBe(1)
-    expect(applied.affected).toEqual({ floorId: null, view: 'plan', itemDesignIds: [itemDesignId], placedItemIds: [] })
+    expect(applied.affected).toEqual({ floorId: null, viewId: null, view: 'plan', itemDesignIds: [itemDesignId], placedItemIds: [] })
   })
 
   it('removes a custom shape that is not placed', () => {
@@ -229,28 +229,45 @@ describe('plan.addTemplate and plan.removeTemplate', () => {
 describe('the Plan Image', () => {
   const IMAGE = { assetHash: 'a'.repeat(64), mediaType: 'image/png' as const, widthPx: 1000, heightPx: 800 }
 
-  it('sets an image and keeps the scale the user already calibrated', () => {
+  it('refuses to re-set the picture that is already there, calibration and all', () => {
     const project = basicProject()
-    const applied = expectRoundTrip(project, intent('plan.setImage', { floorId: 'floor-main', image: IMAGE, clearExisting: false }))
-    expect(applied.project.floors.find((floor) => floor.id === 'floor-main')!.planImage).toEqual({ ...IMAGE, pixelsPerMm: 0.5 })
-    // Nothing else moved: the objects are still standing.
-    expect(applied.project.existingModel.placedItems.length).toBe(project.existingModel.placedItems.length)
+    const existing = project.floors.find((floor) => floor.id === 'floor-main')!.planImage!
+    // Nothing about the record changes, so history records nothing — and the calibrated
+    // scale the user measured stays exactly where it was.
+    expectRejection(project, intent('plan.setImage', {
+      floorId: 'floor-main',
+      image: {
+        assetHash: existing.assetHash,
+        mediaType: existing.mediaType,
+        widthPx: existing.widthPx,
+        heightPx: existing.heightPx,
+      },
+    }), 'no-change')
   })
 
-  it('clears the floor plan in the same transaction when the upload confirms one', () => {
+  it('resets the scale when the bytes change, because the old one measured a different picture', () => {
     const project = basicProject()
-    const applied = expectRoundTrip(project, intent('plan.setImage', { floorId: 'floor-mezz', image: IMAGE, clearExisting: true }))
+    const applied = expectRoundTrip(project, intent('plan.setImage', { floorId: 'floor-main', image: IMAGE }))
+    expect(applied.project.floors.find((floor) => floor.id === 'floor-main')!.planImage).toEqual({ ...IMAGE, pixelsPerMm: null })
+  })
+
+  it('leaves every Placed Item standing when it replaces the picture (#56)', () => {
+    const project = basicProject()
+    const applied = expectRoundTrip(project, intent('plan.setImage', { floorId: 'floor-mezz', image: IMAGE }))
     const floor = applied.project.floors.find((candidate) => candidate.id === 'floor-mezz')!
     expect(floor.planImage).toEqual({ ...IMAGE, pixelsPerMm: null })
-    expect(applied.project.existingModel.placedItems.map((item) => item.floorId)).toEqual(['floor-main', 'floor-main'])
-    // The cabinet design survives; the mezzanine's own objects do not. The template stays.
-    expect(applied.project.itemDesigns.map((item) => item.id)).toEqual(['design-base-cabinet', 'design-legacy-wardrobe'])
+    // Nothing is deleted behind the user's back: the objects, the designs and the template
+    // are exactly where they were.
+    expect(applied.project.existingModel.placedItems).toEqual(project.existingModel.placedItems)
+    expect(applied.project.itemDesigns).toEqual(project.itemDesigns)
   })
 
   it('removes the image, and refuses a Floor with no image to calibrate', () => {
     const project = basicProject()
-    const removed = expectRoundTrip(project, intent('plan.setImage', { floorId: 'floor-main', image: null, clearExisting: false }))
+    const removed = expectRoundTrip(project, intent('plan.removeImage', { floorId: 'floor-main' }))
     expect(removed.project.floors.find((floor) => floor.id === 'floor-main')!.planImage).toBeNull()
+    // Removing the picture is not removing the plan: the objects are still standing.
+    expect(removed.project.existingModel.placedItems).toEqual(project.existingModel.placedItems)
     expectRejection(removed.project, intent('plan.calibrate', { floorId: 'floor-main', pixelsPerMm: 0.4 }), 'unknown-target')
   })
 

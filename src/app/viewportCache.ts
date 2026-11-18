@@ -11,9 +11,10 @@
  * a `Fit`, which is the whole of the damage a disposable cache can do.
  */
 import type { PrefsRepository } from '../persistence'
-import type { ViewportCache } from '../ui'
+import type { ActiveViewState, ViewportCache } from '../ui'
 
 export function createViewportCache(prefs: PrefsRepository, projectId: string): ViewportCache {
+  const activeKey = `activeView:${projectId}` as const
   return {
     async read(viewKey) {
       const found = await prefs.get(`viewState:${projectId}:${viewKey}`)
@@ -21,6 +22,17 @@ export function createViewportCache(prefs: PrefsRepository, projectId: string): 
     },
     write(viewKey, viewport) {
       void prefs.set(`viewState:${projectId}:${viewKey}`, viewport)
+    },
+    // #56 re-keyed viewports to `view:<viewId>`; the `plan:<floorId>` entries the old shell
+    // wrote are never read again, which is the whole of "old entries are dropped".
+    async readActive() {
+      const found = await prefs.get(activeKey)
+      return found.ok && found.value !== undefined
+        ? { floorId: found.value.floorId, viewsByFloor: found.value.viewsByFloor }
+        : null
+    },
+    writeActive(state: ActiveViewState) {
+      void prefs.set(activeKey, state)
     },
   }
 }

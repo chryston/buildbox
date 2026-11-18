@@ -30,6 +30,15 @@ export interface WorkspaceState {
   hydrated: Record<string, boolean>
   /** The rail as a drawer below 1024 px (#55 criterion 4). */
   railOpen: boolean
+  /**
+   * The Floor the Plan View is open on (#56). A pointer, not an owner: it selects which
+   * Floor's entities are drawn, and nothing else in the app holds a Floor (#25).
+   */
+  activeFloorId: string | null
+  /** The last Plan View used on each Floor, keyed by Floor id (#56). */
+  activeViewByFloor: Record<string, string>
+  /** Whether this Project's open Floor and views have been read from the cache yet. */
+  activeHydrated: boolean
 }
 
 export interface WorkspaceActions {
@@ -39,6 +48,12 @@ export interface WorkspaceActions {
   setViewport(viewKey: string, viewport: Viewport): void
   markHydrated(viewKey: string): void
   setRailOpen(open: boolean): void
+  /** Open a Floor, remembering it as the last view used on it. */
+  setActiveFloor(floorId: string | null, viewId: string | null): void
+  /** The view the person picked inside the Floor already open. */
+  setActiveView(floorId: string, viewId: string): void
+  /** The cache's answer for this Project: which Floor was open, and the views on each. */
+  hydrateActive(floorId: string | null, viewsByFloor: Record<string, string>): void
   /** Another Project opened: its placements are not this one's to select. */
   reset(): void
 }
@@ -52,6 +67,22 @@ const INITIAL: WorkspaceState = {
   viewports: {},
   hydrated: {},
   railOpen: false,
+  activeFloorId: null,
+  activeViewByFloor: {},
+  activeHydrated: false,
+}
+
+/**
+ * The part of a Floor/view move that touches the selection: `{ selection: null }` when the
+ * pair being opened is not the one already open, and nothing at all when it is.
+ */
+function movedAway(
+  state: WorkspaceSnapshot,
+  floorId: string | null,
+  viewsByFloor: Record<string, string>,
+): { selection: null } | Record<string, never> {
+  if (floorId === null || floorId !== state.activeFloorId) return { selection: null }
+  return viewsByFloor[floorId] === state.activeViewByFloor[floorId] ? {} : { selection: null }
 }
 
 export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
@@ -64,6 +95,33 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
   markHydrated: (viewKey) =>
     set((state) => ({ hydrated: { ...state.hydrated, [viewKey]: true } })),
   setRailOpen: (railOpen) => set({ railOpen }),
+  // A selection belongs to the Floor and Plan View it was made on, so moving to another pair
+  // drops it. Arriving back at the pair already open keeps it: undo and redo navigate to the
+  // very item they touched (#26), and a selection that vanished on Undo could not be edited
+  // back to what it was.
+  setActiveFloor: (activeFloorId, viewId) =>
+    set((state) => {
+      const activeViewByFloor =
+        activeFloorId === null || viewId === null
+          ? state.activeViewByFloor
+          : { ...state.activeViewByFloor, [activeFloorId]: viewId }
+      return {
+        activeFloorId,
+        activeViewByFloor,
+        ...movedAway(state, activeFloorId, activeViewByFloor),
+      }
+    }),
+  setActiveView: (floorId, viewId) =>
+    set((state) => ({
+      activeViewByFloor: { ...state.activeViewByFloor, [floorId]: viewId },
+      ...movedAway(state, state.activeFloorId, { ...state.activeViewByFloor, [floorId]: viewId }),
+    })),
+  hydrateActive: (activeFloorId, viewsByFloor) =>
+    set((state) => ({
+      activeFloorId: state.activeFloorId ?? activeFloorId,
+      activeViewByFloor: { ...viewsByFloor, ...state.activeViewByFloor },
+      activeHydrated: true,
+    })),
   reset: () => set({ ...INITIAL }),
 }))
 

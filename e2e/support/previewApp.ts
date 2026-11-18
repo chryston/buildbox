@@ -159,3 +159,77 @@ export async function openProjectTab(page: Page, name: string): Promise<void> {
   await cardButton(page, name, 'Open').click()
   await expect(cabinetCanvas(page).or(floorPlanCanvas(page)).first()).toBeVisible()
 }
+
+// ——— Floors (#56) ———
+
+/** The rail's Floor switcher. */
+export const activeFloor = (page: Page): Locator => page.getByTestId('floor-select')
+
+/** Every Floor the Project has, in order, by id and by name. */
+export function floorOptions(page: Page): Promise<{ value: string; label: string }[]> {
+  return activeFloor(page).locator('option')
+    .evaluateAll((nodes) => nodes.map((node) => ({
+      value: node.getAttribute('value') ?? '',
+      label: node.textContent ?? '',
+    })))
+}
+
+/**
+ * Open the Manage Floors dialog.
+ *
+ * The rail that holds it is part of the Plan View, so this is only reachable from there.
+ */
+export async function openManageFloors(page: Page): Promise<void> {
+  await expect(activeFloor(page)).toBeVisible()
+  await page.getByTestId('manage-floors').click()
+  await expect(page.getByTestId('manage-floors-dialog')).toBeVisible()
+}
+
+/**
+ * Add a Floor from the dialog and close it, handing back the new Floor's id.
+ *
+ * The workspace follows a new Floor to it — the same thing it does when a person adds one — so
+ * whatever the caller does next happens on the Floor it just made.
+ */
+export async function addFloor(page: Page): Promise<string> {
+  await openManageFloors(page)
+  await page.getByTestId('add-floor').click()
+  const added = (await floorOptions(page)).slice(-1)[0]!
+  await page.getByTestId('manage-floors-close').click()
+  await expect(activeFloor(page)).toHaveValue(added.value)
+  return added.value
+}
+
+/** The Plan Image the seed carries, as the file a person would have chosen. */
+export function seedPlanImageFile(): { name: string; mimeType: string; buffer: Buffer } {
+  const asset = previewSeed.assets[0]
+  return { name: 'floor-plan.png', mimeType: asset.mediaType, buffer: Buffer.from(asset.base64, 'base64') }
+}
+
+/** Choose a Plan Image through the toolbar's own menu, the way a person does. */
+export async function uploadPlanImage(page: Page, file = seedPlanImageFile()): Promise<void> {
+  await page.getByTestId('plan-image-menu').click()
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.getByTestId('upload-image').click(),
+  ])
+  await chooser.setFiles(file)
+}
+
+/**
+ * Measure a known distance on the Plan Image: two points 120 screen px apart, then the real
+ * length they stand for. What the camera makes of those pixels is its own business — the scale
+ * that comes out is the one the measurement means, which is the point of calibrating this way.
+ */
+export async function calibrateByMeasuring(page: Page, realMm: number): Promise<void> {
+  await page.getByTestId('calibrate-now').click()
+  await expect(page.getByTestId('calibration-overlay')).toBeVisible()
+  const box = (await floorPlanCanvas(page).boundingBox())!
+  const y = box.y + box.height / 2
+  await page.mouse.click(box.x + box.width / 2 - 60, y)
+  await page.mouse.click(box.x + box.width / 2 + 60, y)
+  await expect(page.getByTestId('calibration-modal')).toBeVisible()
+  await page.getByTestId('calibration-distance').fill(String(realMm))
+  await page.getByTestId('calibration-confirm').click()
+  await expect(page.getByTestId('calibration-modal')).toHaveCount(0)
+}

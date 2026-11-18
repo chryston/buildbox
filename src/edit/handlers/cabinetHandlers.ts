@@ -274,7 +274,7 @@ function designLocator(project: Project, itemDesignId: EntityId): Locator {
   const placements = placementsOf(project, itemDesignId)
   return {
     floorId: placements[0]?.floorId ?? null,
-    view: 'cabinet',
+    viewId: null, view: 'cabinet',
     itemDesignIds: [itemDesignId],
     placedItemIds: placements.map((placed) => placed.id),
   }
@@ -284,7 +284,7 @@ export function cabinetLocator(project: Project, intent: CabinetIntent): Locator
   if (intent.type === 'cabinet.addUnit') {
     return {
       floorId: firstFloor(project)?.id ?? null,
-      view: 'cabinet',
+      viewId: null, view: 'cabinet',
       itemDesignIds: intent.ids.slice(0, 1),
       placedItemIds: intent.ids.slice(1, 2),
     }

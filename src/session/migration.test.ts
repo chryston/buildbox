@@ -758,7 +758,7 @@ describe('the read-only downloads (#52 §5)', () => {
     const raw = readFixture(SKETCHES)
     const w = world(raw)
     const { inspected } = await inspect(w.ports, w.deps, raw)
-    const backup = { clock: w.clock, encoder: createFakeEncoder(), buildboxVersion: TEST_VERSION, preview: false }
+    const backup = { clock: w.clock, encoder: createFakeEncoder(), ids: idSource('backup'), buildboxVersion: TEST_VERSION, preview: false }
 
     const names = unwrap(await downloadOldBackups({ ...w.deps, download: w.download, backup }, inspected, [], { floorPlan: null, collisions: {} }, null))
     // The Design that passed validation, and the floor plan standing up its own Project because

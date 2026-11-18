@@ -18,6 +18,7 @@
 import { bench, describe } from 'vitest'
 import { applyIntent, INTENT_LABELS } from '../edit'
 import type { Intent } from '../edit'
+import { migrateProject } from '../domain'
 import type { Project } from '../domain'
 import { createHistory, HISTORY_LIMIT } from './history'
 import type { History } from './history'
@@ -37,7 +38,14 @@ const envelope = JSON.parse(raw) as { domainSchemaVersion: number; project: Proj
 if (envelope.domainSchemaVersion !== 1) {
   throw new Error(`unsupported domainSchemaVersion ${String(envelope.domainSchemaVersion)}`)
 }
-const project = envelope.project
+// The fixture is a v1 document and the bench measures the domain as it is now, so the Project
+// goes through the same migration opening a Project does — since #56 that is what gives every
+// Floor its Plan Views.
+let issued = 0
+const migrated = migrateProject(envelope.project, envelope.domainSchemaVersion, (count = 1) =>
+  Array.from({ length: count }, () => `bench-view-${String(++issued)}`))
+if (!migrated.ok) throw new Error(`reference-project.json: ${migrated.error.message}`)
+const project = migrated.project
 
 const placed = project.existingModel.placedItems.find(
   (item) => project.itemDesigns.find((design) => design.id === item.itemDesignId)?.kind === 'generic',

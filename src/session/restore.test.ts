@@ -16,7 +16,7 @@ import { createMemoryAdapter, withFaults } from '../persistence'
 import type { Ports, ProjectRecord } from '../persistence'
 import { canonicalJson } from '../lib'
 import { encodeProject } from '../package'
-import { validateProject } from '../domain'
+import { DOMAIN_SCHEMA_VERSION, validateProject } from '../domain'
 import type { CabinetNode, EntityId, Project } from '../domain'
 import {
   commitRestore,
@@ -317,7 +317,7 @@ describe('committing a restore', () => {
     expect(points).toHaveLength(1)
     // The Point holds the state that was about to be overwritten, at the revision it was at.
     expect(points[0]!.revision).toBe(4)
-    expect(points[0]!.schemaVersion).toBe(1)
+    expect(points[0]!.schemaVersion).toBe(DOMAIN_SCHEMA_VERSION)
 
     const loaded = await ports.projects.load(KITCHEN)
     if (!loaded.ok) throw new Error('load failed')

@@ -21,7 +21,7 @@ const setProjectPreferences: Handler<'project.setPreferences'> = (ctx) => {
 
 /** A Project rename is seen everywhere and nowhere: no Floor, no Item Design. */
 function projectLocator(): Locator {
-  return { floorId: null, view: 'cabinet', itemDesignIds: [], placedItemIds: [] }
+  return { floorId: null, viewId: null, view: 'cabinet', itemDesignIds: [], placedItemIds: [] }
 }
 
 /**
@@ -29,7 +29,7 @@ function projectLocator(): Locator {
  * View, nothing selected. There is no global active Floor (#25) — the locator names the Floor.
  */
 function preferencesLocator(project: Project): Locator {
-  return { floorId: project.floors[0]?.id ?? null, view: 'plan', itemDesignIds: [], placedItemIds: [] }
+  return { floorId: project.floors[0]?.id ?? null, viewId: null, view: 'plan', itemDesignIds: [], placedItemIds: [] }
 }
 
 export const PROJECT_HANDLERS = {

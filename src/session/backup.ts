@@ -15,10 +15,10 @@
  * encoder, the download and the Library store all arrive as data, so the whole flow runs under
  * Node against the fakes in `./testing`.
  */
-import { referencedAssetHashes, type Project } from '../domain'
+import { DOMAIN_SCHEMA_VERSION, migrateProject, referencedAssetHashes, type Project } from '../domain'
 import type { LibraryRecord, Ports, Result } from '../persistence'
 import { encodeProject } from '../package'
-import type { BackupAsset, BackupEncoderPort, BackupMeta, ClockPort, DownloadPort } from './ports'
+import type { BackupAsset, BackupEncoderPort, BackupMeta, ClockPort, DownloadPort, IdSource } from './ports'
 import { err, ok } from './result'
 import type { EmergencySource, LibraryStore, SessionError, BackupFailure } from './types'
 
@@ -42,6 +42,8 @@ export function backupFileName(name: string): string {
 export interface BackupDeps {
   clock: ClockPort
   encoder: BackupEncoderPort
+  /** IDs for whatever the migration of an older stored record has to mint (#56). */
+  ids: IdSource
   /** Written to the manifest. It is a build constant, never read from the environment (#42 §3). */
   buildboxVersion: string
   /** `true` writes `preview: true`, which production imports refuse (#20 §11). */
@@ -121,10 +123,29 @@ export async function downloadBackup(
   const loaded = await deps.ports.projects.load(id)
   if (!loaded.ok) return loaded
 
-  const encoded = await encodeBackup(deps, loaded.value.data, (sha256) => readStored(deps.ports, sha256))
+  // A Backup is always written at the version the codec writes, so a stored record of an older
+  // domain version is migrated first — the same step `openRecord` takes when the Project is
+  // opened. Writing the stored bytes under the current version's name would hand back a file
+  // whose own manifest and record disagree, and the strict reader would refuse its own Backup.
+  const stored = loaded.value
+  if (stored.schemaVersion !== DOMAIN_SCHEMA_VERSION) {
+    const migrated = migrateProject(stored.data, stored.schemaVersion, deps.ids)
+    if (!migrated.ok) return err('encode-failed')
+    return sendBackup(deps, id, migrated.project)
+  }
+  return sendBackup(deps, id, stored.data)
+}
+
+/** The three steps of #50 §3, in that order: bytes, download, then the record. */
+async function sendBackup(
+  deps: BackupDeps & { ports: Ports; download: DownloadPort; library: LibraryStore },
+  id: string,
+  data: Project,
+): Promise<Result<BackupWritten, SessionError | BackupFailure>> {
+  const encoded = await encodeBackup(deps, data, (sha256) => readStored(deps.ports, sha256))
   if (!encoded.ok) return encoded
 
-  const fileName = backupFileName(loaded.value.data.meta.name)
+  const fileName = backupFileName(data.meta.name)
   deps.download.start(fileName, encoded.value)
 
   // Only now (#14): the bytes have left the tab. Whether the browser kept them is not

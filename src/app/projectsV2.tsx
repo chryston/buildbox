@@ -10,7 +10,7 @@ import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import type { ReactNode } from 'react'
 import type { Root } from 'react-dom/client'
 import App from '../App'
-import { INTENT_LABELS, PLAN_REMOVE_IMAGE_LABEL, PLAN_UPDATE_LABELS, intentIdCount } from '../edit'
+import { INTENT_LABELS, PLAN_UPDATE_LABELS, intentIdCount } from '../edit'
 import type { Intent, IntentType, PayloadOf } from '../edit'
 import { collectLiveHashes, createMemoryAdapter } from '../persistence'
 import type { Ports } from '../persistence'
@@ -173,7 +173,7 @@ export function createIntentFactory(clock: ClockPort, ids: IdSource): IntentBuil
         type,
         payload,
         label: labelOf(type, payload),
-        ids: ids(intentIdCount(type)),
+        ids: ids(intentIdCount(type, payload)),
         now: clock.now(),
       } as Intent
     },
@@ -187,9 +187,6 @@ function labelOf<T extends IntentType>(type: T, payload: PayloadOf<T>): string {
     if ('rotation' in patch) return PLAN_UPDATE_LABELS.rotate
     if ('w' in patch || 'h' in patch) return PLAN_UPDATE_LABELS.resize
     if ('x' in patch || 'y' in patch) return PLAN_UPDATE_LABELS.move
-  }
-  if (type === 'plan.setImage' && (payload as PayloadOf<'plan.setImage'>).image === null) {
-    return PLAN_REMOVE_IMAGE_LABEL
   }
   return INTENT_LABELS[type]
 }
@@ -262,7 +259,7 @@ function createFlaggedDeps(ports: Ports, volatile: boolean): FlaggedDeps {
     // A preview build marks its Backup and is the only build allowed to read it back (#20 §11);
     // production writes unmarked Packages and refuses marked ones. `IS_PREVIEW` is the whole of
     // that decision, and `app/channel` says what makes a build a preview.
-    backup: { clock, encoder: createBackupEncoder(), buildboxVersion: __BUILDBOX_VERSION__, preview: IS_PREVIEW },
+    backup: { clock, encoder: createBackupEncoder(), ids, buildboxVersion: __BUILDBOX_VERSION__, preview: IS_PREVIEW },
     restore: { ports: announced, clock, ids, registry, images: createImageDecoder(), acceptPreview: IS_PREVIEW },
     download,
     assetUrls: createObjectUrlCache(ports.assets.get),

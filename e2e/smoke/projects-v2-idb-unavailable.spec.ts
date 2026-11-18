@@ -5,10 +5,12 @@ import {
   card,
   downloadBackupOf,
   libraryHeading,
+  migratedForComparison,
   restoreFile,
-  storedProject,
+  storedRecord,
   previewSeed,
   toast,
+  withoutMintedViewIds,
 } from '../support/libraryApp'
 import { FIRST_PROJECT, cabinetCanvas, toolbarStatus } from '../support/previewApp'
 import { openPreviewApp } from '../support/previewApp'
@@ -30,13 +32,15 @@ test('the Library says storage is missing, Backup still works from memory, and n
   // The Backup the memory-only tab will be given, made in a profile that has storage.
   const source = await browser.newContext()
   let backup: BackupFile
-  let original: unknown
+  let original: { schemaVersion: number; data: unknown }
   try {
     const sourcePage = await source.newPage()
     await openPreviewApp(sourcePage)
     await sourcePage.goto('./', { waitUntil: 'networkidle' })
     backup = await downloadBackupOf(sourcePage, FIRST_PROJECT)
-    original = await storedProject(sourcePage, previewSeed.projects[0].id)
+    const record = await storedRecord(sourcePage, previewSeed.projects[0].id)
+    if (record === null) throw new Error('the seed holds no record to compare against')
+    original = { schemaVersion: record.schemaVersion, data: record.data }
   } finally {
     await source.close()
   }
@@ -67,7 +71,12 @@ test('the Library says storage is missing, Backup still works from memory, and n
     await restored.goto('./', { waitUntil: 'networkidle' })
     await restoreFile(restored, again)
     await expect(toast(restored)).toContainText(`Restored ${FIRST_PROJECT} from Backup.`)
-    expect(canonical(await storedProject(restored, previewSeed.projects[0].id))).toBe(canonical(original))
+    // #56: the Backup was written at the version the app writes, so what lands here is the
+    // seed migrated — the same step opening it takes. Compared against that, view ids aside.
+    const restoredRecord = await storedRecord(restored, previewSeed.projects[0].id)
+    if (restoredRecord === null) throw new Error('the restore wrote no record')
+    expect(canonical(withoutMintedViewIds(restoredRecord.data)))
+      .toBe(canonical(migratedForComparison(original.data, original.schemaVersion)))
   } finally {
     await fresh.close()
   }

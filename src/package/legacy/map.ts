@@ -11,6 +11,7 @@
  * fields are read as the shapes `types.ts` describes them.
  */
 import { decodeBase64, problem, sha256Hex, type ValidationProblem } from '../../lib'
+import { defaultPlanView } from '../../domain'
 import type {
   CabinetItemDesign,
   CabinetNode,
@@ -90,6 +91,7 @@ export function projectFromDesign(design: LegacyDesign, newId: () => string): Pr
     meta: { name: design.name },
     preferences: { ...MIGRATED_PREFERENCES },
     floors: [{ id: floorId, name: FLOOR_ONE_NAME, planImage: null }],
+    views: [defaultPlanView(newId(), { id: floorId, name: FLOOR_ONE_NAME, planImage: null })],
     itemDesigns: design.units.map((unit) => cabinetItemDesign(unit)),
     existingModel: { placedItems: design.units.map((unit) => cabinetPlacement(unit, floorId, newId())) },
   }

@@ -6,7 +6,7 @@ import { sha256Hex } from '../lib'
 import { referencedAssetHashes } from './assets'
 import { encodeProject, type AssetSource } from './encode'
 import { stageImport } from './import'
-import { FIXTURE_BUILD } from './testing'
+import { allocateIds, FIXTURE_BUILD } from './testing'
 
 /**
  * Round-trip (#44 acceptance): every Project this build can write, it reads back
@@ -47,7 +47,7 @@ describe('every Project round-trips through the codec', () => {
     await fc.assert(
       fc.asyncProperty(arbProject(), async (drawn) => {
         const project = withRealAssets(drawn)
-        const result = await stageImport(await encodeProject(project, store, FIXTURE_BUILD), { acceptPreview: false })
+        const result = await stageImport(await encodeProject(project, store, FIXTURE_BUILD), { acceptPreview: false, allocateId: allocateIds() })
         if (!result.ok) throw new Error(`${result.problem.code} ${JSON.stringify(result.problem)}`)
         expect(result.staged.project).toEqual(project)
         expect(result.staged.migratedFrom).toBeNull()
@@ -89,7 +89,7 @@ describe('every Project round-trips through the codec', () => {
               planImage: { assetHash: HASHES[0]!, mediaType: 'image/png' as const, widthPx: 4, heightPx: 4, pixelsPerMm: null },
             })),
           }
-          const result = await stageImport(await encodeProject(project, store, FIXTURE_BUILD), { acceptPreview: false })
+          const result = await stageImport(await encodeProject(project, store, FIXTURE_BUILD), { acceptPreview: false, allocateId: allocateIds() })
           if (!result.ok) throw new Error(`${result.problem.code}`)
           expect(result.staged.project).toEqual(project)
           expect([...result.staged.assets.keys()]).toEqual([HASHES[0]])
@@ -106,7 +106,7 @@ describe('every Project round-trips through the codec', () => {
       fc.asyncProperty(arbProject(), async (drawn) => {
         const project = withRealAssets(drawn)
         const archive = await encodeProject(project, store, FIXTURE_BUILD)
-        const result = await stageImport(archive.subarray(0, archive.length - 1), { acceptPreview: false })
+        const result = await stageImport(archive.subarray(0, archive.length - 1), { acceptPreview: false, allocateId: allocateIds() })
         expect(result.ok).toBe(false)
       }),
       params,

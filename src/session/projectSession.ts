@@ -24,8 +24,8 @@
  * thing — quota failures, revision conflicts, the two-minute idle point — be tested against
  * the in-memory adapter and a fake clock in `src/session/projectSession.test.ts`.
  */
-import { DOMAIN_SCHEMA_VERSION, summarizeProject, validateProject } from '../domain'
-import type { Project } from '../domain'
+import { DOMAIN_SCHEMA_VERSION, migrateProject, summarizeProject, validateProject } from '../domain'
+import type { IdAllocator, Project } from '../domain'
 import { applyIntent, applyPatches } from '../edit'
 import type { Intent } from '../edit'
 import { problem } from '../lib'
@@ -100,12 +100,41 @@ export async function openProject(
   projectId: string,
   deps: SessionDeps,
 ): Promise<Result<ProjectSession, PersistenceError>> {
-  const loaded = await deps.ports.projects.load(projectId)
+  const loaded = await loadCurrent(deps.ports.projects, projectId, deps.ids)
   if (!loaded.ok) return loaded
   const handle = await deps.lock.acquire(projectId)
   const session = createSession(loaded.value, deps, handle)
   deps.registry.register(session)
   return ok(session)
+}
+
+/**
+ * Read one record and hand back the shape this build writes (#56).
+ *
+ * A Project stored under an older domain schema goes through the migrator here rather than
+ * at the adapter: `persistence` stores bytes and knows nothing about what a Floor is, while
+ * the session is the module that already owns the domain version it commits. Nothing is
+ * written back — the migrated shape lands in memory and reaches the store on the next Edit
+ * Transaction, which is what keeps opening a Project from another tab a read.
+ *
+ * A record that will not migrate is a record this build cannot open: it comes back as the
+ * same kind of "unavailable" the store reports for a database it cannot read, so the caller
+ * shows a Project that failed to open rather than an empty one.
+ */
+async function loadCurrent(
+  projects: Ports['projects'],
+  projectId: string,
+  allocateId: IdAllocator,
+): Promise<Result<ProjectRecord, PersistenceError>> {
+  const loaded = await projects.load(projectId)
+  if (!loaded.ok) return loaded
+  const record = loaded.value
+  if (record.schemaVersion === DOMAIN_SCHEMA_VERSION) return ok(record)
+  const migrated = migrateProject(record.data, record.schemaVersion, allocateId)
+  if (!migrated.ok) {
+    return err({ kind: 'unavailable', reason: `schema-${record.schemaVersion}-unreadable` })
+  }
+  return ok({ ...record, data: migrated.project })
 }
 
 /** The last state a commit took to the store — what a `close` or `idle` Recovery Point holds. */
@@ -423,7 +452,7 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
     // to be thrown away. Under a full quota this fails, and that never blocks a discard
     // the user asked for explicitly (#14).
     const point = await createPoint('pre-discard', project, revision)
-    const reloaded = await ports.projects.load(record.id)
+    const reloaded = await loadCurrent(ports.projects, record.id, ids)
     if (!reloaded.ok) return err(reloaded.error)
 
     project = reloaded.value.data
@@ -473,7 +502,7 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
    */
   async function reload(): Promise<Result<void, SessionError>> {
     if (!readOnly || closed) return err('read-only')
-    const reloaded = await ports.projects.load(record.id)
+    const reloaded = await loadCurrent(ports.projects, record.id, ids)
     if (!reloaded.ok) return err(reloaded.error)
     adopt(reloaded.value)
     return ok(undefined)
@@ -610,7 +639,7 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
         return
       }
       handle = acquired
-      void ports.projects.load(record.id).then((reloaded) => {
+      void loadCurrent(ports.projects, record.id, ids).then((reloaded) => {
         if (closed) return
         if (!reloaded.ok) {
           handle = null

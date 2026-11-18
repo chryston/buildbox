@@ -3,7 +3,7 @@
  * outside this folder. `domain` is pure — no DOM, no React, no state library — and may
  * import only `geometry` and `lib`.
  *
- * It holds the domain schema v1 types, the strict validator, the version and its
+ * It holds the domain schema v2 types, the strict validator, the version and its
  * migrator chain, the cabinet Item Design payload vocabulary, the Library's Project
  * Summary (#45), the fresh identity an imported copy takes (#50) and unit conversion. It
  * never creates an ID or reads the clock (#42 §3): IDs and time arrive as data.
@@ -26,9 +26,18 @@ export type {
 } from './cabinetPayload'
 export { designFootprintSize, designHeight, designOrigin } from './itemDesign'
 export {
+  FLOOR_DEPENDENCY_KINDS,
+  floorHasDependencies,
+  summarizeFloorDependencies,
+  type FloorDependency,
+  type FloorDependencyKind,
+} from './floorDependencies'
+export { defaultPlanView, floorNameTaken, nameKey, nextFloorName, planViewNameTaken } from './floorNames'
+export {
   DOMAIN_SCHEMA_VERSION,
   MIGRATORS,
   migrateProject,
+  migrateV1toV2,
   runMigrationChain,
   type Migrator,
   type MigrateError,
@@ -40,11 +49,13 @@ export type {
   EntityId,
   ExistingModel,
   Floor,
+  FloorLimits,
   GenericItemDesign,
   ItemDesign,
   ItemFootprint,
   PlanImage,
   PlanImageMediaType,
+  PlanView,
   PlacedItem,
   Point2,
   Project,

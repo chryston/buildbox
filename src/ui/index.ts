@@ -20,12 +20,12 @@ import './theme/tokens.css'
 import './library/library.css'
 
 export { STRINGS } from './strings'
-export type { Viewport, ViewportCache } from './workspace'
+export type { ActiveViewState, Viewport, ViewportCache } from './workspace'
 export {
-  firstFloorId,
   FloorWorkspace,
   PLAN_IMAGE_ACCEPT,
   planItemsForFloor,
+  planViewKey,
   workspaceStore,
   WorkspaceProvider,
   type PlanCatalogueOption,

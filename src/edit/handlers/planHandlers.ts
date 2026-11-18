@@ -24,7 +24,18 @@ import {
   spendIds,
 } from './support'
 
-type PlanHandlers = { [T in Extract<IntentType, `plan.${string}`>]: IntentHandler<T> }
+/**
+ * The `plan.*` handlers, minus the three that are about another Floor — removing a Plan
+ * Image and taking Placed Items across a Floor boundary live with the Floor handlers in
+ * `floorHandlers.ts`, where the rules they share with duplicating a Floor are stated once.
+ * `INTENT_HANDLERS` is the completeness check over all of them.
+ */
+type PlanHandlers = {
+  [T in Exclude<
+    Extract<IntentType, `plan.${string}`>,
+    'plan.removeImage' | 'plan.copyToFloor' | 'plan.moveToFloor'
+  >]: IntentHandler<T>
+}
 
 /** The legacy 10 mm floor, which the UI clamps to before it sends the Intent. */
 const MIN_PLAN_SIZE_MM = 10
@@ -192,14 +203,14 @@ const removeTemplate: Handler<'plan.removeTemplate'> = (ctx) => {
 }
 
 const setPlanImage: Handler<'plan.setImage'> = (ctx) => {
-  const { floorId, image, clearExisting } = ctx.intent.payload
+  const { floorId, image } = ctx.intent.payload
   const floor = requireFloor(ctx.project, floorId)
-  // Replacing the picture keeps the scale the user calibrated, unless this upload is the
-  // confirm-after-clearing path, which clears the floor plan in the same transaction.
-  const keptPixelsPerMm = clearExisting ? null : floor.planImage?.pixelsPerMm ?? null
   const draftFloor = requireFloor(ctx.draft, floorId)
-  if (clearExisting) clearGenericItems(ctx.draft, floorId)
-  const next = image === null ? null : { ...image, pixelsPerMm: keptPixelsPerMm }
+  // A different picture is a different picture: its pixels mean nothing until the user says
+  // what a known distance measures, so the old calibration goes with the old bytes (#56).
+  // Nothing else on the Floor is touched — clearing a Plan Image never clears Placed Items.
+  const sameBytes = floor.planImage !== null && floor.planImage.assetHash === image.assetHash
+  const next = { ...image, pixelsPerMm: sameBytes ? floor.planImage?.pixelsPerMm ?? null : null }
   if (!sameJsonValue(draftFloor.planImage, next)) draftFloor.planImage = next
 }
 
@@ -219,13 +230,16 @@ const clearPlan: Handler<'plan.clear'> = (ctx) => {
 
 // --- Where a floor-plan edit lands ------------------------------------------
 
-export function planLocator(project: Project, intent: PlanIntent): Locator {
+export function planLocator(
+  project: Project,
+  intent: Exclude<PlanIntent, { type: 'plan.removeImage' | 'plan.copyToFloor' | 'plan.moveToFloor' }>,
+): Locator {
   switch (intent.type) {
     case 'plan.addObject':
     case 'plan.addFromTemplate':
       return {
         floorId: intent.payload.floorId,
-        view: 'plan',
+        viewId: null, view: 'plan',
         itemDesignIds: intent.ids.slice(0, 1),
         placedItemIds: intent.ids.slice(1, 2),
       }
@@ -234,28 +248,28 @@ export function planLocator(project: Project, intent: PlanIntent): Locator {
       const placement = project.existingModel.placedItems.find((item) => item.id === intent.payload.placedItemId)
       return {
         floorId: placement?.floorId ?? null,
-        view: 'plan',
+        viewId: null, view: 'plan',
         itemDesignIds: placement === undefined ? [] : [placement.itemDesignId],
         placedItemIds: [intent.payload.placedItemId],
       }
     }
     case 'plan.addTemplate':
-      return { floorId: null, view: 'plan', itemDesignIds: intent.ids.slice(0, 1), placedItemIds: [] }
+      return { floorId: null, viewId: null, view: 'plan', itemDesignIds: intent.ids.slice(0, 1), placedItemIds: [] }
     case 'plan.removeTemplate':
       return {
         floorId: null,
-        view: 'plan',
+        viewId: null, view: 'plan',
         itemDesignIds: [intent.payload.itemDesignId],
         placedItemIds: placementsOf(project, intent.payload.itemDesignId).map((item) => item.id),
       }
     case 'plan.setImage':
     case 'plan.calibrate':
-      return { floorId: intent.payload.floorId, view: 'plan', itemDesignIds: [], placedItemIds: [] }
+      return { floorId: intent.payload.floorId, viewId: null, view: 'plan', itemDesignIds: [], placedItemIds: [] }
     case 'plan.clear': {
       const removed = genericPlacementsOn(project, intent.payload.floorId)
       return {
         floorId: intent.payload.floorId,
-        view: 'plan',
+        viewId: null, view: 'plan',
         itemDesignIds: removed.map((item) => item.itemDesignId),
         placedItemIds: removed.map((item) => item.id),
       }

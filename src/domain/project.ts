@@ -1,12 +1,13 @@
 /**
- * The domain schema v1 types (#42 §2) — the exact JSON shape a Project is stored and
+ * The domain schema v2 types (#42 §2) — the exact JSON shape a Project is stored and
  * exchanged as.
  *
- * v1 holds only what the S4 Local Projects release needs: Project metadata and
+ * v1 held only what the S4 Local Projects release needs: Project metadata and
  * preferences, Floors with an optional Plan Image, cabinet and generic Item Designs, and
- * the Existing Model's Placed Items. Everything else arrives through a migrator in the
- * release that ships it (#42 §5, MIGRATIONS.md); unspecified shapes are never frozen
- * early (#20 §3).
+ * the Existing Model's Placed Items. v2 adds what Multiple Floors needs (#56): the
+ * Project's saved Plan Views, and each Floor's own limits. Everything else arrives through
+ * a migrator in the release that ships it (#42 §5, MIGRATIONS.md); unspecified shapes are
+ * never frozen early (#20 §3).
  *
  * Conventions, stated once here because every later module uses them:
  *
@@ -43,6 +44,12 @@ export interface Project {
   preferences: ProjectPreferences
   /** Array order is the user's display order (#25); it implies no vertical relationship. */
   floors: Floor[]
+  /**
+   * The saved Plan Views (#56). Array order is the order the switcher lists them in; every
+   * Floor carries exactly one default view, so this array is never empty for a Project
+   * with a Floor.
+   */
+  views: PlanView[]
   itemDesigns: ItemDesign[]
   existingModel: ExistingModel
 }
@@ -65,6 +72,37 @@ export interface Floor {
   /** Required, editable, unique within the Project ignoring case (#25). */
   name: string
   planImage: PlanImage | null
+  /** The Floor's own vertical extent (#56); absent when the user has given none. */
+  limits?: FloorLimits
+}
+
+/**
+ * The Floor's vertical extent in millimetres, measured from the Floor Datum (#56), so a
+ * `lowerMm` below zero describes the part of the Floor that hangs under it. Either bound
+ * may be absent; when both are present `lowerMm` is the smaller. BuildBox records the
+ * numbers the user gave and derives no requirement from them.
+ */
+export interface FloorLimits {
+  lowerMm?: number
+  upperMm?: number
+}
+
+/**
+ * A saved way of looking at exactly one Floor (#56). A Plan View holds no Placed Item, no
+ * Plan Image and no geometry of its own — it is a viewer, so deleting one deletes nothing
+ * but the view. `isDefault` marks the view that came with the Floor: every Floor has
+ * exactly one, and it goes with the Floor rather than counting as a dependant.
+ */
+export interface PlanView {
+  id: EntityId
+  kind: 'plan'
+  /** A Plan View is a viewer of exactly one Floor. */
+  floorId: EntityId
+  /** Unique among the views of that Floor, ignoring case. */
+  name: string
+  isDefault: boolean
+  /** Whether this view draws the Floor's Plan Image. */
+  showPlanImage: boolean
 }
 
 /**

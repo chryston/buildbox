@@ -1,17 +1,18 @@
 /**
  * The Project "New Project" starts with (#47).
  *
- * It mirrors the legacy `defaultDesign()`: one Floor, one cabinet with the legacy default
- * settings and a single void space, placed at the legacy origin. Like every other write it
- * takes its IDs from the caller — here all five at once, in the order below — so a Project
- * created in two tabs is still two different Projects and a replayed one is the same.
+ * It mirrors the legacy `defaultDesign()`: one Floor with the default Plan View that shows
+ * it (#56), one cabinet with the legacy default settings and a single void space, placed at
+ * the legacy origin. Like every other write it takes its IDs from the caller — here all six
+ * at once, in the order below — so a Project created in two tabs is still two different
+ * Projects and a replayed one is the same.
  */
 import type { Project } from '../domain'
 import { LEGACY_DEFAULT_SETTINGS } from './defaults'
 import { spendIds } from './handlers/support'
 
 export interface CreateProjectArgs {
-  /** `[projectId, floorId, itemDesignId, placedItemId, rootNodeId]`. */
+  /** `[projectId, floorId, viewId, itemDesignId, placedItemId, rootNodeId]`. */
   ids: string[]
   /**
    * ISO timestamp read by the caller, for the uniform Intent shape. A v1 Project stores no
@@ -23,13 +24,14 @@ export interface CreateProjectArgs {
 
 /** The default Project, already strictly valid (#42 §5). */
 export function createProject({ ids, name }: CreateProjectArgs): Project {
-  const [projectId, floorId, itemDesignId, placedItemId, rootNodeId] = spendIds(ids, 5, 'createProject')
+  const [projectId, floorId, viewId, itemDesignId, placedItemId, rootNodeId] = spendIds(ids, 6, 'createProject')
   const settings = { ...LEGACY_DEFAULT_SETTINGS }
   return {
     id: projectId,
     meta: { name },
     preferences: { displayUnit: 'mm', displayPrecision: 0 },
     floors: [{ id: floorId, name: 'Floor 1', planImage: null }],
+    views: [{ id: viewId, kind: 'plan', floorId, name: 'Floor 1', isDefault: true, showPlanImage: true }],
     itemDesigns: [
       {
         id: itemDesignId,
