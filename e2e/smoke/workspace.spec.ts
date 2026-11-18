@@ -76,7 +76,7 @@ test('toolbar interactions never move the toolbar or resize the canvas', async (
   })
   await expectStableCanvas(page, async () => {
     await planImage.click()
-    await expect(page.getByRole('menuitem', { name: /upload image/i })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: /upload/i })).toBeVisible()
     await planImage.click()
   })
   // Starting and cancelling calibration: the overlay is an overlay.
