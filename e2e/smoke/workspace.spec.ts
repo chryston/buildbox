@@ -59,6 +59,29 @@ test('no toolbar control is clipped at 1024 px: everything is inline or in More'
   }
 })
 
+// #112: the App's floor-plan wrapper is a flex row, and the workspace must grow into it.
+// A workspace that shrinks to its content width leaves white space to the app's right —
+// invisible to the shell's own layout tests, which render the shell directly, so this
+// geometry is asserted through the real App wrapper.
+test('the workspace fills the viewport width from 1024 to 1440 px', async ({ page }) => {
+  await openPreviewApp(page)
+  await showFloorPlan(page)
+  for (const width of [1440, 1280, 1024]) {
+    await page.setViewportSize({ width, height: 1000 })
+    const workspace = page.getByTestId('floor-workspace')
+    const canvasHost = page.getByTestId('workspace-canvas-host')
+    await expect(workspace).toBeVisible()
+    const contentWidth = await page.evaluate(() => document.documentElement.clientWidth)
+    const box = await workspace.boundingBox()
+    const host = await canvasHost.boundingBox()
+    // The workspace spans the App's content box: flush left and as wide as the viewport.
+    expect(box?.x, `workspace left at ${width} px`).toBe(0)
+    expect(box?.width, `workspace width at ${width} px`).toBeGreaterThanOrEqual(contentWidth - 1)
+    // The canvas host keeps everything the 300 px static rail (300 px from 1024 up) leaves it.
+    expect(host?.width, `canvas host at ${width} px`).toBeGreaterThanOrEqual(contentWidth - 300 - 2)
+  }
+})
+
 test('toolbar interactions never move the toolbar or resize the canvas', async ({ page }) => {
   await openPreviewApp(page)
   await showFloorPlan(page)
