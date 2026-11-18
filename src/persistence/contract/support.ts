@@ -10,6 +10,7 @@ import { DOMAIN_SCHEMA_VERSION, summarizeProject, type Project } from '../../dom
 import { canonicalJson, sha256Hex } from '../../lib'
 import type { FaultMethod } from '../faults'
 import type {
+  LegacyMigrationRecord,
   MetaMap,
   PersistenceError,
   Ports,
@@ -29,6 +30,17 @@ export const PROJECT_ID = 'project-1'
 export const OTHER_PROJECT_ID = 'project-2'
 export const FIRST_SAVED_AT = '2026-01-01T10:00:00.000Z'
 export const SECOND_SAVED_AT = '2026-01-02T10:00:00.000Z'
+
+/** A completed `meta.legacyMigration` record, for the cases that need `meta` non-empty. */
+export const MIGRATION_META: LegacyMigrationRecord = {
+  status: 'complete',
+  sourceHash: 'a'.repeat(64),
+  completedAt: FIRST_SAVED_AT,
+  projectIds: [PROJECT_ID],
+  notMigrated: [],
+  discardedSketches: 0,
+  removedAt: null,
+}
 
 /** A UTC calendar day, the shape `prune`'s injected `dayKey` returns. */
 export const dayKeyUtc = (createdAt: string): string => createdAt.slice(0, 10)
@@ -244,6 +256,24 @@ export const WRITE_CALLS: Readonly<Record<FaultMethod, WriteCall>> = {
         },
         1,
       ),
+  },
+  commitMany: {
+    run: (ports, seed) =>
+      ports.projects.commitMany([
+        {
+          input: {
+            project: { ...seed.project, meta: { ...seed.project.meta, name: 'Renamed after the fault' } },
+            revision: 2,
+            savedAt: SECOND_SAVED_AT,
+            newAssets: [{ bytes: assetBlob(3), mediaType: 'image/png', widthPx: 4, heightPx: 4 }],
+          },
+          expectedRevision: 1,
+        },
+        {
+          input: { project: projectFixture(null, OTHER_PROJECT_ID), revision: 1, savedAt: SECOND_SAVED_AT },
+          expectedRevision: null,
+        },
+      ]),
   },
   put: {
     run: (ports) => ports.assets.put(assetBlob(4), 'image/png', { widthPx: 4, heightPx: 4 }, SECOND_SAVED_AT),

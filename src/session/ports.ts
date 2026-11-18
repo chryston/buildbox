@@ -1,16 +1,18 @@
 /**
- * The two ports `session` needs from the browser, and the ID allocator it needs from its
- * caller (#48, #20 §2, #42 §3).
+ * The ports `session` needs from the browser, and the ID allocator it needs from its caller
+ * (#48, #20 §2, #42 §3, #52).
  *
- * `session` is a pure module: it never reads a clock, never sets a real timer, never takes
- * a browser lock and never mints an ID. Everything browser-specific arrives here as a port
- * and is implemented in `platform` — #51 binds `ClockPort` to `Date`/`setTimeout` and
- * `LockPort` to Web Locks named `buildbox:project:<id>`. Tests bind both to the fakes in
- * `src/session/testing.ts`, which is why the idle Recovery Point schedule, the read-only
- * mode and the 7-day backup rule are all testable under Node with no timers running.
+ * `session` is a pure module: it never reads a clock, never sets a real timer, never takes a
+ * browser lock, never mints an ID and never touches `localStorage`. Everything
+ * browser-specific arrives here as a port and is implemented in `platform` — #51 binds
+ * `ClockPort` to `Date`/`setTimeout` and `LockPort` to Web Locks named `buildbox:project:<id>`,
+ * #52 binds `LegacySourcePort` to the `buildbox-store` key. Tests bind both to the fakes in
+ * `src/session/testing.ts`, which is why the idle Recovery Point schedule, the read-only mode
+ * and the 7-day backup rule are all testable under Node with no timers running.
  */
 
 import type { Project } from '../domain'
+import type { LegacyConversionResult } from '../package'
 
 /** The clock and the timer: time arrives as data, and a test can advance it by hand. */
 export interface ClockPort {
@@ -99,4 +101,36 @@ export interface DownloadPort {
  */
 export interface ImageDecoderPort {
   decode(bytes: Uint8Array, mediaType: string): Promise<{ widthPx: number; heightPx: number } | null>
+}
+
+/**
+ * The browser's one legacy value, behind the two operations the Migration review is allowed
+ * to perform on it (#52 §1.1, §4.7, #20 §5).
+ *
+ * `read` hands back the raw `buildbox-store` string exactly as it stands — unparsed, and never
+ * re-written. There is no `write`: #52's whole safety argument is that nothing in the new flow
+ * can put anything back, and a port without a setter is how that stays true. `remove` is the
+ * `Remove old copy` button and nothing else ever calls it.
+ *
+ * The port type lives here so `platform` can implement it and `session` can use it without
+ * either naming `window` (#20 §2).
+ */
+export interface LegacySourcePort {
+  /** The stored value, or `null` when this browser holds no legacy data. */
+  read(): string | null
+  /** Delete the `buildbox-store` key alone. Other keys are not this flow's to touch. */
+  remove(): void
+}
+
+/**
+ * #43's legacy → domain v1 converter, as the seam the Migration review runs the pipeline
+ * through (#52 §2 steps 2–5).
+ *
+ * It is a port rather than a direct import for one reason: criterion 11 stops the pipeline at
+ * each named stage and demands that nothing was written. A stage that cannot fail on demand
+ * cannot be tested, and a converter that reaches for the real clock or a real store would not
+ * be the pure function #43 shipped.
+ */
+export interface LegacyConvertPort {
+  (raw: string, options: { newId: () => string }): Promise<LegacyConversionResult>
 }

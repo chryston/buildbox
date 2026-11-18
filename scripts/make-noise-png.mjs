@@ -83,11 +83,57 @@ function arg(name, fallback) {
   return i === -1 ? fallback : process.argv[i + 1]
 }
 
+/**
+ * @returns {Buffer} an 8-bit RGB PNG of a room plan: pale ground, a grid and an outline
+ *
+ * The Migration review fixture (#52) needs a Plan Image whose declared size is the size of the
+ * bytes — a review that says `2400 × 1800 px` over a 256-pixel file would be testing the
+ * preview's ability to lie. Noise cannot do that at a sane byte count, so this is a flat
+ * drawing instead: rows repeat, and deflate takes a 2400×1800 image down to tens of kilobytes.
+ */
+export function planPng({ width, height, grid = 100 }) {
+  const stride = width * 3
+  const raw = Buffer.alloc((stride + 1) * height)
+  const ground = [0xf4, 0xf1, 0xea]
+  const rule = [0xd9, 0xd3, 0xc5]
+  const wall = [0x53, 0x4f, 0x46]
+  const inset = Math.round(Math.min(width, height) / 12)
+
+  for (let y = 0; y < height; y++) {
+    const row = y * (stride + 1)
+    raw[row] = 0 // filter: None
+    const onWallRow = y === inset || y === height - 1 - inset
+    for (let x = 0; x < width; x++) {
+      const onWallColumn = x === inset || x === width - 1 - inset
+      const onRule = x % grid === 0 || y % grid === 0
+      const colour = onWallRow || onWallColumn ? wall : onRule ? rule : ground
+      const at = row + 1 + x * 3
+      raw[at] = colour[0]
+      raw[at + 1] = colour[1]
+      raw[at + 2] = colour[2]
+    }
+  }
+
+  const ihdr = Buffer.alloc(13)
+  ihdr.writeUInt32BE(width, 0)
+  ihdr.writeUInt32BE(height, 4)
+  ihdr[8] = 8 // bit depth
+  ihdr[9] = 2 // colour type: truecolour RGB
+
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', deflateSync(raw, { level: 9 })),
+    chunk('IEND', Buffer.alloc(0)),
+  ])
+}
+
 if (process.argv[1] && process.argv[1].endsWith('make-noise-png.mjs')) {
   const width = Number(arg('width', 1200))
   const height = Number(arg('height', 1000))
   const seed = Number(arg('seed', 20260529))
-  const png = noisePng({ width, height, seed })
+  const kind = arg('kind', 'noise')
+  const png = kind === 'plan' ? planPng({ width, height }) : noisePng({ width, height, seed })
   const dataUrl = `data:image/png;base64,${png.toString('base64')}`
   const out = arg('out', null)
   if (out) writeFileSync(out, png)
@@ -95,9 +141,10 @@ if (process.argv[1] && process.argv[1].endsWith('make-noise-png.mjs')) {
     `${JSON.stringify(
       {
         out,
+        kind,
         widthPx: width,
         heightPx: height,
-        seed,
+        ...(kind === 'noise' ? { seed } : {}),
         bytes: png.length,
         sha256: createHash('sha256').update(png).digest('hex'),
         dataUrlChars: dataUrl.length,

@@ -20,3 +20,4 @@ export { createImageDecoder, readPlanImageFile, type PlanImageSource } from './i
 export { createObjectUrlCache, type ObjectUrlCache } from './objectUrls'
 export { createBackupEncoder } from './backupEncoder'
 export { createDownload } from './download'
+export { createLegacySource, LEGACY_STORE_KEY } from './legacySource'

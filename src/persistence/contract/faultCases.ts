@@ -1,5 +1,5 @@
 /**
- * Contract case 9: every write path, under every injectable failure (#45 criterion 3).
+ * Contract case 10: every write path, under every injectable failure (#45 criterion 3).
  *
  * Each case seeds a store, snapshots everything reachable through the ports as canonical
  * JSON, wraps the adapter in a one-rule fault plan, makes the call, and demands two things:
@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest'
 import { FAULT_KINDS, FAULT_METHODS, withFaults, type FaultKind } from '../faults'
 import type { PersistenceError } from '../ports'
-import { WRITE_CALLS, assetHash, failure, seedProject, snapshotStores, unwrap, type ContractContext } from './support'
+import { WRITE_CALLS, MIGRATION_META, assetHash, failure, seedProject, snapshotStores, unwrap, type ContractContext } from './support'
 
 /** The port error each fault stands for. */
 const ERROR_KIND: Record<FaultKind, PersistenceError['kind']> = {
@@ -25,7 +25,7 @@ export function registerFaultCases(ctx: ContractContext): void {
       for (const fault of FAULT_KINDS) {
         it(`${method} surfaces ${fault} and leaves every store untouched`, async () => {
           const seeded = await seedProject(ctx.ports)
-          unwrap(await ctx.ports.meta.set('legacyMigration', { done: false }))
+          unwrap(await ctx.ports.meta.set('legacyMigration', MIGRATION_META))
           const call = WRITE_CALLS[method]
           if (call.prepare !== undefined) await call.prepare(ctx.ports, seeded)
 

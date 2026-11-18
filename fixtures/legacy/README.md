@@ -62,14 +62,16 @@ platform, unlike `canvas.toDataURL()`). Noise is used because it does not compre
 is what makes the large fixture a real localStorage and render-cost test.
 
 ```sh
-node scripts/make-noise-png.mjs --width 256  --height 192  --seed 20260529   # v3
-node scripts/make-noise-png.mjs --width 1200 --height 1000 --seed 20260529   # v3-large-image
+node scripts/make-noise-png.mjs --width 256  --height 192  --seed 20260529                    # v3
+node scripts/make-noise-png.mjs --width 1200 --height 1000 --seed 20260529                    # v3-large-image
+node scripts/make-noise-png.mjs --kind plan --width 2400 --height 1800                        # migration-review
 ```
 
 | Image | Decoded PNG bytes | PNG SHA-256 | Base64 data URL chars |
 | --- | --- | --- | --- |
 | 256×192 (`v3`) | 147,761 | `2bf8cc1f75e2a76ff78947bf2cfe9e463305915f6f4ee2945df84285aa4ece69` | 197,038 |
 | 1200×1000 (`v3-large-image`) | 3,602,163 | `8dc0df5ac11b522c70ae3e9614da477fe23cbee03033d0b174066817d027f586` | 4,802,906 |
+| 2400×1800 (`migration-review`), `--kind plan` | 58,116 | `8d001c0461b36c0ee47b7d9bfbd21c2c22eca8d39ee393091dce092e08fde067` | 77,510 |
 
 `v3-large-image` is the localStorage ceiling case. Measured in this Chromium build
 (headless shell, fresh origin, single key): a 4.8 M-char value stores, a 5.0 M-char value
@@ -179,6 +181,30 @@ reader says nothing about it (it ignores what it does not model); domain v1 reje
 pair shows both halves of #43: the good project converts, the bad one is rejected with a
 problem that names the field and where it sits.
 
+## Migration review fixtures (#52)
+
+These two are hand-authored rather than captured, because they exist to show the review two
+things the captures cannot: a floor plan whose declared size is the size of its bytes, and a
+source where part of it is refused while the rest migrates. They are still raw
+`localStorage['buildbox-store']` strings — compact JSON, one line, no envelope beyond what
+zustand `persist` wrote.
+
+**`migration-review/buildbox-store.json`** — version 3, three Designs of one cabinet each:
+`Cabinet 1`, `Kitchen Renovation`, `Wardrobe Study`. The floor plan carries the 2400×1800 Plan
+Image above, six objects and one saved custom shape, and no sketches. This is the source the
+review's copy is written against: three Projects, one floor plan with a real preview, nothing
+refused.
+
+**`sketches/buildbox-store.json`** — version 3, two Designs, one of which carries
+`"colour": "#f4f1ea"` in its `settings` and so is refused while `Study Wall` migrates. Its floor
+plan is uncalibrated-but-sized with two `wall-hack` and one `tile-zone` annotation and no image:
+the discarded-sketch count the review reports, and the reason `Download original data` exists.
+
+A cabinet tree whose nodes are cyclic cannot be a fixture. `JSON.parse` gives every node its own
+object, and #43's cycle check is against object identity in the ancestor chain — so a cycle only
+exists in a graph built in memory. `src/session/migration.test.ts` builds one there and asserts
+that Design is reported in `Not migrated` while the others still migrate.
+
 ## Integrity
 
 One row per file, SHA-256 of the file as committed. `src/test/legacyFixtures.test.ts`
@@ -199,3 +225,5 @@ asserts both directions: every file here has a row, and every row matches its fi
 | `edge-cases/floor-plan-sketches.json` | `df9fce33d29e3be5cd6ce37ddff24fc6d82f814b218588e286b2701d7d53666b` |
 | `edge-cases/workspace-duplicate-node-id.buildbox.json` | `5f8fc2f8fb154946c9e8a6bc6956e860857d9dc9ffb545bc482cf96bb1f8b033` |
 | `edge-cases/workspace-unknown-setting-field.buildbox.json` | `b1afeec2cc5ed856c5f14e74e5ca0414736f51380b9112e3b6181027ee56e68b` |
+| `migration-review/buildbox-store.json` | `39d523ee22f132133e0d8155fabdf75a1f459de330940e2c8f016e9376a84698` |
+| `sketches/buildbox-store.json` | `02b3f73b9a2f765895f6e26d56464f921478d8ee7636bfeb6fb54c8d0ae5291b` |

@@ -1,5 +1,5 @@
 /**
- * The fault decorator on its own (#45 criterion 3): the 8 write methods × 3 faults matrix
+ * The fault decorator on its own (#45 criterion 3): the 9 write methods × 3 faults matrix
  * against the in-memory adapter, plus the rules the matrix cannot show on its own — that a
  * faulted call never reaches the wrapped adapter, that `nth` counts calls, that each rule
  * fires once, and that reads and unmatched writes are untouched.
@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import { FAULT_METHODS, createMemoryAdapter, withFaults, type Ports } from './index'
 import {
+  MIGRATION_META,
   PROJECT_ID,
   SECOND_SAVED_AT,
   WRITE_CALLS,
@@ -36,7 +37,7 @@ describe('withFaults (#45 criterion 3)', () => {
       it(`${method} under ${fault} returns the typed failure and leaves prior state byte-identical`, async () => {
         const ports = createMemoryAdapter()
         const seeded = await seedProject(ports)
-        unwrap(await ports.meta.set('legacyMigration', { done: false, at: SECOND_SAVED_AT }))
+        unwrap(await ports.meta.set('legacyMigration', MIGRATION_META))
         const call = WRITE_CALLS[method]
         if (call.prepare !== undefined) await call.prepare(ports, seeded)
         const probe = await probeFor(seeded.planImageHash, seeded.spareHash)
@@ -71,7 +72,7 @@ describe('withFaults (#45 criterion 3)', () => {
     await faulty.projects.purge(PROJECT_ID)
     await faulty.projects.markBackupInitiated(PROJECT_ID, { at: SECOND_SAVED_AT, revision: 1 })
     await faulty.prefs.set('exportRecipes', [])
-    await faulty.meta.set('legacyMigration', { done: true })
+    await faulty.meta.set('legacyMigration', MIGRATION_META)
 
     expect(reached).toEqual([])
   })
@@ -129,7 +130,7 @@ describe('withFaults (#45 criterion 3)', () => {
     ])
 
     expect(failure(await faulty.prefs.set('exportRecipes', [])).kind).toBe('aborted')
-    expect(failure(await faulty.meta.set('legacyMigration', { done: true })).kind).toBe('quota')
+    expect(failure(await faulty.meta.set('legacyMigration', MIGRATION_META)).kind).toBe('quota')
     expect((await faulty.prefs.set('exportRecipes', [{ name: 'Cut list' }])).ok).toBe(true)
     expect(unwrap(await ports.prefs.get('exportRecipes'))).toEqual([{ name: 'Cut list' }])
     expect(await ports.meta.get('legacyMigration')).toEqual({ ok: true, value: undefined })
@@ -159,6 +160,7 @@ function writesThrow(reached: string[]): Ports {
       list: () => trip('projects.list'),
       load: () => trip('projects.load'),
       commit: () => trip('commit'),
+      commitMany: () => trip('commitMany'),
       markBackupInitiated: () => trip('markBackupInitiated'),
       trash: () => trip('trash'),
       restore: () => trip('restore'),

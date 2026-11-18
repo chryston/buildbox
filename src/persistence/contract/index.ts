@@ -20,7 +20,7 @@ import { registerFaultCases } from './faultCases'
 import type { ContractContext } from './support'
 
 export interface ContractOptions {
-  /** Register case 9, the 8 methods × 3 faults matrix. Off by default. */
+  /** Register case 10, the 9 methods × 3 faults matrix. Off by default. */
   faults?: boolean
 }
 
@@ -54,6 +54,7 @@ export function describePersistenceContract(
 // tests (#46's atomicity and GC cases), which need the same view of a store.
 export {
   FIRST_SAVED_AT,
+  MIGRATION_META,
   OTHER_PROJECT_ID,
   PROJECT_ID,
   SECOND_SAVED_AT,

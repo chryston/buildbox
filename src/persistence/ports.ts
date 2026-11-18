@@ -132,6 +132,26 @@ export interface CommitInput {
   newAssets?: NewAsset[]
 }
 
+/**
+ * One Project's share of a multi-Project commit (#52 §2 step 6).
+ *
+ * A migration writes several Projects and, at most, one attach to a Project that already
+ * exists. Each part keeps its own `expectedRevision`, so the whole batch is checked against
+ * the state the caller read and not against whatever the first write left behind.
+ */
+export interface CommitEntry {
+  input: CommitInput
+  expectedRevision: number | null
+  /**
+   * A Recovery Point written in the same unit of work as this Project (#52 §2 step 6).
+   *
+   * A migration that changes a Project it did not create owes that Project a snapshot of its
+   * pre-change state, and a snapshot that survives the abort of the change it was protecting is
+   * a record of something that never happened. At most one entry in a batch carries one.
+   */
+  recoveryPoint?: RecoveryPoint
+}
+
 /** The hashes garbage collection must keep: every Project (trashed included) and every Recovery Point. */
 export type LiveHashes = ReadonlySet<string>
 
@@ -164,9 +184,30 @@ export interface PrefsMap {
   storagePersistence: { askedAt: string; granted: boolean }
 }
 
-/** App-level records. #52 gives `legacyMigration` its shape once the legacy reader exists. */
+/**
+ * The record one completed legacy migration leaves behind (#52 §2 step 7).
+ *
+ * `sourceHash` is the SHA-256 of the raw value or file bytes the review was built from, which
+ * is what makes "already migrated" a fact about the data rather than about the app: a
+ * `buildbox-store` that later holds different bytes is a different source and is offered again.
+ * `removedAt` is written only when the user confirmed `Remove old copy`.
+ */
+export interface LegacyMigrationRecord {
+  status: 'complete'
+  sourceHash: string
+  completedAt: string
+  /** Every Project this migration wrote, in the order the review listed them. */
+  projectIds: string[]
+  /** Each `Design` that was refused, in the plain words the review showed. */
+  notMigrated: Array<{ designName: string; problem: string }>
+  /** The discarded `wall-hack` and `tile-zone` count, kept so `Remove old copy` can say what goes with the source. */
+  discardedSketches: number
+  removedAt: string | null
+}
+
+/** What `meta` holds. #52 gave `legacyMigration` its shape; later records add a key here. */
 export interface MetaMap {
-  legacyMigration: unknown
+  legacyMigration: LegacyMigrationRecord
 }
 
 /** Projects and the Library record derived from each of them. */
@@ -181,6 +222,14 @@ export interface ProjectRepository {
    * nothing.
    */
   commit(input: CommitInput, expectedRevision: number | null): Promise<Result<ProjectRecord, PersistenceError>>
+  /**
+   * Every `entries` write as one atomic unit (#52 §2 step 6, #20 §6 step 9).
+   *
+   * The same rules as `commit`, per entry, and one more across them: if any entry is refused
+   * — a stale `expectedRevision`, a quota, a serialisation fault — then none of them landed and
+   * the store is exactly as it was. The returned records are in `entries` order.
+   */
+  commitMany(entries: readonly CommitEntry[]): Promise<Result<ProjectRecord[], PersistenceError>>
   /** Record that a Project Backup was offered for this revision; touches no other field. */
   markBackupInitiated(
     id: string,
