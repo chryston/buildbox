@@ -6,10 +6,10 @@ import {
   floorPlanObjectIds,
   openPreviewApp,
   placedObject,
-  previewSeed,
-  saveStatus,
+    saveStatus,
   showFloorPlan,
 } from '../support/previewApp'
+import { previewSeed } from '../support/libraryApp'
 import { projectRevision } from '../support/seedPreviewDb'
 
 // Criterion 5 (#49): the flagged build's edits are real saves. One edit in each view, then a

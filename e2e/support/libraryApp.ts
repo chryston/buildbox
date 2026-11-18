@@ -1,0 +1,196 @@
+import { readFileSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import type { Download, Locator, Page } from '@playwright/test'
+import { expect } from '@playwright/test'
+import { PREVIEW_DB_NAME, seedPreviewDb, type PreviewSeed } from './seedPreviewDb'
+
+/**
+ * The pieces the #50 Library specs share: open the flag-on build at the Library, drive the
+ * card actions, hand a file to `Restore Backup`, and read the stores back out of the browser.
+ *
+ * Reading the stores is the load-bearing part. Four of the issue's criteria end with "and every
+ * store is unchanged", which is only a claim worth checking if the check looks at the database
+ * rather than at what the page chose to render — a page can show a Project that was never
+ * written, and a rollback that left a half-written record would look fine from the DOM.
+ */
+
+const fixturesRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../fixtures')
+
+/** The four Projects of the #28 archive's Library, at the instant the comparison freezes. */
+export const paritySeed = JSON.parse(
+  readFileSync(join(fixturesRoot, 'e2e', 'prototype-parity', 'records.json'), 'utf8'),
+) as PreviewSeed
+
+/** The converted v3 legacy fixture: its first Project carries a Plan Image. */
+export const previewSeed = JSON.parse(
+  readFileSync(join(fixturesRoot, 'e2e', 'preview-seed', 'legacy-v3.json'), 'utf8'),
+) as PreviewSeed
+
+export const libraryHeading = (page: Page): Locator =>
+  page.getByRole('heading', { level: 1, name: 'Pick up where you left off' })
+
+/** One card, found by the Project's name rather than by its position in the grid. */
+export const card = (page: Page, name: string): Locator =>
+  page.locator('article.project-card').filter({ has: page.getByRole('heading', { level: 2, name, exact: true }) })
+
+/** The id a card is showing, which is the key every store read needs. */
+export async function cardProjectId(page: Page, name: string): Promise<string> {
+  const id = await card(page, name).getAttribute('data-project')
+  if (id === null) throw new Error(`the card for "${name}" carries no data-project`)
+  return id
+}
+
+/** A button inside one card, so `Backup` means that Project's and not the first one's. */
+export const cardButton = (page: Page, name: string, label: string): Locator =>
+  card(page, name).getByRole('button', { name: label, exact: true })
+
+/** Load the flag-on build at the Library, seeded with `seed` into a fresh database. */
+export async function openLibrary(page: Page, seed: PreviewSeed = paritySeed): Promise<void> {
+  await seedPreviewDb(page, seed)
+  await page.goto('./', { waitUntil: 'networkidle' })
+  await expect(libraryHeading(page)).toBeVisible()
+}
+
+/**
+ * Click a card's `Backup`, confirm, and hand back the file the browser was given.
+ *
+ * The download is awaited before the click rather than after it: the anchor is created and
+ * clicked inside the same task that resolves the encode, so on a slow run the event can arrive
+ * before the code that clicked would have had a chance to subscribe to it.
+ */
+export async function downloadBackupOf(page: Page, name: string): Promise<BackupFile> {
+  await cardButton(page, name, 'Backup').click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  const download = page.waitForEvent('download')
+  await dialog.getByRole('button', { name: 'Download Backup', exact: true }).click()
+  return readDownload(await download)
+}
+
+/** A file the app either handed out or was handed back: the same shape both ways. */
+export interface BackupFile {
+  name: string
+  buffer: Buffer
+}
+
+export async function readDownload(download: Download): Promise<BackupFile> {
+  return { name: download.suggestedFilename(), buffer: await download.createReadStream().then(readAll) }
+}
+
+async function readAll(stream: NodeJS.ReadableStream): Promise<Buffer> {
+  const chunks: Buffer[] = []
+  for await (const chunk of stream) chunks.push(chunk as Buffer)
+  return Buffer.concat(chunks)
+}
+
+/** The `Restore Backup` button, which opens the browser's file picker. */
+export const restoreBackupButton = (page: Page): Locator =>
+  page.getByRole('button', { name: 'Restore Backup', exact: true })
+
+/**
+ * Give a file to the app the way the picker does.
+ *
+ * The input is hidden behind the button, so this sets it directly: what is under test is what
+ * `stageImport` makes of the bytes, not whether Playwright can drive an OS dialog.
+ */
+export async function restoreFile(page: Page, file: BackupFile): Promise<void> {
+  await page.locator('input[type="file"]').setInputFiles({
+    name: file.name,
+    mimeType: 'application/zip',
+    buffer: file.buffer,
+  })
+}
+
+/** The dialog's h2, whatever dialog it turned out to be. */
+export const dialogHeading = (page: Page): Locator => page.getByRole('dialog').getByRole('heading', { level: 2 })
+
+/** The toast, whose exact sentence is part of the contract (#50 §2). */
+export const toast = (page: Page): Locator => page.locator('.toast')
+
+/** One stored Project record, as the database holds it, or `null` when there is none. */
+export async function storedProject(page: Page, projectId: string): Promise<unknown> {
+  const records = await readStore<{ id: string; data: unknown }>(page, 'projects')
+  return records.find((record) => record.id === projectId)?.data ?? null
+}
+
+/** Every Library row the database holds. */
+export async function storedLibrary(page: Page): Promise<{ id: string; trashedAt: string | null }[]> {
+  const records = await readStore<{ id: string; trashedAt: string | null }>(page, 'library')
+  return records.map((row) => ({ id: row.id, trashedAt: row.trashedAt }))
+}
+
+/** Every asset hash the database holds. */
+export async function storedAssetHashes(page: Page): Promise<string[]> {
+  const records = await readStore<{ sha256: string }>(page, 'assets')
+  return records.map((row) => row.sha256)
+}
+
+/** Every Recovery Point id the database holds, across every Project. */
+export async function storedRecoveryIds(page: Page): Promise<string[]> {
+  const records = await readStore<{ id: string }>(page, 'recoveryPoints')
+  return records.map((row) => row.id)
+}
+
+/**
+ * A whole store, read in the page.
+ *
+ * The round trip is one function rather than one per reader because the parts that are easy to
+ * get wrong are the same every time: the database has to be closed whatever the read answered,
+ * or the next navigation in this context waits on a connection the spec leaked, and a rejection
+ * has to name the store that failed.
+ */
+function readStore<T>(page: Page, store: string): Promise<T[]> {
+  return page.evaluate(
+    ([dbName, storeName]) =>
+      new Promise<T[]>((resolveRead, rejectRead) => {
+        const open = indexedDB.open(dbName, 1)
+        open.onerror = () => rejectRead(new Error(`opening ${dbName} failed`))
+        open.onsuccess = () => {
+          const db = open.result
+          const read = db.transaction(storeName, 'readonly').objectStore(storeName).getAll()
+          read.onsuccess = () => {
+            db.close()
+            resolveRead(read.result as T[])
+          }
+          read.onerror = () => rejectRead(new Error(`reading ${storeName} failed`))
+        }
+      }),
+    [PREVIEW_DB_NAME, store],
+  )
+}
+
+/**
+ * Canonical JSON, the same rules as `src/lib/canonicalJson.ts`.
+ *
+ * The spec cannot import that module — it runs in Node against a browser's structured clone, and
+ * the value it is comparing came out of IndexedDB in the page — so the rules are restated here,
+ * and restated deliberately narrowly: sorted keys, no `undefined`, no key whose value is
+ * `undefined`. A comparison that normalised more than that would hide a real difference.
+ */
+export function canonical(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, item]) => item !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`).join(',')}}`
+}
+
+/** Everything the four stores hold, in one string: the thing a rejection must leave identical. */
+export async function storeFingerprint(page: Page): Promise<string> {
+  const [library, assets, recovery, projects] = await Promise.all([
+    storedLibrary(page),
+    storedAssetHashes(page),
+    storedRecoveryIds(page),
+    readStore<unknown>(page, 'projects'),
+  ])
+  return canonical({
+    library: [...library].sort(byId),
+    assets: [...assets].sort(),
+    recovery: [...recovery].sort(),
+    projects,
+  })
+}
+
+const byId = (a: { id: string }, b: { id: string }): number => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
