@@ -398,7 +398,9 @@ const lineLine = (a: Segment, aFrom: Pt, b: Segment, bFrom: Pt, out: SegmentInte
   }
   const t = (qp.x * s.y - qp.y * s.x) / denominator
   const u = (qp.x * r.y - qp.y * r.x) / denominator
-  if (t < -TOLERANCE_MM || t > 1 + TOLERANCE_MM || u < -TOLERANCE_MM || u > 1 + TOLERANCE_MM) return
+  const slackA = TOLERANCE_MM / Math.hypot(r.x, r.y)
+  const slackB = TOLERANCE_MM / Math.hypot(s.x, s.y)
+  if (t < -slackA || t > 1 + slackA || u < -slackB || u > 1 + slackB) return
   const interior = t > 1e-9 && t < 1 - 1e-9 && u > 1e-9 && u < 1 - 1e-9
   pushMeeting(out, a, aFrom, t, interior ? 'cross' : 'touch')
 }
@@ -427,7 +429,10 @@ const collinearLines = (
     pushOverlap(out, a, aFrom, [lo, hi], [onB(pointOn(a, aFrom, lo)), onB(pointOn(a, aFrom, hi))])
     return
   }
-  if (hi >= -1e-9 && hi <= 1 + 1e-9) pushMeeting(out, a, aFrom, Math.min(Math.max(hi, 0), 1), 'touch')
+  const gap = (lo - hi) * Math.sqrt(rr)
+  if (gap <= TOLERANCE_MM && hi >= -1e-9 && hi <= 1 + 1e-9) {
+    pushMeeting(out, a, aFrom, Math.min(Math.max(hi, 0), 1), 'touch')
+  }
 }
 
 const lineCircle = (

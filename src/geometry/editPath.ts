@@ -71,7 +71,8 @@ export const editLineEdge = (
   const fixed = keepFixed === 'start' ? from : segment.to
   const angle = (change.directionDeg ?? Math.atan2(vector.y, vector.x) / DEG) * DEG
   const length = change.length ?? Math.hypot(vector.x, vector.y)
-  const free = pt(fixed.x + Math.cos(angle) * length, fixed.y + Math.sin(angle) * length)
+  const back = keepFixed === 'start' ? 1 : -1
+  const free = pt(fixed.x + back * Math.cos(angle) * length, fixed.y + back * Math.sin(angle) * length)
   const delta = sub(free, keepFixed === 'start' ? segment.to : from)
   const segments = [...path.segments]
   const carrier = keepFixed === 'start' ? (i + 1) % n : (i - 1 + n) % n
