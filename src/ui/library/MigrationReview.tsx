@@ -135,7 +135,7 @@ export function MigrationReview({
       <div className="flow-page migration-review">
         <p>{STRINGS.migrationNothingFound}</p>
         <div className="flow-actions">
-          <button type="button" className="primary" onClick={onReturn}>
+          <button type="button" className="button primary" onClick={onReturn}>
             {STRINGS.migrationReturn}
           </button>
         </div>
@@ -255,8 +255,8 @@ function MigrationSteps({
             {STRINGS.migrationLede(migratable.length, floorPlan !== null && !floorPlan.isEmpty ? 1 : 0)}
           </p>
 
-          <div className="migration-layout">
-            <section className="panel">
+          <section className="migration-layout">
+            <div>
               <h2>{STRINGS.migrationProjectsToCreate}</h2>
               {proposals.map((proposal) => (
                 <ProposalRow key={proposal.designId} proposal={proposal} />
@@ -271,9 +271,9 @@ function MigrationSteps({
                   {STRINGS.migrationSketches(review.discarded.wallHack, review.discarded.tileZone)}
                 </p>
               ) : null}
-            </section>
+            </div>
 
-            <section className="panel">
+            <aside>
               {floorPlan === null || !floorPlan.usable ? (
                 <>
                   <h2>{STRINGS.migrationStandaloneFloorPlan}</h2>
@@ -287,15 +287,18 @@ function MigrationSteps({
               ) : (
                 <>
                   <h2>{STRINGS.migrationStandaloneFloorPlan}</h2>
-                  <p className="migration-preview">
-                    {floorPlan.preview === null
-                      ? STRINGS.migrationNoImage
-                      : STRINGS.migrationPreview(
-                          floorPlan.preview.widthPx,
-                          floorPlan.preview.heightPx,
-                          floorPlan.itemCount,
-                        )}
-                  </p>
+                  <div className="floor-preview">
+                    {STRINGS.migrationFloorPlanImage}
+                    <div>
+                      {floorPlan.preview === null
+                        ? STRINGS.migrationNoImage
+                        : STRINGS.migrationPreview(
+                            floorPlan.preview.widthPx,
+                            floorPlan.preview.heightPx,
+                            floorPlan.itemCount,
+                          )}
+                    </div>
+                  </div>
                   {/* Deviation (a): no default. The list is this review's own Projects first, then
                       the local ones whose Floor 1 has no Plan Image, then a separate Project. */}
                   <label>
@@ -316,22 +319,19 @@ function MigrationSteps({
                       ))}
                     </select>
                   </label>
-                  {destination === null ? (
-                    <p className="migration-hint">{STRINGS.migrationChooseDestination}</p>
-                  ) : null}
                 </>
               )}
-              <p className="migration-helper">{STRINGS.migrationUntouchedHelper}</p>
-            </section>
-          </div>
+              <p className="helper">{STRINGS.migrationUntouchedHelper}</p>
+            </aside>
+          </section>
 
           <div className="flow-actions">
-            <button type="button" className="ghost" onClick={onReturn}>
+            <button type="button" className="button secondary" onClick={onReturn}>
               {STRINGS.migrationDoThisLater}
             </button>
             <button
               type="button"
-              className="primary"
+              className="button primary"
               disabled={
                 (floorPlan !== null && floorPlan.usable && !floorPlan.isEmpty && chosen === null) ||
                 !collisionsAnswered
@@ -377,10 +377,10 @@ function MigrationSteps({
             )}
           </section>
           <div className="flow-actions">
-            <button type="button" className="ghost" onClick={() => setStep('found')}>
+            <button type="button" className="button secondary" onClick={() => setStep('found')}>
               {STRINGS.migrationBack}
             </button>
-            <button type="button" className="primary" disabled={!collisionsAnswered} onClick={() => void migrate()}>
+            <button type="button" className="button primary" disabled={!collisionsAnswered} onClick={() => void migrate()}>
               {STRINGS.migrationMigrateAndVerify}
             </button>
           </div>
@@ -402,7 +402,7 @@ function MigrationSteps({
             <div className="flow-actions">
               <button
                 type="button"
-                className="ghost"
+                className="button secondary"
                 onClick={() => {
                   setRunFailure(null)
                   setStep('found')
@@ -480,7 +480,7 @@ function MigrationSteps({
             <div className="migration-confirm" role="group">
               <p>{STRINGS.migrationRemoveConfirm}</p>
               <div className="flow-actions">
-                <button type="button" className="ghost" onClick={() => setConfirming(false)}>
+                <button type="button" className="button secondary" onClick={() => setConfirming(false)}>
                   {STRINGS.cancel}
                 </button>
                 <button
@@ -501,7 +501,7 @@ function MigrationSteps({
           ) : null}
           {removed ? <p role="status">{STRINGS.migrationRemoved}</p> : null}
           <div className="flow-actions">
-            <button type="button" className="primary" onClick={onReturn}>
+            <button type="button" className="button primary" onClick={onReturn}>
               {STRINGS.migrationReturn}
             </button>
           </div>
@@ -515,12 +515,14 @@ function MigrationSteps({
 function ProposalRow({ proposal }: { proposal: MigrationProposal }) {
   return (
     <div className="migration-item">
-      <span className="file-icon" aria-hidden="true" />
+      <span className="file-icon" aria-hidden="true">
+        ▤
+      </span>
       <div>
         <strong>{proposal.name}</strong>
-        <p>{STRINGS.migrationRowSecondary(proposal.designCount, proposal.hasPlanImage)}</p>
-        {proposal.nameTaken ? <p className="migration-hint">{STRINGS.migrationNameTaken}</p> : null}
-        {!proposal.migratable ? <p className="migration-hint">{proposal.problems.join(' ')}</p> : null}
+        <small>{STRINGS.migrationRowSecondary(proposal.designCount, proposal.hasPlanImage)}</small>
+        {proposal.nameTaken ? <small className="migration-hint">{STRINGS.migrationNameTaken}</small> : null}
+        {!proposal.migratable ? <small className="migration-hint">{proposal.problems.join(' ')}</small> : null}
       </div>
       <span className={`tag ${proposal.migratable ? '' : 'tag-muted'}`}>
         {proposal.migratable ? STRINGS.migrationTagNewProject : STRINGS.migrationTagNotMigrated}
@@ -538,7 +540,7 @@ function Failure({ failure, onReturn }: { failure: MigrationFailure; onReturn():
       {failure.problems.length > 0 ? <p>{failure.problems.join(' ')}</p> : null}
       {storage !== null ? <p>{storage}</p> : null}
       <div className="flow-actions">
-        <button type="button" className="ghost" onClick={onReturn}>
+        <button type="button" className="button secondary" onClick={onReturn}>
           {STRINGS.migrationDoThisLater}
         </button>
       </div>

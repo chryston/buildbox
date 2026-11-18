@@ -123,6 +123,18 @@ function announceCommits(ports: Ports, channel: BroadcastChannel): Ports {
         }
         return committed
       },
+      // A migration commits several Projects in one transaction, and the Library is a list built
+      // before that transaction existed. Without this the reader presses `Return to Projects` and
+      // sees the grid they left: the records are in the store, and nothing has told the screen.
+      commitMany: async (entries) => {
+        const committed = await ports.projects.commitMany(entries)
+        if (committed.ok) {
+          for (const record of committed.value) {
+            channel.postMessage({ projectId: record.id, revision: record.revision } satisfies LibraryChange)
+          }
+        }
+        return committed
+      },
     },
   }
 }
@@ -662,7 +674,14 @@ function FlaggedRoot({ deps, legacyPending = false }: { deps: FlaggedDeps; legac
         const target = await attachTargetFor(choices)
         const plan = buildMigrationPlan(migration, inspected, await existing(), choices, target)
         if (!plan.ok) return plan
-        return runMigration(migration, inspected, plan.value)
+        const result = await runMigration(migration, inspected, plan.value)
+        // The migration writes through the ports rather than through the Library store, because
+        // one transaction is the point. Every other writer here goes through the store, which
+        // refreshes itself; this one cannot, so the app — the only thing that knows a migration
+        // just happened — re-reads the records. Otherwise `Return to Projects` shows the grid the
+        // reader left, with the new Projects sitting unread in the store.
+        if (result.ok) await library.refresh()
+        return result
       },
       downloadBackups: async (inspected, choices) => {
         const target = await attachTargetFor(choices)
@@ -679,7 +698,7 @@ function FlaggedRoot({ deps, legacyPending = false }: { deps: FlaggedDeps; legac
       },
     }
     return services
-  }, [backup, deps, download, legacy, migration, ports])
+  }, [backup, deps, download, legacy, library, migration, ports])
 
   const sessionServices = useMemo(() => createSessionServices(clock, ids, assetUrls), [clock, ids, assetUrls])
 

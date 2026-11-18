@@ -288,8 +288,8 @@ export const STRINGS = {
   migrationTagNotMigrated: 'Not migrated',
   migrationTagReplaced: 'Replaces an existing Project',
   migrationTagCopy: 'Kept as a separate Project',
-  /** Deviation (a): the select has no default, and the reason is said rather than implied. */
-  migrationChooseDestination: 'Choose where the floor plan belongs',
+  /** The hatched box's own line; the dimensions under it say whether there is a real image. */
+  migrationFloorPlanImage: 'Floor plan image',
   migrationStandaloneFloorPlan: 'Standalone floor plan',
   /** `2400 × 1800 px · 6 placed items`. */
   migrationPreview: (widthPx: number, heightPx: number, items: number): string =>

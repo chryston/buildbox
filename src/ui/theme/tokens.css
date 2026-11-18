@@ -258,10 +258,14 @@
   --bb-stepper-done-text: #d9f9e6;
   --bb-stepper-active-border: #258bf0;
   --bb-stepper-active-bg: #176caf;
+  --bb-stepper-active-text: #ffffff;
   --bb-stepper-line: #44444a;
   --bb-migration-icon-bg: #293948;
   --bb-migration-tag-text: #72b3eb;
   --bb-migration-item-border: #35353a;
+  --bb-floor-preview-text: #c9c9ce;
+  --bb-floor-preview-stripe: #29292d;
+  --bb-floor-preview-stripe-alt: #26262a;
   --bb-select-border: #48484f;
   --bb-select-bg: #18181b;
   --bb-success-bg: #275d3f;

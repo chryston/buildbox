@@ -3,7 +3,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Download, Locator, Page } from '@playwright/test'
 import { expect } from '@playwright/test'
-import { PREVIEW_DB_NAME, seedPreviewDb, type PreviewSeed } from './seedPreviewDb'
+import { PREVIEW_DB_NAME, reseedPreviewDb, seedPreviewDb, type PreviewSeed } from './seedPreviewDb'
 
 /**
  * The pieces the #50 Library specs share: open the flag-on build at the Library, drive the
@@ -71,18 +71,7 @@ export async function openLibrary(page: Page, seed: PreviewSeed = paritySeed): P
  * a comparison helper's `prepare` finds itself in.
  */
 export async function reseedAndReload(page: Page, seed: PreviewSeed): Promise<void> {
-  await seedPreviewDb(page, seed)
-  await page.evaluate(
-    (dbName) =>
-      new Promise<void>((resolveDelete, rejectDelete) => {
-        const request = indexedDB.deleteDatabase(dbName)
-        request.onsuccess = () => resolveDelete()
-        request.onerror = () => rejectDelete(new Error(`deleting ${dbName} failed`))
-        request.onblocked = () => rejectDelete(new Error(`deleting ${dbName} was blocked`))
-      }),
-    PREVIEW_DB_NAME,
-  )
-  await page.reload({ waitUntil: 'networkidle' })
+  await reseedPreviewDb(page, seed)
   await expect(libraryHeading(page)).toBeVisible()
 }
 

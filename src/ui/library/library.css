@@ -1022,7 +1022,7 @@
 .stepper-dot.active {
   border-color: var(--bb-stepper-active-border);
   background: var(--bb-stepper-active-bg);
-  color: var(--bb-text);
+  color: var(--bb-stepper-active-text);
 }
 
 .stepper-item i {
@@ -1042,7 +1042,11 @@
   margin-top: 26px;
 }
 
-.migration-layout .panel {
+/* The archive boxes the two halves of the grid with `.migration-layout>div,.migration-layout>aside`
+   rather than with a class, and the Review step's single panel is the same box on its own. */
+.migration-layout > div,
+.migration-layout > aside,
+.panel {
   padding: 18px;
   border: 1px solid var(--bb-border-card);
   border-radius: var(--bb-radius-card);
@@ -1057,7 +1061,7 @@
 .migration-item {
   display: flex;
   gap: 12px;
-  align-items: flex-start;
+  align-items: center;
   padding: 14px 0;
   border-top: 1px solid var(--bb-migration-item-border);
 }
@@ -1066,7 +1070,11 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+}
+
+.migration-item small {
+  color: var(--bb-text-muted);
 }
 
 .migration-item p {
@@ -1076,10 +1084,13 @@
 }
 
 .file-icon {
+  display: grid;
   width: 35px;
   height: 35px;
+  place-items: center;
   border-radius: 7px;
   background: var(--bb-migration-icon-bg);
+  color: var(--bb-migration-tag-text);
 }
 
 .tag {
@@ -1113,10 +1124,33 @@
   font-family: var(--bb-font-body);
 }
 
-.migration-preview,
+/* The archive's plan preview is a hatched 130 px box with the caption inside it, not a
+   thumbnail: the prototype never had the real image, and #28 approved the hatching. */
+.floor-preview {
+  display: grid;
+  height: 130px;
+  margin-bottom: 16px;
+  place-items: center;
+  border-radius: 8px;
+  background: repeating-linear-gradient(
+    45deg,
+    var(--bb-floor-preview-stripe),
+    var(--bb-floor-preview-stripe) 10px,
+    var(--bb-floor-preview-stripe-alt) 10px,
+    var(--bb-floor-preview-stripe-alt) 20px
+  );
+  color: var(--bb-floor-preview-text);
+  font-size: var(--bb-size-line);
+}
+
+.floor-preview div {
+  color: var(--bb-text-stats);
+  font-size: var(--bb-size-eyebrow);
+}
+
 .migration-note,
-.migration-helper,
-.migration-hint {
+.migration-hint,
+.helper {
   margin: 12px 0 0;
   color: var(--bb-text-muted);
   font-size: var(--bb-size-line);
@@ -1124,11 +1158,6 @@
 
 .migration-hint {
   color: var(--bb-eyebrow);
-}
-
-.migration-helper {
-  padding-top: 14px;
-  border-top: 1px solid var(--bb-migration-item-border);
 }
 
 .migration-stages {
@@ -1205,7 +1234,8 @@
 .flow-actions {
   display: flex;
   gap: 10px;
-  margin-top: 22px;
+  justify-content: flex-end;
+  margin-top: 24px;
 }
 
 .flow-actions button[disabled] {

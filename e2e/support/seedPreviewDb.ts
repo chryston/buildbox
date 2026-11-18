@@ -67,6 +67,32 @@ export async function seedPreviewDb(page: Page, seed: PreviewSeed): Promise<void
 }
 
 /**
+ * Make the seed the database's contents on a page that has already loaded.
+ *
+ * The seed can only be written from an init script, and an init script runs at navigation — so the
+ * database is deleted after registering it, and the reload is what writes it. Seeding an existing
+ * database would write nothing, because the seeder only fills a database it has to create.
+ *
+ * `reseedAndReload` in `libraryApp.ts` is this plus the wait for the Library heading, which is only
+ * the right wait on a page that opens on the Library.
+ */
+export async function reseedPreviewDb(page: Page, seed: PreviewSeed): Promise<void> {
+  await seedPreviewDb(page, seed)
+  await page.evaluate(
+    // The executor form rather than `Promise.withResolvers`: the e2e tsconfig targets es2023.
+    (dbName) =>
+      new Promise<void>((resolveDelete, rejectDelete) => {
+        const request = indexedDB.deleteDatabase(dbName)
+        request.onsuccess = () => resolveDelete()
+        request.onerror = () => rejectDelete(new Error(`deleting ${dbName} failed`))
+        request.onblocked = () => rejectDelete(new Error(`deleting ${dbName} was blocked`))
+      }),
+    PREVIEW_DB_NAME,
+  )
+  await page.reload({ waitUntil: 'networkidle' })
+}
+
+/**
  * Runs in the page. Playwright awaits the returned promise before it lets the document load,
  * which is the whole reason this is one transaction: a half-written database would render a
  * scene that no real save could produce.
