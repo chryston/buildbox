@@ -15,7 +15,8 @@ import {
   windingNumber,
 } from './curve'
 import type { SegmentIntersections } from './curve'
-import { normaliseOrientation, signedAreaOf } from './measure'
+import { normaliseOrientation, segmentBounds, signedAreaOf } from './measure'
+import type { Bounds } from './measure'
 import { segmentStart } from './segment'
 import type { ClosedPath, Pt, Segment } from './types'
 import { TOLERANCE_MM } from './types'
@@ -58,15 +59,48 @@ export const intersect = (a: ClosedPath, b: ClosedPath): PathIntersections => {
   }
 }
 
+/** The starts of a path's segments, walked once instead of per pair. */
+const startsOf = (path: ClosedPath): Pt[] => {
+  const starts: Pt[] = []
+  let at = path.start
+  for (const segment of path.segments) {
+    starts.push(at)
+    at = segment.to
+  }
+  return starts
+}
+
+/** A box grown by the tolerance, so a near miss inside tolerance is never skipped. */
+const reach = (box: Bounds): Bounds => ({
+  minX: box.minX - TOLERANCE_MM,
+  minY: box.minY - TOLERANCE_MM,
+  maxX: box.maxX + TOLERANCE_MM,
+  maxY: box.maxY + TOLERANCE_MM,
+})
+
+const apart = (a: Bounds, b: Bounds): boolean =>
+  a.minX > b.maxX || b.minX > a.maxX || a.minY > b.maxY || b.minY > a.maxY
+
+/**
+ * Every pair of segments from two paths, with the exact-bounds test first: two edges whose
+ * boxes are more than a tolerance apart cannot meet, and the analytic arc solver is by far
+ * the most expensive call in the module.
+ */
 const eachPair = (
   a: ClosedPath,
   b: ClosedPath,
   visit: (i: number, j: number, result: SegmentIntersections) => void,
 ): void => {
+  const startsA = startsOf(a)
+  const startsB = startsOf(b)
+  const boxesA = a.segments.map((segment, i) => reach(segmentBounds(segment, startsA[i])))
+  const boxesB = b.segments.map((segment, j) => reach(segmentBounds(segment, startsB[j])))
   a.segments.forEach((segmentA, i) => {
-    const fromA = segmentStart(a, i)
+    const fromA = startsA[i]
+    const boxA = boxesA[i]
     b.segments.forEach((segmentB, j) => {
-      visit(i, j, intersectSegments(segmentA, fromA, segmentB, segmentStart(b, j)))
+      if (apart(boxA, boxesB[j])) return
+      visit(i, j, intersectSegments(segmentA, fromA, segmentB, startsB[j]))
     })
   })
 }

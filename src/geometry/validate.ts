@@ -7,7 +7,7 @@
  * what makes a 0.0099 mm gap between two arcs indistinguishable from a 0.011 mm one.
  */
 import { distanceBetweenSegments, intersectSegments } from './curve'
-import { perimeter, signedArea } from './measure'
+import { perimeter, segmentBounds, signedArea } from './measure'
 import { presetParametersValid, evaluatePreset } from './presets'
 import type { Placement, Preset } from './presets'
 import { distance, lengthOf, segmentStart } from './segment'
@@ -89,10 +89,25 @@ const pairProblems = (path: ClosedPath): GeometryProblem[] => {
     starts.push(walk)
     walk = segment.to
   }
+  // Exact bounds per edge, so a pair that cannot come within tolerance of each other is
+  // rejected before the analytic curve intersection runs. On a convex preset that is
+  // almost every pair, and the arc solver is the most expensive thing in the module.
+  const boxes = path.segments.map((segment, i) => segmentBounds(segment, starts[i]))
   for (let i = 0; i < n; i++) {
     const fromA = starts[i]
+    const boxA = boxes[i]
     for (let j = i + 1; j < n; j++) {
       const adjacent = j === i + 1 || (i === 0 && j === n - 1)
+      const boxB = boxes[j]
+      if (
+        !adjacent &&
+        (boxA.minX - TOLERANCE_MM > boxB.maxX ||
+          boxB.minX - TOLERANCE_MM > boxA.maxX ||
+          boxA.minY - TOLERANCE_MM > boxB.maxY ||
+          boxB.minY - TOLERANCE_MM > boxA.maxY)
+      ) {
+        continue
+      }
       const fromB = starts[j]
       const edges = [i + 1, j + 1]
       const meetings = intersectSegments(path.segments[i], fromA, path.segments[j], fromB)

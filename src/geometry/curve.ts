@@ -325,7 +325,8 @@ export const intersectSegments = (a: Segment, aFrom: Pt, b: Segment, bFrom: Pt):
   if (a.kind === 'ellipticalArc' && b.kind === 'ellipticalArc') {
     const shared = sharedEllipse(a, aFrom, b, bFrom)
     if (shared !== null) {
-      pushOverlap(out, a, aFrom, shared, shared)
+      if (shared.overlap !== undefined) pushOverlap(out, a, aFrom, shared.overlap, shared.overlap)
+      else if (shared.touch !== undefined) pushMeeting(out, a, aFrom, shared.touch, 'touch')
       return out
     }
   }
@@ -361,7 +362,7 @@ const sharedEllipse = (
   aFrom: Pt,
   b: EllipticalArcSegment,
   bFrom: Pt,
-): [number, number] | null => {
+): { overlap?: [number, number]; touch?: number } | null => {
   const same = distance(a.center, b.center) <= TOLERANCE_MM
     && Math.abs(a.rx - b.rx) <= TOLERANCE_MM
     && Math.abs(a.ry - b.ry) <= TOLERANCE_MM
@@ -371,7 +372,14 @@ const sharedEllipse = (
   const fb = alignFrame(arcForm(b, bFrom), fa)
   const lo = Math.max(Math.min(fa.t0, fa.t1), Math.min(fb.t0, fb.t1))
   const hi = Math.min(Math.max(fa.t0, fa.t1), Math.max(fb.t0, fb.t1))
-  return hi - lo > 1e-9 ? [lo, hi] : null
+  if (hi - lo > 1e-9) return { overlap: [lo, hi] }
+  // Arcs of one ellipse meet only where their angles do: the angle gap times the larger
+  // radius bounds the distance between them, so a gap beyond tolerance means no meeting at
+  // all and the subdivision solver never runs (#54 §9 bench).
+  const scale = Math.max(a.rx, a.ry)
+  if ((lo - hi) * scale > TOLERANCE_MM) return {}
+  const at = Math.min(Math.max(hi, Math.min(fa.t0, fa.t1)), Math.max(fa.t0, fa.t1))
+  return { touch: at }
 }
 
 /** The same arc parameters carried by whole turns into `frame`'s range. */

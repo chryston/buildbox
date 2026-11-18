@@ -135,6 +135,31 @@ export interface Bounds {
 }
 
 /**
+ * Exact axis-aligned bounds of one segment, including the extrema an arc turns through.
+ * Validation uses it to reject pairs of edges that cannot possibly meet (#54 §9 bench).
+ */
+export const segmentBounds = (segment: Segment, from: Pt): Bounds => {
+  let box: Bounds = {
+    minX: Math.min(from.x, segment.to.x),
+    minY: Math.min(from.y, segment.to.y),
+    maxX: Math.max(from.x, segment.to.x),
+    maxY: Math.max(from.y, segment.to.y),
+  }
+  if (segment.kind === 'line') return box
+  const form = arcForm(segment, from)
+  for (const t of arcExtrema(form)) {
+    const p = arcPoint(form, t)
+    box = {
+      minX: Math.min(box.minX, p.x),
+      minY: Math.min(box.minY, p.y),
+      maxX: Math.max(box.maxX, p.x),
+      maxY: Math.max(box.maxY, p.y),
+    }
+  }
+  return box
+}
+
+/**
  * Exact axis-aligned bounds, including the arc extrema. With a `transform` the arc's own
  * parameters are rotated — its centre, its sweep, and an ellipse's rotation — and the
  * extrema of the rotated arc are found analytically, so the rotated bounding box is never
@@ -142,14 +167,14 @@ export interface Bounds {
  */
 export const bounds = (path: ClosedPath, transform?: Transform): Bounds => {
   let box: Bounds | null = null
-  const take = (p: Pt): void => {
+  const take = (one: Bounds): void => {
     box = box === null
-      ? { minX: p.x, minY: p.y, maxX: p.x, maxY: p.y }
+      ? one
       : {
-        minX: Math.min(box.minX, p.x),
-        minY: Math.min(box.minY, p.y),
-        maxX: Math.max(box.maxX, p.x),
-        maxY: Math.max(box.maxY, p.y),
+        minX: Math.min(box.minX, one.minX),
+        minY: Math.min(box.minY, one.minY),
+        maxX: Math.max(box.maxX, one.maxX),
+        maxY: Math.max(box.maxY, one.maxY),
       }
   }
   path.segments.forEach((segment, i) => {
@@ -157,11 +182,7 @@ export const bounds = (path: ClosedPath, transform?: Transform): Bounds => {
     const from = transform === undefined
       ? segmentStart(path, i)
       : applyTransform(segmentStart(path, i), transform)
-    take(from)
-    take(local.to)
-    if (local.kind === 'line') return
-    const form = arcForm(local, from)
-    for (const t of arcExtrema(form)) take(arcPoint(form, t))
+    take(segmentBounds(local, from))
   })
   return box ?? { minX: 0, minY: 0, maxX: 0, maxY: 0 }
 }

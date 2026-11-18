@@ -27,7 +27,7 @@ import { kitchenFixture } from './testing'
 const RUNS = { numRuns: 1000 }
 
 /** A 60 s allowance: 1,000 cases of a 12-segment offset is minutes of CPU on a slow runner. */
-const SLOW = 120_000
+const SLOW = 30_000
 
 /** The filleted path the offset round trip needs, built once. */
 const ROUNDED_KITCHEN = roundAllCorners(kitchenFixture(), 250).path
