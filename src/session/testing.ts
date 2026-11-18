@@ -11,7 +11,7 @@
  */
 import { createProject } from '../edit'
 import type { CommitInput, FaultRule, Ports, RecoveryPointMeta } from '../persistence'
-import type { Project } from '../domain'
+import type { CabinetItemDesign, Project } from '../domain'
 import { sha256Hex } from '../lib'
 import type { SessionDeps } from './projectSession'
 import { createSessionRegistry } from './registry'
@@ -324,6 +324,16 @@ export function testProject(id: string, name = 'Kitchen'): Project {
     now: TEST_NOW,
     name,
   })
+}
+
+/**
+ * The one cabinet of a test Project, narrowed out of the design list every Project carries,
+ * so a test can name `construction.root` without re-checking the discriminant each time.
+ */
+export function testCabinet(project: Project): CabinetItemDesign {
+  const design = project.itemDesigns.find((each) => each.kind === 'cabinet')
+  if (design === undefined || design.kind !== 'cabinet') throw new Error('this Project holds no cabinet')
+  return design
 }
 
 /** Write a Project into the store so there is something to open. */

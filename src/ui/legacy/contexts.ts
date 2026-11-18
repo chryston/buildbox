@@ -1,16 +1,15 @@
 /**
- * The React contexts the flagged app is built on (#49).
+ * The React contexts the app is built on (#49, #53).
  *
- * `LegacyViewRoot` provides them once; everything below it reads the Project session, the
- * Library and the view bindings from context instead of reaching for a global store. They
- * live here rather than in `ui/legacy` because the two hooks that read them — `useProject`
- * and `useLibrary` — are about the session layer, not about the legacy view.
+ * `LegacyViewRoot` provides them once; everything below it reads the Project session and the
+ * view bindings from context instead of reaching for a global store. They live here rather than
+ * in `ui/legacy` because the hook that reads one — `useProject` — is about the session layer,
+ * not about the legacy view.
  */
 import { createContext, useContext } from 'react'
-import type { LibraryStore, ProjectSession } from '../../session'
+import type { ProjectSession } from '../../session'
 
 export const SessionContext = createContext<ProjectSession | null>(null)
-export const LibraryContext = createContext<LibraryStore | null>(null)
 
 /**
  * Read a context that the composition root always provides.

@@ -1,32 +1,32 @@
 import { screen } from '@testing-library/react'
-import { renderWithBindings as render } from '../../ui/legacy/testing'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import FloorPlanPage from './FloorPlanPage'
-import { useStore } from '../../store/store'
-
-function resetStore() {
-  useStore.setState({
-    projects: [{ id: 'p1', name: 'Test', units: [{ type: 'cabinet', id: 'u1', label: 'Unit 1', x: 0, y: 0, settings: { unit: 'mm', height: 800, width: 600, depth: 500, thickness: 18, backThickness: 6, toeKick: null, material: 'oak' }, root: { id: 'r1', elementType: 'void' } }] }],
-    activeProjectId: 'p1', selectedId: null, snapGrid: 5, activeUnitId: 'u1',
-    floorPlanSelectedId: null,
-    floorPlan: { image: null, pixelsPerMm: null, objects: [], annotations: [], customTemplates: [] },
-  })
-}
+import { projectFloorPlan } from '../../ui/legacy/projectView'
+import { openTestView, renderWithBindings as render, type TestView } from '../../ui/legacy/testing'
 
 describe('FloorPlanPage', () => {
-  beforeEach(resetStore)
+  let view: TestView
+  beforeEach(async () => { view = await openTestView() })
 
-  it('clicking Sofa 2-seater adds object to store', async () => {
+  it('clicking Sofa 2-seater places it on the Floor', async () => {
     const user = userEvent.setup()
-    render(<FloorPlanPage />)
+    render(<FloorPlanPage />, view)
     await user.click(screen.getByText('Sofa 2-seater'))
-    expect(useStore.getState().floorPlan.objects).toHaveLength(1)
-    expect(useStore.getState().floorPlan.objects[0].type).toBe('sofa-2')
+    const objects = projectFloorPlan(view.project(), null).objects
+    expect(objects).toHaveLength(1)
+    expect(objects[0].type).toBe('sofa-2')
   })
 
   it('shows Calibrate Scale button', () => {
-    render(<FloorPlanPage />)
+    render(<FloorPlanPage />, view)
     expect(screen.getByRole('button', { name: /calibrate scale/i })).toBeInTheDocument()
+  })
+
+  // The floor-plan JSON export went with the legacy store: a Project Backup carries the whole
+  // Project, so there is nothing left for a per-Floor JSON file to be (#53 criterion 2).
+  it('offers no floor-plan JSON export', () => {
+    render(<FloorPlanPage />, view)
+    expect(screen.queryByRole('button', { name: /export json/i })).not.toBeInTheDocument()
   })
 })

@@ -1,43 +1,50 @@
 import { createRef } from 'react'
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { fireEvent, screen } from '@testing-library/react'
-import { renderWithBindings as render } from '../../ui/legacy/testing'
-import type { Design } from '../../types'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
+import type { Project } from '../../domain'
 import type { LayoutDivider } from '../../cabinet'
-import { useStore } from '../../store/store'
+import { testCabinet, testProject } from '../../session/testing'
+import { openTestView, renderWithBindings as render, type TestView } from '../../ui/legacy/testing'
 import DragHandles from './DragHandles'
 
-function createDesign(): Design {
+/**
+ * A cabinet whose one space is split in two: the divider between `top` and `bottom` is what
+ * the handle drags, and the ratio it commits lands on the node that split them.
+ */
+function splitProject(): Project {
+  const project = testProject('p-1')
+  const design = testCabinet(project)
   return {
-    id: 'design-1',
-    name: 'Test Cabinet',
-    units: [{
-      type: 'cabinet',
-      id: 'unit-1',
-      label: 'Unit 1',
-      x: 0,
-      y: 0,
-      settings: {
-        unit: 'mm',
-        height: 800,
-        width: 600,
-        depth: 500,
-        thickness: 18,
-        backThickness: 6,
-        toeKick: null,
-        material: 'oak',
-      },
-      root: {
-        id: 'root',
-        splitAxis: 'horizontal',
-        children: [
-          { id: 'top' },
-          { id: 'bottom' },
-        ],
+    ...project,
+    itemDesigns: [{
+      ...design,
+      construction: {
+        ...design.construction,
+        root: {
+          id: 'root',
+          splitAxis: 'horizontal',
+          splitRatio: 0.5,
+          children: [{ id: 'top', elementType: 'void' }, { id: 'bottom', elementType: 'void' }],
+        },
       },
     }],
   }
 }
+
+const DIVIDER = {
+  nodeId: 'top-shelf',
+  parentId: 'root',
+  childAId: 'top',
+  childBId: 'bottom',
+  x: 0,
+  y: 100,
+  w: 200,
+  h: 18,
+  axis: 'horizontal',
+  material: 'oak',
+  childABounds: { x: 0, y: 0, w: 200, h: 100 },
+  childBBounds: { x: 0, y: 118, w: 200, h: 100 },
+} as LayoutDivider & { parentId: string }
 
 describe('DragHandles', () => {
   beforeAll(() => {
@@ -46,9 +53,8 @@ describe('DragHandles', () => {
     }
   })
 
-  afterEach(() => {
-    localStorage.clear()
-  })
+  let view: TestView
+  beforeEach(async () => { view = await openTestView(splitProject()) })
 
   function renderDragHandles({
     divider,
@@ -66,6 +72,7 @@ describe('DragHandles', () => {
       <svg ref={svgRef}>
         <DragHandles dividers={[divider]} snapGrid={snapGrid} svgRef={svgRef} zoom={zoom} />
       </svg>,
+      view,
     )
 
     const svg = container.querySelector('svg') as SVGSVGElement
@@ -81,34 +88,11 @@ describe('DragHandles', () => {
     return { handle, setPointerCapture }
   }
 
-  function seedStore() {
-    useStore.setState((state) => ({
-      ...state,
-      projects: [createDesign()],
-      activeProjectId: 'design-1',
-      activeUnitId: 'unit-1',
-      selectedId: null,
-      snapGrid: 1,
-    }))
-  }
+  /** The ratio the split node holds after the last commit. */
+  const rootRatio = (): number | undefined => testCabinet(view.project()).construction.root.splitRatio
 
   it('anchors handle movement to the initial handle position during drag', () => {
-    const divider = {
-      nodeId: 'top-shelf',
-      parentId: 'root',
-      childAId: 'top',
-      childBId: 'bottom',
-      x: 0,
-      y: 100,
-      w: 200,
-      h: 18,
-      axis: 'horizontal',
-      material: 'oak',
-      childABounds: { x: 0, y: 0, w: 200, h: 100 },
-      childBBounds: { x: 0, y: 118, w: 200, h: 100 },
-    } as LayoutDivider & { parentId: string }
-
-    const { handle } = renderDragHandles({ divider })
+    const { handle } = renderDragHandles({ divider: DIVIDER })
 
     fireEvent.pointerDown(handle, { pointerId: 1, clientY: 0 })
     fireEvent.pointerMove(handle, { pointerId: 1, clientY: 10 })
@@ -121,83 +105,33 @@ describe('DragHandles', () => {
     expect(handle).toHaveAttribute('y', '133')
   })
 
-  it('scales pointer movement by zoom before committing the drag ratio', () => {
-    seedStore()
-    const divider = {
-      nodeId: 'top-shelf',
-      parentId: 'root',
-      childAId: 'top',
-      childBId: 'bottom',
-      x: 0,
-      y: 100,
-      w: 200,
-      h: 18,
-      axis: 'horizontal',
-      material: 'oak',
-      childABounds: { x: 0, y: 0, w: 200, h: 100 },
-      childBBounds: { x: 0, y: 118, w: 200, h: 100 },
-    } as LayoutDivider & { parentId: string }
-
-    const { handle } = renderDragHandles({ divider, zoom: 2 })
+  it('scales pointer movement by zoom before committing the drag ratio', async () => {
+    const { handle } = renderDragHandles({ divider: DIVIDER, zoom: 2 })
 
     fireEvent.pointerDown(handle, { pointerId: 1, clientY: 0 })
     fireEvent.pointerUp(handle, { pointerId: 1, clientY: 20 })
 
-    const state = useStore.getState()
-    expect(state.projects[0].units[0].root.splitRatio).toBeCloseTo(0.55, 5)
+    await waitFor(() => expect(rootRatio()).toBeCloseTo(0.55, 5))
   })
 
-  it('uses the snapped effective delta for the sibling size before committing the ratio', () => {
-    seedStore()
-    const divider = {
-      nodeId: 'top-shelf',
-      parentId: 'root',
-      childAId: 'top',
-      childBId: 'bottom',
-      x: 0,
-      y: 100,
-      w: 200,
-      h: 18,
-      axis: 'horizontal',
-      material: 'oak',
-      childABounds: { x: 0, y: 0, w: 200, h: 100 },
-      childBBounds: { x: 0, y: 118, w: 200, h: 100 },
-    } as LayoutDivider & { parentId: string }
-
-    const { handle } = renderDragHandles({ divider, snapGrid: 10 })
+  it('uses the snapped effective delta for the sibling size before committing the ratio', async () => {
+    const { handle } = renderDragHandles({ divider: DIVIDER, snapGrid: 10 })
 
     fireEvent.pointerDown(handle, { pointerId: 1, clientY: 0 })
     fireEvent.pointerUp(handle, { pointerId: 1, clientY: 13 })
 
-    const state = useStore.getState()
-    expect(state.projects[0].units[0].root.splitRatio).toBeCloseTo(0.55, 5)
+    await waitFor(() => expect(rootRatio()).toBeCloseTo(0.55, 5))
   })
 
-  it('commits the drag ratio to the split parent node', () => {
-    seedStore()
-    const divider = {
-      nodeId: 'top-shelf',
-      parentId: 'root',
-      childAId: 'top',
-      childBId: 'bottom',
-      x: 0,
-      y: 100,
-      w: 200,
-      h: 18,
-      axis: 'horizontal',
-      material: 'oak',
-      childABounds: { x: 0, y: 0, w: 200, h: 100 },
-      childBBounds: { x: 0, y: 118, w: 200, h: 100 },
-    } as LayoutDivider & { parentId: string }
-
-    const { handle } = renderDragHandles({ divider })
+  it('commits the drag ratio to the split parent node', async () => {
+    const { handle } = renderDragHandles({ divider: DIVIDER })
 
     fireEvent.pointerDown(handle, { pointerId: 1, clientY: 0 })
     fireEvent.pointerUp(handle, { pointerId: 1, clientY: 20 })
 
-    const state = useStore.getState()
-    expect(state.projects[0].units[0].root.splitRatio).toBe(0.6)
-    expect(state.projects[0].units[0].root.children?.[0].splitRatio).toBeUndefined()
+    await waitFor(() => expect(rootRatio()).toBe(0.6))
+    const root = testCabinet(view.project()).construction.root
+    expect(root.children?.[0].splitRatio).toBeUndefined()
   })
 })
 

@@ -1,11 +1,5 @@
-import { useRef, useState } from 'react'
-import type { Design } from '../../types'
 import type { GlobalSettings, Unit } from '../../domain'
-import { readLegacyWorkspaceFile } from '../../package'
-import type { ValidationProblem } from '../../lib'
-import type { LegacyWorkspace, SaveStatusText } from '../../ui/legacy/bindings'
-import ExportModal from './ExportModal'
-import ImportModal from './ImportModal'
+import type { SaveStatusText } from '../../ui/legacy/bindings'
 import UndoRedo from './UndoRedo'
 
 interface Props {
@@ -16,8 +10,6 @@ interface Props {
   onUndo?: () => void
   canRedo?: boolean
   onRedo?: () => void
-  /** The workspace JSON this app can export and import; absent means neither control (#49). */
-  workspace?: LegacyWorkspace
   /** Where the document is saved, when there is a save to report (#14, #49). */
   saveStatus?: SaveStatusText | null
   /**
@@ -25,8 +17,7 @@ interface Props {
    *
    * `Save failed` is the app saying *your newest work is not stored*, and the one answer to that
    * is the dialog with the three ways out — so the words are a button wherever there is a dialog
-   * to open. Absent under the legacy store, which has no session that can fail: the status stays
-   * the plain text it always was.
+   * to open. Absent means there is no dialog to open, and the status stays plain text.
    */
   onSaveStatusClick?: () => void
 }
@@ -41,36 +32,10 @@ export default function Toolbar({
   onUndo,
   canRedo = false,
   onRedo,
-  workspace,
   saveStatus = null,
   onSaveStatusClick,
 }: Props) {
-  const [showExport, setShowExport] = useState(false)
-  const [importState, setImportState] = useState<
-    | { incoming: { projects: Design[]; activeProjectId: string | null } }
-    | { problems: ValidationProblem[] }
-    | null
-  >(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  function handleImportFile(e: React.ChangeEvent<HTMLInputElement>): void {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      // Nothing reaches the store until the whole file has been read and validated, and
-      // the store applies what is left in one set() (#40 §2).
-      const result = readLegacyWorkspaceFile(ev.target?.result as string, () => crypto.randomUUID())
-      setImportState(result.ok
-        ? { incoming: { projects: result.file.projects, activeProjectId: result.file.activeProjectId } }
-        : { problems: result.problems })
-    }
-    reader.readAsText(file)
-    e.target.value = ''
-  }
-
   return (
-    <>
     <header className="flex flex-wrap items-center gap-4 border-b border-divider bg-panel px-4 py-2">
       <span className="mr-2 font-bold text-accent">BuildBox</span>
 
@@ -88,10 +53,11 @@ export default function Toolbar({
         ))}
       </div>
 
-      {/* Without the workspace buttons the row loses the 2 px their ↓/↑ glyphs add to it
-          (fallback-font ascent: 34 px against Export SVG's 32), and every view below it
-          would sit 2 px higher than today's. #49 keeps the pixels, so the row keeps the height. */}
-      <div className={`ml-auto flex items-center gap-2${workspace ? '' : ' min-h-[34px]'}`}>
+      {/* The row keeps its 34 px minimum height: the two workspace buttons that used to sit here
+          added 2 px with their ↓/↑ glyphs (fallback-font ascent: 34 px against Export SVG's 32),
+          and a shorter row would lift every view below it two pixels off the S0 baselines
+          (#53 criterion 12). */}
+      <div className="ml-auto flex min-h-[34px] items-center gap-2">
         {saveStatus && (
           <span
             className={`text-sm ${saveStatus.failed ? 'text-red-400' : 'text-text-muted'}`}
@@ -107,31 +73,6 @@ export default function Toolbar({
           </span>
         )}
         <UndoRedo canUndo={canUndo} onUndo={onUndo ?? (() => {})} canRedo={canRedo} onRedo={onRedo ?? (() => {})} />
-        {workspace && (
-          <>
-            <button
-              onClick={() => setShowExport(true)}
-              className="rounded border border-divider px-3 py-1.5 text-sm text-text-muted hover:text-text-primary"
-              aria-label="Export workspace"
-            >
-              ↓ Export
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".buildbox.json"
-              className="hidden"
-              onChange={handleImportFile}
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="rounded border border-divider px-3 py-1.5 text-sm text-text-muted hover:text-text-primary"
-              aria-label="Import workspace"
-            >
-              ↑ Import
-            </button>
-          </>
-        )}
         <button
           onClick={onExport}
           className="rounded bg-accent px-3 py-1.5 text-sm text-white hover:bg-accent-hover"
@@ -140,30 +81,5 @@ export default function Toolbar({
         </button>
       </div>
     </header>
-    {showExport && workspace && (
-      <ExportModal
-        projects={workspace.projects}
-        activeProjectId={workspace.activeProjectId}
-        onClose={() => setShowExport(false)}
-      />
-    )}
-    {importState && ('problems' in importState ? (
-      <ImportModal
-        problems={importState.problems}
-        onClose={() => setImportState(null)}
-      />
-    ) : (
-      <ImportModal
-        incoming={importState.incoming}
-        onConfirm={(mode) => {
-          if (importState.incoming.projects.length > 0) {
-            workspace?.onImport(importState.incoming, mode)
-          }
-          setImportState(null)
-        }}
-        onClose={() => setImportState(null)}
-      />
-    ))}
-    </>
   )
 }

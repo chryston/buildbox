@@ -1,4 +1,3 @@
-import type { Design, UIState } from './index'
 import type { CabinetSceneUnit, CutListEntry } from '../cabinet'
 
 it('CabinetUnit has id, label, type, settings, root, x, y', () => {
@@ -12,16 +11,6 @@ it('CabinetUnit has id, label, type, settings, root, x, y', () => {
     y: 0,
   }
   expect(unit.type).toBe('cabinet')
-})
-
-it('Design has units array and no root/globalSettings', () => {
-  const d: Design = { id: 'd1', name: 'Test', units: [] }
-  expect(d.units).toEqual([])
-})
-
-it('UIState has activeUnitId', () => {
-  const ui: UIState = { selectedId: null, snapGrid: 5, activeUnitId: null }
-  expect(ui.activeUnitId).toBeNull()
 })
 
 it('CutListEntry has unitId and unitLabel', () => {

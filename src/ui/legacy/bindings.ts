@@ -1,17 +1,15 @@
 /**
- * The one seam between the legacy views and whatever holds their state (#49, #20 §10).
+ * The one seam between the legacy views and the Project session that holds their state
+ * (#49, #20 §10).
  *
- * Seven components used to read the global store directly. They now read this interface out
- * of React context, and nothing else. Two implementations satisfy it: `storeBindings` wraps
- * today's Zustand store and is what the flag-off app installs, `sessionBindings` is built on
- * a Project session and exists only in the flagged chunk. Because neither is imported by the
- * components, the flagged graph never pulls in the legacy store — and the legacy store's
- * `persist` middleware never touches `buildbox-store` in a flag-on build (#49 criterion 8).
+ * Seven components used to read the global store directly. They read this interface out of
+ * React context, and nothing else. Its only implementation is `sessionBindings`, built on a
+ * Project session: the legacy Zustand store went with the S4 cutover, so nothing in this
+ * graph can write `buildbox-store` any more (#53 criterion 1).
  *
- * **A capability this app does not have is an absent callback, not a boolean.** #49 hides the
- * workspace-JSON controls and the sketch tools under the flag; the components render those
- * controls when the callback is there, so the deviation is one fact in one place rather than
- * a flag check in three.
+ * **A capability this app does not have is an absent callback, not a boolean.** The sketch
+ * tools have no home in domain v1, so `addAnnotation` is absent and the components draw no
+ * sketch tool; the deviation is one fact in one place rather than a check in three.
  */
 import { createContext, useContext } from 'react'
 import type { CabinetUnit } from '../../cabinet'
@@ -28,7 +26,6 @@ import type {
   AnnotationType,
   AppModule,
   CustomTemplate,
-  Design,
   FloorPlanData,
   FloorPlanObject,
   FloorPlanObjectType,
@@ -36,12 +33,6 @@ import type {
 
 /** What a floor-plan edit changes about one placed object. `x`/`y` are top-left, Plan Space. */
 export type PlanObjectPatch = Omit<Partial<FloorPlanObject>, 'id'>
-
-/** One tab in the project bar: the legacy view needs nothing more from a Project. */
-export interface ProjectTab {
-  readonly id: string
-  readonly name: string
-}
 
 /** The toolbar's save status (#14). `null` where there is no save state to be truthful about. */
 export interface SaveStatusText {
@@ -76,31 +67,15 @@ export interface PlanImageAsset {
 /** An upload that could not be used, in the words the floor plan has always used. */
 export type PlanImageRead = { readonly image: PreparedPlanImage } | { readonly message: string }
 
-/** A whole workspace, as the toolbar's Export writes it and its Import reads it back. */
-export interface WorkspaceJson {
-  readonly projects: Design[]
-  readonly activeProjectId: string | null
-}
-
-/** The workspace JSON the toolbar exports and imports (#49 deviation 2). */
-export interface LegacyWorkspace extends WorkspaceJson {
-  onImport(incoming: WorkspaceJson, mode: 'replace' | 'merge'): void
-}
-
 export interface LegacyBindings {
   // ---------------------------------------------------------------- the project
-  readonly projects: ProjectTab[]
-  readonly activeProjectId: string | null
   readonly activeProjectName: string
-  selectProject(id: string): void
-  createProject(): void
-  deleteProject(id: string): void
   /**
-   * The workspace JSON the toolbar exports and imports. Absent under the flag: the format
-   * that reads a whole workspace at once is #50's, and the toolbar draws neither control
-   * without it (#49 deviation 2).
+   * Back to the Project Library, which is where another Project is chosen (#53). The editor
+   * has no Project switcher of its own: a session holds one Project's locks and undo stack,
+   * so switching means leaving this one.
    */
-  readonly workspace?: LegacyWorkspace
+  returnToProjects(): void
   readonly saveStatus: SaveStatusText | null
   /**
    * Reopen the Save failed dialog from the red status (#51 §2, criterion 10).
@@ -161,7 +136,7 @@ export interface LegacyBindings {
   removeFloorPlanObject(id: string): void
   setFloorPlanScale(pixelsPerMm: number): void
   clearFloorPlan(): void
-  /** Absent under the flag: domain v1 has no home for sketch annotations (#49 deviation 1). */
+  /** Always absent: domain v1 has no home for sketch annotations (#49 deviation 1). */
   addAnnotation?: (annotation: Annotation) => void
   /** What the file input accepts; #49 deviation 4 narrows it to PNG, JPEG and WebP. */
   readonly planImageAccept: string
@@ -180,8 +155,8 @@ export const LegacyBindingsContext = createContext<LegacyBindings | null>(null)
 /**
  * The bindings the view is running on.
  *
- * A missing provider is a wiring bug: the flagged app has no fallback, because falling back
- * to the legacy store there would silently write `buildbox-store` again.
+ * A missing provider is a wiring bug: there is no fallback, because the app has no other
+ * place its state could come from.
  */
 export function useLegacyBindings(): LegacyBindings {
   const bindings = useContext(LegacyBindingsContext)

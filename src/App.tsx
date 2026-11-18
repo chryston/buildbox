@@ -3,13 +3,14 @@ import CabinetCanvas from './components/CabinetCanvas/CabinetCanvas'
 import ErrorBoundary from './components/ErrorBoundary'
 import FloorPlanPage from './components/FloorPlan/FloorPlanPage'
 import ModuleSwitcher from './components/ModuleSwitcher/ModuleSwitcher'
-import ProjectTabs from './components/ProjectTabs/ProjectTabs'
+import ProjectsNav from './components/ProjectsNav/ProjectsNav'
 import Sidebar from './components/Sidebar/Sidebar'
 import Toolbar from './components/Toolbar/Toolbar'
 import WarningBanner from './components/WarningBanner/WarningBanner'
 import { computeCutListForUnits, computeSceneLayout, findNode } from './cabinet'
 import type { LayoutVoid } from './cabinet'
 import type { GlobalSettings } from './domain'
+import { STRINGS } from './ui'
 import { downloadSVG } from './utils/exportSVG'
 import { useLegacyBindings } from './ui/legacy/bindings'
 
@@ -86,10 +87,6 @@ export default function App() {
     return () => document.removeEventListener('keydown', handler)
   }, [bindings])
 
-  if (bindings.projects.length === 0) {
-    return <div className="min-h-screen bg-surface text-text-primary">BuildBox</div>
-  }
-
   return (
     <ErrorBoundary>
     <div className="h-screen overflow-hidden bg-surface text-text-primary flex flex-col">
@@ -108,18 +105,11 @@ export default function App() {
             downloadSVG(svgRef.current, bindings.activeProjectName)
           }
         }}
-        workspace={bindings.workspace}
         saveStatus={bindings.saveStatus}
         onSaveStatusClick={bindings.reopenSaveFailure}
       />
       <ModuleSwitcher activeModule={activeModule} onChange={bindings.setActiveModule} />
-      <ProjectTabs
-        projects={bindings.projects}
-        activeId={bindings.activeProjectId}
-        onSelect={bindings.selectProject}
-        onCreate={bindings.createProject}
-        onDelete={bindings.deleteProject}
-      />
+      <ProjectsNav label={STRINGS.returnToProjects} onReturn={bindings.returnToProjects} />
       {activeModule === 'cabinet' && overConstrainedIds.length > 0 && (
         <div className="border-b border-divider bg-panel px-4 py-2">
           <WarningBanner overConstrainedIds={overConstrainedIds} />

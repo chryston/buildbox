@@ -1,14 +1,10 @@
 /**
- * The `VITE_FF_PROJECTS_V2` composition root (#49, #50).
+ * The composition root of the app (#49, #50, #53).
  *
- * This is the only module in the app that knows the storage technology, the browser's clock
- * and locks, and the Intent catalogue as *values*: it binds them together and hands the
- * result to the surfaces through `LibraryHome` and `LegacyViewRoot`. Nothing under `ui`
- * reaches any of them, which is what keeps the flagged graph replaceable (#20 §2).
- *
- * The build-time flag means this module is either in the bundle or not at all — `main.tsx`
- * tests the flag once, in a condition the bundler folds away. `PROJECTS_V2_SENTINEL` is what
- * `scripts/check-flag-free.mjs` looks for in a flag-off build to prove it.
+ * This is the only module that knows the storage technology, the browser's clock and locks,
+ * and the Intent catalogue as *values*: it binds them together and hands the result to the
+ * surfaces through `LibraryHome` and `LegacyViewRoot`. Nothing under `ui` reaches any of
+ * them, which is what keeps the app replaceable (#20 §2).
  */
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -76,15 +72,10 @@ import { ConflictDialog, LibraryHome, NowEditableToast, ReadOnlyStrip, SaveFaile
 import type { LibraryServices, MigrationServices, SaveFailedReason } from '../ui'
 import { convertLegacy } from '../package'
 import { requestPersistentStorage } from './persistentStorage'
+import { DB_NAME, IS_PREVIEW } from './channel'
 import { LegacyViewRoot } from '../ui/legacy/LegacyViewRoot'
 import type { IntentBuilder, SessionViewServices } from '../ui/legacy/sessionBindings'
 import type { PlanImageRead } from '../ui/legacy/bindings'
-
-/** Proves a bundle was built with the flag on; see `scripts/check-flag-free.mjs`. */
-export const PROJECTS_V2_SENTINEL = '__PROJECTS_V2__'
-
-/** The preview database: never the production `buildbox`, never `buildbox-store` (#49). */
-export const PREVIEW_DB_NAME = 'buildbox-preview'
 
 /**
  * The channel one tab uses to tell the others that the Library changed (#50 §5). Named for
@@ -267,13 +258,11 @@ function createFlaggedDeps(ports: Ports, volatile: boolean): FlaggedDeps {
     lock: createWebLocksPort(),
     registry,
     library: createLibraryStore({ ports: announced, clock, ids, registry }),
-    // `preview: true` because this whole build is the preview (#20 §11, #50 criterion 28): a
-    // `.buildbox` written here is marked, and production refuses it rather than importing preview
-    // work into a real database.
-    backup: { clock, encoder: createBackupEncoder(), buildboxVersion: __BUILDBOX_VERSION__, preview: true },
-    // `acceptPreview: true` for the same reason in the other direction: this build wrote the
-    // Backup, so it is the only build allowed to read it back.
-    restore: { ports: announced, clock, ids, registry, images: createImageDecoder(), acceptPreview: true },
+    // A preview build marks its Backup and is the only build allowed to read it back (#20 §11);
+    // production writes unmarked Packages and refuses marked ones. `IS_PREVIEW` is the whole of
+    // that decision, and `app/channel` says what makes a build a preview.
+    backup: { clock, encoder: createBackupEncoder(), buildboxVersion: __BUILDBOX_VERSION__, preview: IS_PREVIEW },
+    restore: { ports: announced, clock, ids, registry, images: createImageDecoder(), acceptPreview: IS_PREVIEW },
     download,
     assetUrls: createObjectUrlCache(ports.assets.get),
     channel,
@@ -421,13 +410,26 @@ function FlaggedRoot({ deps, legacyPending = false }: { deps: FlaggedDeps; legac
     wasFailing.current = failing
   }, [failing])
 
-  // The editor's tab bar moves the view to another session *inside* `LegacyViewRoot`, and the
-  // surfaces above it — the read-only strip, both dialogs, the retry — are about whichever Project
-  // this tab is showing now. Following the switch is what keeps them pointed at the live session
-  // rather than the one this route was opened with.
-  const followSwitch = useCallback((next: ProjectSession): void => {
-    held.current = next
-    setSession(next)
+  // The Library is where another Project is chosen (#53): the editor has no Project switcher of
+  // its own, so leaving means closing this session, which is what releases its Web Lock and lets
+  // a card open any Project. A session holding unsaved work refuses to close — #14's guard — and
+  // the refusal is answered by the dialog that names the three ways out, with the editor still
+  // behind it so the work that will not store stays on screen.
+  const returnToProjects = useCallback((): void => {
+    const current = held.current
+    if (current === null) {
+      setRoute('library')
+      return
+    }
+    void current.close().then((closed) => {
+      if (!closed.ok) {
+        setFailureOpen(true)
+        return
+      }
+      held.current = null
+      setSession(null)
+      setRoute('library')
+    })
   }, [])
 
   // #51 §7: the first time this tab's work lands on disk, ask the browser to keep it there. Opening
@@ -755,7 +757,6 @@ function FlaggedRoot({ deps, legacyPending = false }: { deps: FlaggedDeps; legac
   return (
     <>
       <LegacyViewRoot
-        library={library}
         session={session}
         services={sessionServices}
         banner={
@@ -766,7 +767,7 @@ function FlaggedRoot({ deps, legacyPending = false }: { deps: FlaggedDeps; legac
           ) : undefined
         }
         onSaveFailure={() => setFailureOpen(true)}
-        onSessionChange={followSwitch}
+        onReturnToProjects={returnToProjects}
       >
         <App />
       </LegacyViewRoot>
@@ -808,14 +809,14 @@ function FlaggedRoot({ deps, legacyPending = false }: { deps: FlaggedDeps; legac
 }
 
 /**
- * Open the preview database and render the app against it.
+ * Open this build's database and render the app against it.
  *
  * A browser that will not open IndexedDB runs memory-only, which is #20 §11's documented
- * answer and the reason a preview build can be opened in private mode at all: the work is
- * real while the tab is open, and the session says so rather than pretending otherwise.
+ * answer and the reason the app can be opened in private mode at all: the work is real while
+ * the tab is open, and the session says so rather than pretending otherwise.
  */
 export async function mountProjectsV2(root: Root): Promise<void> {
-  const opened = await openIndexedDbAdapter({ dbName: PREVIEW_DB_NAME })
+  const opened = await openIndexedDbAdapter({ dbName: DB_NAME })
   const ports: Ports = opened.ok ? opened.value : createMemoryAdapter()
   // `!opened.ok` is the whole of #51 §6's knowledge: this is the only expression in the app that
   // finds out whether the browser has a durable store, and everything downstream is told.
@@ -826,9 +827,9 @@ export async function mountProjectsV2(root: Root): Promise<void> {
   // exact data was already migrated and verified, and the reader goes back to their Projects.
   const legacyPending = await legacyMigrationPending(deps)
 
-  // The Library is the home of a flag-on build (#50): whatever the last visit left open, a
-  // reload starts at the grid, and an empty database shows the New Project card rather than
-  // inventing a Project to fill it.
+  // The Library is the home of this app (#50): whatever the last visit left open, a reload
+  // starts at the grid, and an empty database shows the New Project card rather than inventing
+  // a Project to fill it.
   const refreshed = await deps.library.refresh()
   if (!refreshed.ok) return renderFailure(root, refreshed.error)
 
@@ -846,10 +847,6 @@ export async function mountProjectsV2(root: Root): Promise<void> {
     deps.channel.close()
     deps.assetUrls.revokeAll()
   })
-
-  // Which build this is, from the outside: the smoke specs assert it, and it is the sentinel
-  // the flag-free build scan looks for.
-  document.documentElement.dataset.projectsV2 = PROJECTS_V2_SENTINEL
 
   root.render(
     <StrictMode>
@@ -876,15 +873,15 @@ async function legacyMigrationPending(deps: FlaggedDeps): Promise<boolean> {
 }
 
 /**
- * The one thing the flagged app can say when it has no document to show. Kept to the shell's
- * own classes: this is not a screen a user is meant to stay on.
+ * The one thing the app can say when it has no document to show. Kept to the shell's own
+ * classes: this is not a screen a user is meant to stay on.
  */
 function renderFailure(root: Root, error: SessionError): void {
   const reason = typeof error === 'string' ? error : error.kind
   root.render(
     <div className="min-h-screen bg-surface px-4 py-6 text-text-primary">
       <h1 className="text-lg font-semibold">BuildBox could not open this Project</h1>
-      <p className="mt-2 text-sm text-text-muted">The preview build stores work in this browser only. ({reason})</p>
+      <p className="mt-2 text-sm text-text-muted">BuildBox stores Projects in this browser only. ({reason})</p>
     </div>,
   )
 }

@@ -1,38 +1,33 @@
 import { createRef } from 'react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, screen } from '@testing-library/react'
-import { renderWithBindings as render } from '../../ui/legacy/testing'
-import type { Design } from '../../types'
-import { computeUnitLayout, type SceneLayout } from '../../cabinet'
+import { computeUnitLayout, type CabinetSceneUnit, type SceneLayout } from '../../cabinet'
+import { openTestView, renderWithBindings as render, type TestView } from '../../ui/legacy/testing'
 import CabinetCanvas from './CabinetCanvas'
 
-function createDesign(): Design {
+/** The one unit the layout is computed from. `Design` is gone with the legacy store (#53), and
+ * the canvas only ever needed a unit's settings and root. */
+function createUnit(): CabinetSceneUnit {
   return {
-    id: 'design-1',
-    name: 'Test Cabinet',
-    units: [
-      {
-        id: 'unit-1',
-        label: 'Unit 1',
-        type: 'cabinet',
-        x: 0,
-        y: 0,
-        settings: {
-          unit: 'mm',
-          height: 800,
-          width: 600,
-          depth: 500,
-          thickness: 18,
-          backThickness: 6,
-          toeKick: null,
-          material: 'oak',
-        },
-        root: {
-          id: 'root-void',
-          elementType: 'void',
-        },
-      },
-    ],
+    type: 'cabinet',
+    id: 'unit-1',
+    label: 'Unit 1',
+    x: 0,
+    y: 0,
+    settings: {
+      unit: 'mm',
+      height: 800,
+      width: 600,
+      depth: 500,
+      thickness: 18,
+      backThickness: 6,
+      toeKick: null,
+      material: 'oak',
+    },
+    root: {
+      id: 'root-void',
+      elementType: 'void',
+    },
   }
 }
 
@@ -58,8 +53,7 @@ function makeSceneLayout(unitCount: number): SceneLayout {
   }
 }
 
-function designToSceneLayout(design: Design): SceneLayout {
-  const firstUnit = design.units[0]
+function unitToSceneLayout(firstUnit: CabinetSceneUnit): SceneLayout {
   const layout = computeUnitLayout(firstUnit.settings, firstUnit.root)
   const { width: w, height: h, unit } = firstUnit.settings
   return {
@@ -84,9 +78,8 @@ function designToSceneLayout(design: Design): SceneLayout {
   }
 }
 
-function renderCabinetCanvas() {
-  const design = createDesign()
-  const sceneLayout = designToSceneLayout(design)
+function renderCabinetCanvas(view: TestView) {
+  const sceneLayout = unitToSceneLayout(createUnit())
   const svgRef = createRef<SVGSVGElement>()
   const result = render(
     <CabinetCanvas
@@ -94,7 +87,8 @@ function renderCabinetCanvas() {
       svgRef={svgRef}
       onUnlockNode={() => {}}
       onUnitClick={() => {}}
-    />
+    />,
+    view,
   )
   const svg = screen.getByTestId('cabinet-canvas') as unknown as SVGSVGElement
   const getViewport = () => {
@@ -115,12 +109,13 @@ describe('CabinetCanvas', () => {
     }
   })
 
-  beforeEach(() => {
-    localStorage.clear()
-  })
+  // The canvas reads its snap grid and commits its drags through the seam, so every test here
+  // renders against a real session over the in-memory store (#49).
+  let view: TestView
+  beforeEach(async () => { view = await openTestView() })
 
   it('uses a matrix transform so panning stays screen-space after zooming', () => {
-    const { svg, getViewport } = renderCabinetCanvas()
+    const { svg, getViewport } = renderCabinetCanvas(view)
 
     ;(svg as SVGSVGElement & { setPointerCapture: ReturnType<typeof vi.fn> }).setPointerCapture = vi.fn()
 
@@ -132,7 +127,7 @@ describe('CabinetCanvas', () => {
   })
 
   it('captures the pointer on the svg element even when panning starts on a child shape', () => {
-    const { svg } = renderCabinetCanvas()
+    const { svg } = renderCabinetCanvas(view)
     const voidRect = screen.getByTestId('void-root-void')
     const originalSetPointerCapture = Element.prototype.setPointerCapture
     const setPointerCapture = vi.fn()
@@ -150,7 +145,7 @@ describe('CabinetCanvas', () => {
   })
 
   it('stops panning when the active pointer is cancelled', () => {
-    const { svg, getViewport } = renderCabinetCanvas()
+    const { svg, getViewport } = renderCabinetCanvas(view)
 
     ;(svg as SVGSVGElement & { setPointerCapture: ReturnType<typeof vi.fn> }).setPointerCapture = vi.fn()
 
@@ -172,7 +167,8 @@ describe('CabinetCanvas', () => {
         svgRef={createRef()}
         onUnlockNode={() => {}}
         onUnitClick={() => {}}
-      />
+      />,
+      view,
     )
     const groups = document.querySelectorAll('[data-unit-id]')
     expect(groups).toHaveLength(2)
@@ -187,7 +183,8 @@ describe('CabinetCanvas', () => {
         svgRef={createRef()}
         onUnlockNode={() => {}}
         onUnitClick={onUnitClick}
-      />
+      />,
+      view,
     )
     const groups = document.querySelectorAll('[data-unit-id]')
     fireEvent.click(groups[1].querySelector('rect')!)
@@ -202,7 +199,8 @@ describe('CabinetCanvas', () => {
         svgRef={createRef()}
         onUnlockNode={() => {}}
         onUnitClick={() => {}}
-      />
+      />,
+      view,
     )
     const groups = document.querySelectorAll('[data-unit-id]')
     const activeGroup = groups[0]

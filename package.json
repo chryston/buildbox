@@ -10,8 +10,7 @@
     "dev": "vite",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "build": "npm run typecheck && vite build && node scripts/check-flag-free.mjs && node scripts/check-size-budget.mjs",
-    "build:preview": "VITE_FF_PROJECTS_V2=true vite build --outDir dist-preview",
+    "build": "npm run typecheck && vite build && node scripts/check-bundle-strings.mjs && node scripts/check-size-budget.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "bench": "vitest bench --run --project pure",
@@ -31,7 +30,6 @@
     "nanoid": "^5.1.11",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "zundo": "^2.3.0",
     "zustand": "^5.0.5"
   },
   "devDependencies": {
