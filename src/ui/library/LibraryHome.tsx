@@ -155,10 +155,15 @@ export function LibraryHome({ services, saveState = null, saveStateFor = null }:
         setDialog({ kind: 'problem', problem: applied.error })
         return
       }
+      // The restore wrote a Project the snapshot has never seen. Every other action on this
+      // screen goes through the library store, which re-reads itself; this one goes to `session`
+      // and comes back with a Project already on disk, so the list is re-read here or the user
+      // is told a Project exists and shown a grid without it.
+      await library.refresh()
       refreshCounts()
       setToast({ text: toastFor(applied.value) })
     },
-    [services, refreshCounts],
+    [services, refreshCounts, library],
   )
 
   const restoreFrom = useCallback(

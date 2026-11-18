@@ -21,7 +21,7 @@ const previewBaseURL = 'http://localhost:4174/buildbox/'
 // The flag-on specs assert against that artifact; the flag-off engines have nothing to
 // assert there, and vice versa. #50's four are named by file rather than by prefix, because
 // the issue names them `backup-restore.spec.ts` and not `projects-v2-backup.spec.ts`.
-const PREVIEW_ONLY = /(?:projects-v2-|backup-restore|restore-rejections|collision|gc)\.spec\.ts$/
+const PREVIEW_ONLY = /(?:projects-v2-.*|backup-restore|restore-rejections|collision|gc)\.spec\.ts$/
 
 const desktopProjects = Object.entries(engines).map(([name, device]) => ({
   name,

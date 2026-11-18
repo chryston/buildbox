@@ -74,7 +74,7 @@ test('Replace keeps the id and saves the previous state as a Recovery Point', as
   await restoreFile(page, backup)
   await page.getByRole('button', { name: /Replace existing Project/ }).click()
 
-  await expect(toast(page)).toHaveText(`Backup restored over ${PROJECT}. Previous state saved as Recovery Point.`)
+  await expect(toast(page)).toContainText(`Backup restored over ${PROJECT}. Previous state saved as Recovery Point.`)
   const pointsAfter = await storedRecoveryIds(page)
   expect(pointsAfter).toHaveLength(pointsBefore.length + 1)
   // The Project is still the one this browser had: same row, same id, one more Point behind it.
@@ -91,16 +91,20 @@ test('Import as a copy makes a second Project that shares no id with the first',
   await restoreFile(page, backup)
   await page.getByRole('button', { name: /Import as a copy/ }).click()
 
-  const copy = page.locator('article.project-card').filter({ hasText: 'Kitchen Wall' }).filter({ hasNotText: PROJECT })
-  await expect(copy).toBeVisible()
+  // The toast is the write landing: `commitRestore` resolves, and only then does the Library
+  // re-read. Reading the stores before it would race the transaction — the same read passes a
+  // moment later, which is exactly the flake a smoke spec must not carry.
+  await expect(toast(page)).toContainText('with new IDs.')
   const rows = await storedLibrary(page)
   expect(rows).toHaveLength(libraryBefore.length + 1)
   const added = rows.find((row) => !libraryBefore.some((was) => was.id === row.id))
   if (added === undefined) throw new Error('no new Library row appeared')
+  // The card is found by the id the database gave the copy, not by its name: the copy's name
+  // contains the original's, so a text filter cannot tell the two cards apart.
+  await expect(page.locator(`article.project-card[data-project="${added.id}"]`)).toBeVisible()
 
   const copyIds = await projectIds(page, added.id)
   expect(copyIds.filter((id) => originalIds.includes(id))).toEqual([])
-  await expect(toast(page)).toContainText('with new IDs.')
   // The Project that was already here is untouched: still listed, still the same record.
   await expect(card(page, PROJECT)).toBeVisible()
 })

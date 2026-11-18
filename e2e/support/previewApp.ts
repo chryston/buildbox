@@ -13,7 +13,7 @@ import { seedPreviewDb } from './seedPreviewDb'
  * `previewSeed.projects[0]`'s revision, so this resolves that record's own name rather than
  * trusting the Library to list it first — the grid is ordered by `savedAt`, not by id.
  */
-const FIRST_PROJECT = previewSeed.library.find((record) => record.id === previewSeed.projects[0]!.id)!.name
+export const FIRST_PROJECT = previewSeed.library.find((record) => record.id === previewSeed.projects[0]!.id)!.name
 
 export const cabinetCanvas = (page: Page): Locator => page.getByTestId('cabinet-canvas')
 export const floorPlanCanvas = (page: Page): Locator => page.getByTestId('floor-plan-canvas')
@@ -28,8 +28,13 @@ export const floorPlanCanvas = (page: Page): Locator => page.getByTestId('floor-
 export async function openPreviewApp(page: Page): Promise<void> {
   await seedPreviewDb(page, previewSeed)
   await page.goto('./', { waitUntil: 'networkidle' })
+  await openProjectFromLibrary(page, FIRST_PROJECT)
+}
+
+/** Open one Project from the Library and wait for its cabinet view. */
+export async function openProjectFromLibrary(page: Page, name: string): Promise<void> {
   await expect(libraryHeading(page)).toBeVisible()
-  await cardButton(page, FIRST_PROJECT, 'Open').click()
+  await cardButton(page, name, 'Open').click()
   await expect(cabinetCanvas(page)).toBeVisible()
 }
 

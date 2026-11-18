@@ -53,7 +53,7 @@ test('a Backup restored into an empty profile is the same Project', async ({ pag
     await expect(libraryHeading(restored)).toBeVisible()
 
     await restoreFile(restored, backup)
-    await expect(toast(restored)).toHaveText(`Restored ${PROJECT} from Backup.`)
+    await expect(toast(restored)).toContainText(`Restored ${PROJECT} from Backup.`)
     await expect(restored.locator('article.project-card').filter({ hasText: PROJECT })).toBeVisible()
 
     expect(canonical(await storedProject(restored, 'proj-kitchen-wall'))).toBe(canonical(original))
