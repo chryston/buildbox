@@ -45,6 +45,8 @@ const ADAPTER_INCLUDE = ['src/persistence/indexeddb/**/*.test.ts']
 const BROWSER_INCLUDE = ['src/persistence/indexeddb/**/*.browser.test.ts']
 // The quota case runs alone in its own browser; see the `persistence-quota` project below.
 const QUOTA_INCLUDE = ['src/persistence/indexeddb/quota.browser.test.ts']
+// The workspace layout tests (#55) measure real bounding boxes, which jsdom cannot give.
+const LAYOUT_BROWSER_INCLUDE = ['src/ui/**/*.browser.test.{ts,tsx}']
 
 const SHARED_EXCLUDE = ['e2e/**', ...configDefaults.exclude]
 
@@ -75,7 +77,7 @@ export default defineConfig({
           name: 'dom',
           environment: 'jsdom',
           include: ['src/**/*.test.{ts,tsx}'],
-          exclude: [...PURE_INCLUDE, ...NODE_ONLY_INCLUDE, ...PURE_EXCLUDE, ...SHARED_EXCLUDE],
+          exclude: [...PURE_INCLUDE, ...NODE_ONLY_INCLUDE, ...PURE_EXCLUDE, ...LAYOUT_BROWSER_INCLUDE, ...SHARED_EXCLUDE],
           setupFiles: ['./src/test/setup.ts'],
         },
       },
@@ -97,6 +99,22 @@ export default defineConfig({
           name: 'persistence-browser',
           include: [...BROWSER_INCLUDE],
           exclude: [...QUOTA_INCLUDE, ...SHARED_EXCLUDE],
+          browser: {
+            enabled: true,
+            headless: true,
+            provider: 'playwright',
+            instances: [{ browser: BROWSER }],
+          },
+        },
+      },
+      {
+        // The workspace layout (#55 criteria 1, 2, 4, 7): real bounding boxes at the
+        // widths the issue names, which only a real CSS engine can give.
+        extends: true,
+        test: {
+          name: 'workspace-layout',
+          include: [...LAYOUT_BROWSER_INCLUDE],
+          exclude: [...SHARED_EXCLUDE],
           browser: {
             enabled: true,
             headless: true,

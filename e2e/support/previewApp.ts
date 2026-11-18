@@ -50,10 +50,11 @@ export async function floorPlanObjectIds(page: Page): Promise<string[]> {
     .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-testid')!.slice('placed-object-'.length)))
 }
 
-/** Click a catalog button in the floor-plan sidebar and wait for its object to appear. */
+/** Open `Add item ▾` in the workspace toolbar and wait for its object to appear (#55). */
 export async function addFloorPlanObject(page: Page, label: string): Promise<string> {
   const before = await floorPlanObjectIds(page)
-  await page.getByRole('button', { name: label, exact: true }).click()
+  await page.getByTestId('add-item-menu').click()
+  await page.getByRole('menuitem', { name: label, exact: true }).click()
   await expect.poll(() => floorPlanObjectIds(page), { message: `${label} was not placed` }).toHaveLength(before.length + 1)
   return (await floorPlanObjectIds(page)).find((id) => !before.includes(id)) as string
 }

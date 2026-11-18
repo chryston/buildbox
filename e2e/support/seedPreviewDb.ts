@@ -212,3 +212,38 @@ export async function projectRevision(page: Page, projectId: string): Promise<nu
     [E2E_DB_NAME, projectId],
   )
 }
+
+/**
+ * The millimetre position of one Placed Item as it sits in the `projects` store right now.
+ * The sibling proof to `projectRevision`: a spec that reloads to check a drag has to wait
+ * for the drag's own write, not just a newer revision (#55).
+ */
+export async function persistedPlacedItemTranslation(
+  page: Page,
+  projectId: string,
+  itemId: string,
+): Promise<{ x: number; y: number } | null> {
+  return page.evaluate(
+    // `new Promise` rather than `Promise.withResolvers`: the e2e tsconfig's lib predates
+    // es2024, which is also why `projectRevision` above uses the executor form.
+    ([dbName, id, item]) =>
+      new Promise<{ x: number; y: number } | null>((resolveItem, rejectItem) => {
+        const open = indexedDB.open(dbName, 1)
+        open.onerror = () => rejectItem(new Error(`opening ${dbName} failed`))
+        open.onsuccess = () => {
+          const db = open.result
+          const read = db.transaction('projects', 'readonly').objectStore('projects').get(id)
+          read.onsuccess = () => {
+            db.close()
+            const record = read.result as
+              | { data?: { existingModel?: { placedItems?: Array<{ id: string; translation: { x: number; y: number } }> } } }
+              | undefined
+            const placed = record?.data?.existingModel?.placedItems?.find((entry) => entry.id === item)
+            resolveItem(placed ? { x: placed.translation.x, y: placed.translation.y } : null)
+          }
+          read.onerror = () => rejectItem(new Error(`reading ${id} failed`))
+        }
+      }),
+    [E2E_DB_NAME, projectId, itemId],
+  )
+}
