@@ -149,9 +149,15 @@ export async function storedProject(page: Page, projectId: string): Promise<unkn
 }
 
 /** Every Library row the database holds. */
-export async function storedLibrary(page: Page): Promise<{ id: string; name: string; trashedAt: string | null }[]> {
-  const records = await readStore<{ id: string; name: string; trashedAt: string | null }>(page, 'library')
-  return records.map((row) => ({ id: row.id, name: row.name, trashedAt: row.trashedAt }))
+export async function storedLibrary(page: Page): Promise<{ id: string; trashedAt: string | null }[]> {
+  const records = await readStore<{ id: string; trashedAt: string | null }>(page, 'library')
+  return records.map((row) => ({ id: row.id, trashedAt: row.trashedAt }))
+}
+
+/** Every Library row's id and name: for a spec that has to find a Project it did not create by name. */
+export async function storedLibraryNames(page: Page): Promise<{ id: string; name: string }[]> {
+  const records = await readStore<{ id: string; name: string }>(page, 'library')
+  return records.map((row) => ({ id: row.id, name: row.name }))
 }
 
 /** Every asset hash the database holds. */

@@ -8,7 +8,7 @@ import {
   placedObject,
   showFloorPlan,
 } from '../support/previewApp'
-import { canonical, dialogHeading, previewSeed, storedLibrary, storedProject } from '../support/libraryApp'
+import { canonical, dialogHeading, previewSeed, storedLibraryNames, storedProject } from '../support/libraryApp'
 import { projectRevision } from '../support/seedPreviewDb'
 
 /**
@@ -61,9 +61,9 @@ test('the second commit says the Project changed, keeps the first, and can impor
   await second.getByRole('button', { name: 'Import my changes as a copy', exact: true }).click()
   await expect(second.getByRole('dialog')).toHaveCount(0)
   await expect
-    .poll(async () => (await storedLibrary(second)).map((row) => row.name))
+    .poll(async () => (await storedLibraryNames(second)).map((row) => row.name))
     .toContain(`${FIRST_PROJECT} — Copy`)
-  const rows = await storedLibrary(second)
+  const rows = await storedLibraryNames(second)
   const copy = rows.find((row) => row.name === `${FIRST_PROJECT} — Copy`)!
   expect(copy.id).not.toBe(PROJECT_ID)
   // The copy has the second tab's content, which the first tab's does not have, and the
