@@ -57,7 +57,7 @@ import {
   readPlanImageFile,
 } from '../platform'
 import type { ObjectUrlCache } from '../platform'
-import { ConflictDialog, LibraryHome, ReadOnlyStrip, SaveFailedDialog } from '../ui'
+import { ConflictDialog, LibraryHome, NowEditableToast, ReadOnlyStrip, SaveFailedDialog } from '../ui'
 import type { LibraryServices, SaveFailedReason } from '../ui'
 import { requestPersistentStorage } from './persistentStorage'
 import { LegacyViewRoot } from '../ui/legacy/LegacyViewRoot'
@@ -286,6 +286,12 @@ function FlaggedRoot({ deps }: { deps: FlaggedDeps }): ReactNode {
   // attempt to leave. `Discard` is the one action that closes it by hand, because a discard that
   // cannot store either is the same failure the person has just chosen to accept.
   const [failureOpen, setFailureOpen] = useState(false)
+  // #51 §5: the tab that held the lock let go. The strip disappearing is the state changing; this
+  // is the event, which is what a tab that has been refusing edits has been waiting to hear. It is
+  // keyed on the session, because switching Project also ends a read-only state and has nothing to
+  // announce.
+  const [nowEditable, setNowEditable] = useState<string | null>(null)
+  const wasReadOnly = useRef<ProjectSession | null>(null)
   const [persistedRevision, setPersistedRevision] = useState(0)
   // The session as the event handler sees it, which is not the same moment as the render that
   // will follow it: `Open` has to close the session it is being clicked away from, and reading
@@ -326,6 +332,16 @@ function FlaggedRoot({ deps }: { deps: FlaggedDeps }): ReactNode {
     read()
     return session.subscribe(read)
   }, [session])
+
+  useEffect(() => {
+    if (session === null) {
+      wasReadOnly.current = null
+      setNowEditable(null)
+      return
+    }
+    if (wasReadOnly.current === session && !readOnly) setNowEditable(session.getSnapshot().project.meta.name)
+    wasReadOnly.current = readOnly ? session : null
+  }, [readOnly, session])
 
   // The failure this dialog speaks. `revision-conflict` is §5's — another tab wrote, and the
   // answer is `Reload the latest version`, not a retry that would overwrite them — so `app` routes
@@ -556,7 +572,13 @@ function FlaggedRoot({ deps }: { deps: FlaggedDeps }): ReactNode {
         library={library}
         session={session}
         services={sessionServices}
-        banner={readOnly ? <ReadOnlyStrip /> : undefined}
+        banner={
+          readOnly ? (
+            <ReadOnlyStrip />
+          ) : nowEditable !== null ? (
+            <NowEditableToast name={nowEditable} onDismiss={() => setNowEditable(null)} />
+          ) : undefined
+        }
         onSaveFailure={() => setFailureOpen(true)}
         onSessionChange={followSwitch}
       >
