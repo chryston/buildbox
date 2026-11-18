@@ -519,6 +519,10 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
     revision = committed.value.revision
     persistedRevision = committed.value.revision
     persisted = { project: committed.value.data, revision: committed.value.revision }
+    // The state just stored is a copy of a point that already exists, and the state it replaced
+    // has its `pre-restore` point: closing next has nothing left to keep, so a restore adds one
+    // Recovery Point and not two (#51 criterion 13).
+    lastRecoveryRevision = committed.value.revision
     lastSavedAt = committed.value.savedAt
     save = afterWrite(committed.value.savedAt)
     guard = { blocked: false, resolvedBy: null }

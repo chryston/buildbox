@@ -28,7 +28,6 @@ import {
   createSessionRegistry,
   downloadBackup,
   encodeEmergencyBackup,
-  err,
   ok,
   openProject,
   stageRestore,
@@ -363,14 +362,21 @@ function FlaggedRoot({ deps }: { deps: FlaggedDeps }): ReactNode {
     setSession(next)
   }, [])
 
-  // #51 §6: the first time a Project is actually on disk, ask the browser to keep it there.
-  // Before that there is nothing worth persisting, and a request made too early is refused on the
-  // merits without anyone being told why.
+  // #51 §7: the first time this tab's work lands on disk, ask the browser to keep it there. Opening
+  // a Project is not work: the revision it opened at is the baseline, and only a commit past it
+  // counts. A request made earlier is refused on the merits without anyone being told why.
+  const persistBaseline = useRef<{ session: ProjectSession; revision: number } | null>(null)
   useEffect(() => {
-    if (persistedRevision === 0 || askedToPersist.current) return
+    if (session === null || askedToPersist.current) return
+    const stored = session.getSnapshot().persistedRevision
+    if (persistBaseline.current?.session !== session) {
+      persistBaseline.current = { session, revision: stored }
+      return
+    }
+    if (stored <= persistBaseline.current.revision) return
     askedToPersist.current = true
     void requestPersistentStorage({ prefs: ports.prefs, clock })
-  }, [persistedRevision, ports.prefs, clock])
+  }, [session, persistedRevision, ports.prefs, clock])
 
   // #51 §5: another tab has written the Project this tab is holding. A tab that is read-only
   // because it lost the lock has no other way to find out the lock is free — `navigator.locks`
@@ -491,17 +497,29 @@ function FlaggedRoot({ deps }: { deps: FlaggedDeps }): ReactNode {
         return false
       },
       restoreRecoveryPoint: async (projectId, pointId) => {
-        // Restoring means editing, and editing means a session: open the Project if this tab is
-        // not already in it, and let the session's own guard refuse if it is holding work.
-        if (held.current?.id !== projectId) {
-          const opened = await open(projectId)
-          if (!opened.ok) return opened
+        // Restoring means editing, and editing means a session — but not a route: the person is
+        // on the Library and stays there. A session this tab already holds for the Project is
+        // used as it is, its guard included; otherwise one is opened for the length of the
+        // restore, which is what holds the Project's lock (#51 §1 steps 1 and 3).
+        const own = held.current?.id === projectId ? held.current : null
+        if (own !== null) return own.restoreRecoveryPoint(pointId)
+        if (held.current !== null) {
+          const closed = await held.current.close()
+          if (!closed.ok) return closed
+          held.current = null
+          setSession(null)
         }
-        const current = held.current
-        if (current === null || current.id !== projectId) {
-          return err({ kind: 'unavailable', reason: 'this tab has no open session for that Project' })
+        const opened = await openProject(projectId, { ports, clock, lock, ids, registry, backup, volatile })
+        if (!opened.ok) return opened
+        const restored = await opened.value.restoreRecoveryPoint(pointId)
+        // A restore that failed in the store leaves the session guarded, and a guarded session
+        // cannot close: it stays, as the tab's session, so #14's dialog has something to answer.
+        const closed = await opened.value.close()
+        if (!closed.ok) {
+          held.current = opened.value
+          setSession(opened.value)
         }
-        return current.restoreRecoveryPoint(pointId)
+        return restored
       },
       // The three Save failed answers, aimed at whatever session this tab holds. They report
       // nothing: the snapshot is the only honest account of whether the retry worked, and the
