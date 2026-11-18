@@ -296,11 +296,12 @@ export function LibraryHome({
 
   const open = useCallback(
     async (record: LibraryRecord): Promise<void> => {
-      if (await lockedElsewhere(record)) return
+      // No lock check: a Project another tab holds opens read-only here (#51 §5), which is the
+      // session's answer and shows its own strip.
       const opened = await services.openProject(record.id)
       if (!opened.ok && opened.error === 'guarded') setDialog({ kind: 'save-failed' })
     },
-    [services, lockedElsewhere],
+    [services],
   )
 
   const trash = useCallback(

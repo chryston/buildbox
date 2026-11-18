@@ -546,6 +546,9 @@ function FlaggedRoot({ deps }: { deps: FlaggedDeps }): ReactNode {
     )
     if (!committed.ok) return
     await library.refresh()
+    // The unsaved state now lives in the copy, so this session has nothing left to guard: reading
+    // the newer stored record back is what lifts #14's block, and `open` can close the session.
+    await current.discardUnsaved()
     void open(copyId)
   }, [ids, ports.projects, clock, library, open])
 
@@ -607,7 +610,7 @@ function FlaggedRoot({ deps }: { deps: FlaggedDeps }): ReactNode {
         <ConflictDialog
           name={session.getSnapshot().project.meta.name}
           onReload={() => {
-            void session.reload()
+            void session.discardUnsaved()
           }}
           onImportCopy={() => {
             void importChangesAsCopy()

@@ -140,9 +140,9 @@ export async function storedProject(page: Page, projectId: string): Promise<unkn
 }
 
 /** Every Library row the database holds. */
-export async function storedLibrary(page: Page): Promise<{ id: string; trashedAt: string | null }[]> {
-  const records = await readStore<{ id: string; trashedAt: string | null }>(page, 'library')
-  return records.map((row) => ({ id: row.id, trashedAt: row.trashedAt }))
+export async function storedLibrary(page: Page): Promise<{ id: string; name: string; trashedAt: string | null }[]> {
+  const records = await readStore<{ id: string; name: string; trashedAt: string | null }>(page, 'library')
+  return records.map((row) => ({ id: row.id, name: row.name, trashedAt: row.trashedAt }))
 }
 
 /** Every asset hash the database holds. */
