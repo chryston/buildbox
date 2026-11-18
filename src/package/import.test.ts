@@ -9,7 +9,7 @@ import type { Migrator, Project } from '../domain'
 import { PACKAGE_LIMITS } from './constants'
 import { encodeProject } from './encode'
 import { migrateDomainProject, stageImport } from './import'
-import { FIXTURE_BUILD, fixtureProject } from './testing'
+import { allocateIds, FIXTURE_BUILD, fixtureProject } from './testing'
 
 const bytes = (value: string): Uint8Array => new TextEncoder().encode(value)
 const text = (value: Uint8Array): string => new TextDecoder().decode(value)
@@ -85,7 +85,7 @@ function withManifest(archive: Uint8Array, edit: (manifest: Record<string, unkno
 
 /** Stage `bytes` as a production import would, and hand back the problem. */
 async function problemOf(archive: Uint8Array, acceptPreview = false): Promise<unknown> {
-  const result = await stageImport(archive, { acceptPreview })
+  const result = await stageImport(archive, { acceptPreview, allocateId: allocateIds() })
   if (result.ok) throw new Error('the input was accepted')
   return result.problem
 }
@@ -101,7 +101,7 @@ const expectProblem = async (
 
 describe('stageImport: a well-formed Backup', () => {
   it('stages the Project, the manifest and the assets', async () => {
-    const result = await stageImport(await validArchive(), { acceptPreview: false })
+    const result = await stageImport(await validArchive(), { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}`)
     const staged = result.staged
     expect(staged.project).toEqual(PROJECT)
@@ -118,7 +118,7 @@ describe('stageImport: a well-formed Backup', () => {
       floors: [{ ...source.floors[0]!, planImage: null }, source.floors[1]!],
     }
     const archive = await encodeProject(bare, async () => ({ bytes: ASSET, mediaType: 'image/png' }), FIXTURE_BUILD)
-    const result = await stageImport(archive, { acceptPreview: false })
+    const result = await stageImport(archive, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}`)
     expect(result.staged.project).toEqual(bare)
     expect(result.staged.assets.size).toBe(0)
@@ -402,8 +402,8 @@ describe('stageImport: hashes and assets', () => {
 
 describe('stageImport: the migrator chain', () => {
   it('refuses a Project saved by a newer BuildBox before touching a field', async () => {
-    await expectProblem(withManifest(await validArchive(), (m) => { m.domainSchemaVersion = 2 }), 'newer-schema', {
-      detail: { detected: 2, supported: 1 },
+    await expectProblem(withManifest(await validArchive(), (m) => { m.domainSchemaVersion = 3 }), 'newer-schema', {
+      detail: { detected: 3, supported: 2 },
     })
   })
 
@@ -412,7 +412,7 @@ describe('stageImport: the migrator chain', () => {
     const boom: Migrator = () => {
       throw new Error('a migrator that cannot run')
     }
-    expect(migrateDomainProject({ v: 1 }, 1, [adds, boom], 3)).toMatchObject({
+    expect(migrateDomainProject({ v: 1 }, 1, [adds, boom], 3, allocateIds())).toMatchObject({
       ok: false,
       problem: { code: 'migration-failed', detail: { step: 2 } },
     })
@@ -420,13 +420,13 @@ describe('stageImport: the migrator chain', () => {
 
   it('runs every step of a chain and reports the schema it came from', () => {
     const step = (key: string): Migrator => (data) => ({ ...(data as Record<string, unknown>), [key]: true })
-    expect(migrateDomainProject({ v: 1 }, 1, [step('two'), step('three')], 3)).toEqual({
+    expect(migrateDomainProject({ v: 1 }, 1, [step('two'), step('three')], 3, allocateIds())).toEqual({
       ok: true,
       record: { v: 1, two: true, three: true },
       migratedFrom: 1,
     })
     // A Project already at the current schema has not been migrated by anything.
-    expect(migrateDomainProject({ v: 1 }, 1, [], 1)).toEqual({ ok: true, record: { v: 1 }, migratedFrom: null })
+    expect(migrateDomainProject({ v: 1 }, 1, [], 1, allocateIds())).toEqual({ ok: true, record: { v: 1 }, migratedFrom: null })
   })
 })
 
@@ -496,7 +496,7 @@ describe('stageImport: preview Packages', () => {
   })
 
   it('is staged when the caller says preview imports are on', async () => {
-    const result = await stageImport(await previewArchive(), { acceptPreview: true })
+    const result = await stageImport(await previewArchive(), { acceptPreview: true, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}`)
     expect(result.staged.manifest.preview).toBe(true)
     expect(result.staged.project).toEqual(PROJECT)

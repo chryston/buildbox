@@ -24,6 +24,10 @@ function baseProject(): Project {
       },
       { id: 'floor-1', name: 'Mezzanine', planImage: null },
     ],
+    views: [
+      { id: 'view-0', kind: 'plan', floorId: 'floor-0', name: 'Floor 1', isDefault: true, showPlanImage: true },
+      { id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Mezzanine', isDefault: true, showPlanImage: true },
+    ],
     itemDesigns: [
       {
         id: 'design-0',
@@ -211,6 +215,8 @@ describe('validateProject — IDs (#42 §3)', () => {
     project.existingModel.placedItems[0].id = 'floor-0'
     expectProblems(project, [
       { path: 'floors[1].id', code: 'duplicate-id' },
+      // The Mezzanine's Plan View now names an id no Floor answers to (#56).
+      { path: 'views[1].floorId', code: 'dangling-reference' },
       { path: 'existingModel.placedItems[0].id', code: 'duplicate-id' },
     ])
   })
@@ -255,7 +261,7 @@ describe('validateProject — Floors and Plan Images', () => {
   })
 
   it('accepts a Project with no Floors and no Placed Items', () => {
-    const project = { ...baseProject(), floors: [], existingModel: { placedItems: [] } }
+    const project = { ...baseProject(), floors: [], views: [], existingModel: { placedItems: [] } }
     expect(validateProject(project).ok).toBe(true)
   })
 

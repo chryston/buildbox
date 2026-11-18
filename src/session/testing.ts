@@ -315,12 +315,12 @@ export function gateCommits(ports: Ports): GatedPorts {
 }
 
 /**
- * A New Project with the five IDs `edit.createProject` spends, named by the test, so two
+ * A New Project with the six IDs `edit.createProject` spends, named by the test, so two
  * Projects in one suite have IDs the assertions can read (#42 §3).
  */
 export function testProject(id: string, name = 'Kitchen'): Project {
   return createProject({
-    ids: [id, `${id}-floor`, `${id}-design`, `${id}-place`, `${id}-root`],
+    ids: [id, `${id}-floor`, `${id}-view`, `${id}-design`, `${id}-place`, `${id}-root`],
     now: TEST_NOW,
     name,
   })

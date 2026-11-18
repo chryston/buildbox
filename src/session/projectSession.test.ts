@@ -126,7 +126,7 @@ describe('the history of one Project', () => {
     const rootId = design.construction.root.id
     const affected: Locator = {
       floorId: placed.floorId,
-      view: 'cabinet',
+      viewId: null, view: 'cabinet',
       itemDesignIds: [design.id],
       placedItemIds: [placed.id],
     }

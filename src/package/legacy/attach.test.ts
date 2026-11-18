@@ -216,9 +216,10 @@ describe('floorPlanAsProject (#43 criterion 11)', () => {
     if (!made.ok) throw new Error(JSON.stringify(made.problems))
 
     expect(validateProject(made.project).ok).toBe(true)
+    // `gen-1` went to the Floor's Plan View, so the regenerated id is the next one (#56).
     expect(made.regeneratedIds).toEqual([
-      { scope: 'floor-plan', path: 'itemDesigns[0].id', oldId: 'proj-floor-plan', newId: 'gen-1' },
+      { scope: 'floor-plan', path: 'itemDesigns[0].id', oldId: 'proj-floor-plan', newId: 'gen-2' },
     ])
-    expect(made.project.existingModel.placedItems[0]?.itemDesignId).toBe('gen-1')
+    expect(made.project.existingModel.placedItems[0]?.itemDesignId).toBe('gen-2')
   })
 })

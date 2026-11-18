@@ -35,14 +35,14 @@ export function intent<T extends IntentType>(type: T, payload: PayloadOf<T>, tak
 export function basicProject(): Project {
   const url = new URL('../../fixtures/domain/v1/project-basic.json', import.meta.url)
   const envelope = JSON.parse(readFileSync(fileURLToPath(url), 'utf8')) as Record<string, unknown>
-  const result = migrateProject(envelope.project, envelope.domainSchemaVersion as number)
+  const result = migrateProject(envelope.project, envelope.domainSchemaVersion as number, idSource('view'))
   if (!result.ok) throw new Error(`project-basic.json: ${result.error.message}`)
   return result.project
 }
 
 /** The Project "New Project" makes, with the five IDs `createProject` spends. */
 export function newProject(name = 'Kitchen'): Project {
-  return createProject({ ids: idSource('new')(5), now: NOW, name })
+  return createProject({ ids: idSource('new')(6), now: NOW, name })
 }
 
 /** A Project whose one cabinet has a shelf, so tree Intents have a space to point at. */

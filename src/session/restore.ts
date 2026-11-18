@@ -109,7 +109,7 @@ export function copyNameFor(name: string, taken: Iterable<string>): string {
  * collision dialog promise `Cancel—change nothing` and mean it.
  */
 export async function stageRestore(deps: RestoreDeps, bytes: Uint8Array): Promise<Result<RestoreStaged, RestoreProblem>> {
-  const staged = await stageImport(bytes, { acceptPreview: deps.acceptPreview })
+  const staged = await stageImport(bytes, { acceptPreview: deps.acceptPreview, allocateId: deps.ids })
   if (!staged.ok) return err({ kind: 'package', problem: staged.problem })
 
   // Step 7 (#20 §6): every Plan Image must decode, with dimensions equal to its record. A

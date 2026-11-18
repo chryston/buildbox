@@ -32,6 +32,19 @@ Item Designs plus Placed Items on every Floor. `src/edit/apply.bench.ts` measure
 `applyIntent` on it, which is why it exists; `src/domain/fixtures.test.ts` migrates it like
 any other file here.
 
+## `v2/` — domain schema v2 (#56)
+
+`v2/project-basic.json` and `v2/reference-project.json` are the two v1 files run through
+`migrateV1toV2`: the same Project, plus the one default Plan View each Floor comes with —
+`{ id, kind: "plan", floorId, name: <the Floor's name>, isDefault: true, showPlanImage: true }`,
+with view IDs allocated as `view-0`, `view-1`, … in Floor order. Neither carries `limits`:
+migration invents no measurement nobody took.
+
+`v2/reference-project.json` is written by the same script as its v1 twin
+(`npx vite-node scripts/make-reference-project.ts` regenerates both together).
+`src/domain/remapIds.property.test.ts` and the benchmarks read the v2 file, because it is
+the current schema; the v1 files stay untouched as the compatibility evidence they were.
+
 ## How it was produced
 
 Hand-authored as a plain object, then written with `lib.canonicalJson` — keys sorted, no

@@ -123,7 +123,7 @@ export function createLibraryStore(deps: LibraryDeps): LibraryStore {
     refresh,
 
     async createProject(name: string): Promise<Result<string, PersistenceError>> {
-      const project = buildProject({ ids: ids(5), now: clock.now(), name })
+      const project = buildProject({ ids: ids(6), now: clock.now(), name })
       const committed = await ports.projects.commit(
         { project, revision: NEW_PROJECT_REVISION, savedAt: clock.now() },
         null,

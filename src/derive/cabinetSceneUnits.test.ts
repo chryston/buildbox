@@ -49,6 +49,7 @@ const project = (parts: Partial<Project>): Project => ({
   meta: { name: 'Test' },
   preferences: { displayUnit: 'mm', displayPrecision: 0 },
   floors: [{ id: 'floor-1', name: 'Floor 1', planImage: null }],
+  views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Floor 1', isDefault: true, showPlanImage: true }],
   itemDesigns: [],
   existingModel: { placedItems: [] },
   ...parts,

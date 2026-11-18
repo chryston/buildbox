@@ -6,6 +6,7 @@ import { sha256Hex, unzipEntries, zipEntries, type ZipLimits } from '../lib'
 import { validateProject } from '../domain'
 import { stageImport, type StageImportResult } from './import'
 import { PACKAGE_PROBLEM_CODES } from './problems'
+import { allocateIds } from './testing'
 
 /**
  * The fuzz property of #44: whatever a hostile upload, a truncated download or a flipped
@@ -123,7 +124,7 @@ describe('no archive defeats the importer', () => {
   it('answers every mutation of a real Backup with a staged Project or a typed problem', async () => {
     await fc.assert(
       fc.asyncProperty(MUTATION, async (edit) => {
-        const result = await stageImport(mutate(REFERENCE, edit), { acceptPreview: false })
+        const result = await stageImport(mutate(REFERENCE, edit), { acceptPreview: false, allocateId: allocateIds() })
         accepted(result)
         for (const [hash, asset] of result.ok ? result.staged.assets : []) {
           expect(await sha256Hex(asset.bytes)).toBe(hash)
@@ -136,7 +137,7 @@ describe('no archive defeats the importer', () => {
   it('answers any bytes at all the same way', async () => {
     await fc.assert(
       fc.asyncProperty(fc.uint8Array({ minLength: 0, maxLength: 512 }), async (noise) => {
-        accepted(await stageImport(noise, { acceptPreview: false }))
+        accepted(await stageImport(noise, { acceptPreview: false, allocateId: allocateIds() }))
       }),
       params,
     )
@@ -145,7 +146,7 @@ describe('no archive defeats the importer', () => {
   it('answers the same mutations when preview packages are accepted', async () => {
     await fc.assert(
       fc.asyncProperty(MUTATION, async (edit) => {
-        accepted(await stageImport(mutate(REFERENCE, edit), { acceptPreview: true }))
+        accepted(await stageImport(mutate(REFERENCE, edit), { acceptPreview: true, allocateId: allocateIds() }))
       }),
       params,
     )

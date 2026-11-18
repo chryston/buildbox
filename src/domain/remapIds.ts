@@ -16,7 +16,8 @@
  *
  * The walk order is fixed and stated in full, because it is the contract between the
  * collection and the rebuild the way `INTENT_ID_ORDER` is between caller and handler
- * (#20 §4): `project.id`, then the Floors in array order, then each Item Design in array
+ * (#20 §4): `project.id`, then the Floors in array order, then the Plan Views in array
+ * order, then each Item Design in array
  * order followed — for a cabinet — by its tree in pre-order (a space, then its dividers,
  * then its accessories, then its left subtree, then its right), then the Placed Items in
  * array order. Slot 0 belongs to the Project and is filled by `newId`, which the caller
@@ -73,6 +74,7 @@ export function remapIds(project: Project, newId: EntityId, allocate: IdAllocato
     ...project,
     id: newId,
     floors: project.floors.map((floor) => ({ ...floor, id: next(floor.id) })),
+    views: project.views.map((view) => ({ ...view, id: next(view.id), floorId: next(view.floorId) })),
     itemDesigns: project.itemDesigns.map((design) => remapDesign(design, next)),
     existingModel: {
       ...project.existingModel,
@@ -90,6 +92,7 @@ export function remapIds(project: Project, newId: EntityId, allocate: IdAllocato
 function entityIds(project: Project): EntityId[] {
   const ids: EntityId[] = [project.id]
   for (const floor of project.floors) ids.push(floor.id)
+  for (const view of project.views) ids.push(view.id)
   for (const design of project.itemDesigns) {
     ids.push(design.id)
     if (design.kind === 'cabinet') collectSpace(design.construction.root, ids)

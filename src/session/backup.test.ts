@@ -37,6 +37,7 @@ import {
   type FakeDownload,
   type FakeEncoder,
 } from './testing'
+import { allocateIds } from '../package/testing'
 
 const KITCHEN = 'kitchen-1'
 
@@ -155,7 +156,7 @@ describe('downloading a Backup', () => {
     expect(written.ok).toBe(true)
     if (!written.ok) return
 
-    const staged = await stageImport(over.download.files[0]!.bytes, { acceptPreview: false })
+    const staged = await stageImport(over.download.files[0]!.bytes, { acceptPreview: false, allocateId: allocateIds() })
     expect(staged.ok).toBe(true)
     if (!staged.ok) return
     expect(canonicalJson(staged.staged.project)).toBe(canonicalJson(project))
@@ -178,7 +179,7 @@ describe('downloading a Backup', () => {
     expect(over.encoder.calls[0]!.assetCount).toBe(1)
 
     // The same bytes in a production build: refused, and named as a preview package.
-    const refused = await stageImport(over.download.files[0]!.bytes, { acceptPreview: false })
+    const refused = await stageImport(over.download.files[0]!.bytes, { acceptPreview: false, allocateId: allocateIds() })
     expect(refused.ok).toBe(false)
     if (refused.ok) return
     expect(refused.problem.code).toBe('preview-package')
@@ -252,7 +253,7 @@ describe('the emergency Backup of an unsaved session', () => {
     expect(encoded.ok).toBe(true)
     if (!encoded.ok) return
 
-    const staged = await stageImport(encoded.value, { acceptPreview: false })
+    const staged = await stageImport(encoded.value, { acceptPreview: false, allocateId: allocateIds() })
     expect(staged.ok).toBe(true)
     if (!staged.ok) return
     expect(staged.staged.project.floors[0]!.name).toBe('Ground')

@@ -34,8 +34,21 @@ export const INTENT_LABELS = {
   'plan.addTemplate': 'Save custom shape',
   'plan.removeTemplate': 'Remove custom shape',
   'plan.setImage': 'Set plan image',
+  'plan.removeImage': 'Remove plan image',
   'plan.calibrate': 'Calibrate scale',
   'plan.clear': 'Clear floor plan',
+  'plan.copyToFloor': 'Copy to floor',
+  'plan.moveToFloor': 'Move to floor',
+  'floor.create': 'Add floor',
+  'floor.rename': 'Rename floor',
+  'floor.reorder': 'Reorder floors',
+  'floor.setLimits': 'Set floor limits',
+  'floor.delete': 'Delete floor',
+  'floor.duplicate': 'Duplicate floor',
+  'view.create': 'Add view',
+  'view.rename': 'Rename view',
+  'view.delete': 'Delete view',
+  'view.setShowPlanImage': 'Show plan image',
 } as const satisfies Record<IntentType, string>
 
 /**
@@ -48,6 +61,3 @@ export const PLAN_UPDATE_LABELS = {
   rotate: 'Rotate item',
   edit: 'Edit item',
 } as const
-
-/** `plan.setImage` with `image: null` is the removal the toolbar offers. */
-export const PLAN_REMOVE_IMAGE_LABEL = 'Remove plan image'

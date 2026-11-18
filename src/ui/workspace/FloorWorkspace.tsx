@@ -97,7 +97,6 @@ export function FloorWorkspace(): ReactNode {
   const [isCalibrating, setIsCalibrating] = useState(false)
   const [pendingDistancePx, setPendingDistancePx] = useState<number | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
-  const [pendingImage, setPendingImage] = useState<PreparedPlanImage | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   const narrow = useNarrow()
@@ -159,7 +158,7 @@ export function FloorWorkspace(): ReactNode {
     select(lastPlacedId(session.getSnapshot().project, floorId))
   }
 
-  const commitImage = (prepared: PreparedPlanImage, clearExisting: boolean): void => {
+  const commitImage = (prepared: PreparedPlanImage): void => {
     const asset = prepared.asset
     if (asset === null || floorId === null) return
     services.assetUrls.put(asset.sha256, asset.bytes)
@@ -179,7 +178,6 @@ export function FloorWorkspace(): ReactNode {
           widthPx: asset.widthPx,
           heightPx: asset.heightPx,
         },
-        clearExisting,
       }),
       [sessionAsset],
     )
@@ -201,8 +199,8 @@ export function FloorWorkspace(): ReactNode {
       setUploadError(read.message)
       return
     }
-    if (items.length > 0) setPendingImage(read.image)
-    else commitImage(read.image, false)
+    // A new picture never clears the objects drawn over it (#56): the upload is the upload.
+    commitImage(read.image)
   }
 
   const handleExportSvg = (): void => {
@@ -446,30 +444,6 @@ export function FloorWorkspace(): ReactNode {
             />
           </>
         }
-        draftBar={pendingImage === null ? null : (
-          <>
-            <span>Uploading a new image will clear all placed objects. Continue?</span>
-            <button
-              type="button"
-              data-testid="confirm-image-upload"
-              className="bb-workspace-tool-button"
-              onClick={() => {
-                commitImage(pendingImage, true)
-                setPendingImage(null)
-              }}
-            >
-              Yes, clear and upload
-            </button>
-            <button
-              type="button"
-              data-testid="cancel-image-upload"
-              className="bb-workspace-tool-button"
-              onClick={() => setPendingImage(null)}
-            >
-              Cancel
-            </button>
-          </>
-        )}
         warningStrip={uploadError !== null ? (
           <span data-testid="upload-error" data-tone="error">{uploadError}</span>
         ) : uncalibratedHint ? (

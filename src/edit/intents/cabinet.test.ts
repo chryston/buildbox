@@ -48,7 +48,7 @@ describe('cabinet.addShelf and cabinet.addDivider', () => {
     expect(root.children?.every((child) => child.elementType === 'void')).toBe(true)
     expect(result.affected).toEqual({
       floorId: firstPlacement(project).floorId,
-      view: 'cabinet',
+      viewId: null, view: 'cabinet',
       itemDesignIds: [designId(project)],
       placedItemIds: [firstPlacement(project).id],
     })
@@ -246,7 +246,7 @@ describe('cabinet.updateSettings and cabinet.setMaterial', () => {
     expect(project.itemDesigns.length).toBe(4)
     expect(applied.affected).toEqual({
       floorId: 'floor-main',
-      view: 'cabinet',
+      viewId: null, view: 'cabinet',
       itemDesignIds: ['design-base-cabinet'],
       placedItemIds: ['place-base-left', 'place-base-right'],
     })
@@ -279,7 +279,7 @@ describe('unit management', () => {
     expect(placed).toMatchObject({ itemDesignId, floorId: project.floors[0]!.id, translation: { x: 920, y: 250 }, baseElevation: 0 })
     expect(result.affected).toEqual({
       floorId: project.floors[0]!.id,
-      view: 'cabinet',
+      viewId: null, view: 'cabinet',
       itemDesignIds: [itemDesignId],
       placedItemIds: [placedItemId],
     })

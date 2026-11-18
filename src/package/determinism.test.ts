@@ -42,6 +42,7 @@ describe('encodeProject determinism', () => {
       JSON.stringify({
         existingModel: project.existingModel,
         itemDesigns: project.itemDesigns,
+        views: project.views,
         floors: project.floors,
         preferences: project.preferences,
         meta: project.meta,

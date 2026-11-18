@@ -11,21 +11,58 @@
  * issue that adds the next one.
  */
 import type { ValidationProblem } from '../lib'
-import type { Project } from './project'
+import type { IdAllocator } from './remapIds'
+import type { Floor, PlanView, Project } from './project'
 import { validateProject } from './validate'
 
 /** The domain schema this build writes and understands at the top of the chain. */
-export const DOMAIN_SCHEMA_VERSION = 1
-
-/** One pure vN → vN+1 step. Its input is already a copy; it never reads the clock. */
-export type Migrator = (data: unknown) => unknown
+export const DOMAIN_SCHEMA_VERSION = 2
 
 /**
- * `MIGRATORS[i]` migrates v(i+1) → v(i+2). v1 is the first schema, so there is nothing
- * to migrate from yet and the chain is empty; the issue that bumps the version appends
- * the first entry.
+ * One pure vN → vN+1 step. Its input is already a copy; it never reads the clock, and a
+ * step that needs new IDs is handed an allocator rather than minting one (#42 §3).
  */
-export const MIGRATORS: readonly Migrator[] = []
+export type Migrator = (data: unknown, allocateId: IdAllocator) => unknown
+
+/**
+ * `MIGRATORS[i]` migrates v(i+1) → v(i+2), so index 0 is v1 → v2.
+ */
+export const MIGRATORS: readonly Migrator[] = [migrateV1toV2]
+
+/**
+ * v1 → v2 (#56): the Project gains `views`, and each Floor gains the one default Plan
+ * View that shows it.
+ *
+ * Nothing else moves. `Floor.limits` is absent rather than defaulted — a Floor whose
+ * extent nobody typed has no limits, and inventing `0` would be a claim about the
+ * building. The view takes its name from the Floor it shows, because that is the label
+ * the switcher would otherwise have to invent per render, and it shows the Plan Image,
+ * which is what every v1 Plan View did. IDs come from `allocateId`, called once with the
+ * number of Floors, so a migrated Project is fully determined by its input plus the IDs
+ * the caller brought.
+ *
+ * A value that is not a Project shape comes back with `views: []` added and is left for
+ * `validateProject` to refuse: a migrator repairs versions, it never repairs data.
+ */
+export function migrateV1toV2(data: unknown, allocateId: IdAllocator): unknown {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return data
+  const record = data as Record<string, unknown>
+  const floors: readonly unknown[] = Array.isArray(record.floors) ? record.floors : []
+  const shaped = floors.filter(
+    (floor): floor is Floor =>
+      floor !== null && typeof floor === 'object' && typeof (floor as Floor).id === 'string',
+  )
+  const ids = allocateId(shaped.length)
+  const views: PlanView[] = shaped.map((floor, index) => ({
+    id: ids[index] as string,
+    kind: 'plan',
+    floorId: floor.id,
+    name: typeof floor.name === 'string' ? floor.name : '',
+    isDefault: true,
+    showPlanImage: true,
+  }))
+  return { ...record, views }
+}
 
 export type MigrateError =
   /** Data from a newer BuildBox: refused, never guessed at (#20 §5). */
@@ -46,11 +83,16 @@ export type MigrateResult =
  * multi-step chain without shipping fake schema versions. `from` is assumed to be an
  * integer of 1 or more; a chain shorter than `from` applies no steps.
  */
-export function runMigrationChain(data: unknown, from: number, chain: readonly Migrator[]): unknown {
+export function runMigrationChain(
+  data: unknown,
+  from: number,
+  chain: readonly Migrator[],
+  allocateId: IdAllocator,
+): unknown {
   // Migration always runs on a copy: the caller's value is never mutated (#14).
   let current = structuredClone(data)
   for (let index = from - 1; index < chain.length; index += 1) {
-    current = (chain[index] as Migrator)(current)
+    current = (chain[index] as Migrator)(current, allocateId)
   }
   return current
 }
@@ -58,8 +100,12 @@ export function runMigrationChain(data: unknown, from: number, chain: readonly M
 /**
  * Bring `data`, recorded as arriving at `fromVersion`, up to {@link DOMAIN_SCHEMA_VERSION}
  * and validate it. `fromVersion` is `unknown` because it comes off an untrusted envelope.
+ *
+ * `allocateId` is only spent when a step actually runs, but it is always a parameter: the
+ * caller decides where new IDs come from, and a Project already at the top of the chain
+ * simply never asks (#42 §3).
  */
-export function migrateProject(data: unknown, fromVersion: unknown): MigrateResult {
+export function migrateProject(data: unknown, fromVersion: unknown, allocateId: IdAllocator): MigrateResult {
   if (typeof fromVersion !== 'number' || !Number.isInteger(fromVersion) || fromVersion < 1) {
     return {
       ok: false,
@@ -83,7 +129,7 @@ export function migrateProject(data: unknown, fromVersion: unknown): MigrateResu
     }
   }
 
-  const migrated = runMigrationChain(data, fromVersion, MIGRATORS)
+  const migrated = runMigrationChain(data, fromVersion, MIGRATORS, allocateId)
   const result = validateProject(migrated)
   if (!result.ok) {
     return {

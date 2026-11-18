@@ -9,6 +9,7 @@
 import type { IntentType } from './intents'
 import type { IntentHandler } from './handlers/context'
 import { CABINET_HANDLERS } from './handlers/cabinetHandlers'
+import { FLOOR_HANDLERS, PLAN_FLOOR_HANDLERS, VIEW_HANDLERS } from './handlers/floorHandlers'
 import { PLAN_HANDLERS } from './handlers/planHandlers'
 import { PROJECT_HANDLERS } from './handlers/projectHandlers'
 
@@ -16,6 +17,9 @@ export const INTENT_HANDLERS: { [T in IntentType]: IntentHandler<T> } = {
   ...PROJECT_HANDLERS,
   ...CABINET_HANDLERS,
   ...PLAN_HANDLERS,
+  ...PLAN_FLOOR_HANDLERS,
+  ...FLOOR_HANDLERS,
+  ...VIEW_HANDLERS,
 }
 
 /** Every Intent type the catalogue answers — the list #48's undo menu and #66 read. */

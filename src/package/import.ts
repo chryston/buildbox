@@ -17,6 +17,7 @@ import {
   MIGRATORS,
   runMigrationChain,
   validateProject,
+  type IdAllocator,
   type Migrator,
   type Project,
 } from '../domain'
@@ -53,6 +54,12 @@ export interface StagedPackage {
 export interface StageImportContext {
   /** Decided by `app` from its feature flag; the codec reads no environment (#44). */
   readonly acceptPreview: boolean
+  /**
+   * Fresh IDs for a Backup that arrives at an older domain schema and gains entities on the
+   * way up (#56). Spent only when a migrator runs; `session` brings it from its own ID
+   * source, because `package` never mints one (#42 §3).
+   */
+  readonly allocateId: IdAllocator
 }
 
 export type StageImportResult = { ok: true; staged: StagedPackage } | { ok: false; problem: PackageProblem }
@@ -93,7 +100,13 @@ async function stage(bytes: Uint8Array, ctx: StageImportContext): Promise<StageI
   const missing = missingAsset(record.record, declared.manifest)
   if (missing !== null) return { ok: false, problem: missing }
 
-  const migrated = migrateDomainProject(record.record, declared.manifest.domainSchemaVersion, MIGRATORS, DOMAIN_SCHEMA_VERSION)
+  const migrated = migrateDomainProject(
+    record.record,
+    declared.manifest.domainSchemaVersion,
+    MIGRATORS,
+    DOMAIN_SCHEMA_VERSION,
+    ctx.allocateId,
+  )
   if (!migrated.ok) return migrated
 
   return validateStaged(migrated.record, migrated.migratedFrom, declared.manifest, archive.entries)
@@ -268,28 +281,33 @@ export type MigrationResult =
  *
  * The chain and the current version are parameters so a test can drive a synthetic
  * multi-step chain, the way `domain`'s `runMigrationChain` does; `stageImport` always
- * passes the real ones.
+ * passes the real ones. `allocateId` is what a step that adds entities is paid in — the
+ * caller's ID source, because `package` never mints one (#42 §3).
  */
 export function migrateDomainProject(
   record: unknown,
   from: number,
   chain: readonly Migrator[],
   current: number,
+  allocateId: IdAllocator,
 ): MigrationResult {
   if (from > current) {
     return packageProblem('newer-schema', { detail: { detected: from, supported: current } })
   }
-  const numbered: Migrator[] = chain.map((migrator, index) => (data: unknown) => {
-    try {
-      return migrator(data)
-    } catch {
-      throw new MigrationStepError(index + 1)
-    }
-  })
+  const numbered: Migrator[] = chain.map(
+    (migrator, index) =>
+      (data: unknown, allocate: IdAllocator) => {
+        try {
+          return migrator(data, allocate)
+        } catch {
+          throw new MigrationStepError(index + 1)
+        }
+      },
+  )
   try {
     return {
       ok: true,
-      record: runMigrationChain(record, from, numbered),
+      record: runMigrationChain(record, from, numbered, allocateId),
       migratedFrom: from === current ? null : from,
     }
   } catch (error) {

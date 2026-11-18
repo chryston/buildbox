@@ -83,6 +83,9 @@ export function projectFixture(planImageHash: string | null, id: string = PROJEC
             : { assetHash: planImageHash, mediaType: 'image/png', widthPx: 64, heightPx: 48, pixelsPerMm: 0.5 },
       },
     ],
+    views: [
+      { id: `${id}-view-1`, kind: 'plan', floorId: `${id}-floor-1`, name: 'Floor 1', isDefault: true, showPlanImage: true },
+    ],
     itemDesigns: [
       {
         id: `${id}-design-bed`,

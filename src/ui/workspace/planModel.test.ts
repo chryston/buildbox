@@ -24,6 +24,7 @@ const project = (over: Partial<Project> = {}): Project => ({
   meta: { name: 'Home' },
   preferences: { displayUnit: 'mm', displayPrecision: 0 },
   floors: [{ id: 'floor-1', name: 'Flat', planImage: null }],
+  views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Flat', isDefault: true, showPlanImage: true }],
   itemDesigns: [genericDesign()],
   existingModel: {
     placedItems: [{

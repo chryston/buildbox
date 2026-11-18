@@ -11,7 +11,7 @@
  * the Project that came out — because a legacy floor plan shares no ID namespace with the
  * Project it is being merged into.
  */
-import { validateProject } from '../../domain'
+import { defaultPlanView, validateProject } from '../../domain'
 import type { EntityId, Floor, GenericItemDesign, PlacedItem, Project } from '../../domain'
 import { problem, type ValidationProblem } from '../../lib'
 import type { IdRegeneration, LegacyFloorPlanContent } from './conversion'
@@ -83,6 +83,13 @@ export function floorPlanAsProject(
     meta: { name: options.name },
     preferences: { ...MIGRATED_PREFERENCES },
     floors: [{ id: options.floorId, name: FLOOR_ONE_NAME, planImage: content.planImage }],
+    views: [
+      defaultPlanView(options.newId(), {
+        id: options.floorId,
+        name: FLOOR_ONE_NAME,
+        planImage: content.planImage,
+      }),
+    ],
     itemDesigns: [],
     existingModel: { placedItems: [] },
   }
@@ -139,6 +146,7 @@ function appendContent(
 function takenIds(project: Project): Set<string> {
   const taken = new Set<string>([project.id])
   for (const floor of project.floors) taken.add(floor.id)
+  for (const view of project.views) taken.add(view.id)
   for (const design of project.itemDesigns) taken.add(design.id)
   for (const placed of project.existingModel.placedItems) taken.add(placed.id)
   return taken
