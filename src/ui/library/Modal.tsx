@@ -34,9 +34,14 @@ export interface ModalProps {
   dismissable?: boolean
   /** `.failure-modal` for the dialogs that report something going wrong (#51). */
   className?: string
+  /**
+   * Drawn before the eyebrow: the `!` of the failure dialogs floats right, and a float only sits
+   * beside the eyebrow and title if it comes before them in the box (the archive's order).
+   */
+  lead?: ReactNode
 }
 
-export function Modal({ eyebrow, eyebrowDanger, heading, onClose, children, dismissable = true, className }: ModalProps): ReactNode {
+export function Modal({ eyebrow, eyebrowDanger, heading, onClose, children, dismissable = true, className, lead }: ModalProps): ReactNode {
   const box = useRef<HTMLDivElement>(null)
   const headingId = useId()
 
@@ -96,6 +101,7 @@ export function Modal({ eyebrow, eyebrowDanger, heading, onClose, children, dism
         tabIndex={-1}
         onKeyDown={onKeyDown}
       >
+        {lead}
         {eyebrow !== undefined && (
           <p className={eyebrowDanger ? 'eyebrow danger' : 'eyebrow'}>{eyebrow}</p>
         )}

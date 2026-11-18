@@ -31,10 +31,12 @@ export function ConflictDialog({ name, onReload, onImportCopy, onEmergencyBackup
       eyebrowDanger
       heading={STRINGS.conflictHeading}
       dismissable={false}
+      lead={
+        <div className="failure-icon" aria-hidden="true">
+          !
+        </div>
+      }
     >
-      <div className="failure-icon" aria-hidden="true">
-        !
-      </div>
       <p>{STRINGS.conflictBody(name)}</p>
       <div className="failure-actions">
         <button className="button primary" onClick={onReload}>

@@ -61,10 +61,12 @@ export function SaveFailedDialog({
       eyebrowDanger
       heading={STRINGS.saveFailedHeading}
       dismissable={false}
+      lead={
+        <div className="failure-icon" aria-hidden="true">
+          !
+        </div>
+      }
     >
-      <div className="failure-icon" aria-hidden="true">
-        !
-      </div>
       {lastSavedAt === null ? (
         <p>{STRINGS.saveFailedNothingStored}</p>
       ) : (
