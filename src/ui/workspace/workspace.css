@@ -315,6 +315,15 @@
   font-size: 13px;
 }
 
+/* The reason and the way to fix it are two things, not one run-on line: the button keeps its
+   own space beside the words and drops below them when the canvas is too narrow for both. */
+.bb-workspace-warning-strip > span {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
 .bb-workspace-warning-strip[data-tone='error'] {
   border-top-color: var(--bb-danger-dot);
   background: var(--bb-bg-modal);
