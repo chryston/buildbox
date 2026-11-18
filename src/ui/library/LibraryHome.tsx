@@ -101,6 +101,7 @@ export function LibraryHome({ services, saveState = null, saveStateFor = null }:
   const [counts, setCounts] = useState<Map<string, number>>(new Map())
   const [busy, setBusy] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
+  const countsToken = useRef(0)
 
   const now = clock.now()
   const projects = useMemo(() => snapshot.projects.filter((record) => record.trashedAt === null), [snapshot.projects])
@@ -108,8 +109,22 @@ export function LibraryHome({ services, saveState = null, saveStateFor = null }:
   const dueIds = useMemo(() => new Set(due.map((record) => record.id)), [due])
 
   const refreshCounts = useCallback((): void => {
-    void services.recoveryCounts().then(setCounts)
+    // A token rather than a bare `then`: two refreshes can be in flight when a Project is
+    // restored (the list re-read and the count re-read both fire), and unmounting the Library
+    // must drop a count that is on its way — setting state on a component that is gone is a
+    // leak in the app, not a quirk of the test that noticed it.
+    const token = ++countsToken.current
+    void services.recoveryCounts().then((next) => {
+      if (token === countsToken.current) setCounts(next)
+    })
   }, [services])
+
+  useEffect(
+    () => () => {
+      countsToken.current += 1
+    },
+    [],
+  )
 
   useEffect(() => {
     refreshCounts()

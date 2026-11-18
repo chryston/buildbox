@@ -53,6 +53,31 @@ export async function openLibrary(page: Page, seed: PreviewSeed = paritySeed): P
 }
 
 /**
+ * Replace the database of a page that has already been loaded, and load it again.
+ *
+ * `seedPreviewDb` writes inside the database's version-change transaction, which only happens
+ * once per context — so a helper handed a page that has already visited the app finds the
+ * database built and empty, and seeding does nothing at all. Dropping it first is the only way
+ * to put records into a page that got there before the seed did, which is exactly the position
+ * a comparison helper's `prepare` finds itself in.
+ */
+export async function reseedAndReload(page: Page, seed: PreviewSeed): Promise<void> {
+  await seedPreviewDb(page, seed)
+  await page.evaluate(
+    (dbName) =>
+      new Promise<void>((resolveDelete, rejectDelete) => {
+        const request = indexedDB.deleteDatabase(dbName)
+        request.onsuccess = () => resolveDelete()
+        request.onerror = () => rejectDelete(new Error(`deleting ${dbName} failed`))
+        request.onblocked = () => rejectDelete(new Error(`deleting ${dbName} was blocked`))
+      }),
+    PREVIEW_DB_NAME,
+  )
+  await page.reload({ waitUntil: 'networkidle' })
+  await expect(libraryHeading(page)).toBeVisible()
+}
+
+/**
  * Click a card's `Backup`, confirm, and hand back the file the browser was given.
  *
  * The download is awaited before the click rather than after it: the anchor is created and

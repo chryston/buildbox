@@ -46,9 +46,11 @@ const FIXTURE = [
  * Let every promise the component started settle inside React's `act`.
  *
  * `src/test/setup.ts` turns an act() warning into a failure, and a component that awaits a port in
- * an effect resolves its promise one tick after `render` or `fireEvent` returned — outside `act`.
- * Draining the queue inside `act` is the only way to see the result without racing a
- * half-committed tree.
+ * an effect resolves its promise some ticks after `render` or `fireEvent` returned — outside
+ * `act`. Draining the queue inside `act` is the only way to see the result without racing a
+ * half-committed tree, and the drain has to outlast the deepest chain the component can start:
+ * renaming re-reads the list, whose notification re-runs the Recovery Point count read, which is
+ * four awaits deep before anything reaches React.
  */
 const flush = async (): Promise<void> => {
   await act(async () => {
@@ -62,6 +64,10 @@ const renderLibrary = async (records = FIXTURE, recoveryCount = 8): Promise<Test
   render(<LibraryHome services={test.services} />)
   await flush()
   await screen.findAllByText(`${recoveryCount} Recovery Point${recoveryCount === 1 ? '' : 's'}`)
+  // The store starts empty and fills itself, so the count read runs twice: once against the
+  // empty list and once when the Projects land. Waiting for the first render is not waiting for
+  // the second, and an update left in flight is charged to whichever test runs next.
+  await flush()
   return test
 }
 
@@ -175,6 +181,7 @@ describe('the Library home', () => {
   it('shows the save line of the Project whose session this tab holds (#50 criterion 4)', async () => {
     const test = createTestLibrary(FIXTURE)
     render(<LibraryHome services={test.services} saveState={{ kind: 'saving' }} saveStateFor="home" />)
+    await flush()
     expect(card('Tiong Bahru Home')).toHaveTextContent('Saving…')
   })
 
@@ -187,6 +194,7 @@ describe('the Library home', () => {
         saveStateFor="home"
       />,
     )
+    await flush()
     const line = card('Tiong Bahru Home').querySelector('.save-line') as HTMLElement
     expect(line).toHaveClass('failed')
     expect(line).toHaveTextContent('Save failed · changes not stored')
@@ -202,6 +210,9 @@ describe('the Library home', () => {
     fireEvent.click(within(card('Studio Renovation')).getByRole('button', { name: 'More actions for Studio Renovation' }))
     fireEvent.click(screen.getByRole('button', { name: 'Duplicate' }))
     expect(test.calls.duplicated).toEqual(['studio'])
+    // Duplicating adds a Project, and a new Project means the Recovery Point counts are read
+    // again. That read belongs to this test whether or not the test looks at it.
+    await flush()
   })
 
   it('treats Cancel, Esc and a backdrop click on the Rename dialog as the same thing (#50 criterion 13)', async () => {
@@ -234,6 +245,9 @@ describe('the Library home', () => {
     fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Renamed' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save name' }))
     expect(test.calls.renamed).toEqual([['home', 'Renamed']])
+    // Renaming re-reads the list, and that read resolves after this assertion — the only way to
+    // see it is to wait for it here rather than let it land in whichever test runs next.
+    await flush()
   })
 
   it('sends a card to Trash and says for how long (#50 criterion 14)', async () => {
@@ -291,6 +305,7 @@ describe('the Library home', () => {
       const test = createTestLibrary(FIXTURE)
       test.failRestore(refusal)
       const view = render(<LibraryHome services={test.services} />)
+      await flush()
       await pickFile(test)
       const dialog = await screen.findByRole('dialog', { name: heading })
       expect(dialog).toHaveTextContent('Restore Backup')
@@ -303,6 +318,7 @@ describe('the Library home', () => {
     const test = createTestLibrary(FIXTURE)
     test.failRestore(packageProblem('hash-mismatch'))
     render(<LibraryHome services={test.services} />)
+    await flush()
     await pickFile(test)
     expect(await screen.findByText('The content hash check failed. Nothing was changed.')).toBeInTheDocument()
   })
@@ -314,6 +330,7 @@ describe('the Library home', () => {
       collision: { existing: record({ id: 'home', name: 'Tiong Bahru Home' }), copyName: 'Restored Flat — Copy' },
     })
     render(<LibraryHome services={test.services} />)
+    await flush()
     await pickFile(test)
     const dialog = await screen.findByRole('dialog', { name: 'This Project already exists here' })
     expect(within(dialog).getByText('Restore Backup')).toBeInTheDocument()

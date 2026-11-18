@@ -2,7 +2,15 @@ import type { Page, TestInfo } from '@playwright/test'
 import { expect, test } from '../support/fixtures'
 import { diffAgainstPrototype } from '../support/prototypeCompare'
 import { LIBRARY_28, importCollision, library } from '../support/prototypes/library28'
-import { card, dialogHeading, downloadBackupOf, openLibrary, paritySeed, restoreFile } from '../support/libraryApp'
+import {
+  card,
+  dialogHeading,
+  downloadBackupOf,
+  openLibrary,
+  paritySeed,
+  reseedAndReload,
+  restoreFile,
+} from '../support/libraryApp'
 import { waitForFonts, waitForStablePaint } from '../support/stability'
 
 /**
@@ -66,7 +74,9 @@ test('the Library matches #28 Variant A and is baselined', async ({ page }, test
     production: {
       route: './',
       prepare: async (production) => {
-        await openLibrary(production, paritySeed)
+        // The comparison helper navigates before it calls a preparer, so the database already
+        // exists by the time this runs and seeding it would be a no-op.
+        await reseedAndReload(production, paritySeed)
         // The card the archive's screenshot has selected, and the pointer parked off every
         // card so no hover state is caught mid-paint on either side.
         await card(production, 'Tiong Bahru Home').click()
@@ -94,7 +104,7 @@ test('the import collision matches #28 Variant A and is baselined', async ({ pag
   await diffAgainstPrototype(page, testInfo, {
     name: 'library-28-import-collision',
     prototype: { kind: 'static-archive', ...LIBRARY_28, prepare: importCollision },
-    production: { route: './', prepare: openCollision },
+    production: { route: './', prepare: (production) => openCollision(production, reseedAndReload) },
     clip: '.modal',
     masks: LIBRARY_MASKS,
     hideOnPrototype: PROTOTYPE_CHROME,
@@ -120,8 +130,8 @@ test('the import collision matches #28 Variant A and is baselined', async ({ pag
  * production, so the state has to be caused rather than declared. Restoring a Project's own
  * Backup onto itself is the shortest real cause, and it is the one the smoke spec proves.
  */
-async function openCollision(page: Page): Promise<void> {
-  await openLibrary(page, paritySeed)
+async function openCollision(page: Page, load: (page: Page, seed: typeof paritySeed) => Promise<void> = openLibrary): Promise<void> {
+  await load(page, paritySeed)
   const backup = await downloadBackupOf(page, 'Tiong Bahru Home')
   await restoreFile(page, backup)
   await expect(dialogHeading(page)).toBeVisible()
