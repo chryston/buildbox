@@ -81,7 +81,7 @@ export function Modal({ eyebrow, eyebrowDanger, heading, onClose, children, dism
 
   return (
     <div
-      className="modal-backdrop"
+      className="modal-backdrop bb-dialog-scope"
       role="presentation"
       onMouseDown={(event) => {
         if (dismissable && event.target === event.currentTarget) onClose?.()

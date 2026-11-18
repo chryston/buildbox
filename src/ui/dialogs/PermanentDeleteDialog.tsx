@@ -37,6 +37,7 @@ export function PermanentDeleteDialog({
 }: PermanentDeleteDialogProps): ReactNode {
   return (
     <Modal
+      className="delete-modal"
       eyebrow={STRINGS.eyebrowPermanentDeletion}
       eyebrowDanger
       heading={STRINGS.permanentDeleteHeading}

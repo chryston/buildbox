@@ -19,14 +19,27 @@
    `.bb-library button` (0-1-1) would outrank every single-class rule below and silently win
    `font: inherit` over `.brand`, `.button` and `.nav-tab`. */
 .bb-library,
-.bb-library * {
+.bb-library *,
+.bb-dialog-scope,
+.bb-dialog-scope * {
   box-sizing: border-box;
 }
 
 :where(.bb-library) button,
-:where(.bb-library) input {
+:where(.bb-library) input,
+:where(.bb-dialog-scope) button,
+:where(.bb-dialog-scope) input {
   cursor: pointer;
   font: inherit;
+}
+
+/* A dialog is also drawn over the editor (#51's Save failed and Changed in another tab), which
+   has none of `.bb-library`'s text defaults: without these the box inherits the editor's black.
+   Inside the Library they restate what `.bb-library` already set, so nothing moves there. */
+.bb-dialog-scope {
+  color: var(--bb-text);
+  font-family: var(--bb-font-body);
+  line-height: normal;
 }
 
 /* No font-size: the archive sets none on its root either, so the Library reads at the browser's
@@ -520,7 +533,14 @@
   margin: 16px 0;
 }
 
-.summary-box {
+.failure-modal p:not(.eyebrow),
+.recovery-modal p:not(.eyebrow),
+.delete-modal p:not(.eyebrow) {
+  color: var(--bb-text-body);
+}
+
+.summary-box,
+.failure-reason {
   display: flex;
   flex-direction: column;
   gap: var(--bb-summary-gap);
@@ -532,6 +552,7 @@
 }
 
 .summary-box span,
+.failure-reason span,
 .helper {
   color: var(--bb-text-muted);
   font-size: var(--bb-size-line);
@@ -705,7 +726,6 @@
 .failure-actions {
   display: grid;
   gap: var(--bb-failure-actions-gap);
-  margin-top: var(--bb-modal-actions-margin);
 }
 
 .failure-actions button {
@@ -716,7 +736,13 @@
   background: var(--bb-bg-button-failure);
   color: var(--bb-text-button);
   font-family: var(--bb-font-body);
-  font-weight: var(--bb-weight-button);
+}
+
+/* `Discard unsaved changes`: red text, no box, as the archive's `.danger-text` draws it. */
+.failure-actions button.danger-text {
+  border-color: transparent;
+  background: transparent;
+  color: var(--bb-danger-text);
 }
 
 /* The one red button in the app (#51 §3). It is `.button.danger-button` rather than
@@ -749,6 +775,18 @@
 .recovery-list label.selected {
   border-color: var(--bb-accent-choice);
   background: var(--bb-bg-accent-soft);
+}
+
+.recovery-list input[type='radio'] {
+  appearance: auto;
+  flex: none;
+  width: 13px;
+  height: 13px;
+  margin: 3px 3px 3px 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color-scheme: dark;
 }
 
 .recovery-list span {

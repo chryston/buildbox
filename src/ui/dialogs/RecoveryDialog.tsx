@@ -57,7 +57,7 @@ export function RecoveryDialog({ name, points, now, onRestore, onClose }: Recove
   const chosen = points.find((point) => point.id === selected) ?? null
 
   return (
-    <Modal eyebrow={STRINGS.eyebrowRecoveryPoints} heading={STRINGS.recoveryHeading(name)} onClose={onClose}>
+    <Modal className="recovery-modal" eyebrow={STRINGS.eyebrowRecoveryPoints} heading={STRINGS.recoveryHeading(name)} onClose={onClose}>
       <p>{STRINGS.recoveryBody}</p>
       {points.length === 0 ? (
         <div className="empty-state">{STRINGS.recoveryEmpty}</div>

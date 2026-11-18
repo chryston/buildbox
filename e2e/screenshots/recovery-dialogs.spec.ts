@@ -95,27 +95,33 @@ async function openPermanentDelete(page: Page): Promise<void> {
   await waitForStablePaint(page.locator('.modal'))
 }
 
-test('Save failed matches #28 Variant A and is baselined', async ({ page }, testInfo) => {
-  requireFlag(testInfo)
-  await page.clock.setFixedTime(FIXED_NOW)
-  await diffAgainstPrototype(page, testInfo, {
-    name: 'recovery-28-save-failed',
-    prototype: { kind: 'static-archive', ...LIBRARY_28, prepare: saveFailure },
-    production: { route: './', prepare: (production) => reachSaveFailed(production, reseedAndReload) },
-    clip: '.modal',
-    masks: [],
-    hideOnPrototype: PROTOTYPE_CHROME,
-    maxDiffRatio: 0.01,
-  })
+// The one state whose fixture is not in UTC: `Tiong Bahru Home` was saved at 02:42Z, which is the
+// 10:42 AM the archive's dialog names in the zone the suite runs in, Singapore (#51 criterion 6).
+test.describe('Save failed', () => {
+  test.use({ timezoneId: 'Asia/Singapore' })
 
-  await reachSaveFailed(page)
-  // Both sides read the same two facts the clip is blind to: when, and why.
-  await expect(page.locator('.modal p strong')).toHaveText('10:42 AM')
-  await expect(page.locator('.failure-reason strong')).toHaveText('Browser storage is full')
-  const backdrop = page.locator('.modal-backdrop')
-  await expect(backdrop).toHaveCSS('background-color', 'rgba(0, 0, 0, 0.733)')
-  await expect(backdrop).toHaveCSS('backdrop-filter', 'blur(4px)')
-  await expect(page).toHaveScreenshot('save-failed.png')
+  test('Save failed matches #28 Variant A and is baselined', async ({ page }, testInfo) => {
+    requireFlag(testInfo)
+    await page.clock.setFixedTime(FIXED_NOW)
+    await diffAgainstPrototype(page, testInfo, {
+      name: 'recovery-28-save-failed',
+      prototype: { kind: 'static-archive', ...LIBRARY_28, prepare: saveFailure },
+      production: { route: './', prepare: (production) => reachSaveFailed(production, reseedAndReload) },
+      clip: '.modal',
+      masks: [],
+      hideOnPrototype: PROTOTYPE_CHROME,
+      maxDiffRatio: 0.01,
+    })
+
+    await reachSaveFailed(page)
+    // Both sides read the same two facts the clip is blind to: when, and why.
+    await expect(page.locator('.modal p strong')).toHaveText('10:42 AM')
+    await expect(page.locator('.failure-reason strong')).toHaveText('Browser storage is full')
+    const backdrop = page.locator('.modal-backdrop')
+    await expect(backdrop).toHaveCSS('background-color', 'rgba(0, 0, 0, 0.733)')
+    await expect(backdrop).toHaveCSS('backdrop-filter', 'blur(4px)')
+    await expect(page).toHaveScreenshot('save-failed.png')
+  })
 })
 
 test('the Recovery Point picker matches #28 Variant A and is baselined', async ({ page }, testInfo) => {
