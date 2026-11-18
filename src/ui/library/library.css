@@ -13,6 +13,19 @@
 
 /* ── Shell ─────────────────────────────────────────────────────────────────── */
 
+/* The archive's three element resets, scoped to the Library so the legacy views keep their own
+   defaults. `font: inherit` on the form elements is what makes a button read in DM Sans at all. */
+.bb-library,
+.bb-library * {
+  box-sizing: border-box;
+}
+
+.bb-library button,
+.bb-library input {
+  cursor: pointer;
+  font: inherit;
+}
+
 .bb-library {
   min-height: 100vh;
   background: var(--bb-bg-page);
@@ -96,14 +109,13 @@
 }
 
 .header-status {
-  display: flex;
-  align-items: center;
   margin-left: auto;
   color: var(--bb-text-status);
   font-size: var(--bb-size-body);
 }
 
 .status-dot {
+  display: inline-block;
   width: var(--bb-status-dot-size);
   height: var(--bb-status-dot-size);
   margin-right: var(--bb-status-dot-gap);
@@ -352,8 +364,6 @@
 
 .save-line,
 .backup-line {
-  display: flex;
-  align-items: center;
   margin-top: var(--bb-card-line-margin);
   color: var(--bb-text-line);
   font-size: var(--bb-size-line);
@@ -400,9 +410,9 @@
 /* `Delete` is text on the card, not a red box: #28 keeps one loud action per card, and that is
    `Open`. */
 .button.danger-text {
-  border-color: transparent !important;
-  background: transparent !important;
-  color: var(--bb-danger-text) !important;
+  border-color: transparent;
+  background: transparent;
+  color: var(--bb-danger-text);
 }
 
 .button[aria-disabled='true'] {
@@ -419,7 +429,8 @@
   justify-content: center;
   min-height: var(--bb-new-card-min-height);
   border-style: dashed;
-  color: inherit;
+  color: var(--bb-text-new);
+  text-align: center;
 }
 
 .new-card span {
