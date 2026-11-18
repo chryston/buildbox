@@ -63,7 +63,10 @@ export function Modal({ eyebrow, eyebrowDanger, heading, onClose, children, dism
   useEffect(() => {
     // Focus lands inside the box on open. Leaving it there when the box has nothing focusable
     // is deliberate: focus outside a modal would leak Tab to the Library behind it.
-    const first = box.current?.querySelector<HTMLElement>(FOCUSABLE)
+    // A chosen radio is where a list dialog's keyboard belongs: arrow keys move from the row that
+    // will be written, not from the top of the list.
+    const first =
+      box.current?.querySelector<HTMLElement>('input:checked') ?? box.current?.querySelector<HTMLElement>(FOCUSABLE)
     if (first !== null && first !== undefined) first.focus()
     else box.current?.focus()
   }, [])

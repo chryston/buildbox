@@ -162,7 +162,8 @@
 /* The archive styles the heading with a bare `h1{margin:0;font-size:38px;letter-spacing:-.035em}`:
    DM Sans, normal line-height and the inherited text colour, with the UA's bold. The preflight
    resets all three, so each is put back here. */
-.page h1 {
+.page h1,
+.flow-page h1 {
   margin: 0;
   font-family: var(--bb-font-heading);
   font-size: var(--bb-size-h1);
@@ -787,6 +788,18 @@
   border: 0;
   background: none;
   color-scheme: dark;
+}
+
+/* The forms plugin rings every focused radio, mouse or keyboard, in a square. The browser's own
+   keyboard-only ring is what the archive had, drawn in the choice blue. */
+.recovery-list input[type='radio']:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.recovery-list input[type='radio']:focus-visible {
+  outline: 2px solid var(--bb-accent-choice);
+  outline-offset: 2px;
 }
 
 .recovery-list span {

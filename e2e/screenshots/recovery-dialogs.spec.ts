@@ -143,6 +143,26 @@ test('the Recovery Point picker matches #28 Variant A and is baselined', async (
   await expect(page).toHaveScreenshot('recovery-points.png')
 })
 
+test('the Trash surface matches #28 Variant A', async ({ page }, testInfo) => {
+  requireFlag(testInfo)
+  await page.clock.setFixedTime(FIXED_NOW)
+  await diffAgainstPrototype(page, testInfo, {
+    name: 'recovery-28-trash',
+    prototype: {
+      kind: 'static-archive',
+      ...LIBRARY_28,
+      prepare: async (prototype) => {
+        await prototype.locator('header.app-header').getByRole('button', { name: 'Trash', exact: true }).click()
+        await expect(prototype.getByRole('heading', { level: 1, name: 'Deleted Projects' })).toBeVisible()
+      },
+    },
+    production: { route: './', prepare: (production) => reachTrash(production, reseedAndReload) },
+    masks: [],
+    hideOnPrototype: PROTOTYPE_CHROME,
+    maxDiffRatio: 0.01,
+  })
+})
+
 test('permanent deletion matches #28 Variant A, over its Trash, and is baselined', async ({ page }, testInfo) => {
   requireFlag(testInfo)
   await page.clock.setFixedTime(FIXED_NOW)
