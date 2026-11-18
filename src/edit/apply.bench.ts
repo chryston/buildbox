@@ -8,6 +8,7 @@
  * above 60 ms, and the issue's target is 30 ms.
  */
 import { bench, describe } from 'vitest'
+import { migrateProject } from '../domain'
 import type { CabinetNode, Project } from '../domain'
 import { applyIntent } from './apply'
 import type { Intent } from './intents'
@@ -29,7 +30,14 @@ const raw = Object.values(SOURCES)[0]
 if (raw === undefined) throw new Error('fixtures/domain/v1/reference-project.json is missing')
 const envelope = JSON.parse(raw) as { domainSchemaVersion: number; project: Project }
 if (envelope.domainSchemaVersion !== 1) throw new Error(`unsupported domainSchemaVersion ${String(envelope.domainSchemaVersion)}`)
-const project = envelope.project
+// The fixture is a v1 document and the bench measures the domain as it is now, so the Project
+// goes through the same migration opening a Project does — since #56 that is what gives every
+// Floor its Plan Views.
+let issued = 0
+const migrated = migrateProject(envelope.project, envelope.domainSchemaVersion, (count = 1) =>
+  Array.from({ length: count }, () => `bench-view-${String(++issued)}`))
+if (!migrated.ok) throw new Error(`reference-project.json: ${migrated.error.message}`)
+const project = migrated.project
 
 /** The deepest split in the project: the case that rebuilds the most geometry. */
 function deepestSplit(): { itemDesignId: string; parentNodeId: string } {
