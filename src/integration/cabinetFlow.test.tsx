@@ -1,58 +1,29 @@
 import { screen, waitFor, within } from '@testing-library/react'
-import { renderWithBindings as render } from '../ui/legacy/testing'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
-import { useStore } from '../store/store'
 import { computeSceneLayout } from '../cabinet'
-import { exportWorkspace } from '../utils/workspaceIO'
-import type { Design } from '../types'
+import { projectUnits } from '../ui/legacy/projectView'
+import { testCabinet } from '../session/testing'
+import { openTestView, renderWithBindings as render, type TestView } from '../ui/legacy/testing'
 
-function createDesign(): Design {
-  return {
-    id: 'design-1',
-    name: 'Cabinet 1',
-    units: [
-      {
-        type: 'cabinet',
-        id: 'unit-1',
-        label: 'Unit 1',
-        settings: {
-          unit: 'mm',
-          height: 800,
-          width: 600,
-          depth: 500,
-          thickness: 18,
-          backThickness: 6,
-          toeKick: null,
-          material: 'oak',
-        },
-        root: { id: 'root', elementType: 'void' },
-        x: 0,
-        y: 0,
-      },
-    ],
-  }
-}
+/**
+ * The whole app, clicked. Every write goes through a session over the in-memory store, so the
+ * assertions read the Project the session committed — the equivalent of reading the store, with
+ * the history, the revision and the validation that comes with a real write (#49, #53).
+ */
+let view: TestView
+beforeEach(async () => { view = await openTestView() })
 
-function resetStore() {
-  localStorage.clear()
-  useStore.setState({
-    projects: [createDesign()],
-    activeProjectId: 'design-1',
-    activeUnitId: 'unit-1',
-    selectedId: null,
-    snapGrid: 5,
-  })
-  useStore.temporal.getState().clear()
-}
+/** The one cabinet's design id, which is what the view calls the unit. */
+const designId = (): string => testCabinet(view.project()).id
+const rootId = (): string => testCabinet(view.project()).construction.root.id
+const layoutOf = () => computeSceneLayout(projectUnits(view.project()), designId())
 
 describe('Phase B: multi-unit canvas', () => {
-  beforeEach(resetStore)
-
   it('user adds a second unit, selects it, and sees cut list entries from both units', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    render(<App />, view)
 
     // Initial state: 1 unit "Unit 1" in sidebar
     expect(screen.getByDisplayValue('Unit 1')).toBeInTheDocument()
@@ -82,11 +53,9 @@ describe('Phase B: multi-unit canvas', () => {
 })
 
 describe('Cabinet design flow', () => {
-  beforeEach(resetStore)
-
   it('shows cut list in sidebar, removes right panel, and fit-all resets zoom', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    render(<App />, view)
 
     // Cut list lives inside the sidebar <aside>, not in a standalone right panel
     const aside = screen.getByRole('complementary')
@@ -110,9 +79,9 @@ describe('Cabinet design flow', () => {
     expect(zoomInBtn).toBeEnabled()
   })
 
-  it('creates a project, adds shelf and divider, and supports undo', async () => {
+  it('adds a shelf and a divider, and supports undo', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    render(<App />, view)
 
     expect(screen.getByTestId('cabinet-canvas')).toBeInTheDocument()
 
@@ -152,55 +121,20 @@ describe('Cabinet design flow', () => {
     })
   })
 
-  it('shows export and import buttons in toolbar and merge increases project count', async () => {
-    const user = userEvent.setup()
-    const { container } = render(<App />)
-
-    // Export and Import buttons are present in the toolbar
-    expect(screen.getByRole('button', { name: /export workspace/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /import workspace/i })).toBeInTheDocument()
-
-    // Open export modal and verify options are shown
-    await user.click(screen.getByRole('button', { name: /export workspace/i }))
-    expect(screen.getByText(/export workspace/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /active project/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /all projects/i })).toBeInTheDocument()
-
-    // Close export modal via cancel
-    await user.click(screen.getByRole('button', { name: /cancel/i }))
-    expect(screen.queryByRole('button', { name: /active project/i })).not.toBeInTheDocument()
-
-    // Import the active project back through the toolbar's file input and merge it.
-    // user.upload() drives the hidden <input type="file">, so the real import path
-    // (FileReader -> ImportModal -> store merge) is exercised.
-    const { projects, activeProjectId } = useStore.getState()
-    const active = projects.find((p) => p.id === activeProjectId)!
-    const initialCount = projects.length
-    const file = new File(
-      [exportWorkspace([active], active.id, '2026-11-17T09:00:00.000Z')],
-      'workspace.buildbox.json',
-      { type: 'application/json' },
-    )
-
-    const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]')!
-    await user.upload(fileInput, file)
-
-    // FileReader.onload lands after the upload resolves, so await the modal.
-    await user.click(await screen.findByRole('button', { name: /merge projects/i }))
-
-    await waitFor(() => {
-      expect(screen.getAllByRole('button', { name: 'Cabinet 1' })).toHaveLength(initialCount + 1)
-    })
-    expect(useStore.getState().projects.length).toBe(initialCount + 1)
+  // The workspace JSON export and import were the toolbar's. Download Backup replaced them at
+  // S4, so the app has no file input at all and no modal behind one (#53 criterion 2).
+  it('offers no workspace export, import or file input', () => {
+    render(<App />, view)
+    expect(document.querySelector('input[type="file"]')).toBeNull()
+    expect(screen.queryByRole('button', { name: /export workspace/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /import workspace/i })).not.toBeInTheDocument()
   })
 })
 
 describe('Polish features E2E', () => {
-  beforeEach(resetStore)
-
   it('user switches to Floor Plan and back, cabinet state preserved', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    render(<App />, view)
 
     // Add a shelf to the cabinet
     const voids = screen.queryAllByTestId(/^void-/)
@@ -224,119 +158,82 @@ describe('Polish features E2E', () => {
   })
 
   it('fit to page button is present and SVG has preserveAspectRatio', () => {
-    render(<App />)
+    render(<App />, view)
     expect(screen.getByLabelText('Fit to screen')).toBeInTheDocument()
     expect(screen.getByTestId('cabinet-canvas')).toHaveAttribute('preserveAspectRatio', 'xMidYMid meet')
   })
 })
 
 describe('Feature improvements E2E', () => {
-  beforeEach(resetStore)
+  it('shelf width becomes editable after adding a divider', async () => {
+    await view.dispatch('cabinet.addShelf', { itemDesignId: designId(), nodeId: rootId() })
 
-  it('shelf width becomes editable after adding a divider', () => {
-    const state = useStore.getState()
-    const rootId = state.projects[0].units[0].root.id
-    state.addShelf(rootId)
-
-    const layout1 = computeSceneLayout(
-      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
-    )
-    const topVoid = layout1.units[0].voids[0]
+    const topVoid = layoutOf().units[0].voids[0]
     expect(topVoid.widthControlNodeId).toBeUndefined()
 
-    state.addDivider(topVoid.nodeId)
-    const layout2 = computeSceneLayout(
-      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
-    )
-    const innerLeft = layout2.units[0].voids.find(v => v.widthControlNodeId !== undefined)
+    await view.dispatch('cabinet.addDivider', { itemDesignId: designId(), nodeId: topVoid.nodeId })
+    const innerLeft = layoutOf().units[0].voids.find((v) => v.widthControlNodeId !== undefined)
     expect(innerLeft).toBeDefined()
     expect(innerLeft!.widthControlNodeId).toBeDefined()
   })
 
-  it('canvas label edit resizes without locking (setNodeSize does not lock)', () => {
-    const state = useStore.getState()
-    const rootId = state.projects[0].units[0].root.id
-    state.addShelf(rootId)
+  it('canvas label edit resizes without locking (setNodeSize does not lock)', async () => {
+    await view.dispatch('cabinet.addShelf', { itemDesignId: designId(), nodeId: rootId() })
 
-    const layout1 = computeSceneLayout(
-      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
-    )
-    const topVoid = layout1.units[0].voids[0]
+    const topVoid = layoutOf().units[0].voids[0]
     const controlId = topVoid.heightControlNodeId ?? topVoid.nodeId
-    useStore.getState().setNodeSize(controlId, 200)
+    await view.dispatch('cabinet.setNodeSize', { itemDesignId: designId(), nodeId: controlId, sizeMm: 200 })
 
-    const unit = useStore.getState().projects[0].units.find(u => u.id === useStore.getState().activeUnitId)!
-    const controlNode = unit.root.id === controlId ? unit.root
-      : unit.root.children?.find(c => c.id === controlId)
+    const root = testCabinet(view.project()).construction.root
+    const controlNode = root.id === controlId
+      ? root
+      : root.children?.find((child) => child.id === controlId)
     expect(controlNode?.fixedSize).toBe(200)
     expect(controlNode?.locked).not.toBe(true)
 
-    const layout2 = computeSceneLayout(
-      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
-    )
-    expect(layout2.units[0].voids.find(v => v.nodeId === topVoid.nodeId)!.h).toBe(200)
+    expect(layoutOf().units[0].voids.find((v) => v.nodeId === topVoid.nodeId)!.h).toBe(200)
   })
 
-  it('pinned void size unchanged when sibling is resized', () => {
-    const state = useStore.getState()
-    const rootId = state.projects[0].units[0].root.id
-    state.addShelf(rootId)
+  it('pinned void size unchanged when sibling is resized', async () => {
+    await view.dispatch('cabinet.addShelf', { itemDesignId: designId(), nodeId: rootId() })
 
-    const layout1 = computeSceneLayout(
-      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
-    )
-    const topVoid = layout1.units[0].voids[0]
-    const bottomVoid = layout1.units[0].voids[1]
+    const [topVoid, bottomVoid] = layoutOf().units[0].voids
     const originalTopH = topVoid.h
 
-    useStore.getState().pinNode(topVoid.nodeId, topVoid.h)
-    useStore.getState().setNodeSize(bottomVoid.heightControlNodeId ?? bottomVoid.nodeId, 100)
+    await view.dispatch('cabinet.pinNode', { itemDesignId: designId(), nodeId: topVoid.nodeId, sizeMm: topVoid.h })
+    await view.dispatch('cabinet.setNodeSize', {
+      itemDesignId: designId(),
+      nodeId: bottomVoid.heightControlNodeId ?? bottomVoid.nodeId,
+      sizeMm: 100,
+    })
 
-    const layout2 = computeSceneLayout(
-      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
-    )
-    expect(layout2.units[0].voids.find(v => v.nodeId === topVoid.nodeId)!.h).toBe(originalTopH)
+    expect(layoutOf().units[0].voids.find((v) => v.nodeId === topVoid.nodeId)!.h).toBe(originalTopH)
   })
 
-  it('setCabinetMaterial changes material for all panels and voids', () => {
-    useStore.getState().setCabinetMaterial('walnut')
-    const layout = computeSceneLayout(
-      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
-    )
-    layout.units[0].voids.forEach(v => expect(v.material).toBe('walnut'))
-    layout.units[0].panels.forEach(p => expect(p.material).toBe('walnut'))
+  it('setCabinetMaterial changes material for all panels and voids', async () => {
+    await view.dispatch('cabinet.setMaterial', { itemDesignId: designId(), material: 'walnut' })
+
+    const layout = layoutOf()
+    layout.units[0].voids.forEach((v) => expect(v.material).toBe('walnut'))
+    layout.units[0].panels.forEach((p) => expect(p.material).toBe('walnut'))
   })
 
-  it('setNodeLabel makes spaceLabel visible in layout', () => {
-    const rootId = useStore.getState().projects[0].units[0].root.id
-    useStore.getState().setNodeLabel(rootId, 'Storage')
-    const layout = computeSceneLayout(
-      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
-    )
-    expect(layout.units[0].voids[0].spaceLabel).toBe('Storage')
+  it('setNodeLabel makes spaceLabel visible in layout', async () => {
+    await view.dispatch('cabinet.setNodeLabel', { itemDesignId: designId(), nodeId: rootId(), label: 'Storage' })
+
+    expect(layoutOf().units[0].voids[0].spaceLabel).toBe('Storage')
   })
 
-  it('distributeEvenly gives all column voids equal height', () => {
-    const rootId = useStore.getState().projects[0].units[0].root.id
-    useStore.getState().addShelf(rootId)
+  it('distributeEvenly gives all column voids equal height', async () => {
+    await view.dispatch('cabinet.addShelf', { itemDesignId: designId(), nodeId: rootId() })
+    await view.dispatch('cabinet.addShelf', { itemDesignId: designId(), nodeId: layoutOf().units[0].voids[1].nodeId })
 
-    const layout1 = computeSceneLayout(
-      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
-    )
-    useStore.getState().addShelf(layout1.units[0].voids[1].nodeId)
-
-    const layout2 = computeSceneLayout(
-      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
-    )
-    expect(layout2.units[0].voids).toHaveLength(3)
-    const voids = layout2.units[0].voids
+    const voids = layoutOf().units[0].voids
+    expect(voids).toHaveLength(3)
     const evenH = voids.reduce((sum, v) => sum + v.h, 0) / 3
-    useStore.getState().distributeEvenly(voids[0].columnRootId!, evenH)
+    await view.dispatch('cabinet.distributeEvenly', { itemDesignId: designId(), columnRootId: voids[0].columnRootId!, evenH })
 
-    const layout3 = computeSceneLayout(
-      useStore.getState().projects[0].units, useStore.getState().activeUnitId,
-    )
-    const heights = layout3.units[0].voids.map(v => Math.round(v.h))
+    const heights = layoutOf().units[0].voids.map((v) => Math.round(v.h))
     expect(Math.max(...heights) - Math.min(...heights)).toBeLessThan(2)
   })
 })

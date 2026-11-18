@@ -1,5 +1,5 @@
 {
-  "dbName": "buildbox-preview",
+  "dbName": "buildbox",
   "source": "fixtures/legacy/v3/buildbox-store.json",
   "projects": [
     {

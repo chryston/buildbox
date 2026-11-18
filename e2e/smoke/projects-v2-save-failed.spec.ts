@@ -72,9 +72,10 @@ test('nothing in the app takes the person away from the failed save', async ({ p
   const dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
 
-  // Switching tab. The modal backdrop covers the tab bar, so the click is dispatched on the
-  // button itself — which is the case the guard exists for: the person means it, and is refused.
-  await page.getByRole('button', { name: OTHER, exact: true }).dispatchEvent('click')
+  // Leaving for the Project Library. The modal backdrop covers the editor's chrome, so the
+  // click is dispatched on the control itself — which is the case the guard exists for: the
+  // person means it, `close()` refuses (#14), and the dialog stays with the work behind it.
+  await page.getByTestId('return-to-projects').dispatchEvent('click')
   await expect(dialog).toBeVisible()
   await expect(placedObject(page, sofa)).toBeVisible()
 
@@ -89,9 +90,10 @@ test('nothing in the app takes the person away from the failed save', async ({ p
   await page.mouse.click(8, 8)
   await expect(dialog).toBeVisible()
 
-  // And the Project cannot be deleted from the Library while this tab is holding it. The editor
-  // has no route back to the Library (#49), so the Library is opened in a second page of the same
-  // profile, which is where the same rule bites: the Delete is refused and the row stays put.
+  // And the Project cannot be deleted from the Library while this tab is holding it. The one
+  // route back to the Library is refused by the guard above, so the Library is opened in a
+  // second page of the same profile, which is where the same rule bites: the Delete is refused
+  // and the row stays put.
   const library = await context.newPage()
   await library.goto('./', { waitUntil: 'networkidle' })
   await expect(libraryHeading(library)).toBeVisible()

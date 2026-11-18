@@ -51,18 +51,10 @@ jobs:
         run: npm test
       - name: build
         run: npm run build
-      # The flag-on bundle is built in CI too, so a broken composition root fails here rather
-      # than in the e2e job that runs it (#49).
-      - name: build the flagged preview
-        run: npm run build:preview
       - uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist-preview
-          path: dist-preview
 
   # Real-browser smoke on Chromium against `vite preview` of the build verify produced
   # (#38, #20 §9.4). Add "CI / e2e-chromium" to the branch's required status checks
@@ -83,14 +75,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: build
         run: npm run build
-      - name: build the flagged preview
-        run: npm run build:preview
       - name: e2e
         run: npm run test:e2e -- --project=chromium
-      # The same smoke suite against `VITE_FF_PROJECTS_V2=true` (#49): the `projects-v2`
-      # project serves dist-preview, and the engine projects ignore its specs.
-      - name: e2e on the flagged build
-        run: npm run test:e2e -- --project=projects-v2
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

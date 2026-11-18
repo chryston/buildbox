@@ -16,9 +16,7 @@
 import type { CabinetUnit } from '../../cabinet'
 import { cabinetSceneUnits } from '../../derive'
 import type { EntityId, GenericItemDesign, PlacedItem, Project } from '../../domain'
-import type { LibrarySnapshot } from '../../session'
 import type { CustomTemplate, FloorPlanData, FloorPlanObject, FloorPlanObjectType } from '../../types'
-import type { ProjectTab } from './bindings'
 
 /** The one Floor the legacy views know about; multiple Floors are #55. */
 export function firstFloorId(project: Project): EntityId | null {
@@ -113,21 +111,4 @@ export function projectFloorPlan(project: Project, imageSrc: string | null): Flo
   const data = planData(project, imageSrc)
   planCache.set(project, { src: imageSrc, data })
   return data
-}
-
-const tabsCache = new WeakMap<LibrarySnapshot['projects'], ProjectTab[]>()
-
-/**
- * The project bar's tabs, stable while the Library's list is the same array.
- *
- * A `LibrarySnapshot` carries a fresh array whenever anything in the Library changed, and a
- * selector that mapped over it inline would hand `useSyncExternalStore` a new value on every
- * render — the one thing that store refuses to tolerate (#49).
- */
-export function projectTabs(snapshot: LibrarySnapshot): ProjectTab[] {
-  const cached = tabsCache.get(snapshot.projects)
-  if (cached !== undefined) return cached
-  const tabs = snapshot.projects.map(({ id, name }) => ({ id, name }))
-  tabsCache.set(snapshot.projects, tabs)
-  return tabs
 }

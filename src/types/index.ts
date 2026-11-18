@@ -1,27 +1,12 @@
 /**
- * Legacy-only types (#41). Everything the target modules own has moved to `domain`
- * (cabinet payload) and `cabinet` (scene and layout output); this file keeps what only
- * the pre-S4 app still uses — `Design`, the floor-plan shapes and the store slice types
- * — and shrinks to nothing at the S4 cutover.
+ * The legacy view's own vocabulary (#41, #53). Everything the target modules own lives in
+ * `domain` (cabinet payload) and `cabinet` (scene and layout output); what is left here is
+ * the shape the pre-S4 components draw — the floor-plan view-models and the module pointer.
  *
- * It imports `CabinetUnit` through the `cabinet` entry point and deliberately does not
- * re-export it: callers that want a cabinet type import `src/cabinet` themselves.
+ * The persisted shapes are gone with the S4 cutover: `Design` and the store slice types had
+ * no reader once the Project Library held the work, and `package/legacy` keeps its own
+ * frozen copies of whatever it reads (#20 §10). Nothing re-exports a removed type.
  */
-import type { CabinetUnit } from '../cabinet'
-
-export interface Design {
-  id: string
-  name: string
-  units: CabinetUnit[]  // >= 1
-}
-
-// --- Store slice shapes ---
-
-export interface UIState {
-  selectedId: string | null
-  snapGrid: number
-  activeUnitId: string | null  // not persisted, not in temporal history
-}
 
 export type AppModule = 'cabinet' | 'floorplan'
 

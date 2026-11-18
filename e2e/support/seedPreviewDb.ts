@@ -14,8 +14,8 @@ import type { AssetRecord, LibraryRecord, ProjectRecord, ProjectSummary, Recover
  * hand-written guess at the shape.
  */
 
-/** The database only the flagged build opens (#20 §11). */
-export const PREVIEW_DB_NAME = 'buildbox-preview'
+/** The database the app opens: since #53 the e2e artifact is the production one. */
+export const E2E_DB_NAME = 'buildbox'
 
 /** One stored asset, with its bytes base64-encoded because JSON cannot hold a Blob. */
 export interface PreviewSeedAsset extends AssetRecord {
@@ -87,7 +87,7 @@ export async function reseedPreviewDb(page: Page, seed: PreviewSeed): Promise<vo
         request.onerror = () => rejectDelete(new Error(`deleting ${dbName} failed`))
         request.onblocked = () => rejectDelete(new Error(`deleting ${dbName} was blocked`))
       }),
-    PREVIEW_DB_NAME,
+    E2E_DB_NAME,
   )
   await page.reload({ waitUntil: 'networkidle' })
 }
@@ -209,6 +209,6 @@ export async function projectRevision(page: Page, projectId: string): Promise<nu
           read.onerror = () => rejectRevision(new Error(`reading ${id} failed`))
         }
       }),
-    [PREVIEW_DB_NAME, projectId],
+    [E2E_DB_NAME, projectId],
   )
 }

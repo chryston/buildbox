@@ -1,5 +1,4 @@
 import { render, screen, fireEvent } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi } from 'vitest'
 import Toolbar from './Toolbar'
 import type { GlobalSettings } from '../../domain'
@@ -7,32 +6,6 @@ import type { GlobalSettings } from '../../domain'
 const settings: GlobalSettings = {
   unit: 'mm', height: 800, width: 600, depth: 500,
   thickness: 18, backThickness: 6, toeKick: null, material: 'oak',
-}
-
-const fileInput = (): HTMLInputElement => {
-  const input = document.querySelector('input[type="file"]')
-  if (!(input instanceof HTMLInputElement)) throw new Error('the toolbar has no file input')
-  return input
-}
-
-/** The toolbar only offers Export and Import to an app that can read workspace JSON (#49). */
-const workspace = (onImport = vi.fn()) => ({ projects: [], activeProjectId: null, onImport })
-
-const upload = (body: unknown, name = 'workspace.buildbox.json'): File =>
-  new File([typeof body === 'string' ? body : JSON.stringify(body)], name, { type: 'application/json' })
-
-const goodDesign = {
-  id: 'p1',
-  name: 'Imported',
-  units: [{
-    type: 'cabinet',
-    id: 'u1',
-    label: 'Unit 1',
-    x: 0,
-    y: 0,
-    settings,
-    root: { id: 'r1', elementType: 'void', accessories: [] },
-  }],
 }
 
 describe('Toolbar', () => {
@@ -43,42 +16,39 @@ describe('Toolbar', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ unit: 'cm' }))
   })
 
-  it('refuses a malformed file and never reaches the store', async () => {
-    const onImport = vi.fn()
-    render(<Toolbar settings={settings} onSettingsChange={vi.fn()} workspace={workspace(onImport)} />)
-    fireEvent.change(fileInput(), { target: { files: [upload({ version: 1, projects: [{}] })] } })
-
-    expect(await screen.findByRole('heading', { name: /can't be imported/i })).toBeInTheDocument()
-    expect(screen.getByTestId('problem-list')).toHaveTextContent('projects[0].id — Missing an id.')
-    expect(onImport).not.toHaveBeenCalled()
-
-    await userEvent.click(screen.getByRole('button', { name: /close/i }))
-    expect(screen.queryByTestId('problem-list')).not.toBeInTheDocument()
-    expect(onImport).not.toHaveBeenCalled()
+  // The workspace JSON export and import lived here. Download Backup replaced them at S4 and
+  // the toolbar has no file input to offer either of them (#53 criterion 2).
+  it('offers no file input and no workspace export', () => {
+    render(<Toolbar settings={settings} onSettingsChange={vi.fn()} />)
+    expect(document.querySelector('input[type="file"]')).toBeNull()
+    expect(screen.queryByRole('button', { name: /export workspace/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /import workspace/i })).not.toBeInTheDocument()
   })
 
-  it('refuses a file from a newer BuildBox', async () => {
-    render(<Toolbar settings={settings} onSettingsChange={vi.fn()} workspace={workspace()} />)
-    fireEvent.change(fileInput(), { target: { files: [upload({ version: 2, projects: [goodDesign] })] } })
-    expect(await screen.findByTestId('problem-list')).toHaveTextContent('version — This file was written by a newer version of BuildBox.')
+  it('still offers the drawing export that has no replacement yet (#61)', () => {
+    const onExport = vi.fn()
+    render(<Toolbar settings={settings} onSettingsChange={vi.fn()} onExport={onExport} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Export SVG' }))
+    expect(onExport).toHaveBeenCalled()
   })
 
-  it('refuses a file that is not JSON at all', async () => {
-    render(<Toolbar settings={settings} onSettingsChange={vi.fn()} workspace={workspace()} />)
-    fireEvent.change(fileInput(), { target: { files: [upload('{')] } })
-    expect(await screen.findByTestId('problem-list')).toHaveTextContent('The file is not valid JSON.')
+  it('shows the save status as plain text when there is no dialog to open', () => {
+    render(<Toolbar settings={settings} onSettingsChange={vi.fn()} saveStatus={{ text: 'Saved', failed: false }} />)
+    expect(screen.getByRole('status')).toHaveTextContent('Saved')
+    expect(screen.queryByRole('button', { name: 'Saved' })).not.toBeInTheDocument()
   })
 
-  it('still offers Replace and Merge for a file the reader accepts', async () => {
-    const onImport = vi.fn()
-    render(<Toolbar settings={settings} onSettingsChange={vi.fn()} workspace={workspace(onImport)} />)
-    fireEvent.change(fileInput(), { target: { files: [upload({ version: 1, projects: [goodDesign], activeProjectId: 'p1' })] } })
-
-    const replace = await screen.findByRole('button', { name: /replace workspace/i })
-    await userEvent.click(replace)
-    expect(onImport).toHaveBeenCalledWith(
-      { projects: [goodDesign], activeProjectId: 'p1' },
-      'replace',
+  it('makes a failed status open the dialog it describes (#51 criterion 10)', () => {
+    const onClick = vi.fn()
+    render(
+      <Toolbar
+        settings={settings}
+        onSettingsChange={vi.fn()}
+        saveStatus={{ text: 'Save failed', failed: true }}
+        onSaveStatusClick={onClick}
+      />,
     )
+    fireEvent.click(screen.getByRole('button', { name: 'Save failed' }))
+    expect(onClick).toHaveBeenCalled()
   })
 })

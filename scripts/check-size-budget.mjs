@@ -9,7 +9,7 @@
 //
 // The budget is the recorded baseline plus maxGrowth. Growing it is a decision,
 // not a side effect of a build, so --record is deliberately not part of any script.
-import { readFileSync, existsSync, statSync, writeFileSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
 import path from 'node:path'
 import process from 'node:process'
@@ -53,6 +53,17 @@ function appShellGzipBytes() {
     .filter((file) => ['.js', '.css'].includes(path.extname(file)))
   if (files.length === 0) throw new Error('dist/index.html references no JS or CSS — the app shell is empty')
   return files.reduce((total, file) => total + gzipSync(readFileSync(file), { level: 9 }).length, 0)
+}
+
+// Every app chunk the build emitted, eager or lazy. Since #53 the editor is a dynamic import,
+// so the budgeted shell is only what a first visit loads before it paints; this number is the
+// whole app, printed for context and gating nothing.
+function allChunksGzipBytes() {
+  const assets = path.join(DIST, 'assets')
+  if (!existsSync(assets)) return 0
+  return readdirSync(assets)
+    .filter((name) => ['.js', '.css'].includes(path.extname(name)))
+    .reduce((total, name) => total + gzipSync(readFileSync(path.join(assets, name)), { level: 9 }).length, 0)
 }
 
 // The commit the recorded build came from, read straight from .git so the script
@@ -101,6 +112,7 @@ if (!existsSync(BUDGET_FILE)) throw new Error('size-budget.json not found — re
 const { appShellGzipBytes: baseline, maxGrowth } = JSON.parse(readFileSync(BUDGET_FILE, 'utf8'))
 const limit = Math.floor(baseline * (1 + maxGrowth))
 console.log(`app shell: ${bytes} B gzip (baseline ${baseline}, limit ${limit})`)
+console.log(`all app chunks: ${allChunksGzipBytes()} B gzip (informational; the budget gates the eager shell only)`)
 if (bytes > limit) {
   const growth = (((bytes - baseline) / baseline) * 100).toFixed(1)
   console.error(`over budget: app shell is ${bytes - baseline} B (+${growth}%) above the S0 baseline; limit is ${limit} B (#20 §12). Shrink the app shell or record a new baseline with an explicit decision.`)

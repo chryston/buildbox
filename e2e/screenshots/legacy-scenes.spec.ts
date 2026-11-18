@@ -4,20 +4,18 @@ import { fileURLToPath } from 'node:url'
 import type { Locator, Page, TestInfo } from '@playwright/test'
 import { expect, test } from '../support/fixtures'
 import { cardButton } from '../support/libraryApp'
-import { seedLegacyStore } from '../support/legacyStore'
 import { seedPreviewDb, type PreviewSeed } from '../support/seedPreviewDb'
 import { waitForFonts, waitForImageDecode, waitForStablePaint } from '../support/stability'
 
-// The two scenes today's app has to keep rendering identically through the migration
+// The two scenes the app has to keep rendering identically through the migration
 // (#39 §2, #20 §13.15): the cabinet editor, and a floor plan with an image, objects and
-// annotations. Both come from the untouched v3 legacy fixture, so a baseline is a promise
-// about real persisted data, not about a fixture the app invented.
+// annotations. Both come from the untouched v3 legacy fixture, converted into Project
+// Backups, so a baseline is a promise about real persisted data and not about a fixture the
+// app invented.
 //
-// It runs in two projects against two artifacts (#49 criterion 1): `chromium` captures
-// today's build seeded through `localStorage`, `projects-v2` captures the flag-on build
-// seeded into `buildbox-preview`. Same spec, same clock, same baselines — the snapshot
-// template has no project segment, so a difference between the two is a real visual
-// difference in the flagged app.
+// Since #53 there is one artifact and one seed: the converted fixture, in the database the app
+// opens. The baselines are the ones #49 captured from the flag-on build, so this spec is the
+// proof that the migrated scenes still draw the same pixels.
 const fixturesRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../fixtures')
 const v3 = readFileSync(join(fixturesRoot, 'legacy', 'v3', 'buildbox-store.json'), 'utf8')
 const previewSeed = JSON.parse(
@@ -46,19 +44,17 @@ const legacyV3 = JSON.parse(v3) as LegacyV3Fixture
 /** The v3 fixture's two sketches: the wall-hack polyline and the tile-zone rectangle. */
 const legacyAnnotations = legacyV3.state.floorPlan.annotations
 
-const isPreview = (projectName: string): boolean => projectName === 'projects-v2'
-
-// The flag-on build opens on the Project Library (#50), so the scene lives one card behind;
-// the seed's first Project is the one the chromium project lands in, so it is the one opened.
+// The app opens on the Project Library (#50), so the scene lives one card behind;
+// the seed's first Project is the one every scene is captured in.
 const firstProjectName = previewSeed.library.find((record) => record.id === previewSeed.projects[0]!.id)!.name
 
-test.beforeEach(async ({ page }, testInfo) => {
+test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(FIXED_NOW)
-  // The one thing the two projects do differently: where the saved work lives.
-  if (isPreview(testInfo.project.name)) await seedPreviewDb(page, previewSeed)
-  else await seedLegacyStore(page, v3)
+  // One seed and one artifact since #53: the v3 fixture converted into Project Backups, in the
+  // database the app opens.
+  await seedPreviewDb(page, previewSeed)
   await page.goto('./', { waitUntil: 'networkidle' })
-  if (isPreview(testInfo.project.name)) await cardButton(page, firstProjectName, 'Open').click()
+  await cardButton(page, firstProjectName, 'Open').click()
   await expect(cabinetCanvas(page)).toBeVisible()
   await waitForFonts(page)
   // The first project is active, nothing is selected and the view is at the default
@@ -246,7 +242,7 @@ test('floor plan scene', async ({ page }, testInfo) => {
   // Auto-fit runs on image and scale change; watch the transformed group, because the
   // canvas host itself never changes size.
   await waitForStablePaint(canvas.locator('g').first())
-  const probes = isPreview(testInfo.project.name) ? await sketchProbes(canvas) : []
+  const probes = await sketchProbes(canvas)
   await zoomUntilSceneFits(page, canvas)
 
   // Calibrated image, placed objects in all four rotations, the custom shape, the

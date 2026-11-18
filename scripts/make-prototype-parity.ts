@@ -39,7 +39,7 @@ const RECOVERY_OUT = resolve(repoRoot, 'fixtures/e2e/prototype-parity/records-re
 const TIONG_BAHRU_ID = 'parity-tiong-bahru'
 
 /** The database the flagged build opens, repeated here so a rename cannot pass silently. */
-const DB_NAME = 'buildbox-preview'
+const DB_NAME = 'buildbox'
 
 /**
  * The instant the comparison freezes: `2026-10-07T10:44:00+08:00`, which is 02:44 UTC. The spec

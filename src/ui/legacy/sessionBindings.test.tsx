@@ -16,7 +16,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { INTENT_LABELS, intentIdCount } from '../../edit'
 import type { Intent, IntentType, PayloadOf } from '../../edit'
 import { createMemoryAdapter } from '../../persistence'
-import { createLibraryStore, openProject } from '../../session'
+import { openProject } from '../../session'
 import { createTestDeps, gateCommits, seedProject, TEST_NOW, testProject } from '../../session/testing'
 import { LegacyViewRoot } from './LegacyViewRoot'
 import { useLegacyBindings } from './bindings'
@@ -66,13 +66,17 @@ async function renderSession() {
   await seedProject(store, testProject('p-1'))
   const gated = gateCommits(store)
   const { deps } = createTestDeps(gated.ports)
-  const library = createLibraryStore(deps)
   const opened = await openProject('p-1', deps)
   if (!opened.ok) throw new Error(`openProject refused: ${opened.error.kind}`)
 
   let published: LegacyBindings | null = null
   render(
-    <LegacyViewRoot library={library} session={opened.value} services={services}>
+    <LegacyViewRoot
+      session={opened.value}
+      services={services}
+      onSaveFailure={() => {}}
+      onReturnToProjects={() => {}}
+    >
       <BindingsProbe show={(bindings) => { published = bindings }} />
     </LegacyViewRoot>,
   )

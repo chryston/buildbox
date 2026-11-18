@@ -1,4 +1,4 @@
-import type { Page, TestInfo } from '@playwright/test'
+import type { Page } from '@playwright/test'
 import { expect, test } from '../support/fixtures'
 import { diffAgainstPrototype } from '../support/prototypeCompare'
 import { LIBRARY_28, importCollision, library } from '../support/prototypes/library28'
@@ -57,16 +57,7 @@ const PROTOTYPE_CHROME = ['.prototype-notice', '.scenario-controls', '.variant-s
  */
 const LIBRARY_MASKS = ['.plan-preview > svg, .plan-preview > img', '[data-stat="design-options"]']
 
-/**
- * The Library exists only in a flag-on build, so the flag-free artifact has nothing to capture.
- * Skipping is honest; a baseline of the legacy app filed under this name would be a lie.
- */
-const requireFlag = (testInfo: TestInfo): void => {
-  test.skip(testInfo.project.name !== 'projects-v2', 'the Project Library exists only behind VITE_FF_PROJECTS_V2')
-}
-
 test('the Library matches #28 Variant A and is baselined', async ({ page }, testInfo) => {
-  requireFlag(testInfo)
   await page.clock.setFixedTime(FIXED_NOW)
   await diffAgainstPrototype(page, testInfo, {
     name: 'library-28-library',
@@ -99,7 +90,6 @@ test('the Library matches #28 Variant A and is baselined', async ({ page }, test
 })
 
 test('the import collision matches #28 Variant A and is baselined', async ({ page }, testInfo) => {
-  requireFlag(testInfo)
   await page.clock.setFixedTime(FIXED_NOW)
   await diffAgainstPrototype(page, testInfo, {
     name: 'library-28-import-collision',

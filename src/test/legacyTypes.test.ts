@@ -3,7 +3,6 @@ import type {
   Annotation,
   AnnotationType,
   CustomTemplate,
-  Design,
   FloorPlanData,
   FloorPlanImage,
   FloorPlanObject,
@@ -33,7 +32,6 @@ import type {
   LegacyCabinetNode,
   LegacyCabinetSceneUnit,
   LegacyCustomTemplate,
-  LegacyDesign,
   LegacyDivider,
   LegacyDrawerConfig,
   LegacyElementType,
@@ -78,13 +76,13 @@ it('copies the v3 shapes word for word', () => {
   expectTypeOf<LegacyFloorPlanData>().toEqualTypeOf<FloorPlanData>()
 })
 
-// The three shapes the reader cannot copy exactly: a frozen node also describes the
-// `material` field that persist v2 dropped, and it appears inside the unit and the Design.
+// The two shapes the reader cannot copy exactly: a frozen node also describes the `material`
+// field that persist v2 dropped, and it appears inside the frozen unit too. `Design` itself is
+// gone from `src/types` — the app has no view of a Project as a `Design` any more (#53) — so the
+// frozen reader's `LegacyDesign` has no counterpart left to be interchangeable with.
 it('stays interchangeable with src/types where it keeps an older field', () => {
   expectTypeOf<LegacyCabinetNode>().toMatchTypeOf<CabinetNode>()
   expectTypeOf<CabinetNode>().toMatchTypeOf<LegacyCabinetNode>()
   expectTypeOf<LegacyCabinetSceneUnit>().toMatchTypeOf<CabinetSceneUnit>()
   expectTypeOf<CabinetSceneUnit>().toMatchTypeOf<LegacyCabinetSceneUnit>()
-  expectTypeOf<LegacyDesign>().toMatchTypeOf<Design>()
-  expectTypeOf<Design>().toMatchTypeOf<LegacyDesign>()
 })

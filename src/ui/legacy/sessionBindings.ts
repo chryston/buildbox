@@ -20,12 +20,11 @@ import type { CabinetMaterialId, DrawerConfig, ElementType, GlobalSettings, Proj
 import type { Intent, IntentType, Locator, PayloadOf } from '../../edit'
 import type { ProjectSession, SaveState, SessionAsset } from '../../session'
 import type { FloorPlanData, FloorPlanObjectType } from '../../types'
-import { useLibrary, useLibrarySelector } from './useLibrary'
 import { useProject, useProjectSelector, useSession } from './useProject'
 import { uiStore, useUi } from './uiStore'
 import type { DragPreview } from './uiStore'
 import type { LegacyBindings, PlanImageAsset, PlanImageRead } from './bindings'
-import { firstFloorId, projectFloorPlan, projectTabs, projectUnits } from './projectView'
+import { firstFloorId, projectFloorPlan, projectUnits } from './projectView'
 
 /**
  * An Intent, fully formed. `app` builds it: the label table and the per-Intent id order are
@@ -52,7 +51,8 @@ export interface SessionViewServices {
 
 /** What only the root that renders the view can do: move it, and open the dialogs above it. */
 export interface SessionHost {
-  goto(projectId: string): void
+  /** Back to the Project Library, which owns the choice of which Project to open next (#53). */
+  returnToProjects(): void
   /**
    * The person clicked the red `Save failed` status, or tried to leave a Project whose unsaved
    * work is holding this tab (#51 §2). Both are answered by the same dialog, which the root owns.
@@ -106,11 +106,9 @@ function sessionAsset(asset: PlanImageAsset): SessionAsset {
 
 export function useSessionBindings(services: SessionViewServices, host: SessionHost): LegacyBindings {
   const session = useSession()
-  const library = useLibrary()
   const { project } = useProject()
   const save = useSaveStatus(session)
   const units = useProjectSelector(projectUnits)
-  const tabs = useLibrarySelector(projectTabs)
 
   const assetHash = project.floors[0]?.planImage?.assetHash ?? null
   const imageSrc = useAssetUrl(services, assetHash)
@@ -185,25 +183,8 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
   const floorId = firstFloorId(project)
 
   return useMemo<LegacyBindings>(() => ({
-    projects: tabs,
-    activeProjectId: session.id,
     activeProjectName: project.meta.name,
-    selectProject: host.goto,
-    createProject: () => {
-      void library.createProject(`Cabinet ${tabs.length + 1}`).then((created) => {
-        if (created.ok) host.goto(created.value)
-      })
-    },
-    deleteProject: (id) => {
-      const others = tabs.filter((tab) => tab.id !== id)
-      if (others.length === 0) return
-      // The Library refuses to trash a Project whose session is holding unsaved work, so
-      // the view moves off it first — which is also what the legacy tab bar did.
-      if (id === session.id) host.goto(others[0].id)
-      void library.trash(id)
-    },
-    // Workspace JSON is #50's: no callback here, so the toolbar draws neither control
-    // (#49 deviation 2).
+    returnToProjects: host.returnToProjects,
     saveStatus: save,
     reopenSaveFailure: () => host.showSaveFailure(),
 
@@ -357,9 +338,7 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
     activeModule,
     setActiveModule,
   }), [
-    tabs,
     session,
-    library,
     host,
     project,
     save,

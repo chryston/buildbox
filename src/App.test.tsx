@@ -1,75 +1,77 @@
-import { act, fireEvent, screen } from '@testing-library/react'
-import { beforeEach, expect, test, vi } from 'vitest'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
+import { beforeEach, expect, test } from 'vitest'
+import App from './App'
+import type { Project } from './domain'
+import { STRINGS } from './ui/strings'
+import { uiStore } from './ui/legacy/uiStore'
+import { openTestView, renderWithBindings as render, type TestView } from './ui/legacy/testing'
+import { flush, testCabinet, testProject } from './session/testing'
 
-beforeEach(() => {
-  localStorage.clear()
-  vi.resetModules()
-})
+/** The New Project with its lower space pinned at 200 mm and locked. */
+function lockedProject(): Project {
+  const project = testProject('p-1')
+  const design = testCabinet(project)
+  return {
+    ...project,
+    itemDesigns: [{
+      ...design,
+      construction: {
+        ...design.construction,
+        root: {
+          id: 'root',
+          splitAxis: 'horizontal',
+          children: [
+            { id: 'a', elementType: 'void', fixedSize: 200, locked: true },
+            { id: 'b', elementType: 'void' },
+          ],
+        },
+      },
+    }],
+  }
+}
+
+let view: TestView
+beforeEach(async () => { view = await openTestView() })
 
 test('renders the BuildBox app shell title and ignores undo shortcuts in focused inputs', async () => {
-  const { useStore } = await import('./store/store')
-  const { default: App } = await import('./App')
-  // `resetModules` above means the seam has to be imported from this generation too, or the
-  // context the render provides is not the one the freshly imported App reads.
-  const { renderWithBindings: render } = await import('./ui/legacy/testing')
-
-  render(<App />)
+  render(<App />, view)
 
   expect(screen.getByText('BuildBox')).toBeInTheDocument()
 
-  act(() => {
-    useStore.getState().createProject()
-  })
-  expect(useStore.getState().projects).toHaveLength(2)
+  // One change, so there is something to undo — then the shortcut, from inside a field, which
+  // belongs to the text caret and not to the app.
+  await view.dispatch('cabinet.addShelf', { itemDesignId: testCabinet(view.project()).id, nodeId: 'root' })
+  const afterShelf = view.project()
 
   const heightInput = screen.getByLabelText('Height')
   heightInput.focus()
   fireEvent.keyDown(heightInput, { key: 'z', ctrlKey: true })
 
-  expect(useStore.getState().projects).toHaveLength(2)
+  // Drain the session inside an act scope: had the shortcut reached it, the notification would
+  // land here and this assertion would fail instead of escaping as a stray render.
+  await act(async () => { await flush() })
+  expect(view.project()).toEqual(afterShelf)
 })
 
 test('unlocking from the sidebar clears fixedSize on the selected node', async () => {
-  const { useStore } = await import('./store/store')
-  const { default: App } = await import('./App')
-  // `resetModules` above means the seam has to be imported from this generation too, or the
-  // context the render provides is not the one the freshly imported App reads.
-  const { renderWithBindings: render } = await import('./ui/legacy/testing')
+  const pinned = await openTestView(lockedProject())
+  act(() => uiStore.getState().selectNode('a'))
 
-  const state = useStore.getState()
-  const activeProjectId = state.activeProjectId!
-  const activeUnitId = state.activeUnitId
-  useStore.setState({
-    selectedId: 'a',
-    projects: state.projects.map((project) =>
-      project.id === activeProjectId
-        ? {
-            ...project,
-            units: project.units.map((u) =>
-              u.id === activeUnitId
-                ? {
-                    ...u,
-                    root: {
-                      id: 'root',
-                      splitAxis: 'horizontal',
-                      children: [
-                        { id: 'a', elementType: 'void', fixedSize: 200, locked: true },
-                        { id: 'b', elementType: 'void' },
-                      ],
-                    },
-                  }
-                : u,
-            ),
-          }
-        : project,
-    ),
-  })
-
-  render(<App />)
+  render(<App />, pinned)
   fireEvent.click(screen.getByRole('button', { name: /locked/i }))
 
-  const selectedProject = useStore.getState().projects.find((project) => project.id === activeProjectId)
-  const unit = selectedProject?.units.find((u) => u.id === activeUnitId)
-  expect(unit?.root.children?.[0].locked).toBe(false)
-  expect(unit?.root.children?.[0].fixedSize).toBeUndefined()
+  const root = await waitFor(() => {
+    const tree = testCabinet(pinned.project()).construction.root
+    expect(tree.children?.[0].locked).toBe(false)
+    return tree
+  })
+  expect(root.children?.[0].fixedSize).toBeUndefined()
+})
+
+// The project bar is gone: the Library chooses the Project, and the editor's one control is the
+// way back to it (#53).
+test('the editor asks to go back to the Project Library', () => {
+  render(<App />, view)
+  fireEvent.click(screen.getByRole('button', { name: STRINGS.returnToProjects }))
+  expect(view.returnToProjects).toHaveBeenCalled()
 })

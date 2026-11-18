@@ -12,7 +12,7 @@ import {
   toast,
 } from '../support/libraryApp'
 import { LEGACY_STORE_KEY, readLegacyStore, seedLegacyStore } from '../support/legacyStore'
-import { PREVIEW_DB_NAME, seedPreviewDb } from '../support/seedPreviewDb'
+import { E2E_DB_NAME, seedPreviewDb } from '../support/seedPreviewDb'
 import type { PreviewSeed } from '../support/seedPreviewDb'
 import type { Page } from '@playwright/test'
 
@@ -231,8 +231,60 @@ test('with IndexedDB unavailable the review pauses, and both downloads still wor
 
   // Nothing was written anywhere: the source is untouched, and no Project was created.
   expect(await readLegacyStore(page)).toBe(REVIEW)
-  expect(await page.evaluate((name) => indexedDB.databases().then((dbs) => dbs.some((db) => db.name === name)), PREVIEW_DB_NAME)).toBe(
+  expect(await page.evaluate((name) => indexedDB.databases().then((dbs) => dbs.some((db) => db.name === name)), E2E_DB_NAME)).toBe(
     false,
   )
   await expect(toast(page)).toHaveCount(0)
+})
+
+/** A v3 envelope whose first Project has lost its list of cabinets. */
+function corruptUnits(): string {
+  const parsed = JSON.parse(REVIEW)
+  parsed.state.projects[0].units = 'wardrobe'
+  return JSON.stringify(parsed)
+}
+
+/** A value truncated mid-write: not even JSON any more. */
+function truncated(): string {
+  return REVIEW.slice(0, Math.floor(REVIEW.length / 2))
+}
+
+// The corrupt-source cases the legacy Recovery screen used to own (#39). The review is the only
+// reader of the old copy now, so it is what a broken value has to be survivable for: it says
+// plainly what is wrong, and it writes nothing — not on open, not on reload, not after five
+// seconds of an idle app. `@local-only` keeps them out of the live smoke run, which cannot seed
+// this browser's storage.
+test('a truncated old copy stops the review before it writes and keeps the bytes @local-only', async ({ page }) => {
+  const raw = truncated()
+  await seedLegacyStore(page, raw)
+  await page.goto('./', { waitUntil: 'networkidle' })
+
+  const failure = page.getByRole('alert')
+  await expect(failure).toContainText('Migration stopped while reading old data')
+  await expect(failure).toContainText('The file is not valid JSON.')
+  await expect(failure).toContainText('Nothing was changed')
+
+  await page.waitForTimeout(5000)
+  expect(await readLegacyStore(page)).toBe(raw)
+
+  await page.reload({ waitUntil: 'networkidle' })
+  await expect(page.getByRole('alert')).toContainText('The file is not valid JSON.')
+  expect(await readLegacyStore(page)).toBe(raw)
+})
+
+test('a Project with no list of cabinets is reported and left alone @local-only', async ({ page }) => {
+  const raw = corruptUnits()
+  await openReview(page, raw)
+
+  const row = page.locator('.migration-item').filter({ hasText: 'Cabinet 1' })
+  await expect(row).toContainText('Not migrated')
+  await expect(row).toContainText('Expected a list of cabinets.')
+
+  await page.waitForTimeout(5000)
+  expect(await readLegacyStore(page)).toBe(raw)
+
+  // "Do this later" leaves without having written anything, and the source still offers itself.
+  await page.getByRole('button', { name: 'Do this later' }).click()
+  await expect(libraryHeading(page)).toBeVisible()
+  expect(await readLegacyStore(page)).toBe(raw)
 })

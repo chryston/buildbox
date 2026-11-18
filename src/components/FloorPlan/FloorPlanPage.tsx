@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react'
-import { downloadFloorPlanJSON } from '../../utils/floorPlanExport'
 import { downloadSVG } from '../../utils/exportSVG'
 import type { FloorPlanObject, FloorPlanObjectType } from '../../types'
 import { useLegacyBindings, type PreparedPlanImage } from '../../ui/legacy/bindings'
@@ -113,15 +112,6 @@ export default function FloorPlanPage() {
         >
           Export SVG
         </button>
-        {bindings.workspace && (
-          <button
-            type="button"
-            onClick={() => downloadFloorPlanJSON(floorPlan, 'floor-plan')}
-            className="rounded border border-divider bg-surface px-3 py-1 text-sm text-text-primary hover:bg-surface-raised"
-          >
-            Export JSON
-          </button>
-        )}
       </div>
 
       {uploadError && (

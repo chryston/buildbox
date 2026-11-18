@@ -1,4 +1,4 @@
-import type { Page, TestInfo } from '@playwright/test'
+import type { Page } from '@playwright/test'
 import { expect, test } from '../support/fixtures'
 import { diffAgainstPrototype } from '../support/prototypeCompare'
 import { LIBRARY_28, permanentDelete, recoveryPoint, saveFailure } from '../support/prototypes/library28'
@@ -34,10 +34,6 @@ test.use({ timezoneId: 'UTC' })
 
 /** The archive's own chrome, hidden on the prototype side only (#50 deviation 1). */
 const PROTOTYPE_CHROME = ['.prototype-notice', '.scenario-controls', '.variant-switcher', '.state-toggle', '.state-panel']
-
-const requireFlag = (testInfo: TestInfo): void => {
-  test.skip(testInfo.project.name !== 'projects-v2', 'the dialogs exist only behind VITE_FF_PROJECTS_V2')
-}
 
 type Load = (page: Page, seed: typeof paritySeed) => Promise<void>
 
@@ -101,7 +97,6 @@ test.describe('Save failed', () => {
   test.use({ timezoneId: 'Asia/Singapore' })
 
   test('Save failed matches #28 Variant A and is baselined', async ({ page }, testInfo) => {
-    requireFlag(testInfo)
     await page.clock.setFixedTime(FIXED_NOW)
     await diffAgainstPrototype(page, testInfo, {
       name: 'recovery-28-save-failed',
@@ -125,7 +120,6 @@ test.describe('Save failed', () => {
 })
 
 test('the Recovery Point picker matches #28 Variant A and is baselined', async ({ page }, testInfo) => {
-  requireFlag(testInfo)
   await page.clock.setFixedTime(FIXED_NOW)
   await diffAgainstPrototype(page, testInfo, {
     name: 'recovery-28-recovery-point',
@@ -144,7 +138,6 @@ test('the Recovery Point picker matches #28 Variant A and is baselined', async (
 })
 
 test('the Trash surface matches #28 Variant A', async ({ page }, testInfo) => {
-  requireFlag(testInfo)
   await page.clock.setFixedTime(FIXED_NOW)
   await diffAgainstPrototype(page, testInfo, {
     name: 'recovery-28-trash',
@@ -164,7 +157,6 @@ test('the Trash surface matches #28 Variant A', async ({ page }, testInfo) => {
 })
 
 test('permanent deletion matches #28 Variant A, over its Trash, and is baselined', async ({ page }, testInfo) => {
-  requireFlag(testInfo)
   await page.clock.setFixedTime(FIXED_NOW)
   const prepare = async (production: Page): Promise<void> => {
     await reachTrash(production, reseedAndReload)

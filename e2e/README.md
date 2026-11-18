@@ -19,9 +19,10 @@ are black-box tests.
 break (#39, #20 §13.15): the cabinet scene, the cabinet scene with a void selected, and the
 floor-plan scene with its calibrated image, placed objects in all four rotations, the custom
 shape and both annotation shapes. They come from the untouched v3 fixture
-(`fixtures/legacy/v3/buildbox-store.json`), so a baseline is a promise about real persisted
-data. They are element-level captures of the canvas hosts, not full-page shots, so toolbar
-and panel changes in the migration don't invalidate them.
+(`fixtures/legacy/v3/buildbox-store.json`), converted into Project Backups and seeded into the
+`buildbox` database the app opens (`support/seedPreviewDb.ts`), so a baseline is a promise about
+real persisted data. They are element-level captures of the canvas hosts, not full-page shots, so
+toolbar and panel changes in the migration don't invalidate them.
 
 Baselines live in `e2e/screenshots/__snapshots__/`, committed like any other test asset.
 

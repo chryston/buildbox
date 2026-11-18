@@ -4,7 +4,7 @@ import { cardButton, libraryHeading, previewSeed } from './libraryApp'
 import { seedPreviewDb } from './seedPreviewDb'
 
 /**
- * The pieces the `projects-v2` smoke specs share (#49): open the flag-on build against the
+ * The pieces the Project smoke specs share (#49): open the app against the
  * seeded preview database, and drive the two views it renders.
  */
 
@@ -21,7 +21,7 @@ export const floorPlanCanvas = (page: Page): Locator => page.getByTestId('floor-
 /**
  * Load the app and reach the cabinet view of the Project the database lists first.
  *
- * The flagged build opens on the Project Library (#50), so getting to an editor is two steps
+ * The app opens on the Project Library (#50), so getting to an editor is two steps
  * now: land on the Library, then open the Project. Which Project is not left to chance — the
  * specs assert against `previewSeed.projects[0]`'s revision, so this opens that one by name.
  */
@@ -138,11 +138,23 @@ function installQuotaPatch(): void {
 }
 
 /**
- * Select a Project by its tab and wait for the view to follow. A Project with no cabinet
- * design has no cabinet canvas, and switching Projects keeps the module the user is in, so
- * the view following means one of the two canvases is on screen again.
+ * Leave the editor for the Project Library. This closes the session, which is what releases its
+ * Web Lock and lets a card open any Project (#53).
+ */
+export async function returnToProjects(page: Page): Promise<void> {
+  await page.getByTestId('return-to-projects').click()
+  await expect(libraryHeading(page)).toBeVisible()
+}
+
+/**
+ * Switch to another Project: back to the Project Library, then open that one by name. Since #53
+ * the editor holds exactly one Project and has no switcher of its own, so a Project switch is a
+ * Library round trip. Which module is on screen is UI state and not Project state, so the floor
+ * plan stays up across the trip; a Project with no cabinet design has no cabinet canvas, so
+ * "switched" means one of the two canvases is on screen again.
  */
 export async function openProjectTab(page: Page, name: string): Promise<void> {
-  await page.getByRole('button', { name, exact: true }).click()
+  await returnToProjects(page)
+  await cardButton(page, name, 'Open').click()
   await expect(cabinetCanvas(page).or(floorPlanCanvas(page)).first()).toBeVisible()
 }

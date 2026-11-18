@@ -1,0 +1,51 @@
+// #53 criterion 2: the removed export paths must be gone from what ships, not merely from
+// `src/`. Three strings prove which release this bundle is from: the workspace-JSON filename
+// the old `Export` wrote, the floor-plan-JSON filename its sibling wrote, and the flag that
+// used to choose between the two apps. None of them has a producer any more.
+//
+// `buildbox-store` is deliberately NOT on this list: reading the old key is the Migration
+// review's job until #86, and `package/legacy` and `platform/legacySource` are allowed to name
+// it. `buildbox-preview` is not either — the preview channel (#20 §11) is a mechanism this
+// build still carries, and it is named by whichever flag is set, not by a flag of its own.
+//
+// Run as part of `npm run build`, after `vite build`.
+import { readdirSync, readFileSync, existsSync } from 'node:fs'
+import { extname, join, relative } from 'node:path'
+import process from 'node:process'
+
+const outDir = process.argv[2] ?? 'dist'
+const FORBIDDEN = ['.buildbox.json', '-floor-plan.json', 'VITE_FF_PROJECTS_V2', '__PROJECTS_V2__']
+// Only the files that could contain application code: an image or a font cannot.
+const SCANNED = new Set(['.js', '.mjs', '.css', '.html', '.json', '.svg', '.txt', '.map'])
+
+if (!existsSync(outDir)) {
+  console.error(`${outDir} not found — run \`vite build\` first`)
+  process.exit(1)
+}
+
+function* textFiles(dir) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) yield* textFiles(path)
+    else if (SCANNED.has(extname(entry.name))) yield path
+  }
+}
+
+const found = []
+let scanned = 0
+for (const file of textFiles(outDir)) {
+  scanned += 1
+  const text = readFileSync(file, 'utf8')
+  for (const needle of FORBIDDEN) {
+    if (text.includes(needle)) found.push(`${relative('.', file)} contains "${needle}"`)
+  }
+}
+
+if (found.length > 0) {
+  console.error(`${outDir} still ships a removed export path (${scanned} files scanned):`)
+  for (const problem of found) console.error(`  ${problem}`)
+  console.error('Download Backup replaced the workspace and floor-plan JSON exports at S4 (#19 §10).')
+  process.exit(1)
+}
+
+console.log(`${outDir}: no removed export strings (${scanned} files scanned)`)

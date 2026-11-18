@@ -39,18 +39,19 @@ const TARGET_MODULES = [
   { name: 'app', allow: ['*'], impure: true },
 ]
 
-// Legacy elements shrink to nothing at the S4 cutover. They keep their S0 allow-lists —
-// with `engine` replaced by the target modules that received it — and may also import the
-// target modules below, through their entry points only. No target module may import any
-// of them.
+// Legacy elements are what the S4 cutover left behind: the pre-Projects view's own types,
+// catalogue and components. They keep their S0 allow-lists — with `engine` replaced by the
+// target modules that received it — and may also import the target modules below, through
+// their entry points only. No target module may import any of them. `src/store` is gone from
+// this list entirely: the legacy persistence stack was deleted, not renamed (#53).
 const LEGACY_TARGET_MODULES = ['lib', 'domain', 'cabinet', 'package']
 
 const LEGACY_ELEMENTS = [
   {
     name: 'legacy-utils-dom',
-    // The two download helpers use document/URL, so they must be claimed before
-    // `legacy-utils`, and so must the test that drives one through a real jsdom document.
-    pattern: ['src/utils/exportSVG.ts', 'src/utils/exportSVG.test.ts', 'src/utils/floorPlanExport.ts'],
+    // The download helper uses document/URL, so it must be claimed before `legacy-utils`, and
+    // so must the test that drives it through a real jsdom document.
+    pattern: ['src/utils/exportSVG.ts', 'src/utils/exportSVG.test.ts'],
     mode: 'file',
     allow: ['legacy-types', 'legacy-utils-dom'],
   },
@@ -66,17 +67,36 @@ const LEGACY_ELEMENTS = [
     allow: ['*'],
   },
   {
+    // #53's rendering harness: a component test gets the bindings the app builds, which means
+    // this one file opens a session over the in-memory store and borrows `app`'s Intent
+    // factory. Both are `app`'s and `persistence`'s business for every other file in
+    // `src/ui/legacy`; this is a test helper, so it ships nothing.
+    name: 'legacy-view-testing',
+    pattern: ['src/ui/legacy/testing.tsx'],
+    mode: 'file',
+    allow: ['*'],
+  },
+  {
+    // A component test renders through #53's harness, so it reaches the harness, `session`'s
+    // fixtures and the seam's own view-models. Tests ship nothing, so they are as open as
+    // `src/test` and `src/integration` already are (#20 §2).
+    name: 'component-test',
+    pattern: ['src/components/**/*.test.tsx'],
+    mode: 'file',
+    allow: ['*'],
+  },
+  {
     name: 'legacy-view',
-    // The adapter layer of #49: the `LegacyBindings` seam, the two implementations of it, and
-    // the UI state that is not project data. It claims `src/ui/legacy`
-    // out of the `ui` module because it is the one place allowed to reach the legacy store
-    // (`storeBindings`) and the legacy view-models — which is exactly why it must not be
-    // reachable *from* `ui`: the flagged graph has to stay free of `src/store`.
+    // The adapter layer of #49: the `LegacyBindings` seam, its one session-backed
+    // implementation, and the UI state that is not project data. It claims `src/ui/legacy`
+    // out of the `ui` module because it is the one place allowed to reach the legacy
+    // view-models — which is exactly why it must not be reachable *from* `ui`: the views are
+    // the only consumers of those shapes, and the seam is what keeps them out of `ui`.
     // `beforeTargets` puts it ahead of `ui` in `ELEMENTS`, being the more specific pattern.
     pattern: ['src/ui/legacy'],
     mode: 'folder',
     beforeTargets: true,
-    allow: ['ui', 'session', 'derive', 'domain', 'legacy-store', 'legacy-types', 'legacy-data', 'legacy-view'],
+    allow: ['ui', 'session', 'derive', 'domain', 'legacy-types', 'legacy-data', 'legacy-view'],
     typeOnly: ['edit'],
   },
   {
@@ -94,23 +114,16 @@ const LEGACY_ELEMENTS = [
     pure: true,
   },
   {
-    name: 'legacy-store',
-    pattern: ['src/store'],
-    mode: 'folder',
-    allow: ['legacy-types', 'legacy-utils', 'legacy-data', 'legacy-store'],
-  },
-  {
     name: 'legacy-components',
     pattern: ['src/components'],
     mode: 'folder',
     allow: [
       'legacy-components',
-      // #49: the views read their state through `LegacyBindings` instead of the store, so the
+      // #49: the views read their state through `LegacyBindings` instead of a store, so the
       // seam is one of their imports. `legacy-view` does not allow `legacy-components` back,
-      // so this is a one-way edge — and the components import only `bindings`, never one of
-      // its two implementations, which is what keeps `src/store` out of the flagged bundle.
+      // so this is a one-way edge — and the components import only `bindings`, never the
+      // session itself, which is what keeps them replaceable.
       'legacy-view',
-      'legacy-store',
       'legacy-utils',
       'legacy-utils-dom',
       'legacy-data',
@@ -187,7 +200,7 @@ const PURE_LEGACY_ELEMENTS = LEGACY_ELEMENTS.filter((element) => element.pure)
 
 const DOM_GLOBALS = ['window', 'document', 'localStorage', 'indexedDB', 'navigator']
 
-const NON_PURE_IMPORTS = ['react', 'react-dom', 'react/*', 'zustand', 'zundo', 'idb']
+const NON_PURE_IMPORTS = ['react', 'react-dom', 'react/*', 'zustand', 'idb']
 
 const folderPatterns = (patterns) => patterns.flatMap((pattern) => `${pattern}/**/*`)
 
@@ -361,7 +374,6 @@ export default tseslint.config(
   {
     ignores: [
       'dist/**',
-      'dist-preview/**',
       'coverage/**',
       'node_modules/**',
       '.prototype-cache/**',
