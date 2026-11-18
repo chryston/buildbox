@@ -34,7 +34,7 @@ const PURE_INCLUDE = [`src/{${PURE_MODULES.join(',')}}/**/*.test.ts`]
 const PURE_EXCLUDE = ['src/persistence/indexeddb/**']
 // Not a module test, but a Node test all the same: it walks `fixtures/legacy` on disk and
 // hashes the files, and `import.meta.url` is only a file URL outside jsdom.
-const NODE_ONLY_INCLUDE = ['src/test/legacyFixtures.test.ts']
+const NODE_ONLY_INCLUDE = ['src/test/legacyFixtures.test.ts', 'src/test/legacyMigration.test.ts']
 
 // The adapter's own suites: `fake-indexeddb` under Node, and `*.browser.test.ts` against
 // real IndexedDB in a real browser. Chromium is part of `npm test`; the nightly workflow
