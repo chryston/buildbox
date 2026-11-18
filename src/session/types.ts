@@ -204,6 +204,13 @@ export interface LibraryStore {
   trash(id: string): Promise<Result<LibraryRecord, SessionError>>
   restore(id: string): Promise<Result<LibraryRecord, SessionError>>
   purge(id: string): Promise<Result<void, SessionError>>
+  /**
+   * Purge every Project whose 30 days are up and report how many went (#51 §4).
+   *
+   * A Project this tab is holding with unsaved changes is skipped rather than refused: the guard
+   * outranks the calendar, and the sweep is not the place to argue about it.
+   */
+  purgeExpired(): Promise<Result<number, SessionError>>
   /** Record that a Project Backup was offered for the state the user was given. */
   markBackupInitiated(id: string): Promise<Result<LibraryRecord, SessionError>>
 }

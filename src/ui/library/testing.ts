@@ -17,11 +17,13 @@ import type {
   LibraryRecord,
   LibrarySnapshot,
   LibraryStore,
+  RecoveryPointMeta,
   RestoreApplied,
   RestoreCommitTarget,
   RestoreProblem,
   RestoreStaged,
   Result,
+  SessionError,
 } from '../../session'
 import type { ProjectSummary } from '../../domain'
 
@@ -62,6 +64,16 @@ export interface LibraryCalls {
   duplicated: string[]
   trashed: string[]
   created: string[]
+  /** The Projects whose Recovery Points were read, which is the picker having opened. */
+  recovered: string[]
+  /** The Projects the Permanent deletion dialog was asked about. */
+  deleted: string[]
+  /** `[projectId, pointId]` for each Recovery Point the person chose. */
+  restoredPoints: Array<[string, string]>
+  /** The three Save failed answers, counted rather than listed — they take no arguments. */
+  retried: number
+  emergencyBackups: number
+  discarded: number
 }
 
 export interface TestLibrary {
@@ -75,6 +87,14 @@ export interface TestLibrary {
   failRestore: (problem: RestoreProblem | null) => void
   /** Replace the answer `stageRestore` gives, which is the only route into the collision dialog. */
   stageAnswer: (staged: RestoreStaged) => void
+  /** The Recovery Points `recoveryPoints` answers with, newest first. */
+  setRecoveryPoints: (points: RecoveryPointMeta[]) => void
+  /** The Projects `lockedElsewhere` says another tab is holding (#51 §5). */
+  setLocked: (ids: readonly string[]) => void
+  /** The Projects the fake store refuses with `'guarded'`, standing in for the session registry. */
+  setGuarded: (ids: readonly string[]) => void
+  /** Make the next `openProject` refuse, which is how a guarded `Open` is drawn. */
+  failOpen: (error: SessionError | null) => void
 }
 
 const ok = <T,>(value: T): Result<T, never> => ({ ok: true, value })
@@ -120,7 +140,17 @@ export function createTestLibrary(records: LibraryRecord[] = []): TestLibrary {
     duplicated: [],
     trashed: [],
     created: [],
+    recovered: [],
+    deleted: [],
+    restoredPoints: [],
+    retried: 0,
+    emergencyBackups: 0,
+    discarded: 0,
   }
+  let points: RecoveryPointMeta[] = []
+  let locked = new Set<string>()
+  let guarded = new Set<string>()
+  let openFailure: SessionError | null = null
 
   const library: LibraryStore = {
     subscribe: (listener) => {
@@ -157,18 +187,25 @@ export function createTestLibrary(records: LibraryRecord[] = []): TestLibrary {
     },
     trash: async (id) => {
       calls.trashed.push(id)
+      if (guarded.has(id)) return { ok: false, error: 'guarded' }
       const found = current.find((entry) => entry.id === id)
       if (found === undefined) throw new Error(`no record ${id}`)
       set(current.map((entry) => (entry.id === id ? { ...entry, trashedAt: NOW } : entry)))
       return ok({ ...found, trashedAt: NOW })
     },
     restore: async (id) => {
+      if (guarded.has(id)) return { ok: false, error: 'guarded' }
       const found = current.find((entry) => entry.id === id)
       if (found === undefined) throw new Error(`no record ${id}`)
       set(current.map((entry) => (entry.id === id ? { ...entry, trashedAt: null } : entry)))
       return ok({ ...found, trashedAt: null })
     },
-    purge: async () => ok(undefined),
+    purge: async (id) => {
+      if (guarded.has(id)) return { ok: false, error: 'guarded' }
+      set(current.filter((entry) => entry.id !== id))
+      return ok(undefined)
+    },
+    purgeExpired: async () => ok(0),
     markBackupInitiated: async (id) => {
       const found = current.find((entry) => entry.id === id)
       if (found === undefined) throw new Error(`no record ${id}`)
@@ -208,8 +245,29 @@ export function createTestLibrary(records: LibraryRecord[] = []): TestLibrary {
         'decision' in target ? (target.decision === 'replace' ? 'replace' : 'copy') : 'new'
       return ok({ kind, id: 'p9', name: 'Restored Flat', migratedFrom: null } satisfies RestoreApplied)
     },
-    openProject: (id) => {
+    openProject: async (id) => {
       calls.opened.push(id)
+      if (openFailure !== null) return { ok: false, error: openFailure }
+      return ok(undefined)
+    },
+    recoveryPoints: async (id) => {
+      calls.recovered.push(id)
+      return points
+    },
+    lockedElsewhere: async (id) => locked.has(id),
+    restoreRecoveryPoint: async (projectId, pointId) => {
+      calls.restoredPoints.push([projectId, pointId])
+      if (openFailure !== null) return { ok: false, error: openFailure }
+      return ok(undefined)
+    },
+    retrySave: () => {
+      calls.retried += 1
+    },
+    downloadEmergencyBackup: () => {
+      calls.emergencyBackups += 1
+    },
+    discardUnsaved: () => {
+      calls.discarded += 1
     },
   }
 
@@ -227,6 +285,18 @@ export function createTestLibrary(records: LibraryRecord[] = []): TestLibrary {
     },
     stageAnswer: (next) => {
       stagedAnswer = next
+    },
+    setRecoveryPoints: (next) => {
+      points = next
+    },
+    setLocked: (next) => {
+      locked = new Set(next)
+    },
+    setGuarded: (next) => {
+      guarded = new Set(next)
+    },
+    failOpen: (next) => {
+      openFailure = next
     },
   }
 }

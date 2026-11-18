@@ -20,7 +20,8 @@ export interface ModalProps {
   /** The small uppercase line above the heading: `Project Backup`, `Restore Backup`. */
   eyebrow?: string
   heading: string
-  onClose: () => void
+  /** Absent for a dialog with no way out but an answer (#51's Save failed and conflict dialogs). */
+  onClose?: () => void
   children: ReactNode
   /** `false` for a dialog the user must answer rather than escape from (#51). */
   dismissable?: boolean
@@ -37,7 +38,7 @@ export function Modal({ eyebrow, heading, onClose, children, dismissable = true,
     const onKey = (event: globalThis.KeyboardEvent): void => {
       if (event.key !== 'Escape') return
       event.stopPropagation()
-      onClose()
+      onClose?.()
     }
     // Captured, so a dialog opened over a dialog closes only the top one: the listener stops
     // the event before the one underneath can see it.
@@ -76,7 +77,7 @@ export function Modal({ eyebrow, heading, onClose, children, dismissable = true,
       className="modal-backdrop"
       role="presentation"
       onMouseDown={(event) => {
-        if (dismissable && event.target === event.currentTarget) onClose()
+        if (dismissable && event.target === event.currentTarget) onClose?.()
       }}
     >
       <div

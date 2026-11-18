@@ -19,21 +19,28 @@ import type { Intent, IntentType, PayloadOf } from '../edit'
 import { collectLiveHashes, createMemoryAdapter } from '../persistence'
 import type { Ports } from '../persistence'
 import { openIndexedDbAdapter } from '../persistence/indexeddb/open'
-import { referencedAssetHashes } from '../domain'
+import { referencedAssetHashes, remapIds } from '../domain'
 import {
+  NEW_PROJECT_REVISION,
+  backupFileName,
   commitRestore,
   createLibraryStore,
   createSessionRegistry,
   downloadBackup,
+  encodeEmergencyBackup,
+  err,
+  ok,
   openProject,
   stageRestore,
   type BackupDeps,
   type ClockPort,
   type DownloadPort,
+  type GuardState,
   type IdSource,
   type LibraryStore,
   type LockPort,
   type ProjectSession,
+  type Result,
   type RestoreDeps,
   type SaveState,
   type SessionError,
@@ -50,8 +57,9 @@ import {
   readPlanImageFile,
 } from '../platform'
 import type { ObjectUrlCache } from '../platform'
-import { LibraryHome } from '../ui'
+import { ConflictDialog, LibraryHome, ReadOnlyStrip } from '../ui'
 import type { LibraryServices } from '../ui'
+import { requestPersistentStorage } from './persistentStorage'
 import { LegacyViewRoot } from '../ui/legacy/LegacyViewRoot'
 import type { IntentBuilder, SessionViewServices } from '../ui/legacy/sessionBindings'
 import type { PlanImageRead } from '../ui/legacy/bindings'
@@ -68,6 +76,40 @@ export const PREVIEW_DB_NAME = 'buildbox-preview'
  * stale", not "one record was written".
  */
 export const LIBRARY_CHANNEL = 'buildbox:library'
+
+/** What one tab says when it has written a Project (#50 §5, #51 §5). */
+interface LibraryChange {
+  projectId: string
+  revision: number
+}
+
+/**
+ * The commit port with the Library announcement attached.
+ *
+ * Wrapped here rather than posted from `session`, which keeps a browser API out of the session
+ * layer — and it means *every* writer announces: the Library, a restore, a session's autosave.
+ * That last one is the reason #51 §5 needs it. A tab that lost its Web Lock has no other way to
+ * learn the record has moved, because `navigator.locks` offers no subscription, and without this
+ * a read-only tab would stay read-only until the person reloaded.
+ */
+function announceCommits(ports: Ports, channel: BroadcastChannel): Ports {
+  return {
+    ...ports,
+    projects: {
+      ...ports.projects,
+      commit: async (input, expectedRevision) => {
+        const committed = await ports.projects.commit(input, expectedRevision)
+        if (committed.ok) {
+          channel.postMessage({
+            projectId: input.project.id,
+            revision: committed.value.revision,
+          } satisfies LibraryChange)
+        }
+        return committed
+      },
+    },
+  }
+}
 
 /**
  * The services the legacy views cannot build for themselves.
@@ -151,28 +193,41 @@ interface FlaggedDeps {
   restore: RestoreDeps
   download: DownloadPort
   assetUrls: ObjectUrlCache
+  channel: BroadcastChannel
+  /**
+   * True when the store behind `ports` keeps nothing past this tab (#51 §6).
+   *
+   * It arrives from `mountProjectsV2`, which is the one place that knows whether IndexedDB
+   * opened, and it reaches the session as `volatile` — the flag that makes every save refuse
+   * itself up front rather than failing on the first write.
+   */
+  volatile: boolean
 }
 
-function createFlaggedDeps(ports: Ports): FlaggedDeps {
+function createFlaggedDeps(ports: Ports, volatile: boolean): FlaggedDeps {
   const clock = createPlatformClock()
   const ids = createRandomIdSource()
   const registry = createSessionRegistry()
+  const channel = new BroadcastChannel(LIBRARY_CHANNEL)
+  const announced = announceCommits(ports, channel)
   return {
-    ports,
+    ports: announced,
     clock,
     ids,
     lock: createWebLocksPort(),
     registry,
-    library: createLibraryStore({ ports, clock, ids, registry }),
+    library: createLibraryStore({ ports: announced, clock, ids, registry }),
     // `preview: true` because this whole build is the preview (#20 §11, #50 criterion 28): a
     // `.buildbox` written here is marked, and production refuses it rather than importing preview
     // work into a real database.
     backup: { clock, encoder: createBackupEncoder(), buildboxVersion: __BUILDBOX_VERSION__, preview: true },
     // `acceptPreview: true` for the same reason in the other direction: this build wrote the
     // Backup, so it is the only build allowed to read it back.
-    restore: { ports, clock, ids, registry, images: createImageDecoder(), acceptPreview: true },
+    restore: { ports: announced, clock, ids, registry, images: createImageDecoder(), acceptPreview: true },
     download: createDownload(),
     assetUrls: createObjectUrlCache(ports.assets.get),
+    channel,
+    volatile,
   }
 }
 
@@ -205,10 +260,13 @@ type Route = 'library' | 'project'
  * The flagged app: the Library, and the legacy editor for whichever Project it opened.
  */
 function FlaggedRoot({ deps }: { deps: FlaggedDeps }): ReactNode {
-  const { ports, clock, ids, lock, registry, backup, restore, download, assetUrls, library } = deps
+  const { ports, clock, ids, lock, registry, backup, restore, download, assetUrls, library, channel, volatile } = deps
   const [route, setRoute] = useState<Route>('library')
   const [session, setSession] = useState<ProjectSession | null>(null)
   const [saveState, setSaveState] = useState<SaveState | null>(null)
+  const [guard, setGuard] = useState<GuardState | null>(null)
+  const [readOnly, setReadOnly] = useState(false)
+  const [persistedRevision, setPersistedRevision] = useState(0)
   // The session as the event handler sees it, which is not the same moment as the render that
   // will follow it: `Open` has to close the session it is being clicked away from, and reading
   // state for that would close the one from the last render.
@@ -216,6 +274,8 @@ function FlaggedRoot({ deps }: { deps: FlaggedDeps }): ReactNode {
   // A thumbnail arrives after the render that asked for it, and the object-URL cache is not the
   // Library store, so the tree needs its own reason to look again.
   const [, thumbnailsChanged] = useState(0)
+  // One persistent-storage request per page load, however many writes follow.
+  const askedToPersist = useRef(false)
 
   useEffect(() => assetUrls.subscribe(() => thumbnailsChanged((n) => n + 1)), [assetUrls])
 
@@ -231,34 +291,102 @@ function FlaggedRoot({ deps }: { deps: FlaggedDeps }): ReactNode {
   useEffect(() => {
     if (session === null) {
       setSaveState(null)
+      setGuard(null)
+      setReadOnly(false)
+      setPersistedRevision(0)
       return
     }
-    const read = (): void => setSaveState(session.getSnapshot().save)
+    const read = (): void => {
+      const snapshot = session.getSnapshot()
+      setSaveState(snapshot.save)
+      setGuard(snapshot.guard)
+      setReadOnly(snapshot.readOnly)
+      setPersistedRevision(snapshot.persistedRevision)
+    }
     read()
     return session.subscribe(read)
   }, [session])
 
+  // #51 §6: the first time a Project is actually on disk, ask the browser to keep it there.
+  // Before that there is nothing worth persisting, and a request made too early is refused on the
+  // merits without anyone being told why.
+  useEffect(() => {
+    if (persistedRevision === 0 || askedToPersist.current) return
+    askedToPersist.current = true
+    void requestPersistentStorage({ prefs: ports.prefs, clock })
+  }, [persistedRevision, ports.prefs, clock])
+
+  // #51 §5: another tab has written the Project this tab is holding. A tab that is read-only
+  // because it lost the lock has no other way to find out the lock is free — `navigator.locks`
+  // answers queries, it does not announce them — so this is what re-reads the record and takes
+  // the Project back. A tab that still holds its lock ignores the message, because the commit
+  // that follows will fail on the revision and say so properly.
+  useEffect(() => {
+    const onMessage = (event: MessageEvent): void => {
+      const change = event.data as LibraryChange | null
+      if (change === null || typeof change !== 'object' || change.projectId !== session?.id) return
+      if (session.getSnapshot().readOnly) void session.reload()
+    }
+    channel.addEventListener('message', onMessage)
+    return () => {
+      channel.removeEventListener('message', onMessage)
+    }
+  }, [channel, session])
+
+  // #14's guard at the one boundary no dialog can reach: the tab itself closing. The Save failed
+  // dialog has no answer for "the browser is going away", so this asks the browser to ask.
+  useEffect(() => {
+    if (guard?.blocked !== true) return
+    const onBeforeUnload = (event: BeforeUnloadEvent): void => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    globalThis.addEventListener('beforeunload', onBeforeUnload)
+    return () => {
+      globalThis.removeEventListener('beforeunload', onBeforeUnload)
+    }
+  }, [guard?.blocked])
+
   const open = useCallback(
-    async (projectId: string): Promise<void> => {
+    async (projectId: string): Promise<Result<void, SessionError>> => {
       // `Open` closes any open session first (#50 criterion 11's card action), because the Web
       // Lock is what stops one Project being edited in two places. A session that refuses to
       // close is holding unsaved changes behind #14's guard, and taking the user away from it is
-      // exactly what that guard exists to prevent — so the Library stays where it is.
+      // exactly what that guard exists to prevent — so the Library stays where it is, and #51 §2
+      // is what shows the person why.
       if (held.current !== null) {
         const closed = await held.current.close()
-        if (!closed.ok) return
+        if (!closed.ok) return closed
         held.current = null
       }
-      const opened = await openProject(projectId, { ports, clock, lock, ids, registry, backup })
+      const opened = await openProject(projectId, { ports, clock, lock, ids, registry, backup, volatile })
       // No dialog for a Project that will not open: it is either locked in another tab or
       // trashed since the card was drawn, and both answer to `Restore Backup`'s refresh.
-      if (!opened.ok) return
+      if (!opened.ok) return opened
       held.current = opened.value
       setSession(opened.value)
       setRoute('project')
+      return ok(undefined)
     },
-    [ports, clock, lock, ids, registry, backup],
+    [ports, clock, lock, ids, registry, backup, volatile],
   )
+
+  /**
+   * Take the work out of the browser (#51 §2's second answer).
+   *
+   * This is the only download in the app that does not read the store: the whole reason it exists
+   * is that the store does not have the newest state. `emergencySource` is the session's own
+   * account of what it holds, held assets included, and the guard is released only once the bytes
+   * have actually left the tab — which is `markEmergencyBackupDownloaded`'s job, not this one's.
+   */
+  const downloadEmergency = useCallback(async (): Promise<void> => {
+    const current = held.current
+    if (current === null) return
+    const encoded = await encodeEmergencyBackup({ ...backup, ports }, current.emergencySource())
+    if (!encoded.ok) return
+    download.start(backupFileName(current.getSnapshot().project.meta.name), encoded.value)
+    current.markEmergencyBackupDownloaded()
+  }, [backup, ports, download])
 
   const services = useMemo<LibraryServices>(
     () => ({
@@ -289,26 +417,123 @@ function FlaggedRoot({ deps }: { deps: FlaggedDeps }): ReactNode {
       readBackupFile: async (file) => new Uint8Array(await file.arrayBuffer()),
       stageRestore: (bytes) => stageRestore(restore, bytes),
       commitRestore: (target) => commitRestore(restore, target),
-      openProject: (projectId) => {
-        void open(projectId)
+      openProject: (projectId) => open(projectId),
+      async recoveryPoints(id) {
+        const listed = await ports.recovery.list(id)
+        return listed.ok ? listed.value : []
+      },
+      async lockedElsewhere(id) {
+        // This tab's own session is not "elsewhere", whether it still holds the lock or has lost
+        // it — that case is #51 §5's read-only tab, and its answer is the strip, not a toast.
+        if (registry.get(id) !== null) return false
+        // `acquire` is `ifAvailable`: it hands back a handle when the Project was free and `null`
+        // when another tab holds it. Releasing straight away means asking costs the other tab
+        // nothing, which is the only reason a Library card is allowed to ask at all.
+        const handle = await lock.acquire(id)
+        if (handle === null) return true
+        handle.release()
+        return false
+      },
+      restoreRecoveryPoint: async (projectId, pointId) => {
+        // Restoring means editing, and editing means a session: open the Project if this tab is
+        // not already in it, and let the session's own guard refuse if it is holding work.
+        if (held.current?.id !== projectId) {
+          const opened = await open(projectId)
+          if (!opened.ok) return opened
+        }
+        const current = held.current
+        if (current === null || current.id !== projectId) {
+          return err({ kind: 'unavailable', reason: 'this tab has no open session for that Project' })
+        }
+        return current.restoreRecoveryPoint(pointId)
+      },
+      // The three Save failed answers, aimed at whatever session this tab holds. They report
+      // nothing: the snapshot is the only honest account of whether the retry worked, and the
+      // dialog reads that.
+      retrySave: () => {
+        void held.current?.retry()
+      },
+      downloadEmergencyBackup: () => {
+        void downloadEmergency()
+      },
+      discardUnsaved: () => {
+        void held.current?.discardUnsaved()
       },
     }),
-    [deps, ports, clock, library, assetUrls, download, restore, open],
+    [deps, ports, clock, library, assetUrls, download, restore, open, lock, registry, downloadEmergency],
   )
 
   const sessionServices = useMemo(() => createSessionServices(clock, ids, assetUrls), [clock, ids, assetUrls])
+
+  /**
+   * Keep this tab's unsaved work by committing it under a new identity (#51 §5).
+   *
+   * The other tab has the record; this one has the newer state and no lock. A copy is the only
+   * answer that loses neither, and `remapIds` is what makes two Projects in one store safe — the
+   * same function a restore-as-copy uses, for the same reason. The assets this tab was about to
+   * write go in with it, or the copy would open with a Plan Image missing.
+   */
+  const importChangesAsCopy = useCallback(async (): Promise<void> => {
+    const current = held.current
+    if (current === null) return
+    const source = current.emergencySource()
+    const copyId = ids(1)[0]
+    if (copyId === undefined) return
+    const remapped = remapIds(source.project, copyId, ids)
+    const copy = {
+      ...remapped,
+      meta: { ...remapped.meta, name: `${source.project.meta.name} — Copy`, revision: NEW_PROJECT_REVISION },
+    }
+    const committed = await ports.projects.commit(
+      { project: copy, revision: NEW_PROJECT_REVISION, savedAt: clock.now(), newAssets: [...source.heldAssets.values()] },
+      null,
+    )
+    if (!committed.ok) return
+    await library.refresh()
+    void open(copyId)
+  }, [ids, ports.projects, clock, library, open])
 
   if (route === 'library') {
     // The session survives a stay on the Library only when it refused to close, which is #14's
     // guard holding unsaved work. Its card is then the one that reads `Saving…` or
     // `Save failed · changes not stored` rather than the record's `Saved locally {since}`.
-    return <LibraryHome services={services} saveState={saveState} saveStateFor={session?.id ?? null} />
+    return (
+      <LibraryHome
+        services={services}
+        saveState={saveState}
+        saveStateFor={session?.id ?? null}
+        guard={guard}
+        storageUnavailable={volatile}
+      />
+    )
   }
   if (session === null) return null
+  const conflict = saveState !== null && saveState.kind === 'failed' && saveState.reason === 'revision-conflict'
   return (
-    <LegacyViewRoot library={library} session={session} services={sessionServices}>
-      <App />
-    </LegacyViewRoot>
+    <>
+      <LegacyViewRoot
+        library={library}
+        session={session}
+        services={sessionServices}
+        banner={readOnly ? <ReadOnlyStrip /> : undefined}
+      >
+        <App />
+      </LegacyViewRoot>
+      {conflict && saveState !== null && saveState.kind === 'failed' && (
+        <ConflictDialog
+          name={session.getSnapshot().project.meta.name}
+          onReload={() => {
+            void session.reload()
+          }}
+          onImportCopy={() => {
+            void importChangesAsCopy()
+          }}
+          onEmergencyBackup={() => {
+            void downloadEmergency()
+          }}
+        />
+      )}
+    </>
   )
 }
 
@@ -322,21 +547,28 @@ function FlaggedRoot({ deps }: { deps: FlaggedDeps }): ReactNode {
 export async function mountProjectsV2(root: Root): Promise<void> {
   const opened = await openIndexedDbAdapter({ dbName: PREVIEW_DB_NAME })
   const ports: Ports = opened.ok ? opened.value : createMemoryAdapter()
-  const deps = createFlaggedDeps(ports)
+  // `!opened.ok` is the whole of #51 §6's knowledge: this is the only expression in the app that
+  // finds out whether the browser has a durable store, and everything downstream is told.
+  const deps = createFlaggedDeps(ports, !opened.ok)
 
   // The Library is the home of a flag-on build (#50): whatever the last visit left open, a
   // reload starts at the grid, and an empty database shows the New Project card rather than
   // inventing a Project to fill it.
-  const [refreshed] = await Promise.all([deps.library.refresh(), reclaimStorage(ports, deps.clock)])
+  const refreshed = await deps.library.refresh()
   if (!refreshed.ok) return renderFailure(root, refreshed.error)
 
+  // #51 §4: the Trash keeps a Project for 30 days and then it does not, whether anybody looks or
+  // not. Sweeping before reclamation is what makes the space come back in the same visit, and
+  // before the first paint is what means the Library never shows a Project that has expired.
+  await deps.library.purgeExpired()
+  await reclaimStorage(ports, deps.clock)
+
   // Another tab committed; the cards on this one are stale (#50 §5).
-  const channel = new BroadcastChannel(LIBRARY_CHANNEL)
-  channel.addEventListener('message', () => {
+  deps.channel.addEventListener('message', () => {
     void deps.library.refresh()
   })
   globalThis.addEventListener('pagehide', () => {
-    channel.close()
+    deps.channel.close()
     deps.assetUrls.revokeAll()
   })
 

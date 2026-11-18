@@ -19,10 +19,17 @@ export interface LegacyViewRootProps {
   readonly library: LibraryStore
   readonly session: ProjectSession
   readonly services: SessionViewServices
+  /**
+   * What sits above the editor and outside it (#51 §5's read-only strip).
+   *
+   * A slot rather than a flag, because the legacy views have no vocabulary for a state that only
+   * the flagged composition knows about — and the strip must not be scrolled away with the Plan.
+   */
+  readonly banner?: ReactNode
   readonly children: ReactNode
 }
 
-export function LegacyViewRoot({ library, session, services, children }: LegacyViewRootProps) {
+export function LegacyViewRoot({ library, session, services, banner, children }: LegacyViewRootProps) {
   const [current, setCurrent] = useState(session)
 
   const goto = useCallback((projectId: string) => {
@@ -41,11 +48,14 @@ export function LegacyViewRoot({ library, session, services, children }: LegacyV
   // when the tab goes. Closing on unmount would also fire on React's StrictMode remount in
   // development, which would leave the view rendering a session it had just closed.
   return (
-    <SessionContext.Provider value={current}>
-      <LibraryContext.Provider value={library}>
-        <SessionBindings services={services} host={host}>{children}</SessionBindings>
-      </LibraryContext.Provider>
-    </SessionContext.Provider>
+    <>
+      {banner}
+      <SessionContext.Provider value={current}>
+        <LibraryContext.Provider value={library}>
+          <SessionBindings services={services} host={host}>{children}</SessionBindings>
+        </LibraryContext.Provider>
+      </SessionContext.Provider>
+    </>
   )
 }
 

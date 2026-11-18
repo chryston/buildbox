@@ -28,11 +28,14 @@
  * the fake lock and the gated adapter the suites are written against.
  */
 export { HISTORY_LIMIT } from './history'
+export { err, ok } from './result'
 export {
   BACKUP_DUE_AFTER_MS,
   NEW_PROJECT_REVISION,
+  TRASH_RETENTION_DAYS,
   createLibraryStore,
   isBackupDue,
+  isTrashExpired,
   type LibraryDeps,
 } from './library'
 export { BACKUP_EXTENSION, backupFileName, downloadBackup, encodeBackup, encodeEmergencyBackup, type BackupDeps, type BackupWritten } from './backup'
