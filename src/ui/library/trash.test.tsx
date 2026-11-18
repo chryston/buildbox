@@ -12,7 +12,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { TrashView, daysRemaining, monogramFor } from './TrashView'
 import { STRINGS } from '../strings'
 import { NOW, record } from './testing'
-import { TRASH_RETENTION_DAYS } from '../../session'
+import { TRASH_RETENTION_DAYS, isTrashExpired } from '../../session'
+import { createFakeClock, TEST_NOW } from '../../session/testing'
 
 const DAY = 86_400_000
 const trashedDaysAgo = (days: number) => record({ id: `p${days}`, trashedAt: new Date(Date.parse(NOW) - days * DAY).toISOString() })
@@ -130,5 +131,44 @@ describe('the Trash', () => {
       />,
     )
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * The day the sweep fires, and the promise the row has already stopped making by then.
+ *
+ * `LibraryStore.purgeExpired` and `TrashView`'s countdown are two readings of one rule, and the
+ * boundary is the only place they could disagree: a row still saying `1 day remaining` while the
+ * sweeper has deleted the Project is a broken promise drawn in the app's own typeface. So both
+ * are asked about the same instants, and the instants come from the same fake clock the session
+ * suites drive — the elapsed thirty days are arithmetic the test owns, not a date that happens to
+ * still read as old.
+ *
+ * The store-level half of criterion 4 — a Project trashed 31 days ago is gone after the next
+ * Library open, with its Recovery Points — is in `src/session/library.test.ts`. The sweeper lives
+ * in `session` and needs a real adapter to have anything to delete, and `ui` may not open one
+ * (#20 §2); what belongs here is the agreement between the two readings.
+ */
+describe('the day the sweep fires', () => {
+  /** A clock the test moves by whole days, starting where every session fixture starts. */
+  const clock = createFakeClock(TEST_NOW)
+  const trashed = record({ id: 'gone', name: 'Old Apartment Study', trashedAt: TEST_NOW })
+
+  it('counts the row down to nothing on the very day the sweeper takes the Project (#51 criterion 4)', async () => {
+    for (let day = 0; day < TRASH_RETENTION_DAYS; day += 1) {
+      const now = clock.now()
+      expect(daysRemaining(trashed.trashedAt as string, now)).toBe(TRASH_RETENTION_DAYS - day)
+      expect(isTrashExpired(trashed, now)).toBe(false)
+      await clock.advance(DAY)
+    }
+
+    // Day 30: the row's last words are `Less than a day remaining`, and the sweep has its Project.
+    expect(daysRemaining(trashed.trashedAt as string, clock.now())).toBe(0)
+    expect(STRINGS.daysRemaining(0)).toBe('Less than a day remaining')
+    expect(isTrashExpired(trashed, clock.now())).toBe(true)
+  })
+
+  it('leaves every Project that is not in the Trash alone, however old its save (#51 §4)', () => {
+    expect(isTrashExpired(record({ trashedAt: null }), clock.now())).toBe(false)
   })
 })

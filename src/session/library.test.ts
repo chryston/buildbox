@@ -8,9 +8,10 @@
  */
 import { describe, expect, it } from 'vitest'
 import { createMemoryAdapter, withFaults } from '../persistence'
+import { summarizeProject } from '../domain'
 import type { LibraryRecord, Ports } from '../persistence'
 import { intent } from '../edit/testing'
-import { BACKUP_DUE_AFTER_MS, createLibraryStore, isBackupDue, openProject } from './index'
+import { BACKUP_DUE_AFTER_MS, TRASH_RETENTION_DAYS, createLibraryStore, isBackupDue, openProject } from './index'
 import type { LibraryStore } from './index'
 import {
   createTestDeps,
@@ -187,5 +188,106 @@ describe('the backup-due rule', () => {
     await test.clock.advance(BACKUP_DUE_AFTER_MS + 1)
     expect(isBackupDue(record(library, KITCHEN), test.clock.now())).toBe(true)
     await opened.value.close()
+  })
+})
+
+/**
+ * The 30-day sweep (#51 §4, criterion 4): the Trash keeps a Project for thirty days, and then the
+ * sweeper `app` runs at every Library open — before the first paint, so an expired Project is
+ * never drawn — does not.
+ *
+ * The fake clock drives it, because the rule is about elapsed days and no test may wait for them.
+ * The two Projects sit 31 days apart in the Trash so that one sweep has two answers to give, and
+ * the Recovery Points are the part a half-done purge would leave behind: `purge` is the only route
+ * out of the store, and it takes the Project's whole local history with it.
+ *
+ * The row's countdown is the same rule read the other way; `src/ui/library/trash.test.tsx` proves
+ * the two agree at every day boundary, which is what keeps a `1 day remaining` row from being
+ * deleted under the person reading it.
+ */
+describe('the 30-day sweep', () => {
+  /** One Recovery Point for `projectId`, holding the Project's own current snapshot. */
+  async function seedPoint(ports: Ports, projectId: string): Promise<void> {
+    const loaded = await ports.projects.load(projectId)
+    if (!loaded.ok) throw new Error(`load: ${loaded.error.kind}`)
+    const created = await ports.recovery.create({
+      id: `${projectId}-rp-1`,
+      projectId,
+      createdAt: TEST_NOW,
+      kind: 'idle',
+      revision: loaded.value.revision,
+      schemaVersion: loaded.value.schemaVersion,
+      summary: summarizeProject(loaded.value.data),
+      data: loaded.value.data,
+    })
+    if (!created.ok) throw new Error(`recovery.create: ${created.error.kind}`)
+  }
+
+  /** The next Library open, which is what `mountProjectsV2` does: read the list, then sweep. */
+  async function openLibrary(library: LibraryStore): Promise<number> {
+    await library.refresh()
+    const purged = await library.purgeExpired()
+    if (!purged.ok) throw new Error(`purgeExpired: ${typeof purged.error === 'string' ? purged.error : purged.error.kind}`)
+    return purged.value
+  }
+
+  it('takes a Project trashed 31 days ago, with its Recovery Points, and leaves the rest (#51 criterion 4)', async () => {
+    const base = createMemoryAdapter()
+    await seedProject(base, testProject(KITCHEN, 'Kitchen'))
+    await seedProject(base, testProject(BEDROOM, 'Bedroom'))
+    const test = createTestDeps(base)
+    const library = libraryOver(base, test)
+    await seedPoint(base, KITCHEN)
+    await seedPoint(base, BEDROOM)
+    await library.refresh()
+
+    expect((await library.trash(KITCHEN)).ok).toBe(true)
+    // 31 days of an untouched Trash, then a deletion that is a day old: one sweep, two answers.
+    await test.clock.advance(31 * DAY_MS)
+    expect((await library.trash(BEDROOM)).ok).toBe(true)
+
+    expect(await openLibrary(library)).toBe(1)
+    expect(library.getSnapshot().trash.map((row) => row.id)).toEqual([BEDROOM])
+    expect((await base.projects.load(KITCHEN)).ok).toBe(false)
+
+    const purgedPoints = await base.recovery.list(KITCHEN)
+    if (!purgedPoints.ok) throw new Error(`recovery.list: ${purgedPoints.error.kind}`)
+    expect(purgedPoints.value).toEqual([])
+
+    // The Project still inside its 30 days keeps its record and its history: the sweep is a
+    // calendar, not a purge.
+    const keptPoints = await base.recovery.list(BEDROOM)
+    if (!keptPoints.ok) throw new Error(`recovery.list: ${keptPoints.error.kind}`)
+    expect(keptPoints.value).toHaveLength(1)
+    expect(record(library, BEDROOM).trashedAt).toBe(test.clock.now())
+  })
+
+  it('waits for the thirtieth day rather than guessing early (#51 criterion 4)', async () => {
+    const base = createMemoryAdapter()
+    await seedProject(base, testProject(KITCHEN, 'Kitchen'))
+    const test = createTestDeps(base)
+    const library = libraryOver(base, test)
+    await library.refresh()
+    expect((await library.trash(KITCHEN)).ok).toBe(true)
+
+    await test.clock.advance(TRASH_RETENTION_DAYS * DAY_MS - 1)
+    expect(await openLibrary(library)).toBe(0)
+    expect(library.getSnapshot().trash).toHaveLength(1)
+
+    await test.clock.advance(1)
+    expect(await openLibrary(library)).toBe(1)
+    expect(library.getSnapshot().trash).toHaveLength(0)
+  })
+
+  it('leaves every Project that was never trashed alone, however old its save (#51 §4)', async () => {
+    const base = createMemoryAdapter()
+    await seedProject(base, testProject(KITCHEN, 'Kitchen'))
+    const test = createTestDeps(base)
+    const library = libraryOver(base, test)
+    await library.refresh()
+
+    await test.clock.advance(400 * DAY_MS)
+    expect(await openLibrary(library)).toBe(0)
+    expect(library.getSnapshot().projects.map((row) => row.id)).toEqual([KITCHEN])
   })
 })
