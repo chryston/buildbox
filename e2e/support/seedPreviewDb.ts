@@ -22,6 +22,18 @@ export interface PreviewSeedAsset extends AssetRecord {
   base64: string
 }
 
+/**
+ * The Recovery Points a fixture wants without carrying their snapshots.
+ *
+ * A card shows the count and nothing else reads the rows, so the seeder materialises each one
+ * from the Project record already in the seed rather than the fixture repeating that Project
+ * eight or twelve times.
+ */
+export interface PreviewSeedRecovery {
+  projectId: string
+  count: number
+}
+
 /** What `fixtures/e2e/preview-seed/legacy-v3.json` holds: the records the adapter writes. */
 export interface PreviewSeed {
   dbName: string
@@ -29,6 +41,7 @@ export interface PreviewSeed {
   projects: ProjectRecord[]
   library: LibraryRecord[]
   assets: PreviewSeedAsset[]
+  recovery?: PreviewSeedRecovery[]
 }
 
 /** Write the seed before every navigation of this page, including reloads. */
@@ -79,6 +92,26 @@ function writeSeed(seed: PreviewSeed): Promise<void> {
         const { base64, ...record } = asset
         const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))
         version.objectStore('assets').put({ ...record, blob: new Blob([bytes], { type: record.mediaType }) })
+      }
+      for (const group of seed.recovery ?? []) {
+        const project = seed.projects.find((record) => record.id === group.projectId)
+        const row = seed.library.find((record) => record.id === group.projectId)
+        if (project === undefined || row === undefined) throw new Error(`no Project ${group.projectId} to recover`)
+        for (let index = 0; index < group.count; index += 1) {
+          // One minute apart, working back from the Project's own save: `recovery.list` sorts by
+          // `createdAt`, and a list of Points all stamped the same second has no order to show.
+          const createdAt = new Date(Date.parse(row.savedAt) - (index + 1) * 60_000).toISOString()
+          version.objectStore('recoveryPoints').put({
+            id: `${group.projectId}-rp-${index + 1}`,
+            projectId: group.projectId,
+            createdAt,
+            kind: 'idle',
+            revision: Math.max(0, row.revision - index),
+            schemaVersion: row.schemaVersion,
+            summary: row.summary,
+            data: project.data,
+          })
+        }
       }
     }
     request.onerror = () => rejectSeed(new Error(`opening ${seed.dbName} failed: ${request.error?.message}`))

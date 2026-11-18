@@ -1,0 +1,65 @@
+import { expect, test } from '../support/fixtures'
+import {
+  card,
+  canonical,
+  downloadBackupOf,
+  libraryHeading,
+  openLibrary,
+  previewSeed,
+  restoreFile,
+  storedAssetHashes,
+  storedProject,
+  toast,
+} from '../support/libraryApp'
+
+/**
+ * Backup → Restore across two browser profiles (#50 criterion 17).
+ *
+ * The claim is the strongest one #20 §13.11 makes about the codec: a Project that leaves this
+ * browser as bytes and comes back into an empty one is *the same Project*, canonically — not
+ * "renders the same", not "has the same name". So the assertion compares the stored record
+ * rather than anything the page drew, and it compares the asset hashes as well, because a
+ * Project whose Plan Image came back as a different hash is a Project that lost its drawing
+ * while keeping its paperwork.
+ *
+ * The second context is genuinely empty: no `seedPreviewDb`, no records, nothing. That is what
+ * makes the restore take the no-collision path, and it is the only way to show that a Backup
+ * carries everything a Project needs rather than leaning on the database it was written from.
+ */
+
+const PROJECT = 'Kitchen Wall'
+
+test('a Backup restored into an empty profile is the same Project', async ({ page, browser }) => {
+  await openLibrary(page, previewSeed)
+  await expect(card(page, PROJECT)).toBeVisible()
+
+  const original = await storedProject(page, 'proj-kitchen-wall')
+  expect(original).not.toBeNull()
+  const originalAssets = await storedAssetHashes(page)
+  expect(originalAssets).toHaveLength(1)
+
+  const backup = await downloadBackupOf(page, PROJECT)
+  expect(backup.name).toBe('Kitchen Wall.buildbox')
+
+  const fresh = await browser.newContext()
+  try {
+    const restored = await fresh.newPage()
+    // The auto fixture guards only the test's own page, so this one needs the same rule or a
+    // crash in the second profile would pass unnoticed.
+    const problems: string[] = []
+    restored.on('pageerror', (error) => problems.push(error.message))
+
+    await restored.goto('./', { waitUntil: 'networkidle' })
+    await expect(libraryHeading(restored)).toBeVisible()
+
+    await restoreFile(restored, backup)
+    await expect(toast(restored)).toContainText(`Restored ${PROJECT} from Backup.`)
+    await expect(restored.locator('article.project-card').filter({ hasText: PROJECT })).toBeVisible()
+
+    expect(canonical(await storedProject(restored, 'proj-kitchen-wall'))).toBe(canonical(original))
+    expect(await storedAssetHashes(restored)).toEqual(originalAssets)
+    expect(problems).toEqual([])
+  } finally {
+    await fresh.close()
+  }
+})

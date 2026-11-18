@@ -3,7 +3,8 @@ import type { Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { addFloorPlanObject, openPreviewApp, previewSeed, showFloorPlan } from '../support/previewApp'
+import { addFloorPlanObject, openPreviewApp, showFloorPlan } from '../support/previewApp'
+import { previewSeed } from '../support/libraryApp'
 import { databaseNames, projectRevision } from '../support/seedPreviewDb'
 
 // Criterion 8 (#49): the flagged build writes only `buildbox-preview`. Today's app persists

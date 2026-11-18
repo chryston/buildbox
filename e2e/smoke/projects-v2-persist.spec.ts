@@ -2,14 +2,15 @@ import { expect, test } from '../support/fixtures'
 import type { Page } from '@playwright/test'
 import {
   addFloorPlanObject,
-  cabinetCanvas,
+  FIRST_PROJECT,
   floorPlanObjectIds,
   openPreviewApp,
   placedObject,
-  previewSeed,
-  saveStatus,
+    saveStatus,
+  openProjectFromLibrary,
   showFloorPlan,
 } from '../support/previewApp'
+import { previewSeed } from '../support/libraryApp'
 import { projectRevision } from '../support/seedPreviewDb'
 
 // Criterion 5 (#49): the flagged build's edits are real saves. One edit in each view, then a
@@ -42,7 +43,9 @@ test('a cabinet edit and a floor-plan edit survive a reload', async ({ page }) =
   await expect.poll(() => projectRevision(page, previewSeed.projects[0].id)).toBeGreaterThanOrEqual(3)
 
   await page.reload({ waitUntil: 'networkidle' })
-  await expect(cabinetCanvas(page)).toBeVisible()
+  // A reload lands on the Library (#50), which is the point: the edit survived because opening
+  // the Project again shows it, not because the same page is still in memory.
+  await openProjectFromLibrary(page, FIRST_PROJECT)
   await expect.poll(() => voidIds(page)).toEqual(voidsAfter)
 
   await showFloorPlan(page)

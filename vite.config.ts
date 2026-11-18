@@ -1,5 +1,15 @@
 import { defineConfig, configDefaults } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import { readFileSync } from 'node:fs'
+
+// The version a Project Backup's manifest carries (#50). It comes from `package.json` rather
+// than from a runtime read of it, because there is no `package.json` at runtime: `buildboxVersion`
+// is written into every archive, and `package` compares it against this same constant when a
+// Backup is staged, so the two must be the one value the build was made from.
+// `package.json` is our own file, not outside input, so naming the shape it is read as is
+// enough; a validator would only restate it.
+const pkg: { version: string } = JSON.parse(readFileSync('./package.json', 'utf8'))
+const BUILDBOX_VERSION = pkg.version
 
 // Vitest projects (#20 §9.1, #41 §4): pure modules run under Node with no DOM, UI runs
 // under jsdom. The pure include list is the target module set minus `platform`, `ui` and
@@ -40,6 +50,7 @@ const SHARED_EXCLUDE = ['e2e/**', ...configDefaults.exclude]
 
 export default defineConfig({
   base: '/buildbox/',
+  define: { __BUILDBOX_VERSION__: JSON.stringify(BUILDBOX_VERSION) },
   plugins: [react()],
   test: {
     globals: true,

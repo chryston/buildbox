@@ -3,6 +3,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Locator, Page, TestInfo } from '@playwright/test'
 import { expect, test } from '../support/fixtures'
+import { cardButton } from '../support/libraryApp'
 import { seedLegacyStore } from '../support/legacyStore'
 import { seedPreviewDb, type PreviewSeed } from '../support/seedPreviewDb'
 import { waitForFonts, waitForImageDecode, waitForStablePaint } from '../support/stability'
@@ -47,12 +48,17 @@ const legacyAnnotations = legacyV3.state.floorPlan.annotations
 
 const isPreview = (projectName: string): boolean => projectName === 'projects-v2'
 
+// The flag-on build opens on the Project Library (#50), so the scene lives one card behind;
+// the seed's first Project is the one the chromium project lands in, so it is the one opened.
+const firstProjectName = previewSeed.library.find((record) => record.id === previewSeed.projects[0]!.id)!.name
+
 test.beforeEach(async ({ page }, testInfo) => {
   await page.clock.setFixedTime(FIXED_NOW)
   // The one thing the two projects do differently: where the saved work lives.
   if (isPreview(testInfo.project.name)) await seedPreviewDb(page, previewSeed)
   else await seedLegacyStore(page, v3)
   await page.goto('./', { waitUntil: 'networkidle' })
+  if (isPreview(testInfo.project.name)) await cardButton(page, firstProjectName, 'Open').click()
   await expect(cabinetCanvas(page)).toBeVisible()
   await waitForFonts(page)
   // The first project is active, nothing is selected and the view is at the default

@@ -77,8 +77,10 @@ actually carries the diff.
   baseline. A failure with no diff images and a "snapshot does not exist" message means the
   baseline was never committed, not that pixels moved.
 - `test-results/prototype-compare/<name>/`: the comparison renders below — `prototype.png`,
-  `production.png` when there is a production side, and `side-by-side.png`, the annotated
-  composite a reviewer signs off on.
+  `production.png` when there is a production side, `diff.png` when the comparison was
+  measured (#50), and `side-by-side.png`, the annotated composite a reviewer signs off on.
+  A measured comparison attaches all four before it fails, so a red run still carries the
+  pixels that produced the number.
 
 ## Prototype comparison
 
@@ -113,6 +115,20 @@ await compareWithPrototype(page, testInfo, {
   prototype: { kind: 'reference-png', commit: 'cadf2d5', path: 'prototype-screenshots/A-preset.png' },
 })
 ```
+
+`diffAgainstPrototype(page, testInfo, …)` is the same two renders plus a number (#50
+criteria 23–24). It crops both sides to one `clip` selector, blanks the `masks` selectors and
+takes their pixels out of the count, hides prototype-only chrome with `hideOnPrototype`, and
+fails when more than `maxDiffRatio` of the remaining pixels differ at `pixelmatch`'s 0.1
+threshold. Still no baseline: the four PNGs go to `test-results/prototype-compare/<name>/`
+and nothing to `__snapshots__`. A mask that matches nothing on one side is a legitimate
+difference — production shows a `Design Options` count the prototype never drew — but one that
+matches nothing on **either** side is a stale selector, and the helper says so.
+
+The archive `@import`s Google's webfonts. The helper answers that request with a generated
+`@font-face` stylesheet whose files come from `@fontsource` in `node_modules`, served from
+`https://prototype-fonts.invalid`, so both sides rasterise identical glyphs and no third-party
+request leaves the pinned container (#50 named deviation 2).
 
 `e2e/screenshots/prototype-compare.spec.ts` covers every state #28 requires plus one
 reference PNG, so both modes are exercised; #30, #31 and #33 add their own states to it.

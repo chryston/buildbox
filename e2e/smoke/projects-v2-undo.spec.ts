@@ -6,11 +6,11 @@ import {
   openPreviewApp,
   openProjectTab,
   placedObject,
-  previewSeed,
   redoButton,
   showFloorPlan,
   undoButton,
 } from '../support/previewApp'
+import { previewSeed } from '../support/libraryApp'
 
 // Criteria 2 and 3 (#49): floor-plan edits are inside the shared undo/redo history — finding
 // 7 of #11 — and each Project carries its own floor plan and its own history — finding 4.

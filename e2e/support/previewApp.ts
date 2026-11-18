@@ -1,29 +1,40 @@
-import { readFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import type { Locator, Page } from '@playwright/test'
 import { expect } from '@playwright/test'
-import { seedPreviewDb, type PreviewSeed } from './seedPreviewDb'
+import { cardButton, libraryHeading, previewSeed } from './libraryApp'
+import { seedPreviewDb } from './seedPreviewDb'
 
 /**
  * The pieces the `projects-v2` smoke specs share (#49): open the flag-on build against the
  * seeded preview database, and drive the two views it renders.
  */
 
-const fixturesRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../fixtures')
-
-/** The converted v3 legacy fixture: Kitchen Wall (with the floor plan) and Bathroom Vanity. */
-export const previewSeed = JSON.parse(
-  readFileSync(join(fixturesRoot, 'e2e', 'preview-seed', 'legacy-v3.json'), 'utf8'),
-) as PreviewSeed
+/**
+ * The Project every one of these specs edits. The specs assert against
+ * `previewSeed.projects[0]`'s revision, so this resolves that record's own name rather than
+ * trusting the Library to list it first — the grid is ordered by `savedAt`, not by id.
+ */
+export const FIRST_PROJECT = previewSeed.library.find((record) => record.id === previewSeed.projects[0]!.id)!.name
 
 export const cabinetCanvas = (page: Page): Locator => page.getByTestId('cabinet-canvas')
 export const floorPlanCanvas = (page: Page): Locator => page.getByTestId('floor-plan-canvas')
 
-/** Load the app and wait for the cabinet view of the Project the database lists first. */
+/**
+ * Load the app and reach the cabinet view of the Project the database lists first.
+ *
+ * The flagged build opens on the Project Library (#50), so getting to an editor is two steps
+ * now: land on the Library, then open the Project. Which Project is not left to chance — the
+ * specs assert against `previewSeed.projects[0]`'s revision, so this opens that one by name.
+ */
 export async function openPreviewApp(page: Page): Promise<void> {
   await seedPreviewDb(page, previewSeed)
   await page.goto('./', { waitUntil: 'networkidle' })
+  await openProjectFromLibrary(page, FIRST_PROJECT)
+}
+
+/** Open one Project from the Library and wait for its cabinet view. */
+export async function openProjectFromLibrary(page: Page, name: string): Promise<void> {
+  await expect(libraryHeading(page)).toBeVisible()
+  await cardButton(page, name, 'Open').click()
   await expect(cabinetCanvas(page)).toBeVisible()
 }
 
