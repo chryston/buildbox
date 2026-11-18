@@ -83,11 +83,17 @@ const segmentProblems = (segment: Segment, from: Pt, index: number): GeometryPro
 const pairProblems = (path: ClosedPath): GeometryProblem[] => {
   const n = path.segments.length
   const out: GeometryProblem[] = []
+  const starts: Pt[] = []
+  let walk = path.start
+  for (const segment of path.segments) {
+    starts.push(walk)
+    walk = segment.to
+  }
   for (let i = 0; i < n; i++) {
-    const fromA = segmentStart(path, i)
+    const fromA = starts[i]
     for (let j = i + 1; j < n; j++) {
       const adjacent = j === i + 1 || (i === 0 && j === n - 1)
-      const fromB = segmentStart(path, j)
+      const fromB = starts[j]
       const edges = [i + 1, j + 1]
       const meetings = intersectSegments(path.segments[i], fromA, path.segments[j], fromB)
       const shared = adjacent ? sharedVertex(path, i, j) : null
