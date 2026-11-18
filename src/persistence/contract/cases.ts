@@ -1,5 +1,5 @@
 /**
- * The behaviour every persistence adapter must show (#45 cases 1–8).
+ * The behaviour every persistence adapter must show (#45 cases 1–8, #52 case 9).
  *
  * These cases state the rules of #14 and #20 §5 as observations through the ports only:
  * what `load`, `list` and `has` return, and what a canonical-JSON snapshot of the stores
@@ -13,6 +13,7 @@ import { canonicalJson, canonicalJsonBytes } from '../../lib'
 import { ASSET_GC_GRACE_MS, type ProjectRecord } from '../ports'
 import {
   FIRST_SAVED_AT,
+  MIGRATION_META,
   OTHER_PROJECT_ID,
   PROJECT_ID,
   SECOND_SAVED_AT,
@@ -421,15 +422,15 @@ function registerPrefsAndMeta(ctx: ContractContext): void {
       unwrap(await ctx.ports.prefs.set('exportRecipes', [{ name: 'Cut list', format: 'csv' }]))
       expect(unwrap(await ctx.ports.prefs.get('exportRecipes'))).toEqual([{ name: 'Cut list', format: 'csv' }])
 
-      unwrap(await ctx.ports.meta.set('legacyMigration', { done: true, at: FIRST_SAVED_AT }))
-      expect(unwrap(await ctx.ports.meta.get('legacyMigration'))).toEqual({ done: true, at: FIRST_SAVED_AT })
+      unwrap(await ctx.ports.meta.set('legacyMigration', MIGRATION_META))
+      expect(unwrap(await ctx.ports.meta.get('legacyMigration'))).toEqual(MIGRATION_META)
       expect(await ctx.ports.meta.get('legacyMigration')).not.toEqual({ ok: true, value: undefined })
     })
 
     it('keeps prefs and meta out of every project record', async () => {
       const seed = await seedProject(ctx.ports)
       unwrap(await ctx.ports.prefs.set('viewState:project-1:main', { zoom: 2, panX: 0, panY: 0 }))
-      unwrap(await ctx.ports.meta.set('legacyMigration', { done: false }))
+      unwrap(await ctx.ports.meta.set('legacyMigration', MIGRATION_META))
 
       const loaded: ProjectRecord = unwrap(await ctx.ports.projects.load(PROJECT_ID))
       expect(Object.keys(loaded).sort()).toEqual(PROJECT_RECORD_KEYS)
@@ -497,7 +498,118 @@ function registerIsolation(ctx: ContractContext): void {
   })
 }
 
-/** Cases 1–8, registered inside the caller's `describe`. */
+/** Case 9. */
+function registerMultiProjectCommit(ctx: ContractContext): void {
+  describe('multi-Project commit', () => {
+    it('writes every Project, its Library record and its assets from one call', async () => {
+      const seed = await seedProject(ctx.ports)
+      // One image offered by the first entry and referenced by the second: the batch is one
+      // unit of work, so the deduplication has to hold across entries and not only within one.
+      const shared = assetBlob(9)
+      const sharedHash = await assetHash(9)
+
+      const records = unwrap(
+        await ctx.ports.projects.commitMany([
+          {
+            input: {
+              project: { ...seed.project, meta: { ...seed.project.meta, name: 'Migrated first' } },
+              revision: 2,
+              savedAt: SECOND_SAVED_AT,
+              newAssets: [{ bytes: shared, mediaType: 'image/png', widthPx: 4, heightPx: 4 }],
+            },
+            expectedRevision: 1,
+          },
+          {
+            input: { project: projectFixture(sharedHash, OTHER_PROJECT_ID), revision: 1, savedAt: SECOND_SAVED_AT },
+            expectedRevision: null,
+          },
+        ]),
+      )
+
+      expect(records.map((record) => record.id)).toEqual([PROJECT_ID, OTHER_PROJECT_ID])
+      expect(records.map((record) => record.revision)).toEqual([2, 1])
+      const listed = unwrap(await ctx.ports.projects.list({ includeTrashed: false }))
+      expect(listed.map((record) => record.id)).toEqual([PROJECT_ID, OTHER_PROJECT_ID])
+      const attached = listed.find((record) => record.id === OTHER_PROJECT_ID)
+      expect(attached?.summary.previewAssetHash).toBe(sharedHash)
+      expect(unwrap(await ctx.ports.assets.has(sharedHash))).toBe(true)
+      expect(canonicalJson(unwrap(await ctx.ports.projects.load(OTHER_PROJECT_ID)).data)).toBe(
+        canonicalJson(projectFixture(sharedHash, OTHER_PROJECT_ID)),
+      )
+    })
+
+    it('takes a pre-change snapshot down with the attach it was protecting', async () => {
+      const seed = await seedProject(ctx.ports)
+      const before = await snapshotStores(ctx.ports, { assets: [seed.planImageHash, seed.spareHash] })
+
+      const error = failure(
+        await ctx.ports.projects.commitMany([
+          {
+            input: {
+              project: { ...seed.project, meta: { ...seed.project.meta, name: 'With the floor plan' } },
+              revision: 2,
+              savedAt: SECOND_SAVED_AT,
+            },
+            expectedRevision: 1,
+            // The snapshot of the state the attach is about to replace (#52 §2 step 6).
+            recoveryPoint: recoveryPointFixture({
+              id: 'point-pre-migration',
+              projectId: PROJECT_ID,
+              createdAt: SECOND_SAVED_AT,
+              kind: 'pre-migration',
+              project: seed.project,
+            }),
+          },
+          {
+            input: { project: projectFixture(null, OTHER_PROJECT_ID), revision: 1, savedAt: SECOND_SAVED_AT },
+            expectedRevision: 7,
+          },
+        ]),
+      )
+
+      expect(error.kind).toBe('revision-conflict')
+      expect(unwrap(await ctx.ports.recovery.list(PROJECT_ID))).toEqual([])
+      expect(await snapshotStores(ctx.ports, { assets: [seed.planImageHash, seed.spareHash] })).toBe(before)
+    })
+
+    it('writes none of them when a later entry is refused', async () => {
+      const seed = await seedProject(ctx.ports)
+      const doomedHash = await assetHash(10)
+      const before = await snapshotStores(ctx.ports, {
+        assets: [seed.planImageHash, seed.spareHash, doomedHash],
+      })
+
+      const error = failure(
+        await ctx.ports.projects.commitMany([
+          {
+            input: {
+              project: { ...seed.project, meta: { ...seed.project.meta, name: 'Migrated first' } },
+              revision: 2,
+              savedAt: SECOND_SAVED_AT,
+              newAssets: [{ bytes: assetBlob(10), mediaType: 'image/png', widthPx: 4, heightPx: 4 }],
+            },
+            expectedRevision: 1,
+          },
+          // The second entry names a revision nobody ever read: the whole batch is refused,
+          // which is the promise a migration depends on (#52 §2 step 6).
+          {
+            input: { project: projectFixture(null, OTHER_PROJECT_ID), revision: 1, savedAt: SECOND_SAVED_AT },
+            expectedRevision: 7,
+          },
+        ]),
+      )
+
+      expect(error.kind).toBe('revision-conflict')
+      expect(unwrap(await ctx.ports.assets.has(doomedHash))).toBe(false)
+      expect(unwrap(await ctx.ports.projects.list({ includeTrashed: true })).map((record) => record.id)).toEqual([
+        PROJECT_ID,
+      ])
+      expect(await snapshotStores(ctx.ports, { assets: [seed.planImageHash, seed.spareHash, doomedHash] })).toBe(before)
+    })
+  })
+}
+
+/** Cases 1–9, registered inside the caller's `describe`. */
 export function registerContractCases(ctx: ContractContext): void {
   registerCreateAndLoad(ctx)
   registerCommit(ctx)
@@ -507,4 +619,5 @@ export function registerContractCases(ctx: ContractContext): void {
   registerPrune(ctx)
   registerPrefsAndMeta(ctx)
   registerIsolation(ctx)
+  registerMultiProjectCommit(ctx)
 }

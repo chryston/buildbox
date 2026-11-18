@@ -20,7 +20,7 @@
  * sentence by string concatenation at a call site, which is where the plurals go wrong.
  */
 
-import type { RecoveryPointKind, SaveFailureReason } from '../../session'
+import type { MigrationStage, PersistenceError, RecoveryPointKind, SaveFailureReason } from '../../session'
 
 /** `1 Floor` / `2 Floors` and the same for every countable noun the Library shows. */
 export const plural = (count: number, one: string, many: string): string =>
@@ -263,6 +263,121 @@ export const STRINGS = {
   /** Deviation 17 again: the notice is new, and it is the failure palette, not a new colour. */
   storageUnavailableNotice:
     "Browser storage isn't available. Projects here last only until this tab closes. Download a Backup to keep your work.",
+
+  /* ------------------------------------------------ #52: Legacy data migration */
+
+  migrationEyebrow: 'Legacy data migration',
+  migrationHeading: 'Review where your existing work belongs',
+  /**
+   * The lede names what was found, because the whole page is a decision about those particular
+   * things. A source with no floor plan has nothing to choose, so it gets its own sentence.
+   */
+  migrationLede: (designs: number, plans: number): string =>
+    plans > 0
+      ? `BuildBox found ${plural(designs, 'cabinet design', 'cabinet designs')}${
+          plans === 1 ? ' and one standalone floor plan' : ` and ${plans} standalone floor plans`
+        }. Cabinet designs will become separate Projects. Choose where the floor plan belongs—we will not guess.`
+      : `BuildBox found ${plural(designs, 'cabinet design', 'cabinet designs')}. Each one will become a separate Project.`,
+  migrationProjectsToCreate: 'Projects to create',
+  /** `1 cabinet Item Design · no Plan Image`, the archive's row. */
+  migrationRowSecondary: (designs: number, hasPlanImage: boolean): string =>
+    `${plural(designs, 'cabinet Item Design', 'cabinet Item Designs')} · ${
+      hasPlanImage ? 'has a Plan Image' : 'no Plan Image'
+    }`,
+  migrationTagNewProject: 'New Project',
+  migrationTagNotMigrated: 'Not migrated',
+  migrationTagReplaced: 'Replaces an existing Project',
+  migrationTagCopy: 'Kept as a separate Project',
+  /** The hatched box's own line; the dimensions under it say whether there is a real image. */
+  migrationFloorPlanImage: 'Floor plan image',
+  migrationStandaloneFloorPlan: 'Standalone floor plan',
+  /** `2400 × 1800 px · 6 placed items`. */
+  migrationPreview: (widthPx: number, heightPx: number, items: number): string =>
+    `${widthPx} × ${heightPx} px · ${plural(items, 'placed item', 'placed items')}`,
+  migrationNoImage: 'No Plan Image',
+  migrationAttachItTo: 'Attach it to',
+  migrationSeparateProject: 'Create a separate Project',
+  migrationSkip: 'Skip — the floor plan is empty',
+  migrationUntouchedHelper: 'The source data stays untouched until all new records verify successfully.',
+  migrationDoThisLater: 'Do this later',
+  migrationContinue: 'Continue to review',
+  migrationBack: 'Back',
+  migrationMigrateAndVerify: 'Migrate and verify',
+  /** The empty floor plan is the one thing the review may decide for itself, and it says so. */
+  migrationFloorPlanEmpty: 'The floor plan is empty, so there is nothing to copy.',
+  /** Sketch types with no domain equivalent. The original keeps them; BuildBox does not. */
+  migrationSketches: (wallHacks: number, tileZones: number): string =>
+    `${plural(wallHacks, 'wall sketch', 'wall sketches')} and ${plural(
+      tileZones,
+      'tile zone',
+      'tile zones',
+    )} can't be migrated and will not be copied. Your original data keeps them.`,
+  /** §4.4: a name that is taken is not a collision, and the row says what happens instead. */
+  migrationNameTaken: 'Name already used; this stays a separate Project',
+  /** §4.4: an id that is taken is a collision, and only the reader decides. */
+  migrationCollision: (name: string): string =>
+    `A Project with this BuildBox ID already exists: ${name}. Replace it, or keep both?`,
+  migrationReplace: 'Replace it',
+  migrationKeepBoth: 'Keep both',
+
+  /** The six steps, in the order the pipeline runs them. */
+  migrationStages: {
+    read: 'Reading old data',
+    convert: 'Converting',
+    validate: 'Checking',
+    images: 'Saving images',
+    write: 'Writing Projects',
+    'read-back': 'Reading back',
+  } as Record<MigrationStage, string>,
+  migrationVerifying: 'BuildBox is copying your work now.',
+  /** §4.5: the sentence names the step, and says plainly that nothing moved. */
+  migrationFailure: (stage: string): string =>
+    `Migration stopped while ${stage.toLowerCase()}. Nothing was changed: your old data is untouched and no Projects were created.`,
+  /** The store's own reasons, which are the only ones a failure may quote. */
+  migrationFailureStorage: {
+    quota: 'Browser storage is full.',
+    aborted: 'The browser stopped the write.',
+    unavailable: "Browser storage isn't available.",
+    serialization: 'This data could not be prepared for saving.',
+    'revision-conflict': 'One of these Projects changed while the review was open.',
+    'not-found': 'One of these Projects is no longer here.',
+  } as Record<PersistenceError['kind'], string>,
+  migrationTryAgain: 'Try again',
+  migrationDownloadOldData: 'Download old data as Backup',
+
+  migrationVerifiedEyebrow: 'Migration verified',
+  migrationVerifiedHeading: 'Your legacy work is ready',
+  /** Deviation (c): the promise the prototype omits, because the old copy is still there. */
+  migrationVerifiedLede:
+    'Every new record was read back and matched. Your old data is untouched and stays in this browser until you choose Remove old copy.',
+  migrationResultRow: (from: string, to: string): string => `${from} → ${to}`,
+  migrationBecameNewProject: 'New Project',
+  migrationBecameAttached: (name: string): string => `Attached to ${name}`,
+  migrationBecameSeparate: 'Separate Project',
+  migrationNotMigratedRow: (name: string): string => `${name} — not migrated`,
+  migrationDownloadBackup: 'Download Backup',
+  migrationDownloadBackupFor: (name: string): string => `Download Backup of ${name}`,
+  migrationRemoveOldCopy: 'Remove old copy',
+  migrationDownloadOriginal: 'Download original data',
+  migrationReturn: 'Return to Projects',
+  /** §4.7: the confirm names exactly what is about to go, and what is not. */
+  migrationRemoveConfirm:
+    'This deletes the old BuildBox data from this browser. The new Projects and your downloaded copies stay.',
+  migrationRemoved: 'Old copy removed.',
+  migrationNothingFound: 'BuildBox found no old data in this browser.',
+  /** §6: migration needs somewhere to write, and this browser is refusing. */
+  migrationPaused:
+    "This browser isn't letting BuildBox store Projects right now, so migration is paused.",
+  migrationStep: (step: number, total: number): string => `Step ${step} of ${total}`,
+  migrationStepFound: 'Found',
+  migrationStepReview: 'Review',
+  migrationStepVerify: 'Verify',
+  migrationStepBackUp: 'Back up',
+  toastMigrationDone: (count: number): string =>
+    `${plural(count, 'Project was', 'Projects were')} created from your old data.`,
+  /** Criterion 17: a legacy file picked from `Restore Backup` goes to the review instead. */
+  migrationFileDetected: 'That file is old BuildBox data. Review it instead?',
+  migrationReviewTheFile: 'Review this file',
 } as const
 
 /**

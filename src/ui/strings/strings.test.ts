@@ -14,9 +14,59 @@
 import { describe, expect, it } from 'vitest'
 import { STRINGS } from './index'
 
+/**
+ * The words #19 §12 keeps out of user-facing copy, carried forward by #24, #27 and ADR-0008.
+ *
+ * `code` and `must` are ordinary English in a developer's sentence and promises in a user's:
+ * "Browser storage is full" is a fact, "the browser must be updated" is an instruction about a
+ * thing the interface has no authority to demand. `sized for` and `rated` are the structural
+ * claims the beam and skirting labels were banned for in ADR-0008, and they are just as false
+ * here — BuildBox has not certified anything.
+ */
+const BANNED = ['compliant', 'safe', 'rated', 'approved', 'code', 'sized for', 'must', 'required']
+
+/** Every string the table can produce, including the ones behind its copy functions. */
+function everyString(value: unknown, key = ''): Array<[string, string]> {
+  if (typeof value === 'string') return [[key, value]]
+  if (typeof value === 'function') {
+    // Each function is called with the widest arguments it will accept: the shapes it can return
+    // are a string, or the three pieces of a sentence split around a bold time.
+    const produced: Array<[string, string]> = []
+    for (const args of [
+      ['', '', ''],
+      [0, 0, 0],
+      [1, 1, 1],
+      [2, 3, 4],
+    ]) {
+      let out: unknown
+      try {
+        out = (value as (...a: unknown[]) => unknown)(...args)
+      } catch {
+        continue
+      }
+      produced.push(...everyString(out, key))
+    }
+    return produced
+  }
+  if (Array.isArray(value)) return value.flatMap((entry, index) => everyString(entry, `${key}[${index}]`))
+  if (value !== null && typeof value === 'object') {
+    return Object.entries(value).flatMap(([child, entry]) => everyString(entry, key === '' ? child : `${key}.${child}`))
+  }
+  return []
+}
+
 describe('the copy', () => {
   it('is the whole vocabulary of the interface', () => {
     expect(STRINGS).toMatchSnapshot()
+  })
+
+  it('keeps the banned words out of every sentence (#52 criterion 21)', () => {
+    const offenders = everyString(STRINGS)
+      .flatMap(([key, text]) =>
+        BANNED.filter((word) => new RegExp(`\\b${word}\\b`, 'i').test(text)).map((word) => `${key}: "${word}" in ${text}`),
+      )
+      .sort()
+    expect(offenders).toEqual([])
   })
 
   it('keeps every sentence out of the components that speak it (#51 criterion 5)', async () => {

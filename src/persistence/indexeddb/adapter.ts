@@ -15,13 +15,14 @@
  *   non-`DOMException` is a programmer bug and stays thrown.
  */
 import type { IDBPDatabase, IDBPTransaction, StoreNames } from 'idb'
-import { DOMAIN_SCHEMA_VERSION, referencedAssetHashes, summarizeProject } from '../../domain'
+import { DOMAIN_SCHEMA_VERSION, referencedAssetHashes, summarizeProject, type Project } from '../../domain'
 import { canonicalJsonBytes, sha256Hex } from '../../lib'
 import {
   ASSET_GC_GRACE_MS,
   RECOVERY_KEEP_DAYS,
   RECOVERY_KEEP_RECENT,
   type AssetDims,
+  type CommitEntry,
   type CommitInput,
   type LibraryRecord,
   type MetaMap,
@@ -148,6 +149,111 @@ function assetEntry(sha256: string, bytes: Blob, mediaType: string, dims: AssetD
   }
 }
 
+/** One commit, ready to be written: the Project cloned and its asset bytes hashed. */
+interface PreparedCommit extends CommitEntry {
+  project: Project
+  assets: AssetEntry[]
+}
+
+/**
+ * Everything a batch of commits needs that must not happen inside a transaction.
+ *
+ * An IndexedDB transaction commits itself the moment the event loop goes idle, so no
+ * `blob.arrayBuffer()` and no digest may run once one is open (#46 notes) — and a batch has to
+ * be prepared as one batch for `commitMany` to be one transaction. The Project is cloned here
+ * too: the store's copy and the record this call returns both have to outlive the object the
+ * caller handed over, which is the caller's to mutate the moment the call resolves (#45 case 8).
+ */
+async function prepareCommit(entries: readonly CommitEntry[]): Promise<PreparedCommit[]> {
+  const prepared: PreparedCommit[] = []
+  for (const entry of entries) {
+    const assets: AssetEntry[] = []
+    for (const asset of entry.input.newAssets ?? []) {
+      const sha256 = await sha256Hex(await asset.bytes.arrayBuffer())
+      assets.push(assetEntry(sha256, asset.bytes, asset.mediaType, asset, entry.input.savedAt))
+    }
+    prepared.push({ ...entry, project: structuredClone(entry.input.project), assets })
+  }
+  return prepared
+}
+
+/**
+ * Every prepared commit inside `tx`, in order, or a refusal that aborts the lot.
+ *
+ * This is the whole of #52 §2 step 6's promise: several Projects, their assets and their Library
+ * records landing together. A stale `expectedRevision` on the last entry takes the first one
+ * down with it, because `write` aborts the transaction on any non-`ok` result.
+ */
+async function writeCommits<Stores extends StoreName[]>(
+  tx: WriteTx<Stores>,
+  entries: readonly PreparedCommit[],
+  /** `null` when no entry carries a snapshot, which is what lets the batch skip that store. */
+  putRecovery: ((point: RecoveryPoint) => Promise<unknown>) | null,
+): Promise<Result<ProjectRecord[], PersistenceError>> {
+  const projects = tx.objectStore('projects')
+  const assets = tx.objectStore('assets')
+  const library = tx.objectStore('library')
+  const records: ProjectRecord[] = []
+
+  for (const { input, expectedRevision, project, assets: newAssets, recoveryPoint } of entries) {
+    const stored = await projects.get(project.id)
+    const actual = stored?.revision ?? null
+    // A stale expected revision and a revision that does not increase are the same
+    // refusal: the caller's view of the store is not the store's (#45).
+    if (actual !== expectedRevision || !(input.revision > (expectedRevision ?? 0))) {
+      return fail({ kind: 'revision-conflict', expected: expectedRevision, actual })
+    }
+
+    const byteLengths = new Map<string, number>()
+    for (const entry of newAssets) {
+      // Deduplicated by hash against the store and against the rest of this batch:
+      // the first write wins, so a repeat keeps the original `storedAt`.
+      if ((await assets.count(entry.sha256)) === 0) await assets.put(entry)
+      byteLengths.set(entry.sha256, entry.byteLength)
+    }
+
+    const record: ProjectRecord = {
+      id: project.id,
+      revision: input.revision,
+      schemaVersion: DOMAIN_SCHEMA_VERSION,
+      savedAt: input.savedAt,
+      data: project,
+    }
+    await projects.put(record)
+
+    // `sizeBytes` is read inside the transaction, off the asset records this batch wrote
+    // and the ones the store already had.
+    let sizeBytes = canonicalJsonBytes(project).byteLength
+    for (const hash of referencedAssetHashes(project)) {
+      const byteLength = byteLengths.get(hash) ?? (await assets.get(hash))?.byteLength
+      if (byteLength !== undefined) sizeBytes += byteLength
+    }
+
+    const previous = await library.get(project.id)
+    const summary: LibraryRecord = {
+      id: record.id,
+      name: project.meta.name,
+      address: project.meta.address ?? null,
+      revision: record.revision,
+      savedAt: record.savedAt,
+      schemaVersion: DOMAIN_SCHEMA_VERSION,
+      sizeBytes,
+      // A commit derives the row; it never invents a backup or a trash flag (#45).
+      lastBackupInitiatedAt: previous?.lastBackupInitiatedAt ?? null,
+      lastBackupRevision: previous?.lastBackupRevision ?? null,
+      trashedAt: previous?.trashedAt ?? null,
+      summary: summarizeProject(project),
+    }
+    await library.put(summary)
+    // The snapshot belongs to the same unit of work as the change it protects: an abort that
+    // takes the attach down takes the record of a state that was never changed with it
+    // (#52 §2 step 6, criterion 11).
+    if (recoveryPoint !== undefined && putRecovery !== null) await putRecovery(recoveryPoint)
+    records.push(record)
+  }
+  return ok(records.map(frozen))
+}
+
 /**
  * The five ports over an open connection. `close` and `onVersionChange` belong to the
  * connection, not to the ports, so `./open` adds them around this.
@@ -171,73 +277,24 @@ export function createIndexedDbPorts(db: Database): Ports {
       },
 
       async commit(input: CommitInput, expectedRevision) {
-        // The store's copy and the record this call returns both have to outlive the object
-        // the caller handed over: it is the caller's to mutate the moment `commit` resolves
-        // (#45 case 8), and the deep freeze on the way out would freeze it in place.
-        const project = structuredClone(input.project)
-        // Hash first: an IndexedDB transaction commits itself when the event loop goes
-        // idle, so no `arrayBuffer()` and no digest may happen inside one (#46 notes).
-        const entries: AssetEntry[] = []
-        for (const asset of input.newAssets ?? []) {
-          const sha256 = await sha256Hex(await asset.bytes.arrayBuffer())
-          entries.push(assetEntry(sha256, asset.bytes, asset.mediaType, asset, input.savedAt))
-        }
-
+        const prepared = await prepareCommit([{ input, expectedRevision }])
         return write(db, ['projects', 'library', 'assets'], async (tx) => {
-          const projects = tx.objectStore('projects')
-          const stored = await projects.get(project.id)
-          const actual = stored?.revision ?? null
-          // A stale expected revision and a revision that does not increase are the same
-          // refusal: the caller's view of the store is not the store's (#45).
-          if (actual !== expectedRevision || !(input.revision > (expectedRevision ?? 0))) {
-            return fail({ kind: 'revision-conflict', expected: expectedRevision, actual })
-          }
-
-          const assets = tx.objectStore('assets')
-          const byteLengths = new Map<string, number>()
-          for (const entry of entries) {
-            // Deduplicated by hash against the store and against the rest of this commit:
-            // the first write wins, so a repeat keeps the original `storedAt`.
-            if ((await assets.count(entry.sha256)) === 0) await assets.put(entry)
-            byteLengths.set(entry.sha256, entry.byteLength)
-          }
-
-          const record: ProjectRecord = {
-            id: project.id,
-            revision: input.revision,
-            schemaVersion: DOMAIN_SCHEMA_VERSION,
-            savedAt: input.savedAt,
-            data: project,
-          }
-          await projects.put(record)
-
-          // `sizeBytes` is read inside the transaction, off the asset records this commit
-          // wrote and the ones the store already had.
-          let sizeBytes = canonicalJsonBytes(project).byteLength
-          for (const hash of referencedAssetHashes(project)) {
-            const byteLength = byteLengths.get(hash) ?? (await assets.get(hash))?.byteLength
-            if (byteLength !== undefined) sizeBytes += byteLength
-          }
-
-          const library = tx.objectStore('library')
-          const previous = await library.get(project.id)
-          const summary: LibraryRecord = {
-            id: record.id,
-            name: project.meta.name,
-            address: project.meta.address ?? null,
-            revision: record.revision,
-            savedAt: record.savedAt,
-            schemaVersion: DOMAIN_SCHEMA_VERSION,
-            sizeBytes,
-            // A commit derives the row; it never invents a backup or a trash flag (#45).
-            lastBackupInitiatedAt: previous?.lastBackupInitiatedAt ?? null,
-            lastBackupRevision: previous?.lastBackupRevision ?? null,
-            trashedAt: previous?.trashedAt ?? null,
-            summary: summarizeProject(project),
-          }
-          await library.put(summary)
-          return ok(frozen(record))
+          const written = await writeCommits(tx, prepared, null)
+          return written.ok ? ok(written.value[0]) : written
         })
+      },
+
+      async commitMany(entries) {
+        const prepared = await prepareCommit(entries)
+        // The snapshot store joins the transaction only when the batch carries a snapshot, so
+        // an ordinary batch keeps the narrowest lock it can (#46's transaction rule).
+        if (prepared.some((entry) => entry.recoveryPoint !== undefined)) {
+          return write(db, ['projects', 'library', 'assets', 'recoveryPoints'], (tx) => {
+            const points = tx.objectStore('recoveryPoints')
+            return writeCommits(tx, prepared, (point) => points.put(point))
+          })
+        }
+        return write(db, ['projects', 'library', 'assets'], (tx) => writeCommits(tx, prepared, null))
       },
 
       async markBackupInitiated(id, { at, revision }) {

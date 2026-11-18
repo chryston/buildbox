@@ -23,6 +23,7 @@ import {
   RECOVERY_KEEP_DAYS,
   RECOVERY_KEEP_RECENT,
   type AssetDims,
+  type CommitEntry,
   type CommitInput,
   type LibraryRecord,
   type LiveHashes,
@@ -154,6 +155,48 @@ async function hashOf(bytes: Blob): Promise<string> {
   return sha256Hex(await bytes.arrayBuffer())
 }
 
+/**
+ * `input` written into `next`, which the caller owns.
+ *
+ * The body of both `commit` and `commitMany`, and the reason the two agree on every rule: the
+ * revision check, the asset deduplication and the derived Library record all run against the
+ * state as it stands *including* whatever earlier entries of the same batch already wrote. A
+ * refusal changes nothing, because `next` is discarded by the caller.
+ */
+async function writeCommit(
+  next: MemoryState,
+  { input, expectedRevision, recoveryPoint }: CommitEntry,
+): Promise<Result<ProjectRecord, PersistenceError>> {
+  const stored = next.projects.get(input.project.id)
+  const actual = stored?.revision ?? null
+  // A revision that does not increase is the same class of refusal as a stale
+  // expected revision: the caller's view of the store is not the store's (#45).
+  if (actual !== expectedRevision || !(input.revision > (expectedRevision ?? 0))) {
+    return fail({ kind: 'revision-conflict', expected: expectedRevision, actual })
+  }
+
+  for (const asset of input.newAssets ?? []) {
+    const sha256 = await hashOf(asset.bytes)
+    // Deduplicated by hash against the store and against the rest of this commit.
+    if (next.assets.has(sha256)) continue
+    next.assets.set(sha256, immutable(storedAsset(sha256, asset, input.savedAt)))
+  }
+  const record: ProjectRecord = immutable({
+    id: input.project.id,
+    revision: input.revision,
+    schemaVersion: DOMAIN_SCHEMA_VERSION,
+    savedAt: input.savedAt,
+    data: input.project,
+  })
+  const previous = next.library.get(record.id)
+  next.projects.set(record.id, record)
+  next.library.set(record.id, libraryOf(input.project, input.revision, input.savedAt, next.assets, previous))
+  // The snapshot belongs to the same unit of work as the change it protects: it becomes
+  // visible here or not at all (#52 §2 step 6).
+  if (recoveryPoint !== undefined) next.recovery.set(recoveryPoint.id, immutable(recoveryPoint))
+  return ok(record)
+}
+
 /** The in-memory adapter over a fresh, empty store. */
 export function createMemoryAdapter(): Ports {
   let state = emptyState()
@@ -173,33 +216,25 @@ export function createMemoryAdapter(): Ports {
       },
 
       async commit(input: CommitInput, expectedRevision) {
-        const stored = state.projects.get(input.project.id)
-        const actual = stored?.revision ?? null
-        // A revision that does not increase is the same class of refusal as a stale
-        // expected revision: the caller's view of the store is not the store's (#45).
-        if (actual !== expectedRevision || !(input.revision > (expectedRevision ?? 0))) {
-          return fail({ kind: 'revision-conflict', expected: expectedRevision, actual })
-        }
-
         const next = nextState(state)
-        for (const asset of input.newAssets ?? []) {
-          const sha256 = await hashOf(asset.bytes)
-          // Deduplicated by hash against the store and against the rest of this commit.
-          if (next.assets.has(sha256)) continue
-          next.assets.set(sha256, immutable(storedAsset(sha256, asset, input.savedAt)))
-        }
-        const record: ProjectRecord = immutable({
-          id: input.project.id,
-          revision: input.revision,
-          schemaVersion: DOMAIN_SCHEMA_VERSION,
-          savedAt: input.savedAt,
-          data: input.project,
-        })
-        next.projects.set(record.id, record)
-        const previous = state.library.get(record.id)
-        next.library.set(record.id, libraryOf(input.project, input.revision, input.savedAt, next.assets, previous))
+        const written = await writeCommit(next, { input, expectedRevision })
+        if (!written.ok) return written
         state = next
-        return ok(record)
+        return written
+      },
+
+      async commitMany(entries) {
+        // One copy for the whole batch: an entry refused part-way leaves `state` untouched,
+        // because the swap below is the only thing that makes any of it visible (#52 §2 step 6).
+        const next = nextState(state)
+        const records: ProjectRecord[] = []
+        for (const entry of entries) {
+          const written = await writeCommit(next, entry)
+          if (!written.ok) return written
+          records.push(written.value)
+        }
+        state = next
+        return ok(records)
       },
 
       async markBackupInitiated(id, { at, revision }) {

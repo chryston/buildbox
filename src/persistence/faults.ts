@@ -18,6 +18,7 @@ import type { PersistenceError, Ports, Result } from './ports'
 /** The write methods a plan can fail. `set` covers both `prefs.set` and `meta.set`. */
 export type FaultMethod =
   | 'commit'
+  | 'commitMany'
   | 'put'
   | 'create'
   | 'trash'
@@ -44,6 +45,7 @@ export interface FaultRule {
 /** Every write method, in the order the fault matrix runs them. */
 export const FAULT_METHODS: readonly FaultMethod[] = [
   'commit',
+  'commitMany',
   'put',
   'create',
   'trash',
@@ -92,6 +94,7 @@ export function withFaults(adapter: Ports, plan: readonly FaultRule[]): Ports {
       load: (id) => adapter.projects.load(id),
       commit: (input, expectedRevision) =>
         guard('commit', () => adapter.projects.commit(input, expectedRevision)),
+      commitMany: (entries) => guard('commitMany', () => adapter.projects.commitMany(entries)),
       markBackupInitiated: (id, change) =>
         guard('markBackupInitiated', () => adapter.projects.markBackupInitiated(id, change)),
       trash: (id, at) => guard('trash', () => adapter.projects.trash(id, at)),

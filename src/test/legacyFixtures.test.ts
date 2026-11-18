@@ -18,6 +18,10 @@ const storeFixtures: Array<{ path: string; version: number }> = [
   { path: 'v2/buildbox-store.json', version: 2 },
   { path: 'v3/buildbox-store.json', version: 3 },
   { path: 'v3-large-image/buildbox-store.json', version: 3 },
+  // #52: the sources the Migration review is written against. Hand-authored, not captured, and
+  // held to the same rules as the captures — never regenerated, one hash here, one row there.
+  { path: 'migration-review/buildbox-store.json', version: 3 },
+  { path: 'sketches/buildbox-store.json', version: 3 },
 ]
 
 const sha256 = (absPath: string) =>

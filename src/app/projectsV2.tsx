@@ -44,11 +44,27 @@ import {
   type SaveState,
   type SessionError,
   type SessionRegistry,
+  buildMigrationPlan,
+  downloadOldBackups,
+  downloadOriginalData,
+  inspectMigration,
+  isAlreadyMigrated,
+  legacyFileKind,
+  removeOldCopy,
+  runMigration,
+  sourceHash,
+  type LegacySourcePort,
+  type LibraryRecord,
+  type MigrationAttachTarget,
+  type MigrationChoices,
+  type MigrationDeps,
+  type MigrationSource,
 } from '../session'
 import {
   createBackupEncoder,
   createDownload,
   createImageDecoder,
+  createLegacySource,
   createObjectUrlCache,
   createPlatformClock,
   createRandomIdSource,
@@ -57,7 +73,8 @@ import {
 } from '../platform'
 import type { ObjectUrlCache } from '../platform'
 import { ConflictDialog, LibraryHome, NowEditableToast, ReadOnlyStrip, SaveFailedDialog } from '../ui'
-import type { LibraryServices, SaveFailedReason } from '../ui'
+import type { LibraryServices, MigrationServices, SaveFailedReason } from '../ui'
+import { convertLegacy } from '../package'
 import { requestPersistentStorage } from './persistentStorage'
 import { LegacyViewRoot } from '../ui/legacy/LegacyViewRoot'
 import type { IntentBuilder, SessionViewServices } from '../ui/legacy/sessionBindings'
@@ -103,6 +120,18 @@ function announceCommits(ports: Ports, channel: BroadcastChannel): Ports {
             projectId: input.project.id,
             revision: committed.value.revision,
           } satisfies LibraryChange)
+        }
+        return committed
+      },
+      // A migration commits several Projects in one transaction, and the Library is a list built
+      // before that transaction existed. Without this the reader presses `Return to Projects` and
+      // sees the grid they left: the records are in the store, and nothing has told the screen.
+      commitMany: async (entries) => {
+        const committed = await ports.projects.commitMany(entries)
+        if (committed.ok) {
+          for (const record of committed.value) {
+            channel.postMessage({ projectId: record.id, revision: record.revision } satisfies LibraryChange)
+          }
         }
         return committed
       },
@@ -194,6 +223,15 @@ interface FlaggedDeps {
   assetUrls: ObjectUrlCache
   channel: BroadcastChannel
   /**
+   * The migration pipeline's dependencies, with the converter and this browser's legacy value
+   * already bound (#52 §2).
+   *
+   * `source` is the only write this whole flow is allowed to make to `localStorage`, and it is
+   * a delete of one key behind a button.
+   */
+  migration: MigrationDeps
+  legacy: LegacySourcePort
+  /**
    * True when the store behind `ports` keeps nothing past this tab (#51 §6).
    *
    * It arrives from `mountProjectsV2`, which is the one place that knows whether IndexedDB
@@ -206,9 +244,22 @@ interface FlaggedDeps {
 function createFlaggedDeps(ports: Ports, volatile: boolean): FlaggedDeps {
   const clock = createPlatformClock()
   const ids = createRandomIdSource()
+  const download = createDownload()
   const registry = createSessionRegistry()
   const channel = new BroadcastChannel(LIBRARY_CHANNEL)
   const announced = announceCommits(ports, channel)
+  const legacy = createLegacySource()
+  const migration: MigrationDeps = {
+    ports: announced,
+    clock,
+    ids,
+    registry,
+    // #43's converter as a seam. It is passed by reference rather than wrapped so that the
+    // function the review runs is the one the parity suite certified.
+    convert: convertLegacy,
+    source: legacy,
+    download,
+  }
   return {
     ports: announced,
     clock,
@@ -223,9 +274,11 @@ function createFlaggedDeps(ports: Ports, volatile: boolean): FlaggedDeps {
     // `acceptPreview: true` for the same reason in the other direction: this build wrote the
     // Backup, so it is the only build allowed to read it back.
     restore: { ports: announced, clock, ids, registry, images: createImageDecoder(), acceptPreview: true },
-    download: createDownload(),
+    download,
     assetUrls: createObjectUrlCache(ports.assets.get),
     channel,
+    migration,
+    legacy,
     volatile,
   }
 }
@@ -272,8 +325,23 @@ function isSaveFailure(save: SaveState | null): save is SaveFailedState {
 /**
  * The flagged app: the Library, and the legacy editor for whichever Project it opened.
  */
-function FlaggedRoot({ deps }: { deps: FlaggedDeps }): ReactNode {
-  const { ports, clock, ids, lock, registry, backup, restore, download, assetUrls, library, channel, volatile } = deps
+function FlaggedRoot({ deps, legacyPending = false }: { deps: FlaggedDeps; legacyPending?: boolean }): ReactNode {
+  const {
+    ports,
+    clock,
+    ids,
+    lock,
+    registry,
+    backup,
+    restore,
+    download,
+    assetUrls,
+    library,
+    channel,
+    migration,
+    legacy,
+    volatile,
+  } = deps
   const [route, setRoute] = useState<Route>('library')
   const [session, setSession] = useState<ProjectSession | null>(null)
   const [saveState, setSaveState] = useState<SaveState | null>(null)
@@ -537,6 +605,101 @@ function FlaggedRoot({ deps }: { deps: FlaggedDeps }): ReactNode {
     [deps, ports, clock, library, assetUrls, download, restore, open, lock, registry, downloadEmergency],
   )
 
+  /**
+   * The Migration review's whole outside world (#52 §2).
+   *
+   * Four things live in this closure and nowhere else. `adopted` is the file a reader picked from
+   * `Restore Backup` that turned out to be old data — once adopted it is what `inspect` reads, and
+   * the browser's own copy is left alone. `current` is the source the last `inspect` looked at, so
+   * `Download original data` and `Remove old copy` act on the bytes that were reviewed rather
+   * than on whatever is in `localStorage` now.
+   *
+   * The attach target is read here rather than in `ui` because it needs the Project's current
+   * revision, and a revision is a store fact. Handing the plan a stale one would make the write
+   * refuse, which is safe but useless; reading it at the moment of the click is what makes the
+   * optimistic check mean something.
+   */
+  const migrationServices = useMemo<MigrationServices>(() => {
+    let adopted: Uint8Array | null = null
+    let current: MigrationSource | null = null
+
+    async function sourceOf(): Promise<MigrationSource | null> {
+      const raw = adopted !== null ? new TextDecoder().decode(adopted) : legacy.read()
+      if (raw === null) return null
+      // The kind of an adopted file is read from its shape, never from its extension: a workspace
+      // export and a floor-plan export differ, and the reader treats them differently.
+      const kind = adopted === null ? 'local-store' : (legacyFileKind(raw) ?? 'workspace-file')
+      return { kind, raw, hash: await sourceHash(raw) }
+    }
+
+    const existing = async (): Promise<LibraryRecord[]> => {
+      const listed = await ports.projects.list({ includeTrashed: true })
+      return listed.ok ? listed.value : []
+    }
+
+    /**
+     * The existing Project a floor plan is being attached to, read at the moment of the click.
+     *
+     * `load` answers with the record and the Project in one read, which is what keeps the revision
+     * the plan names and the record the plan compares against the same instant's two facts.
+     */
+    async function attachTargetFor(choices: MigrationChoices): Promise<MigrationAttachTarget | null> {
+      const destination = choices.floorPlan
+      if (destination === null || destination.kind !== 'existing') return null
+      const [loaded, records] = await Promise.all([ports.projects.load(destination.projectId), existing()])
+      const record = records.find((candidate) => candidate.id === destination.projectId)
+      if (!loaded.ok || record === undefined) return null
+      return {
+        id: destination.projectId,
+        record,
+        project: loaded.value.data,
+        revision: loaded.value.revision,
+      }
+    }
+
+    const services: MigrationServices = {
+      adopt: (bytes) => {
+        adopted = bytes
+      },
+      inspect: async () => {
+        const source = await sourceOf()
+        if (source === null) return { ok: true, value: null }
+        current = source
+        return inspectMigration(migration, source, await existing())
+      },
+      run: async (inspected, choices) => {
+        // Nothing was inspected, so nothing was reviewed, and a plan built from an inspection this
+        // closure never made is a plan for a source nobody looked at.
+        if (current === null) return { ok: false, error: { stage: 'read', problems: [] } }
+        const target = await attachTargetFor(choices)
+        const plan = buildMigrationPlan(migration, inspected, await existing(), choices, target)
+        if (!plan.ok) return plan
+        const result = await runMigration(migration, inspected, plan.value)
+        // The migration writes through the ports rather than through the Library store, because
+        // one transaction is the point. Every other writer here goes through the store, which
+        // refreshes itself; this one cannot, so the app — the only thing that knows a migration
+        // just happened — re-reads the records. Otherwise `Return to Projects` shows the grid the
+        // reader left, with the new Projects sitting unread in the store.
+        if (result.ok) await library.refresh()
+        return result
+      },
+      downloadBackups: async (inspected, choices) => {
+        const target = await attachTargetFor(choices)
+        return downloadOldBackups({ ...migration, download, backup }, inspected, await existing(), choices, target)
+      },
+      downloadOriginal: () => {
+        const source = current
+        if (source !== null) downloadOriginalData({ ...migration, download }, source)
+      },
+      removeOldCopy: async () => {
+        const source = current
+        if (source === null) return { ok: false, error: { stage: 'read', problems: [] } }
+        return removeOldCopy({ ...migration, source: legacy }, source)
+      },
+    }
+    return services
+  }, [backup, deps, download, legacy, library, migration, ports])
+
   const sessionServices = useMemo(() => createSessionServices(clock, ids, assetUrls), [clock, ids, assetUrls])
 
   /**
@@ -581,6 +744,8 @@ function FlaggedRoot({ deps }: { deps: FlaggedDeps }): ReactNode {
         saveStateFor={session?.id ?? null}
         guard={guard}
         storageUnavailable={volatile}
+        migration={migrationServices}
+        openMigration={legacyPending}
       />
     )
   }
@@ -655,6 +820,11 @@ export async function mountProjectsV2(root: Root): Promise<void> {
   // `!opened.ok` is the whole of #51 §6's knowledge: this is the only expression in the app that
   // finds out whether the browser has a durable store, and everything downstream is told.
   const deps = createFlaggedDeps(ports, !opened.ok)
+  // Criterion 1: the review is where a reader who still has old data should land, and the only
+  // honest way to know is to look. This reads `buildbox-store`, hashes it and asks the store for
+  // the completion record — three reads and no write. A hash that matches the record means this
+  // exact data was already migrated and verified, and the reader goes back to their Projects.
+  const legacyPending = await legacyMigrationPending(deps)
 
   // The Library is the home of a flag-on build (#50): whatever the last visit left open, a
   // reload starts at the grid, and an empty database shows the New Project card rather than
@@ -683,9 +853,26 @@ export async function mountProjectsV2(root: Root): Promise<void> {
 
   root.render(
     <StrictMode>
-      <FlaggedRoot deps={deps} />
+      <FlaggedRoot deps={deps} legacyPending={legacyPending} />
     </StrictMode>,
   )
+}
+
+/**
+ * Whether this browser holds old data that has not been migrated into a verified Project (#52
+ * criterion 1).
+ *
+ * A failure to read the completion record counts as "not migrated": the review is a surface that
+ * writes nothing until the reader presses one button, and refusing to show it because a `meta`
+ * read failed would hide the only way out of the old data.
+ */
+async function legacyMigrationPending(deps: FlaggedDeps): Promise<boolean> {
+  const raw = deps.legacy.read()
+  if (raw === null) return false
+  const hash = await sourceHash(raw)
+  const stored = await deps.ports.meta.get('legacyMigration')
+  if (!stored.ok) return true
+  return !isAlreadyMigrated(stored.value, hash)
 }
 
 /**

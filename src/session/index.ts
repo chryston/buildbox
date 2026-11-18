@@ -52,6 +52,39 @@ export {
   type RestoreStaged,
 } from './restore'
 export { IDLE_RECOVERY_MS, openProject, type SessionDeps } from './projectSession'
+// The Migration review (#52): inspection, the pure plan builder, the one-transaction write with
+// its read-back, and the two read-only downloads. `ui` renders these; `app` wires the ports.
+export {
+  FLOOR_PLAN_SEPARATE_VALUE,
+  FLOOR_PLAN_SKIP_VALUE,
+  buildMigrationPlan,
+  downloadOldBackups,
+  downloadOriginalData,
+  floorPlanChoiceValue,
+  floorPlanChoices,
+  inspectMigration,
+  isAlreadyMigrated,
+  legacyFileKind,
+  removeOldCopy,
+  runMigration,
+  sourceHash,
+  type FloorPlanChoice,
+  type FloorPlanDestination,
+  type InspectedMigration,
+  type MigrationAttachTarget,
+  type MigrationChoices,
+  type MigrationDeps,
+  type MigrationFailure,
+  type MigrationFloorPlan,
+  type MigrationPlan,
+  type MigrationPlanProject,
+  type MigrationProposal,
+  type MigrationResult,
+  type MigrationReview,
+  type MigrationSource,
+  type MigrationSourceKind,
+  type MigrationStage,
+} from './migration'
 export { createSessionRegistry } from './registry'
 export type {
   BackupAsset,
@@ -61,6 +94,8 @@ export type {
   DownloadPort,
   IdSource,
   ImageDecoderPort,
+  LegacyConvertPort,
+  LegacySourcePort,
   LockHandle,
   LockPort,
 } from './ports'
@@ -89,6 +124,7 @@ export type {
 // `RecoveryPointMeta` is here for the same reason `LibraryRecord` is: #51's Recovery Point
 // picker reads it through `LibraryServices`, and `ui` may not import `persistence` (#42 §2).
 export type {
+  LegacyMigrationRecord,
   LibraryRecord,
   PersistenceError,
   Ports,
