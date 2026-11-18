@@ -46,3 +46,12 @@ after a green CI run on `main`.
 ```bash
 npm run build
 ```
+
+The build ends with two checks. `scripts/check-bundle-strings.mjs` fails if `dist/` still
+contains a string the removed workspace exports or the `projects_v2` flag would have written.
+`scripts/check-size-budget.mjs` gates the **app shell**: the JS and CSS `dist/index.html` loads
+eagerly. Since #53 the editor is a dynamic import, so the shell is React plus the Project
+Library and the session core, and the editor arrives in its own chunk when a Project opens. The
+script prints the gzip total of every app chunk beside the gated number, so the whole-app cost
+stays visible without becoming a second budget; raising `size-budget.json` remains a decision,
+never a side effect of a build.

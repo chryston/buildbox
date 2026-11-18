@@ -5,12 +5,13 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { addFloorPlanObject, FIRST_PROJECT, openProjectFromLibrary, showFloorPlan } from '../support/previewApp'
 import { libraryHeading, previewSeed } from '../support/libraryApp'
+import { readLegacyStore } from '../support/legacyStore'
 import { databaseNames, projectRevision, seedPreviewDb } from '../support/seedPreviewDb'
 
-// Criterion 8 (#49): the flagged build writes only `buildbox-preview`. Today's app persists
-// through `localStorage['buildbox-store']`, and a build that wrote both would put two
-// histories behind one user's work — so this asserts the old key is untouched, byte for byte,
-// after real edits in both views.
+// Criterion 8 (#49) and criterion 13 (#53): the app writes only `buildbox`. The release before
+// this one persisted through `localStorage['buildbox-store']`, and a build that wrote both would
+// put two histories behind one user's work — so this asserts the old key is untouched, byte for
+// byte, after real edits in both views.
 const fixturesRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../fixtures')
 const v3 = readFileSync(join(fixturesRoot, 'legacy', 'v3', 'buildbox-store.json'), 'utf8')
 
@@ -26,8 +27,8 @@ const localStorageSnapshot = (page: Page) =>
   })
 
 test('editing writes no localStorage key and opens no other database', async ({ page }) => {
-  // Seed the legacy key too: the point is that the flagged build leaves it alone even when
-  // it is present, which is the state a real browser is in after using today's app.
+  // Seed the legacy key too: the point is that this build leaves it alone even when it is
+  // present, which is the state a real browser is in after using the previous release.
   await page.addInitScript(
     ([key, value]) => {
       window.localStorage.setItem(key, value)
@@ -58,4 +59,33 @@ test('editing writes no localStorage key and opens no other database', async ({ 
 
   expect(await localStorageSnapshot(page)).toBe(before)
   await expect.poll(() => databaseNames(page)).toEqual(['buildbox'])
+})
+
+// #53 criterion 13, the browser half of the rollback rehearsal. #20 §12 promises that reverting
+// this release restores the previous one's data, and the only thing that makes it true is that
+// nothing here writes the key the previous release read. `src/integration/noLegacyWrite.test.tsx`
+// proves the same on a spy; this proves it on a real engine, in the state a real browser is in
+// after using the previous release: the fixture's exact bytes, still there after edits and a
+// reload, which is what a reverted build would open.
+test('the old copy survives this build byte for byte, which is the rollback (#20 §12)', async ({ page }) => {
+  await page.addInitScript(
+    ([key, value]) => {
+      window.localStorage.setItem(key, value)
+    },
+    ['buildbox-store', v3],
+  )
+  await seedPreviewDb(page, previewSeed)
+  await page.goto('./', { waitUntil: 'networkidle' })
+  await expect(page.getByRole('heading', { level: 1, name: 'Review where your existing work belongs' })).toBeVisible()
+  await page.getByRole('button', { name: 'Do this later' }).click()
+  await expect(libraryHeading(page)).toBeVisible()
+
+  await openProjectFromLibrary(page, FIRST_PROJECT)
+  await page.getByTestId('void-unit-kitchen-base-hanging').click({ position: { x: 10, y: 10 } })
+  await page.getByRole('button', { name: 'Add Shelf' }).click()
+  await expect.poll(() => projectRevision(page, previewSeed.projects[0].id)).toBeGreaterThanOrEqual(2)
+
+  expect(await readLegacyStore(page)).toBe(v3)
+  await page.reload({ waitUntil: 'networkidle' })
+  expect(await readLegacyStore(page)).toBe(v3)
 })
