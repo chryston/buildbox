@@ -29,8 +29,11 @@ export interface SelectionInspectorProps {
   item: PlanItemView | null
   unit: DisplayUnit
   precision: number
+  /** Another Floor exists to send the selection to (#56). */
+  canTransfer: boolean
   onUpdate: (patch: PlanObjectPatch) => void
   onDelete: () => void
+  onTransfer: () => void
 }
 
 export function SelectionInspector(props: SelectionInspectorProps): ReactNode {
@@ -90,7 +93,7 @@ function SizeField(props: {
 }
 
 function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): ReactNode {
-  const { item, unit, precision, onUpdate, onDelete } = props
+  const { item, unit, precision, canTransfer, onUpdate, onDelete, onTransfer } = props
   return (
     <section className="bb-workspace-card" data-testid="selection-inspector">
       <h3 className="bb-workspace-card-title">Selection</h3>
@@ -142,6 +145,17 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
             onClick={() => onUpdate({ color })}
           />
         ))}
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <button
+          type="button"
+          data-testid="transfer-to-floor"
+          className="bb-workspace-tool-button"
+          disabled={!canTransfer}
+          onClick={onTransfer}
+        >
+          Copy or Move to Floor…
+        </button>
       </div>
       <div style={{ marginTop: 12 }}>
         <button

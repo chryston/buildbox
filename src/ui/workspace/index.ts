@@ -8,6 +8,7 @@
  */
 export * from './displayUnits'
 export * from './planModel'
+export * from './toolbarRegistry'
 export * from './viewport'
 export { WorkspaceProvider, useWorkspaceRoot, useWorkspaceProject } from './WorkspaceRoot'
 export type {

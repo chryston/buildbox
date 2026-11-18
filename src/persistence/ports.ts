@@ -174,6 +174,11 @@ export interface ViewportState {
 export interface PrefsMap {
   /** The last viewport of one saved view, keyed `viewState:<projectId>:<viewKey>`. */
   [key: `viewState:${string}:${string}`]: ViewportState
+  /**
+   * #56: which Floor a Project was last open on, and the last Plan View used on each
+   * Floor. View state like the viewport above — never in the document, never in a Backup.
+   */
+  [key: `activeView:${string}`]: { floorId: string | null; viewsByFloor: Record<string, string> }
   exportRecipes: unknown[]
   /**
    * #51 §6: whether the browser was asked to keep this origin's storage, and what it said.

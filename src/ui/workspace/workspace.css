@@ -417,3 +417,111 @@
     box-shadow: -4px 0 20px rgb(0 0 0 / 45%);
   }
 }
+
+/* ------------------------------------------------- floors (#56) */
+
+/* The view card's two controls sit side by side and never wrap the rail. */
+.bb-workspace-view-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.bb-workspace-scale-readout {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--bb-text-muted);
+}
+
+.bb-workspace-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--bb-text);
+}
+
+.bb-workspace-add-view {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--bb-border-card);
+  border-radius: var(--bb-radius-button);
+}
+
+.bb-workspace-field-error {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--bb-danger-text);
+}
+
+.bb-workspace-dialog-note {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--bb-text-muted);
+}
+
+/* The Manage Floors rows: one line of controls per Floor, in the Project's order. */
+.bb-workspace-floor-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.bb-workspace-floor-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--bb-border-card);
+  border-radius: var(--bb-radius-button);
+}
+
+.bb-workspace-floor-row[data-active='true'] {
+  border-color: var(--bb-accent);
+}
+
+.bb-workspace-floor-row .bb-workspace-input {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.bb-workspace-floor-drag {
+  cursor: grab;
+  color: var(--bb-text-muted);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.bb-workspace-floor-limits {
+  flex-basis: 100%;
+  padding-top: 8px;
+  border-top: 1px solid var(--bb-border-card);
+}
+
+.bb-workspace-dependency-list,
+.bb-workspace-checklist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.bb-workspace-dependency-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bb-workspace-dependency-text {
+  flex: 1;
+}

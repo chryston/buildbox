@@ -30,6 +30,15 @@ export interface WorkspaceState {
   hydrated: Record<string, boolean>
   /** The rail as a drawer below 1024 px (#55 criterion 4). */
   railOpen: boolean
+  /**
+   * The Floor the Plan View is open on (#56). A pointer, not an owner: it selects which
+   * Floor's entities are drawn, and nothing else in the app holds a Floor (#25).
+   */
+  activeFloorId: string | null
+  /** The last Plan View used on each Floor, keyed by Floor id (#56). */
+  activeViewByFloor: Record<string, string>
+  /** Whether this Project's open Floor and views have been read from the cache yet. */
+  activeHydrated: boolean
 }
 
 export interface WorkspaceActions {
@@ -39,6 +48,12 @@ export interface WorkspaceActions {
   setViewport(viewKey: string, viewport: Viewport): void
   markHydrated(viewKey: string): void
   setRailOpen(open: boolean): void
+  /** Open a Floor, remembering it as the last view used on it. */
+  setActiveFloor(floorId: string | null, viewId: string | null): void
+  /** The view the person picked inside the Floor already open. */
+  setActiveView(floorId: string, viewId: string): void
+  /** The cache's answer for this Project: which Floor was open, and the views on each. */
+  hydrateActive(floorId: string | null, viewsByFloor: Record<string, string>): void
   /** Another Project opened: its placements are not this one's to select. */
   reset(): void
 }
@@ -52,6 +67,9 @@ const INITIAL: WorkspaceState = {
   viewports: {},
   hydrated: {},
   railOpen: false,
+  activeFloorId: null,
+  activeViewByFloor: {},
+  activeHydrated: false,
 }
 
 export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
@@ -64,6 +82,26 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
   markHydrated: (viewKey) =>
     set((state) => ({ hydrated: { ...state.hydrated, [viewKey]: true } })),
   setRailOpen: (railOpen) => set({ railOpen }),
+  setActiveFloor: (activeFloorId, viewId) =>
+    set((state) => ({
+      activeFloorId,
+      selection: null,
+      activeViewByFloor:
+        activeFloorId === null || viewId === null
+          ? state.activeViewByFloor
+          : { ...state.activeViewByFloor, [activeFloorId]: viewId },
+    })),
+  setActiveView: (floorId, viewId) =>
+    set((state) => ({
+      selection: null,
+      activeViewByFloor: { ...state.activeViewByFloor, [floorId]: viewId },
+    })),
+  hydrateActive: (activeFloorId, viewsByFloor) =>
+    set((state) => ({
+      activeFloorId: state.activeFloorId ?? activeFloorId,
+      activeViewByFloor: { ...viewsByFloor, ...state.activeViewByFloor },
+      activeHydrated: true,
+    })),
   reset: () => set({ ...INITIAL }),
 }))
 

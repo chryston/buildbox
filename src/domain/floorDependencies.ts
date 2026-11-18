@@ -45,8 +45,10 @@ const planImage: FloorDependencyKind = {
 const planViews: FloorDependencyKind = {
   id: 'planViews',
   label: 'Plan Views',
-  labelOne: 'Plan View',
-  labelMany: 'Plan Views',
+  // `named`, because the count is of the views a person added: every Floor has a default
+  // Plan View and that one goes with the Floor without being asked about.
+  labelOne: 'named Plan View',
+  labelMany: 'named Plan Views',
   count: (project, floorId) =>
     project.views.reduce((total, view) => (view.floorId === floorId && !view.isDefault ? total + 1 : total), 0),
 }

@@ -13,7 +13,7 @@
  * make React re-render forever, and a commit replaces the Project — exactly the
  * granularity the cache wants.
  */
-import type { EntityId, GenericItemDesign, PlacedItem, Project } from '../../domain'
+import type { EntityId, GenericItemDesign, PlanView, PlacedItem, Project } from '../../domain'
 
 /** One Placed Item as the Plan View draws it: a footprint outline with a label. */
 export interface PlanItemView {
@@ -38,15 +38,73 @@ export interface PlanImageView {
   readonly pixelsPerMm: number | null
 }
 
-/** The device-local cache key of a Floor's default Plan View (#55 criterion 4). */
-export const planViewKey = (floorId: EntityId): string => `plan:${floorId}`
+/**
+ * The device-local cache key of one Plan View (#56 criterion 13).
+ *
+ * Every view — a Floor's default or a named one — has its own key, so two views of the
+ * same Floor keep two viewports. #55 keyed this by Floor, which is why the old
+ * `plan:<floorId>` entries are simply never read again.
+ */
+export const planViewKey = (viewId: EntityId): string => `view:${viewId}`
 
 /** The file input names the three formats a Plan Image may be (#49 deviation 4). */
 export const PLAN_IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp'
 
-/** The one Floor the Plan View shows until #56 adds the Floor switcher. */
-export function firstFloorId(project: Project): EntityId | null {
-  return project.floors[0]?.id ?? null
+/**
+ * The Plan Views of one Floor, in the order the switcher lists them: the Floor's own
+ * default view first, then the named ones by name (#56).
+ */
+export function planViewsForFloor(project: Project, floorId: EntityId | null): readonly PlanView[] {
+  if (floorId === null) return EMPTY_VIEWS
+  const views = project.views.filter((view) => view.floorId === floorId)
+  return views.length === 0
+    ? EMPTY_VIEWS
+    : [...views].sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.name.localeCompare(b.name))
+}
+
+const EMPTY_VIEWS: readonly PlanView[] = []
+
+/** The Floor's own Plan View — the one that comes with it and goes with it. */
+export const defaultPlanViewOf = (project: Project, floorId: EntityId | null): PlanView | null =>
+  floorId === null
+    ? null
+    : project.views.find((view) => view.floorId === floorId && view.isDefault) ?? null
+
+/**
+ * The view to show when a Floor is opened: the last one used on this device when it still
+ * belongs to that Floor, otherwise the Floor's default (#56).
+ */
+export const resolvePlanView = (
+  project: Project,
+  floorId: EntityId | null,
+  preferredViewId: string | null,
+): PlanView | null => {
+  if (floorId === null) return null
+  const preferred = preferredViewId === null
+    ? null
+    : project.views.find((view) => view.id === preferredViewId && view.floorId === floorId) ?? null
+  return preferred ?? defaultPlanViewOf(project, floorId)
+}
+
+/**
+ * Where a Placed Item actually sits on its Floor, for the copy/move preview (#56).
+ *
+ * `PlanItemView` carries the drawn top-left, which is the Item Origin minus half the
+ * footprint; the Intent speaks Item Origin and base elevation, so the preview reads the
+ * placement rather than the projection.
+ */
+export function placedOrigin(
+  project: Project,
+  placedItemId: EntityId | null,
+): { x: number; y: number; baseElevation: number } | null {
+  if (placedItemId === null) return null
+  const placed = project.existingModel.placedItems.find((item) => item.id === placedItemId)
+  if (placed === undefined) return null
+  return {
+    x: placed.translation.x,
+    y: placed.translation.y,
+    baseElevation: placed.baseElevation,
+  }
 }
 
 /** `0 ≤ r < 360` to the four rotations the Plan View has. */
@@ -94,20 +152,28 @@ export function planItemsForFloor(project: Project, floorId: EntityId | null): r
 const imageCache = new WeakMap<Project, { src: string | null; key: string | null; view: PlanImageView | null }>()
 
 /**
- * The Floor's Plan Image, stable while the Project and the image's object URL are.
+ * The Plan View's Plan Image, ready to draw, stable while the Project and the image's
+ * object URL are.
  *
  * The URL is a second key because it arrives after the Project is read: the bytes are in
- * IndexedDB, and an `<image>` can only be pointed at them once the URL exists.
+ * IndexedDB, and an `<image>` can only be pointed at them once the URL exists. A view that
+ * has `Show Plan Image` off draws nothing, which is the visibility #19 §4 says the drawing
+ * follows — the Floor still has the image, this view simply is not showing it.
  */
-export function planImageForFloor(
+export function planImageForView(
   project: Project,
-  floorId: EntityId | null,
+  view: PlanView | null,
   imageSrc: string | null,
 ): PlanImageView | null {
-  const planImage = project.floors.find((floor) => floor.id === floorId)?.planImage ?? null
+  const planImage = view === null
+    ? null
+    : view.showPlanImage
+      ? project.floors.find((floor) => floor.id === view.floorId)?.planImage ?? null
+      : null
+  const key = view === null ? null : `${view.id}:${String(view.showPlanImage)}`
   const cached = imageCache.get(project)
-  if (cached !== undefined && cached.src === imageSrc && cached.key === floorId) return cached.view
-  const view = planImage === null || imageSrc === null
+  if (cached !== undefined && cached.src === imageSrc && cached.key === key) return cached.view
+  const drawn = planImage === null || imageSrc === null
     ? null
     : {
       src: imageSrc,
@@ -115,8 +181,8 @@ export function planImageForFloor(
       heightMm: planImage.pixelsPerMm === null ? planImage.heightPx : planImage.heightPx / planImage.pixelsPerMm,
       pixelsPerMm: planImage.pixelsPerMm,
     }
-  imageCache.set(project, { src: imageSrc, key: floorId, view })
-  return view
+  imageCache.set(project, { src: imageSrc, key, view: drawn })
+  return drawn
 }
 
 /** A custom shape that is placed nowhere: placeable again from `Add item ▾`. */

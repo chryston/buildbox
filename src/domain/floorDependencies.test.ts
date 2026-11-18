@@ -53,11 +53,11 @@ const textOf = (floorId: string): string[] => summarizeFloorDependencies(project
 
 describe('summarizeFloorDependencies', () => {
   it('counts the Placed Items, the Plan Image and the named Plan Views of one Floor', () => {
-    expect(textOf('floor-kitchen')).toEqual(['3 Placed Items', '1 Plan Image', '1 Plan View'])
+    expect(textOf('floor-kitchen')).toEqual(['3 Placed Items', '1 Plan Image', '1 named Plan View'])
   })
 
   it('reads an empty Floor as having nothing leaning on it', () => {
-    expect(textOf('floor-cellar')).toEqual(['0 Placed Items', '0 Plan Images', '0 Plan Views'])
+    expect(textOf('floor-cellar')).toEqual(['0 Placed Items', '0 Plan Images', '0 named Plan Views'])
     expect(floorHasDependencies(project(), 'floor-cellar')).toBe(false)
   })
 
@@ -77,7 +77,7 @@ describe('summarizeFloorDependencies', () => {
 
   it('reads a Floor that is not there as having nothing, rather than throwing', () => {
     expect(floorHasDependencies(project(), 'floor-nowhere')).toBe(false)
-    expect(textOf('floor-nowhere')).toEqual(['0 Placed Items', '0 Plan Images', '0 Plan Views'])
+    expect(textOf('floor-nowhere')).toEqual(['0 Placed Items', '0 Plan Images', '0 named Plan Views'])
   })
 
   it('says "1 Placed Item" and "2 Placed Items", which is the whole row', () => {
