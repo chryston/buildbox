@@ -14,24 +14,29 @@
 /* ── Shell ─────────────────────────────────────────────────────────────────── */
 
 /* The archive's three element resets, scoped to the Library so the legacy views keep their own
-   defaults. `font: inherit` on the form elements is what makes a button read in DM Sans at all. */
+   defaults. `font: inherit` on the form elements is what makes a button read in DM Sans at all.
+   The scope rides on `:where()` so the reset keeps the archive's specificity — a bare
+   `.bb-library button` (0-1-1) would outrank every single-class rule below and silently win
+   `font: inherit` over `.brand`, `.button` and `.nav-tab`. */
 .bb-library,
 .bb-library * {
   box-sizing: border-box;
 }
 
-.bb-library button,
-.bb-library input {
+:where(.bb-library) button,
+:where(.bb-library) input {
   cursor: pointer;
   font: inherit;
 }
 
+/* No font-size: the archive sets none on its root either, so the Library reads at the browser's
+   16 px and every smaller size below is an explicit declaration, exactly as there. */
 .bb-library {
   min-height: 100vh;
-  background: var(--bb-bg-page);
+  background: var(--bb-bg-app);
   color: var(--bb-text);
   font-family: var(--bb-font-body);
-  font-size: var(--bb-size-body);
+  line-height: normal;
 }
 
 /* ── Header (68 px) ────────────────────────────────────────────────────────── */
@@ -46,17 +51,16 @@
   background: var(--bb-bg-header);
 }
 
+/* The archive's brand is a UA button with only `border:0` reset, so it keeps the browser's
+   1px 6px padding — written here because the app shell's Tailwind preflight zeroes it. */
 .brand {
-  display: flex;
-  align-items: baseline;
   border: 0;
-  padding: 0;
+  padding: 1px 6px;
   background: none;
-  color: var(--bb-text-strong);
+  color: var(--bb-text);
   font-family: var(--bb-font-heading);
   font-size: var(--bb-size-brand);
   font-weight: var(--bb-weight-brand);
-  letter-spacing: -0.02em;
 }
 
 .brand span {
@@ -69,22 +73,17 @@
 
 .app-header nav {
   display: flex;
-  align-items: center;
   gap: var(--bb-nav-gap);
   height: 100%;
 }
 
 .nav-tab {
-  display: flex;
-  align-items: center;
-  height: 100%;
   padding: var(--bb-nav-item-padding);
   border: 0;
   border-bottom: var(--bb-nav-underline) solid transparent;
   background: none;
   color: var(--bb-text-nav);
   font-family: var(--bb-font-body);
-  font-size: var(--bb-size-body);
   font-weight: var(--bb-weight-nav);
 }
 
@@ -147,22 +146,26 @@
   text-transform: uppercase;
 }
 
+/* The archive styles the heading with a bare `h1{margin:0;font-size:38px;letter-spacing:-.035em}`:
+   DM Sans, normal line-height and the inherited text colour, with the UA's bold. The preflight
+   resets all three, so each is put back here. */
 .page h1 {
-  margin: 0 0 10px;
-  color: var(--bb-text-strong);
+  margin: 0;
   font-family: var(--bb-font-heading);
   font-size: var(--bb-size-h1);
   font-weight: 700;
   letter-spacing: var(--bb-tracking-h1);
-  line-height: 1.05;
 }
 
+/* The archive's intro paragraph is a plain `p`: UA 1em top margin (which the preflight
+   zeroes, so it is written back), the hero rule's zero bottom, inherited 16 px text. */
 .lede {
-  max-width: 62ch;
-  margin: 0;
+  margin: 16px 0 0;
   color: var(--bb-text-body);
-  font-size: var(--bb-size-lede);
-  line-height: var(--bb-line-lede);
+}
+
+.hero-row p {
+  margin-bottom: 0;
 }
 
 .hero-actions {
@@ -183,7 +186,6 @@
   background: var(--bb-bg-button);
   color: var(--bb-text-button);
   font-family: var(--bb-font-body);
-  font-size: var(--bb-size-body);
   font-weight: var(--bb-weight-button);
 }
 
@@ -208,11 +210,8 @@
 }
 
 .icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   border: 0;
-  padding: 0;
+  padding: 1px 6px;
   background: none;
   color: var(--bb-text-icon);
 }
@@ -238,17 +237,18 @@
   flex: 1;
 }
 
+/* The archive gives the banner heading no colour rule: it inherits the banner text colour. */
 .backup-reminder strong {
-  color: var(--bb-text-strong);
+  color: inherit;
 }
 
 .backup-reminder p {
   margin: 4px 0 0;
   color: var(--bb-warn-text);
-  font-size: var(--bb-size-line);
+  font-size: var(--bb-size-body);
 }
 
-.backup-reminder .button {
+.backup-reminder > button:not(.icon-button) {
   border: 0;
   border-radius: var(--bb-radius-banner-button);
   padding: var(--bb-banner-button-padding);
@@ -342,24 +342,20 @@
 
 .card-title {
   display: flex;
-  align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
 }
 
 .card-title h2 {
   margin: 0;
-  color: var(--bb-text-strong);
   font-family: var(--bb-font-heading);
   font-size: var(--bb-size-card-title);
   font-weight: 700;
-  letter-spacing: -0.015em;
 }
 
 .card-title p {
   margin: var(--bb-card-title-margin);
-  color: var(--bb-text-muted);
-  font-size: var(--bb-size-line);
+  color: var(--bb-text-body);
+  font-size: var(--bb-size-body);
 }
 
 .save-line,
@@ -508,17 +504,20 @@
 
 .modal h2 {
   margin: 0;
-  color: var(--bb-text-strong);
   font-family: var(--bb-font-heading);
   font-size: var(--bb-size-modal-title);
   font-weight: 700;
-  letter-spacing: -0.02em;
 }
 
+/* The archive gives dialog paragraphs only a line-height; the 1em block margins are the UA's,
+   which the preflight zeroes, so they are written back — but only to the unclassed body
+   paragraph, because the eyebrow's own `0 0 8px` must survive. */
 .modal p {
-  margin: 12px 0 0;
-  color: var(--bb-text-body);
   line-height: var(--bb-line-modal);
+}
+
+.modal p:not(.eyebrow) {
+  margin: 16px 0;
 }
 
 .summary-box {
@@ -549,11 +548,9 @@
    else the plain text treatment. */
 .modal-actions button:not(.button) {
   border: 0;
-  padding: 0;
+  padding: 1px 6px;
   background: transparent;
   color: var(--bb-text-cancel);
-  font-size: var(--bb-size-body);
-  font-weight: 600;
 }
 
 .choice-grid {
@@ -574,8 +571,6 @@
   border-radius: var(--bb-radius-choice);
   background: var(--bb-bg-choice);
   color: var(--bb-text-choice);
-  font-size: var(--bb-size-body);
-  font-weight: 700;
   text-align: left;
 }
 
@@ -591,14 +586,13 @@
   line-height: var(--bb-line-choice);
 }
 
+/* The archive's dialog-wide quiet cancel: full width, no box, inherited text size and weight. */
 .full-cancel {
   width: 100%;
   border: 0;
   padding: 11px;
   background: none;
   color: var(--bb-text-status);
-  font-size: var(--bb-size-body);
-  font-weight: 600;
 }
 
 .rename-field {
@@ -630,6 +624,8 @@
    plain absolutely-positioned list rather than a portal, because it has two items and one
    anchor, and a portal would be a second stacking context to reason about for no gain. */
 .card-menu {
+  display: flex;
+  align-items: center;
   position: relative;
 }
 
@@ -648,7 +644,7 @@
   box-shadow: var(--bb-shadow-modal);
 }
 
-.card-menu button {
+.card-menu li button {
   width: 100%;
   padding: 8px 10px;
   border: 0;
@@ -660,7 +656,7 @@
   text-align: left;
 }
 
-.card-menu button:hover {
+.card-menu li button:hover {
   background: var(--bb-bg-accent-soft);
   color: var(--bb-text-strong);
 }

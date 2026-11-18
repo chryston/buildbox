@@ -38,11 +38,11 @@ export const CollisionDialog = ({ name, copyName, onReplace, onCopy, onClose }: 
       </p>
       <div className="choice-grid">
         <button type="button" onClick={onReplace}>
-          {STRINGS.collisionReplace}
+          <strong>{STRINGS.collisionReplace}</strong>
           <span>{STRINGS.collisionReplaceBody}</span>
         </button>
         <button type="button" onClick={onCopy}>
-          {STRINGS.collisionCopy}
+          <strong>{STRINGS.collisionCopy}</strong>
           <span>{STRINGS.collisionCopyBody(copyName)}</span>
         </button>
       </div>

@@ -562,7 +562,10 @@ export async function diffAgainstPrototype(
     )
   }
 
-  const dir = resolve(compareRoot(), name)
+  // `diff-` namespaces this helper's artifacts away from `compareWithPrototype`'s: both
+  // specs may name the same state, and parallel workers writing one directory overwrite
+  // each other's captures mid-test.
+  const dir = resolve(compareRoot(), `diff-${name}`)
   mkdirSync(dir, { recursive: true })
 
   // --- the prototype side -------------------------------------------------------
