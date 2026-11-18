@@ -1,5 +1,5 @@
 /**
- * Generate `fixtures/e2e/preview-seed/legacy-v3.json` (#49 criterion 1).
+ * Generate a `fixtures/e2e/preview-seed/*.json` seed (#49 criterion 1, #55 criterion 12).
  *
  * The `projects-v2` Playwright projects need a `buildbox-preview` database that holds the
  * same saved work the S0 screenshot baselines were taken from. Rather than hand-write
@@ -8,22 +8,26 @@
  * Project, and commits the result through the in-memory adapter so the records, the derived
  * Library rows and the asset hashes are all whatever the production code actually writes.
  *
- *   npx vite-node scripts/make-preview-seed.ts
+ *   npx vite-node scripts/make-preview-seed.ts                       # v3 → legacy-v3.json
+ *   npx vite-node scripts/make-preview-seed.ts \
+ *     fixtures/legacy/v3-large-image/buildbox-store.json \
+ *     fixtures/e2e/preview-seed/legacy-v3-large-image.json
  *
  * Assets are base64-encoded *only* inside this fixture: IndexedDB holds Blobs, JSON does not,
  * and `e2e/support/seedPreviewDb.ts` turns them back before writing. Nothing at runtime reads
  * this file but the tests.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { attachFloorPlan, convertLegacy } from '../src/package'
 import { createMemoryAdapter } from '../src/persistence'
 import type { AssetRecord, LibraryRecord, NewAsset, ProjectRecord } from '../src/persistence'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const SOURCE = resolve(repoRoot, 'fixtures/legacy/v3/buildbox-store.json')
-const OUT = resolve(repoRoot, 'fixtures/e2e/preview-seed/legacy-v3.json')
+const [sourceArg, outArg] = process.argv.slice(2)
+const SOURCE = resolve(repoRoot, sourceArg ?? 'fixtures/legacy/v3/buildbox-store.json')
+const OUT = resolve(repoRoot, outArg ?? 'fixtures/e2e/preview-seed/legacy-v3.json')
 
 /** The database the flagged build opens, repeated here so a rename cannot pass silently. */
 const DB_NAME = 'buildbox'
@@ -105,7 +109,7 @@ for (const asset of conversion.assets) {
   assets.push({ ...stored.value, base64: Buffer.from(bytes).toString('base64') })
 }
 
-const fixture = { dbName: DB_NAME, source: 'fixtures/legacy/v3/buildbox-store.json', projects: records, library, assets }
+const fixture = { dbName: DB_NAME, source: relative(repoRoot, SOURCE), projects: records, library, assets }
 mkdirSync(dirname(OUT), { recursive: true })
 writeFileSync(OUT, `${JSON.stringify(fixture, null, 2)}\n`)
 

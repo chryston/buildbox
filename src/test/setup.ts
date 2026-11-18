@@ -55,3 +55,45 @@ if (typeof SVGElement !== 'undefined') {
     } as unknown as DOMMatrix;
   };
 }
+// The Floor workspace (#55) measures its canvas host with a ResizeObserver, asks matchMedia
+// whether the window is narrow, and drags with pointer capture. jsdom implements none of the
+// three. The observer fires synchronously inside `observe` — which the canvas calls from an
+// effect, so the measurement lands in the act scope that rendered it — and the host reports a
+// real size so the first `Fit` has something to fit to.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  class ResizeObserverStub {
+    private readonly callback: ResizeObserverCallback
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback
+    }
+    observe(target: Element): void {
+      this.callback([{ target, contentRect: {} as DOMRectReadOnly, borderBoxSize: [], contentBoxSize: [], devicePixelContentBoxSize: [] } as ResizeObserverEntry], this as unknown as ResizeObserver)
+    }
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver
+}
+
+if (typeof window !== 'undefined' && typeof window.matchMedia === 'undefined') {
+  window.matchMedia = (query: string): MediaQueryList => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })
+}
+
+// jsdom always reports zero for these; only the workspace reads them, and it needs a
+// non-zero host before it will `Fit` the first viewport.
+Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 800 })
+Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, value: 600 })
+
+if (typeof Element !== 'undefined' && typeof Element.prototype.setPointerCapture === 'undefined') {
+  Element.prototype.setPointerCapture = () => {}
+  Element.prototype.releasePointerCapture = () => {}
+}

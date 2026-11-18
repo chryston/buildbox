@@ -250,6 +250,11 @@ export const TOKEN = {
   /* Motion */
   motionCard: "--bb-motion-card",
   lift: "--bb-lift",
+
+  /* Floor workspace (#55) */
+  workspaceToolbarHeight: "--bb-workspace-toolbar-height",
+  workspaceRailWidth: "--bb-workspace-rail-width",
+  workspaceNotesWidth: "--bb-workspace-notes-width",
 } as const
 
 /** One token's role, as this table names it. */

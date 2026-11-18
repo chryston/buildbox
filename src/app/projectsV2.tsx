@@ -68,14 +68,15 @@ import {
   readPlanImageFile,
 } from '../platform'
 import type { ObjectUrlCache } from '../platform'
-import { ConflictDialog, LibraryHome, NowEditableToast, ReadOnlyStrip, SaveFailedDialog } from '../ui'
-import type { LibraryServices, MigrationServices, SaveFailedReason } from '../ui'
+import { ConflictDialog, LibraryHome, NowEditableToast, PLAN_IMAGE_ACCEPT, ReadOnlyStrip, SaveFailedDialog, WorkspaceProvider } from '../ui'
+import type { LibraryServices, MigrationServices, PlanImageRead, SaveFailedReason, WorkspaceServices } from '../ui'
 import { convertLegacy } from '../package'
 import { requestPersistentStorage } from './persistentStorage'
 import { DB_NAME, IS_PREVIEW } from './channel'
 import { LegacyViewRoot } from '../ui/legacy/LegacyViewRoot'
-import type { IntentBuilder, SessionViewServices } from '../ui/legacy/sessionBindings'
-import type { PlanImageRead } from '../ui/legacy/bindings'
+import type { IntentBuilder } from '../ui/legacy/sessionBindings'
+import { PLAN_CATALOGUE } from '../edit'
+import { createViewportCache } from './viewportCache'
 
 /**
  * The channel one tab uses to tell the others that the Library changed (#50 §5). Named for
@@ -141,7 +142,7 @@ export function createSessionServices(
   clock: ClockPort,
   ids: IdSource,
   assetUrls: ObjectUrlCache,
-): SessionViewServices {
+) {
   return {
     intent: createIntentFactory(clock, ids),
     assetUrls,
@@ -704,6 +705,18 @@ function FlaggedRoot({ deps, legacyPending = false }: { deps: FlaggedDeps; legac
 
   const sessionServices = useMemo(() => createSessionServices(clock, ids, assetUrls), [clock, ids, assetUrls])
 
+  /** The same session services the legacy view gets, plus what only the workspace needs (#55). */
+  const workspaceServices = useMemo<WorkspaceServices>(() => ({
+    intent: sessionServices.intent,
+    assetUrls: sessionServices.assetUrls,
+    readPlanImage: sessionServices.readPlanImage,
+    planImageAccept: PLAN_IMAGE_ACCEPT,
+    planCatalogue: Object.entries(PLAN_CATALOGUE)
+      .filter(([key]) => key !== 'custom')
+      .map(([key, entry]) => ({ key, label: entry.label })),
+    viewportCache: createViewportCache(ports.prefs, session?.id ?? ''),
+  }), [sessionServices, ports.prefs, session?.id])
+
   /**
    * Keep this tab's unsaved work by committing it under a new identity (#51 §5).
    *
@@ -769,7 +782,14 @@ function FlaggedRoot({ deps, legacyPending = false }: { deps: FlaggedDeps; legac
         onSaveFailure={() => setFailureOpen(true)}
         onReturnToProjects={returnToProjects}
       >
-        <App />
+        <WorkspaceProvider
+          session={session}
+          services={workspaceServices}
+          onReturnToProjects={returnToProjects}
+          onShowSaveFailure={() => setFailureOpen(true)}
+        >
+          <App />
+        </WorkspaceProvider>
       </LegacyViewRoot>
       {failureOpen && failure !== null && (
         <SaveFailedDialog

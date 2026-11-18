@@ -1,14 +1,14 @@
 /**
- * The session behind the seam, driven the way the canvas drives it (#49 criterion 4).
+ * The session behind the seam, driven the way the views drive it (#49 criterion 4).
  *
- * A drag is the case today's store gets wrong: `dragFloorPlanObject` writes on every pointer
- * move, so one drag is a dozen revisions, a dozen commits and a dozen undo steps. Under the
- * flag the moves are preview only and the pointer-up is the single Intent — one history
- * entry, one revision, one write. Both halves are asserted here, because a binding that
- * committed nothing at all would pass a test that only counted commits.
+ * The floor-plan drag tests left with #55 — the Plan View no longer routes through these
+ * bindings; what remains is the cabinet contract: every document callback builds exactly
+ * one Intent, named by the catalogue. The payloads are placeholders — the Project holds no
+ * such node — so the session refuses most of them. That is fine: this asserts what the
+ * binding *asked for*, which is the contract; whether the handler accepts it is `edit`'s
+ * own suite.
  *
- * Commits are parked at a gate, so the counts are read where they happen rather than raced
- * against a debounced writer, and no write is left notifying React after the test has ended.
+ * Commits are parked at a gate, so no write is left notifying React after the test ended.
  */
 import { act, render } from '@testing-library/react'
 import { useEffect } from 'react'
@@ -51,7 +51,6 @@ const noAssets: AssetUrlSource = {
 const services: SessionViewServices = {
   intent: testIntents,
   assetUrls: noAssets,
-  readPlanImage: () => Promise.reject(new Error('this double models no file reader')),
 }
 
 /** The bindings a rendered view is holding, which is the only set worth testing. */
@@ -90,98 +89,6 @@ async function renderSession() {
   return { session: opened.value, calls: gated.calls, bindings, settle }
 }
 
-/** The one placement on the Floor, which the test has just added. */
-function placed(bindings: LegacyBindings) {
-  const [object] = bindings.floorPlan.objects
-  if (object === undefined) throw new Error('the Floor holds no placement')
-  return object
-}
-
-describe('the session bindings, dragging a floor-plan object', () => {
-  it('previews every move and writes none of them', async () => {
-    const { session, calls, bindings, settle } = await renderSession()
-    act(() => bindings().addFloorPlanObject('sofa-3'))
-    await settle()
-    const before = session.getSnapshot()
-    const { id } = placed(bindings())
-    expect(calls).toHaveLength(1)
-
-    act(() => bindings().dragFloorPlanObject(id, { x: 400, y: 0 }))
-
-    // The view follows the pointer, because today's store moved the object on every move.
-    expect(placed(bindings()).x).toBe(400)
-    // …and nothing else happened: no history, no revision, no write.
-    expect(session.getSnapshot().history.size).toBe(before.history.size)
-    expect(session.getSnapshot().revision).toBe(before.revision)
-    expect(calls).toHaveLength(1)
-  })
-
-  it('turns the whole drag into one history entry, one revision and one commit', async () => {
-    const { session, calls, bindings, settle } = await renderSession()
-    act(() => bindings().addFloorPlanObject('sofa-3'))
-    await settle()
-    const before = session.getSnapshot()
-    const { id } = placed(bindings())
-
-    act(() => {
-      bindings().dragFloorPlanObject(id, { x: 400, y: 0 })
-      bindings().dragFloorPlanObject(id, { x: 800, y: 200 })
-      bindings().dragFloorPlanObject(id, { x: 1200, y: 400 })
-      bindings().endFloorPlanDrag(id)
-    })
-
-    const after = session.getSnapshot()
-    expect(after.history.size - before.history.size).toBe(1)
-    expect(after.revision - before.revision).toBe(1)
-    expect(after.history.undoLabel).not.toBeNull()
-    expect(placed(bindings()).x).toBe(1200)
-
-    // One write for the drag, on the revision after the add, carrying what the view shows.
-    expect(calls).toHaveLength(2)
-    await settle()
-    const written = calls[1]
-    if (written === undefined) throw new Error('the drag wrote nothing')
-    expect(written.input.revision).toBe(before.revision + 1)
-    const moved = written.input.project.existingModel.placedItems.find((item) => item.id === id)
-    const shown = after.project.existingModel.placedItems.find((item) => item.id === id)
-    expect(moved?.translation).toEqual(shown?.translation)
-  })
-
-  it('walks one undo back over the whole drag', async () => {
-    const { session, calls, bindings, settle } = await renderSession()
-    act(() => bindings().addFloorPlanObject('sofa-3'))
-    await settle()
-    const spawn = placed(bindings())
-    const { id } = spawn
-
-    act(() => {
-      bindings().dragFloorPlanObject(id, { x: 400, y: 0 })
-      bindings().dragFloorPlanObject(id, { x: 1200, y: 400 })
-      bindings().endFloorPlanDrag(id)
-    })
-    expect(placed(bindings()).x).toBe(1200)
-    await settle()
-
-    let undone = false
-    act(() => { undone = session.undo().ok })
-    expect(undone).toBe(true)
-    // Undo is a forward revision (#26), so the write count grows rather than rewinds.
-    expect(calls).toHaveLength(3)
-    await settle()
-    expect(placed(bindings()).x).toBe(spawn.x)
-    expect(session.getSnapshot().history.canRedo).toBe(true)
-  })
-})
-
-/**
- * The mapping the flagged app stands on (#49): every callback that changes the document builds
- * exactly one Intent of the type the legacy action stood for, and nothing else. Selection,
- * tool, module and snap callbacks change the UI session only and are absent on purpose.
- *
- * The payloads are placeholders — the Project holds no such node — so the session refuses
- * most of them. That is fine: this asserts what the binding *asked for*, which is the
- * contract; whether the handler accepts it is `edit`'s own suite.
- */
 const INTENT_TABLE: readonly (readonly [string, (bindings: LegacyBindings) => void, IntentType])[] = [
   ['updateUnitSettings', (b) => b.updateUnitSettings('d', { height: 900 }), 'cabinet.updateSettings'],
   ['setCabinetMaterial', (b) => b.setCabinetMaterial('oak'), 'cabinet.setMaterial'],
@@ -202,30 +109,6 @@ const INTENT_TABLE: readonly (readonly [string, (bindings: LegacyBindings) => vo
   ['addAccessory', (b) => b.addAccessory('n', 'door'), 'cabinet.addAccessory'],
   ['removeAccessory', (b) => b.removeAccessory('n', 'a'), 'cabinet.removeAccessory'],
   ['commitDrag', (b) => b.commitDrag('n', 0.5), 'cabinet.setSplitRatio'],
-  ['addFloorPlanObject', (b) => b.addFloorPlanObject('sofa-3'), 'plan.addObject'],
-  ['addFloorPlanFromTemplate', (b) => b.addFloorPlanFromTemplate('t'), 'plan.addFromTemplate'],
-  [
-    'addCustomTemplate',
-    (b) => b.addCustomTemplate({ label: 'Island', defaultW: 800, defaultH: 600, color: '#ffaa00' }),
-    'plan.addTemplate',
-  ],
-  ['updateFloorPlanObject', (b) => b.updateFloorPlanObject('o', { x: 10 }), 'plan.updateObject'],
-  ['removeFloorPlanObject', (b) => b.removeFloorPlanObject('o'), 'plan.removeObject'],
-  ['setFloorPlanScale', (b) => b.setFloorPlanScale(0.25), 'plan.calibrate'],
-  ['clearFloorPlan', (b) => b.clearFloorPlan(), 'plan.clear'],
-  [
-    'setPlanImage',
-    (b) => b.setPlanImage(
-      {
-        src: 'blob:x',
-        widthPx: 640,
-        heightPx: 480,
-        asset: { bytes: new Blob(['x']), sha256: 'a'.repeat(64), mediaType: 'image/png', widthPx: 640, heightPx: 480 },
-      },
-      { clearExisting: false },
-    ),
-    'plan.setImage',
-  ],
 ]
 
 describe('the session bindings, one Intent per document callback', () => {
@@ -237,17 +120,5 @@ describe('the session bindings, one Intent per document callback', () => {
     built.length = 0
     act(() => call(bindings()))
     expect(built).toEqual([expected])
-  })
-
-  it('dispatches a drag as plan.updateObject on pointer-up and not before', async () => {
-    const { bindings, settle } = await renderSession()
-    act(() => bindings().addFloorPlanObject('sofa-3'))
-    await settle()
-    const { id } = placed(bindings())
-    built.length = 0
-    act(() => bindings().dragFloorPlanObject(id, { x: 400, y: 0 }))
-    expect(built).toEqual([])
-    act(() => bindings().endFloorPlanDrag(id))
-    expect(built).toEqual(['plan.updateObject'])
   })
 })

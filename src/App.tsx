@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import CabinetCanvas from './components/CabinetCanvas/CabinetCanvas'
 import ErrorBoundary from './components/ErrorBoundary'
-import FloorPlanPage from './components/FloorPlan/FloorPlanPage'
 import ModuleSwitcher from './components/ModuleSwitcher/ModuleSwitcher'
 import ProjectsNav from './components/ProjectsNav/ProjectsNav'
 import Sidebar from './components/Sidebar/Sidebar'
@@ -10,7 +9,7 @@ import WarningBanner from './components/WarningBanner/WarningBanner'
 import { computeCutListForUnits, computeSceneLayout, findNode } from './cabinet'
 import type { LayoutVoid } from './cabinet'
 import type { GlobalSettings } from './domain'
-import { STRINGS } from './ui'
+import { FloorWorkspace, STRINGS } from './ui'
 import { downloadSVG } from './utils/exportSVG'
 import { useLegacyBindings } from './ui/legacy/bindings'
 
@@ -89,6 +88,16 @@ export default function App() {
 
   return (
     <ErrorBoundary>
+    {activeModule === 'floorplan' ? (
+      /* The Floor workspace owns its chrome (#55): no cabinet Toolbar, no ProjectsNav,
+         no warning banner — the header, toolbar and rail are the workspace's own. */
+      <div className="h-screen overflow-hidden flex flex-col">
+        <ModuleSwitcher activeModule={activeModule} onChange={bindings.setActiveModule} />
+        <div className="flex flex-1 min-h-0">
+          <FloorWorkspace />
+        </div>
+      </div>
+    ) : (
     <div className="h-screen overflow-hidden bg-surface text-text-primary flex flex-col">
       <Toolbar
         settings={activeUnit?.settings ?? defaultSettings}
@@ -110,61 +119,56 @@ export default function App() {
       />
       <ModuleSwitcher activeModule={activeModule} onChange={bindings.setActiveModule} />
       <ProjectsNav label={STRINGS.returnToProjects} onReturn={bindings.returnToProjects} />
-      {activeModule === 'cabinet' && overConstrainedIds.length > 0 && (
+      {overConstrainedIds.length > 0 && (
         <div className="border-b border-divider bg-panel px-4 py-2">
           <WarningBanner overConstrainedIds={overConstrainedIds} />
         </div>
       )}
       <main className="flex flex-1 overflow-hidden">
-        {activeModule === 'floorplan' ? (
-          <FloorPlanPage />
-        ) : (
-          <>
-            {sceneLayout && (
-              <CabinetCanvas
-                sceneLayout={sceneLayout}
-                svgRef={svgRef}
-                onUnlockNode={bindings.unlockNode}
-                onUnitClick={bindings.setActiveItemDesign}
-                selectedNode={selectedNode}
-              />
-            )}
-            <Sidebar
-              cutList={cutList}
-              units={units}
-              activeUnitId={activeItemDesignId}
-              onAddUnit={bindings.addUnit}
-              onRemoveUnit={bindings.removeUnit}
-              onSelectUnit={bindings.setActiveItemDesign}
-              onRenameUnit={bindings.renameUnit}
-              selectedId={selectedNodeId}
-              selectedNode={selectedNode}
-              onAddShelf={bindings.addShelf}
-              onAddDivider={bindings.addDivider}
-              onDelete={bindings.deleteBoard}
-              onToggleLock={(id) => {
-                if (selectedNode?.locked) bindings.unpinNode(id)
-                else {
-                  const sizeMm = selectedVoid?.parentSplitAxis === 'vertical' ? selectedVoid.w : (selectedVoid?.h ?? selectedNode?.fixedSize ?? 0)
-                  if (sizeMm > 0) bindings.pinNode(id, sizeMm)
-                }
-              }}
-              onSetCabinetMaterial={bindings.setCabinetMaterial}
-              currentMaterial={activeUnit?.settings.material ?? 'oak'}
-              selectedVoid={selectedVoid}
-              evenH={evenH}
-              onDistributeEvenly={bindings.distributeEvenly}
-              onSetElementType={bindings.setElementType}
-              onSetDrawerConfig={bindings.setDrawerConfig}
-              onAddAccessory={bindings.addAccessory}
-              onRemoveAccessory={bindings.removeAccessory}
-              settings={activeUnit?.settings}
-              onSettingsChange={(patch) => activeUnit && bindings.updateUnitSettings(activeUnit.id, patch)}
-            />
-          </>
+        {sceneLayout && (
+          <CabinetCanvas
+            sceneLayout={sceneLayout}
+            svgRef={svgRef}
+            onUnlockNode={bindings.unlockNode}
+            onUnitClick={bindings.setActiveItemDesign}
+            selectedNode={selectedNode}
+          />
         )}
+        <Sidebar
+          cutList={cutList}
+          units={units}
+          activeUnitId={activeItemDesignId}
+          onAddUnit={bindings.addUnit}
+          onRemoveUnit={bindings.removeUnit}
+          onSelectUnit={bindings.setActiveItemDesign}
+          onRenameUnit={bindings.renameUnit}
+          selectedId={selectedNodeId}
+          selectedNode={selectedNode}
+          onAddShelf={bindings.addShelf}
+          onAddDivider={bindings.addDivider}
+          onDelete={bindings.deleteBoard}
+          onToggleLock={(id) => {
+            if (selectedNode?.locked) bindings.unpinNode(id)
+            else {
+              const sizeMm = selectedVoid?.parentSplitAxis === 'vertical' ? selectedVoid.w : (selectedVoid?.h ?? selectedNode?.fixedSize ?? 0)
+              if (sizeMm > 0) bindings.pinNode(id, sizeMm)
+            }
+          }}
+          onSetCabinetMaterial={bindings.setCabinetMaterial}
+          currentMaterial={activeUnit?.settings.material ?? 'oak'}
+          selectedVoid={selectedVoid}
+          evenH={evenH}
+          onDistributeEvenly={bindings.distributeEvenly}
+          onSetElementType={bindings.setElementType}
+          onSetDrawerConfig={bindings.setDrawerConfig}
+          onAddAccessory={bindings.addAccessory}
+          onRemoveAccessory={bindings.removeAccessory}
+          settings={activeUnit?.settings}
+          onSettingsChange={(patch) => activeUnit && bindings.updateUnitSettings(activeUnit.id, patch)}
+        />
       </main>
     </div>
+    )}
     </ErrorBoundary>
   )
 }

@@ -98,6 +98,10 @@ const accessoryNodesOf = (design: CabinetItemDesign): CabinetNode[] =>
 /** One random Intent for the Project it is about to be applied to, or `null` if none fits. */
 const GENERATORS: ((g: Gen) => Intent | null)[] = [
   (g) => intent('project.rename', { name: `Project ${int(g, 1, 999)}` }),
+  (g) => intent('project.setPreferences', {
+    displayUnit: pick(g, ['mm', 'cm', 'm'] as const)!,
+    displayPrecision: int(g, 0, 4),
+  }),
   (g) => {
     const design = pick(g, cabinets(g))
     return design === undefined ? null : intent('cabinet.renameUnit', { itemDesignId: design.id, name: `Unit ${int(g, 1, 99)}` })

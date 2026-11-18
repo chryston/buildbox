@@ -20,6 +20,22 @@ import './theme/tokens.css'
 import './library/library.css'
 
 export { STRINGS } from './strings'
+export type { Viewport, ViewportCache } from './workspace'
+export {
+  firstFloorId,
+  FloorWorkspace,
+  PLAN_IMAGE_ACCEPT,
+  planItemsForFloor,
+  workspaceStore,
+  WorkspaceProvider,
+  type PlanCatalogueOption,
+  type PlanImageRead,
+  type PreparedPlanImage,
+  type PreparedPlanImageAsset,
+  type WorkspaceAssetUrls,
+  type WorkspaceIntentBuilder,
+  type WorkspaceServices,
+} from './workspace'
 export { LibraryHome, type LibraryHomeProps, type LibraryServices } from './library/LibraryHome'
 export { MigrationReview, type MigrationReviewProps, type MigrationServices } from './library/MigrationReview'
 export { formatSince } from './library/formatSince'

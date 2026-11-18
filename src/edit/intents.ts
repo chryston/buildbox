@@ -17,6 +17,7 @@ import type {
   Accessory,
   CabinetMaterialId,
   DrawerConfig,
+  DisplayUnit,
   ElementType,
   EntityId,
   GlobalSettings,
@@ -28,6 +29,7 @@ import type { ValidationProblem } from '../lib'
 /** Every Intent type in the #47 catalogue, one per current store action. */
 export type IntentType =
   | 'project.rename'
+  | 'project.setPreferences'
   | 'cabinet.updateSettings'
   | 'cabinet.setMaterial'
   | 'cabinet.addUnit'
@@ -59,6 +61,10 @@ export type IntentType =
 /** The payload each Intent type carries. */
 export interface RenameProject {
   name: string
+}
+export interface SetProjectPreferences {
+  displayUnit: DisplayUnit
+  displayPrecision: number
 }
 export interface UpdateCabinetSettings {
   itemDesignId: EntityId
@@ -194,6 +200,7 @@ export interface ClearPlan {
 /** `type → payload`, the one place the catalogue's shape is written down. */
 export interface IntentPayloads {
   'project.rename': RenameProject
+  'project.setPreferences': SetProjectPreferences
   'cabinet.updateSettings': UpdateCabinetSettings
   'cabinet.setMaterial': SetCabinetMaterial
   'cabinet.addUnit': AddUnit
@@ -252,7 +259,7 @@ export type Intent<T extends IntentType = IntentType> = {
  * The Intents of one family, so a locator can switch over its own types once instead of
  * repeating itself per Intent.
  */
-export type ProjectIntent = Intent<'project.rename'>
+export type ProjectIntent = Intent<'project.rename' | 'project.setPreferences'>
 export type CabinetIntent = Intent<Extract<IntentType, `cabinet.${string}`>>
 export type PlanIntent = Intent<Extract<IntentType, `plan.${string}`>>
 
@@ -262,6 +269,7 @@ export type PlanIntent = Intent<Extract<IntentType, `plan.${string}`>>
  */
 export const INTENT_ID_ORDER: Record<IntentType, readonly string[]> = {
   'project.rename': [],
+  'project.setPreferences': [],
   'cabinet.updateSettings': [],
   'cabinet.setMaterial': [],
   'cabinet.addUnit': ['itemDesignId', 'placedItemId', 'rootNodeId'],

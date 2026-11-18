@@ -14,17 +14,18 @@
  *   label or guesses how many ids that Intent needs (#20 §2 keeps `edit` values out of `ui`).
  * - **Selection** lives in the UI store, not the Project: switching Projects leaves an empty
  *   history and nothing selected, because a Project's document never held either.
+ *
+ * The floor-plan half left with #55: the Plan View is the Floor workspace
+ * (`src/ui/workspace`), which builds its own Intents against the same session.
  */
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
-import type { CabinetMaterialId, DrawerConfig, ElementType, GlobalSettings, Project } from '../../domain'
+import type { CabinetMaterialId, DrawerConfig, ElementType, GlobalSettings } from '../../domain'
 import type { Intent, IntentType, Locator, PayloadOf } from '../../edit'
 import type { ProjectSession, SaveState, SessionAsset } from '../../session'
-import type { FloorPlanData, FloorPlanObjectType } from '../../types'
 import { useProject, useProjectSelector, useSession } from './useProject'
-import { uiStore, useUi } from './uiStore'
-import type { DragPreview } from './uiStore'
-import type { LegacyBindings, PlanImageAsset, PlanImageRead } from './bindings'
-import { firstFloorId, projectFloorPlan, projectUnits } from './projectView'
+import { useUi } from './uiStore'
+import type { LegacyBindings } from './bindings'
+import { projectUnits } from './projectView'
 
 /**
  * An Intent, fully formed. `app` builds it: the label table and the per-Intent id order are
@@ -46,7 +47,6 @@ export interface AssetUrlSource {
 export interface SessionViewServices {
   readonly intent: IntentBuilder
   readonly assetUrls: AssetUrlSource
-  readPlanImage(file: File): Promise<PlanImageRead>
 }
 
 /** What only the root that renders the view can do: move it, and open the dialogs above it. */
@@ -60,31 +60,6 @@ export interface SessionHost {
   showSaveFailure(): void
 }
 
-/** #49 deviation 4: the flagged file input names the three formats a Plan Image may be. */
-export const PLAN_IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp'
-
-/** The last placement on this Floor: the one a just-committed add has made. */
-function lastPlacedId(project: Project, floorId: string): string | null {
-  const { placedItems } = project.existingModel
-  for (let index = placedItems.length - 1; index >= 0; index -= 1) {
-    if (placedItems[index].floorId === floorId) return placedItems[index].id
-  }
-  return null
-}
-
-/**
- * The live drag, overlaid on the Floor's objects. The pointer has moved and the Intent has
- * not: today's store wrote on every pointer move, so a preview the view did not follow would
- * read as a frozen canvas (#49).
- */
-function withDragPreview(plan: FloorPlanData, preview: DragPreview | null): FloorPlanData {
-  if (preview === null) return plan
-  return {
-    ...plan,
-    objects: plan.objects.map((object) => (object.id === preview.id ? { ...object, ...preview.patch } : object)),
-  }
-}
-
 /** The words under the undo button (#14, #49 deviation 3). */
 function saveStatusOf(save: SaveState | null): LegacyBindings['saveStatus'] {
   if (save === null) return null
@@ -93,39 +68,18 @@ function saveStatusOf(save: SaveState | null): LegacyBindings['saveStatus'] {
   return { text: `Saved locally ${new Date(save.at).toLocaleTimeString()}`, failed: false }
 }
 
-/** The same `SessionAsset` the Asset Store will keep, from the bytes one upload produced. */
-function sessionAsset(asset: PlanImageAsset): SessionAsset {
-  return {
-    sha256: asset.sha256,
-    bytes: asset.bytes,
-    mediaType: asset.mediaType,
-    widthPx: asset.widthPx,
-    heightPx: asset.heightPx,
-  }
-}
-
 export function useSessionBindings(services: SessionViewServices, host: SessionHost): LegacyBindings {
   const session = useSession()
   const { project } = useProject()
   const save = useSaveStatus(session)
   const units = useProjectSelector(projectUnits)
 
-  const assetHash = project.floors[0]?.planImage?.assetHash ?? null
-  const imageSrc = useAssetUrl(services, assetHash)
-  const baseFloorPlan = useProjectSelector((current) => projectFloorPlan(current, imageSrc))
-
   const activeItemDesignId = useUi((state) => state.activeItemDesignId)
   const selectedNodeId = useUi((state) => state.selectedNodeId)
   const snapGrid = useUi((state) => state.snapGrid)
-  const floorPlanSelectedId = useUi((state) => state.floorPlanSelectedId)
-  const tool = useUi((state) => state.tool)
-  const dragPreview = useUi((state) => state.dragPreview)
   const activeModule = useUi((state) => state.activeModule)
   const setActiveItemDesign = useUi((state) => state.setActiveItemDesign)
   const selectNode = useUi((state) => state.selectNode)
-  const selectFloorPlanObject = useUi((state) => state.selectFloorPlanObject)
-  const setTool = useUi((state) => state.setTool)
-  const setDragPreview = useUi((state) => state.setDragPreview)
   const setActiveModule = useUi((state) => state.setActiveModule)
 
   // The cabinet view shows a Design by id and falls back to the first one when nothing is
@@ -142,14 +96,13 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
     shownSessionId.current = session.id
     setActiveItemDesign(units[0]?.id ?? null)
   }, [session.id, units, setActiveItemDesign])
-  const floorPlan = useMemo(() => withDragPreview(baseFloorPlan, dragPreview), [baseFloorPlan, dragPreview])
 
   // Undo and redo name the Floor and view their Intent landed on; #14's session publishes
   // that as navigation, and the legacy view's only notion of it is which tab is showing.
+  // The Plan View's own selection is the workspace store's business (#55).
   useEffect(() => session.onNavigate((locator: Locator) => {
     setActiveModule(locator.view === 'plan' ? 'floorplan' : 'cabinet')
-    if (locator.view === 'plan') selectFloorPlanObject(locator.placedItemIds[0] ?? null)
-  }), [session, setActiveModule, selectFloorPlanObject])
+  }), [session, setActiveModule])
 
   const dispatch = useCallback(
     (intent: Intent, newAssets?: readonly SessionAsset[]) => {
@@ -180,7 +133,6 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
   }, [dispatch, services, itemDesignId])
 
   const history = session.getSnapshot().history
-  const floorId = firstFloorId(project)
 
   return useMemo<LegacyBindings>(() => ({
     activeProjectName: project.meta.name,
@@ -270,71 +222,6 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
       ratio,
     })),
 
-    floorPlan,
-    floorPlanSelectedId,
-    selectFloorPlanObject,
-    addFloorPlanObject: (catalogKey: FloorPlanObjectType) => {
-      if (floorId === null) return
-      send('plan.addObject', { floorId, catalogKey })
-      selectFloorPlanObject(lastPlacedId(session.getSnapshot().project, floorId))
-    },
-    addFloorPlanFromTemplate: (templateId) => {
-      if (floorId === null) return
-      send('plan.addFromTemplate', { floorId, templateItemDesignId: templateId })
-      selectFloorPlanObject(lastPlacedId(session.getSnapshot().project, floorId))
-    },
-    addCustomTemplate: (template) => send('plan.addTemplate', {
-      label: template.label,
-      w: template.defaultW,
-      h: template.defaultH,
-      color: template.color,
-    }),
-    updateFloorPlanObject: (id, patch) => send('plan.updateObject', { placedItemId: id, patch }),
-    // A drag is transient until the pointer comes up: one Intent then, so one undo step (#26).
-    dragFloorPlanObject: (id, patch) => setDragPreview({ id, patch }),
-    endFloorPlanDrag: (id) => {
-      // The pointer-up listener belongs to the render that began the drag, so the preview is
-      // read from the store: this closure's `dragPreview` is the one from before it moved.
-      const preview = uiStore.getState().dragPreview
-      setDragPreview(null)
-      if (preview === null || preview.id !== id) return
-      send('plan.updateObject', { placedItemId: id, patch: preview.patch })
-    },
-    removeFloorPlanObject: (id) => {
-      send('plan.removeObject', { placedItemId: id })
-      if (floorPlanSelectedId === id) selectFloorPlanObject(null)
-    },
-    setFloorPlanScale: (pixelsPerMm) => {
-      if (floorId !== null) send('plan.calibrate', { floorId, pixelsPerMm })
-    },
-    clearFloorPlan: () => {
-      if (floorId !== null) send('plan.clear', { floorId })
-    },
-    // Sketch annotations have no home in domain v1 (#49 deviation 1): no callback, no tools.
-    planImageAccept: PLAN_IMAGE_ACCEPT,
-    readPlanImage: (file) => services.readPlanImage(file),
-    setPlanImage: (image, { clearExisting }) => {
-      const asset: PlanImageAsset | null = image.asset
-      // The flagged reader always returns bytes; only the legacy reader hands back `null`.
-      if (asset === null || floorId === null) return
-      services.assetUrls.put(asset.sha256, asset.bytes)
-      dispatch(
-        services.intent.build('plan.setImage', {
-          floorId,
-          image: {
-            assetHash: asset.sha256,
-            mediaType: asset.mediaType,
-            widthPx: asset.widthPx,
-            heightPx: asset.heightPx,
-          },
-          clearExisting,
-        }),
-        [sessionAsset(asset)],
-      )
-    },
-
-    tool,
-    setTool,
     activeModule,
     setActiveModule,
   }), [
@@ -344,26 +231,18 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
     save,
     history,
     units,
-    floorPlan,
-    floorId,
     activeItemDesignId,
     itemDesignId,
     setActiveItemDesign,
     selectedNodeId,
     selectNode,
     snapGrid,
-    floorPlanSelectedId,
-    selectFloorPlanObject,
-    tool,
-    setTool,
-    setDragPreview,
     activeModule,
     setActiveModule,
     dispatch,
     send,
     onUnit,
     services,
-    host,
   ])
 }
 
@@ -379,19 +258,5 @@ function useSaveStatus(session: ProjectSession): LegacyBindings['saveStatus'] {
     cache.current = { key, value }
     return value
   }, [session])
-  return useSyncExternalStore(subscribe, getSnapshot)
-}
-
-/** The object URL of the current Plan Image, `null` until the cache has read the bytes. */
-function useAssetUrl(services: SessionViewServices, sha256: string | null): string | null {
-  const { assetUrls } = services
-  const subscribe = useCallback((listener: () => void) => assetUrls.subscribe(listener), [assetUrls])
-  const getSnapshot = useCallback(
-    () => (sha256 === null ? null : assetUrls.urlFor(sha256)),
-    [assetUrls, sha256],
-  )
-  useEffect(() => {
-    if (sha256 !== null) assetUrls.load(sha256)
-  }, [assetUrls, sha256])
   return useSyncExternalStore(subscribe, getSnapshot)
 }

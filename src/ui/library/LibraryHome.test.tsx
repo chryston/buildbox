@@ -286,7 +286,11 @@ describe('the Library home', () => {
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Download Backup' }))
     await waitFor(() => expect(test.calls.download).toEqual(['home']))
-    expect(screen.getByRole('status')).toHaveTextContent(
+    // The toast arrives in the handler's continuation after the awaited download — a React
+    // update queued outside this test's act(). The recorded call is the earlier fact; the
+    // status element is the one being asserted, so wait for that, not for the call.
+    const status = await screen.findByRole('status')
+    expect(status).toHaveTextContent(
       'Backup download started for Tiong Bahru Home. BuildBox cannot verify where the file is kept.',
     )
   })

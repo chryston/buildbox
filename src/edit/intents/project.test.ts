@@ -82,6 +82,40 @@ describe('project.rename', () => {
   })
 })
 
+describe('project.setPreferences', () => {
+  it('writes the display preferences and touches nothing else', () => {
+    const project = newProject('Kitchen')
+    const result = expectRoundTrip(project, intent('project.setPreferences', { displayUnit: 'cm', displayPrecision: 1 }))
+
+    expect(result.project.preferences).toEqual({ displayUnit: 'cm', displayPrecision: 1 })
+    expect(canonicalJson({ ...result.project, preferences: project.preferences })).toBe(canonicalJson(project))
+    // Undo lands on the first Floor's Plan View, where the dialog was opened from (#55).
+    expect(result.affected).toEqual({
+      floorId: project.floors[0]!.id,
+      view: 'plan',
+      itemDesignIds: [],
+      placedItemIds: [],
+    })
+    expect(result.patches).toEqual([
+      { op: 'replace', path: ['preferences', 'displayUnit'], value: 'cm' },
+      { op: 'replace', path: ['preferences', 'displayPrecision'], value: 1 },
+    ])
+  })
+
+  it('refuses to record a change that changes nothing', () => {
+    expectRejection(newProject(), intent('project.setPreferences', { displayUnit: 'mm', displayPrecision: 0 }), 'no-change')
+  })
+
+  it('refuses a precision outside 0–4, as an invalid Project', () => {
+    const project = deepFreeze(newProject())
+    expectRejection(project, intent('project.setPreferences', { displayUnit: 'mm', displayPrecision: 5 }), 'invalid-project')
+  })
+
+  it('is deterministic', () => {
+    expectDeterministic(newProject(), intent('project.setPreferences', { displayUnit: 'm', displayPrecision: 3 }))
+  })
+})
+
 describe('an Intent the catalogue does not know', () => {
   it('is refused rather than crashing', () => {
     const project = deepFreeze(newProject())

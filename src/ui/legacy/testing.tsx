@@ -18,6 +18,8 @@ import { createMemoryAdapter } from '../../persistence'
 import { openProject, type ProjectSession } from '../../session'
 import { createTestDeps, flush, seedProject, testProject } from '../../session/testing'
 import { createIntentFactory } from '../../app'
+import { PLAN_IMAGE_ACCEPT, WorkspaceProvider } from '../index'
+import type { WorkspaceServices } from '../index'
 import { LegacyViewRoot } from './LegacyViewRoot'
 import { uiStore } from './uiStore'
 import type { AssetUrlSource, SessionViewServices } from './sessionBindings'
@@ -69,7 +71,6 @@ export async function openTestView(project: Project = testProject('p-1')): Promi
     services: {
       intent,
       assetUrls: noAssets,
-      readPlanImage: () => Promise.reject(new Error('this double models no file reader')),
     },
     returnToProjects: vi.fn(),
     showSaveFailure: vi.fn(),
@@ -90,6 +91,18 @@ export function renderWithBindings(
   view: TestView,
   options?: RenderOptions,
 ): RenderResult {
+  // The Floor workspace (#55) hangs off the same session; a test that switches to the
+  // Floor Plan module needs its provider present even when the test itself never opens
+  // the toolbar, so the harness supplies a minimal one. Tests that drive the workspace
+  // render their own provider around the `ui` and win.
+  const workspaceServices: WorkspaceServices = {
+    intent: view.services.intent,
+    assetUrls: view.services.assetUrls,
+    readPlanImage: () => Promise.reject(new Error('jsdom models no file reader')),
+    planImageAccept: PLAN_IMAGE_ACCEPT,
+    planCatalogue: [{ key: 'sofa-2', label: 'Sofa 2-seater' }],
+    viewportCache: { read: async () => undefined, write: () => {} },
+  }
   return render(
     <LegacyViewRoot
       session={view.session}
@@ -97,7 +110,14 @@ export function renderWithBindings(
       onSaveFailure={view.showSaveFailure}
       onReturnToProjects={view.returnToProjects}
     >
-      {ui}
+      <WorkspaceProvider
+        session={view.session}
+        services={workspaceServices}
+        onReturnToProjects={view.returnToProjects}
+        onShowSaveFailure={view.showSaveFailure}
+      >
+        {ui}
+      </WorkspaceProvider>
     </LegacyViewRoot>,
     options,
   )

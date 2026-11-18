@@ -6,6 +6,7 @@ coverage
 .vitest
 .DS_Store
 test-results/
+__screenshots__/
 playwright-report/
 blob-report/
 .prototype-cache/
