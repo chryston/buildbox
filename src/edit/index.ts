@@ -53,6 +53,7 @@ export {
   type SetNodeLabel,
   type SetNodeSize,
   type SetPlanImage,
+  type SetProjectPreferences,
   type SetSplitRatio,
   type UnpinNode,
   type UpdateCabinetSettings,

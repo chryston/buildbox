@@ -20,6 +20,7 @@ import './theme/tokens.css'
 import './library/library.css'
 
 export { STRINGS } from './strings'
+export type { Viewport, ViewportCache } from './workspace'
 export { LibraryHome, type LibraryHomeProps, type LibraryServices } from './library/LibraryHome'
 export { MigrationReview, type MigrationReviewProps, type MigrationServices } from './library/MigrationReview'
 export { formatSince } from './library/formatSince'

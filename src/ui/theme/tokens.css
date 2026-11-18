@@ -278,4 +278,9 @@
   /* Motion */
   --bb-motion-card: 0.16s ease;
   --bb-lift: -2px;
+
+  /* Floor workspace (#55) */
+  --bb-workspace-toolbar-height: 44px;
+  --bb-workspace-rail-width: 300px;
+  --bb-workspace-notes-width: 380px;
 }

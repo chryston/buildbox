@@ -8,6 +8,7 @@ import type { IntentType } from './intents'
 /** The default label per Intent type, verbatim from the #47 catalogue. */
 export const INTENT_LABELS = {
   'project.rename': 'Rename Project',
+  'project.setPreferences': 'Change display settings',
   'cabinet.updateSettings': 'Change cabinet size',
   'cabinet.setMaterial': 'Change material',
   'cabinet.addUnit': 'Add unit',
