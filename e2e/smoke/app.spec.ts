@@ -27,30 +27,25 @@ test('load renders the Project Library', async ({ page }) => {
 
 test('a cabinet edit survives a reload', async ({ page }) => {
   await openPreviewApp(page)
-  await expect(voids(page)).toHaveCount(1)
-
+  const projectId = previewSeed.projects[0]!.id
   const before = await voidIds(page)
+  const storedBefore = canonical(await storedProject(page, projectId))
+
   // The space-label click-to-edit rect (DimensionLabels.tsx) covers the middle half of
   // every void and swallows clicks aimed at its centre, so a real click has to land in
   // the outer quarter — which is where a user's click actually reaches the void.
-  await voids(page).first().click({ position: { x: 10, y: 10 } })
+  await page.getByTestId('void-unit-kitchen-base-hanging').click({ position: { x: 10, y: 10 } })
   await page.getByRole('button', { name: 'Add Shelf' }).click()
-  await expect(voids(page)).toHaveCount(2)
 
-  // Adding a shelf turns the clicked void into a panel and leaves a fresh void beside
-  // it, so both rendered ids are new. Poll the stored Project rather than sleeping: the
-  // session writes behind React (#14).
-  const added = (await voidIds(page)).filter((id) => !before.includes(id))
-  expect(added).toHaveLength(2)
-  const projectId = previewSeed.projects[0]!.id
-  await expect
-    .poll(async () => canonical(await storedProject(page, projectId)))
-    .toContain(added[0]!)
+  // Poll the stored Project rather than sleeping: the session writes behind React (#14).
+  await expect.poll(async () => canonical(await storedProject(page, projectId))).not.toBe(storedBefore)
+  const after = await voidIds(page)
+  expect(after).not.toEqual(before)
 
   await page.reload({ waitUntil: 'networkidle' })
   // Opened again, not reseeded: the point is that the shelf is in the database the app wrote.
   await openProjectFromLibrary(page, FIRST_PROJECT)
-  await expect(voids(page)).toHaveCount(2)
+  await expect.poll(() => voidIds(page)).toEqual(after)
 })
 
 // Seeded fixtures never touch a real user's storage, and the live smoke runs against a

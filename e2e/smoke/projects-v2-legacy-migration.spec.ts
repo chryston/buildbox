@@ -254,13 +254,13 @@ function truncated(): string {
 // plainly what is wrong, and it writes nothing — not on open, not on reload, not after five
 // seconds of an idle app. `@local-only` keeps them out of the live smoke run, which cannot seed
 // this browser's storage.
-test('a truncated old copy stops the review at Converting and keeps the bytes @local-only', async ({ page }) => {
+test('a truncated old copy stops the review before it writes and keeps the bytes @local-only', async ({ page }) => {
   const raw = truncated()
   await seedLegacyStore(page, raw)
   await page.goto('./', { waitUntil: 'networkidle' })
 
   const failure = page.getByRole('alert')
-  await expect(failure).toContainText('Migration stopped while Converting')
+  await expect(failure).toContainText('Migration stopped while reading old data')
   await expect(failure).toContainText('The file is not valid JSON.')
   await expect(failure).toContainText('Nothing was changed')
 
