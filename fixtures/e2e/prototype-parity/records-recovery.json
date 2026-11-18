@@ -1,0 +1,441 @@
+{
+  "dbName": "buildbox-preview",
+  "source": "the #28 Variant A Library and its Recovery Point picker, at 2026-10-07T10:44:00+08:00",
+  "projects": [
+    {
+      "id": "parity-tiong-bahru",
+      "revision": 3,
+      "schemaVersion": 1,
+      "savedAt": "2026-10-07T10:42:00.000Z",
+      "data": {
+        "id": "parity-tiong-bahru",
+        "meta": {
+          "name": "Tiong Bahru Home",
+          "address": "18 Yong Siak Street"
+        },
+        "preferences": {
+          "displayUnit": "mm",
+          "displayPrecision": 0
+        },
+        "floors": [
+          {
+            "id": "parity-tiong-bahru-floor",
+            "name": "Floor 1",
+            "planImage": null
+          },
+          {
+            "id": "parity-tiong-bahru-floor-2",
+            "name": "Bedroom",
+            "planImage": null
+          }
+        ],
+        "itemDesigns": [
+          {
+            "id": "parity-tiong-bahru-design",
+            "kind": "cabinet",
+            "name": "Unit 1",
+            "construction": {
+              "settings": {
+                "unit": "mm",
+                "height": 800,
+                "width": 600,
+                "depth": 500,
+                "thickness": 18,
+                "backThickness": 6,
+                "toeKick": null,
+                "material": "oak"
+              },
+              "root": {
+                "id": "parity-tiong-bahru-root",
+                "elementType": "void"
+              }
+            }
+          }
+        ],
+        "existingModel": {
+          "placedItems": [
+            {
+              "id": "parity-tiong-bahru-place",
+              "itemDesignId": "parity-tiong-bahru-design",
+              "floorId": "parity-tiong-bahru-floor",
+              "translation": {
+                "x": 300,
+                "y": 250
+              },
+              "rotationDeg": 0,
+              "baseElevation": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "parity-parents-flat",
+      "revision": 7,
+      "schemaVersion": 1,
+      "savedAt": "2026-10-06T20:42:00.000Z",
+      "data": {
+        "id": "parity-parents-flat",
+        "meta": {
+          "name": "Parents’ Flat",
+          "address": "48 Marine Parade Road"
+        },
+        "preferences": {
+          "displayUnit": "mm",
+          "displayPrecision": 0
+        },
+        "floors": [
+          {
+            "id": "parity-parents-flat-floor",
+            "name": "Floor 1",
+            "planImage": null
+          }
+        ],
+        "itemDesigns": [
+          {
+            "id": "parity-parents-flat-design",
+            "kind": "cabinet",
+            "name": "Unit 1",
+            "construction": {
+              "settings": {
+                "unit": "mm",
+                "height": 800,
+                "width": 600,
+                "depth": 500,
+                "thickness": 18,
+                "backThickness": 6,
+                "toeKick": null,
+                "material": "oak"
+              },
+              "root": {
+                "id": "parity-parents-flat-root",
+                "elementType": "void"
+              }
+            }
+          }
+        ],
+        "existingModel": {
+          "placedItems": [
+            {
+              "id": "parity-parents-flat-place",
+              "itemDesignId": "parity-parents-flat-design",
+              "floorId": "parity-parents-flat-floor",
+              "translation": {
+                "x": 300,
+                "y": 250
+              },
+              "rotationDeg": 0,
+              "baseElevation": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "parity-studio",
+      "revision": 3,
+      "schemaVersion": 1,
+      "savedAt": "2026-10-03T02:44:00.000Z",
+      "data": {
+        "id": "parity-studio",
+        "meta": {
+          "name": "Studio Renovation",
+          "address": "71 Ayer Rajah Crescent"
+        },
+        "preferences": {
+          "displayUnit": "mm",
+          "displayPrecision": 0
+        },
+        "floors": [
+          {
+            "id": "parity-studio-floor",
+            "name": "Floor 1",
+            "planImage": null
+          }
+        ],
+        "itemDesigns": [
+          {
+            "id": "parity-studio-design",
+            "kind": "cabinet",
+            "name": "Unit 1",
+            "construction": {
+              "settings": {
+                "unit": "mm",
+                "height": 800,
+                "width": 600,
+                "depth": 500,
+                "thickness": 18,
+                "backThickness": 6,
+                "toeKick": null,
+                "material": "oak"
+              },
+              "root": {
+                "id": "parity-studio-root",
+                "elementType": "void"
+              }
+            }
+          }
+        ],
+        "existingModel": {
+          "placedItems": [
+            {
+              "id": "parity-studio-place",
+              "itemDesignId": "parity-studio-design",
+              "floorId": "parity-studio-floor",
+              "translation": {
+                "x": 300,
+                "y": 250
+              },
+              "rotationDeg": 0,
+              "baseElevation": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "parity-old-apartment",
+      "revision": 2,
+      "schemaVersion": 1,
+      "savedAt": "2026-09-23T02:44:00.000Z",
+      "data": {
+        "id": "parity-old-apartment",
+        "meta": {
+          "name": "Old Apartment Study",
+          "address": "9 Kim Yam Road"
+        },
+        "preferences": {
+          "displayUnit": "mm",
+          "displayPrecision": 0
+        },
+        "floors": [
+          {
+            "id": "parity-old-apartment-floor",
+            "name": "Floor 1",
+            "planImage": null
+          }
+        ],
+        "itemDesigns": [
+          {
+            "id": "parity-old-apartment-design",
+            "kind": "cabinet",
+            "name": "Unit 1",
+            "construction": {
+              "settings": {
+                "unit": "mm",
+                "height": 800,
+                "width": 600,
+                "depth": 500,
+                "thickness": 18,
+                "backThickness": 6,
+                "toeKick": null,
+                "material": "oak"
+              },
+              "root": {
+                "id": "parity-old-apartment-root",
+                "elementType": "void"
+              }
+            }
+          }
+        ],
+        "existingModel": {
+          "placedItems": [
+            {
+              "id": "parity-old-apartment-place",
+              "itemDesignId": "parity-old-apartment-design",
+              "floorId": "parity-old-apartment-floor",
+              "translation": {
+                "x": 300,
+                "y": 250
+              },
+              "rotationDeg": 0,
+              "baseElevation": 0
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "library": [
+    {
+      "id": "parity-tiong-bahru",
+      "name": "Tiong Bahru Home",
+      "address": "18 Yong Siak Street",
+      "revision": 3,
+      "savedAt": "2026-10-07T10:42:00.000Z",
+      "schemaVersion": 1,
+      "sizeBytes": 802,
+      "lastBackupInitiatedAt": null,
+      "lastBackupRevision": null,
+      "trashedAt": null,
+      "summary": {
+        "floorCount": 2,
+        "designOptionCount": 0,
+        "itemCount": 1,
+        "previewAssetHash": null,
+        "previewOutline": {
+          "bounds": [
+            0,
+            0,
+            600,
+            500
+          ],
+          "rects": [
+            [
+              300,
+              250,
+              600,
+              500,
+              0
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "parity-parents-flat",
+      "name": "Parents’ Flat",
+      "address": "48 Marine Parade Road",
+      "revision": 7,
+      "savedAt": "2026-10-06T20:42:00.000Z",
+      "schemaVersion": 1,
+      "sizeBytes": 740,
+      "lastBackupInitiatedAt": "2026-10-01T02:44:00.000Z",
+      "lastBackupRevision": 7,
+      "trashedAt": null,
+      "summary": {
+        "floorCount": 1,
+        "designOptionCount": 0,
+        "itemCount": 1,
+        "previewAssetHash": null,
+        "previewOutline": {
+          "bounds": [
+            0,
+            0,
+            600,
+            500
+          ],
+          "rects": [
+            [
+              300,
+              250,
+              600,
+              500,
+              0
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "parity-studio",
+      "name": "Studio Renovation",
+      "address": "71 Ayer Rajah Crescent",
+      "revision": 3,
+      "savedAt": "2026-10-03T02:44:00.000Z",
+      "schemaVersion": 1,
+      "sizeBytes": 701,
+      "lastBackupInitiatedAt": "2026-09-18T02:44:00.000Z",
+      "lastBackupRevision": 1,
+      "trashedAt": null,
+      "summary": {
+        "floorCount": 1,
+        "designOptionCount": 0,
+        "itemCount": 1,
+        "previewAssetHash": null,
+        "previewOutline": {
+          "bounds": [
+            0,
+            0,
+            600,
+            500
+          ],
+          "rects": [
+            [
+              300,
+              250,
+              600,
+              500,
+              0
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "parity-old-apartment",
+      "name": "Old Apartment Study",
+      "address": "9 Kim Yam Road",
+      "revision": 2,
+      "savedAt": "2026-09-23T02:44:00.000Z",
+      "schemaVersion": 1,
+      "sizeBytes": 744,
+      "lastBackupInitiatedAt": null,
+      "lastBackupRevision": null,
+      "trashedAt": "2026-09-25T02:44:00.000Z",
+      "summary": {
+        "floorCount": 1,
+        "designOptionCount": 0,
+        "itemCount": 1,
+        "previewAssetHash": null,
+        "previewOutline": {
+          "bounds": [
+            0,
+            0,
+            600,
+            500
+          ],
+          "rects": [
+            [
+              300,
+              250,
+              600,
+              500,
+              0
+            ]
+          ]
+        }
+      }
+    }
+  ],
+  "assets": [],
+  "recovery": [
+    {
+      "projectId": "parity-tiong-bahru",
+      "points": [
+        {
+          "id": "parity-tiong-bahru-rp-1",
+          "createdAt": "2026-10-07T10:42:00.000Z",
+          "kind": "pre-restore"
+        },
+        {
+          "id": "parity-tiong-bahru-rp-2",
+          "createdAt": "2026-10-07T09:15:00.000Z",
+          "kind": "idle"
+        },
+        {
+          "id": "parity-tiong-bahru-rp-3",
+          "createdAt": "2026-10-06T18:30:00.000Z",
+          "kind": "idle"
+        },
+        {
+          "id": "parity-tiong-bahru-rp-4",
+          "createdAt": "2026-10-03T11:20:00.000Z",
+          "kind": "idle"
+        }
+      ]
+    },
+    {
+      "projectId": "parity-parents-flat",
+      "count": 12
+    },
+    {
+      "projectId": "parity-studio",
+      "count": 5
+    },
+    {
+      "projectId": "parity-old-apartment",
+      "count": 3
+    }
+  ]
+}

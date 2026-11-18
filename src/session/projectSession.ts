@@ -79,6 +79,15 @@ export interface SessionDeps {
    * would offer a dialog that cannot finish.
    */
   backup: BackupDeps
+  /**
+   * True when the adapter behind `ports` keeps nothing past this tab (#51 §6).
+   *
+   * IndexedDB was unavailable, so `app` fell back to `createMemoryAdapter()`. The writes will
+   * succeed — against RAM — which is exactly why the session has to be told: #14 forbids
+   * claiming durability it does not have, so the session opens already failed and every later
+   * "Saved locally" is refused.
+   */
+  volatile?: boolean
 }
 
 /**
@@ -106,7 +115,7 @@ interface Persisted {
 }
 
 function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: LockHandle | null): ProjectSession {
-  const { ports, clock, ids, lock, registry } = deps
+  const { ports, clock, ids, lock, registry, volatile } = deps
   const history = createHistory()
   const listeners = new Set<() => void>()
   const navigateListeners = new Set<(locator: Locator) => void>()
@@ -117,8 +126,11 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
   let revision = record.revision
   let persistedRevision = record.revision
   let persisted: Persisted = { project: record.data, revision: record.revision }
-  let lastSavedAt: string | null = record.savedAt
-  let save: SaveState = { kind: 'saved', at: record.savedAt }
+  let lastSavedAt: string | null = volatile === true ? null : record.savedAt
+  let save: SaveState =
+    volatile === true
+      ? { kind: 'failed', lastSavedAt: null, reason: 'unavailable' }
+      : { kind: 'saved', at: record.savedAt }
   let guard: GuardState = { blocked: false, resolvedBy: null }
   let notice: SessionNotice | null = null
   let lastError: PersistenceError | null = null
@@ -164,6 +176,19 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
     return error.kind === 'not-found' ? 'unavailable' : error.kind
   }
 
+  /**
+   * What `save` says after an operation that wrote successfully.
+   *
+   * In-memory mode is the exception (#51 §6): the write landed in this tab's RAM, and
+   * `Saved locally` would be the claim #14 exists to stop. The failure stands, with the same
+   * reason it opened with.
+   */
+  function afterWrite(at: string): SaveState {
+    return volatile === true
+      ? { kind: 'failed', lastSavedAt: null, reason: 'unavailable' }
+      : { kind: 'saved', at }
+  }
+
   function enterFailed(error: PersistenceError): void {
     lastError = error
     save = { kind: 'failed', lastSavedAt, reason: saveReason(error) }
@@ -182,6 +207,13 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
    */
   async function drain(): Promise<void> {
     if (writing) return
+    // In-memory mode has nothing to write to (#51 §6). A retry that "succeeded" against RAM
+    // would hand the user a `Saved locally` they cannot come back to, so the failure stands.
+    if (volatile === true) {
+      enterFailed({ kind: 'unavailable', reason: 'this tab keeps nothing past itself' })
+      notify()
+      return
+    }
     writing = true
     writerIdle = new Promise<void>((resolve) => {
       writerIdleDone = resolve
@@ -211,7 +243,7 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
       writerIdleDone = null
       settled?.()
       if (save.kind === 'saving' && revision === persistedRevision) {
-        save = { kind: 'saved', at: lastSavedAt ?? clock.now() }
+        save = afterWrite(lastSavedAt ?? clock.now())
         guard = { blocked: false, resolvedBy: null }
         lastError = null
       }
@@ -306,6 +338,10 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
     notice = null
     // The emergency download only promised the user a file; this edit is not in it (#14).
     if (guard.resolvedBy === 'emergency-download') guard = { blocked: true, resolvedBy: null }
+    // An edit made while storage has failed is unsaved by definition, so the guard arms on it
+    // even when the failure predates this session — which is how memory mode gets §6's rule
+    // (`beforeunload` once a Project has edits) without a dialog the moment it opens.
+    if (save.kind === 'failed' && !guard.blocked) guard = { blocked: true, resolvedBy: null }
     // While save has failed the writer stays stopped: the edit is kept in memory, marked
     // unsaved, and waits for the user's retry rather than a silent loop (#14).
     if (save.kind !== 'failed') {
@@ -398,7 +434,7 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
     heldAssets.clear()
     history.clear()
     disarmIdle()
-    save = { kind: 'saved', at: reloaded.value.savedAt }
+    save = afterWrite(reloaded.value.savedAt)
     guard = { blocked: false, resolvedBy: null }
     lastError = null
     if (point.ok) {
@@ -406,6 +442,40 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
       notice = { kind: 'previous-state-saved' }
     }
     notify()
+    return ok(undefined)
+  }
+
+  /**
+   * Take a freshly-read stored record as this session's own state.
+   *
+   * History goes with it (#26): the steps that led to the old snapshot no longer describe a
+   * continuous session over the one that arrived.
+   */
+  function adopt(reloaded: ProjectRecord): void {
+    project = reloaded.data
+    revision = reloaded.revision
+    persistedRevision = reloaded.revision
+    persisted = { project: reloaded.data, revision: reloaded.revision }
+    lastSavedAt = reloaded.savedAt
+    save = afterWrite(reloaded.savedAt)
+    lastRecoveryRevision = reloaded.revision
+    history.clear()
+    notify()
+  }
+
+  /**
+   * Re-read the stored record into a read-only session (#51 §5).
+   *
+   * A read-only tab is not the writer, so it has nothing of its own to lose: the editing tab
+   * announces its commit on `buildbox:library` and this tab shows the new state a frame later.
+   * An editable session is refused rather than quietly thrown away — discarding unsaved work
+   * is `discardUnsaved`'s decision, made by a person, not by a message arriving.
+   */
+  async function reload(): Promise<Result<void, SessionError>> {
+    if (!readOnly || closed) return err('read-only')
+    const reloaded = await ports.projects.load(record.id)
+    if (!reloaded.ok) return err(reloaded.error)
+    adopt(reloaded.value)
     return ok(undefined)
   }
 
@@ -449,8 +519,12 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
     revision = committed.value.revision
     persistedRevision = committed.value.revision
     persisted = { project: committed.value.data, revision: committed.value.revision }
+    // The state just stored is a copy of a point that already exists, and the state it replaced
+    // has its `pre-restore` point: closing next has nothing left to keep, so a restore adds one
+    // Recovery Point and not two (#51 criterion 13).
+    lastRecoveryRevision = committed.value.revision
     lastSavedAt = committed.value.savedAt
-    save = { kind: 'saved', at: committed.value.savedAt }
+    save = afterWrite(committed.value.savedAt)
     guard = { blocked: false, resolvedBy: null }
     lastError = null
     history.clear()
@@ -519,6 +593,7 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
     emergencySource,
     encodeEmergencyBackup: () => encodeEmergencyBackup({ ...deps.backup, ports }, emergencySource()),
     discardUnsaved,
+    reload,
     checkpoint,
     restoreRecoveryPoint,
     close,
@@ -541,16 +616,8 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
           handle = null
           return
         }
-        project = reloaded.value.data
-        revision = reloaded.value.revision
-        persistedRevision = reloaded.value.revision
-        persisted = { project: reloaded.value.data, revision: reloaded.value.revision }
-        lastSavedAt = reloaded.value.savedAt
-        save = { kind: 'saved', at: reloaded.value.savedAt }
-        lastRecoveryRevision = reloaded.value.revision
-        history.clear()
         readOnly = false
-        notify()
+        adopt(reloaded.value)
       })
     })
   }

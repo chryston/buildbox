@@ -102,6 +102,14 @@ export interface LegacyBindings {
    */
   readonly workspace?: LegacyWorkspace
   readonly saveStatus: SaveStatusText | null
+  /**
+   * Reopen the Save failed dialog from the red status (#51 §2, criterion 10).
+   *
+   * The dialog belongs to the composition, not to the editor, and the legacy store has no session
+   * that can fail — so this is absent rather than a no-op, and a status with nowhere to go stays
+   * the plain text it always was.
+   */
+  readonly reopenSaveFailure?: () => void
 
   // ---------------------------------------------------------------- history
   readonly canUndo: boolean

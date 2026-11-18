@@ -80,6 +80,64 @@ export const redoButton = (page: Page): Locator => page.getByRole('button', { na
 export const saveStatus = (page: Page): Locator => page.getByRole('status')
 
 /**
+ * The toolbar's save line, exactly.
+ *
+ * `saveStatus` asks for the `status` role, which is right until a modal is up: a dialog body is
+ * an `aria-live` region and the accessibility tree calls that a status too, so the role matches
+ * both. Specs that assert the line while the Save failed dialog is open need the element itself.
+ */
+export const toolbarStatus = (page: Page): Locator => page.locator('span[role="status"]')
+
+/**
+ * The page's own switch, read by the patched `IDBObjectStore` methods above. A window property
+ * rather than a closure because the init script and the test body are separate scripts.
+ */
+interface QuotaFlaggedWindow {
+  quotaIsFull?: boolean
+}
+
+/**
+ * Make every IndexedDB write in the page come back `QuotaExceededError` (#51 criterion 10).
+ *
+ * CDP `Storage.overrideQuotaForOrigin` was the first attempt and is dead: Chromium applies it to
+ * `navigator.storage.estimate()` only, and an IndexedDB write against the overridden origin still
+ * succeeds — the probe that proved it is in the history of this file. So the quota is failed where
+ * a full disk fails it, on the write request itself, and the app's own error mapping
+ * (`persistence/indexeddb/errors.ts`) turns it into the `quota` save failure like any other.
+ *
+ * The patch is installed as an init script so a reload keeps it, and starts disarmed: the seeder
+ * registers its own init script first and has to be able to write.
+ */
+export async function quotaOverride(page: Page, full: boolean): Promise<void> {
+  // An init script only runs in documents that have not loaded yet, so the patch is also applied
+  // to the one that is already up: the spec arms the quota after the Project is open.
+  await page.addInitScript(installQuotaPatch)
+  await page.evaluate(installQuotaPatch)
+  await page.evaluate((value) => {
+    const flagged = window as QuotaFlaggedWindow
+    flagged.quotaIsFull = value
+  }, full)
+}
+
+function installQuotaPatch(): void {
+  const flagged = window as QuotaFlaggedWindow
+  if (flagged.quotaIsFull !== undefined) return
+  flagged.quotaIsFull = false
+  for (const method of ['put', 'add'] as const) {
+    const original = IDBObjectStore.prototype[method]
+    IDBObjectStore.prototype[method] = function patched(
+      this: IDBObjectStore,
+      ...args: Parameters<typeof original>
+    ) {
+      if (flagged.quotaIsFull === true) {
+        throw new DOMException('The quota has been exceeded.', 'QuotaExceededError')
+      }
+      return original.apply(this, args as Parameters<IDBObjectStore['put']>)
+    }
+  }
+}
+
+/**
  * Select a Project by its tab and wait for the view to follow. A Project with no cabinet
  * design has no cabinet canvas, and switching Projects keeps the module the user is in, so
  * the view following means one of the two canvases is on screen again.

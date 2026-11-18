@@ -80,7 +80,8 @@ describe('the Library home', () => {
     expect(screen.getByText('Project Library')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Projects' })).toHaveClass('active')
     expect(screen.getByRole('button', { name: 'Migration review' })).toHaveAttribute('aria-disabled', 'true')
-    expect(screen.getByRole('button', { name: 'Trash' })).toHaveAttribute('aria-disabled', 'true')
+    // #51 §4 gave the Trash a screen, so its tab is a destination rather than a promise.
+    expect(screen.getByRole('button', { name: 'Trash' })).toBeEnabled()
   })
 
   it('counts the reminders in the header, in the singular when there is one (#50 criteria 3, 6)', () => {
@@ -119,7 +120,8 @@ describe('the Library home', () => {
     expect(within(home).getByText('8 Recovery Points')).toBeInTheDocument()
     expect(within(home).getByRole('button', { name: 'Open' })).toBeInTheDocument()
     expect(within(home).getByRole('button', { name: 'Backup' })).toBeInTheDocument()
-    expect(within(home).getByRole('button', { name: 'Recover' })).toHaveAttribute('aria-disabled', 'true')
+    // #51 §1 made this real: the card's fourth action opens the Recovery Point picker.
+    expect(within(home).getByRole('button', { name: 'Recover' })).toBeEnabled()
     expect(within(home).getByRole('button', { name: 'Delete' })).toBeInTheDocument()
   })
 
@@ -253,8 +255,10 @@ describe('the Library home', () => {
   it('sends a card to Trash and says for how long (#50 criterion 14)', async () => {
     const test = await renderLibrary()
     fireEvent.click(within(card('Tiong Bahru Home')).getByRole('button', { name: 'Delete' }))
-    expect(test.calls.trashed).toEqual(['home'])
+    // #51 §5: `Delete` asks whether another tab holds the Project before it asks the store, so
+    // the trashing lands one microtask later than it did when the card acted on its own.
     await flush()
+    expect(test.calls.trashed).toEqual(['home'])
     expect(screen.getByRole('status')).toHaveTextContent(
       'Moved Tiong Bahru Home to Trash. You can restore it for 30 days.',
     )

@@ -19,14 +19,29 @@ const FOCUSABLE =
 export interface ModalProps {
   /** The small uppercase line above the heading: `Project Backup`, `Restore Backup`. */
   eyebrow?: string
+  /**
+   * Red eyebrow, for the three dialogs whose subject is that something has gone wrong (#51).
+   *
+   * A tone rather than a class name, because the archive colours exactly one element of these
+   * dialogs — the eyebrow above the heading — and nothing else may reach in and colour the rest.
+   */
+  eyebrowDanger?: boolean
   heading: string
-  onClose: () => void
+  /** Absent for a dialog with no way out but an answer (#51's Save failed and conflict dialogs). */
+  onClose?: () => void
   children: ReactNode
   /** `false` for a dialog the user must answer rather than escape from (#51). */
   dismissable?: boolean
+  /** `.failure-modal` for the dialogs that report something going wrong (#51). */
+  className?: string
+  /**
+   * Drawn before the eyebrow: the `!` of the failure dialogs floats right, and a float only sits
+   * beside the eyebrow and title if it comes before them in the box (the archive's order).
+   */
+  lead?: ReactNode
 }
 
-export function Modal({ eyebrow, heading, onClose, children, dismissable = true }: ModalProps): ReactNode {
+export function Modal({ eyebrow, eyebrowDanger, heading, onClose, children, dismissable = true, className, lead }: ModalProps): ReactNode {
   const box = useRef<HTMLDivElement>(null)
   const headingId = useId()
 
@@ -35,7 +50,7 @@ export function Modal({ eyebrow, heading, onClose, children, dismissable = true 
     const onKey = (event: globalThis.KeyboardEvent): void => {
       if (event.key !== 'Escape') return
       event.stopPropagation()
-      onClose()
+      onClose?.()
     }
     // Captured, so a dialog opened over a dialog closes only the top one: the listener stops
     // the event before the one underneath can see it.
@@ -48,7 +63,10 @@ export function Modal({ eyebrow, heading, onClose, children, dismissable = true 
   useEffect(() => {
     // Focus lands inside the box on open. Leaving it there when the box has nothing focusable
     // is deliberate: focus outside a modal would leak Tab to the Library behind it.
-    const first = box.current?.querySelector<HTMLElement>(FOCUSABLE)
+    // A chosen radio is where a list dialog's keyboard belongs: arrow keys move from the row that
+    // will be written, not from the top of the list.
+    const first =
+      box.current?.querySelector<HTMLElement>('input:checked') ?? box.current?.querySelector<HTMLElement>(FOCUSABLE)
     if (first !== null && first !== undefined) first.focus()
     else box.current?.focus()
   }, [])
@@ -71,22 +89,25 @@ export function Modal({ eyebrow, heading, onClose, children, dismissable = true 
 
   return (
     <div
-      className="modal-backdrop"
+      className="modal-backdrop bb-dialog-scope"
       role="presentation"
       onMouseDown={(event) => {
-        if (dismissable && event.target === event.currentTarget) onClose()
+        if (dismissable && event.target === event.currentTarget) onClose?.()
       }}
     >
       <div
         ref={box}
-        className="modal"
+        className={className === undefined ? 'modal' : `modal ${className}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={headingId}
         tabIndex={-1}
         onKeyDown={onKeyDown}
       >
-        {eyebrow !== undefined && <p className="eyebrow">{eyebrow}</p>}
+        {lead}
+        {eyebrow !== undefined && (
+          <p className={eyebrowDanger ? 'eyebrow danger' : 'eyebrow'}>{eyebrow}</p>
+        )}
         <h2 id={headingId}>{heading}</h2>
         {children}
       </div>

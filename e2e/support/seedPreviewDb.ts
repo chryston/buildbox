@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import type { AssetRecord, LibraryRecord, ProjectRecord } from '../../src/persistence'
+import type { AssetRecord, LibraryRecord, ProjectRecord, ProjectSummary, RecoveryPointKind } from '../../src/persistence'
 
 /**
  * Seeding the flagged build's database (#49 criterion 1).
@@ -23,15 +23,32 @@ export interface PreviewSeedAsset extends AssetRecord {
 }
 
 /**
- * The Recovery Points a fixture wants without carrying their snapshots.
+ * One Recovery Point the fixture names exactly.
  *
- * A card shows the count and nothing else reads the rows, so the seeder materialises each one
- * from the Project record already in the seed rather than the fixture repeating that Project
- * eight or twelve times.
+ * The picker reads these rows — the clock time, the day word, why BuildBox kept it — so the
+ * fixture that feeds it cannot let the seeder invent them. What a row does not name is taken from
+ * the Project record already in the seed, because a Recovery Point *is* a copy of that record.
+ */
+export interface PreviewSeedRecoveryPoint {
+  id: string
+  createdAt: string
+  kind: RecoveryPointKind
+  /** The row's shape line; the Project's own summary when the fixture does not care about it. */
+  summary?: ProjectSummary
+}
+
+/**
+ * The Recovery Points a fixture wants.
+ *
+ * Either as rows, for the surfaces that list them (#51 §1), or as a count for a card that shows a
+ * number and nothing else — the latter materialised from the Project record already in the seed,
+ * which keeps the fixture the size of four Projects instead of twenty-nine.
  */
 export interface PreviewSeedRecovery {
   projectId: string
-  count: number
+  /** Newest first. Takes precedence over `count` when both are given. */
+  points?: PreviewSeedRecoveryPoint[]
+  count?: number
 }
 
 /** What `fixtures/e2e/preview-seed/legacy-v3.json` holds: the records the adapter writes. */
@@ -97,7 +114,19 @@ function writeSeed(seed: PreviewSeed): Promise<void> {
         const project = seed.projects.find((record) => record.id === group.projectId)
         const row = seed.library.find((record) => record.id === group.projectId)
         if (project === undefined || row === undefined) throw new Error(`no Project ${group.projectId} to recover`)
-        for (let index = 0; index < group.count; index += 1) {
+        for (const point of group.points ?? []) {
+          version.objectStore('recoveryPoints').put({
+            id: point.id,
+            projectId: group.projectId,
+            createdAt: point.createdAt,
+            kind: point.kind,
+            revision: row.revision,
+            schemaVersion: row.schemaVersion,
+            summary: point.summary ?? row.summary,
+            data: project.data,
+          })
+        }
+        for (let index = 0; index < (group.count ?? 0); index += 1) {
           // One minute apart, working back from the Project's own save: `recovery.list` sorts by
           // `createdAt`, and a list of Points all stamped the same second has no order to show.
           const createdAt = new Date(Date.parse(row.savedAt) - (index + 1) * 60_000).toISOString()

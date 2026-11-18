@@ -154,6 +154,11 @@ export interface ProjectSession {
   encodeEmergencyBackup(): Promise<Result<Uint8Array, BackupFailure>>
   /** Throw away the unsaved changes, behind a best-effort `pre-discard` Recovery Point. */
   discardUnsaved(): Promise<Result<void, SessionError>>
+  /**
+   * Re-read the stored record into a read-only session (#51 §5), which is the only state it is
+   * offered in: an editable session has work of its own that a message must not overwrite.
+   */
+  reload(): Promise<Result<void, SessionError>>
   /** A Recovery Point from the persisted state, then history is cleared (#26). */
   checkpoint(kind: PreBoundaryKind): Promise<Result<void, SessionError>>
   /** Recovery Point → its data as a new revision → history cleared (#26). */
@@ -199,6 +204,13 @@ export interface LibraryStore {
   trash(id: string): Promise<Result<LibraryRecord, SessionError>>
   restore(id: string): Promise<Result<LibraryRecord, SessionError>>
   purge(id: string): Promise<Result<void, SessionError>>
+  /**
+   * Purge every Project whose 30 days are up and report how many went (#51 §4).
+   *
+   * A Project this tab is holding with unsaved changes is skipped rather than refused: the guard
+   * outranks the calendar, and the sweep is not the place to argue about it.
+   */
+  purgeExpired(): Promise<Result<number, SessionError>>
   /** Record that a Project Backup was offered for the state the user was given. */
   markBackupInitiated(id: string): Promise<Result<LibraryRecord, SessionError>>
 }

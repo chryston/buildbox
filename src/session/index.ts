@@ -28,11 +28,14 @@
  * the fake lock and the gated adapter the suites are written against.
  */
 export { HISTORY_LIMIT } from './history'
+export { err, ok } from './result'
 export {
   BACKUP_DUE_AFTER_MS,
   NEW_PROJECT_REVISION,
+  TRASH_RETENTION_DAYS,
   createLibraryStore,
   isBackupDue,
+  isTrashExpired,
   type LibraryDeps,
 } from './library'
 export { BACKUP_EXTENSION, backupFileName, downloadBackup, encodeBackup, encodeEmergencyBackup, type BackupDeps, type BackupWritten } from './backup'
@@ -83,4 +86,13 @@ export type {
   SessionSnapshot,
 } from './types'
 // The record shapes a caller of `session` meets in its results, named where they are owned.
-export type { LibraryRecord, PersistenceError, Ports, Result } from '../persistence'
+// `RecoveryPointMeta` is here for the same reason `LibraryRecord` is: #51's Recovery Point
+// picker reads it through `LibraryServices`, and `ui` may not import `persistence` (#42 §2).
+export type {
+  LibraryRecord,
+  PersistenceError,
+  Ports,
+  RecoveryPointKind,
+  RecoveryPointMeta,
+  Result,
+} from '../persistence'

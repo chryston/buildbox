@@ -19,14 +19,27 @@
    `.bb-library button` (0-1-1) would outrank every single-class rule below and silently win
    `font: inherit` over `.brand`, `.button` and `.nav-tab`. */
 .bb-library,
-.bb-library * {
+.bb-library *,
+.bb-dialog-scope,
+.bb-dialog-scope * {
   box-sizing: border-box;
 }
 
 :where(.bb-library) button,
-:where(.bb-library) input {
+:where(.bb-library) input,
+:where(.bb-dialog-scope) button,
+:where(.bb-dialog-scope) input {
   cursor: pointer;
   font: inherit;
+}
+
+/* A dialog is also drawn over the editor (#51's Save failed and Changed in another tab), which
+   has none of `.bb-library`'s text defaults: without these the box inherits the editor's black.
+   Inside the Library they restate what `.bb-library` already set, so nothing moves there. */
+.bb-dialog-scope {
+  color: var(--bb-text);
+  font-family: var(--bb-font-body);
+  line-height: normal;
 }
 
 /* No font-size: the archive sets none on its root either, so the Library reads at the browser's
@@ -149,7 +162,8 @@
 /* The archive styles the heading with a bare `h1{margin:0;font-size:38px;letter-spacing:-.035em}`:
    DM Sans, normal line-height and the inherited text colour, with the UA's bold. The preflight
    resets all three, so each is put back here. */
-.page h1 {
+.page h1,
+.flow-page h1 {
   margin: 0;
   font-family: var(--bb-font-heading);
   font-size: var(--bb-size-h1);
@@ -520,7 +534,14 @@
   margin: 16px 0;
 }
 
-.summary-box {
+.failure-modal p:not(.eyebrow),
+.recovery-modal p:not(.eyebrow),
+.delete-modal p:not(.eyebrow) {
+  color: var(--bb-text-body);
+}
+
+.summary-box,
+.failure-reason {
   display: flex;
   flex-direction: column;
   gap: var(--bb-summary-gap);
@@ -532,6 +553,7 @@
 }
 
 .summary-box span,
+.failure-reason span,
 .helper {
   color: var(--bb-text-muted);
   font-size: var(--bb-size-line);
@@ -668,6 +690,243 @@
 .bb-library :focus-visible {
   outline: 2px solid var(--bb-accent);
   outline-offset: 2px;
+}
+
+/* ── #51: the failure dialogs ──────────────────────────────────────────────── */
+
+/* The failure palette, no new colour: a dialog that says something went wrong keeps the
+   archive's red edge and red `!` and changes nothing else about the box, so it is still
+   recognisably the same dialog the Library already uses. */
+.failure-modal {
+  border-color: var(--bb-failure-border);
+}
+
+.failure-icon {
+  float: right;
+  display: grid;
+  width: var(--bb-failure-icon-size);
+  height: var(--bb-failure-icon-size);
+  place-items: center;
+  border-radius: 50%;
+  background: var(--bb-failure-icon-bg);
+  color: var(--bb-failure-icon);
+  font-size: var(--bb-failure-icon-font);
+  font-weight: var(--bb-failure-icon-weight);
+}
+
+.eyebrow.danger {
+  color: var(--bb-danger-text);
+}
+
+.danger {
+  color: var(--bb-danger-text);
+}
+
+/* The three Save failed answers stack: each is a whole sentence, and three sentences in a
+   560px row are unreadable. The archive's `.failure-actions` is a grid for the same reason. */
+.failure-actions {
+  display: grid;
+  gap: var(--bb-failure-actions-gap);
+}
+
+.failure-actions button {
+  min-height: var(--bb-failure-button-min-height);
+  padding: var(--bb-control-padding);
+  border: 1px solid var(--bb-border-failure-button);
+  border-radius: var(--bb-radius-button);
+  background: var(--bb-bg-button-failure);
+  color: var(--bb-text-button);
+  font-family: var(--bb-font-body);
+}
+
+/* `Discard unsaved changes`: red text, no box, as the archive's `.danger-text` draws it. */
+.failure-actions button.danger-text {
+  border-color: transparent;
+  background: transparent;
+  color: var(--bb-danger-text);
+}
+
+/* The one red button in the app (#51 §3). It is `.button.danger-button` rather than
+   `.danger-button` so it outranks `.button`'s own background without `!important`, which is
+   how the archive had to write it. */
+.button.danger-button {
+  border-color: var(--bb-danger-button);
+  background: var(--bb-danger-button);
+}
+
+/* ── #51: Recovery Points ──────────────────────────────────────────────────── */
+
+.recovery-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bb-recovery-gap);
+  margin-top: var(--bb-recovery-margin);
+}
+
+.recovery-list label {
+  display: flex;
+  align-items: center;
+  gap: var(--bb-recovery-row-gap);
+  padding: var(--bb-recovery-row-padding);
+  border: 1px solid var(--bb-border-recovery);
+  border-radius: var(--bb-radius-inset);
+}
+
+/* The chosen row is the one that will be written, so it is the archive's selected blue. */
+.recovery-list label.selected {
+  border-color: var(--bb-accent-choice);
+  background: var(--bb-bg-accent-soft);
+}
+
+.recovery-list input[type='radio'] {
+  appearance: auto;
+  flex: none;
+  width: 13px;
+  height: 13px;
+  margin: 3px 3px 3px 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color-scheme: dark;
+}
+
+/* The forms plugin rings every focused radio, mouse or keyboard, in a square. The browser's own
+   keyboard-only ring is what the archive had, drawn in the choice blue. */
+.recovery-list input[type='radio']:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.recovery-list input[type='radio']:focus-visible {
+  outline: 2px solid var(--bb-accent-choice);
+  outline-offset: 2px;
+}
+
+.recovery-list span {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bb-recovery-text-gap);
+}
+
+.recovery-list small {
+  color: var(--bb-text-recovery-sub);
+}
+
+/* ── #51: Permanent deletion ───────────────────────────────────────────────── */
+
+/* The same full-width quiet button as `Cancel`, but boxed: it is an action that leaves the
+   dialog open (the download runs, the checkbox stays), not a way out of it. */
+.backup-before-delete {
+  width: 100%;
+  padding: var(--bb-backup-delete-padding);
+  border: 1px solid var(--bb-border-stat-sep);
+  border-radius: var(--bb-radius-button);
+  background: none;
+  color: var(--bb-text-status);
+}
+
+.backup-before-delete input {
+  margin-right: var(--bb-recovery-gap);
+}
+
+/* ── #51: the Trash surface ────────────────────────────────────────────────── */
+
+.flow-page {
+  max-width: var(--bb-flow-page-max-width);
+  margin: 0 auto;
+  padding: var(--bb-page-padding);
+}
+
+.trash-row {
+  display: flex;
+  align-items: center;
+  gap: var(--bb-trash-row-gap);
+  padding: var(--bb-trash-row-padding);
+  border-bottom: 1px solid var(--bb-border-trash-row);
+}
+
+.trash-row > div:nth-child(2) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--bb-trash-text-gap);
+}
+
+.trash-row span {
+  color: var(--bb-text-stats);
+  font-size: var(--bb-size-line);
+}
+
+.trash-row button {
+  padding: var(--bb-trash-button-padding);
+  border: 1px solid var(--bb-border-trash-button);
+  border-radius: var(--bb-radius-small-button);
+  background: transparent;
+  color: var(--bb-text-trash-button);
+}
+
+.project-monogram {
+  display: grid;
+  width: var(--bb-monogram-size);
+  height: var(--bb-monogram-size);
+  place-items: center;
+  border-radius: var(--bb-radius-button);
+  background: var(--bb-monogram-bg);
+  color: var(--bb-monogram-text);
+  font-size: var(--bb-size-line);
+  font-weight: var(--bb-monogram-weight);
+}
+
+.empty-state {
+  padding: var(--bb-empty-padding);
+  border: 1px dashed var(--bb-border-dashed-empty);
+  border-radius: var(--bb-radius-banner);
+  color: var(--bb-text-empty);
+  text-align: center;
+}
+
+.back-link {
+  margin-top: var(--bb-back-link-margin);
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--bb-link);
+}
+
+/* ── #51: multi-tab and unavailable storage ────────────────────────────────── */
+
+/* Deviation 17: neither strip exists in the prototype, so both borrow the failure palette and
+   the inset radius rather than inventing a third look. */
+.read-only-strip,
+.storage-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--bb-summary-gap);
+  padding: var(--bb-strip-padding);
+  border: 1px solid var(--bb-failure-border);
+  border-radius: var(--bb-radius-inset);
+  background: var(--bb-bg-modal);
+  color: var(--bb-text);
+  font-size: var(--bb-size-body);
+  line-height: var(--bb-line-modal);
+}
+
+.read-only-strip {
+  border-color: var(--bb-accent-choice);
+  background: var(--bb-bg-accent-soft);
+}
+
+.read-only-strip .status-dot,
+.storage-notice .status-dot {
+  flex: 0 0 auto;
+  width: var(--bb-status-dot-size);
+  height: var(--bb-status-dot-size);
+  border-radius: 50%;
+  background: var(--bb-failure-icon);
+}
+
+.read-only-strip .status-dot {
+  background: var(--bb-accent-choice);
 }
 
 /* ── Responsive (deviation 3) ──────────────────────────────────────────────── */

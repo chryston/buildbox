@@ -37,6 +37,23 @@ export const NEW_PROJECT_REVISION = 1
 /** #14: a backup reminder fires once the last one started more than seven days ago. */
 export const BACKUP_DUE_AFTER_MS = 7 * 24 * 60 * 60 * 1000
 
+/** #51 §4: how long a trashed Project stays recoverable, in whole days. */
+export const TRASH_RETENTION_DAYS = 30
+
+const DAY_MS = 86_400_000
+
+/**
+ * Whether a trashed Project has outlived its 30 days.
+ *
+ * Whole elapsed days, which is the same count the Trash row prints in `18 days remaining` — the
+ * row and the sweeper read one rule, so a Project is never purged while its row still promises
+ * time. A record that is not trashed is never expired.
+ */
+export function isTrashExpired(record: LibraryRecord, now: string): boolean {
+  if (record.trashedAt === null) return false
+  return Math.floor((Date.parse(now) - Date.parse(record.trashedAt)) / DAY_MS) >= TRASH_RETENTION_DAYS
+}
+
 /** What the Library store needs from outside: the ports, the clock and the tab's open sessions. */
 export interface LibraryDeps {
   ports: Ports
@@ -184,6 +201,23 @@ export function createLibraryStore(deps: LibraryDeps): LibraryStore {
       if (!purged.ok) return purged
       await refresh()
       return ok(undefined)
+    },
+
+    async purgeExpired(): Promise<Result<number, SessionError>> {
+      // #51 §4: thirty days is a promise, and a promise nobody keeps needs a sweeper. It runs
+      // over the list already in memory rather than re-reading, because `refresh` is what put
+      // the Trash there in the first place and the Library opens by refreshing first.
+      //
+      // A Project whose session this tab holds with unsaved changes is skipped, not failed: the
+      // guard outranks the calendar, and the next Library open will find it unblocked.
+      const expired = snapshot.trash.filter((record) => isTrashExpired(record, clock.now()))
+      for (const record of expired) {
+        if (registry.isGuarded(record.id)) continue
+        const purged = await ports.projects.purge(record.id)
+        if (!purged.ok) return err(purged.error)
+      }
+      if (expired.length > 0) await refresh()
+      return ok(expired.length)
     },
 
     async markBackupInitiated(id: string): Promise<Result<LibraryRecord, SessionError>> {

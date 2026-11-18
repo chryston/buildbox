@@ -65,6 +65,8 @@ export interface ProjectCardProps {
   onSelect: () => void
   onOpen: () => void
   onBackup: () => void
+  /** Open the Recovery Point picker (#51 §1), which #50 drew disabled and this enables. */
+  onRecover: () => void
   onRename: () => void
   onDuplicate: () => void
   onTrash: () => void
@@ -87,6 +89,7 @@ export const ProjectCard = ({
   onSelect,
   onOpen,
   onBackup,
+  onRecover,
   onRename,
   onDuplicate,
   onTrash,
@@ -154,9 +157,7 @@ export const ProjectCard = ({
           <button type="button" className="button" onClick={stop(onBackup)}>
             {STRINGS.backup}
           </button>
-          {/* #51 owns Recovery Points; the button is drawn and marked unavailable rather than
-              left out, so the card's shape is already the finished one. */}
-          <button type="button" className="button" aria-disabled="true" onClick={stop(() => undefined)}>
+          <button type="button" className="button" onClick={stop(onRecover)}>
             {STRINGS.recover}
           </button>
           <button type="button" className="button danger-text" onClick={stop(onTrash)}>

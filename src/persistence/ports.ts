@@ -155,6 +155,13 @@ export interface PrefsMap {
   /** The last viewport of one saved view, keyed `viewState:<projectId>:<viewKey>`. */
   [key: `viewState:${string}:${string}`]: ViewportState
   exportRecipes: unknown[]
+  /**
+   * #51 §6: whether the browser was asked to keep this origin's storage, and what it said.
+   *
+   * `askedAt` is when the question was put, which for a refusal is also the moment to start
+   * counting the 30 days before it may be put again.
+   */
+  storagePersistence: { askedAt: string; granted: boolean }
 }
 
 /** App-level records. #52 gives `legacyMigration` its shape once the legacy reader exists. */
