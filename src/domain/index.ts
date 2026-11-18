@@ -5,7 +5,7 @@
  *
  * It holds the domain schema v1 types, the strict validator, the version and its
  * migrator chain, the cabinet Item Design payload vocabulary, the Library's Project
- * Summary (#45) and unit conversion. It
+ * Summary (#45), the fresh identity an imported copy takes (#50) and unit conversion. It
  * never creates an ID or reads the clock (#42 §3): IDs and time arrive as data.
  * `src/domain/testing.ts` is the second entry point, for test files only.
  */
@@ -52,6 +52,7 @@ export type {
   ProjectPreferences,
   RectangleFootprint,
 } from './project'
+export { remapIds, type IdAllocator } from './remapIds'
 export {
   MAX_OUTLINE_RECTS,
   referencedAssetHashes,

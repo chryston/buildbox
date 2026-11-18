@@ -149,17 +149,32 @@ const LEGACY_ELEMENTS = [
 // outside `ui`/`app` that may talk to the browser.
 const ADAPTER_ELEMENT = { type: 'indexeddb', pattern: ['src/persistence/indexeddb'], mode: 'folder' }
 
+// The Backup codec is the one part of `platform` allowed `package` (#50): the Worker entry that
+// writes the archive, and its main-thread host. Claimed out by file name rather than by widening
+// `platform`, so "platform imports nothing but `lib`" still holds for every other file in that
+// folder — and so the exception is two files long, with the reason written next to it.
+const PLATFORM_BACKUP_ELEMENT = {
+  type: 'platform-backup',
+  pattern: ['src/platform/backupEncoder.ts', 'src/platform/backup.worker.ts'],
+  mode: 'file',
+}
+
 const TARGET_MODULE_NAMES = TARGET_MODULES.map((module) => module.name)
 
 // Elements whose files are importable individually: legacy code has no entry point until
 // it is merged into a target module, and `app` reaches adapters file-by-file.
-const OPEN_ENTRY_ELEMENT_NAMES = [ADAPTER_ELEMENT.type, ...LEGACY_ELEMENTS.map((element) => element.name)]
+const OPEN_ENTRY_ELEMENT_NAMES = [
+  ADAPTER_ELEMENT.type,
+  PLATFORM_BACKUP_ELEMENT.type,
+  ...LEGACY_ELEMENTS.map((element) => element.name),
+]
 
 const legacyElement = (element) => ({ type: element.name, pattern: element.pattern, mode: element.mode })
 
 // Most specific first: the plugin assigns the first element whose pattern matches.
 const ELEMENTS = [
   ADAPTER_ELEMENT,
+  PLATFORM_BACKUP_ELEMENT,
   ...LEGACY_ELEMENTS.filter((element) => element.mode === 'file' || element.beforeTargets).map(legacyElement),
   ...TARGET_MODULES.map((module) => ({ type: module.name, pattern: [`src/${module.name}`], mode: 'folder' })),
   ...LEGACY_ELEMENTS.filter((element) => element.mode === 'folder' && !element.beforeTargets).map(legacyElement),
@@ -310,6 +325,18 @@ const elementTypeRules = [
   // the port declarations, `domain` and `lib` are what it is built from, and no other
   // module may be reached from it (#46).
   { from: [ADAPTER_ELEMENT.type], allow: ['persistence', 'domain', 'lib', ADAPTER_ELEMENT.type] },
+  // `platform`'s index re-exports the Backup codec it claims out by file name, so the folder is
+  // allowed that one element. This row comes first because the plugin stops at the first rule
+  // whose `from` matches: after the generic `platform` row below it would never be read.
+  { from: ['platform'], allow: ['platform', 'lib', PLATFORM_BACKUP_ELEMENT.type] },
+  // The Backup codec speaks `session`'s port shapes and `domain`'s Project, both as types only;
+  // `package` is the one value it may reach, because writing the archive is the whole exception.
+  {
+    from: [PLATFORM_BACKUP_ELEMENT.type],
+    allow: ['domain', 'persistence', 'session'],
+    importKind: 'type',
+  },
+  { from: [PLATFORM_BACKUP_ELEMENT.type], allow: ['package', PLATFORM_BACKUP_ELEMENT.type] },
   // Type-only exceptions first: a value import of the same target falls through to the
   // module's own row below and is rejected there.
   ...[...TARGET_MODULES, ...LEGACY_ELEMENTS].filter((module) => module.typeOnly).map((module) => ({

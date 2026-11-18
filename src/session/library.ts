@@ -15,8 +15,10 @@
  *   holding unsaved changes is refused with `'guarded'` — the session owns that decision and
  *   the Library only asks the registry whether it is blocked.
  */
+import { remapIds } from '../domain'
 import { createProject as buildProject } from '../edit'
 import type { LibraryRecord, PersistenceError, Ports, Result } from '../persistence'
+import { copyNameFor } from './restore'
 import type { ClockPort, IdSource } from './ports'
 import { err, ok } from './result'
 import type { LibrarySnapshot, LibraryStore, SessionError, SessionRegistry } from './types'
@@ -112,6 +114,50 @@ export function createLibraryStore(deps: LibraryDeps): LibraryStore {
       if (!committed.ok) return committed
       // The Library record is derived from the Project inside the commit (#45), so the new
       // row appears with its real Summary rather than a placeholder.
+      await refresh()
+      return ok(project.id)
+    },
+
+    async rename(id: string, name: string): Promise<Result<LibraryRecord, SessionError>> {
+      if (registry.isGuarded(id)) return err('guarded')
+      const loaded = await ports.projects.load(id)
+      if (!loaded.ok) return loaded
+      const current = loaded.value.data
+      const trimmed = name.trim()
+      // An empty or unchanged name writes nothing: the dialog's Save is disabled for the first,
+      // and a second commit of the same name would make the Project look due for a Backup for a
+      // change that did not happen.
+      if (trimmed !== '' && trimmed !== current.meta.name) {
+        const project = { ...current, meta: { ...current.meta, name: trimmed } }
+        const committed = await ports.projects.commit(
+          { project, revision: loaded.value.revision + 1, savedAt: clock.now() },
+          loaded.value.revision,
+        )
+        if (!committed.ok) return committed
+      }
+      const refreshed = await refresh()
+      if (!refreshed.ok) return refreshed
+      const record = [...snapshot.projects, ...snapshot.trash].find((each) => each.id === id)
+      return record === undefined ? err({ kind: 'not-found', id }) : ok(record)
+    },
+
+    async duplicate(id: string): Promise<Result<string, SessionError>> {
+      const loaded = await ports.projects.load(id)
+      if (!loaded.ok) return loaded
+      const source = loaded.value.data
+      const copyName = copyNameFor(
+        source.meta.name,
+        [...snapshot.projects, ...snapshot.trash].map((record) => record.name),
+      )
+      // The same content under a wholly new identity (#50): a Duplicate that shared an ID with
+      // its source would collide the moment either one was restored from a Backup.
+      const remapped = remapIds(source, ids(1)[0], (count) => ids(count))
+      const project = { ...remapped, meta: { ...remapped.meta, name: copyName } }
+      const committed = await ports.projects.commit(
+        { project, revision: NEW_PROJECT_REVISION, savedAt: clock.now() },
+        null,
+      )
+      if (!committed.ok) return committed
       await refresh()
       return ok(project.id)
     },

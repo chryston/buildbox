@@ -39,6 +39,8 @@ import type {
   Result,
 } from '../persistence'
 import { createHistory } from './history'
+import type { BackupDeps } from './backup'
+import { encodeEmergencyBackup } from './backup'
 import type { ClockPort, IdSource, LockHandle, LockPort } from './ports'
 import { err, ok } from './result'
 import type {
@@ -69,6 +71,14 @@ export interface SessionDeps {
   ids: IdSource
   /** The tab's open sessions, so the Library can ask whether this Project is blocked. */
   registry: SessionRegistry
+  /**
+   * What the emergency download needs (#50): the encoder, the clock and the build's word.
+   *
+   * It is one group rather than three fields because it belongs to one capability — writing a
+   * Project Backup out of a session whose storage has stopped — and a session with half of it
+   * would offer a dialog that cannot finish.
+   */
+  backup: BackupDeps
 }
 
 /**
@@ -507,6 +517,7 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
     retry,
     markEmergencyBackupDownloaded,
     emergencySource,
+    encodeEmergencyBackup: () => encodeEmergencyBackup({ ...deps.backup, ports }, emergencySource()),
     discardUnsaved,
     checkpoint,
     restoreRecoveryPoint,

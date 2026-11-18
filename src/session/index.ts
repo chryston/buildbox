@@ -3,17 +3,26 @@
  * outside this folder.
  *
  * `session` is the stateful core of local Projects and nothing else: it holds no React, no
- * state library, no DOM and no storage technology. It imports `edit`, `domain`, `lib` and
- * the *ports and types* of `persistence` — never an adapter — and everything
- * browser-specific (clock, timer, Web Lock, ID source) arrives through `./ports`. #49 wires
- * it to IndexedDB and `useSyncExternalStore`; #51 binds the ports in `platform` and builds
- * the dialogs that read `save` and `guard`.
+ * state library, no DOM and no storage technology. It imports `edit`, `domain`, `package`,
+ * `lib` and the *ports and types* of `persistence` — never an adapter — and everything
+ * browser-specific (clock, timer, Web Lock, ID source, the Backup codec, the download, the
+ * image decoder) arrives through `./ports`. #49 wires it to IndexedDB and
+ * `useSyncExternalStore`; #50 binds the Backup ports in `platform` and builds the Library that
+ * reads `library` and `guard`.
  *
- * Two stores live here:
+ * `package` is the one import here that is not a port or a pure type, and it is here because
+ * a Project Backup is a *storage* concern with a *codec* in front of it: writing one means
+ * reading stored assets and marking the Library record, and reading one means staging,
+ * remapping IDs and committing atomically. Both are flows this module owns; `ui` may not import
+ * `package` at all (#42 §2), so neither flow can live there.
  *
- * - `createLibraryStore`: Project summaries, Trash, and `isBackupDue`.
+ * Three stores live here:
+ *
+ * - `createLibraryStore`: Project summaries, Trash, rename, duplicate, and `isBackupDue`.
  * - `openProject`: one Project's snapshot, its 200-step history, the single-flight writer,
  *   #14's guard as state, and the Recovery Point schedule.
+ * - `./backup` and `./restore`: Download Backup and Restore Backup, including the collision
+ *   decision and the read-back verification that rolls a bad import back.
  *
  * `src/session/testing.ts` is the second entry point, for test files only: the fake clock,
  * the fake lock and the gated adapter the suites are written against.
@@ -26,10 +35,34 @@ export {
   isBackupDue,
   type LibraryDeps,
 } from './library'
+export { BACKUP_EXTENSION, backupFileName, downloadBackup, encodeBackup, encodeEmergencyBackup, type BackupDeps, type BackupWritten } from './backup'
+export {
+  commitRestore,
+  copyNameFor,
+  stageRestore,
+  type RestoreApplied,
+  type RestoreCollision,
+  type RestoreCommitTarget,
+  type RestoreDecision,
+  type RestoreDeps,
+  type RestoreProblem,
+  type RestoreStaged,
+} from './restore'
 export { IDLE_RECOVERY_MS, openProject, type SessionDeps } from './projectSession'
 export { createSessionRegistry } from './registry'
-export type { ClockPort, IdSource, LockHandle, LockPort } from './ports'
 export type {
+  BackupAsset,
+  BackupEncoderPort,
+  BackupMeta,
+  ClockPort,
+  DownloadPort,
+  IdSource,
+  ImageDecoderPort,
+  LockHandle,
+  LockPort,
+} from './ports'
+export type {
+  BackupFailure,
   DispatchResult,
   EmergencySource,
   GuardState,

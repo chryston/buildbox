@@ -104,12 +104,19 @@ export type PreBoundaryKind = Extract<RecoveryPointKind, 'pre-restore' | 'pre-im
 /** Every way a session operation can be refused. `'guarded'` is #14's block; `'read-only'` is another tab's lock. */
 export type SessionError = PersistenceError | 'guarded' | 'read-only'
 
-/** A dispatch refused because this tab may not write: another tab holds the lock, or this session is closed. */
+/** Why a dispatch was refused because this tab may not write: another tab holds the lock, or this session is closed. */
 export interface SessionRejection {
   ok: false
   code: 'read-only' | 'closed'
   problems: ValidationProblem[]
 }
+
+/** Why a Project Backup could not be written, past the storage errors `persistence` names (#50). */
+export type BackupFailure =
+  /** The Project references an asset hash the store no longer holds, so no complete Backup exists. */
+  | 'missing-asset'
+  /** The codec threw. There is no second copy of the bytes to try again with. */
+  | 'encode-failed'
 
 /** One `dispatch`: the step was taken, or the Intent was refused and nothing changed. */
 export type DispatchResult = { ok: true } | Rejection | SessionRejection
@@ -138,6 +145,13 @@ export interface ProjectSession {
   markEmergencyBackupDownloaded(): void
   /** The in-memory Project — strictly validated — plus the bytes no commit has taken. */
   emergencySource(): EmergencySource
+  /**
+   * The in-memory Project and its held assets as a `.buildbox` Backup (#50).
+   *
+   * #51 wires it to the Save failed dialog, where it is the one action that lifts the guard
+   * honestly: the bytes no commit took leave the tab, and nothing is recorded about them.
+   */
+  encodeEmergencyBackup(): Promise<Result<Uint8Array, BackupFailure>>
   /** Throw away the unsaved changes, behind a best-effort `pre-discard` Recovery Point. */
   discardUnsaved(): Promise<Result<void, SessionError>>
   /** A Recovery Point from the persisted state, then history is cleared (#26). */
@@ -165,6 +179,23 @@ export interface LibraryStore {
   refresh(): Promise<Result<void, PersistenceError>>
   /** A New Project at `NEW_PROJECT_REVISION`, committed with no expected revision. Returns its id. */
   createProject(name: string): Promise<Result<string, PersistenceError>>
+  /**
+   * Rename a Project without opening a session for it (#50's card menu).
+   *
+   * One forward revision, so the rename is a meaningful change and the Project becomes due for
+   * a Backup like any other edit. An empty name changes nothing and reports the record back
+   * unchanged: the dialog's Save is disabled for exactly that case, and a nameless card is not
+   * a state worth storing.
+   */
+  rename(id: string, name: string): Promise<Result<LibraryRecord, SessionError>>
+  /**
+   * A second Project with the same content and none of the same IDs (#50's card menu).
+   *
+   * Import-as-copy semantics, because that is what they are: `domain.remapIds` gives every owned
+   * record a fresh identity and follows every reference, and the name takes the `— Copy` suffix
+   * an imported copy would. The source is untouched, so #14's guard does not apply.
+   */
+  duplicate(id: string): Promise<Result<string, SessionError>>
   trash(id: string): Promise<Result<LibraryRecord, SessionError>>
   restore(id: string): Promise<Result<LibraryRecord, SessionError>>
   purge(id: string): Promise<Result<void, SessionError>>

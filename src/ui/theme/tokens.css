@@ -1,0 +1,242 @@
+/**
+ * The shared design tokens (#50, #28, #21).
+ *
+ * Every value here is copied value-for-value out of the selected Project Library
+ * prototype — `src/prototypes/project-library/styles.css` at `8787ba4`, Variant A.
+ * #28 is explicit that "rewriting the prototype implementation does not authorize
+ * restyling it", so this file is a transcription rather than a palette: a later
+ * workspace screen reuses these tokens and adds no colour of its own.
+ *
+ * Two rules make the transcription checkable:
+ *
+ * - `src/ui/theme/tokens.ts` names every custom property below, and a test asserts the
+ *   two lists are identical, so a token cannot be added to one and not the other.
+ * - no stylesheet under `src/ui` may write a hex literal; a test scans them and points
+ *   at this file (#50 criterion 1).
+ *
+ * The Variant B and Variant C blocks of the prototype CSS are deliberately absent — #28
+ * rejected both variants — except `.project-monogram`, which the Variant A Trash view
+ * uses and which #51 draws on.
+ */
+
+:root {
+  /* Page and app background */
+  --bb-bg-page: #141416;
+  --bb-bg-app: #171719;
+
+  /* Header */
+  --bb-bg-header: #202023;
+  --bb-border-header: #343438;
+
+  /* Surfaces */
+  --bb-bg-card: #222225;
+  --bb-bg-modal: #242428;
+  --bb-bg-inset: #1b1b1e;
+  --bb-bg-choice: #1c1c20;
+  --bb-bg-flow-panel: #212125;
+  --bb-bg-button: #2b2b2f;
+  --bb-bg-button-failure: #2b2b30;
+
+  /* Text */
+  --bb-text: #f5f5f7;
+  --bb-text-strong: #fff;
+  --bb-text-button: #eeeef2;
+  --bb-text-body: #9d9da6;
+  --bb-text-muted: #8f8f98;
+  --bb-text-subtle: #83838d;
+  --bb-text-nav: #92929b;
+  --bb-text-status: #a7a7af;
+  --bb-text-line: #aaaab2;
+  --bb-text-stats: #8e8e97;
+  --bb-text-new: #9b9ba4;
+  --bb-text-new-strong: #e6e6ea;
+  --bb-text-choice: #f0f0f3;
+  --bb-text-choice-sub: #9898a1;
+  --bb-text-recovery-sub: #96969f;
+  --bb-text-cancel: #aaaab3;
+  --bb-text-icon: #8c8c95;
+
+  /* Borders */
+  --bb-border-card: #38383e;
+  --bb-border-button: #46464c;
+  --bb-border-modal: #44444b;
+  --bb-border-inset: #3e3e44;
+  --bb-border-choice: #414147;
+  --bb-border-recovery: #3b3b41;
+  --bb-border-stat-sep: #45454a;
+  --bb-border-trash-row: #39393f;
+  --bb-border-trash-button: #45454b;
+  --bb-border-failure-button: #47474e;
+  --bb-border-dashed-empty: #44444b;
+
+  /* Accent and primary */
+  --bb-accent: #1686f5;
+  --bb-accent-nav: #3b9eff;
+  --bb-accent-selected: #397bbd;
+  --bb-accent-choice: #268ceb;
+  --bb-bg-accent-soft: #172b3f;
+  --bb-eyebrow: #6eb7ff;
+  --bb-link: #66aeee;
+
+  /* Success and save */
+  --bb-ok-dot: #49c77c;
+  --bb-toast-bg: #173526;
+  --bb-toast-border: #2f8e5c;
+  --bb-toast-text: #c3f5d8;
+  --bb-toast-action: #8ce8b5;
+
+  /* Backup risk (amber) */
+  --bb-warn-bg: #29240f;
+  --bb-warn-border: #695822;
+  --bb-warn-text: #b9ad84;
+  --bb-warn-line: #e7bd58;
+  --bb-warn-button: #e8b94c;
+  --bb-warn-button-text: #241b04;
+  --bb-warn-icon-bg: #4a3d16;
+  --bb-warn-icon: #ffd468;
+
+  /* Failure and destructive */
+  --bb-danger-text: #ff7d82;
+  --bb-danger-dot: #ff575d;
+  --bb-danger-button: #ce3d45;
+  --bb-failure-border: #8d383d;
+  --bb-failure-icon-bg: #552529;
+  --bb-failure-icon: #ff8f94;
+
+  /* Plan preview */
+  --bb-preview-grad-a: #2b2f34;
+  --bb-preview-grad-b: #242527;
+  --bb-preview-fill: #25394a;
+  --bb-preview-stroke: #7298b8;
+  --bb-preview-badge-bg: #111b;
+  --bb-preview-badge-text: #b8cde0;
+
+  /* Monogram (the Trash view, #51) */
+  --bb-monogram-bg: #dce8ef;
+  --bb-monogram-text: #34576b;
+
+  /* Radii */
+  --bb-radius-card: 14px;
+  --bb-radius-modal: 17px;
+  --bb-radius-banner: 12px;
+  --bb-radius-choice: 12px;
+  --bb-radius-inset: 10px;
+  --bb-radius-toast: 10px;
+  --bb-radius-button: 9px;
+  --bb-radius-banner-button: 8px;
+  --bb-radius-badge: 7px;
+  --bb-radius-small-button: 7px;
+
+  /* Shadows */
+  --bb-shadow-card-hover: 0 14px 35px #0005;
+  --bb-shadow-modal: 0 30px 80px #000d;
+  --bb-shadow-toast: 0 12px 32px #0008;
+
+  /* Backdrop */
+  --bb-backdrop: #000b;
+  --bb-backdrop-blur: 4px;
+
+  /* Type families */
+  --bb-font-body: 'DM Sans', sans-serif;
+  --bb-font-heading: 'Manrope', 'DM Sans', sans-serif;
+
+  /* Type scale */
+  --bb-size-brand: 20px;
+  --bb-size-brand-suffix: 13px;
+  --bb-size-h1: 38px;
+  --bb-size-h2: 20px;
+  --bb-size-card-title: 18px;
+  --bb-size-modal-title: 25px;
+  --bb-size-eyebrow: 12px;
+  --bb-size-body: 13px;
+  --bb-size-line: 12px;
+  --bb-size-stats: 11px;
+  --bb-size-badge: 11px;
+  --bb-size-lede: 15px;
+  --bb-tracking-h1: -0.035em;
+  --bb-tracking-eyebrow: 0.11em;
+  --bb-weight-brand: 700;
+  --bb-weight-brand-suffix: 500;
+  --bb-weight-eyebrow: 700;
+  --bb-weight-badge: 700;
+  --bb-weight-button: 650;
+  --bb-weight-nav: 600;
+  --bb-line-lede: 1.6;
+  --bb-line-modal: 1.55;
+  --bb-line-choice: 1.45;
+
+  /* Spacing */
+  --bb-header-height: 68px;
+  --bb-header-gap: 34px;
+  --bb-header-padding: 0 38px;
+  --bb-nav-gap: 6px;
+  --bb-nav-item-padding: 0 14px;
+  --bb-nav-underline: 2px;
+  --bb-page-max-width: 1380px;
+  --bb-page-padding: 46px 44px;
+  --bb-hero-gap: 40px;
+  --bb-hero-actions-gap: 10px;
+  --bb-banner-margin: 30px 0;
+  --bb-banner-padding: 16px 18px;
+  --bb-banner-gap: 14px;
+  --bb-grid-columns: 3;
+  --bb-grid-min-column: 290px;
+  --bb-grid-gap: 20px;
+  --bb-card-body-padding: 17px;
+  --bb-card-title-margin: 4px 0 14px;
+  --bb-card-line-margin: 8px;
+  --bb-stats-gap: 10px;
+  --bb-stats-margin: 15px 0;
+  --bb-stats-sep-padding: 10px;
+  --bb-card-actions-gap: 7px;
+  --bb-modal-padding: 29px;
+  --bb-modal-width: min(620px, 92vw);
+  --bb-modal-max-height: 88vh;
+  --bb-summary-margin: 20px 0;
+  --bb-summary-padding: 14px;
+  --bb-summary-gap: 5px;
+  --bb-modal-actions-margin: 24px;
+  --bb-modal-actions-gap: 10px;
+  --bb-choice-gap: 12px;
+  --bb-choice-margin: 22px 0;
+  --bb-choice-padding: 17px;
+  --bb-choice-inner-gap: 8px;
+  --bb-recovery-gap: 8px;
+  --bb-recovery-margin: 18px;
+  --bb-recovery-row-padding: 13px;
+  --bb-recovery-row-gap: 13px;
+  --bb-flow-page-max-width: 1060px;
+  --bb-preview-height: 145px;
+  --bb-preview-angle: 145deg;
+  --bb-preview-box-width: 82%;
+  --bb-preview-box-height: 76%;
+  --bb-badge-padding: 5px 7px;
+  --bb-badge-offset: 12px;
+  --bb-toast-offset: 16px;
+  --bb-toast-max-width: 500px;
+  --bb-toast-padding: 13px 16px;
+  --bb-toast-gap: 18px;
+  --bb-backdrop-padding: 30px;
+  --bb-new-card-min-height: 335px;
+  --bb-new-card-glyph-size: 36px;
+
+  /* Controls */
+  --bb-control-min-height: 38px;
+  --bb-control-padding: 0 15px;
+  --bb-card-button-min-height: 32px;
+  --bb-card-button-padding: 0 10px;
+  --bb-card-button-size: 12px;
+  --bb-failure-button-min-height: 42px;
+  --bb-banner-button-padding: 9px 13px;
+  --bb-status-dot-size: 8px;
+  --bb-status-dot-gap: 7px;
+  --bb-reminder-icon-size: 38px;
+  --bb-reminder-icon-font: 20px;
+  --bb-failure-icon-size: 45px;
+  --bb-failure-icon-font: 25px;
+  --bb-failure-icon-weight: 800;
+
+  /* Motion */
+  --bb-motion-card: 0.16s ease;
+  --bb-lift: -2px;
+}

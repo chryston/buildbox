@@ -7,6 +7,7 @@
  */
 import { sha256Hex } from '../lib'
 import type { Result } from '../persistence'
+import type { ImageDecoderPort } from '../session'
 
 /**
  * The formats a Plan Image may be (#49 deviation 4).
@@ -27,6 +28,32 @@ export interface PlanImageSource {
   readonly mediaType: PlanImageMedia
   readonly widthPx: number
   readonly heightPx: number
+}
+
+/**
+ * An `ImageDecoderPort` over `createImageBitmap` (#50 §4 step 7, #20 §6).
+ *
+ * The same decoder that checks an upload checks a Backup's Plan Images, which is the point: a
+ * Backup restored on the machine that wrote it must decode the same way, and a Floor whose
+ * record claims dimensions the decoder disagrees with is refused rather than drawn wrong.
+ *
+ * `null` for anything the decoder will not open — truncated bytes, an unknown media type, a
+ * file that is not a picture. It is a value and not a throw because the caller is deciding
+ * whether to refuse a Backup, not handling a fault.
+ */
+export function createImageDecoder(): ImageDecoderPort {
+  return {
+    async decode(bytes: Uint8Array, mediaType: string) {
+      try {
+        const bitmap = await createImageBitmap(new Blob([bytes as BlobPart], { type: mediaType }))
+        const dims = { widthPx: bitmap.width, heightPx: bitmap.height }
+        bitmap.close()
+        return dims
+      } catch {
+        return null
+      }
+    },
+  }
 }
 
 /** The messages the floor plan has always shown for a file it cannot use (#49). */

@@ -22,11 +22,13 @@ import {
   createLibraryStore,
   createSessionRegistry,
   openProject,
+  type BackupDeps,
   type ClockPort,
   type IdSource,
   type SessionError,
 } from '../session'
 import {
+  createBackupEncoder,
   createObjectUrlCache,
   createPlatformClock,
   createRandomIdSource,
@@ -126,6 +128,15 @@ export async function mountProjectsV2(root: Root): Promise<void> {
   const lock = createWebLocksPort()
   const registry = createSessionRegistry()
   const library = createLibraryStore({ ports, clock, ids, registry })
+  // `preview: true` because this whole build is the preview (#20 §11, #50 criterion 28): a
+  // `.buildbox` written here is marked, and production refuses it rather than importing preview
+  // work into a real database.
+  const backup: BackupDeps = {
+    clock,
+    encoder: createBackupEncoder(),
+    buildboxVersion: __BUILDBOX_VERSION__,
+    preview: true,
+  }
 
   const refreshed = await library.refresh()
   if (!refreshed.ok) return renderFailure(root, refreshed.error)
@@ -137,7 +148,7 @@ export async function mountProjectsV2(root: Root): Promise<void> {
     projectId = created.value
   }
 
-  const session = await openProject(projectId, { ports, clock, lock, ids, registry })
+  const session = await openProject(projectId, { ports, clock, lock, ids, registry, backup })
   if (!session.ok) return renderFailure(root, session.error)
 
   const assetUrls = createObjectUrlCache(ports.assets.get)

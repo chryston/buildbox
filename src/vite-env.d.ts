@@ -12,3 +12,11 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+/**
+ * The version from `package.json`, replaced with a string literal at build time (#50).
+ *
+ * It is a `define` and not an environment variable because it is not a switch: every build
+ * carries its own version, and a Project Backup's manifest has to say which build wrote it.
+ */
+declare const __BUILDBOX_VERSION__: string

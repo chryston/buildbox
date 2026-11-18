@@ -15,11 +15,20 @@ import type { Project } from '../domain'
 import { sha256Hex } from '../lib'
 import type { SessionDeps } from './projectSession'
 import { createSessionRegistry } from './registry'
-import type { IdSource, LockHandle, LockPort } from './ports'
+import type { BackupDeps } from './backup'
+import type { BackupAsset, BackupEncoderPort, BackupMeta, DownloadPort, IdSource, ImageDecoderPort, LockHandle, LockPort } from './ports'
 import type { SessionAsset, SessionRegistry } from './types'
 
 /** The instant every fixture starts its clock at, so a stored `savedAt` is predictable. */
 export const TEST_NOW = '2026-01-01T00:00:00.000Z'
+
+/**
+ * The `buildboxVersion` a test writes into a Backup manifest (#50).
+ *
+ * It is a constant rather than the app's real version because a test that round-trips a Backup
+ * through `package` must know what the manifest will say, and the released version changes.
+ */
+export const TEST_VERSION = '0.0.0-test'
 
 /**
  * A fault plan that keeps failing: `withFaults` fires each rule at most once, so a rule per
@@ -152,6 +161,8 @@ export interface TestDeps {
   lock: FakeLock
   registry: SessionRegistry
   ids: IdSource
+  encoder: FakeEncoder
+  download: FakeDownload
 }
 
 export function createTestDeps(ports: Ports, options?: { now?: string; prefix?: string }): TestDeps {
@@ -159,7 +170,93 @@ export function createTestDeps(ports: Ports, options?: { now?: string; prefix?: 
   const lock = createFakeLock()
   const ids = idSource(options?.prefix ?? 'session')
   const registry = createSessionRegistry()
-  return { deps: { ports, clock, lock, ids, registry }, ports, clock, lock, registry, ids }
+  const encoder = createFakeEncoder()
+  const download = createFakeDownload()
+  const backup: BackupDeps = { clock, encoder, buildboxVersion: TEST_VERSION, preview: false }
+  return { deps: { ports, clock, lock, ids, registry, backup }, ports, clock, lock, registry, ids, encoder, download }
+}
+
+/** What a test saw the Backup encoder asked for. */
+export interface EncoderCall {
+  projectId: string
+  assetCount: number
+  meta: BackupMeta
+}
+
+/**
+ * A `BackupEncoderPort` with no Worker behind it, which is what a Node test really has.
+ *
+ * It answers `null` — the host's word for "no Worker here" — so `encodeBackup` takes its
+ * main-thread fallback and the bytes a test asserts on are a real `.buildbox` written by the
+ * real codec. Faking the Worker's output instead would test the fake.
+ */
+export interface FakeEncoder extends BackupEncoderPort {
+  calls: EncoderCall[]
+}
+
+export function createFakeEncoder(): FakeEncoder {
+  const encoder: FakeEncoder = {
+    calls: [],
+    async encode(project: Project, assets: readonly BackupAsset[], meta: BackupMeta) {
+      encoder.calls.push({ projectId: project.id, assetCount: assets.length, meta })
+      return null
+    },
+  }
+  return encoder
+}
+
+/** One download a test saw: the name the browser was given and how much it was given. */
+export interface DownloadedFile {
+  fileName: string
+  bytes: Uint8Array
+}
+
+/**
+ * A `DownloadPort` that keeps the bytes instead of handing them to a browser.
+ *
+ * The point is the *order*: a test can assert the file is here before the Library record says a
+ * Backup was offered, which is the promise #14 makes and the one a refactor is most likely to
+ * quietly reverse.
+ */
+export interface FakeDownload extends DownloadPort {
+  files: DownloadedFile[]
+}
+
+export function createFakeDownload(): FakeDownload {
+  const download: FakeDownload = {
+    files: [] as DownloadedFile[],
+    start(fileName, bytes) {
+      download.files.push({ fileName, bytes })
+    },
+  }
+  return download
+}
+
+/** What the fake image decoder answers, and what it was asked about. */
+export interface FakeImages extends ImageDecoderPort {
+  asked: { mediaType: string; byteLength: number }[]
+  /** Swap the answer mid-test: `() => null` is an asset that will not decode. */
+  answer: (bytes: Uint8Array, mediaType: string) => { widthPx: number; heightPx: number } | null
+}
+
+/**
+ * An `ImageDecoderPort` that reports fixed dimensions for every media type it is handed.
+ *
+ * The dimensions are a *claim*, not a copy of the record under test: step 7 compares a Plan
+ * Image's record against what the decoder says, so a record that disagrees with this fake is
+ * refused exactly as a truncated JPEG would be. `answer` is reassignable so one test can make a
+ * single asset fail.
+ */
+export function createFakeImages(dims: { widthPx: number; heightPx: number } = { widthPx: 1000, heightPx: 700 }): FakeImages {
+  const images: FakeImages = {
+    asked: [] as { mediaType: string; byteLength: number }[],
+    answer: () => dims,
+    async decode(bytes, mediaType) {
+      images.asked.push({ mediaType, byteLength: bytes.byteLength })
+      return images.answer(bytes, mediaType)
+    },
+  }
+  return images
 }
 
 /** One recorded commit: what the writer asked the store to write, and against which revision. */
