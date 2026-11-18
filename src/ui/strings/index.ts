@@ -93,8 +93,18 @@ export const STRINGS = {
 
   eyebrowRestore: 'Restore Backup',
   collisionHeading: 'This Project already exists here',
-  collisionBody: (name: string): string =>
-    `The backup for ${name} has the same Project identity as a local Project. It passed validation and migration.`,
+  /**
+   * The collision paragraph, in three pieces.
+   *
+   * #50 sets the Project name in bold inside it, and the only way to keep the sentence in this
+   * table *and* render the emphasis is to hand the view the parts. Splitting a stored string at
+   * the name would break the moment a Project is called `The` or `for`.
+   */
+  collisionBody: (name: string): { before: string; strong: string; after: string } => ({
+    before: 'The backup for ',
+    strong: name,
+    after: ' has the same Project identity as a local Project. It passed validation and migration.',
+  }),
   collisionReplace: 'Replace existing Project',
   collisionReplaceBody:
     'Preserve the current Project as a Recovery Point, then restore this backup with the same identity.',
@@ -122,6 +132,23 @@ export const STRINGS = {
   restoreProblemUnverifiedBody:
     'The Backup was written, but reading it back did not match. Existing Projects are as they were.',
   restoreProblemBody: (check: string): string => `The ${check} check failed. Nothing was changed.`,
+  /**
+   * The two ways the write itself can refuse. #50 does not quote these — the prototype had no
+   * rejection state at all — so they follow the shape of the sentences it does quote: state the
+   * fact, then say nothing changed.
+   */
+  restoreProblemGuarded: 'That Project is held by another tab with unsaved changes. Nothing was changed.',
+  restoreProblemStorage: 'This browser refused the write. Nothing was changed.',
+
+  /**
+   * The five shapes of `{since}` (#50 §2). One formatter produces them, driven by the clock
+   * port, so a card and a Recovery Point row can never disagree about what "yesterday" means.
+   */
+  sinceJustNow: 'just now',
+  sinceMinutes: (n: number): string => `${n} min ago`,
+  sinceToday: (time: string): string => `Today, ${time}`,
+  sinceYesterday: (time: string): string => `Yesterday, ${time}`,
+  sinceDays: (n: number): string => `${n} days ago`,
 } as const
 
 /**

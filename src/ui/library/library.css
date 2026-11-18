@@ -1,0 +1,713 @@
+/**
+ * The Project Library's stylesheet (#50, #28 Variant A at `8787ba4`).
+ *
+ * Every value is a `var(--bb-*)` token from `src/ui/theme/tokens.css`, which is itself a
+ * value-for-value transcription of the selected prototype. Nothing here writes a colour, and a
+ * test in `src/ui/theme/tokens.test.ts` fails the build if one appears (#50 criterion 1) — the
+ * reason the file is long is that the prototype's numbers are specific, not that they are many.
+ *
+ * The class names mirror the archive so a reviewer can diff the two. The prototype's own chrome
+ * — the variant switcher, the scenario controls, the state panel — is absent, which is named
+ * deviation 1, and the responsive rules below 1080 px are deviation 3.
+ */
+
+/* ── Shell ─────────────────────────────────────────────────────────────────── */
+
+.bb-library {
+  min-height: 100vh;
+  background: var(--bb-bg-page);
+  color: var(--bb-text);
+  font-family: var(--bb-font-body);
+  font-size: var(--bb-size-body);
+}
+
+/* ── Header (68 px) ────────────────────────────────────────────────────────── */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: var(--bb-header-gap);
+  height: var(--bb-header-height);
+  padding: var(--bb-header-padding);
+  border-bottom: 1px solid var(--bb-border-header);
+  background: var(--bb-bg-header);
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--bb-text-strong);
+  font-family: var(--bb-font-heading);
+  font-size: var(--bb-size-brand);
+  font-weight: var(--bb-weight-brand);
+  letter-spacing: -0.02em;
+}
+
+.brand span {
+  margin-left: 8px;
+  color: var(--bb-text-subtle);
+  font-family: var(--bb-font-body);
+  font-size: var(--bb-size-brand-suffix);
+  font-weight: var(--bb-weight-brand-suffix);
+}
+
+.app-header nav {
+  display: flex;
+  align-items: center;
+  gap: var(--bb-nav-gap);
+  height: 100%;
+}
+
+.nav-tab {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: var(--bb-nav-item-padding);
+  border: 0;
+  border-bottom: var(--bb-nav-underline) solid transparent;
+  background: none;
+  color: var(--bb-text-nav);
+  font-family: var(--bb-font-body);
+  font-size: var(--bb-size-body);
+  font-weight: var(--bb-weight-nav);
+}
+
+.nav-tab:hover {
+  color: var(--bb-text-strong);
+}
+
+.nav-tab.active {
+  border-bottom-color: var(--bb-accent-nav);
+  color: var(--bb-text-strong);
+}
+
+/* #51 and #52 own the Trash and Migration review surfaces. Until they land the tabs are drawn
+   and marked unavailable rather than hidden, which is the only honest state for a button that
+   leads somewhere the build does not have yet. */
+.nav-tab[aria-disabled='true'] {
+  cursor: default;
+}
+
+.nav-tab[aria-disabled='true']:hover {
+  color: var(--bb-text-nav);
+}
+
+.header-status {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  color: var(--bb-text-status);
+  font-size: var(--bb-size-body);
+}
+
+.status-dot {
+  width: var(--bb-status-dot-size);
+  height: var(--bb-status-dot-size);
+  margin-right: var(--bb-status-dot-gap);
+  border-radius: 50%;
+  background: var(--bb-ok-dot);
+}
+
+/* ── Page ──────────────────────────────────────────────────────────────────── */
+
+.page {
+  max-width: var(--bb-page-max-width);
+  margin: 0 auto;
+  padding: var(--bb-page-padding);
+}
+
+.hero-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--bb-hero-gap);
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--bb-eyebrow);
+  font-size: var(--bb-size-eyebrow);
+  font-weight: var(--bb-weight-eyebrow);
+  letter-spacing: var(--bb-tracking-eyebrow);
+  text-transform: uppercase;
+}
+
+.page h1 {
+  margin: 0 0 10px;
+  color: var(--bb-text-strong);
+  font-family: var(--bb-font-heading);
+  font-size: var(--bb-size-h1);
+  font-weight: 700;
+  letter-spacing: var(--bb-tracking-h1);
+  line-height: 1.05;
+}
+
+.lede {
+  max-width: 62ch;
+  margin: 0;
+  color: var(--bb-text-body);
+  font-size: var(--bb-size-lede);
+  line-height: var(--bb-line-lede);
+}
+
+.hero-actions {
+  display: flex;
+  gap: var(--bb-hero-actions-gap);
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────────────── */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--bb-control-min-height);
+  padding: var(--bb-control-padding);
+  border: 1px solid var(--bb-border-button);
+  border-radius: var(--bb-radius-button);
+  background: var(--bb-bg-button);
+  color: var(--bb-text-button);
+  font-family: var(--bb-font-body);
+  font-size: var(--bb-size-body);
+  font-weight: var(--bb-weight-button);
+}
+
+.button:hover {
+  border-color: var(--bb-text-line);
+}
+
+.button.primary {
+  border-color: var(--bb-accent);
+  background: var(--bb-accent);
+  color: var(--bb-text-strong);
+}
+
+.button.primary:hover {
+  border-color: var(--bb-accent);
+}
+
+/* `Restore Backup` is the peer of `New Project` and not its rival: the archive gives it the
+   same box with no fill. */
+.button.secondary {
+  background: transparent;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--bb-text-icon);
+}
+
+.icon-button:hover {
+  color: var(--bb-text-strong);
+}
+
+/* ── Backup reminder ───────────────────────────────────────────────────────── */
+
+.backup-reminder {
+  display: flex;
+  align-items: center;
+  gap: var(--bb-banner-gap);
+  margin: var(--bb-banner-margin);
+  padding: var(--bb-banner-padding);
+  border: 1px solid var(--bb-warn-border);
+  border-radius: var(--bb-radius-banner);
+  background: var(--bb-warn-bg);
+}
+
+.backup-reminder > div {
+  flex: 1;
+}
+
+.backup-reminder strong {
+  color: var(--bb-text-strong);
+}
+
+.backup-reminder p {
+  margin: 4px 0 0;
+  color: var(--bb-warn-text);
+  font-size: var(--bb-size-line);
+}
+
+.backup-reminder .button {
+  border: 0;
+  border-radius: var(--bb-radius-banner-button);
+  padding: var(--bb-banner-button-padding);
+  background: var(--bb-warn-button);
+  color: var(--bb-warn-button-text);
+  font-weight: 700;
+}
+
+.reminder-icon {
+  display: grid;
+  place-items: center;
+  width: var(--bb-reminder-icon-size);
+  height: var(--bb-reminder-icon-size);
+  border-radius: 50%;
+  background: var(--bb-warn-icon-bg);
+  color: var(--bb-warn-icon);
+  font-size: var(--bb-reminder-icon-font);
+}
+
+/* ── Property grid ─────────────────────────────────────────────────────────── */
+
+.project-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--bb-grid-columns), minmax(var(--bb-grid-min-column), 1fr));
+  gap: var(--bb-grid-gap);
+}
+
+.project-card,
+.new-card {
+  overflow: hidden;
+  border: 1px solid var(--bb-border-card);
+  border-radius: var(--bb-radius-card);
+  background: var(--bb-bg-card);
+  color: inherit;
+  text-align: left;
+  transition: var(--bb-motion-card);
+}
+
+.project-card:hover,
+.project-card.selected,
+.new-card:hover {
+  border-color: var(--bb-accent-selected);
+  transform: var(--bb-lift);
+  box-shadow: var(--bb-shadow-card-hover);
+}
+
+/* ── Plan preview ──────────────────────────────────────────────────────────── */
+
+.plan-preview {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: var(--bb-preview-height);
+  background: linear-gradient(var(--bb-preview-angle), var(--bb-preview-grad-a), var(--bb-preview-grad-b));
+}
+
+.plan-preview span {
+  position: absolute;
+  top: var(--bb-badge-offset);
+  right: var(--bb-badge-offset);
+  padding: var(--bb-badge-padding);
+  border-radius: var(--bb-radius-badge);
+  background: var(--bb-preview-badge-bg);
+  color: var(--bb-preview-badge-text);
+  font-size: var(--bb-size-badge);
+  font-weight: var(--bb-weight-badge);
+}
+
+/* The 82% × 76% artwork box, and the two things that can fill it. */
+.plan-preview svg,
+.plan-preview img {
+  width: var(--bb-preview-box-width);
+  height: var(--bb-preview-box-height);
+}
+
+.plan-preview svg {
+  fill: var(--bb-preview-fill);
+  stroke: var(--bb-preview-stroke);
+  stroke-width: 2;
+}
+
+.plan-preview img {
+  object-fit: contain;
+}
+
+/* ── Card body ─────────────────────────────────────────────────────────────── */
+
+.card-body {
+  padding: var(--bb-card-body-padding);
+}
+
+.card-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.card-title h2 {
+  margin: 0;
+  color: var(--bb-text-strong);
+  font-family: var(--bb-font-heading);
+  font-size: var(--bb-size-card-title);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.card-title p {
+  margin: var(--bb-card-title-margin);
+  color: var(--bb-text-muted);
+  font-size: var(--bb-size-line);
+}
+
+.save-line,
+.backup-line {
+  display: flex;
+  align-items: center;
+  margin-top: var(--bb-card-line-margin);
+  color: var(--bb-text-line);
+  font-size: var(--bb-size-line);
+}
+
+/* A failed save is the one line on a card that changes colour, and it changes to the failure
+   pair rather than to a warning: #14 makes it mean "the work is not stored". */
+.save-line.failed {
+  color: var(--bb-danger-text);
+}
+
+.save-line.failed .status-dot {
+  background: var(--bb-danger-dot);
+}
+
+.backup-line.due {
+  color: var(--bb-warn-line);
+}
+
+.card-stats {
+  display: flex;
+  gap: var(--bb-stats-gap);
+  margin: var(--bb-stats-margin);
+  color: var(--bb-text-stats);
+  font-size: var(--bb-size-stats);
+}
+
+.card-stats span + span {
+  padding-left: var(--bb-stats-sep-padding);
+  border-left: 1px solid var(--bb-border-stat-sep);
+}
+
+.card-actions {
+  display: flex;
+  gap: var(--bb-card-actions-gap);
+}
+
+.card-actions .button {
+  min-height: var(--bb-card-button-min-height);
+  padding: var(--bb-card-button-padding);
+  font-size: var(--bb-card-button-size);
+}
+
+/* `Delete` is text on the card, not a red box: #28 keeps one loud action per card, and that is
+   `Open`. */
+.button.danger-text {
+  border-color: transparent !important;
+  background: transparent !important;
+  color: var(--bb-danger-text) !important;
+}
+
+.button[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.55;
+}
+
+/* ── New Project card ──────────────────────────────────────────────────────── */
+
+.new-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--bb-new-card-min-height);
+  border-style: dashed;
+  color: inherit;
+}
+
+.new-card span {
+  color: var(--bb-text-new);
+  font-size: var(--bb-new-card-glyph-size);
+  font-weight: 300;
+}
+
+.new-card strong {
+  /* The archive's own `10px 0 4px`; no token names it, and inventing one for a single
+     two-value margin would be a token with one consumer. */
+  margin: 10px 0 4px;
+  color: var(--bb-text-new-strong);
+  font-size: var(--bb-size-card-title);
+}
+
+.new-card small {
+  color: var(--bb-text-muted);
+  font-size: var(--bb-size-line);
+}
+
+/* ── Toast ─────────────────────────────────────────────────────────────────── */
+
+/* `top: 16px` rather than the archive's 42px: the 26px it sat below was the prototype strip,
+   which production omits (deviation 1). */
+.toast {
+  position: fixed;
+  z-index: 80;
+  top: var(--bb-toast-offset);
+  right: 24px;
+  display: flex;
+  align-items: center;
+  gap: var(--bb-toast-gap);
+  max-width: var(--bb-toast-max-width);
+  padding: var(--bb-toast-padding);
+  border: 1px solid var(--bb-toast-border);
+  border-radius: var(--bb-radius-toast);
+  background: var(--bb-toast-bg);
+  box-shadow: var(--bb-shadow-toast);
+  color: var(--bb-toast-text);
+  font-size: var(--bb-size-line);
+}
+
+.toast button {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--bb-toast-action);
+  font-weight: 700;
+}
+
+/* ── Dialogs ───────────────────────────────────────────────────────────────── */
+
+.modal-backdrop {
+  position: fixed;
+  z-index: 70;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--bb-backdrop-padding);
+  background: var(--bb-backdrop);
+  backdrop-filter: blur(var(--bb-backdrop-blur));
+}
+
+.modal {
+  width: var(--bb-modal-width);
+  max-height: var(--bb-modal-max-height);
+  overflow: auto;
+  padding: var(--bb-modal-padding);
+  border: 1px solid var(--bb-border-modal);
+  border-radius: var(--bb-radius-modal);
+  background: var(--bb-bg-modal);
+  box-shadow: var(--bb-shadow-modal);
+}
+
+.modal h2 {
+  margin: 0;
+  color: var(--bb-text-strong);
+  font-family: var(--bb-font-heading);
+  font-size: var(--bb-size-modal-title);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.modal p {
+  margin: 12px 0 0;
+  color: var(--bb-text-body);
+  line-height: var(--bb-line-modal);
+}
+
+.summary-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bb-summary-gap);
+  margin: var(--bb-summary-margin);
+  padding: var(--bb-summary-padding);
+  border: 1px solid var(--bb-border-inset);
+  border-radius: var(--bb-radius-inset);
+  background: var(--bb-bg-inset);
+}
+
+.summary-box span,
+.helper {
+  color: var(--bb-text-muted);
+  font-size: var(--bb-size-line);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--bb-modal-actions-gap);
+  margin-top: var(--bb-modal-actions-margin);
+}
+
+/* `Cancel` is a word, not a box: the archive gives every dialog one loud action and everything
+   else the plain text treatment. */
+.modal-actions button:not(.button) {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--bb-text-cancel);
+  font-size: var(--bb-size-body);
+  font-weight: 600;
+}
+
+.choice-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--bb-choice-gap);
+  margin: var(--bb-choice-margin);
+}
+
+/* Neither choice is primary (#50 §4): the two cards are the same weight because the two answers
+   are equally right, and the dialog must not steer. */
+.choice-grid button {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bb-choice-inner-gap);
+  padding: var(--bb-choice-padding);
+  border: 1px solid var(--bb-border-choice);
+  border-radius: var(--bb-radius-choice);
+  background: var(--bb-bg-choice);
+  color: var(--bb-text-choice);
+  font-size: var(--bb-size-body);
+  font-weight: 700;
+  text-align: left;
+}
+
+.choice-grid button:hover {
+  border-color: var(--bb-accent-choice);
+  background: var(--bb-bg-accent-soft);
+}
+
+.choice-grid span {
+  color: var(--bb-text-choice-sub);
+  font-size: var(--bb-size-line);
+  font-weight: 400;
+  line-height: var(--bb-line-choice);
+}
+
+.full-cancel {
+  width: 100%;
+  border: 0;
+  padding: 11px;
+  background: none;
+  color: var(--bb-text-status);
+  font-size: var(--bb-size-body);
+  font-weight: 600;
+}
+
+.rename-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: var(--bb-summary-margin);
+}
+
+.rename-field label {
+  color: var(--bb-text-muted);
+  font-size: var(--bb-size-line);
+}
+
+.rename-field input {
+  min-height: var(--bb-control-min-height);
+  padding: 0 12px;
+  border: 1px solid var(--bb-border-button);
+  border-radius: var(--bb-radius-button);
+  background: var(--bb-bg-inset);
+  color: var(--bb-text-strong);
+  font-family: inherit;
+  font-size: var(--bb-size-body);
+}
+
+/* ── The card's `•••` menu ─────────────────────────────────────────────────── */
+
+/* The archive's `•••` was inert; production opens Rename and Duplicate (deviation 7). It is a
+   plain absolutely-positioned list rather than a portal, because it has two items and one
+   anchor, and a portal would be a second stacking context to reason about for no gain. */
+.card-menu {
+  position: relative;
+}
+
+.card-menu ul {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 132px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--bb-border-modal);
+  border-radius: var(--bb-radius-button);
+  background: var(--bb-bg-modal);
+  box-shadow: var(--bb-shadow-modal);
+}
+
+.card-menu button {
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--bb-radius-small-button);
+  background: none;
+  color: var(--bb-text-body);
+  font-size: var(--bb-size-line);
+  font-weight: 600;
+  text-align: left;
+}
+
+.card-menu button:hover {
+  background: var(--bb-bg-accent-soft);
+  color: var(--bb-text-strong);
+}
+
+/* ── Focus (deviation 4) ───────────────────────────────────────────────────── */
+
+/* The archive has no focus treatment at all, which is why keyboard use through it is invisible.
+   `:focus-visible` only, so a mouse click does not leave a ring the prototype never drew. */
+.bb-library :focus-visible {
+  outline: 2px solid var(--bb-accent);
+  outline-offset: 2px;
+}
+
+/* ── Responsive (deviation 3) ──────────────────────────────────────────────── */
+
+/* Desktop at 1080 px and wider is the archive. Below it the grid narrows and the nav wraps
+   under the brand; the comparison only ever runs at 1440 × 1000. */
+@media (max-width: 1079px) {
+  .app-header {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 12px 20px;
+  }
+
+  .app-header nav {
+    height: auto;
+    order: 3;
+    width: 100%;
+  }
+
+  .nav-tab {
+    height: 34px;
+  }
+
+  .header-status {
+    margin-left: auto;
+  }
+
+  .project-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .page {
+    padding: 28px 20px;
+  }
+
+  .hero-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 699px) {
+  .project-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .choice-grid {
+    grid-template-columns: 1fr;
+  }
+}
