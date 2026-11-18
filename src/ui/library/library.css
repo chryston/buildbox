@@ -977,3 +977,238 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── #52: Legacy data migration ──────────────────────────────────────────────
+   The archive's `MigrationReview` at 8787ba4. Deviation (d): the prototype strip and the
+   variant/state controls are not reproduced, so nothing here reserves room for them. */
+
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 42px;
+}
+
+.stepper-item {
+  display: flex;
+  align-items: center;
+}
+
+.stepper-dot {
+  position: relative;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--bb-stepper-dot-border);
+  border-radius: 50%;
+  color: var(--bb-stepper-dot-text);
+  font-size: var(--bb-size-line);
+}
+
+/* The label sits below the circle rather than inside it, which is why the circle stays 30px. */
+.stepper-dot > span {
+  position: absolute;
+  margin-top: 57px;
+  white-space: nowrap;
+}
+
+.stepper-dot.done {
+  border-color: var(--bb-stepper-done-border);
+  background: var(--bb-stepper-done-bg);
+  color: var(--bb-stepper-done-text);
+}
+
+.stepper-dot.active {
+  border-color: var(--bb-stepper-active-border);
+  background: var(--bb-stepper-active-bg);
+  color: var(--bb-text);
+}
+
+.stepper-item i {
+  width: 120px;
+  height: 1px;
+  background: var(--bb-stepper-line);
+}
+
+.migration-review .lede {
+  max-width: var(--bb-lede-max-width);
+}
+
+.migration-layout {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 22px;
+  margin-top: 26px;
+}
+
+.migration-layout .panel {
+  padding: 18px;
+  border: 1px solid var(--bb-border-card);
+  border-radius: var(--bb-radius-card);
+  background: var(--bb-bg-flow-panel);
+}
+
+.migration-layout h2 {
+  margin: 0 0 14px;
+  font-size: var(--bb-size-h2);
+}
+
+.migration-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 0;
+  border-top: 1px solid var(--bb-migration-item-border);
+}
+
+.migration-item > div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.migration-item p {
+  margin: 0;
+  color: var(--bb-text-muted);
+  font-size: var(--bb-size-line);
+}
+
+.file-icon {
+  width: 35px;
+  height: 35px;
+  border-radius: 7px;
+  background: var(--bb-migration-icon-bg);
+}
+
+.tag {
+  padding: 5px 8px;
+  border-radius: 99px;
+  background: var(--bb-migration-icon-bg);
+  color: var(--bb-migration-tag-text);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.tag-muted {
+  background: var(--bb-bg-inset);
+  color: var(--bb-text-muted);
+}
+
+.migration-layout label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--bb-text-line);
+  font-size: var(--bb-size-line);
+}
+
+.migration-layout select {
+  padding: 10px;
+  border: 1px solid var(--bb-select-border);
+  border-radius: 8px;
+  background: var(--bb-select-bg);
+  color: var(--bb-text);
+  font-family: var(--bb-font-body);
+}
+
+.migration-preview,
+.migration-note,
+.migration-helper,
+.migration-hint {
+  margin: 12px 0 0;
+  color: var(--bb-text-muted);
+  font-size: var(--bb-size-line);
+}
+
+.migration-hint {
+  color: var(--bb-eyebrow);
+}
+
+.migration-helper {
+  padding-top: 14px;
+  border-top: 1px solid var(--bb-migration-item-border);
+}
+
+.migration-stages {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 25px 0;
+  padding: 15px 15px 15px 34px;
+  border: 1px solid var(--bb-result-border);
+  border-radius: 10px;
+  color: var(--bb-result-text);
+}
+
+.migration-stages .failed {
+  color: var(--bb-danger-text);
+}
+
+.migration-stages .passed {
+  color: var(--bb-stepper-done-text);
+}
+
+.migration-failure,
+.migration-paused {
+  margin-top: 25px;
+  padding: 15px;
+  border: 1px solid var(--bb-border-failure-button);
+  border-radius: 10px;
+  color: var(--bb-text-body);
+}
+
+.success-page {
+  max-width: var(--bb-success-max-width);
+  margin: 0 auto;
+  text-align: center;
+}
+
+.success-mark {
+  display: grid;
+  width: 65px;
+  height: 65px;
+  margin: 0 auto 18px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--bb-success-bg);
+  color: var(--bb-success-text);
+  font-size: 30px;
+}
+
+.result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 25px 0;
+  padding: 15px;
+  border: 1px solid var(--bb-result-border);
+  border-radius: 10px;
+  color: var(--bb-result-text);
+  text-align: left;
+}
+
+.result-list li {
+  list-style: none;
+}
+
+.migration-confirm {
+  margin-top: 18px;
+  padding: 15px;
+  border: 1px solid var(--bb-result-border);
+  border-radius: 10px;
+  color: var(--bb-text-body);
+  text-align: left;
+}
+
+.flow-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.flow-actions button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

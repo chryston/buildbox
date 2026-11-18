@@ -250,6 +250,27 @@
   --bb-failure-icon-font: 25px;
   --bb-failure-icon-weight: 800;
 
+  /* Legacy data migration (#52) */
+  --bb-stepper-dot-border: #4a4a50;
+  --bb-stepper-dot-text: #888891;
+  --bb-stepper-done-border: #3f9c68;
+  --bb-stepper-done-bg: #255c3e;
+  --bb-stepper-done-text: #d9f9e6;
+  --bb-stepper-active-border: #258bf0;
+  --bb-stepper-active-bg: #176caf;
+  --bb-stepper-line: #44444a;
+  --bb-migration-icon-bg: #293948;
+  --bb-migration-tag-text: #72b3eb;
+  --bb-migration-item-border: #35353a;
+  --bb-select-border: #48484f;
+  --bb-select-bg: #18181b;
+  --bb-success-bg: #275d3f;
+  --bb-success-text: #9be3b8;
+  --bb-result-border: #3b3b41;
+  --bb-result-text: #bdbdc5;
+  --bb-lede-max-width: 730px;
+  --bb-success-max-width: 680px;
+
   /* Motion */
   --bb-motion-card: 0.16s ease;
   --bb-lift: -2px;

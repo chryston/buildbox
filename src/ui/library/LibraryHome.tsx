@@ -12,7 +12,7 @@
  * this one component against a fake store rather than by driving a browser.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { backupFileName, isBackupDue } from '../../session'
+import { backupFileName, isBackupDue, legacyFileKind } from '../../session'
 import { STRINGS } from '../strings'
 import { BackupDialog } from './BackupDialog'
 import { CollisionDialog } from './CollisionDialog'
@@ -21,8 +21,11 @@ import { RenameDialog } from './RenameDialog'
 import { RestoreProblemDialog } from './RestoreProblemDialog'
 import { StorageNotice } from './Notices'
 import { TrashView } from './TrashView'
+import { MigrationReview } from './MigrationReview'
+import type { MigrationServices } from './MigrationReview'
 import { Toast } from './Toast'
 import type { ToastMessage } from './Toast'
+import { LegacyFileDialog } from '../dialogs/LegacyFileDialog'
 import { PermanentDeleteDialog } from '../dialogs/PermanentDeleteDialog'
 import { RecoveryDialog } from '../dialogs/RecoveryDialog'
 import { SaveFailedDialog } from '../dialogs/SaveFailedDialog'
@@ -123,9 +126,22 @@ type Dialog =
   | { kind: 'delete'; id: string; name: string; record: LibraryRecord; recoveryPoints: number }
   /** Always about the session this tab holds, which is why it carries no id of its own. */
   | { kind: 'save-failed' }
+  /**
+   * A file picked from `Restore Backup` that turned out to be old BuildBox data (#52 criterion 17).
+   *
+   * The bytes are held, not re-read: the picker has already gone, and the review is going to be
+   * given exactly the file the reader chose.
+   */
+  | { kind: 'legacy-file'; bytes: Uint8Array }
 
-/** Which of the Library's two surfaces is showing. Migration review is #52's. */
-type Surface = 'projects' | 'trash'
+/**
+ * Which of the Library's three surfaces is showing.
+ *
+ * Migration review is a surface rather than a dialog because it is a four-step flow the reader
+ * may leave in the middle (#52 §4.6) — a dialog would have to be dismissed, which reads as a
+ * decision, and `Do this later` is not one.
+ */
+type Surface = 'projects' | 'migration' | 'trash'
 
 export interface LibraryHomeProps {
   services: LibraryServices
@@ -143,6 +159,23 @@ export interface LibraryHomeProps {
   guard?: GuardState | null
   /** True when this tab has no durable storage at all (#51 §6). */
   storageUnavailable?: boolean
+  /**
+   * The migration flows, when this build has a legacy source to look at (#52).
+   *
+   * Optional rather than part of `LibraryServices` because the Library is rendered by tests and
+   * by surfaces that have nothing to migrate; a surface with no legacy data shows the same
+   * `Migration review` tab and says so plainly.
+   */
+  migration?: MigrationServices
+  /**
+   * Open on the Migration review rather than the grid (#52 criterion 1).
+   *
+   * `app` decides this before rendering, from the source hash and the completion record: a
+   * reader whose old data has already been migrated and verified lands on their Projects, and
+   * one whose has not lands where the decision is. It is an initial surface, not a lock — every
+   * way out of the review is a tab, a brand click and a `Do this later`.
+   */
+  openMigration?: boolean
 }
 
 export function LibraryHome({
@@ -151,6 +184,8 @@ export function LibraryHome({
   saveStateFor = null,
   guard = null,
   storageUnavailable = false,
+  migration,
+  openMigration = false,
 }: LibraryHomeProps): ReactNode {
   const { library, clock } = services
   const subscribe = useCallback((listener: () => void) => library.subscribe(listener), [library])
@@ -163,7 +198,7 @@ export function LibraryHome({
   const [reminderDismissed, setReminderDismissed] = useState(false)
   const [counts, setCounts] = useState<Map<string, number>>(new Map())
   const [busy, setBusy] = useState(false)
-  const [surface, setSurface] = useState<Surface>('projects')
+  const [surface, setSurface] = useState<Surface>(openMigration && migration !== undefined ? 'migration' : 'projects')
   const fileInput = useRef<HTMLInputElement>(null)
   const countsToken = useRef(0)
 
@@ -262,6 +297,13 @@ export function LibraryHome({
   const restoreFrom = useCallback(
     async (file: File): Promise<void> => {
       const bytes = await services.readBackupFile(file)
+      // Criterion 17: old data is not a broken Backup, and saying so is not enough — the review
+      // is opened with the file the reader actually chose. `legacyFileKind` only routes; whether
+      // the bytes are readable is `package`'s judgement, made a step later.
+      if (migration !== undefined && legacyFileKind(new TextDecoder().decode(bytes)) !== null) {
+        setDialog({ kind: 'legacy-file', bytes })
+        return
+      }
       const staged = await services.stageRestore(bytes)
       if (!staged.ok) {
         setDialog({ kind: 'problem', problem: staged.error })
@@ -438,9 +480,13 @@ export function LibraryHome({
           >
             {STRINGS.navProjects}
           </button>
-          {/* #52 owns Migration review; it is drawn in the finished position and marked
-              unavailable, which is truer than hiding a destination this build does not have. */}
-          <button type="button" className="nav-tab" aria-disabled="true">
+          <button
+            type="button"
+            className={`nav-tab ${surface === 'migration' ? 'active' : ''}`}
+            onClick={() => {
+              goto('migration')
+            }}
+          >
             {STRINGS.navMigration}
           </button>
           <button
@@ -458,7 +504,23 @@ export function LibraryHome({
         </div>
       </header>
 
-      {surface === 'trash' ? (
+      {surface === 'migration' && migration !== undefined ? (
+        <MigrationReview
+          migration={migration}
+          existing={[...snapshot.projects, ...snapshot.trash]}
+          paused={storageUnavailable}
+          onReturn={() => {
+            setSurface('projects')
+          }}
+          onToast={(message) => {
+            setToast({ text: message })
+          }}
+        />
+      ) : surface === 'migration' ? (
+        <main className="library-main">
+          <p role="status">{STRINGS.migrationNothingFound}</p>
+        </main>
+      ) : surface === 'trash' ? (
         <TrashView
           records={snapshot.trash}
           now={now}
@@ -552,12 +614,13 @@ export function LibraryHome({
       </main>
       )}
 
-      {/* The file picker is the browser's; `accept` names the one extension a Backup can have,
-          and everything past this point is `package`'s judgement rather than this component's. */}
+      {/* `accept` names both extensions a file can arrive with: `.buildbox` for a Backup and
+          `.json` for the old workspace and store exports (#52 criterion 17). Which one it is
+          stays unread until the bytes are here, because the extension is not the format. */}
       <input
         ref={fileInput}
         type="file"
-        accept=".buildbox"
+        accept=".buildbox,.json"
         hidden
         onChange={(event) => {
           const file = event.target.files?.[0]
@@ -566,6 +629,19 @@ export function LibraryHome({
         }}
       />
 
+      {dialog.kind === 'legacy-file' && migration !== undefined && (
+        <LegacyFileDialog
+          onReview={() => {
+            migration.adopt(dialog.bytes)
+            setDialog({ kind: 'none' })
+            setSelected(null)
+            setSurface('migration')
+          }}
+          onClose={() => {
+            setDialog({ kind: 'none' })
+          }}
+        />
+      )}
       {dialog.kind === 'backup' && (
         <BackupDialog
           fileName={dialog.fileName}

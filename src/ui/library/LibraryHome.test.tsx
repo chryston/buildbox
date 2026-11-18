@@ -79,7 +79,9 @@ describe('the Library home', () => {
     expect(screen.getByText('BuildBox')).toBeInTheDocument()
     expect(screen.getByText('Project Library')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Projects' })).toHaveClass('active')
-    expect(screen.getByRole('button', { name: 'Migration review' })).toHaveAttribute('aria-disabled', 'true')
+    // #50 left this tab disabled because it had not built the review; #52 §4 built it, so all
+    // three tabs are destinations now.
+    expect(screen.getByRole('button', { name: 'Migration review' })).toBeEnabled()
     // #51 §4 gave the Trash a screen, so its tab is a destination rather than a promise.
     expect(screen.getByRole('button', { name: 'Trash' })).toBeEnabled()
   })
