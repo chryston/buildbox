@@ -63,4 +63,6 @@ export {
   type ProjectSummary,
 } from './summarizeProject'
 export { formatDisplay, fromMm, toMm } from './units/unitConversion'
+export { formatGeometryProblem } from './formatGeometryProblem'
+export type { DisplayFormat } from './formatGeometryProblem'
 export { validateProject, type ValidateProjectResult } from './validate'
