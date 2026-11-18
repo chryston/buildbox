@@ -20,6 +20,8 @@
  * sentence by string concatenation at a call site, which is where the plurals go wrong.
  */
 
+import type { RecoveryPointKind, SaveFailureReason } from '../../session'
+
 /** `1 Floor` / `2 Floors` and the same for every countable noun the Library shows. */
 export const plural = (count: number, one: string, many: string): string =>
   count === 1 ? `${count} ${one}` : `${count} ${many}`
@@ -149,6 +151,118 @@ export const STRINGS = {
   sinceToday: (time: string): string => `Today, ${time}`,
   sinceYesterday: (time: string): string => `Yesterday, ${time}`,
   sinceDays: (n: number): string => `${n} days ago`,
+
+  /* ------------------------------------------------------------------ #51: Recovery Points */
+
+  eyebrowRecoveryPoints: 'Recovery Points',
+  recoveryHeading: (name: string): string => `Return ${name} to an earlier state`,
+  recoveryBody:
+    'Restoring creates a new current revision. Your current state is preserved first, so this action is reversible.',
+  recoveryRestore: 'Restore selected point',
+  recoveryEmpty:
+    'No Recovery Points yet. BuildBox creates them while you work and when you close a Project.',
+  /**
+   * The six checkpoint triggers #26 lists, in the words the row shows.
+   *
+   * Deviation 15: the prototype invented `Before importing plan image` and `Daily checkpoint`,
+   * and neither is a kind a real Recovery Point has. These six are the kinds `persistence`
+   * stores, so a row always names something BuildBox actually did.
+   */
+  recoveryReason: {
+    idle: 'Automatic checkpoint',
+    close: 'When the Project was closed',
+    'pre-restore': 'Before restoring an older version',
+    'pre-import-replace': 'Before replacing it from a Backup',
+    'pre-migration': 'Before updating to a newer BuildBox',
+    'pre-discard': 'Before discarding unsaved changes',
+  } as Record<RecoveryPointKind, string>,
+  /** The row's shape line, in the archive's lower case: `2 floors · 3 options · 14 items`. */
+  recoverySummary: (floors: number, options: number, items: number): string =>
+    `${plural(floors, 'floor', 'floors')} · ${plural(options, 'option', 'options')} · ${plural(items, 'item', 'items')}`,
+  /** Deviation 13: #26 fixes this sentence; the prototype's wording is superseded. */
+  toastRecoveryRestored: 'Recovery Point restored. Previous state saved as Recovery Point.',
+
+  /* ---------------------------------------------------------------- #51: Save failed */
+
+  eyebrowSaveFailed: 'Save failed',
+  saveFailedHeading: 'Your latest changes are not stored',
+  /**
+   * The last-success sentence, in three pieces, because #14 sets the time in bold and a stored
+   * string cannot be split at the time without breaking on a Project called `10:42`.
+   */
+  saveFailedBody: (time: string): { before: string; strong: string; after: string } => ({
+    before: 'BuildBox kept the last successful local version from ',
+    strong: time,
+    after: '. Do not close this tab or switch Projects until you choose an action.',
+  }),
+  saveFailedNothingStored:
+    'BuildBox has no stored local version of this Project yet. Do not close this tab or switch Projects until you choose an action.',
+  saveFailedHeld: 'Current unsaved changes are still held in memory.',
+  /** The four reasons #14 names. `revision-conflict` has its own dialog (#51 §5). */
+  saveFailureReason: {
+    quota: 'Browser storage is full',
+    aborted: 'The browser stopped the save',
+    serialization: "This Project couldn't be prepared for saving",
+    unavailable: "Browser storage isn't available",
+  } as Record<Exclude<SaveFailureReason, 'revision-conflict'>, string>,
+  retrySave: 'Retry save',
+  downloadEmergencyBackup: 'Download emergency backup',
+  discardUnsaved: 'Discard unsaved changes',
+  /** #14: the download is what lifts the guard, and BuildBox cannot see where the file went. */
+  toastEmergencyStarted: 'Emergency backup download started. BuildBox cannot verify where the file is kept.',
+  toastDiscarded: 'Unsaved changes discarded. Previous state saved as Recovery Point.',
+  /** The same sentence when the `pre-discard` Point could not be stored — usually the same quota. */
+  toastDiscardedNoPoint: 'Unsaved changes discarded.',
+
+  /* ------------------------------------------------------- #51: Permanent deletion */
+
+  eyebrowPermanentDeletion: 'Permanent deletion',
+  permanentDeleteHeading: 'Delete this Project permanently?',
+  permanentDeleteBody:
+    'This removes the Project, its Plan Images, and local Recovery Points. This cannot be undone.',
+  /** Deviation 14: the summary names the Project being deleted, not whatever card was selected. */
+  permanentDeleteSummary: (floors: number, options: number, points: number): string =>
+    `${plural(floors, 'floor', 'floors')} · ${plural(options, 'option', 'options')} · ${plural(points, 'Recovery Point', 'Recovery Points')}`,
+  backupBeforeDelete: 'Download Backup before deleting',
+  deletePermanently: 'Delete permanently',
+  toastPurged: (name: string): string => `${name} was deleted permanently.`,
+
+  /* ---------------------------------------------------------------- #51: Trash */
+
+  eyebrowLocalTrash: 'Local trash',
+  trashHeading: 'Deleted Projects',
+  trashLede: 'Projects remain recoverable for 30 days. Clearing browser data can remove trash immediately.',
+  trashEmpty: 'Trash is empty.',
+  restore: 'Restore',
+  /** `Deleted 12 days ago · 18 days remaining`, the archive's row. */
+  trashDeleted: (since: string, remaining: string): string => `Deleted ${since} · ${remaining}`,
+  /** #14: the Trash lasts 30 days, and the row counts them down. */
+  daysRemaining: (n: number): string =>
+    n >= 2 ? `${n} days remaining` : n === 1 ? '1 day remaining' : 'Less than a day remaining',
+  returnToProjects: '← Return to Projects',
+  toastRestored: (name: string): string => `Restored ${name}.`,
+
+  /* ---------------------------------------------------------- #51: multi-tab safety */
+
+  /** Deviation 17: no prototype surface has this strip; it reuses the chosen-row tokens. */
+  readOnlyStrip:
+    'This Project is open for editing in another tab. This tab is read-only and shows the latest saved state.',
+  toastNowEditable: (name: string): string => `This tab can now edit ${name}.`,
+  /** The one refusal every locked Library action answers with. */
+  toastOpenElsewhere: (name: string): string => `${name} is open in another tab. Close it there first.`,
+
+  eyebrowChangedInAnotherTab: 'Changed in another tab',
+  conflictHeading: 'This Project changed in another tab',
+  conflictBody: (name: string): string =>
+    `Another tab saved a newer version of ${name}. Your latest changes in this tab are not stored.`,
+  conflictReload: 'Reload the latest version',
+  conflictImportCopy: 'Import my changes as a copy',
+
+  /* ------------------------------------------------- #51: IndexedDB unavailable */
+
+  /** Deviation 17 again: the notice is new, and it is the failure palette, not a new colour. */
+  storageUnavailableNotice:
+    "Browser storage isn't available. Projects here last only until this tab closes. Download a Backup to keep your work.",
 } as const
 
 /**

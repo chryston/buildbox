@@ -24,9 +24,11 @@ export interface ModalProps {
   children: ReactNode
   /** `false` for a dialog the user must answer rather than escape from (#51). */
   dismissable?: boolean
+  /** `.failure-modal` for the dialogs that report something going wrong (#51). */
+  className?: string
 }
 
-export function Modal({ eyebrow, heading, onClose, children, dismissable = true }: ModalProps): ReactNode {
+export function Modal({ eyebrow, heading, onClose, children, dismissable = true, className }: ModalProps): ReactNode {
   const box = useRef<HTMLDivElement>(null)
   const headingId = useId()
 
@@ -79,7 +81,7 @@ export function Modal({ eyebrow, heading, onClose, children, dismissable = true 
     >
       <div
         ref={box}
-        className="modal"
+        className={className === undefined ? 'modal' : `modal ${className}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={headingId}

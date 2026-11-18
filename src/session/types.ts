@@ -154,6 +154,11 @@ export interface ProjectSession {
   encodeEmergencyBackup(): Promise<Result<Uint8Array, BackupFailure>>
   /** Throw away the unsaved changes, behind a best-effort `pre-discard` Recovery Point. */
   discardUnsaved(): Promise<Result<void, SessionError>>
+  /**
+   * Re-read the stored record into a read-only session (#51 §5), which is the only state it is
+   * offered in: an editable session has work of its own that a message must not overwrite.
+   */
+  reload(): Promise<Result<void, SessionError>>
   /** A Recovery Point from the persisted state, then history is cleared (#26). */
   checkpoint(kind: PreBoundaryKind): Promise<Result<void, SessionError>>
   /** Recovery Point → its data as a new revision → history cleared (#26). */

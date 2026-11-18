@@ -26,6 +26,40 @@ const clockTime = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2
 /** Midnight, local, as an epoch value: two of these subtract to a whole number of calendar days. */
 const startOfDay = (at: Date): number => Date.UTC(at.getFullYear(), at.getMonth(), at.getDate())
 
+/** `3 Oct`, the archive's short date: day without a leading zero, three-letter month. */
+const shortDate = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' })
+
+/** `3 Oct, 11:20 AM` — the shape every older instant takes once `Today` and `Yesterday` are spent. */
+const datedTime = (then: Date): string => `${shortDate.format(then)}, ${clockTime.format(then)}`
+
+/**
+ * A Recovery Point's time: `Today, 9:15 AM`, `Yesterday, 6:30 PM`, otherwise `3 Oct, 11:20 AM`.
+ *
+ * A Point is chosen by *when* it was, so the row leads with the clock time and keeps the day
+ * word for as long as it is true. `formatSince` counts the other way — it answers "how long
+ * ago", which is what a card's save line says and not what a picker needs.
+ */
+export function formatPointTime(at: string, now: string): string {
+  const then = new Date(at)
+  const days = Math.round((startOfDay(new Date(now)) - startOfDay(then)) / DAY_MS)
+  if (days === 0) return STRINGS.sinceToday(clockTime.format(then))
+  if (days === 1) return STRINGS.sinceYesterday(clockTime.format(then))
+  return datedTime(then)
+}
+
+/**
+ * The last successful save, as the Save failed dialog names it: `10:42 AM` today, otherwise
+ * `3 Oct, 11:20 AM`.
+ *
+ * No `Today,` prefix: the dialog is read minutes after the failure, and the sentence
+ * `BuildBox kept the last successful local version from Today, 10:42 AM` is not English.
+ */
+export function formatLastSave(at: string, now: string): string {
+  const then = new Date(at)
+  const days = Math.round((startOfDay(new Date(now)) - startOfDay(then)) / DAY_MS)
+  return days === 0 ? clockTime.format(then) : datedTime(then)
+}
+
 /**
  * How long ago `at` was, as one short phrase.
  *

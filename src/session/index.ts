@@ -83,4 +83,13 @@ export type {
   SessionSnapshot,
 } from './types'
 // The record shapes a caller of `session` meets in its results, named where they are owned.
-export type { LibraryRecord, PersistenceError, Ports, Result } from '../persistence'
+// `RecoveryPointMeta` is here for the same reason `LibraryRecord` is: #51's Recovery Point
+// picker reads it through `LibraryServices`, and `ui` may not import `persistence` (#42 §2).
+export type {
+  LibraryRecord,
+  PersistenceError,
+  Ports,
+  RecoveryPointKind,
+  RecoveryPointMeta,
+  Result,
+} from '../persistence'

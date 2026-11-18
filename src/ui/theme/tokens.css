@@ -53,6 +53,8 @@
   --bb-text-choice: #f0f0f3;
   --bb-text-choice-sub: #9898a1;
   --bb-text-recovery-sub: #96969f;
+  --bb-text-empty: #8d8d95;
+  --bb-text-trash-button: #cccccc;
   --bb-text-cancel: #aaaab3;
   --bb-text-icon: #8c8c95;
 
@@ -114,6 +116,8 @@
   /* Monogram (the Trash view, #51) */
   --bb-monogram-bg: #dce8ef;
   --bb-monogram-text: #34576b;
+  --bb-monogram-size: 42px;
+  --bb-monogram-weight: 800;
 
   /* Radii */
   --bb-radius-card: 14px;
@@ -205,7 +209,17 @@
   --bb-recovery-margin: 18px;
   --bb-recovery-row-padding: 13px;
   --bb-recovery-row-gap: 13px;
+  --bb-recovery-text-gap: 4px;
+  --bb-failure-actions-gap: 9px;
+  --bb-backup-delete-padding: 11px;
   --bb-flow-page-max-width: 1060px;
+  --bb-trash-row-padding: 17px 4px;
+  --bb-trash-row-gap: 14px;
+  --bb-trash-text-gap: 5px;
+  --bb-trash-button-padding: 7px 10px;
+  --bb-empty-padding: 60px;
+  --bb-back-link-margin: 24px;
+  --bb-strip-padding: 12px 18px;
   --bb-preview-height: 145px;
   --bb-preview-angle: 145deg;
   --bb-preview-box-width: 82%;
