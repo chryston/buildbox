@@ -28,6 +28,7 @@ export function ConflictDialog({ name, onReload, onImportCopy, onEmergencyBackup
     <Modal
       className="failure-modal"
       eyebrow={STRINGS.eyebrowChangedInAnotherTab}
+      eyebrowDanger
       heading={STRINGS.conflictHeading}
       dismissable={false}
     >

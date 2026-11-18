@@ -27,7 +27,9 @@ const DAY_MS = 86_400_000
  */
 export function daysRemaining(trashedAt: string, now: string): number {
   const elapsed = Date.parse(now) - Date.parse(trashedAt)
-  return TRASH_RETENTION_DAYS - Math.floor(elapsed / DAY_MS)
+  // Clamped, because a record the sweeper has not reached yet is not a negative number of days:
+  // the row says `Less than a day remaining`, which is the truth the archive tells at that point.
+  return Math.max(0, TRASH_RETENTION_DAYS - Math.floor(elapsed / DAY_MS))
 }
 
 /**

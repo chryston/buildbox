@@ -58,6 +58,7 @@ export function SaveFailedDialog({
     <Modal
       className="failure-modal"
       eyebrow={STRINGS.eyebrowSaveFailed}
+      eyebrowDanger
       heading={STRINGS.saveFailedHeading}
       dismissable={false}
     >

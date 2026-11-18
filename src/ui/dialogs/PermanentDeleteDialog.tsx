@@ -36,7 +36,12 @@ export function PermanentDeleteDialog({
   onClose,
 }: PermanentDeleteDialogProps): ReactNode {
   return (
-    <Modal eyebrow={STRINGS.eyebrowPermanentDeletion} heading={STRINGS.permanentDeleteHeading} onClose={onClose}>
+    <Modal
+      eyebrow={STRINGS.eyebrowPermanentDeletion}
+      eyebrowDanger
+      heading={STRINGS.permanentDeleteHeading}
+      onClose={onClose}
+    >
       <p>{STRINGS.permanentDeleteBody}</p>
       <div className="summary-box">
         <strong>{name}</strong>

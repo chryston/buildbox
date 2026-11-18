@@ -19,6 +19,13 @@ const FOCUSABLE =
 export interface ModalProps {
   /** The small uppercase line above the heading: `Project Backup`, `Restore Backup`. */
   eyebrow?: string
+  /**
+   * Red eyebrow, for the three dialogs whose subject is that something has gone wrong (#51).
+   *
+   * A tone rather than a class name, because the archive colours exactly one element of these
+   * dialogs — the eyebrow above the heading — and nothing else may reach in and colour the rest.
+   */
+  eyebrowDanger?: boolean
   heading: string
   /** Absent for a dialog with no way out but an answer (#51's Save failed and conflict dialogs). */
   onClose?: () => void
@@ -29,7 +36,7 @@ export interface ModalProps {
   className?: string
 }
 
-export function Modal({ eyebrow, heading, onClose, children, dismissable = true, className }: ModalProps): ReactNode {
+export function Modal({ eyebrow, eyebrowDanger, heading, onClose, children, dismissable = true, className }: ModalProps): ReactNode {
   const box = useRef<HTMLDivElement>(null)
   const headingId = useId()
 
@@ -89,7 +96,9 @@ export function Modal({ eyebrow, heading, onClose, children, dismissable = true,
         tabIndex={-1}
         onKeyDown={onKeyDown}
       >
-        {eyebrow !== undefined && <p className="eyebrow">{eyebrow}</p>}
+        {eyebrow !== undefined && (
+          <p className={eyebrowDanger ? 'eyebrow danger' : 'eyebrow'}>{eyebrow}</p>
+        )}
         <h2 id={headingId}>{heading}</h2>
         {children}
       </div>
