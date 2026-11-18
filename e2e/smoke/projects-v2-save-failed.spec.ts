@@ -79,9 +79,10 @@ test('nothing in the app takes the person away from the failed save', async ({ p
   await expect(dialog).toBeVisible()
   await expect(placedObject(page, sofa)).toBeVisible()
 
-  // The brand. The flagged editor draws it as a heading rather than a link, so there is nowhere
-  // for it to go; clicking the words changes nothing about the Project or the dialog.
-  await page.getByText('BuildBox', { exact: true }).dispatchEvent('click')
+  // The Project name. The workspace header draws it as plain text, not a link — the
+  // brand left the screen with the legacy page (#55) — so there is nowhere for the
+  // click to go; it changes nothing about the Project or the dialog.
+  await page.locator('.bb-workspace-project-name').dispatchEvent('click')
   await expect(dialog).toBeVisible()
   await expect(placedObject(page, sofa)).toBeVisible()
 

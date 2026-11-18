@@ -348,16 +348,22 @@ export function FloorWorkspace(): ReactNode {
             <span className="bb-workspace-project-name">{project.meta.name}</span>
             <span className="bb-workspace-spacer" />
             {save !== null && (
-              <button
-                type="button"
+              // The legacy shape the S4 specs assert: a `role="status"` span whose failed
+              // state is a button, because the dialog is the answer to the red words.
+              <span
                 role="status"
                 data-testid="save-status"
                 data-failed={save.failed ? 'true' : 'false'}
                 className="bb-workspace-save-status"
-                onClick={save.failed ? host.showSaveFailure : undefined}
               >
-                {save.text}
-              </button>
+                {save.failed ? (
+                  <button type="button" onClick={host.showSaveFailure}>
+                    {save.text}
+                  </button>
+                ) : (
+                  save.text
+                )}
+              </span>
             )}
             <button
               type="button"
