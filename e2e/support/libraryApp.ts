@@ -3,7 +3,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Download, Locator, Page } from '@playwright/test'
 import { expect } from '@playwright/test'
-import { PREVIEW_DB_NAME, reseedPreviewDb, seedPreviewDb, type PreviewSeed } from './seedPreviewDb'
+import { E2E_DB_NAME, reseedPreviewDb, seedPreviewDb, type PreviewSeed } from './seedPreviewDb'
 
 /**
  * The pieces the #50 Library specs share: open the flag-on build at the Library, drive the
@@ -185,7 +185,7 @@ function readStore<T>(page: Page, store: string): Promise<T[]> {
           read.onerror = () => rejectRead(new Error(`reading ${storeName} failed`))
         }
       }),
-    [PREVIEW_DB_NAME, store],
+    [E2E_DB_NAME, store],
   )
 }
 

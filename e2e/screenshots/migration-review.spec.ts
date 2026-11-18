@@ -1,4 +1,4 @@
-import type { Page, TestInfo } from '@playwright/test'
+import type { Page } from '@playwright/test'
 import { expect, test } from '../support/fixtures'
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -40,10 +40,6 @@ const PROTOTYPE_CHROME = ['.prototype-notice', '.scenario-controls', '.variant-s
    production draws the same hatching rather than the fixture's PNG, because #28 approved the
    hatching. There is nothing on this screen the two sides cannot be asked to share. */
 
-const requireFlag = (testInfo: TestInfo): void => {
-  test.skip(testInfo.project.name !== 'projects-v2', 'the Migration review exists only behind VITE_FF_PROJECTS_V2')
-}
-
 /** Old data in `localStorage` and a seeded store, so the review opens by itself. */
 async function seed(page: Page): Promise<void> {
   await seedPreviewDb(page, previewSeed)
@@ -71,7 +67,6 @@ async function openReview(page: Page): Promise<void> {
 }
 
 test('the Migration review matches #28 and is baselined', async ({ page }, testInfo) => {
-  requireFlag(testInfo)
   await page.clock.setFixedTime(FIXED_NOW)
   await seed(page)
 

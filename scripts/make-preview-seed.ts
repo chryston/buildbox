@@ -26,7 +26,7 @@ const SOURCE = resolve(repoRoot, 'fixtures/legacy/v3/buildbox-store.json')
 const OUT = resolve(repoRoot, 'fixtures/e2e/preview-seed/legacy-v3.json')
 
 /** The database the flagged build opens, repeated here so a rename cannot pass silently. */
-const DB_NAME = 'buildbox-preview'
+const DB_NAME = 'buildbox'
 
 /**
  * The clock the baselines freeze (#39). The first Project is the newest because

@@ -57,5 +57,5 @@ test('editing writes no localStorage key and opens no other database', async ({ 
   await expect.poll(() => projectRevision(page, previewSeed.projects[0].id)).toBeGreaterThanOrEqual(3)
 
   expect(await localStorageSnapshot(page)).toBe(before)
-  await expect.poll(() => databaseNames(page)).toEqual(['buildbox-preview'])
+  await expect.poll(() => databaseNames(page)).toEqual(['buildbox'])
 })

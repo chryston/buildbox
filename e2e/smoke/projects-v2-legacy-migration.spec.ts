@@ -12,7 +12,7 @@ import {
   toast,
 } from '../support/libraryApp'
 import { LEGACY_STORE_KEY, readLegacyStore, seedLegacyStore } from '../support/legacyStore'
-import { PREVIEW_DB_NAME, seedPreviewDb } from '../support/seedPreviewDb'
+import { E2E_DB_NAME, seedPreviewDb } from '../support/seedPreviewDb'
 import type { PreviewSeed } from '../support/seedPreviewDb'
 import type { Page } from '@playwright/test'
 
@@ -231,7 +231,7 @@ test('with IndexedDB unavailable the review pauses, and both downloads still wor
 
   // Nothing was written anywhere: the source is untouched, and no Project was created.
   expect(await readLegacyStore(page)).toBe(REVIEW)
-  expect(await page.evaluate((name) => indexedDB.databases().then((dbs) => dbs.some((db) => db.name === name)), PREVIEW_DB_NAME)).toBe(
+  expect(await page.evaluate((name) => indexedDB.databases().then((dbs) => dbs.some((db) => db.name === name)), E2E_DB_NAME)).toBe(
     false,
   )
   await expect(toast(page)).toHaveCount(0)
