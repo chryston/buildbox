@@ -78,6 +78,11 @@ export interface MigrationReviewProps {
   onReturn(): void
   /** A toast for the reader who finishes; the Library owns the toast slot. */
   onToast?(message: string): void
+  /**
+   * Criterion 5: a Backup of one Project this review made, asked of the Library, which owns the
+   * Download Backup dialog. The review does not render that dialog a second time.
+   */
+  onDownloadBackup(projectId: string, name: string): void
 }
 
 type Step = 'found' | 'review' | 'verify' | 'done'
@@ -97,6 +102,7 @@ export function MigrationReview({
   paused = false,
   onReturn,
   onToast,
+  onDownloadBackup,
 }: MigrationReviewProps) {
   const [inspected, setInspected] = useState<InspectedMigration | null>(null)
   const [nothingFound, setNothingFound] = useState(false)
@@ -182,6 +188,7 @@ export function MigrationReview({
       migration={migration}
       onReturn={onReturn}
       onToast={onToast}
+      onDownloadBackup={onDownloadBackup}
     />
   )
 }
@@ -192,13 +199,13 @@ function MigrationSteps({
   migration,
   onReturn,
   onToast,
+  onDownloadBackup,
 }: MigrationReviewProps & { inspected: InspectedMigration }) {
   const [step, setStep] = useState<Step>('found')
   const [destination, setDestination] = useState<string | null>(null)
   const [collisions, setCollisions] = useState<MigrationChoices['collisions']>({})
   const [runFailure, setRunFailure] = useState<MigrationFailure | null>(null)
   const [result, setResult] = useState<MigrationResult | null>(null)
-  const [busy, setBusy] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [removed, setRemoved] = useState(false)
 
@@ -216,7 +223,6 @@ function MigrationSteps({
   const chosen = destinations.find((choice) => choice.value === destination)?.destination ?? null
 
   const migrate = useCallback(async (): Promise<void> => {
-    setBusy(true)
     setRunFailure(null)
     setStep('verify')
     const outcome = await migration.run(inspected, { floorPlan: chosen, collisions })
@@ -226,7 +232,6 @@ function MigrationSteps({
     } else {
       setRunFailure(outcome.error)
     }
-    setBusy(false)
   }, [chosen, collisions, inspected, migration])
 
   const stepIndex = STEPS.findIndex((each) => each.key === step)
@@ -425,42 +430,29 @@ function MigrationSteps({
           <h1>{STRINGS.migrationVerifiedHeading}</h1>
           <p className="lede">{STRINGS.migrationVerifiedLede}</p>
           <ul className="result-list">
-            {(result?.projects ?? [])
-              .filter((entry) => !entry.floorPlan)
-              .map((entry) => (
-                <li key={entry.id}>{STRINGS.migrationResultRow(entry.name, STRINGS.migrationBecameNewProject)}</li>
-              ))}
-            {planOutcome?.kind === 'attached' ? (
-              <li>
-                {STRINGS.migrationResultRow(
-                  STRINGS.migrationStandaloneFloorPlan,
-                  STRINGS.migrationBecameAttached(planOutcome.projectName),
-                )}
+            {(result?.projects ?? []).map((entry) => (
+              <li key={entry.id}>
+                {entry.floorPlan
+                  ? planOutcome?.kind === 'attached'
+                    ? STRINGS.migrationResultRow(
+                        STRINGS.migrationStandaloneFloorPlan,
+                        STRINGS.migrationBecameAttached(planOutcome.projectName),
+                      )
+                    : STRINGS.migrationResultRow(STRINGS.migrationStandaloneFloorPlan, STRINGS.migrationBecameSeparate)
+                  : STRINGS.migrationResultRow(entry.name, STRINGS.migrationBecameNewProject)}
+                {/* Criterion 5: a Backup of every Project this step made, each through the Library's
+                    own Download Backup dialog — the same dialog a card offers, because a Backup made
+                    here is not a different kind of Backup. */}
+                <button type="button" onClick={() => onDownloadBackup(entry.id, entry.name)}>
+                  {STRINGS.migrationDownloadBackup}
+                </button>
               </li>
-            ) : null}
-            {planOutcome?.kind === 'separate' ? (
-              <li>
-                {STRINGS.migrationResultRow(STRINGS.migrationStandaloneFloorPlan, STRINGS.migrationBecameSeparate)}
-              </li>
-            ) : null}
+            ))}
             {(result?.notMigrated ?? []).map((row) => (
               <li key={row.designName}>{STRINGS.migrationNotMigratedRow(row.designName)}</li>
             ))}
           </ul>
           <div className="flow-actions">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setBusy(true)
-                void migration.downloadBackups(inspected, { floorPlan: chosen, collisions }).then((outcome) => {
-                  if (outcome.ok) onToast?.(outcome.value.join(' '))
-                  setBusy(false)
-                })
-              }}
-            >
-              {STRINGS.migrationDownloadBackup}
-            </button>
             <button type="button" onClick={() => migration.downloadOriginal()}>
               {STRINGS.migrationDownloadOriginal}
             </button>

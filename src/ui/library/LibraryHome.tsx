@@ -247,12 +247,26 @@ export function LibraryHome({
     )
   }, [projects])
 
-  const openBackup = useCallback(
-    async (record: LibraryRecord): Promise<void> => {
-      const sizeBytes = await services.backupEstimate(record.id)
-      setDialog({ kind: 'backup', id: record.id, name: record.name, fileName: backupFileName(record.name), sizeBytes })
+  /**
+   * The Download Backup dialog for one Project, by id and name.
+   *
+   * The Migration review's Back up step asks for this by name rather than by record (#52
+   * criterion 5): the Project it names was written moments ago by the same flow, and the review
+   * holds the name the reader chose, not a `LibraryRecord`.
+   */
+  const openBackupOf = useCallback(
+    async (id: string, name: string): Promise<void> => {
+      const sizeBytes = await services.backupEstimate(id)
+      setDialog({ kind: 'backup', id, name, fileName: backupFileName(name), sizeBytes })
     },
     [services],
+  )
+
+  const openBackup = useCallback(
+    async (record: LibraryRecord): Promise<void> => {
+      await openBackupOf(record.id, record.name)
+    },
+    [openBackupOf],
   )
 
   const confirmBackup = useCallback(
@@ -514,6 +528,9 @@ export function LibraryHome({
           }}
           onToast={(message) => {
             setToast({ text: message })
+          }}
+          onDownloadBackup={(id, name) => {
+            void openBackupOf(id, name)
           }}
         />
       ) : surface === 'migration' ? (

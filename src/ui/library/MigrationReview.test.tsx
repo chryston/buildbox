@@ -149,17 +149,29 @@ const MIGRATION_REVIEW: MigrationProposal[] = [
 ]
 
 /** Render the review and let the inspection land. */
-const renderReview = async (harness: Harness, paused = false): Promise<void> => {
+const renderReview = async (
+  harness: Harness,
+  paused = false,
+  onDownloadBackup: (projectId: string, name: string) => void = () => undefined,
+): Promise<void> => {
   render(
-    <MigrationReview migration={harness.services} existing={[]} paused={paused} onReturn={() => undefined} />,
+    <MigrationReview
+      migration={harness.services}
+      existing={[]}
+      paused={paused}
+      onReturn={() => undefined}
+      onDownloadBackup={onDownloadBackup}
+    />,
   )
   await flush()
 }
 
 /** Advance to the Back up step: choose a destination, continue, migrate. */
-const runThrough = async (): Promise<Harness> => {
+const runThrough = async (
+  onDownloadBackup?: (projectId: string, name: string) => void,
+): Promise<Harness> => {
   const harness = createMigration()
-  await renderReview(harness)
+  await renderReview(harness, false, onDownloadBackup)
   fireEvent.change(screen.getByLabelText(STRINGS.migrationAttachItTo), { target: { value: 'separate' } })
   fireEvent.click(screen.getByRole('button', { name: STRINGS.migrationContinue }))
   fireEvent.click(screen.getByRole('button', { name: STRINGS.migrationMigrateAndVerify }))
@@ -216,24 +228,29 @@ describe('the Migration review', () => {
         migration={createMigration({ ok: true, value: empty }).services}
         existing={[]}
         onReturn={() => undefined}
+        onDownloadBackup={() => undefined}
       />,
     )
     await flush()
     expect(screen.getByText(STRINGS.migrationFloorPlanEmpty)).toBeInTheDocument()
 
     const filled = createMigration()
-    render(<MigrationReview migration={filled.services} existing={[]} onReturn={() => undefined} />)
+    render(<MigrationReview migration={filled.services} existing={[]} onReturn={() => undefined} onDownloadBackup={() => undefined} />)
     await flush()
     expect(screen.queryByText(STRINGS.migrationSkip)).not.toBeInTheDocument()
   })
 
-  it('lists what each Design became and offers a Backup on the Back up step (#52 criterion 5)', async () => {
-    const harness = await runThrough()
+  it('lists what each Design became and offers a Backup for each of them (#52 criterion 5)', async () => {
+    const asked: string[] = []
+    await runThrough((_id, name) => asked.push(name))
     expect(screen.getByText('Cabinet 1 → New Project')).toBeInTheDocument()
     expect(screen.getByText('Standalone floor plan → Separate Project')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: STRINGS.migrationDownloadBackup }))
-    await flush()
-    expect(harness.downloadBackups).toHaveBeenCalledTimes(1)
+    // Criterion 5 is a Backup per Project, not one for all of them, and each goes to the Library's
+    // own Download Backup dialog — the one place that names the file before writing it.
+    const buttons = screen.getAllByRole('button', { name: STRINGS.migrationDownloadBackup })
+    expect(buttons).toHaveLength(4)
+    fireEvent.click(buttons[0] as HTMLElement)
+    expect(asked).toEqual(['Cabinet 1'])
   })
 
   it('removes nothing until the confirmation is pressed (#52 criterion 6)', async () => {
@@ -252,6 +269,7 @@ describe('the Migration review', () => {
         migration={createMigration({ ok: true, value: inspectedOf(MIGRATION_REVIEW, null, { wallHack: 2, tileZone: 1 }) }).services}
         existing={[]}
         onReturn={() => undefined}
+        onDownloadBackup={() => undefined}
       />,
     )
     await flush()
@@ -298,6 +316,7 @@ describe('the Migration review', () => {
         migration={createMigration({ ok: true, value: null }).services}
         existing={[]}
         onReturn={() => undefined}
+        onDownloadBackup={() => undefined}
       />,
     )
     await flush()

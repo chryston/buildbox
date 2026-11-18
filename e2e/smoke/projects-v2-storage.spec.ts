@@ -3,9 +3,9 @@ import type { Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { addFloorPlanObject, openPreviewApp, showFloorPlan } from '../support/previewApp'
-import { previewSeed } from '../support/libraryApp'
-import { databaseNames, projectRevision } from '../support/seedPreviewDb'
+import { addFloorPlanObject, FIRST_PROJECT, openProjectFromLibrary, showFloorPlan } from '../support/previewApp'
+import { libraryHeading, previewSeed } from '../support/libraryApp'
+import { databaseNames, projectRevision, seedPreviewDb } from '../support/seedPreviewDb'
 
 // Criterion 8 (#49): the flagged build writes only `buildbox-preview`. Today's app persists
 // through `localStorage['buildbox-store']`, and a build that wrote both would put two
@@ -34,8 +34,19 @@ test('editing writes no localStorage key and opens no other database', async ({ 
     },
     ['buildbox-store', v3],
   )
-  await openPreviewApp(page)
+  await seedPreviewDb(page, previewSeed)
+  await page.goto('./', { waitUntil: 'networkidle' })
+  // #52 criterion 1: a browser that still holds legacy data opens on the Migration review rather
+  // than on the Library, so this spec passes through that flow too. It is a second subject here and
+  // not an obstacle — the review is the thing that runs on a real browser that has used today's
+  // app, and `Do this later` is the one exit that promises to write nothing. The snapshot is taken
+  // after it for that reason: the review's own read of the key is then inside the assertion.
+  await expect(page.getByRole('heading', { level: 1, name: 'Review where your existing work belongs' })).toBeVisible()
+  await page.getByRole('button', { name: 'Do this later' }).click()
+  await expect(libraryHeading(page)).toBeVisible()
   const before = await localStorageSnapshot(page)
+
+  await openProjectFromLibrary(page, FIRST_PROJECT)
 
   await page.getByTestId('void-unit-kitchen-base-hanging').click({ position: { x: 10, y: 10 } })
   await page.getByRole('button', { name: 'Add Shelf' }).click()
