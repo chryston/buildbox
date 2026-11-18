@@ -533,7 +533,8 @@ export async function compareWithPrototype(
  * - both sides rasterise the same woff2 bytes (`routePrototypeFonts`, #50 named deviation
  *   2), so a difference is the app's and never the font host's;
  * - `hideOnPrototype` removes the prototype's own chrome — the scenario bar, the notice
- *   strip — before its state is driven, so chrome the app never had cannot count;
+ *   strip — after its state is driven and before capture, so chrome the app never had
+ *   cannot count;
  * - `masks` excludes the regions the two sides are *meant* to disagree about, and says so on
  *   the composite instead of hiding it.
  *
@@ -567,13 +568,15 @@ export async function diffAgainstPrototype(
   // --- the prototype side -------------------------------------------------------
   await routePrototypeFonts(page)
   // `renderPrototype` drives `prepare` itself, before any style of ours existed, so the
-  // preparer is deferred here and runs exactly once — on the page the capture sees.
+  // preparer is deferred here and runs exactly once — on the page the capture sees. The
+  // preparer drives the archive's own controls, so it runs while they are still clickable;
+  // the chrome is hidden only afterwards, so it cannot count in the pixels.
   await renderPrototype(page, { ...prototype, prepare: undefined }, viewport)
+  if (prototype.prepare) await prototype.prepare(page)
   if (hideOnPrototype.length > 0) {
     const hide = hideOnPrototype.map((selector) => `${selector} { display: none !important; }`).join('\n')
     await page.addStyleTag({ content: hide })
   }
-  if (prototype.prepare) await prototype.prepare(page)
   await waitForFonts(page)
   const prototypeRegion = await maskRegion(page, masks)
   const prototypePng = join(dir, 'prototype.png')
