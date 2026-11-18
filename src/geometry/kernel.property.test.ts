@@ -44,7 +44,10 @@ const rotateStart = (path: ClosedPath, steps: number): ClosedPath => {
   return { start: path.segments[k - 1].to, segments: [...path.segments.slice(k), ...path.segments.slice(0, k)] }
 }
 
-const fixed = (value: number, digits: number): string => (Object.is(value, -0) ? 0 : value).toFixed(digits)
+const fixed = (value: number, digits: number): string => {
+  const rounded = Number(value.toFixed(digits))
+  return (rounded === 0 ? 0 : rounded).toFixed(digits)
+}
 
 const rect = (width: number, depth: number, at: Pt): ClosedPath => ({
   start: { x: at.x, y: at.y },
