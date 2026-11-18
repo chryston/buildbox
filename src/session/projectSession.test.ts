@@ -485,6 +485,25 @@ describe('the Recovery Point schedule', () => {
     expect(preRestore[0]?.revision).toBe(3)
   })
 
+  it('adds no close point after a restore: the stored state is a copy of an existing point (#51 criterion 13)', async () => {
+    const { session, ports } = await openFixture()
+    session.dispatch(rename('Worth Keeping'))
+    await flush()
+    expect((await session.checkpoint('pre-import-replace')).ok).toBe(true)
+    const [point] = await pointsOfKind(ports, PROJECT_ID, 'pre-import-replace')
+    if (point === undefined) throw new Error('no pre-import-replace Recovery Point was stored')
+    session.dispatch(rename('Later Work'))
+    await flush()
+
+    expect((await session.restoreRecoveryPoint(point.id)).ok).toBe(true)
+    const before = await ports.recovery.list(PROJECT_ID)
+    expect((await session.close()).ok).toBe(true)
+    const after = await ports.recovery.list(PROJECT_ID)
+    if (!before.ok || !after.ok) throw new Error('could not list Recovery Points')
+    expect(after.value).toHaveLength(before.value.length)
+    expect(await pointsOfKind(ports, PROJECT_ID, 'close')).toHaveLength(0)
+  })
+
   it('prunes after every Recovery Point it creates (criterion 10)', async () => {
     const base = createMemoryAdapter()
     await seedProject(base, testProject(PROJECT_ID))
