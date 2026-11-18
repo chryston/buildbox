@@ -237,7 +237,7 @@ function objectItemDesign(object: LegacyFloorPlanObject, designId: string): Gene
  * | `(x + w/2, y + h/2)` and `rotationDeg = rotation` (0, 90, 180 or 270, clockwise with
  * | +Y down, which matches domain v1). |
  *
- * Centres, not corners: legacy rotation is about the centre (`PlacedObject.tsx`
+ * Centres, not corners: legacy rotation is about the centre (the legacy canvas drew
  * `rotate(rotation, cx, cy)`), and a domain placement rotates about the Item Origin too.
  */
 function objectPlacement(object: LegacyFloorPlanObject, designId: string): LegacyFloorPlanContent['placements'][number] {

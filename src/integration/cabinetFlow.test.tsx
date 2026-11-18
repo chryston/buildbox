@@ -144,9 +144,9 @@ describe('Polish features E2E', () => {
     // Canvas shows the cabinet
     expect(screen.getByTestId('cabinet-canvas')).toBeInTheDocument()
 
-    // Switch to Floor Plan
+    // Switch to Floor Plan — the workspace shell replaces the cabinet chrome (#55).
     await user.click(screen.getByRole('button', { name: /floor plan/i }))
-    expect(screen.getByText(/upload image/i)).toBeInTheDocument()
+    expect(screen.getByTestId('floor-workspace')).toBeInTheDocument()
     expect(screen.queryByTestId('cabinet-canvas')).not.toBeInTheDocument()
 
     // Switch back to Cabinet — canvas is back and shelf still there

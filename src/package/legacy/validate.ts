@@ -494,8 +494,8 @@ function validateAnnotation(raw: unknown, path: string, add: Add): void {
     return
   }
   // #40 asked for exactly two points on a tile-zone, but the captured v3 fixture — the
-  // input this reader must accept — stores a 4-point tile-zone, and AnnotationLayer
-  // renders any annotation with >= 2 points (a zone from its first two). The fixture
+  // input this reader must accept — stores a 4-point tile-zone, and the legacy floor
+  // plan rendered any annotation with >= 2 points (a zone from its first two). The fixture
   // wins: both kinds need at least two points, more is fine.
   if (points.length < 2) {
     add(problem(pointsPath, EMPTY_LIST, 'Expected at least two points.'))

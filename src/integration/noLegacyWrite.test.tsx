@@ -12,6 +12,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../App'
 import { LEGACY_STORE_KEY } from '../platform'
+import { PLAN_IMAGE_ACCEPT, WorkspaceProvider, type WorkspaceServices } from '../ui'
 import { openTestView, renderWithBindings as render, type TestView } from '../ui/legacy/testing'
 
 /** Every key a `Storage.prototype.setItem` call named since the last `beforeEach`. */
@@ -37,14 +38,33 @@ describe('the legacy localStorage key', () => {
 
   it('is never written while the app is used and the Project is edited', async () => {
     const user = userEvent.setup()
-    render(<App />, view)
+    const services: WorkspaceServices = {
+      intent: view.services.intent,
+      assetUrls: view.services.assetUrls,
+      readPlanImage: () => Promise.reject(new Error('jsdom models no file reader')),
+      planImageAccept: PLAN_IMAGE_ACCEPT,
+      planCatalogue: [{ key: 'sofa-2', label: 'Sofa 2-seater' }],
+      viewportCache: { read: async () => undefined, write: () => {} },
+    }
+    render(
+      <WorkspaceProvider
+        session={view.session}
+        services={services}
+        onReturnToProjects={() => {}}
+        onShowSaveFailure={() => {}}
+      >
+        <App />
+      </WorkspaceProvider>,
+      view,
+    )
 
     // A cabinet edit, a floor-plan edit, a module switch and an undo: the four actions the
     // `persist` middleware used to flush to localStorage.
     await user.click(screen.getAllByTestId(/^void-/)[0]!)
     await user.click(screen.getByRole('button', { name: /add shelf/i }))
     await user.click(screen.getByRole('button', { name: /floor plan/i }))
-    await user.click(screen.getByText('Sofa 2-seater'))
+    await user.click(screen.getByTestId('add-item-menu'))
+    await user.click(screen.getByTestId('add-sofa-2'))
     await user.keyboard('{Control>}z{/Control}')
 
     expect(written).not.toContain(LEGACY_STORE_KEY)

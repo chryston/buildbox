@@ -1,0 +1,410 @@
+/**
+ * The Floor workspace's styling (#55).
+ *
+ * Every value is a token from `theme/tokens.css` — the same palette the Library and the
+ * cabinet chrome draw from, never the legacy Tailwind surface classes. The layout is the
+ * one the issue prescribes: header, one fixed-height toolbar row, then a body of
+ * left rail (300 px), canvas host, and a notes slot that is zero-width until #61 gives
+ * it content. Below 1024 px the rail becomes a drawer the `View & selection` control
+ * opens; below 1280 px the notes slot would be a fixed overlay. Nothing here resizes the
+ * canvas: the host is whatever the flex row leaves it.
+ */
+
+.bb-workspace {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bb-bg-app);
+  color: var(--bb-text);
+}
+
+/* ---------------------------------------------------------------- header */
+
+.bb-workspace-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--bb-header-height);
+  flex: none;
+  padding: 0 16px;
+  background: var(--bb-bg-header);
+  border-bottom: 1px solid var(--bb-border-header);
+}
+
+.bb-workspace-header .bb-workspace-project-name {
+  font-size: 15px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bb-workspace-header .bb-workspace-spacer {
+  flex: 1;
+}
+
+.bb-workspace-save-status {
+  font-size: 12px;
+  color: var(--bb-text-muted);
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  cursor: default;
+}
+
+.bb-workspace-save-status[data-failed='true'] {
+  color: var(--bb-danger-text);
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------- toolbar */
+
+.bb-workspace-toolbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--bb-workspace-toolbar-height);
+  flex: none;
+  padding: 0 12px;
+  background: var(--bb-bg-header);
+  border-bottom: 1px solid var(--bb-border-header);
+  overflow: visible;
+}
+
+.bb-workspace-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.bb-workspace-tool-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--bb-radius-button);
+  border: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-button);
+  color: var(--bb-text-button);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bb-workspace-tool-button:hover:not(:disabled) {
+  background: var(--bb-bg-choice);
+}
+
+.bb-workspace-tool-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.bb-workspace-tool-button[aria-pressed='true'] {
+  background: var(--bb-accent);
+  border-color: var(--bb-accent);
+  color: var(--bb-text-strong);
+}
+
+/* Dropdown panels are overlays: opening one never changes the toolbar's height. */
+.bb-workspace-menu-anchor {
+  position: relative;
+}
+
+.bb-workspace-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  min-width: 200px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: var(--bb-radius-choice);
+  border: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-modal);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 40%);
+}
+
+.bb-workspace-menu-item {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: var(--bb-radius-button);
+  background: none;
+  color: var(--bb-text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bb-workspace-menu-item:hover:not(:disabled) {
+  background: var(--bb-bg-choice);
+}
+
+.bb-workspace-menu-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.bb-workspace-menu-heading {
+  padding: 6px 10px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bb-text-muted);
+}
+
+/* ---------------------------------------------------------------- body */
+
+.bb-workspace-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.bb-workspace-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: var(--bb-workspace-rail-width);
+  flex: none;
+  padding: 12px;
+  overflow-y: auto;
+  background: var(--bb-bg-header);
+  border-right: 1px solid var(--bb-border-header);
+}
+
+.bb-workspace-card {
+  padding: 12px;
+  border-radius: var(--bb-radius-card);
+  border: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-card);
+}
+
+.bb-workspace-card-title {
+  margin: 0 0 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bb-text-muted);
+}
+
+.bb-workspace-field-label {
+  display: block;
+  margin: 8px 0 4px;
+  font-size: 12px;
+  color: var(--bb-text-muted);
+}
+
+.bb-workspace-input,
+.bb-workspace-select {
+  width: 100%;
+  height: var(--bb-control-min-height);
+  padding: 0 10px;
+  border-radius: var(--bb-radius-button);
+  border: 1px solid var(--bb-select-border);
+  background: var(--bb-select-bg);
+  color: var(--bb-text);
+  font-size: 13px;
+}
+
+.bb-workspace-unit-suffix {
+  font-size: 12px;
+  color: var(--bb-text-subtle);
+}
+
+.bb-workspace-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.bb-workspace-swatch[aria-pressed='true'] {
+  border-color: var(--bb-text);
+}
+
+.bb-workspace-danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--bb-radius-button);
+  border: 1px solid var(--bb-danger-button);
+  background: var(--bb-danger-button);
+  color: var(--bb-text-strong);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------- canvas */
+
+.bb-workspace-canvas-host {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--bb-bg-app);
+}
+
+.bb-workspace-canvas-host svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.bb-workspace-scale-hint {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  font-size: 12px;
+  color: var(--bb-text-muted);
+  pointer-events: none;
+}
+
+/* The draft bar and the warning strip are overlays: they never resize the canvas. */
+.bb-workspace-draft-bar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: var(--bb-radius-choice);
+  border: 1px solid var(--bb-warn-border);
+  background: var(--bb-warn-bg);
+  color: var(--bb-warn-text);
+  font-size: 13px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 35%);
+}
+
+.bb-workspace-warning-strip {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  padding: 8px 16px;
+  border-top: 1px solid var(--bb-warn-border);
+  background: var(--bb-warn-bg);
+  color: var(--bb-warn-text);
+  font-size: 13px;
+}
+
+.bb-workspace-warning-strip[data-tone='error'] {
+  border-top-color: var(--bb-danger-dot);
+  background: var(--bb-bg-modal);
+  color: var(--bb-danger-text);
+}
+
+/* ---------------------------------------------------------------- notes */
+
+.bb-workspace-notes {
+  width: var(--bb-workspace-notes-width);
+  flex: none;
+  overflow-y: auto;
+  background: var(--bb-bg-header);
+  border-left: 1px solid var(--bb-border-header);
+}
+
+/* ---------------------------------------------------------------- dialogs */
+
+.bb-workspace-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 50%);
+}
+
+.bb-workspace-dialog {
+  width: 340px;
+  padding: 20px;
+  border-radius: var(--bb-radius-card);
+  border: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-modal);
+  color: var(--bb-text);
+}
+
+.bb-workspace-dialog h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.bb-workspace-dialog-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.bb-workspace-primary-button {
+  flex: 1;
+  height: var(--bb-control-min-height);
+  border-radius: var(--bb-radius-button);
+  border: none;
+  background: var(--bb-accent);
+  color: var(--bb-text-strong);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bb-workspace-secondary-button {
+  flex: 1;
+  height: var(--bb-control-min-height);
+  border-radius: var(--bb-radius-button);
+  border: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-button);
+  color: var(--bb-text-button);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------- narrow viewports */
+
+/* Below 1024 px the rail is a drawer over the canvas, opened by `View & selection`. */
+@media (max-width: 1023.98px) {
+  .bb-workspace-rail {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 25;
+    transform: translateX(-100%);
+    box-shadow: 4px 0 20px rgb(0 0 0 / 45%);
+  }
+
+  .bb-workspace-rail[data-open='true'] {
+    transform: translateX(0);
+  }
+}
+
+/* Below 1280 px the notes slot is a fixed overlay: the canvas never resizes. */
+@media (max-width: 1279.98px) {
+  .bb-workspace-notes {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    z-index: 25;
+    box-shadow: -4px 0 20px rgb(0 0 0 / 45%);
+  }
+}

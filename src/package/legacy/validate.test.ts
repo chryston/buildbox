@@ -578,7 +578,7 @@ describe('validateLegacyFloorPlan', () => {
 
   it('accepts a zone drawn with more than two points, which the app has always written', () => {
     // #40 asks for exactly two on a tile-zone, but `fixtures/legacy/v3/buildbox-store.json`
-    // stores a 4-point zone and AnnotationLayer renders any annotation with >= 2 points.
+    // stores a 4-point zone and the legacy floor plan rendered any annotation with >= 2 points.
     expect(plan({ annotations: [marked({ type: 'tile-zone', points: [
       { x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 },
     ] })] })).toEqual([])

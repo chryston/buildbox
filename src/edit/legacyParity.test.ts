@@ -67,8 +67,8 @@ const NOT_INTENTS: readonly string[] = [
   'persist',
 ]
 
-/** The catalogue rows no single store action names: the template fork and the two labels. */
-const EXTRA_INTENTS = ['plan.addFromTemplate']
+/** The catalogue rows no single store action names: the template fork and #55's preference write. */
+const EXTRA_INTENTS = ['plan.addFromTemplate', 'project.setPreferences']
 
 describe('action coverage', () => {
   it('names only Intents that exist, each with a label', () => {

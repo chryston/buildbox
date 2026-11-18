@@ -41,6 +41,9 @@ export interface PlanImageView {
 /** The device-local cache key of a Floor's default Plan View (#55 criterion 4). */
 export const planViewKey = (floorId: EntityId): string => `plan:${floorId}`
 
+/** The file input names the three formats a Plan Image may be (#49 deviation 4). */
+export const PLAN_IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp'
+
 /** The one Floor the Plan View shows until #56 adds the Floor switcher. */
 export function firstFloorId(project: Project): EntityId | null {
   return project.floors[0]?.id ?? null
