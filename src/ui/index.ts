@@ -23,3 +23,8 @@ export { LibraryHome, type LibraryHomeProps, type LibraryServices } from './libr
 export { formatSince } from './library/formatSince'
 export { ReadOnlyStrip, StorageNotice } from './library/Notices'
 export { ConflictDialog, type ConflictDialogProps } from './dialogs/ConflictDialog'
+export {
+  SaveFailedDialog,
+  type SaveFailedDialogProps,
+  type SaveFailedReason,
+} from './dialogs/SaveFailedDialog'

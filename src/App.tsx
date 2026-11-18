@@ -110,6 +110,7 @@ export default function App() {
         }}
         workspace={bindings.workspace}
         saveStatus={bindings.saveStatus}
+        onSaveStatusClick={bindings.reopenSaveFailure}
       />
       <ModuleSwitcher activeModule={activeModule} onChange={bindings.setActiveModule} />
       <ProjectTabs

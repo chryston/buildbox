@@ -20,6 +20,15 @@ interface Props {
   workspace?: LegacyWorkspace
   /** Where the document is saved, when there is a save to report (#14, #49). */
   saveStatus?: SaveStatusText | null
+  /**
+   * What the red status does when clicked (#51 §2, criterion 10).
+   *
+   * `Save failed` is the app saying *your newest work is not stored*, and the one answer to that
+   * is the dialog with the three ways out — so the words are a button wherever there is a dialog
+   * to open. Absent under the legacy store, which has no session that can fail: the status stays
+   * the plain text it always was.
+   */
+  onSaveStatusClick?: () => void
 }
 
 const UNITS: Unit[] = ['mm', 'cm', 'in']
@@ -34,6 +43,7 @@ export default function Toolbar({
   onRedo,
   workspace,
   saveStatus = null,
+  onSaveStatusClick,
 }: Props) {
   const [showExport, setShowExport] = useState(false)
   const [importState, setImportState] = useState<
@@ -87,7 +97,13 @@ export default function Toolbar({
             className={`text-sm ${saveStatus.failed ? 'text-red-400' : 'text-text-muted'}`}
             role="status"
           >
-            {saveStatus.text}
+            {saveStatus.failed && onSaveStatusClick ? (
+              <button type="button" className="cursor-pointer hover:underline" onClick={onSaveStatusClick}>
+                {saveStatus.text}
+              </button>
+            ) : (
+              saveStatus.text
+            )}
           </span>
         )}
         <UndoRedo canUndo={canUndo} onUndo={onUndo ?? (() => {})} canRedo={canRedo} onRedo={onRedo ?? (() => {})} />

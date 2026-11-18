@@ -57,8 +57,8 @@ import {
   readPlanImageFile,
 } from '../platform'
 import type { ObjectUrlCache } from '../platform'
-import { ConflictDialog, LibraryHome, ReadOnlyStrip } from '../ui'
-import type { LibraryServices } from '../ui'
+import { ConflictDialog, LibraryHome, ReadOnlyStrip, SaveFailedDialog } from '../ui'
+import type { LibraryServices, SaveFailedReason } from '../ui'
 import { requestPersistentStorage } from './persistentStorage'
 import { LegacyViewRoot } from '../ui/legacy/LegacyViewRoot'
 import type { IntentBuilder, SessionViewServices } from '../ui/legacy/sessionBindings'
@@ -256,6 +256,20 @@ async function reclaimStorage(ports: Ports, clock: ClockPort): Promise<void> {
  */
 type Route = 'library' | 'project'
 
+/** The `failed` save state minus the reason the other dialog owns. */
+type SaveFailedState = { kind: 'failed'; lastSavedAt: string | null; reason: SaveFailedReason }
+
+/**
+ * The failure the Save failed dialog speaks.
+ *
+ * `revision-conflict` is §5's: another tab wrote, and the answer is `Reload the latest version`
+ * rather than a retry that would overwrite them. Routing it away here is where the two dialogs are
+ * shown not to overlap, which is what criterion 1's last line asks for.
+ */
+function isSaveFailure(save: SaveState | null): save is SaveFailedState {
+  return save !== null && save.kind === 'failed' && save.reason !== 'revision-conflict'
+}
+
 /**
  * The flagged app: the Library, and the legacy editor for whichever Project it opened.
  */
@@ -266,6 +280,12 @@ function FlaggedRoot({ deps }: { deps: FlaggedDeps }): ReactNode {
   const [saveState, setSaveState] = useState<SaveState | null>(null)
   const [guard, setGuard] = useState<GuardState | null>(null)
   const [readOnly, setReadOnly] = useState(false)
+  // #51 §2: the Save failed dialog over the editor, where the archive shows it and where the
+  // unsaved work actually is. It opens itself when the session *enters* the failed state, and
+  // comes back for two reasons afterwards: the red status was clicked, or the guard refused an
+  // attempt to leave. `Discard` is the one action that closes it by hand, because a discard that
+  // cannot store either is the same failure the person has just chosen to accept.
+  const [failureOpen, setFailureOpen] = useState(false)
   const [persistedRevision, setPersistedRevision] = useState(0)
   // The session as the event handler sees it, which is not the same moment as the render that
   // will follow it: `Open` has to close the session it is being clicked away from, and reading
@@ -306,6 +326,26 @@ function FlaggedRoot({ deps }: { deps: FlaggedDeps }): ReactNode {
     read()
     return session.subscribe(read)
   }, [session])
+
+  // The failure this dialog speaks. `revision-conflict` is §5's — another tab wrote, and the
+  // answer is `Reload the latest version`, not a retry that would overwrite them — so `app` routes
+  // that one to the other dialog and this one never sees it.
+  const failing = saveState !== null && saveState.kind === 'failed' && saveState.reason !== 'revision-conflict'
+  const wasFailing = useRef(failing)
+  useEffect(() => {
+    if (failing && !wasFailing.current) setFailureOpen(true)
+    if (!failing) setFailureOpen(false)
+    wasFailing.current = failing
+  }, [failing])
+
+  // The editor's tab bar moves the view to another session *inside* `LegacyViewRoot`, and the
+  // surfaces above it — the read-only strip, both dialogs, the retry — are about whichever Project
+  // this tab is showing now. Following the switch is what keeps them pointed at the live session
+  // rather than the one this route was opened with.
+  const followSwitch = useCallback((next: ProjectSession): void => {
+    held.current = next
+    setSession(next)
+  }, [])
 
   // #51 §6: the first time a Project is actually on disk, ask the browser to keep it there.
   // Before that there is nothing worth persisting, and a request made too early is refused on the
@@ -509,6 +549,7 @@ function FlaggedRoot({ deps }: { deps: FlaggedDeps }): ReactNode {
   }
   if (session === null) return null
   const conflict = saveState !== null && saveState.kind === 'failed' && saveState.reason === 'revision-conflict'
+  const failure = isSaveFailure(saveState) ? saveState : null
   return (
     <>
       <LegacyViewRoot
@@ -516,9 +557,30 @@ function FlaggedRoot({ deps }: { deps: FlaggedDeps }): ReactNode {
         session={session}
         services={sessionServices}
         banner={readOnly ? <ReadOnlyStrip /> : undefined}
+        onSaveFailure={() => setFailureOpen(true)}
+        onSessionChange={followSwitch}
       >
         <App />
       </LegacyViewRoot>
+      {failureOpen && failure !== null && (
+        <SaveFailedDialog
+          reason={failure.reason}
+          lastSavedAt={failure.lastSavedAt}
+          now={clock.now()}
+          onRetry={() => {
+            services.retrySave()
+          }}
+          onEmergencyBackup={() => {
+            services.downloadEmergencyBackup()
+          }}
+          onDiscard={() => {
+            // Closed by hand rather than by the snapshot: the state may well stay failed, because
+            // writing the `pre-discard` Recovery Point needs the storage that just refused.
+            setFailureOpen(false)
+            services.discardUnsaved()
+          }}
+        />
+      )}
       {conflict && saveState !== null && saveState.kind === 'failed' && (
         <ConflictDialog
           name={session.getSnapshot().project.meta.name}

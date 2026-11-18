@@ -50,9 +50,14 @@ export interface SessionViewServices {
   readPlanImage(file: File): Promise<PlanImageRead>
 }
 
-/** Moving the view to another Project's session, which only the root that renders it can do. */
+/** What only the root that renders the view can do: move it, and open the dialogs above it. */
 export interface SessionHost {
   goto(projectId: string): void
+  /**
+   * The person clicked the red `Save failed` status, or tried to leave a Project whose unsaved
+   * work is holding this tab (#51 §2). Both are answered by the same dialog, which the root owns.
+   */
+  showSaveFailure(): void
 }
 
 /** #49 deviation 4: the flagged file input names the three formats a Plan Image may be. */
@@ -200,6 +205,7 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
     // Workspace JSON is #50's: no callback here, so the toolbar draws neither control
     // (#49 deviation 2).
     saveStatus: save,
+    reopenSaveFailure: () => host.showSaveFailure(),
 
     canUndo: history.canUndo,
     canRedo: history.canRedo,
@@ -378,6 +384,7 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
     send,
     onUnit,
     services,
+    host,
   ])
 }
 
