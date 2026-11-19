@@ -144,12 +144,15 @@ test('the Item Design editor shows the footprint on local axes, with eight prese
   // …and nothing that measures from a wall, because an Item Footprint has no wall to have.
   await expect(page.getByTestId('floor-bounds')).toHaveCount(0)
 
-  // #58 criterion 1: eight presets, by name, in the order the issue lists them.
+  // #58 criterion 1: eight presets, by name, in the order the issue lists them — plus Custom
+  // Path, which #59 criterion 16 adds as the ninth entry so a drawn shape is reached the same
+  // way a preset is.
   await page.getByTestId('shapes-menu').click()
   const entries = page.getByRole('menuitemradio')
-  await expect(entries).toHaveCount(8)
+  await expect(entries).toHaveCount(9)
   await expect(entries).toHaveText([
     'Square', 'Rectangle', 'Rounded Rectangle', 'Circle', 'Ellipse', 'Capsule', 'Triangle', 'Regular Polygon',
+    'Custom Path',
   ])
   // #58 criterion 22: the palette is a menu of named entries, not a row of icons.
   for (const entry of await entries.all()) {

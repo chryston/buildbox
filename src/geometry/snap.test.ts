@@ -39,15 +39,30 @@ describe('acquisition (#59 criterion 18)', () => {
     expect(resolveSnap([candidate('grid', 1, 1)], pt(1, 1), 0, ALL)).toBeNull()
   })
 
-  it('takes the nearest candidate when the miss is wider than a tie', () => {
+  it('gives the cursor to the higher-priority kind even when the other is nearer', () => {
     const cursor = pt(0, 0)
+    // The rule criterion 20 needs. A grid point under the cursor and a corner five millimetres
+    // away, both inside the radius: the corner wins, because the constructed candidates — grid,
+    // axis, angle, perpendicular — are built on the cursor and so are always nearer. Nearest
+    // first would hand every snap to them and no corner would ever be caught.
     const snap = resolveSnap(
       [candidate('endpoint', 0, 5), candidate('grid', 0, 1)],
       cursor,
       1,
       ALL,
     )
-    expect(snap!.kind).toBe('grid')
+    expect(snap!.kind).toBe('endpoint')
+  })
+
+  it('takes the nearer of two candidates of the same kind', () => {
+    const cursor = pt(0, 0)
+    const snap = resolveSnap(
+      [candidate('endpoint', 0, 5), candidate('endpoint', 0, 1)],
+      cursor,
+      1,
+      ALL,
+    )
+    expect(snap!.point.y).toBe(1)
   })
 })
 

@@ -310,9 +310,17 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
     }
   }
 
-  /** A press on the canvas while a tool is armed: start, place, or close on the start vertex. */
-  const draftPoint = (at: Pt): void => {
+  /**
+   * A press on the canvas while a tool is armed: start, place, or close on the start vertex.
+   *
+   * The press is snapped before it is placed, exactly as the rubber band is. A band that ends on
+   * the corner while the vertex lands under the cursor is the failure criterion 20 names: the
+   * shape looks right on the screen and is 117 mm on the way out.
+   */
+  const draftPoint = (raw: Pt): void => {
     if (drawTool === null) return
+    const found = snapAt(raw)
+    const at = found === null ? raw : found.at
     if (pathDraft === null) {
       updateDraft(startDraft(drawTool, at))
       return

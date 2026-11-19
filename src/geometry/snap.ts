@@ -9,7 +9,7 @@
 import { intersect } from './intersect'
 import { arcForm, centre, distance, midpoint, segmentStart, sub } from './segment'
 import type { ClosedPath, Pt, Segment } from './types'
-import { TOLERANCE_MM, pt } from './types'
+import { pt } from './types'
 
 /** The corners of a path: the start of every edge, which is also the end of the one before. */
 export const endpoints = (path: ClosedPath): Pt[] =>
@@ -120,10 +120,17 @@ export interface Snap {
 export const SNAP_ACQUISITION_PX = 12
 
 /**
- * The one snap resolver (#59 §5): the nearest enabled candidate within the screen-pixel
- * acquisition radius, ties inside `TOLERANCE_MM` broken by `SNAP_PRIORITY`. It resolves to
- * the candidate's exact canonical coordinate, never the cursor (#59 behaviour 20), and it
- * stores nothing — a snap writes coordinates only, never a relationship (#59 behaviour 25).
+ * The one snap resolver (#59 §5): the highest-priority enabled candidate within the screen-pixel
+ * acquisition radius, `SNAP_PRIORITY` deciding first and distance only breaking ties within one
+ * kind. It resolves to the candidate's exact canonical coordinate, never the cursor (#59
+ * behaviour 20), and it stores nothing — a snap writes coordinates only, never a relationship
+ * (#59 behaviour 25).
+ *
+ * Priority has to dominate distance, not merely break a tie inside it. The axis, angle and
+ * perpendicular candidates are constructed *on* the cursor, so their distance is always zero and
+ * a nearest-first rule lets one of them beat a real corner a millimetre away every single time —
+ * which is behaviour 20 failing with the default settings on. D6's list is the order the tools
+ * prefer, and "a corner that is also a grid point reads as a corner" is the same argument.
  */
 export const resolveSnap = (
   candidates: readonly SnapCandidate[],
@@ -138,9 +145,7 @@ export const resolveSnap = (
     .map((candidate) => ({ candidate, distance: distance(candidate.point, cursorWorld) }))
     .filter((found) => found.distance <= reach)
   if (within.length === 0) return null
-  const nearest = Math.min(...within.map((found) => found.distance))
-  const tied = within.filter((found) => found.distance <= nearest + TOLERANCE_MM)
-  const winner = tied.reduce((best, found) => {
+  const winner = within.reduce((best, found) => {
     const r = SNAP_PRIORITY.indexOf(found.candidate.kind)
     const br = SNAP_PRIORITY.indexOf(best.candidate.kind)
     if (r !== br) return r < br ? found : best
