@@ -64,6 +64,8 @@ export interface FootprintCanvasProps {
   readonly selectedVertex?: number | null
   /** The typed-length field over the Edge it describes, or `null`. */
   readonly lengthField?: LengthFieldView | null
+  /** A draw tool is armed and no draft is open yet, so the next press is the first vertex (#59 §1). */
+  readonly drawing?: boolean
   /** A draft press, in Item Design local millimetres. */
   readonly onDraftPoint?: (at: Pt) => void
   /** Every pointer move while drafting, so the rubber band and the chips follow the cursor. */
@@ -141,7 +143,7 @@ export function FootprintCanvas(props: FootprintCanvasProps): ReactNode {
     placing = null, drag = null, frameShape = null,
     chipLabels = { width: '', depth: '' },
     onDrag, onGesture,
-    draft = null, handles = null, selectedVertex = null, lengthField = null,
+    draft = null, handles = null, selectedVertex = null, lengthField = null, drawing = false,
     onDraftPoint, onDraftMove, onHandleDrag, onScale,
   } = props
   const svgRef = useRef<SVGSVGElement | null>(null)
@@ -167,8 +169,10 @@ export function FootprintCanvas(props: FootprintCanvasProps): ReactNode {
     if (event.button !== 0) return
     const point = toLocal(event)
     if (point === null) return
-    // A press while drafting places a vertex; it is never the start of a placement drag.
-    if (draft !== null) {
+    // A press while drafting places a vertex; it is never the start of a placement drag. With a
+    // draw tool armed and nothing drafted yet the same is true of the very first press — it is the
+    // shape's first vertex, and there is no box to drag out of it.
+    if (draft !== null || drawing) {
       onDraftPoint?.(point)
       return
     }

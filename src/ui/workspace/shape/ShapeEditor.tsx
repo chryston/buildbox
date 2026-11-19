@@ -663,6 +663,7 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
               handles={pathDraft === null && committedPath !== null && !readOnly ? vertices(committedPath) : []}
               selectedVertex={shapeSelection === null || !('vertex' in shapeSelection) ? null : shapeSelection.vertex}
               lengthField={lengthField}
+              drawing={drawTool !== null}
               chipLabels={drag === null
                 ? { width: '', depth: '' }
                 : { width: `W ${num(drag.maxX - drag.minX)}`, depth: `D ${num(drag.maxY - drag.minY)}` }}
