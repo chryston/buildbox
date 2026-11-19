@@ -47,6 +47,7 @@ export {
   lengthOf,
   midpoints,
   normaliseDeg,
+  presetInBox,
   presetParametersValid,
   pt,
   regularPolygonMetrics,
@@ -66,4 +67,5 @@ export type {
   RoundedRectanglePreset,
   Segment,
   SideName,
+  SizeBox,
 } from '../geometry'

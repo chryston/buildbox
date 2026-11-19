@@ -7,8 +7,10 @@
  * history, nothing written. That is the whole argument for putting an invalid proposal behind a
  * controller rather than in front of the Intent, and it is only visible with a session under it.
  *
- * The drag-and-drop and the pointer work are e2e's; jsdom cannot model pointer capture. What it
- * can do is type.
+ * The pointer gestures are driven here by saying what the canvas is drawn as — jsdom lays
+ * nothing out, but it will dispatch a pointer event wherever it is told to land. What it cannot
+ * do is lay out text, so the chip sizes are checked as geometry, not as pixels; the pixels are
+ * `e2e/smoke/shape-editor.spec.ts`.
  */
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -91,6 +93,74 @@ async function fieldOf(testId: string): Promise<string> {
   expect(field).toBeInstanceOf(HTMLInputElement)
   return (field as HTMLInputElement).value
 }
+
+// The canvas gestures. jsdom lays nothing out, so every element is a zero-by-zero box and a
+// pointer would land nowhere; saying what the canvas is drawn as is the one thing a jsdom test
+// has to supply for itself. `clientFor` then reads the viewBox the component chose and inverts
+// it, so a gesture is aimed at the geometry on screen rather than at a number this file guessed.
+
+interface ScreenBox { left: number; top: number; width: number; height: number }
+
+function drawCanvas(widthPx: number, heightPx: number): HTMLElement {
+  const canvas = screen.getByTestId('footprint-canvas')
+  const box: ScreenBox = { left: 0, top: 0, width: widthPx, height: heightPx }
+  canvas.getBoundingClientRect = () => ({
+    ...box, right: box.left + box.width, bottom: box.top + box.height, x: box.left, y: box.top, toJSON: () => ({}),
+  }) as DOMRect
+  return canvas
+}
+
+function clientFor(canvas: HTMLElement, mm: { x: number; y: number }): { x: number; y: number } {
+  const [minX = 0, minY = 0, w = 1, h = 1] = (canvas.getAttribute('viewBox') ?? '').split(' ').map(Number)
+  const box = canvas.getBoundingClientRect()
+  const mmPerPx = Math.max(w / box.width, h / box.height)
+  return {
+    x: box.left + (box.width - w / mmPerPx) / 2 + (mm.x - minX) / mmPerPx,
+    y: box.top + (box.height - h / mmPerPx) / 2 + (mm.y - minY) / mmPerPx,
+  }
+}
+
+function pointerAt(canvas: HTMLElement, type: string, mm: { x: number; y: number }, extra: { button?: number; buttons?: number }): void {
+  const at = clientFor(canvas, mm)
+  act(() => {
+    // jsdom has no PointerEvent, so a MouseEvent under the pointer name is what React sees. It
+    // carries the coordinates, which is all the canvas reads out of it.
+    const event = new MouseEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      clientX: at.x,
+      clientY: at.y,
+      button: extra.button ?? 0,
+      buttons: extra.buttons ?? 0,
+    })
+    Object.defineProperty(event, 'pointerId', { value: 1 })
+    canvas.dispatchEvent(event)
+  })
+}
+
+function dragCanvas(
+  canvas: HTMLElement,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+): void {
+  pointerAt(canvas, 'pointerdown', from, { button: 0, buttons: 1 })
+  pointerAt(canvas, 'pointermove', to, { buttons: 1 })
+  pointerAt(canvas, 'pointerup', to, { button: 0 })
+}
+
+function clickCanvas(canvas: HTMLElement, at: { x: number; y: number }): void {
+  dragCanvas(canvas, at, at)
+}
+
+/** The rectangle an SVG element is drawn at, read off its attributes. */
+function boxOf(testId: string): ScreenBox {
+  const shape = (screen.getByTestId(testId).querySelector('rect') ?? screen.getByTestId(testId)) as SVGGraphicsElement
+  const number = (name: string): number => Number(shape.getAttribute(name) ?? 0)
+  return { left: number('x'), top: number('y'), width: number('width'), height: number('height') }
+}
+
+const overlaps = (a: ScreenBox, b: ScreenBox): boolean =>
+  a.left < b.left + b.width && b.left < a.left + a.width && a.top < b.top + b.height && b.top < a.top + a.height
 
 describe('the Item Detail shape editor', () => {
   beforeEach(() => {
@@ -177,6 +247,7 @@ describe('the Item Detail shape editor', () => {
     const before = view.session.getSnapshot()
     await userEvent.click(screen.getByTestId('shapes-menu'))
     await userEvent.click(await screen.findByTestId('shape-preset-capsule'))
+    clickCanvas(drawCanvas(640, 340), { x: 300, y: 300 })
 
     const messages = screen.getAllByTestId('shape-problem-message')
     expect(messages).toHaveLength(1)
@@ -233,19 +304,106 @@ describe('the Item Detail shape editor', () => {
     expect(sofa(view.project()).footprint).toEqual(rectangleFootprint(1000, 600))
   })
 
-  it('picking a preset keeps the position and takes the size the shape already had', async () => {
+  it('picking a preset arms a placement and changes nothing until the canvas is used (criterion 3)', async () => {
+    const view = await openShapeEditor(withSofa(testProject('p-1'), rectangleFootprint(1200, 400)))
+    const revision = view.session.getSnapshot().revision
+    await userEvent.click(screen.getByTestId('shapes-menu'))
+    await userEvent.click(await screen.findByTestId('shape-preset-circle'))
+
+    expect(screen.getByTestId('shape-placing')).toHaveTextContent('Placing Circle')
+    expect(screen.getByTestId('shape-placing')).toHaveTextContent('click for 1200 × 400 mm')
+    expect(screen.getByTestId('footprint-canvas')).toHaveAttribute('data-placing', 'circle')
+    expect(view.session.getSnapshot().revision).toBe(revision)
+
+    await userEvent.click(screen.getByTestId('shape-placing-cancel'))
+    expect(screen.queryByTestId('shape-placing')).not.toBeInTheDocument()
+    expect(screen.getByTestId('footprint-canvas')).toHaveAttribute('data-placing', 'none')
+    expect(view.session.getSnapshot().revision).toBe(revision)
+    expect(screen.getByTestId('shape-kind')).toHaveTextContent('Rectangle')
+  })
+
+  it('clicking places the default size centred on the point that was clicked (criterion 3)', async () => {
     const view = await openShapeEditor(withSofa(testProject('p-1'), rectangleFootprint(1200, 400)))
     await userEvent.click(screen.getByTestId('shapes-menu'))
     await userEvent.click(await screen.findByTestId('shape-preset-circle'))
 
+    const canvas = drawCanvas(640, 340)
+    await clickCanvas(canvas, { x: 1500, y: 900 })
+
     await waitFor(() => expect(sofa(view.project()).footprint).toEqual({
       kind: 'preset',
       preset: { kind: 'circle', diameter: 400 },
-      centre: { x: 600, y: 200 },
+      centre: { x: 1500, y: 900 },
       orientationDeg: 0,
     }))
-    expect(screen.getByTestId('shape-kind')).toHaveTextContent('Circle')
-    expect(await fieldOf('shape-diameter')).toBe('400')
+    expect(screen.queryByTestId('shape-placing')).not.toBeInTheDocument()
+  })
+
+  it('dragging a box places the rectangle it describes, with the chips outside it (criterion 2)', async () => {
+    const view = await openShapeEditor(withSofa(testProject('p-1'), rectangleFootprint(1200, 400)))
+    await userEvent.click(screen.getByTestId('shapes-menu'))
+    await userEvent.click(await screen.findByTestId('shape-preset-rectangle'))
+
+    const canvas = drawCanvas(640, 340)
+    const to = { x: 700, y: 500 }
+    pointerAt(canvas, 'pointerdown', { x: 100, y: 100 }, { button: 0, buttons: 1 })
+    pointerAt(canvas, 'pointermove', to, { buttons: 1 })
+
+    const box = boxOf('footprint-drag')
+    const width = boxOf('footprint-chip-width')
+    const depth = boxOf('footprint-chip-depth')
+    expect(screen.getByTestId('footprint-chip-width')).toHaveTextContent('W 600')
+    expect(screen.getByTestId('footprint-chip-depth')).toHaveTextContent('D 400')
+    // Criterion 22, on the rectangles the component actually rendered.
+    expect(overlaps(width, box)).toBe(false)
+    expect(overlaps(depth, box)).toBe(false)
+
+    pointerAt(canvas, 'pointerup', to, { button: 0 })
+
+    await waitFor(() => expect(sofa(view.project()).footprint).toEqual({
+      kind: 'preset',
+      preset: { kind: 'rectangle', width: 600, depth: 400 },
+      centre: { x: 400, y: 300 },
+      orientationDeg: 0,
+    }))
+    expect(screen.queryByTestId('footprint-drag')).not.toBeInTheDocument()
+  })
+
+  it('Esc during a drag cancels with the revision unchanged (criterion 3)', async () => {
+    const view = await openShapeEditor(withSofa(testProject('p-1'), rectangleFootprint(1200, 400)))
+    const revision = view.session.getSnapshot().revision
+    await userEvent.click(screen.getByTestId('shapes-menu'))
+    await userEvent.click(await screen.findByTestId('shape-preset-rectangle'))
+
+    const canvas = drawCanvas(640, 340)
+    pointerAt(canvas, 'pointerdown', { x: 100, y: 100 }, { button: 0, buttons: 1 })
+    pointerAt(canvas, 'pointermove', { x: 700, y: 500 }, { buttons: 1 })
+    expect(screen.getByTestId('footprint-drag')).toBeInTheDocument()
+
+    await userEvent.keyboard('{Escape}')
+
+    expect(screen.queryByTestId('footprint-drag')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('shape-placing')).not.toBeInTheDocument()
+    expect(view.session.getSnapshot().revision).toBe(revision)
+    expect(sofa(view.project()).footprint).toEqual(rectangleFootprint(1200, 400))
+  })
+
+  it('placing a preset on a design with two placements asks first (criterion 4)', async () => {
+    const view = await openShapeEditor(withSofa(testProject('p-1'), rectangleFootprint(1200, 400), 2))
+    const revision = view.session.getSnapshot().revision
+    await userEvent.click(screen.getByTestId('shapes-menu'))
+    await userEvent.click(await screen.findByTestId('shape-preset-rectangle'))
+
+    const canvas = drawCanvas(640, 340)
+    await dragCanvas(canvas, { x: 100, y: 100 }, { x: 700, y: 500 })
+
+    expect(screen.getByTestId('shape-draft-bar')).toBeInTheDocument()
+    expect(screen.getByTestId('shape-draft-affects')).toHaveTextContent('Affects 2 placements')
+    expect(view.session.getSnapshot().revision).toBe(revision)
+
+    await userEvent.click(screen.getByTestId('shape-apply'))
+    await waitFor(() => expect(view.session.getSnapshot().revision).toBe(revision + 1))
+    expect(presetOf(view.project())).toEqual({ kind: 'rectangle', width: 600, depth: 400 })
   })
 
   it('reads the shape as edges and as measurements, with nothing to type', async () => {

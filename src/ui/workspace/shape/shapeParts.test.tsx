@@ -18,7 +18,7 @@ import { MeasurementsTab } from './MeasurementsTab'
 import { FootprintCanvas } from './FootprintCanvas'
 import { ConvertDialog } from './ConvertDialog'
 import { ShapesGallery } from './ShapesGallery'
-import { withPresetKind } from './parameters'
+import { placementDefaults, placementFootprint } from './placement'
 
 const MM = { unit: 'mm', precision: 0 } as const
 
@@ -156,25 +156,29 @@ describe('the Shapes gallery', () => {
 
 describe('inheriting a size when the kind changes', () => {
   it('takes the bounds, and the smaller axis when the new kind has one number', () => {
-    const wide = rectangleFootprint(1200, 400)
-    expect(withPresetKind(wide, 'rectangle').preset).toEqual({ kind: 'rectangle', width: 1200, depth: 400 })
-    expect(withPresetKind(wide, 'circle').preset).toEqual({ kind: 'circle', diameter: 400 })
-    expect(withPresetKind(wide, 'capsule').preset).toEqual({ kind: 'capsule', length: 1200, width: 400 })
+    const wide = placementDefaults(rectangleFootprint(1200, 400))
+    expect(placementFootprint('rectangle', { point: { x: 0, y: 0 } }, wide).preset)
+      .toEqual({ kind: 'rectangle', width: 1200, depth: 400 })
+    expect(placementFootprint('circle', { point: { x: 0, y: 0 } }, wide).preset)
+      .toEqual({ kind: 'circle', diameter: 400 })
+    expect(placementFootprint('capsule', { point: { x: 0, y: 0 } }, wide).preset)
+      .toEqual({ kind: 'capsule', length: 1200, width: 400 })
   })
 
   it('falls back to 600 × 600 when there is nothing to inherit', () => {
-    expect(withPresetKind(null, 'square').preset).toEqual({ kind: 'square', side: 600 })
+    expect(placementFootprint('square', { point: { x: 0, y: 0 } }, placementDefaults(null)).preset)
+      .toEqual({ kind: 'square', side: 600 })
   })
 
-  it('keeps the centre and the orientation', () => {
+  it('keeps the orientation, and takes the point it was clicked at as the centre', () => {
     const turned: ItemFootprint = {
       kind: 'preset',
       preset: { kind: 'rectangle', width: 1000, depth: 500 },
       centre: { x: 900, y: 250 },
       orientationDeg: 30,
     }
-    const next = withPresetKind(turned, 'ellipse')
-    expect(next.centre).toEqual({ x: 900, y: 250 })
+    const next = placementFootprint('ellipse', { point: { x: 300, y: 400 } }, placementDefaults(turned))
+    expect(next.centre).toEqual({ x: 300, y: 400 })
     expect(next.orientationDeg).toBe(30)
   })
 })

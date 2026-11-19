@@ -1,15 +1,16 @@
 /**
- * The `Shapes ▾` gallery (#58 §4).
+ * The `Shapes ▾` gallery (#58 §4, §5).
  *
  * Eight presets, each drawn as itself, in a menu rather than a dialog: changing shape is a
  * routine edit and should cost one click. The current kind is marked, because the most common
  * reason to open this menu on a Rectangle is to check that it is still a Rectangle.
  *
- * Picking a preset replaces the Item Footprint and keeps the position, the orientation and
- * the size the design already had — a Square becoming a Circle should not also move. Where a
- * preset has no single size to inherit (a Capsule has a length and a width, a Triangle a base
- * and a depth) the bounds are inherited and the other axis follows from it, which is what
- * "the same shape, this kind instead" reads as.
+ * Picking arms a placement; it does not change anything. The next drag or click on the canvas
+ * is the shape — see `placement.ts`. Nothing here commits, so a pick that is never finished
+ * leaves no trace, which is what makes the gallery safe to open just to look.
+ *
+ * Custom Path is the ninth entry of the catalog and is absent on purpose: it needs the Line
+ * tool, which is #59. Until then a Custom Path is reached through Convert.
  */
 import type { ReactNode } from 'react'
 import { PRESET_NAMES } from '../../../domain'

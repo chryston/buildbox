@@ -13,12 +13,13 @@
  * no proposal state of its own — the draft lives in the workspace store, so the canvas, the
  * rail and the draft bar are three readings of one value.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { designFootprintSize, footprintAsPath, rectangleFootprint } from '../../../domain'
+import { designFootprintSize, footprintAsPath, PRESET_NAMES, rectangleFootprint } from '../../../domain'
 import type { ItemDesign, ItemFootprint } from '../../../domain'
 import type { PresetKind } from '../../../derive'
 import { designOutline } from '../../../derive'
+import { formatMm } from '../displayUnits'
 import { useWorkspaceDispatch, useWorkspaceProject, useWorkspaceRoot } from '../WorkspaceRoot'
 import { ToolbarMenu } from '../WorkspaceToolbar'
 import { useWorkspace, workspaceStore } from '../workspaceStore'
@@ -37,7 +38,8 @@ import {
 } from './proposal'
 import type { ShapeDraft, ShapeGesture } from './proposal'
 import { shapeTarget } from './shapeTarget'
-import { withPresetKind } from './parameters'
+import { placementDefaults, placementFootprint } from './placement'
+import type { DragBox, PlacementGesture } from './placement'
 import type { ShapeFieldId } from './parameters'
 import { ShapesGallery } from './ShapesGallery'
 import { ShapeTab } from './ShapeTab'
@@ -130,6 +132,52 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
     if (draft !== null) workspaceStore.getState().setShapeDraft(itemDesignId, discard(draft))
   }
 
+  /**
+   * The preset waiting to be placed, and the box being dragged for it.
+   *
+   * Both are local, and both are gone the moment the gesture ends: a shape that has been picked
+   * out of the gallery but not drawn yet is not a proposal, and putting it in the workspace
+   * store would mean a reload could find a half-placed Rectangle on screen.
+   */
+  const [placing, setPlacing] = useState<PresetKind | null>(null)
+  const [drag, setDrag] = useState<DragBox | null>(null)
+
+  const stopPlacing = (): void => {
+    setPlacing(null)
+    setDrag(null)
+  }
+
+  /** A number in the Project's display unit, for the chips and for the status line. */
+  const num = (mm: number): string => formatMm(mm, format.unit, format.precision)
+
+  const defaults = placementDefaults(design.kind === 'generic' ? design.footprint : null)
+
+  const place = (gestureFromCanvas: PlacementGesture): void => {
+    if (placing === null) return
+    stopPlacing()
+    gesture(placementFootprint(placing, gestureFromCanvas, defaults), null, true)
+  }
+
+  /**
+   * Esc, wherever the focus is: it stops a placement, and it discards a proposal.
+   *
+   * One key for both because they are the same answer to the same question — "put back what was
+   * there". Criterion 9's "selecting something else" is the same transition from the other end,
+   * and lives in the workspace store's selection, not here.
+   */
+  useEffect(() => {
+    const proposalUp = draft !== null && draft.proposal.state !== 'idle'
+    if (placing === null && !proposalUp) return
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      event.stopPropagation()
+      stopPlacing()
+      dropDraft()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => { window.removeEventListener('keydown', onKey) }
+  })
+
   const applyDraft = (): void => {
     if (draft === null || draft.proposal.state !== 'valid') return
     commit(draft.proposal.footprint)
@@ -150,10 +198,23 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
             <ToolbarMenu label="Shapes" testId="shapes-menu" disabled={isCabinet}>
               <ShapesGallery
                 current={shown.kind === 'preset' ? shown.preset.kind : null}
-                onPick={(kind: PresetKind) => gesture(withPresetKind(shown, kind), null, true)}
+                onPick={(kind: PresetKind) => setPlacing(kind)}
               />
             </ToolbarMenu>
           </div>
+          {placing !== null && (
+            <p className="bb-shape-placing" data-testid="shape-placing">
+              {`Placing ${PRESET_NAMES[placing]} — drag a box, or click for ${num(defaults.size.width)} × ${num(defaults.size.depth)} ${format.unit}`}
+              <button
+                type="button"
+                data-testid="shape-placing-cancel"
+                className="bb-workspace-secondary-button"
+                onClick={stopPlacing}
+              >
+                Cancel
+              </button>
+            </p>
+          )}
         </div>
       )}
 
@@ -209,6 +270,14 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
               marker={marker}
               origin={design.kind === 'cabinet' ? { x: 0, y: 0 } : design.origin}
               invalid={invalid}
+              placing={placing}
+              drag={drag}
+              frameShape={committed}
+              chipLabels={drag === null
+                ? { width: '', depth: '' }
+                : { width: `W ${num(drag.maxX - drag.minX)}`, depth: `D ${num(drag.maxY - drag.minY)}` }}
+              onDrag={setDrag}
+              onGesture={place}
             />
             {draft !== null && draft.proposal.state !== 'idle' && (
               <div

@@ -196,6 +196,48 @@ export const regularPolygonMetrics = (sideCount: number, sideLength: number): { 
   acrossFlats: sideLength / Math.tan(Math.PI / sideCount),
 })
 
+/** A size in local millimetres — the only thing two different preset kinds can agree on. */
+export interface SizeBox {
+  readonly width: number
+  readonly depth: number
+}
+
+/**
+ * The preset of `kind` that fits a box (#58 §4, §5).
+ *
+ * A box is what both gestures produce: a dragged rectangle on the canvas, and the local bounds
+ * of the shape a kind switch is replacing. A preset's own parameters mean nothing to another
+ * kind — a Circle has no depth to inherit — so the box is the only size either one can offer.
+ *
+ * Where the new kind takes two numbers they are the box's own, in the order they were drawn.
+ * Where it takes one it takes the smaller axis, so a Circle in a 1,200 × 400 box is Ø400 and
+ * still fits where it was rather than Ø1,200 with most of it off the paper. A Regular Polygon
+ * is sized so its across-corners span the smaller axis, for the same reason: corners are what
+ * would poke out.
+ */
+export const presetInBox = (kind: PresetKind, box: SizeBox): Preset => {
+  const small = Math.min(box.width, box.depth)
+  const large = Math.max(box.width, box.depth)
+  switch (kind) {
+    case 'square':
+      return { kind: 'square', side: small }
+    case 'rectangle':
+      return { kind: 'rectangle', width: box.width, depth: box.depth }
+    case 'roundedRectangle':
+      return { kind: 'roundedRectangle', width: box.width, depth: box.depth, radius: 0 }
+    case 'circle':
+      return { kind: 'circle', diameter: small }
+    case 'ellipse':
+      return { kind: 'ellipse', width: box.width, depth: box.depth }
+    case 'capsule':
+      return { kind: 'capsule', length: large, width: small }
+    case 'triangle':
+      return { kind: 'triangle', baseWidth: box.width, depth: box.depth }
+    case 'regularPolygon':
+      return { kind: 'regularPolygon', sideCount: 6, sideLength: small * Math.sin(Math.PI / 6) }
+  }
+}
+
 /** Square and Rectangle: four lines, start top-left, edges top, right, bottom, left. */
 const rectangle = (width: number, depth: number): ClosedPath => {
   const start = pt(-width / 2, -depth / 2)

@@ -36,6 +36,17 @@
   color: var(--bb-text-muted);
 }
 
+/* The one line that says the canvas is waiting for a box. It is in the fixed-height tool row,
+   so arming a placement moves neither the toolbar nor the canvas — behaviour 2. */
+.bb-shape-placing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--bb-text-muted);
+}
+
 /* The same three tabs in a host that owns the drawing — a cabinet's Item Detail. The rail is
    the whole panel here, so it takes the panel's width and stops being a rail beside a canvas. */
 .bb-shape-editor[data-layout='inspector'] {
@@ -254,6 +265,35 @@
   stroke: var(--bb-danger-text);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
+}
+
+/* The box being dragged: an outline only, so the shape inside it stays readable. */
+.bb-shape-drag {
+  fill: none;
+  stroke: var(--bb-accent);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+
+/*
+ * The `W` and `D` readouts. They are drawn in the canvas's own units but sized from pixels, and
+ * they sit wholly beyond the box's right and bottom edges — the prototype's Variant B floated
+ * them over the middle of the shape, which is the one place a chip cannot be.
+ */
+.bb-shape-chip rect {
+  fill: var(--bb-bg-modal);
+  stroke: var(--bb-border-card);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.bb-shape-chip text {
+  fill: var(--bb-text);
+  font-family: inherit;
+  paint-order: stroke;
+  stroke: var(--bb-bg-modal);
+  stroke-width: 2;
 }
 
 .bb-shape-draft-bar {

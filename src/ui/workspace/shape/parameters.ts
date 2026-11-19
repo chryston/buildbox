@@ -12,8 +12,8 @@
  */
 import { cornerRadiiOf } from '../../../derive'
 import type { CornerRadii, Preset } from '../../../derive'
-import { footprintBounds, footprintCentre, footprintMovedTo } from '../../../domain'
-import type { ItemFootprint, PresetItemFootprint } from '../../../domain'
+import { footprintCentre, footprintMovedTo } from '../../../domain'
+import type { ItemFootprint } from '../../../domain'
 
 /** Every field the Shape tab can write. The read side in `ShapeTab` uses the same names. */
 export type ShapeFieldId =
@@ -94,47 +94,4 @@ export function withUniformRadius(footprint: ItemFootprint, radius: number): Ite
 export function withPerCornerRadii(footprint: ItemFootprint): ItemFootprint {
   if (footprint.kind !== 'preset' || footprint.preset.kind !== 'roundedRectangle') return footprint
   return { ...footprint, preset: { ...footprint.preset, radius: undefined, radii: cornerRadiiOf(footprint.preset) } }
-}
-
-/**
- * A preset of `kind` taking the size and place the footprint already had (#58 §4).
- *
- * The bounds are inherited rather than the parameters, because the parameters of one kind have
- * no meaning for another. Where the new kind needs two numbers and the bounds give two, they
- * are the bounds; where it needs one — a Square's side, a Circle's diameter — it takes the
- * smaller axis, so a 1,200 × 400 Rectangle becoming a Circle gives a Ø400 Circle rather than a
- * Ø1,200 one that no longer fits where it was. With nothing to inherit, 600 × 600 mm.
- */
-export function withPresetKind(footprint: ItemFootprint | null, kind: Preset['kind']): PresetItemFootprint {
-  const box = footprint === null
-    ? { width: 600, depth: 600 }
-    : (() => {
-        const bounds = footprintBounds(footprint)
-        return { width: bounds.maxX - bounds.minX, depth: bounds.maxY - bounds.minY }
-      })()
-  const centre = footprint === null ? { x: box.width / 2, y: box.depth / 2 } : footprintCentre(footprint)
-  const orientationDeg = footprint !== null && footprint.kind === 'preset' ? footprint.orientationDeg : 0
-  const small = Math.min(box.width, box.depth)
-  const preset: Preset = (() => {
-    switch (kind) {
-      case 'square':
-        return { kind: 'square', side: small }
-      case 'rectangle':
-        return { kind: 'rectangle', width: box.width, depth: box.depth }
-      case 'roundedRectangle':
-        return { kind: 'roundedRectangle', width: box.width, depth: box.depth, radius: 0 }
-      case 'circle':
-        return { kind: 'circle', diameter: small }
-      case 'ellipse':
-        return { kind: 'ellipse', width: box.width, depth: box.depth }
-      case 'capsule':
-        return { kind: 'capsule', length: Math.max(box.width, box.depth), width: small }
-      case 'triangle':
-        return { kind: 'triangle', baseWidth: box.width, depth: box.depth }
-      case 'regularPolygon':
-        // The side length that puts a hexagon across the smaller axis, so it still fits.
-        return { kind: 'regularPolygon', sideCount: 6, sideLength: small * Math.sin(Math.PI / 6) }
-    }
-  })()
-  return { kind: 'preset', preset, centre, orientationDeg }
 }
