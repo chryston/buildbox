@@ -9,13 +9,14 @@
  */
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactElement, ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { rectangleFootprint } from '../../../domain'
+import { footprintAsPath, footprintPath, rectangleFootprint } from '../../../domain'
 import type { ItemFootprint } from '../../../domain'
-import { footprintPath } from '../../../domain'
 import { EdgesTab } from './EdgesTab'
 import { MeasurementsTab } from './MeasurementsTab'
 import { FootprintCanvas } from './FootprintCanvas'
+import { ShapeTab } from './ShapeTab'
 import { ConvertDialog } from './ConvertDialog'
 import { ShapesGallery } from './ShapesGallery'
 import { placementDefaults, placementFootprint } from './placement'
@@ -162,9 +163,9 @@ describe('the Shapes gallery', () => {
     ])
     // A glyph alone would leave a screen reader with nothing to say.
     for (const entry of entries) expect(entry.textContent?.trim() ?? '').not.toBe('')
-    // The prototype's two odd shapes are not entries: Custom Path is reached through Convert
-    // until #59 adds the Line tool that starts one.
-    expect(entries.map((entry) => entry.textContent).join(' ')).not.toMatch(/l-shape|u-shape/i)
+    // The equality above is the whole claim: nine entries would be one too many, and the
+    // prototype's two odd shapes are not among these eight. Custom Path is reached through
+    // Convert until #59 adds the Line tool that starts one.
   })
 })
 
@@ -194,5 +195,93 @@ describe('inheriting a size when the kind changes', () => {
     const next = placementFootprint('ellipse', { point: { x: 300, y: 400 } }, placementDefaults(turned))
     expect(next.centre).toEqual({ x: 300, y: 400 })
     expect(next.orientationDeg).toBe(30)
+  })
+})
+
+/**
+ * The prototype's shorthand (#58 criterion 23). Each of these was a label in Variant A and each
+ * was rejected with it: `ell ` and `∠` are notation rather than words, `Floor bbox` and
+ * `(local)` name a coordinate space at a person who never asked about one, `face L`/`face R` are
+ * the prototype's own abbreviations, `… · 4 centre` repeats a number the field beside it already
+ * gives, and `Origin X`/`Origin Y` is a placement label for what the glossary calls the Item
+ * Origin. A shape editor that says any of them has drifted back towards the prototype.
+ */
+const BANNED: readonly (string | RegExp)[] = [
+  'ell ', '∠', 'Floor bbox', '(local)', 'face L', 'face R', 'Origin X', 'Origin Y',
+  /W-\d+ · \d+ centre/,
+]
+
+/** One footprint per catalog entry, plus the Custom Path the tabs also have to read. */
+const EVERY_SHAPE: readonly ItemFootprint[] = [
+  { kind: 'preset', preset: { kind: 'square', side: 600 }, centre: { x: 300, y: 300 }, orientationDeg: 0 },
+  { kind: 'preset', preset: { kind: 'rectangle', width: 1000, depth: 500 }, centre: { x: 500, y: 250 }, orientationDeg: 0 },
+  { kind: 'preset', preset: { kind: 'roundedRectangle', width: 1000, depth: 500, radius: 40 }, centre: { x: 500, y: 250 }, orientationDeg: 0 },
+  { kind: 'preset', preset: { kind: 'roundedRectangle', width: 1000, depth: 500, radii: { topLeft: 40, topRight: 80, bottomRight: 20, bottomLeft: 60 } }, centre: { x: 500, y: 250 }, orientationDeg: 0 },
+  { kind: 'preset', preset: { kind: 'circle', diameter: 1600 }, centre: { x: 800, y: 800 }, orientationDeg: 0 },
+  { kind: 'preset', preset: { kind: 'ellipse', width: 1200, depth: 700 }, centre: { x: 600, y: 350 }, orientationDeg: 0 },
+  { kind: 'preset', preset: { kind: 'capsule', length: 1200, width: 400 }, centre: { x: 600, y: 200 }, orientationDeg: 0 },
+  { kind: 'preset', preset: { kind: 'triangle', baseWidth: 900, depth: 600 }, centre: { x: 450, y: 300 }, orientationDeg: 0 },
+  { kind: 'preset', preset: { kind: 'regularPolygon', sideCount: 6, sideLength: 300 }, centre: { x: 0, y: 0 }, orientationDeg: 0 },
+  footprintAsPath(rectangleFootprint(600, 400)),
+]
+
+describe('the words a shape editor never says', () => {
+  it('names nothing in the prototype’s shorthand, in any state it can be in (criterion 23)', () => {
+    const nothing = (): void => undefined
+    const seen: string[] = []
+
+    /** Render, keep the text, take it down again — one page on screen at a time. */
+    const say = (node: ReactNode): void => {
+      const { unmount, asFragment } = render(node as ReactElement)
+      seen.push(asFragment().textContent ?? '')
+      unmount()
+    }
+
+    for (const footprint of EVERY_SHAPE) {
+      for (const readOnly of [false, true]) {
+        say(
+          <ShapeTab
+            footprint={footprint}
+            format={MM}
+            invalidField={null}
+            invalidMessage={null}
+            readOnly={readOnly}
+            onGesture={nothing}
+            onDiscard={nothing}
+            onConvert={nothing}
+          />,
+        )
+      }
+      say(<EdgesTab path={footprintPath(footprint)} format={MM} />)
+      say(<MeasurementsTab footprint={footprint} format={MM} boundsLabel="Bounds" />)
+    }
+
+    // The sentence itself, where it is shown: under the field it marks, and in the draft bar.
+    say(
+      <ShapeTab
+        footprint={EVERY_SHAPE[2]}
+        format={MM}
+        invalidField="topRight"
+        invalidMessage="Corner radii on the top side overlap (100 + 901 > 1,000 mm)"
+        readOnly={false}
+        onGesture={nothing}
+        onDiscard={nothing}
+        onConvert={nothing}
+      />,
+    )
+    say(<ShapesGallery current="circle" onPick={nothing} />)
+    say(<ShapesGallery current={null} onPick={nothing} />)
+    for (const preset of [
+      { kind: 'rectangle', width: 1000, depth: 600 } as const,
+      { kind: 'regularPolygon', sideCount: 6, sideLength: 300 } as const,
+    ]) {
+      say(<ConvertDialog designName="Sofa" preset={preset} onConvert={nothing} onCancel={nothing} />)
+    }
+
+    const words = seen.join('\n')
+    expect(words.length).toBeGreaterThan(1000)
+    for (const banned of BANNED) {
+      expect(words, banned instanceof RegExp ? String(banned) : banned).not.toMatch(banned)
+    }
   })
 })
