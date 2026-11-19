@@ -90,12 +90,12 @@ const splitRatio: Intent = {
 }
 
 const moveObject: Intent = {
-  type: 'plan.updateObject',
+  type: 'plan.movePlacement',
   payload: {
     placedItemId: placedOnFloor.id,
-    patch: { x: placedOnFloor.translation.x + 40, y: placedOnFloor.translation.y + 25 },
+    translation: { x: placedOnFloor.translation.x + 40, y: placedOnFloor.translation.y + 25 },
   },
-  label: INTENT_LABELS['plan.updateObject'],
+  label: INTENT_LABELS['plan.movePlacement'],
   ids: [],
   now: NOW,
 }
@@ -110,7 +110,7 @@ const appendUnit: Intent = {
 
 const CASES: { name: string; intent: Intent }[] = [
   { name: 'cabinet.setSplitRatio (depth-8 tree)', intent: splitRatio },
-  { name: 'plan.updateObject', intent: moveObject },
+  { name: 'plan.movePlacement', intent: moveObject },
   { name: 'cabinet.addUnit', intent: appendUnit },
 ]
 

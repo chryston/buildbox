@@ -28,8 +28,9 @@ export const INTENT_LABELS = {
   'cabinet.addAccessory': 'Add accessory',
   'cabinet.removeAccessory': 'Remove accessory',
   'plan.addObject': 'Add item',
-  'plan.addFromTemplate': 'Add item',
-  'plan.updateObject': 'Edit item',
+  'plan.placeDesign': 'Add item',
+  'plan.movePlacement': 'Move item',
+  'plan.rotatePlacement': 'Rotate item',
   'plan.removeObject': 'Remove item',
   'plan.addTemplate': 'Save custom shape',
   'plan.removeTemplate': 'Remove custom shape',
@@ -39,6 +40,9 @@ export const INTENT_LABELS = {
   'plan.clear': 'Clear floor plan',
   'plan.copyToFloor': 'Copy to floor',
   'plan.moveToFloor': 'Move to floor',
+  'design.update': 'Edit item design',
+  'design.setOrigin': 'Move item origin',
+  'design.fork': 'Fork design',
   'floor.create': 'Add floor',
   'floor.rename': 'Rename floor',
   'floor.reorder': 'Reorder floors',
@@ -50,14 +54,3 @@ export const INTENT_LABELS = {
   'view.delete': 'Delete view',
   'view.setShowPlanImage': 'Show plan image',
 } as const satisfies Record<IntentType, string>
-
-/**
- * `plan.updateObject` covers four different gestures, so it takes the label of the field
- * the user actually touched. `Edit item` is the fallback in `INTENT_LABELS`.
- */
-export const PLAN_UPDATE_LABELS = {
-  move: 'Move item',
-  resize: 'Resize item',
-  rotate: 'Rotate item',
-  edit: 'Edit item',
-} as const

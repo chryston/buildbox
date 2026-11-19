@@ -63,9 +63,9 @@ const NOW = '2026-11-18T00:00:00.000Z'
 function intentAt(index: number): Intent {
   return index % 2 === 0
     ? {
-        type: 'plan.updateObject',
-        payload: { placedItemId: movedId, patch: { x: movedX + index * 0.5, y: movedY } },
-        label: INTENT_LABELS['plan.updateObject'],
+        type: 'plan.movePlacement',
+        payload: { placedItemId: movedId, translation: { x: movedX + index * 0.5, y: movedY } },
+        label: INTENT_LABELS['plan.movePlacement'],
         ids: [],
         now: NOW,
       }

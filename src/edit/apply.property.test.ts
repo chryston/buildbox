@@ -224,24 +224,53 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
     return intent('plan.addObject', { floorId: floor.id, catalogKey: pick(g, CATALOG_KEYS)! }, [itemDesignId!, placedItemId!])
   },
   (g) => {
+    // Reuse, never a copy (#57 §2): any Item Design, placed on any Floor.
     const floor = pick(g, g.project.floors)
-    const template = pick(g, templates(g))
-    if (floor === undefined || template === undefined) return null
-    const [itemDesignId, placedItemId] = g.ids(2)
-    return intent('plan.addFromTemplate', { floorId: floor.id, templateItemDesignId: template.id }, [itemDesignId!, placedItemId!])
+    const design = pick(g, g.project.itemDesigns)
+    if (floor === undefined || design === undefined) return null
+    const [placedItemId] = g.ids(1)
+    return intent('plan.placeDesign', { floorId: floor.id, itemDesignId: design.id }, [placedItemId!])
   },
   (g) => {
-    const placed = pick(g, planPlacements(g))
+    const placed = pick(g, placements(g))
     if (placed === undefined) return null
-    const patch: PayloadOf<'plan.updateObject'>['patch'] = {}
-    if (bool(g)) patch.x = real(g, -500, 6000)
-    if (bool(g)) patch.y = real(g, -500, 6000)
-    if (bool(g)) patch.w = real(g, 10, 4000)
-    if (bool(g)) patch.h = real(g, 10, 4000)
-    if (bool(g)) patch.rotation = int(g, -720, 720)
-    if (bool(g)) patch.label = `Object ${int(g, 1, 99)}`
-    if (bool(g)) patch.color = `#${int(g, 0, 0xffffff).toString(16).padStart(6, '0')}`
-    return intent('plan.updateObject', { placedItemId: placed.id, patch })
+    return intent('plan.movePlacement', {
+      placedItemId: placed.id,
+      translation: { x: real(g, -500, 6000), y: real(g, -500, 6000) },
+    })
+  },
+  (g) => {
+    const placed = pick(g, placements(g))
+    if (placed === undefined) return null
+    return intent('plan.rotatePlacement', { placedItemId: placed.id, rotationDeg: int(g, -720, 720) })
+  },
+  (g) => {
+    // The design-level fields (#57 §2), which every placement of the design shares. A
+    // cabinet takes only the name: its size is its construction and it has no colour.
+    const design = pick(g, g.project.itemDesigns)
+    if (design === undefined) return null
+    const patch: PayloadOf<'design.update'>['patch'] = {}
+    if (bool(g)) patch.name = `Object ${int(g, 1, 99)}`
+    if (design.kind === 'generic') {
+      if (bool(g)) patch.color = `#${int(g, 0, 0xffffff).toString(16).padStart(6, '0')}`
+      if (bool(g)) patch.width = real(g, 10, 4000)
+      if (bool(g)) patch.depth = real(g, 10, 4000)
+    }
+    return intent('design.update', { itemDesignId: design.id, patch })
+  },
+  (g) => {
+    const design = pick(g, generics(g))
+    if (design === undefined) return null
+    return intent('design.setOrigin', {
+      itemDesignId: design.id,
+      origin: { x: real(g, 0, design.footprint.width), y: real(g, 0, design.footprint.depth) },
+    })
+  },
+  (g) => {
+    const placed = pick(g, placements(g))
+    if (placed === undefined) return null
+    const [itemDesignId] = g.ids(1)
+    return intent('design.fork', { placedItemId: placed.id, name: `Copy ${int(g, 1, 999)}` }, [itemDesignId!])
   },
   (g) => {
     const placed = pick(g, planPlacements(g))

@@ -1,12 +1,16 @@
 /**
- * The floor-plan half of the catalogue (#47).
+ * The floor-plan half of the catalogue (#47, #57).
  *
- * A plan object is one generic Item Design and one Placed Item (#43 §3): the size, colour
- * and name belong to the design, the position and rotation to the placement. The legacy
- * store dragged and resized from the top-left corner, so a resize keeps that corner still
- * and moves the Item Origin — the placement's translation — by half the change.
+ * A plan object is one Item Design and one Placed Item (#43 §3): the name, colour and size
+ * belong to the design and are shared by every placement of it (#57 §2), the position and
+ * the turn belong to the placement and belong to it alone. The legacy store dragged from the
+ * top-left corner, so a new object still spawns with that corner at the legacy point — but
+ * what it stores is the Item Origin's Floor position, which for a design whose Origin is its
+ * centre is the same number (#43).
  */
-import type { EntityId, GenericItemDesign, Project } from '../../domain'
+import { designFootprintSize } from '../../domain'
+import type { EntityId, Project } from '../../domain'
+import { normaliseDeg } from '../../geometry'
 import { CUSTOM_PLAN_ENTRY, PLAN_CATALOGUE } from '../planCatalogue'
 import type { IntentType, Locator, PlanIntent } from '../intents'
 import type { Handler, IntentHandler } from './context'
@@ -18,6 +22,7 @@ import {
   placementsOf,
   refuse,
   requireFloor,
+  requireGenericDesign,
   requirePlacement,
   removePlacementAndDesign,
   sameJsonValue,
@@ -38,19 +43,11 @@ type PlanHandlers = {
 }
 
 /** The legacy 10 mm floor, which the UI clamps to before it sends the Intent. */
-const MIN_PLAN_SIZE_MM = 10
+export const MIN_PLAN_SIZE_MM = 10
 
 /** The legacy sidebar drops a new object with its top-left corner here. */
 const LEGACY_SPAWN_X_MM = 100
 const LEGACY_SPAWN_Y_MM = 100
-
-/** A generic Item Design, or a rejection: every plan-object Intent starts here. */
-function requireGenericDesign(project: Project, itemDesignId: EntityId): GenericItemDesign {
-  const design = findDesign(project, itemDesignId)
-  if (design === undefined) refuse('unknown-target', designPath(itemDesignId), `No Item Design ${itemDesignId} is in this Project.`)
-  if (design.kind !== 'generic') refuse('unknown-target', designPath(itemDesignId), `Item Design ${itemDesignId} is not a floor-plan object.`)
-  return design
-}
 
 /** `legacyTopLeft + size / 2`, the #43 placement convention. */
 function centreAt(x: number, y: number, width: number, depth: number): { x: number; y: number } {
@@ -112,57 +109,55 @@ const addObject: Handler<'plan.addObject'> = (ctx) => {
 }
 
 /**
- * Place a custom shape. The template itself stays — placing it forks a copy the user can
- * then resize without touching the shape in the sidebar (#20 §3).
+ * Place an Item Design that already exists (#57 §2): reuse, never a copy.
+ *
+ * This is what the library's `In this Project` section does, and it is the end of the
+ * fork-on-place behaviour #20 §3 allowed until S5 — a migrated `CustomTemplate` design now
+ * gains a placement instead of a twin, so a design placed on two Floors is one design.
+ * The new Placed Item spawns at the legacy corner with no turn and on the Floor Datum.
  */
-const addFromTemplate: Handler<'plan.addFromTemplate'> = (ctx) => {
-  const { floorId, templateItemDesignId } = ctx.intent.payload
-  const [itemDesignId, placedItemId] = spendIds(ctx.intent.ids, 2, ctx.intent.type)
+const placeDesign: Handler<'plan.placeDesign'> = (ctx) => {
+  const { floorId, itemDesignId } = ctx.intent.payload
+  const [placedItemId] = spendIds(ctx.intent.ids, 1, ctx.intent.type)
   requireFloor(ctx.project, floorId)
-  const template = requireGenericDesign(ctx.project, templateItemDesignId)
-  if (template.isCustom !== true) {
-    refuse('unknown-target', designPath(templateItemDesignId), `Item Design ${templateItemDesignId} is not a custom shape.`)
+  const design = findDesign(ctx.project, itemDesignId)
+  if (design === undefined) {
+    refuse('unknown-target', designPath(itemDesignId), `No Item Design ${itemDesignId} is in this Project.`)
   }
-  ctx.draft.itemDesigns.push({ ...template, id: itemDesignId, isCustom: true })
+  const { width, depth } = designFootprintSize(design)
   ctx.draft.existingModel.placedItems.push({
     id: placedItemId,
     itemDesignId,
     floorId,
-    translation: centreAt(LEGACY_SPAWN_X_MM, LEGACY_SPAWN_Y_MM, template.footprint.width, template.footprint.depth),
+    translation: centreAt(LEGACY_SPAWN_X_MM, LEGACY_SPAWN_Y_MM, width, depth),
     rotationDeg: 0,
-    baseElevation: CUSTOM_PLAN_ENTRY.base,
+    baseElevation: 0,
   })
 }
 
-const updateObject: Handler<'plan.updateObject'> = (ctx) => {
-  const { placedItemId, patch } = ctx.intent.payload
-  const placement = requirePlacement(ctx.project, placedItemId)
-  const design = requireGenericDesign(ctx.project, placement.itemDesignId)
-  const nextWidth = patch.w ?? design.footprint.width
-  const nextDepth = patch.h ?? design.footprint.depth
-  if (nextWidth < MIN_PLAN_SIZE_MM || nextDepth < MIN_PLAN_SIZE_MM) {
-    refuse(
-      'invalid-size',
-      designPath(design.id),
-      `A floor-plan object is at least ${MIN_PLAN_SIZE_MM} mm across; this one asked for ${Math.min(nextWidth, nextDepth)} mm.`,
-    )
-  }
+/**
+ * Where the Item Origin stands (#57 behaviour 33): the drag and the `Position X` /
+ * `Position Y` fields both write this one point. The Placed Item owns no pivot and no size,
+ * so there is nothing else here for a move to touch.
+ */
+const movePlacement: Handler<'plan.movePlacement'> = (ctx) => {
+  const { placedItemId, translation } = ctx.intent.payload
+  requirePlacement(ctx.project, placedItemId)
   const draftPlacement = requirePlacement(ctx.draft, placedItemId)
-  const draftDesign = requireGenericDesign(ctx.draft, design.id)
-  // A drag keeps the top-left corner the legacy store recorded, so the Item Origin moves
-  // by half the change in size. An explicit `x`/`y` is that corner, restated.
-  if (patch.x === undefined) draftPlacement.translation.x += (nextWidth - design.footprint.width) / 2
-  else draftPlacement.translation.x = patch.x + nextWidth / 2
-  if (patch.y === undefined) draftPlacement.translation.y += (nextDepth - design.footprint.depth) / 2
-  else draftPlacement.translation.y = patch.y + nextDepth / 2
-  // The validator keeps rotation in one turn; a drag past 360° lands back inside it.
-  if (patch.rotation !== undefined) draftPlacement.rotationDeg = ((patch.rotation % 360) + 360) % 360
-  if (patch.label !== undefined) draftDesign.name = patch.label
-  if (patch.color !== undefined) draftDesign.color = patch.color
-  if (patch.w !== undefined || patch.h !== undefined) {
-    draftDesign.footprint = { ...draftDesign.footprint, width: nextWidth, depth: nextDepth }
-    draftDesign.origin = { ...draftDesign.origin, x: nextWidth / 2, y: nextDepth / 2 }
-  }
+  draftPlacement.translation.x = translation.x
+  draftPlacement.translation.y = translation.y
+}
+
+/**
+ * One turn about the Item Origin (#57 behaviour 33). Free rotation: any decimal, clockwise
+ * with +Y down, normalised into the one turn the validator asks for. The Item Footprint is
+ * never re-authored by a turn, which is why a 600 × 400 design at 90° still reads 600 wide.
+ */
+const rotatePlacement: Handler<'plan.rotatePlacement'> = (ctx) => {
+  const { placedItemId, rotationDeg } = ctx.intent.payload
+  requirePlacement(ctx.project, placedItemId)
+  const draftPlacement = requirePlacement(ctx.draft, placedItemId)
+  draftPlacement.rotationDeg = normaliseDeg(rotationDeg)
 }
 
 const removeObject: Handler<'plan.removeObject'> = (ctx) => {
@@ -236,14 +231,21 @@ export function planLocator(
 ): Locator {
   switch (intent.type) {
     case 'plan.addObject':
-    case 'plan.addFromTemplate':
       return {
         floorId: intent.payload.floorId,
         viewId: null, view: 'plan',
         itemDesignIds: intent.ids.slice(0, 1),
         placedItemIds: intent.ids.slice(1, 2),
       }
-    case 'plan.updateObject':
+    case 'plan.placeDesign':
+      return {
+        floorId: intent.payload.floorId,
+        viewId: null, view: 'plan',
+        itemDesignIds: [intent.payload.itemDesignId],
+        placedItemIds: intent.ids.slice(0, 1),
+      }
+    case 'plan.movePlacement':
+    case 'plan.rotatePlacement':
     case 'plan.removeObject': {
       const placement = project.existingModel.placedItems.find((item) => item.id === intent.payload.placedItemId)
       return {
@@ -279,8 +281,9 @@ export function planLocator(
 
 export const PLAN_HANDLERS: PlanHandlers = {
   'plan.addObject': { run: addObject, locate: planLocator },
-  'plan.addFromTemplate': { run: addFromTemplate, locate: planLocator },
-  'plan.updateObject': { run: updateObject, locate: planLocator },
+  'plan.placeDesign': { run: placeDesign, locate: planLocator },
+  'plan.movePlacement': { run: movePlacement, locate: planLocator },
+  'plan.rotatePlacement': { run: rotatePlacement, locate: planLocator },
   'plan.removeObject': { run: removeObject, locate: planLocator },
   'plan.addTemplate': { run: addTemplate, locate: planLocator },
   'plan.removeTemplate': { run: removeTemplate, locate: planLocator },

@@ -50,8 +50,9 @@ export type IntentType =
   | 'cabinet.addAccessory'
   | 'cabinet.removeAccessory'
   | 'plan.addObject'
-  | 'plan.addFromTemplate'
-  | 'plan.updateObject'
+  | 'plan.placeDesign'
+  | 'plan.movePlacement'
+  | 'plan.rotatePlacement'
   | 'plan.removeObject'
   | 'plan.addTemplate'
   | 'plan.removeTemplate'
@@ -61,6 +62,9 @@ export type IntentType =
   | 'plan.clear'
   | 'plan.copyToFloor'
   | 'plan.moveToFloor'
+  | 'design.update'
+  | 'design.setOrigin'
+  | 'design.fork'
   | 'floor.create'
   | 'floor.rename'
   | 'floor.reorder'
@@ -166,22 +170,35 @@ export interface AddPlanObject {
   /** A key of the floor-plan catalog, e.g. `bed-king`. */
   catalogKey: string
 }
-export interface AddPlanFromTemplate {
+/**
+ * Place an Item Design that already exists (#57 behaviour 30, #16).
+ *
+ * This is reuse, not a copy: the new Placed Item points at the same design every other
+ * placement of it points at, which is what the library's `Affects N placements` preview is
+ * warning about. It replaces `plan.addFromTemplate`, whose fork-on-place made every placed
+ * object its own design and left the library listing nothing but unplaced shapes.
+ */
+export interface PlacePlanDesign {
   floorId: EntityId
-  templateItemDesignId: EntityId
+  itemDesignId: EntityId
 }
-export interface UpdatePlanObject {
+/**
+ * Where the Item Origin stands on the Floor (#57 behaviour 33). The Placed Item owns no
+ * pivot and no size, so a drag and the `Position X` / `Position Y` fields both land here —
+ * the one point the rotation turns about, in Floor-local millimetres.
+ */
+export interface MovePlanPlacement {
   placedItemId: EntityId
-  /** `x`, `y` and `rotation` are Floor-local; `label`, `color`, `w` and `h` are the design's. */
-  patch: {
-    x?: number
-    y?: number
-    w?: number
-    h?: number
-    rotation?: number
-    label?: string
-    color?: string
-  }
+  translation: Point2
+}
+/**
+ * One turn about the Item Origin (#57 behaviour 33): free rotation, clockwise degrees in
+ * the +Y-down frame, normalised to `[0, 360)`. The Item Footprint is never re-authored and
+ * never mirrored — a 600 × 400 footprint at 90° is still 600 wide and 400 deep locally.
+ */
+export interface RotatePlanPlacement {
+  placedItemId: EntityId
+  rotationDeg: number
 }
 export interface RemovePlanObject {
   placedItemId: EntityId
@@ -231,6 +248,51 @@ export interface TransferPlanObjectsToFloor {
 }
 export type CopyPlanObjectsToFloor = TransferPlanObjectsToFloor
 export type MovePlanObjectsToFloor = TransferPlanObjectsToFloor
+
+/**
+ * The design-level half of the inspector (#57 behaviour 30): name, colour and, for a
+ * rectangle footprint, size. Every Placed Item of this Item Design changes with it, which
+ * is why the view previews the result and says `Affects N placements` before it commits.
+ *
+ * A size change keeps the Item Origin where it is — the footprint grows about the point the
+ * placement is pinned to — unless the Origin sat at the old footprint's centre, in which
+ * case it follows the new one so `Centre` keeps meaning centre.
+ */
+export interface UpdateItemDesign {
+  itemDesignId: EntityId
+  patch: {
+    name?: string
+    /** `#rrggbb`, lowercase. */
+    color?: string
+    width?: number
+    depth?: number
+  }
+}
+/**
+ * Move the Item Origin inside the footprint (#57 behaviour 31, D3). Every placement of the
+ * design takes the same turn the Origin did —
+ *
+ *     translation′ = translation + R(rotationDeg) · (origin′ − origin)
+ *
+ * — so each footprint stays exactly where it is on its Floor and only the point future
+ * rotations turn about moves. The placements' rotations are untouched.
+ */
+export interface SetItemDesignOrigin {
+  itemDesignId: EntityId
+  /** Footprint-local millimetres; any point, not only a preset. */
+  origin: Point2
+}
+/**
+ * Fork one Placed Item onto its own copy of the Item Design (#57 behaviour 30, D11).
+ *
+ * The copy is deep — footprint, origin, colour, height and, for a cabinet, its whole
+ * construction — and only the chosen placement is repointed, so the other placements keep
+ * the shared design. The name arrives already de-duplicated by the dialog.
+ */
+export interface ForkItemDesign {
+  placedItemId: EntityId
+  name: string
+}
 
 /** A new Floor (#56). `name` absent means the next free `Floor N`. */
 export interface CreateFloor {
@@ -315,8 +377,9 @@ export interface IntentPayloads {
   'cabinet.addAccessory': AddAccessory
   'cabinet.removeAccessory': RemoveAccessory
   'plan.addObject': AddPlanObject
-  'plan.addFromTemplate': AddPlanFromTemplate
-  'plan.updateObject': UpdatePlanObject
+  'plan.placeDesign': PlacePlanDesign
+  'plan.movePlacement': MovePlanPlacement
+  'plan.rotatePlacement': RotatePlanPlacement
   'plan.removeObject': RemovePlanObject
   'plan.addTemplate': AddPlanTemplate
   'plan.removeTemplate': RemovePlanTemplate
@@ -326,6 +389,9 @@ export interface IntentPayloads {
   'plan.clear': ClearPlan
   'plan.copyToFloor': CopyPlanObjectsToFloor
   'plan.moveToFloor': MovePlanObjectsToFloor
+  'design.update': UpdateItemDesign
+  'design.setOrigin': SetItemDesignOrigin
+  'design.fork': ForkItemDesign
   'floor.create': CreateFloor
   'floor.rename': RenameFloor
   'floor.reorder': ReorderFloor
@@ -370,6 +436,7 @@ export type Intent<T extends IntentType = IntentType> = {
 export type ProjectIntent = Intent<'project.rename' | 'project.setPreferences'>
 export type CabinetIntent = Intent<Extract<IntentType, `cabinet.${string}`>>
 export type PlanIntent = Intent<Extract<IntentType, `plan.${string}`>>
+export type DesignIntent = Intent<Extract<IntentType, `design.${string}`>>
 export type FloorIntent = Intent<Extract<IntentType, `floor.${string}`>>
 export type ViewIntent = Intent<Extract<IntentType, `view.${string}`>>
 
@@ -399,8 +466,9 @@ export const INTENT_ID_ORDER: Record<IntentType, readonly string[]> = {
   'cabinet.addAccessory': ['accessoryId'],
   'cabinet.removeAccessory': [],
   'plan.addObject': ['itemDesignId', 'placedItemId'],
-  'plan.addFromTemplate': ['itemDesignId', 'placedItemId'],
-  'plan.updateObject': [],
+  'plan.placeDesign': ['placedItemId'],
+  'plan.movePlacement': [],
+  'plan.rotatePlacement': [],
   'plan.removeObject': [],
   'plan.addTemplate': ['itemDesignId'],
   'plan.removeTemplate': [],
@@ -410,6 +478,9 @@ export const INTENT_ID_ORDER: Record<IntentType, readonly string[]> = {
   'plan.clear': [],
   'plan.copyToFloor': ['placedItemId…'],
   'plan.moveToFloor': [],
+  'design.update': [],
+  'design.setOrigin': [],
+  'design.fork': ['itemDesignId'],
   'floor.create': ['floorId', 'viewId'],
   'floor.rename': [],
   'floor.reorder': [],
@@ -478,6 +549,8 @@ export type RejectionCode =
   | 'default-view'
   /** A plan object below the legacy 10 mm minimum, which the UI clamps before sending. */
   | 'invalid-size'
+  /** An Item Origin outside the Item Footprint, which the canvas never offers (#57). */
+  | 'invalid-origin'
   /** `cabinet` refused the tree operation: an already split or over-deep space. */
   | 'invalid-tree'
 

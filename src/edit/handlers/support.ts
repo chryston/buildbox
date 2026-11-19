@@ -7,7 +7,7 @@
  * only the draft: it never generates an ID and never reads the clock (#42 §3).
  */
 import { findNode } from '../../cabinet'
-import type { CabinetItemDesign, CabinetNode, EntityId, Floor, ItemDesign, PlacedItem, Project } from '../../domain'
+import type { CabinetItemDesign, CabinetNode, EntityId, Floor, GenericItemDesign, ItemDesign, PlacedItem, Project } from '../../domain'
 import { problem } from '../../lib'
 import type { ValidationProblem } from '../../lib'
 import type { RejectionCode } from '../intents'
@@ -86,6 +86,18 @@ export function requirePlacement(project: Project, placedItemId: EntityId): Plac
   const placed = project.existingModel.placedItems.find((item) => item.id === placedItemId)
   if (placed === undefined) refuse('unknown-target', placedPath(placedItemId), `No Placed Item ${placedItemId} is in this Project.`)
   return placed
+}
+
+/**
+ * A generic Item Design, or a rejection: the Intents about a design that owns its own
+ * footprint, origin and colour — which a cabinet does not, because those three are derived
+ * from its construction (#42 §2).
+ */
+export function requireGenericDesign(project: Project, itemDesignId: EntityId): GenericItemDesign {
+  const design = findDesign(project, itemDesignId)
+  if (design === undefined) refuse('unknown-target', designPath(itemDesignId), `No Item Design ${itemDesignId} is in this Project.`)
+  if (design.kind !== 'generic') refuse('unknown-target', designPath(itemDesignId), `Item Design ${itemDesignId} is not a floor-plan object.`)
+  return design
 }
 
 /** Every placement of one Item Design, in placement order. */
