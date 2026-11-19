@@ -132,7 +132,7 @@ describe('Cabinet design flow', () => {
 })
 
 describe('Polish features E2E', () => {
-  it('user switches to Floor Plan and back, cabinet state preserved', async () => {
+  it('Item Detail opens the cabinet editor, and back returns to the Placed Item', async () => {
     const user = userEvent.setup()
     render(<App />, view)
 
@@ -144,13 +144,15 @@ describe('Polish features E2E', () => {
     // Canvas shows the cabinet
     expect(screen.getByTestId('cabinet-canvas')).toBeInTheDocument()
 
-    // Switch to Floor Plan — the workspace shell replaces the cabinet chrome (#55).
-    await user.click(screen.getByRole('button', { name: /floor plan/i }))
+    // Back to the Floor — the workspace shell replaces the cabinet chrome (#55), and the
+    // Placed Item Item Detail was opened from is selected again (#57 §6).
+    await user.click(screen.getByTestId('item-detail-back'))
     expect(screen.getByTestId('floor-workspace')).toBeInTheDocument()
     expect(screen.queryByTestId('cabinet-canvas')).not.toBeInTheDocument()
+    expect(screen.getByTestId('selection-inspector')).toBeInTheDocument()
 
-    // Switch back to Cabinet — canvas is back and shelf still there
-    await user.click(screen.getByRole('button', { name: 'Cabinet' }))
+    // Item Detail is the only way back into the editor, and the shelf is still there.
+    await user.click(screen.getByTestId('open-item-detail'))
     expect(screen.getByTestId('cabinet-canvas')).toBeInTheDocument()
     // Cut list should show shelf entry
     const table = screen.getByRole('table')

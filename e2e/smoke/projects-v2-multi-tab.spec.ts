@@ -7,6 +7,7 @@ import {
   openPreviewApp,
   openProjectFromLibrary,
   placedObject,
+  openItemDetail,
   showFloorPlan,
 } from '../support/previewApp'
 import { previewSeed, toast } from '../support/libraryApp'
@@ -36,6 +37,7 @@ test('a second tab reads the Project, refuses edits, follows the first, and take
   second.on('pageerror', (error) => problems.push(error.message))
   await second.goto('./', { waitUntil: 'networkidle' })
   await openProjectFromLibrary(second, FIRST_PROJECT)
+  await openItemDetail(second, 'seed-002')
 
   // The strip, with its words: this tab is showing the latest saved state and nothing more.
   const strip = second.locator('.read-only-strip')

@@ -23,6 +23,7 @@ export { STRINGS } from './strings'
 export type { ActiveViewState, Viewport, ViewportCache } from './workspace'
 export {
   FloorWorkspace,
+  ItemDetailView,
   PLAN_IMAGE_ACCEPT,
   planItemsForFloor,
   planViewKey,
@@ -34,6 +35,8 @@ export {
   type PreparedPlanImageAsset,
   type WorkspaceAssetUrls,
   type WorkspaceIntentBuilder,
+  useWorkspace,
+  type ItemDetailViewProps,
   type WorkspaceServices,
 } from './workspace'
 export { LibraryHome, type LibraryHomeProps, type LibraryServices } from './library/LibraryHome'

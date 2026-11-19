@@ -59,12 +59,15 @@ test('each Project has its own floor plan, and a switch starts an empty history'
   await showFloorPlan(page)
 
   // The first seeded Project's floor plan plus one Placed Item of our own. The second seeded
-  // Project holds no Placed Items, so "empty" there means exactly that.
+  // Project has never had one added, so none of these ids appear on its Floor.
   const bedId = await addFloorPlanObject(page, 'Single Bed')
   await expect(undoButton(page)).toBeEnabled()
 
   await openProjectTab(page, secondProject)
-  await expect.poll(() => floorPlanObjectIds(page)).toEqual([])
+  // Each Project draws its own Placed Items and nothing else. #57 put the cabinet every
+  // Project starts with on the Plan View too, so separateness — not emptiness — is the
+  // property here.
+  await expect.poll(() => floorPlanObjectIds(page)).not.toContain(bedId)
   // A new Project session has no history to walk back into (#26).
   await expect(undoButton(page)).toBeDisabled()
   await expect(redoButton(page)).toBeDisabled()
@@ -80,7 +83,10 @@ test('the seeded Projects keep their own floor plans', async ({ page }) => {
   expect(kitchenObjects.length).toBeGreaterThan(0)
 
   await openProjectTab(page, secondProject)
-  await expect.poll(() => floorPlanObjectIds(page)).toHaveLength(0)
+  // Its own Placed Items, none of them shared with the first Project (#57 draws each
+  // Project's starting cabinet here too, so this is no longer an empty list).
+  const secondObjects = await floorPlanObjectIds(page)
+  expect(secondObjects.some((id) => kitchenObjects.includes(id))).toBe(false)
 
   await openProjectTab(page, firstProject)
   await expect.poll(() => floorPlanObjectIds(page)).toEqual(kitchenObjects)

@@ -17,7 +17,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Project } from '../../domain'
+import { originCandidates as originCandidatePoints } from '../../derive'
+import type { Point2, Project } from '../../domain'
 import { summarizeFloorDependencies } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { IntentType, PayloadOf } from '../../edit'
@@ -30,9 +31,9 @@ import {
 } from './WorkspaceRoot'
 import type { PreparedPlanImage } from './WorkspaceRoot'
 import {
-  customTemplates,
   decodeActiveViews,
   encodeActiveViews,
+  itemLibrary,
   planImageForView,
   planItemsForFloor,
   planViewKey,
@@ -50,8 +51,10 @@ import type { ToolbarGroup } from './WorkspaceToolbar'
 import { PlanViewCanvas } from './PlanViewCanvas'
 import { SavedViewCard } from './SavedViewCard'
 import { SelectionInspector } from './SelectionInspector'
-import type { PlanObjectPatch } from './SelectionInspector'
+import type { DesignEdit } from './SelectionInspector'
+import { quarterTurn } from './rotateHandle'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
+import { ForkDesignDialog, NewItemDialog } from './ItemDialogs'
 import { ManageFloorsDialog } from './ManageFloorsDialog'
 import { DeleteFloorDialog } from './DeleteFloorDialog'
 import { DuplicateFloorDialog } from './DuplicateFloorDialog'
@@ -110,7 +113,7 @@ export function FloorWorkspace(): ReactNode {
   const imageSrc = usePlanImageSrc(services.assetUrls, planImage?.assetHash ?? null)
   const image = planImageForView(project, view, imageSrc)
   const items = planItemsForFloor(project, floorId)
-  const templates = customTemplates(project)
+  const library = itemLibrary(project)
 
   const tool = useWorkspace((state) => state.activeTool)
   const setTool = useWorkspace((state) => state.setTool)
@@ -118,6 +121,12 @@ export function FloorWorkspace(): ReactNode {
   const select = useWorkspace((state) => state.select)
   const dragPreview = useWorkspace((state) => state.dragPreview)
   const setDragPreview = useWorkspace((state) => state.setDragPreview)
+  const angleSnap = useWorkspace((state) => state.snapSettings.angle)
+  const designPreview = useWorkspace((state) => state.designPreview)
+  const setDesignPreview = useWorkspace((state) => state.setDesignPreview)
+  const pickingOrigin = useWorkspace((state) => state.pickingOrigin)
+  const setPickingOrigin = useWorkspace((state) => state.setPickingOrigin)
+  const openItemDetail = useWorkspace((state) => state.openItemDetail)
   const viewKey = view === null ? null : planViewKey(view)
   const viewport = useWorkspace((state) => (viewKey === null ? undefined : state.viewports[viewKey]))
   const hydrated = useWorkspace((state) => (viewKey === null ? true : state.hydrated[viewKey] === true))
@@ -136,13 +145,17 @@ export function FloorWorkspace(): ReactNode {
   const [deleteFloorId, setDeleteFloorId] = useState<string | null>(null)
   const [duplicateFloorId, setDuplicateFloorId] = useState<string | null>(null)
   const [transferOpen, setTransferOpen] = useState(false)
+  const [newItemOpen, setNewItemOpen] = useState(false)
+  const [forkOpen, setForkOpen] = useState(false)
 
   const narrow = useNarrow()
   const uncalibrated = floorNeedsCalibration(planImage)
 
-  // Another Project opened: its placements, Floors and open view are not this one's.
+  // Another Project opened: its placements, Floors and open view are not this one's. The store
+  // was already emptied when its Project was opened (`WorkspaceProvider` owns that), so arriving
+  // here from Item Detail — which unmounts this view and mounts it again — keeps the Placed Item
+  // the back link navigated to (#57 §6).
   useEffect(() => {
-    workspaceStore.getState().reset()
     let live = true
     void services.viewportCache.readActive().then((active) => {
       if (!live) return
@@ -210,10 +223,96 @@ export function FloorWorkspace(): ReactNode {
   }
 
   const selected = items.find((item) => item.id === selection) ?? null
+  const selectedDesign = selected === null
+    ? null
+    : project.itemDesigns.find((design) => design.id === selected.designId) ?? null
 
-  const update = (patch: PlanObjectPatch): void => {
+  /** Where the Item Origin stands: what a drag and `Position X` / `Position Y` both mean. */
+  const setPosition = (x: number, y: number): void => {
     if (selection === null) return
-    send('plan.updateObject', { placedItemId: selection, patch })
+    send('plan.movePlacement', { placedItemId: selection, translation: { x, y } })
+  }
+
+  /** One turn about the Item Origin; the handler normalises to `[0, 360)`. */
+  const setRotation = (rotationDeg: number): void => {
+    if (selection === null) return
+    send('plan.rotatePlacement', { placedItemId: selection, rotationDeg })
+  }
+
+  /**
+   * An Item Design edit is shared, so more than one placement opens the preview (D3) and
+   * nothing is written until `Apply`. With one placement there is nothing to preview.
+   */
+  const editDesign = (edit: DesignEdit): void => {
+    if (selected === null) return
+    if (selected.placementCount <= 1) {
+      send('design.update', { itemDesignId: selected.designId, patch: edit })
+      return
+    }
+    setDesignPreview({
+      itemDesignId: selected.designId,
+      origin: designPreview?.origin ?? null,
+      name: edit.name ?? designPreview?.name ?? null,
+      width: edit.width ?? designPreview?.width ?? null,
+      depth: edit.depth ?? designPreview?.depth ?? null,
+      color: edit.color ?? designPreview?.color ?? null,
+    })
+  }
+
+  /** An Item Origin choice always previews: the footprints stay put, the markers move. */
+  const previewOrigin = (origin: Point2): void => {
+    if (selected === null) return
+    setDesignPreview({
+      itemDesignId: selected.designId,
+      origin,
+      name: null,
+      width: null,
+      depth: null,
+      color: null,
+    })
+    setPickingOrigin(false)
+  }
+
+  const applyPreview = (): void => {
+    if (designPreview === null) return
+    const { itemDesignId, origin, name, width, depth, color } = designPreview
+    setDesignPreview(null)
+    setPickingOrigin(false)
+    if (origin !== null) {
+      send('design.setOrigin', { itemDesignId, origin })
+      return
+    }
+    send('design.update', {
+      itemDesignId,
+      patch: {
+        ...(name === null ? {} : { name }),
+        ...(width === null ? {} : { width }),
+        ...(depth === null ? {} : { depth }),
+        ...(color === null ? {} : { color }),
+      },
+    })
+  }
+
+  const cancelPreview = (): void => {
+    setDesignPreview(null)
+    setPickingOrigin(false)
+  }
+
+  /** `Fork design…`: the placement gets its own deep copy and the selection follows it. */
+  const forkDesign = (name: string): void => {
+    if (selected === null) return
+    const originalDesignId = selected.designId
+    send('design.fork', { placedItemId: selected.id, name })
+    setForkOpen(false)
+    const next = session.getSnapshot().project
+    const design = next.itemDesigns.find((candidate) => candidate.id !== originalDesignId && candidate.name === name)
+    const placed = next.existingModel.placedItems.find((placement) => placement.itemDesignId === design?.id)
+    select(placed?.id ?? null)
+  }
+
+  const openDetail = (): void => {
+    if (selected === null || floorId === null || view === null) return
+    openItemDetail(selected.designId, { floorId, viewId: view.id, placedItemId: selected.id })
   }
 
   const addObject = (catalogKey: string): void => {
@@ -222,11 +321,41 @@ export function FloorWorkspace(): ReactNode {
     select(lastPlacedId(session.getSnapshot().project, floorId))
   }
 
-  const addTemplate = (templateItemDesignId: string): void => {
+  /** Placing a design from the library is reuse: the same design, one more placement. */
+  const placeDesign = (itemDesignId: string): void => {
     if (floorId === null) return
-    send('plan.addFromTemplate', { floorId, templateItemDesignId })
+    send('plan.placeDesign', { floorId, itemDesignId })
     select(lastPlacedId(session.getSnapshot().project, floorId))
   }
+
+  /** `New item…` authors a design nobody has placed, then places this one copy. */
+  const addItemDesign = (label: string, w: number, h: number, color: string): void => {
+    if (floorId === null) return
+    send('plan.addTemplate', { label, w, h, color })
+    setNewItemOpen(false)
+    select(lastPlacedId(session.getSnapshot().project, floorId))
+  }
+
+  // `[` and `]` turn the selected Placed Item a quarter turn about its Item Origin, and
+  // Escape backs out of a pending design preview or a disarmed `Pick on canvas` (#57 §4).
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        if (designPreview === null && !pickingOrigin) return
+        event.preventDefault()
+        setDesignPreview(null)
+        setPickingOrigin(false)
+        return
+      }
+      const target = event.target as HTMLElement | null
+      if (target !== null && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+      if (selected === null) return
+      if (event.key === '[') send('plan.rotatePlacement', { placedItemId: selected.id, rotationDeg: quarterTurn(selected.rotationDeg, -1) })
+      if (event.key === ']') send('plan.rotatePlacement', { placedItemId: selected.id, rotationDeg: quarterTurn(selected.rotationDeg, 1) })
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [selected, designPreview, pickingOrigin, setDesignPreview, setPickingOrigin, send])
 
   const commitImage = (prepared: PreparedPlanImage): void => {
     const asset = prepared.asset
@@ -420,6 +549,31 @@ export function FloorWorkspace(): ReactNode {
       label: 'Add item',
       content: (
         <ToolbarMenu label="Add item" testId="add-item-menu">
+          {/* Three sections (#57 §3): what this Project already has, the shipped catalogue,
+              and the one way to author a shape of your own. */}
+          <div className="bb-workspace-menu-heading">In this Project</div>
+          {library.length === 0 && (
+            <div className="bb-workspace-library-item" data-testid="library-empty">Nothing here yet</div>
+          )}
+          {library.map((entry) => (
+            <button
+              key={entry.itemDesignId}
+              type="button"
+              className="bb-workspace-library-item"
+              data-testid={`add-design-${entry.itemDesignId}`}
+              onClick={() => placeDesign(entry.itemDesignId)}
+            >
+              <span className="bb-workspace-library-swatch" style={{ background: entry.color }} />
+              <span className="bb-workspace-library-name">{entry.label}</span>
+              <span className="bb-workspace-library-meta">
+                {entry.isCabinet ? 'Cabinet' : `${Math.round(entry.width)} × ${Math.round(entry.depth)}`}
+              </span>
+              <span className="bb-workspace-library-meta" data-testid={`library-count-${entry.itemDesignId}`}>
+                {entry.placementCount}
+              </span>
+            </button>
+          ))}
+          <div className="bb-workspace-menu-heading">Catalog</div>
           {services.planCatalogue.map((option) => (
             <ToolbarMenuItem
               key={option.key}
@@ -428,15 +582,7 @@ export function FloorWorkspace(): ReactNode {
               onSelect={() => addObject(option.key)}
             />
           ))}
-          {templates.length > 0 && <div className="bb-workspace-menu-heading">Custom</div>}
-          {templates.map((template) => (
-            <ToolbarMenuItem
-              key={template.itemDesignId}
-              label={template.label}
-              testId={`add-template-${template.itemDesignId}`}
-              onSelect={() => addTemplate(template.itemDesignId)}
-            />
-          ))}
+          <ToolbarMenuItem label="New item…" testId="add-new-item" onSelect={() => setNewItemOpen(true)} />
         </ToolbarMenu>
       ),
     },
@@ -602,10 +748,21 @@ export function FloorWorkspace(): ReactNode {
         inspector={
           <SelectionInspector
             item={selected}
+            design={selectedDesign}
             unit={project.preferences.displayUnit}
             precision={project.preferences.displayPrecision}
             canTransfer={selected !== null && project.floors.length > 1}
-            onUpdate={update}
+            preview={designPreview}
+            pickingOrigin={pickingOrigin}
+            onSetPosition={setPosition}
+            onSetRotation={setRotation}
+            onEditDesign={editDesign}
+            onPreviewOrigin={previewOrigin}
+            onApplyPreview={applyPreview}
+            onCancelPreview={cancelPreview}
+            onTogglePick={() => setPickingOrigin(!pickingOrigin)}
+            onFork={() => setForkOpen(true)}
+            onOpenDetail={openDetail}
             onTransfer={() => setTransferOpen(true)}
             onDelete={() => {
               if (selection === null) return
@@ -628,7 +785,15 @@ export function FloorWorkspace(): ReactNode {
               onSelect={select}
               dragPreview={dragPreview}
               onDragPreview={setDragPreview}
-              onMoveItem={(id, x, y) => send('plan.updateObject', { placedItemId: id, patch: { x, y } })}
+              onMoveItem={(id, x, y) => send('plan.movePlacement', { placedItemId: id, translation: { x, y } })}
+              onRotateItem={(id, rotationDeg) => send('plan.rotatePlacement', { placedItemId: id, rotationDeg })}
+              designPreview={designPreview}
+              pickingOrigin={pickingOrigin}
+              originCandidates={selectedDesign === null ? [] : originCandidatePoints(selectedDesign)}
+              onPickOrigin={previewOrigin}
+              unit={project.preferences.displayUnit}
+              precision={project.preferences.displayPrecision}
+              angleSnap={angleSnap}
               overlay={isCalibrating ? (
                 <CalibrationOverlay
                   zoom={viewport?.zoom ?? 1}
@@ -731,6 +896,20 @@ export function FloorWorkspace(): ReactNode {
           onCopy={(target) => transfer('copy', target)}
           onMove={(target) => transfer('move', target)}
           onClose={() => setTransferOpen(false)}
+        />
+      )}
+      {newItemOpen && (
+        <NewItemDialog
+          onConfirm={addItemDesign}
+          onClose={() => setNewItemOpen(false)}
+        />
+      )}
+      {forkOpen && selected !== null && (
+        <ForkDesignDialog
+          designName={selected.label}
+          taken={project.itemDesigns.map((design) => design.name)}
+          onConfirm={forkDesign}
+          onClose={() => setForkOpen(false)}
         />
       )}
     </>

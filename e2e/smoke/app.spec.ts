@@ -5,7 +5,7 @@ import type { Page } from '@playwright/test'
 import { expect, test } from '../support/fixtures'
 import { canonical, libraryHeading, previewSeed, storedProject } from '../support/libraryApp'
 import { readLegacyStore, seedLegacyStore } from '../support/legacyStore'
-import { FIRST_PROJECT, openPreviewApp, openProjectFromLibrary } from '../support/previewApp'
+import { FIRST_PROJECT, openItemDetail, openPreviewApp, openProjectFromLibrary } from '../support/previewApp'
 
 const fixturesRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../fixtures/legacy')
 const readFixture = (name: string) =>
@@ -27,6 +27,8 @@ test('load renders the Project Library', async ({ page }) => {
 
 test('a cabinet edit survives a reload', async ({ page }) => {
   await openPreviewApp(page)
+  // The cabinet editor is one Placed Item deep now (#57): the migrated `Base Unit`.
+  await openItemDetail(page, 'seed-002')
   const projectId = previewSeed.projects[0]!.id
   const before = await voidIds(page)
   const storedBefore = canonical(await storedProject(page, projectId))
@@ -45,6 +47,7 @@ test('a cabinet edit survives a reload', async ({ page }) => {
   await page.reload({ waitUntil: 'networkidle' })
   // Opened again, not reseeded: the point is that the shelf is in the database the app wrote.
   await openProjectFromLibrary(page, FIRST_PROJECT)
+  await openItemDetail(page, 'seed-002')
   await expect.poll(() => voidIds(page)).toEqual(after)
 })
 

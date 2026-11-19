@@ -40,7 +40,7 @@ const ACTION_TO_INTENT: Record<string, string> = {
   addAccessory: 'cabinet.addAccessory',
   removeAccessory: 'cabinet.removeAccessory',
   addFloorPlanObject: 'plan.addObject',
-  updateFloorPlanObject: 'plan.updateObject',
+  updateFloorPlanObject: 'plan.movePlacement',
   removeFloorPlanObject: 'plan.removeObject',
   addCustomTemplate: 'plan.addTemplate',
   removeCustomTemplate: 'plan.removeTemplate',
@@ -73,7 +73,14 @@ const NOT_INTENTS: readonly string[] = [
  * Floor and one way of looking at it, so there was no action there to map.
  */
 const EXTRA_INTENTS = [
-  'plan.addFromTemplate',
+  // #57: placing reuses an Item Design instead of forking it, and the legacy
+  // `updateFloorPlanObject` — one action for position, size, turn, name and colour — split
+  // into the placement half and the design half the inspector now keeps apart.
+  'plan.placeDesign',
+  'plan.rotatePlacement',
+  'design.update',
+  'design.setOrigin',
+  'design.fork',
   'project.setPreferences',
   'plan.removeImage',
   'plan.copyToFloor',

@@ -63,9 +63,11 @@ const NOW = '2026-11-18T00:00:00.000Z'
 function intentAt(index: number): Intent {
   return index % 2 === 0
     ? {
-        type: 'plan.updateObject',
-        payload: { placedItemId: movedId, patch: { x: movedX + index * 0.5, y: movedY } },
-        label: INTENT_LABELS['plan.updateObject'],
+        type: 'plan.movePlacement',
+        // `+ 1`, not `+ 0`: `plan.movePlacement` takes the translation itself, so index 0 would
+        // ask for the placement's own position and be refused as a no-change edit.
+        payload: { placedItemId: movedId, translation: { x: movedX + (index + 1) * 0.5, y: movedY } },
+        label: INTENT_LABELS['plan.movePlacement'],
         ids: [],
         now: NOW,
       }

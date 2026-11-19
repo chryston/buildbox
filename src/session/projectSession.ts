@@ -137,6 +137,24 @@ async function loadCurrent(
   return ok({ ...record, data: migrated.project })
 }
 
+/**
+ * A Recovery Point's snapshot at this build's domain version.
+ *
+ * A point is Project data from whatever version wrote it, so it takes the same chain
+ * `loadCurrent` runs when a Project is opened: a point written before #56 carries no `views`, and
+ * committing it as it stands leaves a Project whose Plan View cannot be drawn — which, since #57,
+ * is the first thing a Project shows. A point that will not migrate is refused the way a record
+ * that will not migrate is: the restore fails, the Project on disk is untouched.
+ */
+function migratePoint(point: RecoveryPoint, allocateId: IdAllocator): Result<Project, PersistenceError> {
+  if (point.schemaVersion === DOMAIN_SCHEMA_VERSION) return ok(point.data)
+  const migrated = migrateProject(point.data, point.schemaVersion, allocateId)
+  if (!migrated.ok) {
+    return err({ kind: 'unavailable', reason: `recovery-schema-${point.schemaVersion}-unreadable` })
+  }
+  return ok(migrated.project)
+}
+
 /** The last state a commit took to the store — what a `close` or `idle` Recovery Point holds. */
 interface Persisted {
   project: Project
@@ -534,9 +552,11 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
     if (!marked.ok) return marked
     const point = await ports.recovery.load(pointId)
     if (!point.ok) return point
+    const snapshot = migratePoint(point.value, ids)
+    if (!snapshot.ok) return snapshot
 
     const committed = await ports.projects.commit(
-      { project: point.value.data, revision: revision + 1, savedAt: clock.now() },
+      { project: snapshot.value, revision: revision + 1, savedAt: clock.now() },
       persistedRevision,
     )
     if (!committed.ok) {

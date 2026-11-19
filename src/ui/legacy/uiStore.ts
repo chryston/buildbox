@@ -15,10 +15,8 @@
 import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
 import { useShallow } from 'zustand/react/shallow'
-import type { AppModule } from '../../types'
 
 export interface UiState {
-  activeModule: AppModule
   /** The cabinet the sidebar edits: an Item Design id, or `null` for the first one. */
   activeItemDesignId: string | null
   selectedNodeId: string | null
@@ -26,7 +24,6 @@ export interface UiState {
 }
 
 export interface UiActions {
-  setActiveModule(module: AppModule): void
   setActiveItemDesign(id: string | null): void
   selectNode(id: string | null): void
   setSnapGrid(grid: number): void
@@ -36,7 +33,6 @@ export interface UiActions {
 export type UiSnapshot = UiState & UiActions
 
 const INITIAL: UiState = {
-  activeModule: 'cabinet',
   activeItemDesignId: null,
   selectedNodeId: null,
   snapGrid: 5,
@@ -45,7 +41,6 @@ const INITIAL: UiState = {
 export function createUiStore() {
   return createStore<UiState & UiActions>()((set) => ({
     ...INITIAL,
-    setActiveModule: (activeModule) => set({ activeModule }),
     setActiveItemDesign: (activeItemDesignId) => set({ activeItemDesignId }),
     selectNode: (selectedNodeId) => set({ selectedNodeId }),
     setSnapGrid: (snapGrid) => set({ snapGrid }),

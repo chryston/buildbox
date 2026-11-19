@@ -1,14 +1,12 @@
 /**
  * The legacy view's own vocabulary (#41, #53). Everything the target modules own lives in
  * `domain` (cabinet payload) and `cabinet` (scene and layout output); what is left here is
- * the shape the pre-S4 components draw — the floor-plan view-models and the module pointer.
+ * the shape the pre-S4 components draw — the floor-plan view-models.
  *
  * The persisted shapes are gone with the S4 cutover: `Design` and the store slice types had
  * no reader once the Project Library held the work, and `package/legacy` keeps its own
  * frozen copies of whatever it reads (#20 §10). Nothing re-exports a removed type.
  */
-
-export type AppModule = 'cabinet' | 'floorplan'
 
 // --- Floor Plan types ---
 

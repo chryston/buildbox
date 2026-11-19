@@ -539,3 +539,233 @@
 .bb-workspace-dependency-text {
   flex: 1;
 }
+
+/* #57: the Placed Item / Item Design split in the inspector. */
+
+.bb-workspace-button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+
+.bb-workspace-static-value {
+  display: block;
+  min-height: 20px;
+  font-size: 13px;
+  color: var(--bb-text);
+}
+
+.bb-workspace-field-hint {
+  display: block;
+  margin: -6px 0 8px;
+  font-size: 11px;
+  color: var(--bb-text-subtle);
+}
+
+.bb-workspace-design-section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bb-border-card);
+}
+
+.bb-workspace-preview {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: var(--bb-radius-button);
+  border: 1px solid var(--bb-accent);
+  background: var(--bb-bg-accent-soft);
+  font-size: 12px;
+  color: var(--bb-text);
+}
+
+/* #57: the library popover's three sections. */
+
+.bb-workspace-library-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  background: none;
+  color: var(--bb-text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bb-workspace-library-item:hover:not(:disabled) {
+  background: var(--bb-bg-button);
+}
+
+.bb-workspace-library-item:disabled {
+  color: var(--bb-text-subtle);
+  cursor: default;
+}
+
+.bb-workspace-library-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.bb-workspace-library-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bb-workspace-library-meta {
+  font-size: 11px;
+  color: var(--bb-text-subtle);
+}
+
+/* Item Detail View (#57 §6): the design on its own, with the Placements list beside it. */
+.bb-item-detail {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bb-bg-app);
+  color: var(--bb-text);
+}
+
+.bb-item-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--bb-header-height);
+  flex: none;
+  padding: 0 16px;
+  background: var(--bb-bg-header);
+  border-bottom: 1px solid var(--bb-border-header);
+}
+
+.bb-item-detail-back {
+  border: none;
+  background: none;
+  padding: 4px 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--bb-accent);
+  cursor: pointer;
+}
+
+.bb-item-detail-back:disabled {
+  color: var(--bb-text-subtle);
+  cursor: default;
+}
+
+.bb-item-detail-title {
+  font-size: 15px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bb-item-detail-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.bb-item-detail-placements {
+  width: 220px;
+  flex: none;
+  overflow-y: auto;
+  padding: 12px;
+  border-right: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-card);
+}
+
+.bb-item-detail-placements h2,
+.bb-item-detail-props h2 {
+  margin: 0 0 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bb-text-muted);
+}
+
+.bb-item-detail-placements h3 {
+  margin: 12px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bb-text-muted);
+}
+
+.bb-item-detail-placements ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bb-item-detail-row {
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--bb-radius-button);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--bb-text);
+  cursor: pointer;
+}
+
+.bb-item-detail-row:hover {
+  background: var(--bb-bg-accent-soft);
+}
+
+.bb-item-detail-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--bb-text-subtle);
+}
+
+.bb-item-detail-main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.bb-item-detail-main > * {
+  flex: 1;
+  min-height: 0;
+}
+
+.bb-item-detail-props {
+  margin: 16px;
+  padding: 12px;
+  border-radius: var(--bb-radius-card);
+  border: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-card);
+  align-self: flex-start;
+  min-height: auto;
+}
+
+.bb-item-detail-props dl {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 16px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.bb-item-detail-props dt {
+  color: var(--bb-text-muted);
+}
+
+.bb-item-detail-props dd {
+  margin: 0;
+}

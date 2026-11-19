@@ -9,6 +9,7 @@
 import type { IntentType } from './intents'
 import type { IntentHandler } from './handlers/context'
 import { CABINET_HANDLERS } from './handlers/cabinetHandlers'
+import { DESIGN_HANDLERS } from './handlers/designHandlers'
 import { FLOOR_HANDLERS, PLAN_FLOOR_HANDLERS, VIEW_HANDLERS } from './handlers/floorHandlers'
 import { PLAN_HANDLERS } from './handlers/planHandlers'
 import { PROJECT_HANDLERS } from './handlers/projectHandlers'
@@ -17,6 +18,7 @@ export const INTENT_HANDLERS: { [T in IntentType]: IntentHandler<T> } = {
   ...PROJECT_HANDLERS,
   ...CABINET_HANDLERS,
   ...PLAN_HANDLERS,
+  ...DESIGN_HANDLERS,
   ...PLAN_FLOOR_HANDLERS,
   ...FLOOR_HANDLERS,
   ...VIEW_HANDLERS,

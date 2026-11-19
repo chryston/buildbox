@@ -18,7 +18,7 @@ import { createMemoryAdapter } from '../../persistence'
 import { openProject, type ProjectSession } from '../../session'
 import { createTestDeps, flush, seedProject, testProject } from '../../session/testing'
 import { createIntentFactory } from '../../app'
-import { PLAN_IMAGE_ACCEPT, WorkspaceProvider } from '../index'
+import { PLAN_IMAGE_ACCEPT, WorkspaceProvider, workspaceStore } from '../index'
 import type { WorkspaceServices } from '../index'
 import { LegacyViewRoot } from './LegacyViewRoot'
 import { uiStore } from './uiStore'
@@ -49,6 +49,12 @@ export interface TestView {
   dispatch<T extends IntentType>(type: T, payload: PayloadOf<T>): Promise<void>
 }
 
+/** `renderWithBindings`'s options: RTL's, plus where the app should be left. */
+export interface RenderViewOptions extends RenderOptions {
+  /** Leave the app on the Floor workspace instead of opening the cabinet's Item Detail (#57). */
+  onWorkspace?: boolean
+}
+
 /**
  * Open a Project session the way the app does, over the in-memory store.
  *
@@ -56,8 +62,8 @@ export interface TestView {
  * void space. A test that needs a particular cabinet tree passes one built from that.
  */
 export async function openTestView(project: Project = testProject('p-1')): Promise<TestView> {
-  // Selection, module and tool are UI state, not Project data: they outlive a Project in the
-  // app, so they outlive a test unless this says otherwise.
+  // Selection and tool are UI state, not Project data: they outlive a Project in the app, so
+  // they outlive a test unless this says otherwise.
   uiStore.getState().reset()
   const ports = createMemoryAdapter()
   await seedProject(ports, project)
@@ -89,8 +95,9 @@ export async function openTestView(project: Project = testProject('p-1')): Promi
 export function renderWithBindings(
   ui: ReactElement,
   view: TestView,
-  options?: RenderOptions,
+  options?: RenderViewOptions,
 ): RenderResult {
+  const { onWorkspace, ...renderOptions } = options ?? {}
   // The Floor workspace (#55) hangs off the same session; a test that switches to the
   // Floor Plan module needs its provider present even when the test itself never opens
   // the toolbar, so the harness supplies a minimal one. Tests that drive the workspace
@@ -103,7 +110,7 @@ export function renderWithBindings(
     planCatalogue: [{ key: 'sofa-2', label: 'Sofa 2-seater' }],
     viewportCache: { read: async () => undefined, write: () => {}, readActive: async () => null, writeActive: () => {} },
   }
-  return render(
+  const result = render(
     <LegacyViewRoot
       session={view.session}
       services={view.services}
@@ -119,6 +126,25 @@ export function renderWithBindings(
         {ui}
       </WorkspaceProvider>
     </LegacyViewRoot>,
-    options,
+    renderOptions,
   )
+  // The app opens on the Floor workspace and the cabinet editor is reachable only through a
+  // Placed Item's Item Detail (#57). A view test asks for the editor it has always driven by
+  // arriving the way a person does — after the mount, because opening a Project's workspace
+  // starts from an empty store.
+  const project = view.project()
+  const cabinet = project.itemDesigns.find((design) => design.kind === 'cabinet')
+  const placed = project.existingModel.placedItems.find(
+    (item) => cabinet !== undefined && item.itemDesignId === cabinet.id,
+  ) ?? project.existingModel.placedItems[0]
+  if (!onWorkspace && cabinet !== undefined && placed !== undefined) {
+    act(() => {
+      workspaceStore.getState().openItemDetail(cabinet.id, {
+        floorId: placed.floorId,
+        viewId: project.views.find((view) => view.floorId === placed.floorId)?.id ?? null,
+        placedItemId: placed.id,
+      })
+    })
+  }
+  return result
 }

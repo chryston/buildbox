@@ -16,7 +16,6 @@ import {
   calibrateByMeasuring,
   FIRST_PROJECT,
   floorOptions,
-  floorPlanCanvas,
   openManageFloors,
   openPreviewApp,
   placedObject,
@@ -48,15 +47,12 @@ const last = <T>(items: T[]): T => items[items.length - 1] as T
  * Back into the Plan View after a reload.
  *
  * A reload either lands on the Project Library or goes straight back to the Project the session
- * had open, and a Floor with nothing on it has no cabinet canvas to wait for — so the Plan View
- * is the only thing that is reliably there.
+ * had open, and the Plan View is where opening one lands now (#57) — so this is a wait, with the
+ * Library card in front of it when the reload came back to the list.
  */
 async function reopenFloorPlan(page: Page, name: string): Promise<void> {
   if (await libraryHeading(page).isVisible()) await cardButton(page, name, 'Open').click()
-  if (!(await floorPlanCanvas(page).isVisible())) {
-    await page.getByRole('button', { name: 'Floor Plan', exact: true }).click()
-  }
-  await expect(floorPlanCanvas(page)).toBeVisible()
+  await showFloorPlan(page)
 }
 
 // The stored record read as data, narrowed to what these criteria look at.

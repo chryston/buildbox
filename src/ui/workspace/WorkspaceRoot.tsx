@@ -16,6 +16,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
   useSyncExternalStore,
 } from 'react'
 import type { ReactNode } from 'react'
@@ -23,6 +24,7 @@ import type { Project } from '../../domain'
 import type { Intent, IntentType, PayloadOf } from '../../edit'
 import type { ProjectSession, SaveState, SessionAsset } from '../../session'
 import type { PlanImageMediaType } from '../../domain'
+import { workspaceStore } from './workspaceStore'
 import type { ViewportCache } from './viewport'
 
 /** An Intent, fully formed; `app` builds it from `edit`'s label table and id order. */
@@ -93,6 +95,9 @@ interface WorkspaceRootValue {
 
 const WorkspaceContext = createContext<WorkspaceRootValue | null>(null)
 
+/** The session the workspace store was last opened for, so a second Project starts clean. */
+let openedForSession: string | null = null
+
 export function WorkspaceProvider(props: {
   session: ProjectSession
   services: WorkspaceServices
@@ -101,6 +106,16 @@ export function WorkspaceProvider(props: {
   children: ReactNode
 }): ReactNode {
   const { session, services, onReturnToProjects, onShowSaveFailure, children } = props
+  // Which Floor and view are open, what is selected and whose Item Detail is on screen belong
+  // to one Project. The store is a module singleton, so opening another Project in the same tab
+  // has to start from nothing — before its first render, or the previous Project's Item Detail
+  // is painted for a Design this Project does not have (#57).
+  useState(() => {
+    if (openedForSession === session.id) return null
+    openedForSession = session.id
+    workspaceStore.getState().reset()
+    return null
+  })
   const value = useMemo<WorkspaceRootValue>(
     () => ({
       session,

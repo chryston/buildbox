@@ -10,7 +10,7 @@ import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import type { ReactNode } from 'react'
 import type { Root } from 'react-dom/client'
 import App from '../App'
-import { INTENT_LABELS, PLAN_UPDATE_LABELS, intentIdCount } from '../edit'
+import { INTENT_LABELS, intentIdCount } from '../edit'
 import type { Intent, IntentType, PayloadOf } from '../edit'
 import { collectLiveHashes, createMemoryAdapter } from '../persistence'
 import type { Ports } from '../persistence'
@@ -172,23 +172,12 @@ export function createIntentFactory(clock: ClockPort, ids: IdSource): IntentBuil
       return {
         type,
         payload,
-        label: labelOf(type, payload),
+        label: INTENT_LABELS[type],
         ids: ids(intentIdCount(type, payload)),
         now: clock.now(),
       } as Intent
     },
   }
-}
-
-/** The undo tooltip's verb phrase: the table, narrowed by what the payload actually changed. */
-function labelOf<T extends IntentType>(type: T, payload: PayloadOf<T>): string {
-  if (type === 'plan.updateObject') {
-    const patch = (payload as PayloadOf<'plan.updateObject'>).patch
-    if ('rotation' in patch) return PLAN_UPDATE_LABELS.rotate
-    if ('w' in patch || 'h' in patch) return PLAN_UPDATE_LABELS.resize
-    if ('x' in patch || 'y' in patch) return PLAN_UPDATE_LABELS.move
-  }
-  return INTENT_LABELS[type]
 }
 
 /**

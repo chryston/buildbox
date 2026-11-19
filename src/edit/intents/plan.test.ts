@@ -14,6 +14,7 @@ import {
   basicProject,
   deepFreeze,
   expectDeterministic,
+  expectApplied,
   expectRejection,
   expectRoundTrip,
   idSource,
@@ -87,93 +88,78 @@ describe('plan.addObject', () => {
   })
 })
 
-describe('plan.addFromTemplate', () => {
-  it('forks the template instead of placing it', () => {
+describe('plan.placeDesign', () => {
+  it('places a second Placed Item that references the same design (#57 criterion 13)', () => {
     const project = basicProject()
-    const [itemDesignId, placedItemId] = idSource('fork')(2)
-    const applied = expectRoundTrip(project, intent('plan.addFromTemplate', {
+    const [placedItemId] = idSource('place')(1)
+    const applied = expectRoundTrip(project, intent('plan.placeDesign', {
       floorId: 'floor-main',
-      templateItemDesignId: 'design-custom-chest',
-    }, [itemDesignId, placedItemId]))
+      itemDesignId: 'design-custom-chest',
+    }, [placedItemId]))
 
-    const template = design(project, 'design-custom-chest')
-    const fork = design(applied.project, itemDesignId)
-    expect(fork).toEqual({ ...template, id: itemDesignId, isCustom: true })
+    expect(applied.project.itemDesigns.length, 'reuse creates no design').toBe(project.itemDesigns.length)
     expect(placement(applied.project, placedItemId)).toMatchObject({
-      itemDesignId,
+      itemDesignId: 'design-custom-chest',
       floorId: 'floor-main',
-      translation: { x: 100 + template.footprint.width / 2, y: 100 + template.footprint.depth / 2 },
-      baseElevation: CUSTOM_PLAN_ENTRY.base,
+      translation: { x: 100 + 450, y: 100 + 225 },
+      rotationDeg: 0,
+      baseElevation: 0,
     })
-    // The template itself is still in the sidebar, unplaced.
-    expect(placement(applied.project, 'place-chest').itemDesignId).toBe('design-custom-chest')
+    expect(applied.affected).toEqual({
+      floorId: 'floor-main',
+      viewId: null,
+      view: 'plan',
+      itemDesignIds: ['design-custom-chest'],
+      placedItemIds: [placedItemId],
+    })
   })
 
-  it('refuses a design that is not a custom shape', () => {
+  it('reuses a migrated custom shape and a cabinet alike (#57 criterion 14)', () => {
+    const project = basicProject()
+    const [first, second] = idSource('twice')(2)
+    const onGround = expectApplied(project, intent('plan.placeDesign', { floorId: 'floor-main', itemDesignId: 'design-base-cabinet' }, [first]))
+    const onMezz = expectApplied(onGround.project, intent('plan.placeDesign', { floorId: 'floor-mezz', itemDesignId: 'design-base-cabinet' }, [second]))
+    const ids = onMezz.project.existingModel.placedItems.filter((item) => item.itemDesignId === 'design-base-cabinet')
+    expect(ids.map((item) => item.id).sort()).toEqual(['place-base-left', 'place-base-right', first, second].sort())
+    expect(onMezz.project.itemDesigns.filter((item) => item.id === 'design-base-cabinet').length).toBe(1)
+  })
+
+  it('refuses a design or a Floor that is not in the Project', () => {
     const project = deepFreeze(basicProject())
-    expectRejection(
-      project,
-      intent('plan.addFromTemplate', { floorId: 'floor-main', templateItemDesignId: 'design-bed-king' }, idSource('x')(2)),
-      'unknown-target',
-    )
+    expectRejection(project, intent('plan.placeDesign', { floorId: 'floor-main', itemDesignId: 'nope' }, ['p']), 'unknown-target')
+    expectRejection(project, intent('plan.placeDesign', { floorId: 'nope', itemDesignId: 'design-bed-king' }, ['p']), 'unknown-target')
+    expectRejection(project, intent('plan.placeDesign', { floorId: 'floor-main', itemDesignId: 'design-bed-king' }, []), 'missing-ids')
   })
 })
 
-describe('plan.updateObject', () => {
-  it('moves the object by its legacy top-left corner', () => {
-    const { project, itemDesignId, placedItemId } = withBed()
-    const applied = expectRoundTrip(project, intent('plan.updateObject', { placedItemId, patch: { x: 500, y: 400 } }))
-    expect(placement(applied.project, placedItemId).translation).toEqual({ x: 500 + 910, y: 400 + 990 })
-    expect(canonicalJson(design(applied.project, itemDesignId))).toBe(canonicalJson(design(project, itemDesignId)))
+describe('plan.movePlacement and plan.rotatePlacement', () => {
+  it('writes the Item Origin position and nothing else (#57 criterion 7)', () => {
+    const project = basicProject()
+    const applied = expectRoundTrip(project, intent('plan.movePlacement', { placedItemId: 'place-bed', translation: { x: 2100, y: 640 } }))
+    expect(placement(applied.project, 'place-bed').translation).toEqual({ x: 2100, y: 640 })
+    expect(canonicalJson(design(applied.project, 'design-bed-king'))).toBe(canonicalJson(design(project, 'design-bed-king')))
   })
 
-  it('resizes without moving the top-left corner', () => {
-    const { project, itemDesignId, placedItemId } = withBed()
-    const applied = expectRoundTrip(project, intent('plan.updateObject', { placedItemId, patch: { w: 2000, h: 1980 } }))
-    const entry = PLAN_CATALOGUE['bed-king']!
-    expect(placement(applied.project, placedItemId).translation).toEqual({ x: 100 + 1000, y: 100 + entry.h / 2 })
-    expect(design(applied.project, itemDesignId).footprint).toEqual({ kind: 'rectangle', width: 2000, depth: 1980 })
-    expect(design(applied.project, itemDesignId).origin).toEqual({ x: 1000, y: 990 })
-  })
-
-  it('keeps rotation inside one turn, the way the validator wants it', () => {
-    const { project, placedItemId } = withBed()
-    for (const [rotation, expected] of [[45, 45], [400, 40], [-90, 270]] as const) {
-      const applied = expectRoundTrip(project, intent('plan.updateObject', { placedItemId, patch: { rotation } }))
-      expect(applied.project.existingModel.placedItems.find((item) => item.id === placedItemId)!.rotationDeg).toBe(expected)
+  it('turns a placement about its Item Origin, keeping rotation inside one turn', () => {
+    const project = basicProject()
+    for (const [rotationDeg, expected] of [[45, 45], [400, 40], [-90, 270], [37.5, 37.5]] as const) {
+      const applied = expectRoundTrip(project, intent('plan.rotatePlacement', { placedItemId: 'place-chest', rotationDeg }))
+      expect(placement(applied.project, 'place-chest').rotationDeg).toBeCloseTo(expected, 10)
+      expect(placement(applied.project, 'place-chest').translation).toEqual(placement(project, 'place-chest').translation)
     }
     // A full turn from a turned object lands back on zero rather than on 360.
-    const turned = applyIntent(project, intent('plan.updateObject', { placedItemId, patch: { rotation: 90 } }))
-    if (!turned.ok) throw new Error('the turn was refused')
-    const spun = expectRoundTrip(turned.project, intent('plan.updateObject', { placedItemId, patch: { rotation: 360 } }))
-    expect(placement(spun.project, placedItemId).rotationDeg).toBe(0)
-    expectRejection(spun.project, intent('plan.updateObject', { placedItemId, patch: { rotation: 720 } }), 'no-change')
+    const turned = expectApplied(project, intent('plan.rotatePlacement', { placedItemId: 'place-chest', rotationDeg: 90 }))
+    const spun = expectRoundTrip(turned.project, intent('plan.rotatePlacement', { placedItemId: 'place-chest', rotationDeg: 360 }))
+    expect(placement(spun.project, 'place-chest').rotationDeg).toBe(0)
+    expectRejection(spun.project, intent('plan.rotatePlacement', { placedItemId: 'place-chest', rotationDeg: 720 }), 'no-change')
   })
 
-  it('writes the label and colour onto the design, not the placement', () => {
-    const { project, itemDesignId, placedItemId } = withBed()
-    const applied = expectRoundTrip(project, intent('plan.updateObject', { placedItemId, patch: { label: 'Guest bed', color: '#00ff00' } }))
-    expect(design(applied.project, itemDesignId).name).toBe('Guest bed')
-    expect(design(applied.project, itemDesignId).color).toBe('#00ff00')
-    expect(canonicalJson(placement(applied.project, placedItemId))).toBe(canonicalJson(placement(project, placedItemId)))
-  })
-
-  it('refuses an object below the legacy 10 mm floor, rather than clamping it', () => {
-    const { project, placedItemId } = deepFreeze(withBed())
-    expectRejection(project, intent('plan.updateObject', { placedItemId, patch: { w: 5 } }), 'invalid-size')
-    expectRejection(project, intent('plan.updateObject', { placedItemId, patch: { h: 9.99 } }), 'invalid-size')
-  })
-
-  it('refuses a patch that changes nothing, and one that names nothing', () => {
-    const { project, placedItemId } = deepFreeze(withBed())
-    const here = placement(project, placedItemId).translation
-    expectRejection(project, intent('plan.updateObject', { placedItemId, patch: { x: here.x - 910, y: here.y - 990 } }), 'no-change')
-    expectRejection(project, intent('plan.updateObject', { placedItemId: 'gone', patch: { x: 1 } }), 'unknown-target')
-  })
-
-  it('refuses to treat a cabinet placement as a floor-plan object', () => {
+  it('refuses a move that changes nothing, and one that names nothing', () => {
     const project = deepFreeze(basicProject())
-    expectRejection(project, intent('plan.updateObject', { placedItemId: 'place-base-left', patch: { label: 'No' } }), 'unknown-target')
+    const here = placement(project, 'place-bed').translation
+    expectRejection(project, intent('plan.movePlacement', { placedItemId: 'place-bed', translation: { ...here } }), 'no-change')
+    expectRejection(project, intent('plan.movePlacement', { placedItemId: 'gone', translation: { x: 1, y: 1 } }), 'unknown-target')
+    expectRejection(project, intent('plan.rotatePlacement', { placedItemId: 'gone', rotationDeg: 12 }), 'unknown-target')
   })
 })
 

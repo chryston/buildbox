@@ -1,79 +1,112 @@
 /**
- * The selection inspector (#55 criterion 5): the properties of the selected Placed
- * Item, in the Project's display unit.
+ * The selection inspector (#55 criterion 5, #57 §2–3): the Placed Item first, then the
+ * Item Design it references, in the Project's display unit.
  *
- * Sizes are shown through `displayUnits` — a 605.5 mm width reads `606` at mm / 0 dp —
- * and a typed number is read back through the same pair, so `60.55` cm is exactly
- * 605.5 mm. The display never rewrites the Project: the field keeps the person's text
- * while they type and dispatches one `plan.updateObject` on commit.
+ * The split is the whole point. `Position X`, `Position Y` and `Rotation` belong to the
+ * Placed Item and commit as they stand; `Width`, `Depth`, `Colour`, the name and the
+ * `Item Origin` belong to the Item Design and are shared, so with more than one placement
+ * each of them opens the preview (D3) — the text says `Affects N placements` and nothing is
+ * written until `Apply`. A Placed Item owns no pivot and no size, so nothing here edits one.
+ *
+ * Numbers are shown through `displayUnits` — a 605.5 mm width reads `606` at mm / 0 dp — and
+ * read back through the same pair, so `60.55` cm is exactly 605.5 mm. Each field keeps the
+ * person's text while they type and commits once on Enter or blur.
  */
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { DisplayUnit } from '../../domain'
+import { footprintPath, pathOrigin } from '../../derive'
+import { designFootprintSize } from '../../domain'
+import type { DisplayUnit, ItemDesign, Point2 } from '../../domain'
 import { PLAN_SWATCHES } from './planColors'
 import { formatMm, parseToMm } from './displayUnits'
 import type { PlanItemView } from './planModel'
+import { quarterTurn } from './rotateHandle'
+import type { DesignEditPreview } from './workspaceStore'
 
 /** The smallest footprint the handlers accept (`MIN_PLAN_SIZE_MM`). */
 const MIN_SIZE_MM = 50
 
-export interface PlanObjectPatch {
-  label?: string
-  w?: number
-  h?: number
-  rotation?: number
+/** A design edit, as the inspector asks for it: only the fields the person touched. */
+export interface DesignEdit {
+  name?: string
+  width?: number
+  depth?: number
   color?: string
 }
 
 export interface SelectionInspectorProps {
   item: PlanItemView | null
+  /** The Item Design the selected Placed Item references. */
+  design: ItemDesign | null
   unit: DisplayUnit
   precision: number
   /** Another Floor exists to send the selection to (#56). */
   canTransfer: boolean
-  onUpdate: (patch: PlanObjectPatch) => void
+  /** The design edit awaiting `Apply` (D3), or `null`. */
+  preview: DesignEditPreview | null
+  /** `Pick on canvas` is armed (#57 §5). */
+  pickingOrigin: boolean
+  onSetPosition: (x: number, y: number) => void
+  onSetRotation: (rotationDeg: number) => void
+  /** A design-level edit: the workspace previews it or commits it, by placement count. */
+  onEditDesign: (edit: DesignEdit) => void
+  /** An Item Origin choice: always a preview, never a direct commit (D3). */
+  onPreviewOrigin: (origin: Point2) => void
+  onApplyPreview: () => void
+  onCancelPreview: () => void
+  onTogglePick: () => void
+  onFork: () => void
+  onOpenDetail: () => void
   onDelete: () => void
   onTransfer: () => void
 }
 
 export function SelectionInspector(props: SelectionInspectorProps): ReactNode {
-  const { item, unit, precision } = props
+  const { item } = props
   // No selection: the rail simply has no inspector, per the issue's layout.
   if (item === null) return null
-  return <ItemEditor key={item.id} {...props} item={item} unit={unit} precision={precision} />
+  return <ItemEditor key={item.id} {...props} item={item} />
 }
 
-/** One size field: the person's text while typing, the Project's value otherwise. */
-function SizeField(props: {
+/** One number field: the person's text while typing, the Project's value otherwise. */
+function NumberField(props: {
   label: string
   testId: string
-  mm: number
+  value: number
+  /** `null` reads the value as a Floor distance in the display unit; `'deg'` as degrees. */
+  kind: 'mm' | 'deg'
   unit: DisplayUnit
   precision: number
-  onCommit: (mm: number) => void
+  min?: number
+  onCommit: (value: number) => void
 }): ReactNode {
-  const { label, testId, mm, unit, precision, onCommit } = props
-  const shown = formatMm(mm, unit, precision)
+  const { label, testId, value, kind, unit, precision, min, onCommit } = props
+  const shown = kind === 'mm' ? formatMm(value, unit, precision) : trimNumber(value)
   const [text, setText] = useState<string | null>(null)
 
-  useEffect(() => { setText(null) }, [mm])
+  useEffect(() => { setText(null) }, [value])
 
   const commit = (): void => {
     if (text === null) return
     const parsed = Number(text)
-    if (Number.isFinite(parsed)) {
-      const mmValue = Math.max(MIN_SIZE_MM, parseToMm(parsed, unit))
-      onCommit(mmValue)
-      if (formatMm(mmValue, unit, precision) === shown) setText(null)
-    } else {
+    if (!Number.isFinite(parsed)) {
       setText(null)
+      return
     }
+    const next = kind === 'mm'
+      ? parseToMm(parsed, unit)
+      : parsed
+    const clamped = min === undefined ? next : Math.max(min, next)
+    onCommit(clamped)
+    const committed = kind === 'mm' ? formatMm(clamped, unit, precision) : trimNumber(clamped)
+    if (committed === shown) setText(null)
   }
 
   return (
     <>
       <label className="bb-workspace-field-label" htmlFor={`${testId}-label`}>
-        {label} <span className="bb-workspace-unit-suffix">({unit})</span>
+        {label}
+        {kind === 'mm' && <> <span className="bb-workspace-unit-suffix">({unit})</span></>}
       </label>
       <input
         id={`${testId}-label`}
@@ -92,60 +125,136 @@ function SizeField(props: {
   )
 }
 
+/** `37.5` reads `37.5`, `90` reads `90` — a rotation is not a distance, so no unit dp. */
+function trimNumber(value: number): string {
+  return String(Math.round(value * 10) / 10)
+}
+
+/** One read-only row: the label the issue names, and the value beside it. */
+function ReadOnlyRow(props: { testId: string; label: string; value: string; hint?: string }): ReactNode {
+  return (
+    <>
+      <span className="bb-workspace-field-label" data-testid={`${props.testId}-label`}>{props.label}</span>
+      <span className="bb-workspace-static-value" data-testid={props.testId}>{props.value}</span>
+      {props.hint !== undefined && (
+        <span className="bb-workspace-field-hint" data-testid={`${props.testId}-hint`}>{props.hint}</span>
+      )}
+    </>
+  )
+}
+
+/** The four corners of the local bounds plus its centre: the `Item Origin` quick choices. */
+function originChoices(design: ItemDesign): readonly { label: string; point: Point2 }[] {
+  const path = footprintPath(design)
+  const points = [path.start, ...path.segments.map((segment) => segment.to)]
+  const xs = points.map((point) => point.x)
+  const ys = points.map((point) => point.y)
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minY = Math.min(...ys)
+  const maxY = Math.max(...ys)
+  return [
+    { label: 'Centre', point: pathOrigin(path) },
+    // Named as they appear at 0°, with +Y down: `Bottom-left` is local (minX, maxY).
+    { label: 'Top-left', point: { x: minX, y: minY } },
+    { label: 'Top-right', point: { x: maxX, y: minY } },
+    { label: 'Bottom-right', point: { x: maxX, y: maxY } },
+    { label: 'Bottom-left', point: { x: minX, y: maxY } },
+  ]
+}
+
 function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): ReactNode {
-  const { item, unit, precision, canTransfer, onUpdate, onDelete, onTransfer } = props
+  const {
+    item, design, unit, precision, canTransfer, preview, pickingOrigin,
+    onSetPosition, onSetRotation, onEditDesign, onPreviewOrigin, onApplyPreview,
+    onCancelPreview, onTogglePick, onFork, onOpenDetail, onDelete, onTransfer,
+  } = props
+  const { width, depth } = design === null
+    ? { width: item.width, depth: item.depth }
+    : designFootprintSize(design)
+  const isCabinet = design === null || design.kind === 'cabinet'
+  const pending = preview !== null && preview.itemDesignId === item.designId ? preview : null
+  const count = item.placementCount
+  const size = (mm: number): string => formatMm(mm, unit, precision)
+
   return (
     <section className="bb-workspace-card" data-testid="selection-inspector">
-      <h3 className="bb-workspace-card-title">Selection</h3>
-      <label className="bb-workspace-field-label" htmlFor="inspector-label-input">Label</label>
-      <input
-        id="inspector-label-input"
-        data-testid="inspector-label"
-        className="bb-workspace-input"
-        type="text"
-        value={item.label}
-        onChange={(event) => onUpdate({ label: event.target.value })}
-      />
-      <SizeField
-        label="Width"
-        testId="inspector-width"
-        mm={item.w}
-        unit={unit}
-        precision={precision}
-        onCommit={(w) => onUpdate({ w })}
-      />
-      <SizeField
-        label="Depth"
-        testId="inspector-depth"
-        mm={item.h}
-        unit={unit}
-        precision={precision}
-        onCommit={(h) => onUpdate({ h })}
-      />
-      <label className="bb-workspace-field-label">Rotation: {item.rotationDeg}°</label>
+      <h3 className="bb-workspace-card-title">Placed Item</h3>
+      <ReadOnlyRow testId="inspector-name" label="Name" value={item.label} />
+      <span className="bb-workspace-field-label" data-testid="inspector-design-label">
+        Item Design: {item.label}
+      </span>
       <button
         type="button"
-        data-testid="rotate-90"
+        data-testid="open-item-detail"
         className="bb-workspace-tool-button"
-        onClick={() => onUpdate({ rotation: (item.rotationDeg + 90) % 360 })}
+        onClick={onOpenDetail}
       >
-        Rotate 90°
+        Open Item Detail
       </button>
-      <label className="bb-workspace-field-label">Colour</label>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {PLAN_SWATCHES.map((color) => (
-          <button
-            key={color}
-            type="button"
-            data-testid={`swatch-${color}`}
-            aria-label={`Colour ${color}`}
-            aria-pressed={item.color === color ? 'true' : 'false'}
-            className="bb-workspace-swatch"
-            style={{ background: color }}
-            onClick={() => onUpdate({ color })}
-          />
-        ))}
+      <NumberField
+        label="Position X"
+        testId="inspector-position-x"
+        kind="mm"
+        value={item.translation.x}
+        unit={unit}
+        precision={precision}
+        onCommit={(x) => onSetPosition(x, item.translation.y)}
+      />
+      <NumberField
+        label="Position Y"
+        testId="inspector-position-y"
+        kind="mm"
+        value={item.translation.y}
+        unit={unit}
+        precision={precision}
+        onCommit={(y) => onSetPosition(item.translation.x, y)}
+      />
+      <NumberField
+        label="Rotation"
+        testId="inspector-rotation"
+        kind="deg"
+        value={item.rotationDeg}
+        unit={unit}
+        precision={precision}
+        onCommit={onSetRotation}
+      />
+      <div className="bb-workspace-button-row">
+        <button
+          type="button"
+          data-testid="rotate-minus-90"
+          className="bb-workspace-tool-button"
+          onClick={() => onSetRotation(quarterTurn(item.rotationDeg, -1))}
+        >
+          ↺ 90°
+        </button>
+        <button
+          type="button"
+          data-testid="rotate-plus-90"
+          className="bb-workspace-tool-button"
+          onClick={() => onSetRotation(quarterTurn(item.rotationDeg, 1))}
+        >
+          ↻ 90°
+        </button>
       </div>
+      {/* The Item Footprint's own numbers: they never swap when the item turns. */}
+      <ReadOnlyRow
+        testId="placed-width"
+        label="Width"
+        value={size(item.width)}
+        hint="Set in the Item Design below"
+      />
+      <ReadOnlyRow
+        testId="placed-depth"
+        label="Depth"
+        value={size(item.depth)}
+        hint="Set in the Item Design below"
+      />
+      <ReadOnlyRow
+        testId="floor-bounds"
+        label="Floor bounds"
+        value={`${size(item.boundsWidth)} × ${size(item.boundsDepth)}`}
+      />
       <div style={{ marginTop: 12 }}>
         <button
           type="button"
@@ -160,6 +269,16 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
       <div style={{ marginTop: 12 }}>
         <button
           type="button"
+          data-testid="fork-design"
+          className="bb-workspace-tool-button"
+          onClick={onFork}
+        >
+          Fork design…
+        </button>
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <button
+          type="button"
           data-testid="delete-object"
           className="bb-workspace-danger-button"
           onClick={onDelete}
@@ -167,6 +286,117 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
           Delete
         </button>
       </div>
+
+      {design !== null && (
+        <div className="bb-workspace-design-section" data-testid="item-design-section">
+          <h4 className="bb-workspace-card-title" data-testid="item-design-title">
+            {`Item Design · ${design.name} — shared by ${count} ${count === 1 ? 'placement' : 'placements'}`}
+          </h4>
+          <label className="bb-workspace-field-label" htmlFor="design-name-input">Name</label>
+          <input
+            id="design-name-input"
+            data-testid="design-name"
+            className="bb-workspace-input"
+            type="text"
+            value={pending?.name ?? design.name}
+            onChange={(event) => onEditDesign({ name: event.target.value })}
+          />
+          {/* A cabinet's footprint, origin and colour are its construction (#42 §2), so the
+              rows that would edit them are not offered — Item Detail edits the cabinet. */}
+          {!isCabinet && (
+            <>
+              <NumberField
+                label="Width"
+                testId="inspector-width"
+                kind="mm"
+                value={pending?.width ?? width}
+                unit={unit}
+                precision={precision}
+                min={MIN_SIZE_MM}
+                onCommit={(next) => onEditDesign({ width: next })}
+              />
+              <NumberField
+                label="Depth"
+                testId="inspector-depth"
+                kind="mm"
+                value={pending?.depth ?? depth}
+                unit={unit}
+                precision={precision}
+                min={MIN_SIZE_MM}
+                onCommit={(next) => onEditDesign({ depth: next })}
+              />
+              <label className="bb-workspace-field-label">Colour</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {PLAN_SWATCHES.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    data-testid={`swatch-${color}`}
+                    aria-label={`Colour ${color}`}
+                    aria-pressed={(pending?.color ?? design.color) === color ? 'true' : 'false'}
+                    className="bb-workspace-swatch"
+                    style={{ background: color }}
+                    onClick={() => onEditDesign({ color })}
+                  />
+                ))}
+              </div>
+              <label className="bb-workspace-field-label">Item Origin</label>
+              <div className="bb-workspace-button-row" data-testid="origin-choices">
+                {originChoices(design).map((choice) => (
+                  <button
+                    key={choice.label}
+                    type="button"
+                    data-testid={`origin-${choice.label.toLowerCase()}`}
+                    className="bb-workspace-tool-button"
+                    aria-pressed={
+                      pending?.origin != null &&
+                      pending.origin.x === choice.point.x &&
+                      pending.origin.y === choice.point.y
+                        ? 'true'
+                        : 'false'
+                    }
+                    onClick={() => onPreviewOrigin(choice.point)}
+                  >
+                    {choice.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  data-testid="origin-pick"
+                  className="bb-workspace-tool-button"
+                  aria-pressed={pickingOrigin ? 'true' : 'false'}
+                  onClick={onTogglePick}
+                >
+                  Pick on canvas
+                </button>
+              </div>
+            </>
+          )}
+          {pending && (
+            <div className="bb-workspace-preview" data-testid="design-preview">
+              <span data-testid="affects-count">{`Affects ${count} ${count === 1 ? 'placement' : 'placements'}`}</span>
+              <div className="bb-workspace-button-row">
+                <button
+                  type="button"
+                  data-testid="preview-apply"
+                  className="bb-workspace-tool-button"
+                  onClick={onApplyPreview}
+                >
+                  Apply
+                </button>
+                <button
+                  type="button"
+                  data-testid="preview-cancel"
+                  className="bb-workspace-tool-button"
+                  onClick={onCancelPreview}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   )
 }

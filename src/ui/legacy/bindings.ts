@@ -20,7 +20,6 @@ import type {
   ElementType,
   GlobalSettings,
 } from '../../domain'
-import type { AppModule } from '../../types'
 
 /** The toolbar's save status (#14). `null` where there is no save state to be truthful about. */
 export interface SaveStatusText {
@@ -81,10 +80,6 @@ export interface LegacyBindings {
   removeAccessory(nodeId: string, accessoryId: string): void
   /** One proportional drag, committed once on pointer-up (#26). */
   commitDrag(parentNodeId: string, ratio: number): void
-
-  // ---------------------------------------------------------------- module
-  readonly activeModule: AppModule
-  setActiveModule(module: AppModule): void
 }
 
 export const LegacyBindingsContext = createContext<LegacyBindings | null>(null)

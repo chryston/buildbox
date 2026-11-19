@@ -31,16 +31,69 @@ export async function openPreviewApp(page: Page): Promise<void> {
   await openProjectFromLibrary(page, FIRST_PROJECT)
 }
 
-/** Open one Project from the Library and wait for its cabinet view. */
+/**
+ * Open one Project from the Library and wait for the Floor workspace it opens on.
+ *
+ * The app used to land in the cabinet editor and switch away; since #57 it lands on the Plan
+ * View and the editor is one Placed Item deep.
+ */
 export async function openProjectFromLibrary(page: Page, name: string): Promise<void> {
   await expect(libraryHeading(page)).toBeVisible()
   await cardButton(page, name, 'Open').click()
-  await expect(cabinetCanvas(page)).toBeVisible()
+  await expect(floorPlanCanvas(page)).toBeVisible()
 }
 
+/**
+ * Be on the Plan View. Usually that is only a wait, because it is where the app opens (#57);
+ * from a design's Item Detail it is the back link, which also reselects the Placed Item the
+ * design was opened from.
+ */
 export async function showFloorPlan(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Floor Plan', exact: true }).click()
+  const back = page.getByTestId('item-detail-back')
+  if (await back.isVisible().catch(() => false)) {
+    await back.click()
+  }
   await expect(floorPlanCanvas(page)).toBeVisible()
+}
+
+/**
+ * Zoom the Plan View out until `target` lies inside the canvas. A Project opens framed on its
+ * whole Floor, so an item near an edge can sit under the toolbar or above the visible canvas —
+ * the same thing a person fixes with the wheel, and the only way to reach it.
+ */
+export async function revealOnCanvas(page: Page, target: Locator): Promise<void> {
+  const frame = await floorPlanCanvas(page).boundingBox()
+  if (frame === null) throw new Error('the Plan View has no box to reveal into')
+  const viewport = page.viewportSize()
+  if (viewport === null) throw new Error('revealing needs a known viewport')
+  // The canvas runs to the bottom edge of the window, so "inside the canvas" is not yet "inside
+  // the viewport" — and only what is in the viewport can be clicked.
+  const top = frame.y + 8
+  const bottom = Math.min(frame.y + frame.height, viewport.height) - 8
+  const left = frame.x + 8
+  const right = Math.min(frame.x + frame.width, viewport.width) - 8
+  await page.mouse.move(frame.x + frame.width / 2, Math.min(frame.y + frame.height / 2, viewport.height - 40))
+  await expect.poll(async () => {
+    const at = await target.boundingBox()
+    if (at === null) return false
+    if (at.y >= top && at.y + at.height <= bottom && at.x >= left && at.x + at.width <= right) return true
+    await page.mouse.wheel(0, 300)
+    return false
+  }, { message: `${await target.getAttribute('data-testid')} stayed outside the canvas`, timeout: 15_000 }).toBe(true)
+}
+
+/**
+ * Open a Placed Item's Item Design — the only way into the cabinet editor (#57). The Placed Item
+ * is chosen by id, because the design's own name is what the inspector shows afterwards.
+ */
+export async function openItemDetail(page: Page, placedItemId: string): Promise<void> {
+  const target = placedObject(page, placedItemId)
+  await revealOnCanvas(page, target)
+  await target.click()
+  const open = page.getByTestId('open-item-detail')
+  await expect(open).toBeVisible()
+  await open.click()
+  await expect(page.getByTestId('item-detail-view')).toBeVisible()
 }
 
 /** The ids of the Placed Items the floor plan is showing, in render order. */
