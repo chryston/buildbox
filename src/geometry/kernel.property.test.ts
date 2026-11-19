@@ -184,9 +184,11 @@ describe('#54 §9 properties', () => {
       }),
     )
     fc.assert(
-      fc.property(arbPreset, (preset) => {
+      fc.property(arbPreset, fc.integer({ min: 0, max: 359 }), (preset, orientationDeg) => {
         if (preset.kind === 'capsule' && preset.length <= preset.width) return
-        const path = evaluatePreset(preset, placed())
+        // The orientation is generated, not fixed at 0: a placement that turned an arc into a
+        // longer arc passed every case this property used to run.
+        const path = evaluatePreset(preset, placed(orientationDeg))
         expect(validateLoop(path)).toEqual([])
         const closed = closedFormArea(preset)
         expect(area(path)).toBeCloseTo(closed, 1)

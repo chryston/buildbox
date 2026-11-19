@@ -250,27 +250,13 @@ const arbPreset: fc.Arbitrary<Preset> = fc.oneof(
   ),
 )
 
-/**
- * A preset footprint: the shape, where it sits, how far it is turned.
- *
- * A Circle or an Ellipse is generated unturned. `evaluatePreset` rotates an arc by adding to
- * `sweepDeg` without carrying the centre's own frame, so a turned Circle currently reports
- * `edges-touch` to `validateLoop` — a defect in the #54 kernel rather than in a footprint, and
- * outside this issue. Generating one here would make every property that builds a Project fail
- * on that defect instead of on whatever it is meant to be checking.
- */
-const arbPresetFootprint: fc.Arbitrary<PresetItemFootprint> = fc
-  .record({
-    preset: arbPreset,
-    centre: arbPoint,
-    orientationDeg: fc.integer({ min: 0, max: 359 }),
-  })
-  .map(({ preset, centre, orientationDeg }) => ({
-    kind: 'preset' as const,
-    preset,
-    centre,
-    orientationDeg: preset.kind === 'circle' || preset.kind === 'ellipse' ? 0 : orientationDeg,
-  }))
+/** A preset footprint: the shape, where it sits, how far it is turned. */
+const arbPresetFootprint: fc.Arbitrary<PresetItemFootprint> = fc.record({
+  kind: fc.constant('preset' as const),
+  preset: arbPreset,
+  centre: arbPoint,
+  orientationDeg: fc.integer({ min: 0, max: 359 }),
+})
 
 /**
  * A Custom Path that always closes: an axis-aligned rectangle with one corner optionally cut.

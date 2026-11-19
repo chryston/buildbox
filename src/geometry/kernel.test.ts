@@ -10,6 +10,7 @@ import {
   area,
   editLineEdge,
   evaluate,
+  evaluatePreset,
   fillet,
   isTangentFillet,
   classifyPoint,
@@ -318,5 +319,45 @@ describe('#54 criteria 15 and 16: tolerance, not sampling', () => {
     expect(first).toEqual([])
     expect(validateLoop(normaliseOrientation(kitchen))).toEqual(first)
     expect(validateLoop(normaliseOrientation(kitchen))).toEqual([])
+  })
+})
+
+/**
+ * A rotation turns an arc; it does not make it longer.
+ *
+ * `transformSegment` used to add the placement's rotation to `sweepDeg` as well as to the
+ * ellipse's own `rotationDeg`. A Circle is four 90° arcs, so turning it by 1° made them four
+ * 91° arcs, each ending a little past where the next began — and `validateLoop` reported
+ * `edges-touch` on a perfectly good Circle. Nothing caught it because every preset property
+ * in this file evaluated at `orientationDeg: 0`.
+ */
+describe('a turned arc keeps its own sweep (#54, found by #58)', () => {
+  const ORIGIN = { x: 0, y: 0 }
+  const angles = [0, 1, 12, 37, 90, 181, 359]
+  const circles = [1, 180, 1600, 6000]
+
+  it.each(angles)('validates a Ø%x-turned Circle at every size', (orientationDeg) => {
+    for (const diameter of circles) {
+      const path = evaluatePreset({ kind: 'circle', diameter }, { centre: ORIGIN, orientationDeg })
+      expect(validateLoop(path), `Ø${diameter} at ${orientationDeg}°`).toEqual([])
+      expect(area(path)).toBeCloseTo((Math.PI * diameter * diameter) / 4, 1)
+    }
+  })
+
+  it.each(angles)('validates a %x°-turned Ellipse at every size', (orientationDeg) => {
+    for (const [width, depth] of [[1, 1], [1600, 600], [2400, 900]] as const) {
+      const path = evaluatePreset({ kind: 'ellipse', width, depth }, { centre: ORIGIN, orientationDeg })
+      expect(validateLoop(path), `${width}×${depth} at ${orientationDeg}°`).toEqual([])
+      expect(area(path)).toBeCloseTo(Math.PI * (width / 2) * (depth / 2), 1)
+    }
+  })
+
+  it.each(angles)('turns a Circle to the same outline the same shape draws unturned', (orientationDeg) => {
+    // A Circle is rotation-symmetric: turning it may move the vertices, but the outline —
+    // and so the area, the perimeter and the bounds — is the shape's, unchanged.
+    const plain = evaluatePreset({ kind: 'circle', diameter: 1600 }, { centre: ORIGIN, orientationDeg: 0 })
+    const turned = evaluatePreset({ kind: 'circle', diameter: 1600 }, { centre: ORIGIN, orientationDeg })
+    expect(area(turned)).toBeCloseTo(area(plain), 6)
+    expect(perimeter(turned)).toBeCloseTo(perimeter(plain), 6)
   })
 })
