@@ -87,7 +87,17 @@ export const editLineEdge = (
     segments[absorber] = { ...reChord(segments[absorber], segmentStart(path, absorber), moved), to: moved }
   }
   const edited: ClosedPath = {
-    start: keepFixed === 'end' && i === 0 ? free : path.start,
+    // The chain's one open end. `Keep fixed: end` runs the propagation backwards, and it reaches
+    // `path.start` two different ways: the edited Edge may *be* the first one, in which case its
+    // own start is the free end; or the carrier may be, in which case the whole first Edge has
+    // just been shifted and its start has to shift with it. Leaving either behind unjoins the
+    // loop — and a first Edge whose start stayed put has quietly changed its own direction and
+    // length, which is the one thing the absorbing rule promises it will not do (#59 criterion 10).
+    start: keepFixed === 'end' && i === 0
+      ? free
+      : keepFixed === 'end' && carrier === 0
+        ? add(path.start, delta)
+        : path.start,
     segments,
   }
   const problems = brokenEdges(path, edited)

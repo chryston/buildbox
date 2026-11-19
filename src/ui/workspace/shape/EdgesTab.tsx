@@ -181,7 +181,10 @@ export function EdgesTab(props: EdgesTabProps): ReactNode {
           })}
         </tbody>
       </table>
-      {selectedEdge !== null && segment !== null && (
+      {/* A tangent fillet gets the corner field above it and nothing else. Its Radius and Sweep
+          would move the same arc by a different route — two answers to one question, which is the
+          failure #58 criterion 11 forbids and criterion 16 settles the other way. */}
+      {selectedEdge !== null && segment !== null && filletEdge === null && (
         <div className="bb-edge-editor" data-testid={`edge-editor-${selectedEdge}`}>
           <p className="bb-edge-editor-heading">
             {`Edge ${selectedEdge} · ${EDGE_KIND_NAMES[segment.kind]}`}

@@ -163,3 +163,31 @@ describe('moveVertex on a drag that breaks the loop', () => {
     expect(area(moved.path)).toBeGreaterThan(before)
   })
 })
+
+describe('keeping the far end fixed (#59 criterion 10)', () => {
+  it('carries the first Edge whole, start and all, when the propagation reaches it', () => {
+    const kitchen = kitchenFixture()
+    const result = editLineEdge(kitchen, 2, { length: 3200 }, 'end')
+    expect(result.problems).toEqual([])
+    const path = result.path
+    // Edge 2 holds its new length and its far corner stays put.
+    expect(lengthOf(path.segments[1], segmentStart(path, 1))).toBeCloseTo(3200, 6)
+    expect(path.segments[1].to).toEqual(pt(4800, 4000))
+    // Edge 1 has been shifted whole: same direction, same 3,600. It hangs from `path.start`, so
+    // that is what had to move — leaving it behind stretched the first Edge into a 3,634 diagonal
+    // and the loop closed only by the arithmetic, not by the shape.
+    expect(lengthOf(path.segments[0], path.start)).toBeCloseTo(3600, 6)
+    expect(path.start).toEqual(pt(1200, 800))
+    expect(validateLoop(path)).toEqual([])
+  })
+
+  it('moves the start itself when the edited Edge is the first one', () => {
+    const kitchen = kitchenFixture()
+    const result = editLineEdge(kitchen, 1, { length: 4100 }, 'end')
+    expect(result.problems).toEqual([])
+    expect(result.path.start).toEqual(pt(700, 1300))
+    expect(lengthOf(result.path.segments[0], result.path.start)).toBeCloseTo(4100, 6)
+    expect(result.path.segments[0].to).toEqual(pt(4800, 1300))
+    expect(validateLoop(result.path)).toEqual([])
+  })
+})
