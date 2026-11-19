@@ -164,3 +164,29 @@ export function fixtureProject(): Project {
     },
   }
 }
+
+/**
+ * The same fixture as the v1 and v2 golden files store it: an Item Footprint was a kind, a
+ * width and a depth until v3 restated it as a preset (#58).
+ *
+ * Those two files hold the bytes they were written from and are never edited, so the record
+ * they are compared against has to be the one a v2 BuildBox wrote — not the one this build
+ * reads them into. It is a serialised record rather than a `Project`, because this build's
+ * `Project` no longer describes it.
+ */
+export function legacyFixtureRecord(): unknown {
+  const project = fixtureProject()
+  return {
+    ...project,
+    itemDesigns: project.itemDesigns.map((design) =>
+      design.kind === 'generic' && design.footprint.kind === 'preset' && design.footprint.preset.kind === 'rectangle'
+        ? { ...design, footprint: legacyFootprint(design.footprint.preset.width, design.footprint.preset.depth) }
+        : design,
+    ),
+  }
+}
+
+/** An Item Footprint as the pre-v3 files wrote it. */
+function legacyFootprint(width: number, depth: number): { kind: 'rectangle'; width: number; depth: number } {
+  return { kind: 'rectangle', width, depth }
+}

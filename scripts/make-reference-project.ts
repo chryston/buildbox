@@ -2,12 +2,15 @@
  * The S4 performance reference Project (#47, #20 §8).
  *
  * Run with `node scripts/make-reference-project.ts`; it rewrites
- * `fixtures/domain/v1/reference-project.json` and
- * `fixtures/domain/v2/reference-project.json` byte for byte. Both are committed, and
+ * `fixtures/domain/v1/reference-project.json`,
+ * `fixtures/domain/v2/reference-project.json` and
+ * `fixtures/domain/v3/reference-project.json` byte for byte. All three are committed, and
  * `src/domain/fixtures.test.ts` migrates and canonicalises each on every run like any other
  * domain fixture. The v2 file is the v1 one through `migrateV1toV2` — the same Project, plus
- * the default Plan View each Floor comes with (#56) — which is how a benchmark can measure
- * the current schema without rewriting the compatibility evidence next to it.
+ * the default Plan View each Floor comes with (#56) — and the v3 file is that one through
+ * `migrateV2toV3`, with every Item Footprint restated as a Rectangle preset (#58). That is
+ * how a benchmark can measure the current schema without rewriting the compatibility evidence
+ * next to it.
  *
  * The shape is the S4 subset of #20 §8's reference Project — 3 Floors, 200 generic Placed
  * Items per Floor, 30 cabinet Item Designs of tree depth 8 each placed once on Floor 1.
@@ -19,7 +22,7 @@
 import { writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { canonicalJson } from '../src/lib/canonicalJson.ts'
-import { DOMAIN_SCHEMA_VERSION, migrateV1toV2 } from '../src/domain/migrate.ts'
+import { DOMAIN_SCHEMA_VERSION, migrateV1toV2, migrateV2toV3 } from '../src/domain/migrate.ts'
 import type {
   CabinetItemDesign,
   CabinetNode,
@@ -34,6 +37,7 @@ import type {
 
 const OUT_FILE = fileURLToPath(new URL('../fixtures/domain/v1/reference-project.json', import.meta.url))
 const OUT_FILE_V2 = fileURLToPath(new URL('../fixtures/domain/v2/reference-project.json', import.meta.url))
+const OUT_FILE_V3 = fileURLToPath(new URL('../fixtures/domain/v3/reference-project.json', import.meta.url))
 
 const FLOOR_NAMES = ['Floor 1', 'Floor 2', 'Floor 3']
 const CABINET_COUNT = 30
@@ -190,9 +194,16 @@ const project = referenceProject()
 const envelope = { domainSchemaVersion: 1, project }
 writeFileSync(OUT_FILE, `${canonicalJson(envelope)}\n`)
 
-// The current-schema twin, through the real migrator with the fixture's own ID convention.
+// The v2 twin, through the real migrator with the fixture's own ID convention. Stamped 2 on
+// purpose: it is the record a v2 BuildBox wrote, and the point of keeping it is that a v2
+// file still opens.
 const v2Project = migrateV1toV2(project, (count) => Array.from({ length: count }, (_, index) => `view-${index}`))
-writeFileSync(OUT_FILE_V2, `${canonicalJson({ domainSchemaVersion: DOMAIN_SCHEMA_VERSION, project: v2Project })}\n`)
+writeFileSync(OUT_FILE_V2, `${canonicalJson({ domainSchemaVersion: 2, project: v2Project })}\n`)
+
+// The current-schema twin: the same Project again, with every Item Footprint restated as a
+// Rectangle preset (#58). No new IDs, and the geometry it draws is identical.
+const v3Project = migrateV2toV3(v2Project)
+writeFileSync(OUT_FILE_V3, `${canonicalJson({ domainSchemaVersion: DOMAIN_SCHEMA_VERSION, project: v3Project })}\n`)
 
 const nodes = (node: CabinetNode): number =>
   node.children === undefined ? 1 : 1 + nodes(node.children[0]) + nodes(node.children[1])

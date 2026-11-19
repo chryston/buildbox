@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   DOMAIN_SCHEMA_VERSION,
+  footprintPath,
+  footprintSize,
   migrateProject,
   migrateV1toV2,
   rectangleFootprint,
   runMigrationChain,
   type IdAllocator,
+  type ItemFootprint,
   type Migrator,
   type Project,
 } from './index'
@@ -159,6 +162,133 @@ describe('migrateProject — the envelope version (#14)', () => {
     expect(result.project).toEqual(project)
     // The chain always works on a copy, so the caller keeps its own value.
     expect(result.project).not.toBe(project)
+  })
+})
+
+/** A cabinet Item Design, which has a `construction` payload and no footprint at all. */
+const CABINET_DESIGN = {
+  id: 'design-cab',
+  kind: 'cabinet',
+  name: 'Base Cabinet',
+  construction: {
+    settings: {
+      unit: 'mm',
+      height: 850,
+      width: 600,
+      depth: 560,
+      thickness: 18,
+      backThickness: 6,
+      toeKick: { height: 100, setback: 50 },
+      material: 'walnut',
+    },
+    root: {
+      id: 'node-root',
+      splitAxis: 'horizontal',
+      splitRatio: 0.6,
+      children: [
+        { id: 'node-left', drawerConfig: { slideType: 'undermount', reveal: 20 } },
+        { id: 'node-right', locked: true, fixedSize: 300, elementType: 'hanging-space' },
+      ],
+    },
+  },
+}
+
+/**
+ * A v2 file: two generic Item Designs whose footprints are a bare width and a depth, and a
+ * cabinet design, which never had a footprint to restate.
+ */
+function v2Record(): Record<string, unknown> {
+  const project = validProject()
+  return {
+    ...project,
+    itemDesigns: [
+      { ...project.itemDesigns[0], footprint: { kind: 'rectangle', width: 1820, depth: 1980 } },
+      {
+        id: 'design-1',
+        kind: 'generic',
+        name: 'Pendant',
+        footprint: { kind: 'rectangle', width: 320, depth: 320 },
+        origin: { x: 160, y: 160 },
+        height: 400,
+        heightIsTypical: false,
+        isCustom: true,
+        color: '#222222',
+      },
+      CABINET_DESIGN,
+    ],
+  }
+}
+
+/** The generic footprint of design `id`, refusing to answer for any other kind of design. */
+function footprintOf(project: Project, id: string): ItemFootprint {
+  const design = project.itemDesigns.find((candidate) => candidate.id === id)
+  if (design === undefined || design.kind !== 'generic') throw new Error(`${id} must be a generic design`)
+  return design.footprint
+}
+
+describe('migrateV2toV3 — a rectangle becomes a Rectangle preset (#58)', () => {
+  it('restates every generic footprint and nothing else', () => {
+    const result = migrateProject(v2Record(), 2, allocator())
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(footprintOf(result.project, 'design-0')).toEqual({
+      kind: 'preset',
+      preset: { kind: 'rectangle', width: 1820, depth: 1980 },
+      centre: { x: 910, y: 990 },
+      orientationDeg: 0,
+    })
+    expect(footprintOf(result.project, 'design-1')).toEqual({
+      kind: 'preset',
+      preset: { kind: 'rectangle', width: 320, depth: 320 },
+      centre: { x: 160, y: 160 },
+      orientationDeg: 0,
+    })
+    // A cabinet's size comes from its construction, so it has no footprint to restate.
+    expect(result.project.itemDesigns[2]).toEqual(CABINET_DESIGN)
+  })
+
+  it('draws exactly the outline the v2 record drew', () => {
+    const result = migrateProject(v2Record(), 2, allocator())
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    // The old rectangle ran from (0,0) to (width,depth) in the design's local frame. The
+    // preset that replaces it is centred on its own middle, so the corners land identically
+    // — which is the whole reason a v2 Project still looks like itself after one open.
+    expect(footprintPath(footprintOf(result.project, 'design-0'))).toEqual({
+      start: { x: 0, y: 0 },
+      segments: [
+        { kind: 'line', to: { x: 1820, y: 0 } },
+        { kind: 'line', to: { x: 1820, y: 1980 } },
+        { kind: 'line', to: { x: 0, y: 1980 } },
+        { kind: 'line', to: { x: 0, y: 0 } },
+      ],
+    })
+    expect(footprintSize(footprintOf(result.project, 'design-0'))).toEqual({ width: 1820, depth: 1980 })
+  })
+
+  it('spends no IDs, because a footprint has never had one', () => {
+    const issued: number[] = []
+    const allocate: IdAllocator = (count) => {
+      issued.push(count)
+      return Array.from({ length: count }, (_, index) => `fresh-${String(index)}`)
+    }
+    const result = migrateProject(v2Record(), 2, allocate)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(issued).toEqual([])
+    // Every ID the file arrived with is still the ID it left with.
+    expect(result.project.itemDesigns.map((design) => design.id)).toEqual(['design-0', 'design-1', 'design-cab'])
+    expect(result.project.existingModel.placedItems.map((item) => item.id)).toEqual(['place-0'])
+  })
+
+  it('carries a footprint that is already a v3 shape straight through', () => {
+    // Idempotence is what lets a v3 file pass through the chain unchanged: `migrateProject`
+    // runs the step for every version below the current one, and a v3 Project has none left.
+    const project = validProject()
+    const result = migrateProject(project, 3, allocator())
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.project.itemDesigns[0]).toEqual(project.itemDesigns[0])
   })
 })
 

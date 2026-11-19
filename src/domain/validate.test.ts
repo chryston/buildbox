@@ -147,6 +147,164 @@ function expectProblems(value: unknown, expected: { path: string; code: string }
   expect(problemsOf(value)).toEqual(expected)
 }
 
+/**
+ * The Item Footprint, checked strictly (#58 §7).
+ *
+ * The point of these cases is the last one: an impossible shape arriving in a Backup is
+ * refused with the geometry kernel's own sentence, the same words the editor shows while a
+ * proposal is on screen. Two doors, one rule.
+ */
+describe('validateProject — the Item Footprint (#58)', () => {
+  /** `{path, code, message}` triples, because the message is the thing under test. */
+  function problemsWithMessages(value: unknown): { path: string; code: string; message: string }[] {
+    const result = validateProject(value)
+    return result.ok ? [] : result.problems.map(({ path, code, message }) => ({ path, code, message }))
+  }
+
+  const bed = (footprint: unknown): Project => {
+    const project = baseProject()
+    baseGeneric(project).footprint = footprint as never
+    return project
+  }
+
+  it('refuses a radius left on a Rectangle, which has no such field', () => {
+    expectProblems(
+      bed({ kind: 'preset', preset: { kind: 'rectangle', width: 1820, depth: 1980, radius: 40 }, centre: { x: 910, y: 990 }, orientationDeg: 0 }),
+      [{ path: 'itemDesigns[1].footprint.preset.radius', code: 'unknown-field' }],
+    )
+  })
+
+  it('refuses a footprint that is still a v2 width-and-depth pair', () => {
+    // `rectangle` is a preset kind, not a footprint kind: the first thing the validator says
+    // is that it cannot tell what this footprint is supposed to be.
+    expectProblems(bed({ kind: 'rectangle', width: 1820, depth: 1980 }), [
+      { path: 'itemDesigns[1].footprint.kind', code: 'not-one-of' },
+    ])
+  })
+
+  it('refuses a preset kind this build does not know', () => {
+    expectProblems(
+      bed({ kind: 'preset', preset: { kind: 'hexagon', width: 100 }, centre: { x: 50, y: 50 }, orientationDeg: 0 }),
+      [{ path: 'itemDesigns[1].footprint.preset.kind', code: 'not-one-of' }],
+    )
+  })
+
+  it('refuses a footprint kind that is neither preset nor path', () => {
+    expectProblems(bed({ kind: 'circle', diameter: 100 }), [
+      { path: 'itemDesigns[1].footprint.kind', code: 'not-one-of' },
+    ])
+  })
+
+  it('refuses an impossible corner radius in the kernel\'s sentence', () => {
+    const overlapping = {
+      kind: 'preset',
+      preset: {
+        kind: 'roundedRectangle',
+        width: 2000,
+        depth: 3000,
+        radii: { topLeft: 1000, topRight: 1001, bottomRight: 0, bottomLeft: 0 },
+      },
+      centre: { x: 1000, y: 1500 },
+      orientationDeg: 0,
+    }
+    // The base Project displays centimetres at one decimal, and the sentence says so: the
+    // refusal is written in the units the person reading it asked for.
+    expect(problemsWithMessages(bed(overlapping))).toEqual([
+      {
+        path: 'itemDesigns[1].footprint',
+        code: 'corner-radii-overlap',
+        message: 'Corner radii on the top side overlap (100.0 + 100.1 > 200.0 cm)',
+      },
+    ])
+
+    const inMillimetres = bed(overlapping)
+    inMillimetres.preferences = { displayUnit: 'mm', displayPrecision: 0 }
+    expect(problemsWithMessages(inMillimetres)).toEqual([
+      {
+        path: 'itemDesigns[1].footprint',
+        code: 'corner-radii-overlap',
+        message: 'Corner radii on the top side overlap (1,000 + 1,001 > 2,000 mm)',
+      },
+    ])
+  })
+
+  it('refuses a Custom Path that does not close, and names the Edge', () => {
+    const [problem] = problemsWithMessages(
+      bed({
+        kind: 'path',
+        path: {
+          start: { x: 0, y: 0 },
+          segments: [
+            { kind: 'line', to: { x: 100, y: 0 } },
+            { kind: 'line', to: { x: 100, y: 100 } },
+            { kind: 'line', to: { x: 0, y: 90 } },
+          ],
+        },
+      }),
+    )
+    expect(problem).toEqual({
+      path: 'itemDesigns[1].footprint.segments[2]',
+      code: 'arc-not-closed',
+      message: "Edge 3 doesn't meet its neighbour",
+    })
+  })
+
+  it('refuses a shape that encloses nothing rather than storing a line as a footprint', () => {
+    expectProblems(
+      bed({
+        kind: 'path',
+        path: {
+          start: { x: 0, y: 0 },
+          segments: [
+            { kind: 'line', to: { x: 100, y: 100 } },
+            { kind: 'line', to: { x: 100, y: 0 } },
+            { kind: 'line', to: { x: 0, y: 100 } },
+            { kind: 'line', to: { x: 0, y: 0 } },
+          ],
+        },
+      }),
+      [
+        { path: 'itemDesigns[1].footprint.segments[0]', code: 'edges-cross' },
+        { path: 'itemDesigns[1].footprint.segments[0]', code: 'no-area' },
+      ],
+    )
+  })
+
+  it('stops at the structure when there is no shape to check', () => {
+    // A preset with no side has no loop to hand the kernel, so the answer is one missing
+    // field and not a pile of geometry complaints about a shape that does not exist.
+    expectProblems(bed({ kind: 'preset', preset: { kind: 'square' }, centre: { x: 0, y: 0 }, orientationDeg: 0 }), [
+      { path: 'itemDesigns[1].footprint.preset.side', code: 'missing-field' },
+    ])
+  })
+
+  it('accepts a Custom Path that is a real shape', () => {
+    const project = bed({
+      kind: 'path',
+      path: {
+        start: { x: 0, y: 0 },
+        segments: [
+          { kind: 'line', to: { x: 1200, y: 0 } },
+          { kind: 'line', to: { x: 1200, y: 600 } },
+          { kind: 'line', to: { x: 0, y: 600 } },
+          { kind: 'line', to: { x: 0, y: 0 } },
+        ],
+      },
+    })
+    expect(validateProject(project).ok).toBe(true)
+  })
+
+  it('accepts a turned preset, because a turn is not a defect', () => {
+    const project = bed({
+      kind: 'preset',
+      preset: { kind: 'circle', diameter: 1600 },
+      centre: { x: 800, y: 800 },
+      orientationDeg: 37,
+    })
+    expect(validateProject(project).ok).toBe(true)
+  })
+})
+
 describe('validateProject — the root', () => {
   it('accepts a valid Project and hands back the same reference', () => {
     const project = baseProject()

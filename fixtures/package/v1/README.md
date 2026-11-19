@@ -3,8 +3,10 @@
 Golden `.buildbox` fixtures (#44). **Never deleted, never edited.** Each
 `PACKAGE_FORMAT_VERSION` adds files under `v<N>/`; older ones stay exactly as they are, so
 they remain permanent compatibility evidence — `src/package/fixtures.test.ts` stages every
-file in this folder on every run, re-encodes it byte for byte, and a future package version
-has to keep that passing.
+file in this folder on every run, and a future package version has to keep that passing.
+Only the folder holding the version this build writes is re-encoded byte for byte; the older
+ones are read and migrated, which is the half that matters to a user with an old Backup.
+See `v3/README.md` for the current one (#58).
 
 ## Contents
 

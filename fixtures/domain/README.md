@@ -41,9 +41,21 @@ with view IDs allocated as `view-0`, `view-1`, … in Floor order. Neither carri
 migration invents no measurement nobody took.
 
 `v2/reference-project.json` is written by the same script as its v1 twin
-(`npx vite-node scripts/make-reference-project.ts` regenerates both together).
-`src/domain/remapIds.property.test.ts` and the benchmarks read the v2 file, because it is
-the current schema; the v1 files stay untouched as the compatibility evidence they were.
+(`npx vite-node scripts/make-reference-project.ts` regenerates all three together).
+
+## `v3/` — domain schema v3 (#58)
+
+`v3/project-basic.json` and `v3/reference-project.json` are the two v2 files run through
+`migrateV2toV3`: the same Project, with every generic Item Design's footprint restated as an
+Item Footprint — `{ kind: "preset", preset: { kind: "rectangle", width, depth },
+centre: { x: width / 2, y: depth / 2 }, orientationDeg: 0 }`. The step spends no IDs and
+moves no geometry, which is what `src/domain/remapIds.property.test.ts` leans on: it walks
+the v3 reference and asserts the same pinned entity-ID count, 16,597, that v2 had.
+
+`src/domain/remapIds.property.test.ts` reads the v3 file, because it is the current schema
+and a copy is taken of the current schema. The benchmarks read the v1 file and migrate up on
+load, so they measure the migrator as part of the path a real open takes. The v1 and v2 files
+stay untouched as the compatibility evidence they were.
 
 ## How it was produced
 
