@@ -18,15 +18,18 @@ import type { CabinetMaterialId } from '../domain'
 import type { LayoutVoid, SceneLayout, UnitLayoutResult } from '../cabinet'
 import { layoutText } from './font/layoutText'
 import { pathToCommands, rectCommands, roundedRectCommands } from './path'
+import { unionText } from './planView'
 import { resolveSize } from './styles'
 import { LAYER_ORDER } from './types'
 import type {
   DisplayItem,
+  DisplayLayer,
   DisplayList,
   DrawOptions,
   LayerKey,
   MissingGlyph,
   PathCommand,
+  Rect,
   Sizing,
   StyleKey,
 } from './types'
@@ -109,10 +112,13 @@ function drawGeneric(
       layout,
     }],
   }
+  const genericLayers: DisplayLayer[] = ITEM_LAYERS
+    .filter((key) => bands[key] !== undefined)
+    .map((key) => ({ key, items: bands[key] ?? [] }))
   return {
     space: 'design-local',
-    bounds: d.bounds,
-    layers: ITEM_LAYERS.filter((key) => bands[key] !== undefined).map((key) => ({ key, items: bands[key]! })),
+    bounds: genericLayers.reduce<Rect>((box, layer) => unionText(box, layer.items), d.bounds),
+    layers: genericLayers,
     missingGlyphs,
   }
 }
@@ -174,11 +180,13 @@ function drawCabinet(
     add('cabinet-marks', unit, marksFor(unit, sizing, view))
   }
 
+  const ordered: DisplayLayer[] = CABINET_LAYERS.filter((key) => (bands.get(key)?.length ?? 0) > 0)
+    .map((key) => ({ key, items: bands.get(key)! }))
+
   return {
     space: 'design-local',
-    bounds: layout.boundingBox,
-    layers: CABINET_LAYERS.filter((key) => (bands.get(key)?.length ?? 0) > 0)
-      .map((key) => ({ key, items: bands.get(key)! })),
+    bounds: ordered.reduce<Rect>((box, layer) => unionText(box, layer.items), layout.boundingBox),
+    layers: ordered,
     missingGlyphs,
   }
 }

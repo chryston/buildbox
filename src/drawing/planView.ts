@@ -142,9 +142,7 @@ export function drawPlanView(
     ? { x: 0, y: 0, w: PLACEHOLDER_MM.w, h: PLACEHOLDER_MM.h }
     : imageBounds(image.pxToFloor, image.widthPx, image.heightPx)
   if (d.bounds !== null) box = unionRect(box, d.bounds)
-  for (const item of labelItems) {
-    if (item.kind === 'text') box = unionRect(box, measureRect(item.layout, item.at, item.anchor))
-  }
+  box = unionText(box, labelItems)
 
   return { space: 'floor', bounds: box, layers, missingGlyphs }
 }
@@ -319,4 +317,20 @@ export const unionRect = (a: Rect, b: Rect): Rect => {
     w: Math.max(a.x + a.w, b.x + b.w) - x,
     h: Math.max(a.y + a.h, b.y + b.h) - y,
   }
+}
+
+/**
+ * The box every word inside these items needs, added to the box already gathered.
+ *
+ * Criterion 12 is that `DisplayList.bounds` contains every text box, and the only way to be
+ * sure of that is to walk the same tree the renderer walks — groups and all — rather than the
+ * list of places whoever wrote the layer remembers putting a word.
+ */
+export function unionText(box: Rect, items: readonly DisplayItem[]): Rect {
+  let out = box
+  for (const item of items) {
+    if (item.kind === 'group') out = unionText(out, item.items)
+    else if (item.kind === 'text') out = unionRect(out, measureRect(item.layout, item.at, item.anchor))
+  }
+  return out
 }

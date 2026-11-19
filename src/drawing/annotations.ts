@@ -16,7 +16,7 @@ import type { EntityId } from '../domain'
 import { layoutText, measureRect } from './font/layoutText'
 import { placeLabels } from './labels'
 import { lineCommands, roundedRectCommands } from './path'
-import { drawPlacement, unionRect, type DrawnPlacement, type PlanPreview } from './planView'
+import { drawPlacement, unionText, type DrawnPlacement, type PlanPreview } from './planView'
 import { resolveSize } from './styles'
 import type { DisplayItem, DisplayLayer, DisplayList, DrawOptions, MissingGlyph, Rect } from './types'
 
@@ -80,14 +80,7 @@ export function drawSelectionAnnotations(
   if (layers.length === 0) return null
 
   let bounds = focus.world
-  for (const item of chipItems) {
-    if (item.kind === 'group') for (const child of item.items) {
-      if (child.kind === 'text') bounds = unionRect(bounds, measureRect(child.layout, child.at, child.anchor))
-    }
-  }
-  for (const item of dimensions) {
-    if (item.kind === 'text') bounds = unionRect(bounds, measureRect(item.layout, item.at, item.anchor))
-  }
+  for (const layer of layers) bounds = unionText(bounds, layer.items)
 
   return { space: 'floor', bounds, layers, missingGlyphs }
 }
