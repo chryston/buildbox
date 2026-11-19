@@ -56,9 +56,13 @@ test('cabinet scene', async ({ page }) => {
 
 test('cabinet scene with a void selected', async ({ page }) => {
   const firstVoid = page.getByTestId(/^void-/).first()
-  // The space-label rect covers the middle half of every void, so a real click lands in
-  // the outer quarter — the same position e2e/smoke/app.spec.ts uses.
-  await firstVoid.click({ position: { x: 10, y: 10 } })
+  // The space-label rect covers the middle half of every void, so a real click has to land in an
+  // outer quarter — and in the bottom-left one, because the canvas's floating toolbar overlays
+  // its top-left corner however wide the drawing is. #58 put the Shape inspector to the left of
+  // the cabinet, which centres the drawing further right than the fixed 10 px offset used to.
+  const box = await firstVoid.boundingBox()
+  if (box === null) throw new Error('the void drew no box')
+  await firstVoid.click({ position: { x: box.width / 5, y: (box.height * 4) / 5 } })
   await expect(firstVoid).toHaveAttribute('stroke', '#7c3aed')
   await waitForStablePaint(cabinetCanvas(page))
 

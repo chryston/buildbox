@@ -100,16 +100,17 @@ export function ItemDetailView({ itemDesignId, children }: ItemDetailViewProps) 
           })}
         </nav>
         <div className="bb-item-detail-main">
-          {children ?? (design === null ? null : (
-            <ShapeEditor itemDesignId={itemDesignId} design={design} />
-          ))}
           {/* A cabinet's Item Footprint is derived from its construction, so its Shape tab is
               read-only — but it is still the answer to "how big is this", and it is the same
               three tabs with the same labels as any other Item Design (#58 criterion 18). The
-              cabinet editor owns the drawing, so these tabs come without a canvas. */}
+              cabinet editor owns the drawing, so these tabs come without a canvas, and they are
+              the inspector: left of the drawing, as on any other Item Design (#58 criterion 17). */}
           {hasEditor && design !== null && (
             <ShapeEditor itemDesignId={itemDesignId} design={design} layout="inspector" />
           )}
+          {children ?? (design === null ? null : (
+            <ShapeEditor itemDesignId={itemDesignId} design={design} />
+          ))}
         </div>
       </div>
     </div>
