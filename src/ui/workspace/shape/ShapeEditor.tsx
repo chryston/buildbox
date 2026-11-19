@@ -531,7 +531,12 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
             <ToolbarMenu label="Shapes" testId="shapes-menu" disabled={isCabinet}>
               <ShapesGallery
                 current={shown.kind === 'preset' ? shown.preset.kind : null}
+                currentPath={shown.kind === 'path'}
                 onPick={(kind: PresetKind) => setPlacing(kind)}
+                onPickPath={() => {
+                  stopPlacing()
+                  setDrawTool('line')
+                }}
               />
             </ToolbarMenu>
           </div>

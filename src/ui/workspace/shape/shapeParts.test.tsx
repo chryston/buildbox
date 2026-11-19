@@ -134,9 +134,9 @@ describe('the Convert dialog', () => {
 })
 
 describe('the Shapes gallery', () => {
-  it('marks the kind in hand and offers all eight', async () => {
+  it('marks the kind in hand and offers all eight presets', async () => {
     const onPick = vi.fn()
-    render(<ShapesGallery current="circle" onPick={onPick} />)
+    render(<ShapesGallery current="circle" currentPath={false} onPick={onPick} onPickPath={vi.fn()} />)
     expect(screen.getByTestId('shapes-gallery')).toBeInTheDocument()
     expect(screen.getByTestId('shape-preset-circle')).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByTestId('shape-preset-square')).toHaveAttribute('aria-checked', 'false')
@@ -146,26 +146,29 @@ describe('the Shapes gallery', () => {
     expect(onPick).toHaveBeenCalledWith('triangle')
   })
 
-  it('marks nothing when the shape is a Custom Path', () => {
-    render(<ShapesGallery current={null} onPick={vi.fn()} />)
-    expect(screen.queryByTestId('shapes-gallery-item-current')).not.toBeInTheDocument()
+  it('marks the Custom Path row and nothing else when the shape is a path (#59 criterion 15)', async () => {
+    const onPickPath = vi.fn()
+    render(<ShapesGallery current={null} currentPath onPick={vi.fn()} onPickPath={onPickPath} />)
+    expect(screen.getByTestId('shape-custom-path')).toHaveAttribute('aria-checked', 'true')
     for (const kind of ['square', 'circle', 'capsule']) {
       expect(screen.getByTestId(`shape-preset-${kind}`)).toHaveAttribute('aria-checked', 'false')
     }
+    // Picking it arms the Line tool; it places nothing, because there is no box to place.
+    await userEvent.setup().click(screen.getByTestId('shape-custom-path'))
+    expect(onPickPath).toHaveBeenCalled()
   })
 
-  it('lists exactly the eight presets, each with a name a person can read (criterion 1)', () => {
-    render(<ShapesGallery current={null} onPick={vi.fn()} />)
+  it('lists the eight presets and Custom Path, each with a name a person can read (criterion 1)', () => {
+    render(<ShapesGallery current={null} currentPath={false} onPick={vi.fn()} onPickPath={vi.fn()} />)
     const entries = within(screen.getByTestId('shapes-gallery')).getAllByRole('menuitemradio')
-    // In this order, because it is the order §3 lists them and the order the gallery is read.
+    // In this order, because it is the order §3 lists them and the order the gallery is read,
+    // with Custom Path last because it is the one entry that draws rather than places.
     expect(entries.map((entry) => entry.textContent?.trim())).toEqual([
-      'Square', 'Rectangle', 'Rounded Rectangle', 'Circle', 'Ellipse', 'Capsule', 'Triangle', 'Regular Polygon',
+      'Square', 'Rectangle', 'Rounded Rectangle', 'Circle', 'Ellipse', 'Capsule', 'Triangle', 'Regular Polygon', 'Custom Path',
     ])
     // A glyph alone would leave a screen reader with nothing to say.
     for (const entry of entries) expect(entry.textContent?.trim() ?? '').not.toBe('')
-    // The equality above is the whole claim: nine entries would be one too many, and the
-    // prototype's two odd shapes are not among these eight. Custom Path is reached through
-    // Convert until #59 adds the Line tool that starts one.
+    // The prototype's two odd shapes are still not among these.
   })
 })
 
@@ -269,8 +272,8 @@ describe('the words a shape editor never says', () => {
         onConvert={nothing}
       />,
     )
-    say(<ShapesGallery current="circle" onPick={nothing} />)
-    say(<ShapesGallery current={null} onPick={nothing} />)
+    say(<ShapesGallery current="circle" currentPath={false} onPick={nothing} onPickPath={nothing} />)
+    say(<ShapesGallery current={null} currentPath onPick={nothing} onPickPath={nothing} />)
     for (const preset of [
       { kind: 'rectangle', width: 1000, depth: 600 } as const,
       { kind: 'regularPolygon', sideCount: 6, sideLength: 300 } as const,
