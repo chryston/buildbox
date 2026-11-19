@@ -253,8 +253,7 @@ export function FloorWorkspace(): ReactNode {
       itemDesignId: selected.designId,
       origin: designPreview?.origin ?? null,
       name: edit.name ?? designPreview?.name ?? null,
-      width: edit.width ?? designPreview?.width ?? null,
-      depth: edit.depth ?? designPreview?.depth ?? null,
+      footprint: designPreview?.footprint ?? null,
       color: edit.color ?? designPreview?.color ?? null,
     })
   }
@@ -266,8 +265,7 @@ export function FloorWorkspace(): ReactNode {
       itemDesignId: selected.designId,
       origin,
       name: null,
-      width: null,
-      depth: null,
+      footprint: null,
       color: null,
     })
     setPickingOrigin(false)
@@ -275,19 +273,21 @@ export function FloorWorkspace(): ReactNode {
 
   const applyPreview = (): void => {
     if (designPreview === null) return
-    const { itemDesignId, origin, name, width, depth, color } = designPreview
+    const { itemDesignId, origin, name, footprint, color } = designPreview
     setDesignPreview(null)
     setPickingOrigin(false)
     if (origin !== null) {
       send('design.setOrigin', { itemDesignId, origin })
       return
     }
+    if (footprint !== null) {
+      send('design.setFootprint', { itemDesignId, footprint })
+      return
+    }
     send('design.update', {
       itemDesignId,
       patch: {
         ...(name === null ? {} : { name }),
-        ...(width === null ? {} : { width }),
-        ...(depth === null ? {} : { depth }),
         ...(color === null ? {} : { color }),
       },
     })

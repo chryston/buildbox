@@ -14,7 +14,7 @@
  */
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { footprintPath, pathOrigin } from '../../derive'
+import { designOutline, pathOrigin } from '../../derive'
 import { designFootprintSize } from '../../domain'
 import type { DisplayUnit, ItemDesign, Point2 } from '../../domain'
 import { PLAN_SWATCHES } from './planColors'
@@ -23,14 +23,16 @@ import type { PlanItemView } from './planModel'
 import { quarterTurn } from './rotateHandle'
 import type { DesignEditPreview } from './workspaceStore'
 
-/** The smallest footprint the handlers accept (`MIN_PLAN_SIZE_MM`). */
-const MIN_SIZE_MM = 50
-
-/** A design edit, as the inspector asks for it: only the fields the person touched. */
+/**
+ * An Item Design edit the Floor workspace can commit: the two fields that belong to the
+ * Item Design and not to its shape.
+ *
+ * `width` and `depth` were here until #58 took them out of `design.update`. A footprint is
+ * no longer two numbers, so it is no longer a field — the Shape tab of Item Detail edits it,
+ * and the rows here say where it went.
+ */
 export interface DesignEdit {
   name?: string
-  width?: number
-  depth?: number
   color?: string
 }
 
@@ -145,7 +147,7 @@ function ReadOnlyRow(props: { testId: string; label: string; value: string; hint
 
 /** The four corners of the local bounds plus its centre: the `Item Origin` quick choices. */
 function originChoices(design: ItemDesign): readonly { label: string; point: Point2 }[] {
-  const path = footprintPath(design)
+  const path = designOutline(design)
   const points = [path.start, ...path.segments.map((segment) => segment.to)]
   const xs = points.map((point) => point.x)
   const ys = points.map((point) => point.y)
@@ -305,25 +307,19 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
               rows that would edit them are not offered — Item Detail edits the cabinet. */}
           {!isCabinet && (
             <>
-              <NumberField
-                label="Width"
+              {/* #58: an Item Footprint is a shape, not two numbers, so it has no field here.
+                  These rows say the size and point at the page that changes it. */}
+              <ReadOnlyRow
                 testId="inspector-width"
-                kind="mm"
-                value={pending?.width ?? width}
-                unit={unit}
-                precision={precision}
-                min={MIN_SIZE_MM}
-                onCommit={(next) => onEditDesign({ width: next })}
+                label="Width"
+                value={size(width)}
+                hint="Set in Item Detail"
               />
-              <NumberField
-                label="Depth"
+              <ReadOnlyRow
                 testId="inspector-depth"
-                kind="mm"
-                value={pending?.depth ?? depth}
-                unit={unit}
-                precision={precision}
-                min={MIN_SIZE_MM}
-                onCommit={(next) => onEditDesign({ depth: next })}
+                label="Depth"
+                value={size(depth)}
+                hint="Set in Item Detail"
               />
               <label className="bb-workspace-field-label">Colour</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>

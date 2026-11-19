@@ -42,9 +42,6 @@ type PlanHandlers = {
   >]: IntentHandler<T>
 }
 
-/** The legacy 10 mm floor, which the UI clamps to before it sends the Intent. */
-export const MIN_PLAN_SIZE_MM = 10
-
 /** The legacy sidebar drops a new object with its top-left corner here. */
 const LEGACY_SPAWN_X_MM = 100
 const LEGACY_SPAWN_Y_MM = 100

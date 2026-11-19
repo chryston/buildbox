@@ -9,7 +9,7 @@
 import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
 import { useShallow } from 'zustand/react/shallow'
-import type { Point2 } from '../../domain'
+import type { ItemFootprint, Point2 } from '../../domain'
 import type { Viewport } from './viewport'
 
 export type WorkspaceTool = 'select' | 'pan'
@@ -44,9 +44,9 @@ export interface DesignEditPreview {
   readonly origin: Point2 | null
   /** The pending Item Design name, for a rename that reaches every placement. */
   readonly name: string | null
-  /** The pending Item Footprint size, and the colour, for a size or colour preview. */
-  readonly width: number | null
-  readonly depth: number | null
+  /** The pending Item Footprint, for a shape change that reaches every placement (#58). */
+  readonly footprint: ItemFootprint | null
+  /** The pending colour, for a colour preview. */
   readonly color: string | null
 }
 

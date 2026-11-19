@@ -16,7 +16,7 @@ import { pt } from '../geometry'
 import {
   designDefaultOrigin,
   floorBoundsSize,
-  footprintPath,
+  designOutline,
   localPointOf,
   nearestOriginCandidate,
   normaliseRotation,
@@ -56,11 +56,11 @@ const turned = onFloor({ id: 'place-2', translation: { x: 5150, y: 4500 }, rotat
 
 /** The four footprint corners, in footprint-local millimetres. */
 const localCorners = (design: GenericItemDesign): Pt[] =>
-  footprintPath(design).segments.map((segment) => segment.to)
+  designOutline(design).segments.map((segment) => segment.to)
 
-describe('footprintPath and pathOrigin', () => {
+describe('designOutline and pathOrigin', () => {
   it('is a closed rectangle from the design size, starting at the local origin', () => {
-    const path = footprintPath(base600())
+    const path = designOutline(base600())
     expect(path.segments.map((segment) => segment.to)).toEqual([
       pt(600, 0),
       pt(600, 400),

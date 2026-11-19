@@ -117,6 +117,7 @@ describe('the Floor workspace', () => {
     await user.click(screen.getByTestId('add-item-menu'))
     await user.click(screen.getByTestId('add-sofa-2'))
     expect(screen.getByTestId('selection-inspector')).toBeInTheDocument()
+    const mmWidth = screen.getByTestId('inspector-width').textContent
 
     await user.click(screen.getByTestId('project-settings'))
     await user.selectOptions(screen.getByTestId('settings-unit'), 'cm')
@@ -126,7 +127,28 @@ describe('the Floor workspace', () => {
 
     expect(view.project().preferences.displayUnit).toBe('cm')
     expect(view.project().preferences.displayPrecision).toBe(1)
-    // Position X, Position Y, Width and Depth all carry the unit suffix (#57 §2).
-    expect(screen.getAllByText('(cm)')).toHaveLength(4)
+    // Position X and Position Y still carry the unit suffix (#57 §2). Width and Depth do not:
+    // #58 made them read-only rows, which read like the Placed Item's own size rows.
+    expect(screen.getAllByText('(cm)')).toHaveLength(2)
+    const width = screen.getByTestId('inspector-width')
+    expect(width).not.toHaveTextContent(mmWidth)
+    expect(width).not.toHaveTextContent('')
+  })
+
+  it('offers no way to change the Item Footprint from the Floor inspector (#58)', async () => {
+    const user = userEvent.setup()
+    await renderWorkspace()
+    await user.click(screen.getByTestId('add-item-menu'))
+    await user.click(screen.getByTestId('add-sofa-2'))
+
+    // An Item Footprint is a shape now, so it has no number field here: the rows say the size
+    // and point at the page that edits it. Footprint edits affect every placement, which is
+    // why they happen in the Item Design editor and nowhere else (#58 §2).
+    expect(screen.getByTestId('inspector-width').tagName).not.toBe('INPUT')
+    expect(screen.getByTestId('inspector-depth').tagName).not.toBe('INPUT')
+    expect(screen.getByTestId('inspector-width-hint')).toHaveTextContent('Set in Item Detail')
+    expect(screen.getByTestId('inspector-depth-hint')).toHaveTextContent('Set in Item Detail')
+    // Name and Colour are still the Item Design's own and still editable here.
+    expect(screen.getByTestId('design-name')).toBeInTheDocument()
   })
 })

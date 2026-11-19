@@ -21,9 +21,9 @@ export { cabinetSceneUnits } from './cabinetSceneUnits'
 export { pathToSvg } from './svg'
 export {
   designDefaultOrigin,
+  designOutline,
   floorBounds,
   floorBoundsSize,
-  footprintPath,
   localPointOf,
   localPointValid,
   nearestOriginCandidate,

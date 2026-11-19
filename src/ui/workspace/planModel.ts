@@ -16,7 +16,7 @@
  * make React re-render forever, and a commit replaces the Project — exactly the
  * granularity the cache wants.
  */
-import { floorBoundsSize, footprintPath, normaliseRotation, placementContext, worldPointOf } from '../../derive'
+import { designOutline, floorBoundsSize, normaliseRotation, placementContext, worldPointOf } from '../../derive'
 import type { PlacementContext } from '../../derive'
 import { designFootprintSize, designOrigin } from '../../domain'
 import type { EntityId, ItemDesign, PlanView, PlacedItem, Point2, Project } from '../../domain'
@@ -167,7 +167,7 @@ export function placedOrigin(
 
 /** The four footprint corners of one design, local millimetres, from local (0, 0). */
 function localCorners(design: ItemDesign): readonly Point2[] {
-  const path = footprintPath(design)
+  const path = designOutline(design)
   // The ring from (0, 0): the path's start, then every segment end but the closing one.
   return [path.start, ...path.segments.slice(0, -1).map((segment) => segment.to)]
 }

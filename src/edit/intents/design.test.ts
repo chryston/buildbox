@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest'
 import { footprintSize, rectangleFootprint } from '../../domain'
 import type { GenericItemDesign, ItemDesign, PlacedItem, Project } from '../../domain'
-import { footprintPath, placementContext, worldPoint } from '../../derive'
+import { designOutline, placementContext, worldPoint } from '../../derive'
 import { canonicalJson } from '../../lib'
 import { applyPatches } from '../apply'
 import {
@@ -63,7 +63,7 @@ function twoBases(): { project: Project; itemDesignId: string; first: string; se
 function worldCorners(project: Project, placedItemId: string): { x: number; y: number }[] {
   const placed = placement(project, placedItemId)
   const itemDesign = design(project, placed.itemDesignId)
-  return footprintPath(itemDesign).segments.map((segment) => worldPoint(itemDesign, placed, segment.to))
+  return designOutline(itemDesign).segments.map((segment) => worldPoint(itemDesign, placed, segment.to))
 }
 
 describe('design.update', () => {
