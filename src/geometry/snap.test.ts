@@ -19,17 +19,17 @@ const candidate = (kind: SnapKind, x: number, y: number): SnapCandidate => ({
 describe('acquisition (#59 criterion 18)', () => {
   const vertex = pt(4800, 1300)
 
-  for (const pxPerMm of [0.05, 0.2, 1]) {
-    it(`snaps an 11 px miss and ignores a 13 px one at ${pxPerMm} px/mm`, () => {
-      const near = pt(vertex.x + 11 / pxPerMm, vertex.y)
-      const far = pt(vertex.x + 13 / pxPerMm, vertex.y)
-      const snap = resolveSnap([candidate('endpoint', vertex.x, vertex.y)], near, pxPerMm, ALL)
+  for (const mmPerPx of [0.05, 0.2, 1]) {
+    it(`snaps an 11 px miss and ignores a 13 px one at ${mmPerPx} mm/px`, () => {
+      const near = pt(vertex.x + 11 * mmPerPx, vertex.y)
+      const far = pt(vertex.x + 13 * mmPerPx, vertex.y)
+      const snap = resolveSnap([candidate('endpoint', vertex.x, vertex.y)], near, mmPerPx, ALL)
       expect(snap).not.toBeNull()
       // Criterion 20: the canonical coordinate, bit for bit — not the cursor.
       expect(snap!.point.x).toBe(4800)
       expect(snap!.point.y).toBe(1300)
       expect(snap!.target.point).toBe(snap!.point)
-      expect(resolveSnap([candidate('endpoint', vertex.x, vertex.y)], far, pxPerMm, ALL)).toBeNull()
+      expect(resolveSnap([candidate('endpoint', vertex.x, vertex.y)], far, mmPerPx, ALL)).toBeNull()
     })
   }
 

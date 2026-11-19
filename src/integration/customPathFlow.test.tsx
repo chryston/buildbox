@@ -15,6 +15,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import type { ItemDesign, ItemFootprint, PlacedItem, Project } from '../domain'
 import type { ClosedPath } from '../derive'
+import { canonicalJson } from '../lib'
 import { workspaceStore } from '../ui'
 import { openTestView, renderWithBindings as render, type TestView } from '../ui/legacy/testing'
 import { testProject } from '../session/testing'
@@ -165,5 +166,44 @@ describe('drawing a Custom Path', () => {
     // One step back, and the Kitchen is whole again — the whole draft was one transaction.
     await act(async () => { view.session.undo() })
     expect(pathOf(view.project()).segments.length).toBe(6)
+  })
+
+  it('writes coordinates and nothing else, so nothing is left tied to what it snapped to (criterion 22)', async () => {
+    const view = await openShapeEditor(withSofa(testProject('p-1'), KITCHEN_FOOTPRINT))
+    const { canvas, mmPerPx } = drawCanvas(640, 340)
+    // Three of the Kitchen's own corners, each aimed six pixels clear of it — inside the twelve
+    // pixel acquisition radius, far enough that landing on the corner is the snap and not the
+    // cursor. Six pixels is 6 × mmPerPx millimetres at this zoom.
+    const off = 6 * mmPerPx
+    await startLine(canvas, { x: 1200 + off, y: 1300 + off })
+    clickCanvas(canvas, { x: 4800 + off, y: 1300 + off })
+    clickCanvas(canvas, { x: 4800 + off, y: 4000 + off })
+    clickCanvas(canvas, { x: 1200, y: 1300 })
+    await waitFor(() => expect(pathOf(view.project()).segments.length).toBe(3))
+    // The drawn path is a plain outline: the same object a hand would have typed, with no extra
+    // key on any point or edge. A structural comparison is the whole claim — a stored snap or
+    // constraint would show up here as a field this literal does not have.
+    expect(pathOf(view.project())).toEqual({
+      start: { x: 1200, y: 1300 },
+      segments: [
+        { kind: 'line', to: { x: 4800, y: 1300 } },
+        { kind: 'line', to: { x: 4800, y: 4000 } },
+        { kind: 'line', to: { x: 1200, y: 1300 } },
+      ],
+    })
+    // …and the same in the bytes that go to storage. Key names, not substrings: a Project has
+    // every right to a value that happens to read `reference`, and no right to a `snappedTo`.
+    const keys = new Set<string>()
+    const walk = (value: unknown): void => {
+      if (Array.isArray(value)) return value.forEach(walk)
+      if (value === null || typeof value !== 'object') return
+      for (const [key, child] of Object.entries(value)) {
+        keys.add(key)
+        walk(child)
+      }
+    }
+    walk(JSON.parse(canonicalJson(view.project())))
+    for (const banned of ['snap', 'snapped', 'snappedTo', 'constraint', 'constraints', 'relation', 'relationship', 'target', 'targetId', 'guide', 'guides', 'tolerance'])
+      expect(keys.has(banned), `${banned} in the saved Project`).toBe(false)
   })
 })

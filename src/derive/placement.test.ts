@@ -199,8 +199,8 @@ describe('originCandidates', () => {
     // in pixels and the candidates carry the kinds the resolver ranks them by.
     const picks = originSnapCandidates(base600())
     const kinds = new Set<SnapKind>(['endpoint', 'midpoint', 'centre'])
-    expect(resolveSnap(picks, pt(0, 410), 0.5, kinds)?.point).toEqual(pt(0, 400))
-    expect(resolveSnap(picks, pt(120, 410), 0.5, kinds)).toBeNull()
+    expect(resolveSnap(picks, pt(0, 410), 2, kinds)?.point).toEqual(pt(0, 400))
+    expect(resolveSnap(picks, pt(120, 410), 2, kinds)).toBeNull()
   })
 })
 

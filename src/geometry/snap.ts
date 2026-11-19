@@ -113,9 +113,8 @@ export interface Snap {
 }
 
 /**
- * The acquisition radius (#59 behaviour 22): 12 CSS px at every zoom, converted to
- * millimetres with `pxPerMm`. Never a world-space constant — that was the prototype's
- * 200 mm defect.
+ * The acquisition radius (#59 behaviour 22): 12 CSS px at every zoom. Never a world-space
+ * constant — that was the prototype's 200 mm defect.
  */
 export const SNAP_ACQUISITION_PX = 12
 
@@ -135,11 +134,14 @@ export const SNAP_ACQUISITION_PX = 12
 export const resolveSnap = (
   candidates: readonly SnapCandidate[],
   cursorWorld: Pt,
-  pxPerMm: number,
+  mmPerPx: number,
   enabledKinds: ReadonlySet<SnapKind>,
 ): Snap | null => {
-  if (!(pxPerMm > 0)) return null
-  const reach = SNAP_ACQUISITION_PX / pxPerMm
+  if (!(mmPerPx > 0)) return null
+  // Twelve screen pixels, in millimetres: the canvas reports its own millimetres per pixel, so
+  // that is the number this takes. The reciprocal would read the same at 1 and quietly make the
+  // reach 12 mm at a zoom of 12 mm per pixel, which is the defect the criterion names.
+  const reach = SNAP_ACQUISITION_PX * mmPerPx
   const within = candidates
     .filter((candidate) => enabledKinds.has(candidate.kind))
     .map((candidate) => ({ candidate, distance: distance(candidate.point, cursorWorld) }))
