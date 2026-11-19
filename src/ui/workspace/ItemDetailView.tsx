@@ -4,15 +4,16 @@
  * This is the only way into the cabinet editor. The `Cabinet ⇄ Floor Plan` switcher is gone, so
  * the editor appears in this view's main slot — passed in as `children`, because the cabinet
  * chrome belongs to the composition above this module and not to the Plan View's. A generic
- * Item Design gets its properties in the same slot; #58 puts the shape editor there.
+ * Item Design gets the shape editor in the same slot (#58): its own component, because a
+ * cabinet's body is built elsewhere and knows about construction, which a shape does not.
  *
  * Navigation only: nothing here dispatches an Intent (#26). `← Back` and the `Placements` list
  * both move the Floor and Plan View pointers and reselect one Placed Item.
  */
 import type { ReactNode } from 'react'
 import { useWorkspaceProject, useWorkspaceRoot } from './WorkspaceRoot'
-import { formatMm } from './displayUnits'
 import { itemLibrary, planViewsForFloor, placementGroups } from './planModel'
+import { ShapeEditor } from './shape/ShapeEditor'
 import { useWorkspace, workspaceStore } from './workspaceStore'
 
 export interface ItemDetailViewProps {
@@ -38,14 +39,15 @@ export function ItemDetailView({ itemDesignId, children }: ItemDetailViewProps) 
   const project = useWorkspaceProject(session)
   const detail = useWorkspace((state) => state.itemDetail)
   const entry = itemLibrary(project).find((each) => each.itemDesignId === itemDesignId) ?? null
+  const design = project.itemDesigns.find((each) => each.id === itemDesignId) ?? null
   const groups = placementGroups(project, itemDesignId)
+  // The cabinet editor is passed in; a generic Item Design has no editor of its own and gets
+  // the shape editor instead. `null` counts as absent, which is what the caller passes.
+  const hasEditor = children !== null && children !== undefined
   const from = detail?.from ?? null
   const fromFloor = from === null
     ? null
     : project.floors.find((each) => each.id === from.floorId) ?? null
-  const unit = project.preferences.displayUnit
-  const precision = project.preferences.displayPrecision
-  const size = (mm: number): string => formatMm(mm, unit, precision)
 
   return (
     <div className="bb-item-detail" data-testid="item-detail-view">
@@ -98,21 +100,16 @@ export function ItemDetailView({ itemDesignId, children }: ItemDetailViewProps) 
           })}
         </nav>
         <div className="bb-item-detail-main">
-          {children ?? (entry === null ? null : (
-            <section className="bb-item-detail-props" data-testid="item-detail-props">
-              <h2>Item Design</h2>
-              <dl>
-                <dt>Name</dt>
-                <dd data-testid="detail-name">{entry.label}</dd>
-                <dt>Width</dt>
-                <dd data-testid="detail-width">{size(entry.width)}</dd>
-                <dt>Depth</dt>
-                <dd data-testid="detail-depth">{size(entry.depth)}</dd>
-                <dt>Colour</dt>
-                <dd data-testid="detail-color">{entry.color}</dd>
-              </dl>
-            </section>
+          {children ?? (design === null ? null : (
+            <ShapeEditor itemDesignId={itemDesignId} design={design} />
           ))}
+          {/* A cabinet's Item Footprint is derived from its construction, so its Shape tab is
+              read-only — but it is still the answer to "how big is this", and it is the same
+              three tabs with the same labels as any other Item Design (#58 criterion 18). The
+              cabinet editor owns the drawing, so these tabs come without a canvas. */}
+          {hasEditor && design !== null && (
+            <ShapeEditor itemDesignId={itemDesignId} design={design} layout="inspector" />
+          )}
         </div>
       </div>
     </div>

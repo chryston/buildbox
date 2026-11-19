@@ -63,6 +63,7 @@ export type {
   Pt,
   Preset,
   PresetKind,
+  RoundedRectanglePreset,
   Segment,
   SideName,
 } from '../geometry'

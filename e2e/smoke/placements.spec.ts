@@ -264,11 +264,14 @@ test.describe('Item Detail', () => {
     // The Plan View is gone, not hidden behind: this is a view of the design, not of a Floor.
     await expect(floorPlanCanvas(page)).toHaveCount(0)
     await expect(page.getByTestId('item-detail-title')).toHaveText('Sofa (3-seat)')
-    await expect(page.getByTestId('detail-name')).toHaveText('Sofa (3-seat)')
+    // A generic design's properties panel is the shape editor now (#58): the name lives in the
+    // title, and what this page edits is the Item Footprint.
+    await expect(page.getByTestId('shape-editor')).toBeVisible()
+    await expect(page.getByTestId('shape-kind')).toHaveText('Rectangle')
     await expect(page.getByTestId('placement-row-fp-sofa')).toBeVisible()
     await expect(page.getByTestId(`placement-row-${second}`)).toBeVisible()
     await expect(page.getByTestId('item-detail-placements')).toContainText('Floor 1')
-    // A generic design has no editor of its own yet (#58), so its properties stand in here.
+    // The shape editor draws the footprint itself; the cabinet editor is nowhere near this design.
     await expect(page.getByTestId('cabinet-canvas')).toHaveCount(0)
 
     // Choosing the other placement is navigation: the Floor it is on, that one selected.

@@ -26,6 +26,8 @@ export type {
 export { FloorWorkspace } from './FloorWorkspace'
 export { ItemDetailView } from './ItemDetailView'
 export type { ItemDetailViewProps } from './ItemDetailView'
+export { ShapeEditor, CABINET_SHAPE_NOTE } from './shape/ShapeEditor'
+export type { ShapeEditorProps } from './shape/ShapeEditor'
 export { WorkspaceShell } from './WorkspaceShell'
 export type { WorkspaceShellProps } from './WorkspaceShell'
 export { ToolbarMenu, ToolbarMenuItem, WorkspaceToolbar } from './WorkspaceToolbar'
