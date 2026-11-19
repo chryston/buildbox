@@ -5,7 +5,7 @@
  * is visible from `editLineEdge`'s tests, which edit an Edge rather than its endpoint.
  */
 import { describe, expect, it } from 'vitest'
-import { TOLERANCE_MM, area, lengthOf, moveVertex, perimeter, pt, segmentStart, validateLoop } from './index'
+import { TOLERANCE_MM, area, editLineEdge, lengthOf, moveVertex, perimeter, pt, segmentStart, validateLoop } from './index'
 import type { ArcSegment, ClosedPath } from './index'
 import { kitchenFixture } from './testing'
 
@@ -23,6 +23,14 @@ const arcLoop = (): ClosedPath => ({
 })
 
 const radiusOf = (segment: ArcSegment): number => Math.hypot(segment.center.x, segment.center.y)
+
+/**
+ * True when nothing in the path is NaN or infinite. A `d` attribute built from NaN renders
+ * nothing at all, so a shape that is merely invalid must still be a shape.
+ */
+const allFinite = (path: ClosedPath): boolean => [path.start, ...path.segments.flatMap((segment) => [segment, segment.to])]
+  .flatMap((part) => Object.values(part))
+  .every((value) => typeof value !== 'number' || Number.isFinite(value))
 
 describe('moveVertex on a chain of straight Edges', () => {
   it('moves only the two Edges that meet at the vertex (criterion 8)', () => {
@@ -94,6 +102,42 @@ describe('moveVertex beside a curved Edge', () => {
     expect(moved.path.segments[0]).toEqual(loop.segments[0])
     expect(moved.path.segments[1]).toEqual({ kind: 'line', to: pt(0, 1500) })
     expect(moved.path.segments[2]).toEqual(loop.segments[2])
+  })
+})
+
+describe('a chord with no length (#59 regression)', () => {
+  it('reports the collapsed Edge and keeps every number finite, so the canvas goes red rather than blank', () => {
+    const loop = arcLoop()
+    const moved = moveVertex(loop, 2, loop.start)
+    expect(moved.problems.map((problem) => problem.code)).toContain('edge-no-length')
+    // The centre used to come back NaN. `moveVertex` hands the dragged shape back on purpose, so
+    // that NaN travelled into the SVG `d` attribute and erased the whole drawing: an invalid drag
+    // has to *look* invalid, not absent.
+    expect(allFinite(moved.path)).toBe(true)
+    expect(() => perimeter(moved.path)).not.toThrow()
+    expect(Number.isFinite(area(moved.path))).toBe(true)
+    expect(Number.isFinite(perimeter(moved.path))).toBe(true)
+    // And the chain still joins: an Edge with no length is not an Edge that came apart.
+    expect(moved.path.segments[0].to).toEqual(loop.start)
+    expect(segmentStart(moved.path, 1)).toEqual(moved.path.segments[0].to)
+  })
+
+  it('keeps a zero-sweep arc finite when a neighbour absorbs a straight Edge edit', () => {
+    // A sweep of 0° has no finite centre for *any* chord: the offset is a division by zero. The
+    // absorber of `editLineEdge` is re-chorded, so this reaches the same line of code from the
+    // typed-edit side, and unlike a drag the edited path is returned whenever nothing is broken.
+    const flat: ClosedPath = {
+      start: pt(0, 0),
+      segments: [
+        { kind: 'line', to: pt(1000, 0) },
+        { kind: 'line', to: pt(1000, 1000) },
+        { kind: 'arc', to: pt(0, 0), center: pt(500, 0), sweepDeg: 0 },
+      ],
+    }
+    const edited = editLineEdge(flat, 1, { length: 500 }, 'start')
+    expect(edited.problems).toEqual([])
+    expect(edited.path).not.toEqual(flat)
+    expect(allFinite(edited.path)).toBe(true)
   })
 })
 

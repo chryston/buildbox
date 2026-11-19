@@ -115,6 +115,15 @@ const reChord = (segment: Segment, from: Pt, to: Pt, oldFrom = from): Segment =>
   if (segment.kind === 'arc') {
     const sweep = segment.sweepDeg * DEG
     const offset = length / (2 * Math.tan(sweep / 2))
+    // A chord with no length has no perpendicular bisector to stand a centre on, and a sweep of
+    // 0° or 360° has no finite centre either; both divide by something that is not a number. The
+    // NaN would travel straight into the SVG `d` attribute and silently erase the shape, which is
+    // worse than the lie the rest of the kernel already tells about a zero-length Edge. So the
+    // centre goes on the chord itself: finite, joined, radius zero, and `brokenEdges` reports the
+    // Edge as having no length either way — an invalid proposal, not a vanished drawing.
+    if (length <= TOLERANCE_MM || !Number.isFinite(offset)) {
+      return { kind: 'arc', to, center: to, sweepDeg: segment.sweepDeg }
+    }
     const normal = turnNormal(unitOf(chord))
     return {
       kind: 'arc',
