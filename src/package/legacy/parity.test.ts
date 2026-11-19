@@ -241,12 +241,14 @@ describe.each(PLAN_FIXTURES)('floor-plan parity: %s', (fixture) => {
         throw new Error(`${fixture}: no Placed Item for ${object.id}`)
       }
       const footprint = design.footprint
-      if (footprint.kind !== 'rectangle') throw new Error(`${fixture}: ${object.id} is not a rectangle`)
+      if (footprint.kind !== 'preset' || footprint.preset.kind !== 'rectangle') {
+        throw new Error(`${fixture}: ${object.id} is not a Rectangle preset`)
+      }
 
       // The degrees are copied, not converted: 0/90/180/270 mean the same turn in v1.
       expect(placement.rotationDeg).toBe(object.rotation)
-      expect(footprint.width).toBe(object.w)
-      expect(footprint.depth).toBe(object.h)
+      expect(footprint.preset.width).toBe(object.w)
+      expect(footprint.preset.depth).toBe(object.h)
       expect(design.origin).toEqual({ x: object.w / 2, y: object.h / 2 })
 
       // The domain transform is `translation + R(rotationDeg) · (p − origin)`. With the

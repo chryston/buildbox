@@ -5,6 +5,7 @@
  * may draw at all.
  */
 import { describe, expect, it } from 'vitest'
+import { rectangleFootprint } from '../../domain'
 import type { GenericItemDesign, Project } from '../../domain'
 import {
   decodeActiveViews,
@@ -33,7 +34,7 @@ const genericDesign = (over: Partial<GenericItemDesign> = {}): GenericItemDesign
   id: 'design-1',
   kind: 'generic',
   name: 'Sofa 3-seater',
-  footprint: { kind: 'rectangle', width: 600, depth: 220 },
+  footprint: rectangleFootprint(600, 220),
   origin: { x: 300, y: 110 },
   height: 850,
   heightIsTypical: true,

@@ -9,6 +9,7 @@
  */
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { rectangleFootprint } from '../../domain'
 import type { Project } from '../../domain'
 import { DuplicateFloorDialog, duplicateGroups } from './DuplicateFloorDialog'
 
@@ -27,8 +28,8 @@ const project = (): Project => ({
     { id: 'view-2', kind: 'plan', floorId: 'floor-2', name: 'Loft', isDefault: true, showPlanImage: true },
   ],
   itemDesigns: [
-    { id: 'd-sofa', kind: 'generic', name: 'Sofa 3-seater', footprint: { kind: 'rectangle', width: 600, depth: 220 }, origin: { x: 300, y: 110 }, height: 850, heightIsTypical: true, color: 'indigo' },
-    { id: 'd-fridge', kind: 'generic', name: 'Fridge', footprint: { kind: 'rectangle', width: 600, depth: 600 }, origin: { x: 300, y: 300 }, height: 1800, heightIsTypical: true, color: 'indigo' },
+    { id: 'd-sofa', kind: 'generic', name: 'Sofa 3-seater', footprint: rectangleFootprint(600, 220), origin: { x: 300, y: 110 }, height: 850, heightIsTypical: true, color: 'indigo' },
+    { id: 'd-fridge', kind: 'generic', name: 'Fridge', footprint: rectangleFootprint(600, 600), origin: { x: 300, y: 300 }, height: 1800, heightIsTypical: true, color: 'indigo' },
   ],
   existingModel: {
     placedItems: [

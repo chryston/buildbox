@@ -433,11 +433,13 @@ describe.each(PLAN_FIXTURES)('read-back floor-plan parity: %s', (fixture) => {
         throw new Error(`${fixture}: no Placed Item for ${object.id}`)
       }
       const footprint = design.footprint
-      if (footprint.kind !== 'rectangle') throw new Error(`${fixture}: ${object.id} is not a rectangle`)
+      if (footprint.kind !== 'preset' || footprint.preset.kind !== 'rectangle') {
+        throw new Error(`${fixture}: ${object.id} is not a Rectangle preset`)
+      }
 
       expect(placement.rotationDeg).toBe(object.rotation)
-      expect(footprint.width).toBe(object.w)
-      expect(footprint.depth).toBe(object.h)
+      expect(footprint.preset.width).toBe(object.w)
+      expect(footprint.preset.depth).toBe(object.h)
 
       const cornersPlaced = corners(
         placement.translation.x - object.w / 2,

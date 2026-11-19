@@ -13,17 +13,27 @@
  * patch set, so that one undo restores both. The arithmetic itself is `derive`'s, so the
  * preview on screen and the committed result cannot drift apart.
  */
-import { designFootprintSize, designOrigin } from '../../domain'
-import type { EntityId, ItemDesign, Project } from '../../domain'
+import { designOrigin, footprintProblems, formatGeometryProblem } from '../../domain'
+import type { DisplayFormat, EntityId, ItemDesign, Project } from '../../domain'
 import { localPointValid, originMoveTranslations } from '../../derive'
-import { TOLERANCE_MM } from '../../geometry'
 import type { Handler, IntentHandler } from './context'
 import type { IntentType, Locator } from '../intents'
-import { MIN_PLAN_SIZE_MM } from './planHandlers'
-import { designPath, findDesign, placementsOf, refuse, requireGenericDesign, requirePlacement, spendIds } from './support'
+import {
+  designPath,
+  findDesign,
+  placementsOf,
+  refuse,
+  requireGenericDesign,
+  requirePlacement,
+  sameJsonValue,
+  spendIds,
+} from './support'
 
 /** The `design.*` handlers; `INTENT_HANDLERS` is the completeness check over them. */
 type DesignHandlers = { [T in Extract<IntentType, `design.${string}`>]: IntentHandler<T> }
+
+/** The words around a refused shape: the Project's units are not applied to a refusal. */
+const MM: DisplayFormat = { unit: 'mm', precision: 0 }
 
 /** An Item Design of either kind, or a rejection. */
 function requireDesign(project: Project, itemDesignId: EntityId): ItemDesign {
@@ -32,32 +42,23 @@ function requireDesign(project: Project, itemDesignId: EntityId): ItemDesign {
   return design
 }
 
-/** Whether the Item Origin sits at the centre of a `width × depth` footprint. */
-function isCentred(origin: { x: number; y: number }, width: number, depth: number): boolean {
-  return Math.abs(origin.x - width / 2) <= TOLERANCE_MM && Math.abs(origin.y - depth / 2) <= TOLERANCE_MM
-}
-
 /**
- * The design-level fields: name, colour and, for a rectangle footprint, size.
+ * The design-level fields: name and colour.
  *
  * A cabinet's size is its `construction.settings` and belongs to `cabinet.updateSettings`,
  * which owns the tree consequences of a new width; asking this Intent to change one is a
- * view that has lost track of which section it is in, so it is refused rather than
- * silently forwarded.
- *
- * A resize keeps the Item Origin where it is — the footprint grows about the point every
- * placement is pinned to, so nothing on any Floor jumps — unless the Origin was the old
- * centre, in which case it follows the new one so `Centre` keeps meaning centre.
+ * view that has lost track of which section it is in, so it is refused rather than silently
+ * forwarded. The Item Footprint is not a field of this Intent either (#58) — it is
+ * `design.setFootprint`, which can say whether the shape it was handed exists.
  */
 const updateDesign: Handler<'design.update'> = (ctx) => {
   const { itemDesignId, patch } = ctx.intent.payload
   const design = requireDesign(ctx.project, itemDesignId)
-  const resizing = patch.width !== undefined || patch.depth !== undefined
   if (design.kind === 'cabinet') {
     // A cabinet's size is its `construction.settings`, which `cabinet.updateSettings` owns
     // with the tree consequences of a new width, and it has no colour of its own. Asking
     // this Intent for either is a view that lost track of which section it is in.
-    if (resizing || patch.color !== undefined) {
+    if (patch.color !== undefined) {
       refuse(
         'unknown-target',
         designPath(itemDesignId),
@@ -67,25 +68,42 @@ const updateDesign: Handler<'design.update'> = (ctx) => {
     if (patch.name !== undefined) requireDesign(ctx.draft, itemDesignId).name = patch.name
     return
   }
-  const { width, depth } = designFootprintSize(design)
-  const nextWidth = patch.width ?? width
-  const nextDepth = patch.depth ?? depth
-  if (nextWidth < MIN_PLAN_SIZE_MM || nextDepth < MIN_PLAN_SIZE_MM) {
-    refuse(
-      'invalid-size',
-      designPath(itemDesignId),
-      `An Item Footprint is at least ${MIN_PLAN_SIZE_MM} mm across; this one asked for ${Math.min(nextWidth, nextDepth)} mm.`,
-    )
-  }
   const draftDesign = requireGenericDesign(ctx.draft, itemDesignId)
   if (patch.name !== undefined) draftDesign.name = patch.name
   if (patch.color !== undefined) draftDesign.color = patch.color
-  if (patch.width !== undefined) draftDesign.footprint.width = patch.width
-  if (patch.depth !== undefined) draftDesign.footprint.depth = patch.depth
-  if (resizing && isCentred(design.origin, width, depth)) {
-    draftDesign.origin.x = nextWidth / 2
-    draftDesign.origin.y = nextDepth / 2
+}
+
+/**
+ * Restate the Item Footprint (#58): a preset with new parameters, or a Custom Path.
+ *
+ * The gate is the same question the editor asks on every keystroke — `footprintProblems`,
+ * which is also what the strict validator runs on import — so an impossible shape is refused
+ * here rather than reaching the Project and being caught on the next save. That is what
+ * makes "invalid geometry never enters the model or the undo history" true of the model
+ * rather than of one view: there is no other way to write a footprint.
+ *
+ * The Item Origin is deliberately untouched. It belongs to the design and not to the shape
+ * (#57 D3), every placement is pinned to it, and moving it would move every placement of a
+ * design the person only asked to re-shape.
+ */
+const setFootprint: Handler<'design.setFootprint'> = (ctx) => {
+  const { itemDesignId, footprint } = ctx.intent.payload
+  const design = requireDesign(ctx.project, itemDesignId)
+  if (design.kind !== 'generic') {
+    refuse(
+      'unknown-target',
+      designPath(itemDesignId),
+      `Item Design ${itemDesignId} is a cabinet: its Item Footprint is derived from its construction.`,
+    )
   }
+  const [first] = footprintProblems(footprint)
+  if (first !== undefined) {
+    refuse('invalid-shape', designPath(itemDesignId), formatGeometryProblem(first, MM))
+  }
+  if (sameJsonValue(design.footprint, footprint)) {
+    refuse('no-change', designPath(itemDesignId), 'This Item Design already has that Item Footprint.')
+  }
+  requireGenericDesign(ctx.draft, itemDesignId).footprint = structuredClone(footprint)
 }
 
 /**
@@ -189,6 +207,11 @@ export const DESIGN_HANDLERS: DesignHandlers = {
   'design.update': {
     run: updateDesign,
     locate: (project, intent) => designLocator(project, intent.payload.itemDesignId, placementsOf(project, intent.payload.itemDesignId).map((item) => item.id)),
+  },
+  'design.setFootprint': {
+    run: setFootprint,
+    locate: (project, intent) =>
+      designLocator(project, intent.payload.itemDesignId, placementsOf(project, intent.payload.itemDesignId).map((item) => item.id)),
   },
   'design.setOrigin': {
     run: setOrigin,

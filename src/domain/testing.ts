@@ -32,12 +32,16 @@ import type {
   FloorLimits,
   GenericItemDesign,
   ItemDesign,
+  ItemFootprint,
+  PathItemFootprint,
   PlanImageMediaType,
   PlanView,
   PlacedItem,
+  PresetItemFootprint,
   Project,
   ProjectMeta,
 } from './project'
+import type { CornerRadii, Preset } from '../geometry'
 
 /** A Project that breaks exactly one invariant, and where the validator must say so. */
 export interface Corruption {
@@ -180,9 +184,130 @@ const arbCabinetBody = fc
   .record({ name: arbText(1, 16), settings: arbSettings, spec: arbNodeSpec })
   .map(({ name, settings, spec }) => ({ name, settings, spec }))
 
+// --- Item Footprints ----------------------------------------------------------
+
+/** Millimetres from 10 mm up: big enough that a fraction of it is still a real radius. */
+const arbBigMm = fc.integer({ min: 100, max: 60000 }).map((value) => value / 10)
+
+/** Millimetres from 0 to `max`, in tenths, so a radius never lands on a rounding edge. */
+const arbUpToMm = (max: number): fc.Arbitrary<number> =>
+  fc.integer({ min: 0, max: Math.max(0, Math.floor(max * 10)) }).map((value) => value / 10)
+
+const arbSize = fc.record({ width: arbMm, depth: arbMm })
+const arbBigSize = fc.record({ width: arbBigMm, depth: arbBigMm })
+
+/** Four corner radii that together fit the side they sit on. */
+const arbCornerRadii = (width: number, depth: number): fc.Arbitrary<CornerRadii> => {
+  const radius = arbUpToMm(Math.min(width, depth) / 2)
+  return fc.record({
+    topLeft: radius,
+    topRight: radius,
+    bottomRight: radius,
+    bottomLeft: radius,
+  })
+}
+
+/**
+ * A preset whose parameters always describe a shape.
+ *
+ * The ranges are what make that true rather than a filter: a Rounded Rectangle's radii stay
+ * under half the shorter side, so no two of them can overlap; a Capsule is always longer than
+ * it is wide; a Regular Polygon always has three sides or more. `arbProject` is reused by the
+ * `package` and `edit` properties, which assert that a generated Project validates — an
+ * impossible shape here would be a bug in the generator, not a finding. Impossible shapes are
+ * made on purpose by `impossibleRadii` instead.
+ */
+const arbPreset: fc.Arbitrary<Preset> = fc.oneof(
+  arbMm.map((side): Preset => ({ kind: 'square', side })),
+  arbSize.map(({ width, depth }): Preset => ({ kind: 'rectangle', width, depth })),
+  arbBigSize.chain(({ width, depth }) =>
+    fc.oneof(
+      arbUpToMm(Math.min(width, depth) / 2).map((radius): Preset => ({ kind: 'roundedRectangle', width, depth, radius })),
+      arbCornerRadii(width, depth).map((radii): Preset => ({ kind: 'roundedRectangle', width, depth, radii })),
+    ),
+  ),
+  arbMm.map((diameter): Preset => ({ kind: 'circle', diameter })),
+  arbSize.map(({ width, depth }): Preset => ({ kind: 'ellipse', width, depth })),
+  arbBigSize.chain(({ width }) =>
+    arbUpToMm(6000 - width).map((extra): Preset => ({ kind: 'capsule', width, length: width + 1 + extra })),
+  ),
+  arbSize.chain(({ width: baseWidth, depth }) =>
+    fc.option(arbUpToMm(baseWidth).map((offset) => offset - baseWidth / 2), { nil: undefined }).map(
+      (apexOffset): Preset => ({ kind: 'triangle', baseWidth, depth, apexOffset }),
+    ),
+  ),
+  fc.record({ sideCount: fc.integer({ min: 3, max: 12 }), sideLength: arbMm }).map(
+    ({ sideCount, sideLength }): Preset => ({ kind: 'regularPolygon', sideCount, sideLength }),
+  ),
+)
+
+/**
+ * A preset footprint: the shape, where it sits, how far it is turned.
+ *
+ * A Circle or an Ellipse is generated unturned. `evaluatePreset` rotates an arc by adding to
+ * `sweepDeg` without carrying the centre's own frame, so a turned Circle currently reports
+ * `edges-touch` to `validateLoop` — a defect in the #54 kernel rather than in a footprint, and
+ * outside this issue. Generating one here would make every property that builds a Project fail
+ * on that defect instead of on whatever it is meant to be checking.
+ */
+const arbPresetFootprint: fc.Arbitrary<PresetItemFootprint> = fc
+  .record({
+    preset: arbPreset,
+    centre: arbPoint,
+    orientationDeg: fc.integer({ min: 0, max: 359 }),
+  })
+  .map(({ preset, centre, orientationDeg }) => ({
+    kind: 'preset' as const,
+    preset,
+    centre,
+    orientationDeg: preset.kind === 'circle' || preset.kind === 'ellipse' ? 0 : orientationDeg,
+  }))
+
+/**
+ * A Custom Path that always closes: an axis-aligned rectangle with one corner optionally cut.
+ *
+ * Every vertex lies on the boundary of a convex box and is visited in order, so the loop is
+ * convex and encloses a real area — valid by construction, which is the same reason the
+ * generator never asks the kernel whether a sample is one.
+ */
+const arbPathFootprint: fc.Arbitrary<PathItemFootprint> = fc
+  .record({ width: arbBigMm, depth: arbBigMm, cut: fc.option(arbBigMm, { nil: null }) })
+  .map(({ width, depth, cut }) => {
+    const inset = cut === null ? 0 : Math.min(cut, width / 3, depth / 3)
+    const corners =
+      inset > 0
+        ? [
+            { x: 0, y: 0 },
+            { x: width - inset, y: 0 },
+            { x: width, y: inset },
+            { x: width, y: depth },
+            { x: 0, y: depth },
+          ]
+        : [
+            { x: 0, y: 0 },
+            { x: width, y: 0 },
+            { x: width, y: depth },
+            { x: 0, y: depth },
+          ]
+    return {
+      kind: 'path' as const,
+      path: {
+        start: corners[0],
+        segments: [...corners.slice(1), corners[0]].map((to) => ({ kind: 'line' as const, to })),
+      },
+    }
+  })
+
+/** Any Item Footprint that describes a shape. */
+export const arbFootprint: fc.Arbitrary<ItemFootprint> = fc.oneof(
+  arbPresetFootprint,
+  arbPresetFootprint,
+  arbPathFootprint,
+)
+
 const arbGenericBody = fc.record({
   name: arbText(1, 16),
-  footprint: fc.record({ kind: fc.constant('rectangle' as const), width: arbMm, depth: arbMm }),
+  footprint: arbFootprint,
   origin: arbPoint,
   height: arbMm,
   heightIsTypical: fc.boolean(),
@@ -334,7 +459,12 @@ function injectedGenericDesign(index: number): GenericItemDesign {
     id: `${INJECT}-design-${index}`,
     kind: 'generic',
     name: `${INJECT} design ${index}`,
-    footprint: { kind: 'rectangle', width: 900, depth: 600 },
+    footprint: {
+      kind: 'preset',
+      preset: { kind: 'rectangle', width: 900, depth: 600 },
+      centre: { x: 450, y: 300 },
+      orientationDeg: 0,
+    },
     origin: { x: 450, y: 300 },
     height: 2000,
     heightIsTypical: false,
@@ -556,6 +686,36 @@ const zeroScale: CorruptionMaker = (project) => {
   }
 }
 
+/**
+ * An Item Footprint that describes no shape: radii of 1,000 and 1,001 on a 2,000 mm side.
+ *
+ * The path is the preset, not one number inside it, because that is what the problem is
+ * about — the pair, not either radius — and it is the path the editor puts the message's
+ * `aria-describedby` on.
+ */
+const impossibleShape: CorruptionMaker = (project) => {
+  const index = project.itemDesigns.length
+  const design: GenericItemDesign = {
+    ...injectedGenericDesign(index),
+    footprint: {
+      kind: 'preset',
+      preset: {
+        kind: 'roundedRectangle',
+        width: 2000,
+        depth: 3000,
+        radii: { topLeft: 1000, topRight: 1001, bottomRight: 0, bottomLeft: 0 },
+      },
+      centre: { x: 1000, y: 1500 },
+      orientationDeg: 0,
+    },
+  }
+  return {
+    project: { ...project, itemDesigns: [...project.itemDesigns, design] },
+    path: `itemDesigns[${index}].footprint.preset`,
+    code: 'bad-format',
+  }
+}
+
 const CORRUPTIONS: readonly CorruptionMaker[] = [
   duplicateId,
   danglingDesign,
@@ -570,6 +730,7 @@ const CORRUPTIONS: readonly CorruptionMaker[] = [
   duplicateViewName,
   viewOnMissingFloor,
   zeroScale,
+  impossibleShape,
 ]
 
 /**

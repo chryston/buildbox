@@ -8,7 +8,7 @@
  * what it stores is the Item Origin's Floor position, which for a design whose Origin is its
  * centre is the same number (#43).
  */
-import { designFootprintSize } from '../../domain'
+import { designFootprintSize, rectangleFootprint } from '../../domain'
 import type { EntityId, Project } from '../../domain'
 import { normaliseDeg } from '../../geometry'
 import { CUSTOM_PLAN_ENTRY, PLAN_CATALOGUE } from '../planCatalogue'
@@ -91,7 +91,7 @@ const addObject: Handler<'plan.addObject'> = (ctx) => {
     id: itemDesignId,
     kind: 'generic',
     name: entry.label,
-    footprint: { kind: 'rectangle', width: entry.w, depth: entry.h },
+    footprint: rectangleFootprint(entry.w, entry.h),
     origin: { x: entry.w / 2, y: entry.h / 2 },
     height: entry.height,
     heightIsTypical: true,
@@ -174,7 +174,7 @@ const addTemplate: Handler<'plan.addTemplate'> = (ctx) => {
     id: itemDesignId,
     kind: 'generic',
     name: label,
-    footprint: { kind: 'rectangle', width: w, depth: h },
+    footprint: rectangleFootprint(w, h),
     origin: { x: w / 2, y: h / 2 },
     height: CUSTOM_PLAN_ENTRY.height,
     heightIsTypical: true,

@@ -9,6 +9,7 @@ import { canonicalJson } from '../lib'
 import { arbProject } from './testing'
 import {
   MAX_OUTLINE_RECTS,
+  rectangleFootprint,
   referencedAssetHashes,
   summarizeProject,
   type GenericItemDesign,
@@ -24,7 +25,7 @@ function genericDesign(id: string, name: string, width: number, depth: number, o
     id,
     kind: 'generic',
     name,
-    footprint: { kind: 'rectangle', width, depth },
+    footprint: rectangleFootprint(width, depth),
     origin: { x: originX, y: originY },
     height: 900,
     heightIsTypical: false,

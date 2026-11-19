@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { validateProject, type PlanImage, type Project } from '../../domain'
+import { rectangleFootprint, validateProject, type PlanImage, type Project } from '../../domain'
 import {
   attachFloorPlan,
   convertLegacy,
@@ -99,7 +99,7 @@ describe('attachFloorPlan (#43 criterion 11)', () => {
         id: 'fp-sofa',
         kind: 'generic',
         name: 'My sofa',
-        footprint: { kind: 'rectangle', width: 2000, depth: 900 },
+        footprint: rectangleFootprint(2000, 900),
         origin: { x: 1000, y: 450 },
         height: 850,
         heightIsTypical: true,
@@ -108,7 +108,7 @@ describe('attachFloorPlan (#43 criterion 11)', () => {
         id: 'plan-1',
         kind: 'generic',
         name: 'My fridge',
-        footprint: { kind: 'rectangle', width: 180, depth: 180 },
+        footprint: rectangleFootprint(180, 180),
         origin: { x: 90, y: 90 },
         height: 1800,
         heightIsTypical: true,

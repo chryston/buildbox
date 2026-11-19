@@ -3,6 +3,7 @@
  * from, and the meta the fixture was written with. Importable from `*.test.ts` only
  * (`eslint.config.js` boundaries), and never from `app`.
  */
+import { rectangleFootprint } from '../domain'
 import type { CabinetNode, EntityId, GlobalSettings, Project } from '../domain'
 
 /**
@@ -96,7 +97,7 @@ export function fixtureProject(): Project {
         id: 'design-2',
         kind: 'generic',
         name: 'King Bed',
-        footprint: { kind: 'rectangle', width: 1820, depth: 1980 },
+        footprint: rectangleFootprint(1820, 1980),
         origin: { x: 910, y: 990 },
         height: 500,
         heightIsTypical: true,
@@ -107,7 +108,7 @@ export function fixtureProject(): Project {
         id: 'design-3',
         kind: 'generic',
         name: 'Pendant Light',
-        footprint: { kind: 'rectangle', width: 320, depth: 320 },
+        footprint: rectangleFootprint(320, 320),
         origin: { x: 160, y: 160 },
         height: 220,
         heightIsTypical: false,
@@ -118,7 +119,7 @@ export function fixtureProject(): Project {
         id: 'design-4',
         kind: 'generic',
         name: 'Runner Rug',
-        footprint: { kind: 'rectangle', width: 2400, depth: 800 },
+        footprint: rectangleFootprint(2400, 800),
         origin: { x: 1200, y: 400 },
         height: 12,
         heightIsTypical: false,

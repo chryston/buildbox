@@ -11,7 +11,7 @@
  * fields are read as the shapes `types.ts` describes them.
  */
 import { decodeBase64, problem, sha256Hex, type ValidationProblem } from '../../lib'
-import { defaultPlanView } from '../../domain'
+import { defaultPlanView, rectangleFootprint } from '../../domain'
 import type {
   CabinetItemDesign,
   CabinetNode,
@@ -224,7 +224,7 @@ function objectItemDesign(object: LegacyFloorPlanObject, designId: string): Gene
     id: designId,
     kind: 'generic',
     name: object.label,
-    footprint: { kind: 'rectangle', width: object.w, depth: object.h },
+    footprint: rectangleFootprint(object.w, object.h),
     origin: { x: object.w / 2, y: object.h / 2 },
     height: typical.height,
     heightIsTypical: true,
@@ -263,7 +263,7 @@ function templateItemDesign(template: LegacyCustomTemplate): GenericItemDesign {
     id: template.id,
     kind: 'generic',
     name: template.label,
-    footprint: { kind: 'rectangle', width: template.defaultW, depth: template.defaultH },
+    footprint: rectangleFootprint(template.defaultW, template.defaultH),
     origin: { x: template.defaultW / 2, y: template.defaultH / 2 },
     height: TYPICAL_CUSTOM.height,
     heightIsTypical: true,

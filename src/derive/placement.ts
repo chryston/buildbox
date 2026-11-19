@@ -1,8 +1,8 @@
 /**
  * Where a Placed Item actually sits (#57, #16).
  *
- * An Item Design owns one Item Footprint in its own local coordinates — the v1 rectangle
- * runs from (0,0) to (width,depth) with +Y down — plus one editable Item Origin inside it.
+ * An Item Design owns one Item Footprint in its own local coordinates — a preset with
+ * parameters, or a Custom Path (#58) — plus one editable Item Origin inside it.
  * A Placed Item owns placement context only: where that Origin stands on the Floor and how
  * the design is turned about it.
  *
@@ -21,7 +21,7 @@
  */
 import { applyTransform, bounds, endpoints, midpoints, normaliseDeg, pt, rotate, TOLERANCE_MM } from '../geometry'
 import type { Bounds, ClosedPath, Pt, Transform } from '../geometry'
-import { designFootprintSize, designOrigin } from '../domain'
+import { designFootprintSize, designOrigin, footprintPath as domainFootprintPath } from '../domain'
 import type { EntityId, ItemDesign, PlacedItem } from '../domain'
 
 /** One placement's placement context, spelled shortly for the pure helpers below. */
@@ -31,8 +31,16 @@ export interface PlacementContext {
   readonly origin: Pt
 }
 
-/** The Item Footprint as a closed path in local coordinates, origin at (0,0). */
+/**
+ * The Item Footprint as a closed path in local coordinates.
+ *
+ * A generic design's footprint is whatever its preset evaluates to, or the Custom Path it
+ * stores (#58) — the same call the Item Design canvas and the Measurements tab make, so the
+ * Floor outline and the editor cannot disagree. A cabinet's footprint is still derived from
+ * its construction settings, and it is still the rectangle from `(0,0)` to `(width,depth)`.
+ */
 export function footprintPath(design: ItemDesign): ClosedPath {
+  if (design.kind === 'generic') return domainFootprintPath(design.footprint)
   const { width, depth } = designFootprintSize(design)
   return {
     start: pt(0, 0),

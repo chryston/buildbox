@@ -69,10 +69,14 @@ describe('domain fixtures (#42 §6)', () => {
       // A v1 Floor had no limits, and inventing some would be inventing geometry.
       expect(floor).not.toHaveProperty('limits')
     }
-    // Everything the v1 file already said survives the step untouched.
-    const v1 = envelope.project as Record<string, unknown>
-    expect(result.project.floors).toEqual(v1.floors)
-    expect(result.project.itemDesigns).toEqual(v1.itemDesigns)
-    expect(result.project.existingModel).toEqual(v1.existingModel)
+    // Everything the older file already said survives. The Item Designs keep their ids,
+    // names and heights; only the footprint is restated, which is the whole step (#58).
+    type Identified = { id: string; name: string; height?: number }
+    const prior = envelope.project as { floors: unknown; existingModel: unknown; itemDesigns: Identified[] }
+    const identity = (designs: Identified[]) =>
+      designs.map((design) => ({ id: design.id, name: design.name, height: design.height }))
+    expect(result.project.floors).toEqual(prior.floors)
+    expect(result.project.existingModel).toEqual(prior.existingModel)
+    expect(identity(result.project.itemDesigns)).toEqual(identity(prior.itemDesigns))
   })
 })

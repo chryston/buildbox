@@ -3,6 +3,7 @@ import {
   DOMAIN_SCHEMA_VERSION,
   migrateProject,
   migrateV1toV2,
+  rectangleFootprint,
   runMigrationChain,
   type IdAllocator,
   type Migrator,
@@ -27,7 +28,7 @@ function validProject(): Project {
         id: 'design-0',
         kind: 'generic',
         name: 'King Bed',
-        footprint: { kind: 'rectangle', width: 1820, depth: 1980 },
+        footprint: rectangleFootprint(1820, 1980),
         origin: { x: 910, y: 990 },
         height: 500,
         heightIsTypical: true,
@@ -57,8 +58,8 @@ function v1Project(): Record<string, unknown> {
 }
 
 describe('DOMAIN_SCHEMA_VERSION', () => {
-  it('is 2, one step above the version #43 shipped', () => {
-    expect(DOMAIN_SCHEMA_VERSION).toBe(2)
+  it('is 3, one step above the version #56 shipped', () => {
+    expect(DOMAIN_SCHEMA_VERSION).toBe(3)
   })
 })
 
@@ -105,12 +106,12 @@ describe('migrateV1toV2 — one default Plan View per Floor (#56)', () => {
 
 describe('migrateProject — the envelope version (#14)', () => {
   it('refuses a newer schema before touching the data', () => {
-    const result = migrateProject(validProject(), 3, allocator())
+    const result = migrateProject(validProject(), 4, allocator())
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.error.kind).toBe('newer-schema')
     if (result.error.kind !== 'newer-schema') return
-    expect(result.error.found).toBe(3)
+    expect(result.error.found).toBe(4)
     expect(result.error.supported).toBe(DOMAIN_SCHEMA_VERSION)
     expect(result.error.message).toContain('saved by a newer BuildBox')
   })
@@ -147,12 +148,14 @@ describe('migrateProject — the envelope version (#14)', () => {
     expect(data).not.toHaveProperty('views')
   })
 
-  it('carries a v2 Project through an empty chain and says where it came from', () => {
+  it('carries a v2 Project through to v3, restating every footprint', () => {
     const project = validProject()
     const result = migrateProject(project, 2, allocator())
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.migratedFrom).toBe(2)
+    // The step is not the identity: a v2 rectangle becomes a Rectangle preset, and the
+    // geometry it draws is unchanged. `validProject()` has no Item Designs to rewrite.
     expect(result.project).toEqual(project)
     // The chain always works on a copy, so the caller keeps its own value.
     expect(result.project).not.toBe(project)

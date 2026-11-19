@@ -8,6 +8,7 @@
  * rule under test is arithmetic the user can check by eye.
  */
 import { describe, expect, it } from 'vitest'
+import { footprintSize, rectangleFootprint } from '../../domain'
 import type { GenericItemDesign, ItemDesign, PlacedItem, Project } from '../../domain'
 import { footprintPath, placementContext, worldPoint } from '../../derive'
 import { canonicalJson } from '../../lib'
@@ -85,35 +86,91 @@ describe('design.update', () => {
     })
   })
 
-  it('resizes a generic design, taking a centred Origin along with the new centre', () => {
+  it("restates a generic design's footprint, leaving the Origin and every placement still", () => {
     const project = basicProject()
-    const applied = expectRoundTrip(project, intent('design.update', {
+    const applied = expectRoundTrip(project, intent('design.setFootprint', {
       itemDesignId: 'design-bed-king',
-      patch: { width: 2000, depth: 1980 },
+      footprint: rectangleFootprint(2000, 1980),
     }))
-    expect(generic(applied.project, 'design-bed-king').footprint).toEqual({ kind: 'rectangle', width: 2000, depth: 1980 })
-    expect(generic(applied.project, 'design-bed-king').origin).toEqual({ x: 1000, y: 990 })
-    // The Placed Items did not move: the Origin did the work.
+    expect(generic(applied.project, 'design-bed-king').footprint).toEqual(rectangleFootprint(2000, 1980))
+    // The Item Origin belongs to the design and not to the shape, so it stays where it was —
+    // and because every Placed Item is pinned to it, nothing on any Floor moves either.
+    expect(generic(applied.project, 'design-bed-king').origin).toEqual(generic(project, 'design-bed-king').origin)
     expect(applied.project.existingModel.placedItems.map((item) => item.translation))
       .toEqual(project.existingModel.placedItems.map((item) => item.translation))
+  })
+
+  it('refuses a footprint that describes no shape, in the kernel’s own words', () => {
+    const project = deepFreeze(basicProject())
+    const overlapping = intent('design.setFootprint', {
+      itemDesignId: 'design-bed-king',
+      footprint: {
+        kind: 'preset' as const,
+        preset: {
+          kind: 'roundedRectangle' as const,
+          width: 2000,
+          depth: 3000,
+          radii: { topLeft: 1000, topRight: 1001, bottomRight: 0, bottomLeft: 0 },
+        },
+        centre: { x: 1000, y: 1500 },
+        orientationDeg: 0,
+      },
+    })
+    const rejection = expectRejection(project, overlapping, 'invalid-shape')
+    expect(rejection.problems[0].message).toBe('Corner radii on the top side overlap (1,000 + 1,001 > 2,000 mm)')
+  })
+
+  it('refuses a cabinet footprint and the footprint a design already has', () => {
+    const project = deepFreeze(basicProject())
+    expectRejection(
+      project,
+      intent('design.setFootprint', { itemDesignId: 'design-base-cabinet', footprint: rectangleFootprint(600, 400) }),
+      'unknown-target',
+    )
+    expectRejection(
+      project,
+      intent('design.setFootprint', {
+        itemDesignId: 'design-bed-king',
+        footprint: generic(project, 'design-bed-king').footprint,
+      }),
+      'no-change',
+    )
   })
 
   it('leaves a hand-placed Origin where the user put it', () => {
     const project = basicProject()
     const moved = expectApplied(project, intent('design.setOrigin', { itemDesignId: 'design-bed-king', origin: { x: 0, y: 1980 } })).project
-    const applied = expectRoundTrip(moved, intent('design.update', { itemDesignId: 'design-bed-king', patch: { width: 1500 } }))
+    const applied = expectRoundTrip(
+      moved,
+      intent('design.setFootprint', { itemDesignId: 'design-bed-king', footprint: rectangleFootprint(1500, 1980) }),
+    )
     expect(generic(applied.project, 'design-bed-king').origin).toEqual({ x: 0, y: 1980 })
   })
 
-  it('refuses a footprint below the legacy 10 mm floor, rather than clamping it', () => {
+  it('refuses a footprint that encloses nothing, rather than clamping it', () => {
     const project = deepFreeze(basicProject())
-    expectRejection(project, intent('design.update', { itemDesignId: 'design-bed-king', patch: { width: 5 } }), 'invalid-size')
-    expectRejection(project, intent('design.update', { itemDesignId: 'design-bed-king', patch: { depth: 9.99 } }), 'invalid-size')
+    expectRejection(
+      project,
+      intent('design.setFootprint', { itemDesignId: 'design-bed-king', footprint: rectangleFootprint(0, 1980) }),
+      'invalid-shape',
+    )
+    expectRejection(
+      project,
+      intent('design.setFootprint', {
+        itemDesignId: 'design-bed-king',
+        footprint: {
+          kind: 'preset',
+          preset: { kind: 'circle', diameter: -1 },
+          centre: { x: 0, y: 0 },
+          orientationDeg: 0,
+        },
+      }),
+      'invalid-shape',
+    )
   })
 
-  it('refuses a size or colour on a cabinet, whose size is its construction', () => {
+  it('refuses a colour on a cabinet, which has none of its own', () => {
     const project = deepFreeze(basicProject())
-    expectRejection(project, intent('design.update', { itemDesignId: 'design-base-cabinet', patch: { width: 800 } }), 'unknown-target')
     expectRejection(project, intent('design.update', { itemDesignId: 'design-base-cabinet', patch: { color: '#ff0000' } }), 'unknown-target')
     // The name is shared by both kinds, and is the one field a cabinet design takes here.
     expect(expectApplied(project, intent('design.update', { itemDesignId: 'design-base-cabinet', patch: { name: 'Rename me' } })).project
@@ -122,7 +179,11 @@ describe('design.update', () => {
 
   it('refuses a patch that changes nothing, and one that names nothing', () => {
     const project = deepFreeze(basicProject())
-    expectRejection(project, intent('design.update', { itemDesignId: 'design-bed-king', patch: { width: 1820, depth: 1980 } }), 'no-change')
+    expectRejection(
+      project,
+      intent('design.update', { itemDesignId: 'design-bed-king', patch: { name: generic(project, 'design-bed-king').name } }),
+      'no-change',
+    )
     expectRejection(project, intent('design.update', { itemDesignId: 'nope', patch: { name: 'Ghost' } }), 'unknown-target')
   })
 })
@@ -208,9 +269,14 @@ describe('design.fork', () => {
     expect(copy.isCustom, 'a fork is a design, not a legacy custom shape').toBeUndefined()
     // Deep: the copy's footprint is its own object, so editing it cannot reach the original.
     expect(copy.footprint).not.toBe(original.footprint)
-    const edited = expectApplied(applied.project, intent('design.update', { itemDesignId, patch: { width: 1200 } })).project
-    expect(generic(edited, itemDesignId).footprint.width).toBe(1200)
-    expect(generic(edited, 'design-custom-chest').footprint.width).toBe(900)
+    const edited = expectApplied(
+      applied.project,
+      intent('design.setFootprint', { itemDesignId, footprint: rectangleFootprint(1200, 600) }),
+    ).project
+    expect(footprintSize(generic(edited, itemDesignId).footprint)).toEqual({ width: 1200, depth: 600 })
+    expect(footprintSize(generic(edited, 'design-custom-chest').footprint)).toEqual(
+      footprintSize(generic(project, 'design-custom-chest').footprint),
+    )
   })
 
   it('refuses a placement that is not in the Project and a name that is empty', () => {

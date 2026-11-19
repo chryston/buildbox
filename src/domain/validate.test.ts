@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_TREE_DEPTH, validateProject } from './index'
+import { MAX_TREE_DEPTH, rectangleFootprint, validateProject } from './index'
 import type { CabinetNode, GenericItemDesign, Project } from './index'
 
 // A Project small enough to read and complete enough to reach every level of the schema:
@@ -59,7 +59,7 @@ function baseProject(): Project {
         id: 'design-1',
         kind: 'generic',
         name: 'King Bed',
-        footprint: { kind: 'rectangle', width: 1820, depth: 1980 },
+        footprint: rectangleFootprint(1820, 1980),
         origin: { x: 910, y: 990 },
         height: 500,
         heightIsTypical: true,
@@ -326,10 +326,10 @@ describe('validateProject — Item Designs', () => {
     bed.footprint = { kind: 'circle', width: 100, depth: 100 } as never
     expectProblems(project, [{ path: 'itemDesigns[1].footprint.kind', code: 'not-one-of' }])
 
-    bed.footprint = { kind: 'rectangle', width: 0, depth: 1980 }
-    expectProblems(project, [{ path: 'itemDesigns[1].footprint.width', code: 'out-of-range' }])
+    bed.footprint = rectangleFootprint(0, 1980)
+    expectProblems(project, [{ path: 'itemDesigns[1].footprint.preset.width', code: 'out-of-range' }])
 
-    bed.footprint = { kind: 'rectangle', width: 1820, depth: 1980 }
+    bed.footprint = rectangleFootprint(1820, 1980)
     bed.height = Number.NaN
     expectProblems(project, [{ path: 'itemDesigns[1].height', code: 'out-of-range' }])
 

@@ -9,6 +9,7 @@
  */
 import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
+import { rectangleFootprint } from '../domain'
 import type { GenericItemDesign, PlacedItem } from '../domain'
 import type { ClosedPath, Pt } from '../geometry'
 import { pt } from '../geometry'
@@ -32,7 +33,7 @@ const base600 = (overrides: Partial<GenericItemDesign> = {}): GenericItemDesign 
   id: 'design-base',
   kind: 'generic',
   name: 'Base 600',
-  footprint: { kind: 'rectangle', width: 600, depth: 400 },
+  footprint: rectangleFootprint(600, 400),
   origin: { x: 300, y: 200 },
   height: 900,
   heightIsTypical: true,
@@ -161,7 +162,7 @@ describe('originMoveTranslations', () => {
         }),
         (spec) => {
           const design = base600({
-            footprint: { kind: 'rectangle', width: spec.width, depth: spec.depth },
+            footprint: rectangleFootprint(spec.width, spec.depth),
             origin: { x: spec.originX * spec.width, y: spec.originY * spec.depth },
           })
           const placed = onFloor({ rotationDeg: spec.rotationDeg, translation: { x: spec.x, y: spec.y } })
