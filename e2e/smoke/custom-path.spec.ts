@@ -300,4 +300,93 @@ test.describe('Custom Path', () => {
       expect(Math.abs(box.y + box.height / 2 - (text.y + text.height / 2))).toBeLessThanOrEqual(2)
     }
   })
+
+  /**
+   * The three tools, one after another, closed into one shape.
+   *
+   * The screenshot spec draws the same three Edges and leaves them open; this one finishes the
+   * gesture, because only a committed path says whether the arc that was drawn is the arc that was
+   * stored. The closing segment is drawn with the Line tool re-armed: with an arc tool still
+   * active, `Close` waits for a further click to bow it, which is behaviour 10 and a different
+   * test. Both bulges bow outward and stay inside the frame the canvas had already fitted, or the
+   * click would land on the page rather than the canvas and the Edge would never be placed.
+   */
+  test('a line, an arc and an elliptical arc close into one Custom Path', async ({ page }) => {
+    await armLine(page)
+    await clickMm(page, A)
+    await clickMm(page, B)
+    await page.getByTestId('draw-arc').click()
+    await clickMm(page, C)
+    await clickMm(page, { x: 150, y: 60 })
+    await page.getByTestId('draw-elliptical-arc').click()
+    await clickMm(page, D)
+    await clickMm(page, { x: 60, y: 150 })
+    await armLine(page)
+    await expect(page.getByTestId('shape-close-path')).toBeEnabled()
+    await page.getByTestId('shape-close-path').click()
+
+    // The draft is gone and the shape is a Custom Path of four Edges: the line, the two arcs, and
+    // the straight closing Edge from the last corner back to the start.
+    await expect(draft(page)).toHaveCount(0)
+    await page.getByTestId('shape-tab-edges').click()
+    const kinds: string[] = []
+    for (const row of [1, 2, 3, 4]) kinds.push(await page.getByTestId(`edge-kind-${row}`).innerText())
+    expect(kinds).toEqual(['Line', 'Arc', 'Elliptical arc', 'Line'])
+    // The arcs bow outward past the Washer's own 120 mm, so the stored outline is wider and
+    // deeper than the rectangle it replaced — the arcs are in the Project, not only on screen.
+    const size = await placedSize(page)
+    expect(size.width).toBeGreaterThan(120)
+    expect(size.depth).toBeGreaterThan(120)
+  })
+
+  /**
+   * The Edges tab's own numbers, changed in a browser and seen on the Plan.
+   *
+   * The Kitchen fixture and its exact millimetres belong to the jsdom spec, which can hold that
+   * path without drawing it. What this adds is the trip the other cannot make: a length typed
+   * into a field, committed on Enter, landing on the Placed Item's bounding box — and `Round all
+   * corners` turning a square into eight Edges in one transaction, so one Undo empties it again.
+   * The Washer stands in for the Kitchen at a radius that fits it.
+   */
+  test('an Edge length and Round all corners reach the Placed Item', async ({ page }) => {
+    // Convert, edit a field, round every corner and take it back again crosses the Floor twice,
+    // which is more round trips than the default allowance.
+    test.setTimeout(90_000)
+    await page.getByTestId('shape-convert').click()
+    await page.getByTestId('convert-confirm').click()
+    await page.getByTestId('shape-tab-edges').click()
+
+    const length = page.getByTestId('edge-length-1')
+    await expect(length).toHaveCount(1)
+    await page.getByTestId('edge-row-1').click()
+    await page.getByTestId('edge-keep-fixed-start').click()
+    await page.getByTestId('edge-length-field').fill('200')
+    await page.getByTestId('edge-length-field').press('Enter')
+    await expect(length).toHaveText(/200/)
+    // `Keep fixed: start` held the Edge's first corner and moved its far end along the same
+    // direction, so the outline grew along the width and the depth is still the Washer's own.
+    const grown = await placedSize(page)
+    expect(grown.width).toBeCloseTo(200, 0)
+    expect(grown.depth).toBeCloseTo(120, 0)
+    await backToDesign(page)
+
+    await page.getByTestId('shape-tab-edges').click()
+    await page.getByTestId('edge-round-all').fill('25')
+    await page.getByTestId('edge-round-all-apply').click()
+    // Four corners become four tangent arcs, so eight Edges: a trimmed straight run and then the
+    // arc, alternating, starting with the straight run that survives at the end of Edge 1.
+    const kinds: string[] = []
+    for (const row of [1, 2, 3, 4, 5, 6, 7, 8]) kinds.push(await page.getByTestId(`edge-kind-${row}`).innerText())
+    expect(kinds.filter((kind) => kind === 'Arc')).toHaveLength(4)
+    expect(kinds.filter((kind) => kind === 'Line')).toHaveLength(4)
+    await expect(page.getByTestId('edge-kind-9')).toHaveCount(0)
+    // One transaction: one Undo takes all four corners back. Undo lives on the Floor toolbar, so
+    // the check leaves the design and comes back to it.
+    await showFloorPlan(page)
+    await undoButton(page).click()
+    await openItemDetail(page, WASHER)
+    await page.getByTestId('shape-tab-edges').click()
+    await expect(page.getByTestId('edge-kind-5')).toHaveCount(0)
+    await expect(page.getByTestId('edge-kind-1')).toHaveText('Line')
+  })
 })
