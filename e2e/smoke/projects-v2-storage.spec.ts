@@ -3,7 +3,13 @@ import type { Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { addFloorPlanObject, FIRST_PROJECT, openProjectFromLibrary, showFloorPlan } from '../support/previewApp'
+import {
+  addFloorPlanObject,
+  FIRST_PROJECT,
+  openItemDetail,
+  openProjectFromLibrary,
+  showFloorPlan,
+} from '../support/previewApp'
 import { libraryHeading, previewSeed } from '../support/libraryApp'
 import { readLegacyStore } from '../support/legacyStore'
 import { databaseNames, projectRevision, seedPreviewDb } from '../support/seedPreviewDb'
@@ -48,6 +54,7 @@ test('editing writes no localStorage key and opens no other database', async ({ 
   const before = await localStorageSnapshot(page)
 
   await openProjectFromLibrary(page, FIRST_PROJECT)
+  await openItemDetail(page, 'seed-002')
 
   await page.getByTestId('void-unit-kitchen-base-hanging').click({ position: { x: 10, y: 10 } })
   await page.getByRole('button', { name: 'Add Shelf' }).click()
@@ -81,6 +88,7 @@ test('the old copy survives this build byte for byte, which is the rollback (#20
   await expect(libraryHeading(page)).toBeVisible()
 
   await openProjectFromLibrary(page, FIRST_PROJECT)
+  await openItemDetail(page, 'seed-002')
   await page.getByTestId('void-unit-kitchen-base-hanging').click({ position: { x: 10, y: 10 } })
   await page.getByRole('button', { name: 'Add Shelf' }).click()
   await expect.poll(() => projectRevision(page, previewSeed.projects[0].id)).toBeGreaterThanOrEqual(2)

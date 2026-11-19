@@ -10,7 +10,7 @@ import {
   parityRecoverySeed,
   reseedAndReload,
 } from '../support/libraryApp'
-import { addFloorPlanObject, cabinetCanvas, quotaOverride, showFloorPlan } from '../support/previewApp'
+import { addFloorPlanObject, quotaOverride, showFloorPlan } from '../support/previewApp'
 import { waitForFonts, waitForStablePaint } from '../support/stability'
 
 /**
@@ -47,7 +47,7 @@ type Load = (page: Page, seed: typeof paritySeed) => Promise<void>
 async function reachSaveFailed(page: Page, load: Load = openLibrary): Promise<void> {
   await load(page, paritySeed)
   await cardButton(page, 'Tiong Bahru Home', 'Open').click()
-  await expect(cabinetCanvas(page)).toBeVisible()
+  // The app opens on the Plan View now (#57), which is where the failing write happens.
   await showFloorPlan(page)
   await quotaOverride(page, true)
   await addFloorPlanObject(page, 'Sofa 2-seater')

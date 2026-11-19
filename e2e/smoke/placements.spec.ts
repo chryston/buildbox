@@ -1,6 +1,14 @@
 import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
-import { addFloorPlanObject, floorPlanCanvas, openPreviewApp, showFloorPlan } from '../support/previewApp'
+import { canonical, previewSeed, storedProject } from '../support/libraryApp'
+import {
+  addFloorPlanObject,
+  floorPlanCanvas,
+  openPreviewApp,
+  placedObject,
+  revealOnCanvas,
+  showFloorPlan,
+} from '../support/previewApp'
 
 /**
  * Placed Items on the Plan View (#57): turning an item about its Item Origin, the numbers the
@@ -19,22 +27,8 @@ const origins = (page: Page) => page
   .locator('[data-testid^="origin-marker-"]')
   .evaluateAll((nodes) => nodes.map((node) => `${node.dataset.x},${node.dataset.y}`))
 
-/**
- * Zoom the view out until `target` lies inside the canvas. The seeded Project opens framed on
- * its whole Floor, so an item near the top has its rotate handle above the visible canvas —
- * the same thing a person fixes with the wheel, and the only way to grab it.
- */
-async function reveal(page: Page, target: Locator): Promise<void> {
-  const frame = await floorPlanCanvas(page).boundingBox()
-  expect(frame).not.toBeNull()
-  await page.mouse.move(frame!.x + frame!.width / 2, frame!.y + frame!.height / 2)
-  await expect.poll(async () => {
-    const at = await target.boundingBox()
-    if (at !== null && at.y > frame!.y + 8 && at.y + at.height < frame!.y + frame!.height - 8) return true
-    await page.mouse.wheel(0, 300)
-    return false
-  }, { message: `${await target.getAttribute('data-testid')} stayed outside the canvas`, timeout: 15_000 }).toBe(true)
-}
+/** The menu names a design with its own words; `Sofa (3-seat)` has to stay literal. */
+const escapeForName = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /**
  * A second placement of the design the last add made: `Add item` → `In this Project`, which
@@ -44,7 +38,7 @@ async function placeAgain(page: Page, label: string): Promise<string> {
   const placed = page.locator('[data-testid^="placed-object-"]')
   const before = await placed.count()
   await page.getByTestId('add-item-menu').click()
-  await page.getByRole('button', { name: new RegExp(label) }).click()
+  await page.getByRole('button', { name: new RegExp(escapeForName(label)) }).click()
   await expect(placed).toHaveCount(before + 1)
   const ids = await placed.evaluateAll((nodes) =>
     nodes.map((node) => node.getAttribute('data-testid')!.slice('placed-object-'.length)))
@@ -63,7 +57,7 @@ test.describe('a Placed Item on the Plan View', () => {
     const start = await rotation(page).inputValue()
     const originBefore = await origin.evaluate((node) => [node.dataset.x, node.dataset.y])
     const handle = page.getByTestId('rotate-handle')
-    await reveal(page, handle)
+    await revealOnCanvas(page, handle)
     const at = await origin.boundingBox()
     expect(at).not.toBeNull()
 
@@ -128,7 +122,7 @@ test.describe('a Placed Item on the Plan View', () => {
   test('picking the origin on the canvas previews it before anything is written', async ({ page }) => {
     const id = await addFloorPlanObject(page, 'Sofa 2-seater')
     const footprint = page.getByTestId(`placed-object-${id}`)
-    await reveal(page, footprint)
+    await revealOnCanvas(page, footprint)
     const box = await footprint.boundingBox()
     expect(box).not.toBeNull()
 
@@ -198,5 +192,85 @@ test.describe('a Placed Item on the Plan View', () => {
     // One Edit Transaction: undo puts the placement back on the design it shared.
     await page.keyboard.press('Control+z')
     expect((await title.innerText()).toLowerCase()).toContain('shared by 2 placements')
+  })
+})
+
+/**
+ * Item Detail as the way between the two views (#57 §6, §7): opening a design shows that design,
+ * its `Placements` list says where it is used, and both ways out are navigation — the Project
+ * does not change and nothing enters history.
+ */
+test.describe('Item Detail', () => {
+  test.beforeEach(async ({ page }) => {
+    await openPreviewApp(page)
+    await showFloorPlan(page)
+  })
+
+  test('opens from a selected Placed Item and lists every placement of its design', async ({ page }) => {
+    // A second placement of the same design, so the list has more than one row to show.
+    const second = await placeAgain(page, 'Sofa (3-seat)')
+
+    await placedObject(page, 'fp-sofa').click()
+    const position = await page.getByTestId('inspector-position-x').inputValue()
+    await page.getByTestId('open-item-detail').click()
+    await expect(page.getByTestId('item-detail-view')).toBeVisible()
+    // The Plan View is gone, not hidden behind: this is a view of the design, not of a Floor.
+    await expect(floorPlanCanvas(page)).toHaveCount(0)
+    await expect(page.getByTestId('item-detail-title')).toHaveText('Sofa (3-seat)')
+    await expect(page.getByTestId('detail-name')).toHaveText('Sofa (3-seat)')
+    await expect(page.getByTestId('placement-row-fp-sofa')).toBeVisible()
+    await expect(page.getByTestId(`placement-row-${second}`)).toBeVisible()
+    await expect(page.getByTestId('item-detail-placements')).toContainText('Floor 1')
+    // A generic design has no editor of its own yet (#58), so its properties stand in here.
+    await expect(page.getByTestId('cabinet-canvas')).toHaveCount(0)
+
+    // Choosing the other placement is navigation: the Floor it is on, that one selected.
+    await page.getByTestId(`placement-row-${second}`).click()
+    await expect(page.getByTestId('item-detail-view')).toHaveCount(0)
+    await expect(floorPlanCanvas(page)).toBeVisible()
+    await expect(page.getByTestId('selection-inspector')).toBeVisible()
+    await expect(page.getByTestId('inspector-position-x')).not.toHaveValue(position)
+    await expect(page.getByTestId('rotate-handle-group')).toHaveCount(1)
+  })
+
+  test('back returns to the Placed Item it was opened from', async ({ page }) => {
+    await revealOnCanvas(page, placedObject(page, 'fp-washer'))
+    await placedObject(page, 'fp-washer').click()
+    const name = await page.getByTestId('inspector-name').innerText()
+    await page.getByTestId('open-item-detail').click()
+    await expect(page.getByTestId('item-detail-back')).toContainText('Floor 1')
+    await page.getByTestId('item-detail-back').click()
+    await expect(floorPlanCanvas(page)).toBeVisible()
+    await expect(page.getByTestId('selection-inspector')).toBeVisible()
+    await expect(page.getByTestId('inspector-name')).toHaveText(name)
+  })
+
+  test('is the only way into the cabinet editor, and no control switches views', async ({ page }) => {
+    await expect(page.getByRole('button', { name: 'Cabinet', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Floor Plan', exact: true })).toHaveCount(0)
+
+    await placedObject(page, 'seed-002').click()
+    await page.getByTestId('open-item-detail').click()
+    await expect(page.getByTestId('cabinet-canvas')).toBeVisible()
+    // A cabinet's design has no size or colour of its own to edit here; the editor is the body.
+    await expect(page.getByTestId('item-detail-props')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Cabinet', exact: true })).toHaveCount(0)
+
+    await page.getByTestId('item-detail-back').click()
+    await expect(floorPlanCanvas(page)).toBeVisible()
+  })
+
+  test('opening and leaving it changes no Project and enters no history', async ({ page }) => {
+    const projectId = previewSeed.projects[0]!.id
+    const before = canonical(await storedProject(page, projectId))
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled()
+
+    await placedObject(page, 'seed-002').click()
+    await page.getByTestId('open-item-detail').click()
+    await expect(page.getByTestId('cabinet-canvas')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled()
+    await page.getByTestId('item-detail-back').click()
+
+    expect(canonical(await storedProject(page, projectId))).toBe(before)
   })
 })

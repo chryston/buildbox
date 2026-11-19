@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import type { Locator, Page } from '@playwright/test'
 import { expect, test } from '../support/fixtures'
 import { cardButton } from '../support/libraryApp'
+import { floorPlanCanvas, openItemDetail } from '../support/previewApp'
 import { seedPreviewDb, type PreviewSeed } from '../support/seedPreviewDb'
 import { waitForFonts, waitForStablePaint } from '../support/stability'
 
@@ -39,9 +40,12 @@ test.beforeEach(async ({ page }) => {
   await seedPreviewDb(page, previewSeed)
   await page.goto('./', { waitUntil: 'networkidle' })
   await cardButton(page, firstProjectName, 'Open').click()
-  await expect(cabinetCanvas(page)).toBeVisible()
+  await expect(floorPlanCanvas(page)).toBeVisible()
+  // The cabinet editor is reached through a Placed Item's Item Detail now (#57), so the scene
+  // is captured from the migrated `Base Unit` the way a person reaches it.
+  await openItemDetail(page, 'seed-002')
   await waitForFonts(page)
-  // The first project is active, nothing is selected and the view is at the default
+  // The first project is active, no void is selected and the view is at the default
   // zoom — the state a user lands in, and the one S4 has to reproduce.
   await waitForStablePaint(cabinetCanvas(page))
 })

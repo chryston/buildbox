@@ -1,13 +1,13 @@
 import { expect, test } from '../support/fixtures'
 import type { Page } from '@playwright/test'
 import {
-  addFloorPlanObject,
   FIRST_PROJECT,
-  floorPlanObjectIds,
+  openItemDetail,
   openPreviewApp,
-  placedObject,
-    saveStatus,
   openProjectFromLibrary,
+  placedObject,
+  revealOnCanvas,
+  saveStatus,
   showFloorPlan,
 } from '../support/previewApp'
 import { previewSeed } from '../support/libraryApp'
@@ -16,6 +16,9 @@ import { projectRevision } from '../support/seedPreviewDb'
 // Criterion 5 (#49): the flagged build's edits are real saves. One edit in each view, then a
 // reload — the floor-plan edit in particular is the one today's app cannot make durable per
 // Project, which is finding 4 of #11.
+/** The seeded sofa on the Kitchen Wall's Plan View (#57). */
+const SOFA = 'fp-sofa'
+
 const voidIds = (page: Page) =>
   page
     .getByTestId(/^void-/)
@@ -23,6 +26,7 @@ const voidIds = (page: Page) =>
 
 test('a cabinet edit and a floor-plan edit survive a reload', async ({ page }) => {
   await openPreviewApp(page)
+  await openItemDetail(page, 'seed-002')
 
   const voidsBefore = await voidIds(page)
   // Two things decide this target: the space-label click-to-edit rect covers the middle half
@@ -35,8 +39,13 @@ test('a cabinet edit and a floor-plan edit survive a reload', async ({ page }) =
   expect(voidsAfter.length).toBeGreaterThan(voidsBefore.length)
 
   await showFloorPlan(page)
-  const objectsBefore = await floorPlanObjectIds(page)
-  const sofaId = await addFloorPlanObject(page, 'Sofa 2-seater')
+  // The floor-plan half is a turn of the seeded sofa rather than an added item: a new item lands
+  // over the Base Unit and hides it from the click that opens Item Detail again below (#57).
+  await revealOnCanvas(page, placedObject(page, SOFA))
+  await placedObject(page, SOFA).click()
+  await page.getByTestId('rotate-plus-90').click()
+  const turnedTo = await page.getByTestId('inspector-rotation').inputValue()
+  expect(turnedTo).not.toBe('0')
 
   // The write has to be on disk before a reload can prove anything: the status line reads
   // "Saved locally" for the seeded revision too, so it says nothing on its own.
@@ -46,10 +55,12 @@ test('a cabinet edit and a floor-plan edit survive a reload', async ({ page }) =
   // A reload lands on the Library (#50), which is the point: the edit survived because opening
   // the Project again shows it, not because the same page is still in memory.
   await openProjectFromLibrary(page, FIRST_PROJECT)
+  await openItemDetail(page, 'seed-002')
   await expect.poll(() => voidIds(page)).toEqual(voidsAfter)
 
   await showFloorPlan(page)
-  await expect(placedObject(page, sofaId)).toBeVisible()
-  await expect.poll(() => floorPlanObjectIds(page)).toHaveLength(objectsBefore.length + 1)
+  await revealOnCanvas(page, placedObject(page, SOFA))
+  await placedObject(page, SOFA).click()
+  await expect(page.getByTestId('inspector-rotation')).toHaveValue(turnedTo)
   await expect(saveStatus(page)).toContainText('Saved locally')
 })

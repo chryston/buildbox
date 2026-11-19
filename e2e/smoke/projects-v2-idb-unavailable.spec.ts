@@ -12,7 +12,7 @@ import {
   toast,
   withoutMintedViewIds,
 } from '../support/libraryApp'
-import { FIRST_PROJECT, cabinetCanvas, toolbarStatus } from '../support/previewApp'
+import { FIRST_PROJECT, floorPlanCanvas, toolbarStatus } from '../support/previewApp'
 import { openPreviewApp } from '../support/previewApp'
 
 /**
@@ -85,7 +85,7 @@ test('the Library says storage is missing, Backup still works from memory, and n
 
   // A new Project starts out failed: there is nowhere for it to be saved.
   await page.getByRole('button', { name: 'New Project', exact: true }).first().click()
-  await expect(cabinetCanvas(page)).toBeVisible()
+  await expect(floorPlanCanvas(page)).toBeVisible()
   await expect(toolbarStatus(page)).toContainText('Save failed')
   expect(await page.evaluate(() => localStorage.length)).toBe(0)
 })
