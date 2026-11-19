@@ -31,6 +31,7 @@ export type { SnapGeometry, SnapSettingKinds, SnapSourceInput, WallFaceSource } 
 export {
   AFFINE_IDENTITY,
   affineApply,
+  affineInvert,
   affineMultiply,
   affineRotateDeg,
   affineScale,

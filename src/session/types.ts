@@ -13,7 +13,8 @@
  */
 import type { Applied, Intent, Locator, Rejection } from '../edit'
 import type { LibraryRecord, PersistenceError, RecoveryPointKind, Result } from '../persistence'
-import type { Project } from '../domain'
+import type { DerivedFloor, DerivedItemDetail } from '../derive'
+import type { EntityId, Project } from '../domain'
 import type { ValidationProblem } from '../lib'
 
 /** The patches of one Edit Transaction, as `edit` produces them (#20 §4). */
@@ -135,6 +136,17 @@ export interface ProjectSession {
   getSnapshot(): SessionSnapshot
   /** Apply one Intent as one Edit Transaction, and schedule the write. */
   dispatch(intent: Intent, options?: { newAssets?: readonly SessionAsset[] }): DispatchResult
+  /**
+   * The Floor as the Plan View draws it, through this session's one derive cache
+   * (#60 criterion 3).
+   *
+   * The cache belongs here and nowhere else: it is keyed by the identity of the in-memory
+   * Project and its revision, which only this object can answer for. A canvas that built its
+   * own would either re-derive the same Floor on every repaint or hold a stale Project alive.
+   */
+  deriveFloor(floorId: EntityId, optionId?: EntityId | null): DerivedFloor
+  /** The Item Design as the Item Detail draws it, through the same cache. */
+  deriveItemDetail(designId: EntityId, floorId?: EntityId | null): DerivedItemDetail
   /** Undo as a forward revision (#26). Works while save has failed. */
   undo(): Result<void, 'no-history'>
   /** Redo as a forward revision (#26). Works while save has failed. */

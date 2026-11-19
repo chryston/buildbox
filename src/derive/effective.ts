@@ -91,6 +91,13 @@ export interface DerivedPlacement {
   readonly worldBounds: Rect
   /** The footprint's own box, which the Item Design canvas and the Measurements tab read. */
   readonly localBounds: Rect
+  /**
+   * The Item Origin in footprint-local millimetres — the point the rotate handle turns the
+   * placement about, and the one number the handle cannot recover from `worldTransform`, which
+   * has already folded it in.
+   */
+  readonly origin: Pt
+
   /** The Item Design's colour; a cabinet has none, so it takes the one slate the Plan View uses. */
   readonly color: string
 }
@@ -190,6 +197,7 @@ const affineOf = (transform: Transform): Affine => affineMultiply(
 const derivePlacement = (design: ItemDesign, placed: PlacedItem): DerivedPlacement => {
   const outline = designOutline(design)
   const transform = placementTransform(design, placed)
+  const origin = designOrigin(design)
   return {
     id: placed.id,
     designId: design.id,
@@ -204,6 +212,7 @@ const derivePlacement = (design: ItemDesign, placed: PlacedItem): DerivedPlaceme
     },
     worldBounds: rectOf(bounds(outline, transform)),
     localBounds: rectOf(bounds(outline)),
+    origin: pt(origin.x, origin.y),
     color: design.kind === 'cabinet' ? CABINET_PLAN_COLOR : design.color,
   }
 }

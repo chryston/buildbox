@@ -39,7 +39,7 @@ export type {
 export { FONT_STACK, SIZE_ROLES, STYLES, resolveSize, resolveStyle } from './styles'
 export { lineCommands, pathToCommands, rectCommands, roundedRectCommands } from './path'
 export { serializeSvg, toSvgTree } from './svg'
-export type { SvgNode, SvgOptions } from './svg'
+export type { Emphasis, SvgNode, SvgOptions } from './svg'
 export { layoutText, measureRect } from './font/layoutText'
 export type { TextLayout } from './font/layoutText'
 export { placeLabels } from './labels'

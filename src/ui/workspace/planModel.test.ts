@@ -5,6 +5,7 @@
  * may draw at all.
  */
 import { describe, expect, it } from 'vitest'
+import { effectiveFloor } from '../../derive'
 import { rectangleFootprint } from '../../domain'
 import type { GenericItemDesign, Project } from '../../domain'
 import {
@@ -78,16 +79,12 @@ describe('planItemsForFloor', () => {
       color: '#6366f1',
       placementCount: 1,
     })
-    // The Item Origin is the one point the rotation turns about; here it is the centre, so
-    // the world corners are the footprint laid out about (420, 450).
-    expect(item?.corners).toEqual([
-      { x: 120, y: 340 },
-      { x: 720, y: 340 },
-      { x: 720, y: 560 },
-      { x: 120, y: 560 },
-    ])
-    expect(item?.boundsWidth).toBe(600)
-    expect(item?.boundsDepth).toBe(220)
+    // The Floor-space half of this — the corners, the box it covers — is no longer the view
+    // model's to know: `derive` answers it, and `effective.test.ts` pins the numbers. What is
+    // left here is the one thing the view model still owns, that the footprint's own centre
+    // is where the rotation turns.
+    const derived = effectiveFloor(project(), 1, 'floor-1', null).placements[0]
+    expect(derived.worldBounds).toEqual({ x: 120, y: 340, w: 600, h: 220 })
   })
 
   it('keeps the footprint\'s own numbers and grows the Floor bounds as it turns (#57)', () => {
@@ -101,17 +98,22 @@ describe('planItemsForFloor', () => {
     expect(at90.rotationDeg).toBe(90)
     expect(at90.width).toBe(600)
     expect(at90.depth).toBe(220)
-    expect(at90.boundsWidth).toBeCloseTo(220, 6)
-    expect(at90.boundsDepth).toBeCloseTo(600, 6)
+    const box90 = effectiveFloor(turned(90), 1, 'floor-1', null).placements[0].worldBounds
+    expect(box90.w).toBeCloseTo(220, 6)
+    expect(box90.h).toBeCloseTo(600, 6)
     // Free rotation: 37° is kept as it is, no quarter-turn snapping anywhere.
     const at37 = planItemsForFloor(turned(37), 'floor-1')[0]
     expect(at37.rotationDeg).toBe(37)
     const rad = 37 * Math.PI / 180
-    expect(at37.boundsWidth).toBeCloseTo(600 * Math.cos(rad) + 220 * Math.sin(rad), 6)
-    expect(at37.boundsDepth).toBeCloseTo(600 * Math.sin(rad) + 220 * Math.cos(rad), 6)
-    // Turning never moves the Item Origin, so the corners stay the same distance from it.
-    expect(at37.corners.map((corner) => Math.hypot(corner.x - 420, corner.y - 450).toFixed(3)))
-      .toEqual(['319.531', '319.531', '319.531', '319.531'])
+    const box37 = effectiveFloor(turned(37), 1, 'floor-1', null).placements[0].worldBounds
+    expect(box37.w).toBeCloseTo(600 * Math.cos(rad) + 220 * Math.sin(rad), 6)
+    expect(box37.h).toBeCloseTo(600 * Math.sin(rad) + 220 * Math.cos(rad), 6)
+    // Turning never moves the Item Origin, and the footprint keeps its shape: the half-
+    // diagonal from the Origin to a corner is the same 319.531 at any rotation.
+    const at37d = effectiveFloor(turned(37), 1, 'floor-1', null).placements[0]
+    expect(at37d.origin).toEqual({ x: 300, y: 110 })
+    expect(at37d.translation).toEqual({ x: 420, y: 450 })
+    expect(Math.hypot(at37d.localBounds.w / 2, at37d.localBounds.h / 2).toFixed(3)).toBe('319.531')
   })
 
   it('shows every placement of this Floor', () => {

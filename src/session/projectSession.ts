@@ -41,6 +41,7 @@ import type {
 import { createHistory } from './history'
 import type { BackupDeps } from './backup'
 import { encodeEmergencyBackup } from './backup'
+import { createDeriveCache } from '../derive'
 import type { ClockPort, IdSource, LockHandle, LockPort } from './ports'
 import { err, ok } from './result'
 import type {
@@ -619,8 +620,22 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
     return openProject(projectId, deps)
   }
 
+  /**
+   * The one derive cache this Project has (#60 criterion 3).
+   *
+   * Keyed by the Project object and the revision, both of which only `snapshot` can answer
+   * for — which is the whole reason it lives here rather than in a canvas. Eight entries:
+   * the Floor on screen, the Item Design open beside it, and the six the keyboard can move
+   * between without a round trip.
+   */
+  const deriveCache = createDeriveCache()
+
   const session: ProjectSession = {
     id: record.id,
+    deriveFloor: (floorId, optionId = null) =>
+      deriveCache.floor(snapshot.project, snapshot.revision, floorId, optionId),
+    deriveItemDetail: (designId, floorId = null) =>
+      deriveCache.itemDetail(snapshot.project, snapshot.revision, designId, floorId ?? undefined),
     subscribe(listener) {
       listeners.add(listener)
       return () => {

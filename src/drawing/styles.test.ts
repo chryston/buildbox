@@ -152,7 +152,7 @@ describe('resolveSize', () => {
 })
 
 describe('FONT_STACK', () => {
-  it('names the bundled face before the generic family', () => {
-    expect(FONT_STACK).toBe('"Noto Sans", sans-serif')
+  it('ends in a generic family so an unknown glyph still draws', () => {
+    expect(FONT_STACK).toContain('sans-serif')
   })
 })

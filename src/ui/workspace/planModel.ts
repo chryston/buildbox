@@ -16,8 +16,7 @@
  * make React re-render forever, and a commit replaces the Project — exactly the
  * granularity the cache wants.
  */
-import { designOutline, floorBoundsSize, normaliseRotation, placementContext, worldPointOf } from '../../derive'
-import type { PlacementContext } from '../../derive'
+import { normaliseRotation } from '../../derive'
 import { designFootprintSize, designOrigin } from '../../domain'
 import type { EntityId, ItemDesign, PlanView, PlacedItem, Point2, Project } from '../../domain'
 
@@ -45,13 +44,6 @@ export interface PlanItemView {
   readonly translation: Point2
   /** Free rotation, degrees clockwise with +Y down, normalised to [0, 360). */
   readonly rotationDeg: number
-  /** The placement's own context, so the canvas can project any other local point. */
-  readonly context: PlacementContext
-  /** The Item Footprint's four corners in Floor millimetres, from local (0, 0). */
-  readonly corners: readonly Point2[]
-  /** The `Floor bounds` the inspector reads: the box this placement covers on the Floor. */
-  readonly boundsWidth: number
-  readonly boundsDepth: number
   /** Placements of the same Item Design, on every Floor — the `Affects N placements` N. */
   readonly placementCount: number
 }
@@ -165,17 +157,8 @@ export function placedOrigin(
   }
 }
 
-/** The four footprint corners of one design, local millimetres, from local (0, 0). */
-function localCorners(design: ItemDesign): readonly Point2[] {
-  const path = designOutline(design)
-  // The ring from (0, 0): the path's start, then every segment end but the closing one.
-  return [path.start, ...path.segments.slice(0, -1).map((segment) => segment.to)]
-}
-
 function itemView(design: ItemDesign, placed: PlacedItem, placementCount: number): PlanItemView {
   const { width, depth } = designFootprintSize(design)
-  const context = placementContext(design, placed)
-  const box = floorBoundsSize(design, placed)
   return {
     id: placed.id,
     designId: design.id,
@@ -187,10 +170,6 @@ function itemView(design: ItemDesign, placed: PlacedItem, placementCount: number
     origin: designOrigin(design),
     translation: placed.translation,
     rotationDeg: normaliseRotation(placed.rotationDeg),
-    context,
-    corners: localCorners(design).map((corner) => worldPointOf(context, corner)),
-    boundsWidth: box.width,
-    boundsDepth: box.depth,
     placementCount,
   }
 }

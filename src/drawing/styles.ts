@@ -15,11 +15,17 @@
 import type { ResolvedSize, SizeRole, SizeRow, SizeSpec, Sizing, Style, StyleKey } from './types'
 
 /**
- * The one font stack (#19 §4): the bundled face by name, then the generic family, so a
- * glyph the metrics table does not cover still draws as *something* readable rather than as
- * the browser's default serif.
+ * The one font stack, named once so every `<text>` is measured and drawn in the same face.
+ *
+ * Right now that is the stack Tailwind's preflight puts on `html`, which is what the canvases
+ * inherited while they wrote no `font-family` of their own. Naming it here rather than leaving
+ * the attribute off is what makes the stack a fact of the drawing instead of a fact of
+ * whichever page hosts it — and it is the one line the next commit in this issue changes to
+ * the bundled `"Noto Sans", sans-serif`, so that the screen and an export agree on the face
+ * and `layoutText`'s committed metrics measure the glyphs that actually appear.
  */
-export const FONT_STACK = '"Noto Sans", sans-serif'
+export const FONT_STACK =
+  'ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"'
 
 /**
  * What each role's size is on a screen and on paper.
@@ -49,6 +55,10 @@ export const SIZE_ROLES: Record<SizeRole, SizeRow> = {
   'plan-origin-line': { screen: { px: 1.25 }, paper: { mm: 0.2 } },
   'plan-origin-arm': { screen: { px: 7 }, paper: { mm: 1.4 } },
   'plan-origin-dot': { screen: { px: 2 }, paper: { mm: 0.4 } },
+  // The rotate handle: a grip 24 CSS px past the footprint's furthest corner, whatever the zoom.
+  'plan-handle-reach': { screen: { px: 24 }, paper: { mm: 12 } },
+  'plan-handle-r': { screen: { px: 6 }, paper: { mm: 3 } },
+  'plan-handle-stroke': { screen: { px: 1.5 }, paper: { mm: 0.3 } },
   // The cabinet canvas's two `Math.max(n / zoom, m)` sizes.
   'cabinet-dimension': { screen: { px: 12, mm: 8 }, paper: { mm: 2 } },
   'cabinet-space-label': { screen: { px: 10, mm: 6 }, paper: { mm: 2 } },
@@ -75,10 +85,10 @@ export const SIZE_ROLES: Record<SizeRole, SizeRow> = {
   'cabinet-active': { screen: { px: 2 }, paper: { mm: 0.25 } },
   'cabinet-active-dash': { screen: { px: 6 }, paper: { mm: 3 } },
   'cabinet-active-gap': { screen: { px: 3 }, paper: { mm: 1.5 } },
-  // A drawer front's dash, which the legacy canvas spelled `strokeDasharray="6 2"` in scene
-  // millimetres; the paper column is where those two millimetres reappear.
-  'cabinet-outline-dash': { screen: { px: 6 }, paper: { mm: 3 } },
-  'cabinet-outline-gap': { screen: { px: 2 }, paper: { mm: 1 } },
+  // A drawer front's dash is drawn inside the zoomed group, so it is millimetres of the
+  // scene and grows with the cabinet — unlike the active-unit dash above, which is chrome.
+  'cabinet-outline-dash': { screen: { mm: 6 }, paper: { mm: 3 } },
+  'cabinet-outline-gap': { screen: { mm: 2 }, paper: { mm: 1 } },
 
   // Rounded corners, which are a size for the same reason a stroke is: 2 mm of a cabinet
   // scene is not 2 px of a screen.
@@ -107,31 +117,38 @@ export const STYLES: Record<StyleKey, Style> = {
     stroke: 'var(--bb-text)',
     strokeWidth: 'plan-line-selected',
   },
-  'plan-label': { fill: 'item', size: 'plan-label', fontFamily: FONT_STACK },
-  'plan-dimension': { fill: 'var(--bb-accent)', size: 'plan-dimension', fontFamily: FONT_STACK },
-  'plan-dimension-line': { stroke: 'var(--bb-accent)', strokeWidth: 'hairline' },
+  'plan-label': { fill: 'item', size: 'plan-label', fontFamily: FONT_STACK, hit: 'none' },
+  'plan-dimension': { fill: 'var(--bb-accent)', size: 'plan-dimension', fontFamily: FONT_STACK, hit: 'none' },
+  'plan-dimension-line': { stroke: 'var(--bb-accent)', strokeWidth: 'hairline', hit: 'none' },
   'plan-chip-box': {
     fill: 'var(--bb-bg-card)',
     stroke: 'var(--bb-border-card)',
     strokeWidth: 'hairline',
     corner: 'plan-chip-corner',
+    hit: 'none',
   },
-  'plan-chip-text': { fill: 'var(--bb-text-muted)', size: 'plan-chip', fontFamily: FONT_STACK },
+  'plan-chip-text': { fill: 'var(--bb-text-muted)', size: 'plan-chip', fontFamily: FONT_STACK, hit: 'none' },
 
   // The Item Origin: a crosshair on the placement, its centre dot, and the stem out to the
   // rotate handle. `:preview` is the same crosshair while a drag is in flight — a row rather
   // than a parameter, because a display list never mentions interaction and an export of the
   // same Floor must look like the unmanipulated canvas.
-  'plan-origin': { stroke: 'var(--bb-text)', strokeWidth: 'plan-origin-line' },
-  'plan-origin:preview': { stroke: 'var(--bb-accent)', strokeWidth: 'plan-origin-line' },
-  'plan-origin-dot': { fill: 'var(--bb-text)' },
-  'plan-origin-dot:preview': { fill: 'var(--bb-accent)' },
-  'plan-rotate-stem': { stroke: 'var(--bb-accent)', strokeWidth: 'plan-line' },
+  'plan-origin': { stroke: 'var(--bb-text)', strokeWidth: 'plan-origin-line', hit: 'none' },
+  'plan-origin:preview': { stroke: 'var(--bb-accent)', strokeWidth: 'plan-origin-line', hit: 'none' },
+  'plan-origin-dot': { fill: 'var(--bb-text)', hit: 'none' },
+  'plan-origin-dot:preview': { fill: 'var(--bb-accent)', hit: 'none' },
+  'plan-rotate-stem': { stroke: 'var(--bb-accent)', strokeWidth: 'plan-line', hit: 'none' },
+  'plan-handle': {
+    fill: 'var(--bb-bg-card)',
+    stroke: 'var(--bb-accent)',
+    strokeWidth: 'plan-handle-stroke',
+  },
 
   'plan-placeholder': {
     fill: 'var(--bb-bg-card)',
     stroke: 'var(--bb-border-card)',
     strokeWidth: 'plan-placeholder-line',
+    hit: 'none',
   },
 
   // --- A cabinet's construction.
@@ -161,7 +178,14 @@ export const STYLES: Record<StyleKey, Style> = {
   'cabinet-divider-white': { fill: '#F5F5F0', stroke: '#D0CEC8', strokeWidth: 'cabinet-outline' },
   'cabinet-divider-birch': { fill: '#E8D5A3', stroke: '#B09050', strokeWidth: 'cabinet-outline' },
   'cabinet-divider-mdf': { fill: '#D4C5A9', stroke: '#9E8E72', strokeWidth: 'cabinet-outline' },
-  'cabinet-divider:selected': { stroke: '#7c3aed', strokeWidth: 'cabinet-outline-bold' },
+  // Selection is a row per material, not one shared `:selected`: the renderer suffixes the
+  // style the builder named, which is the material row, and a divider that lost its wood
+  // colour when you clicked it would be worse than no highlight at all.
+  'cabinet-divider-oak:selected': { fill: '#C8A96E', stroke: '#7c3aed', strokeWidth: 'cabinet-outline-bold' },
+  'cabinet-divider-walnut:selected': { fill: '#5C3D1E', stroke: '#7c3aed', strokeWidth: 'cabinet-outline-bold' },
+  'cabinet-divider-white:selected': { fill: '#F5F5F0', stroke: '#7c3aed', strokeWidth: 'cabinet-outline-bold' },
+  'cabinet-divider-birch:selected': { fill: '#E8D5A3', stroke: '#7c3aed', strokeWidth: 'cabinet-outline-bold' },
+  'cabinet-divider-mdf:selected': { fill: '#D4C5A9', stroke: '#7c3aed', strokeWidth: 'cabinet-outline-bold' },
 
   'cabinet-unit-hit': { fill: 'transparent' },
   'cabinet-unit-active': {
@@ -169,6 +193,7 @@ export const STYLES: Record<StyleKey, Style> = {
     stroke: 'var(--color-accent)',
     strokeWidth: 'cabinet-active',
     dash: ['cabinet-active-dash', 'cabinet-active-gap'],
+    hit: 'none',
   },
   'cabinet-drawer-frame': {
     fill: 'none',
@@ -209,6 +234,7 @@ export const STYLES: Record<StyleKey, Style> = {
     fill: '#6b7280',
     size: 'cabinet-space-label',
     fontFamily: FONT_STACK,
+    hit: 'none',
   },
   'cabinet-lock-mark': {
     stroke: 'var(--color-dim-label)',

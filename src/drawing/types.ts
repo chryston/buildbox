@@ -60,6 +60,7 @@ export type LayerKey =
   | 'placed-item-labels'
   | 'plan-dimensions'
   | 'plan-chip'
+  | 'plan-handle'
   | 'cabinet-units'
   | 'cabinet-panels'
   | 'cabinet-voids'
@@ -89,6 +90,7 @@ export const LAYER_ORDER: readonly LayerKey[] = [
   'placed-item-labels',
   'plan-dimensions',
   'plan-chip',
+  'plan-handle',
   'cabinet-units',
   'cabinet-panels',
   'cabinet-voids',
@@ -165,6 +167,7 @@ export type StyleKey =
   | 'plan-origin-dot'
   | 'plan-origin-dot:preview'
   | 'plan-rotate-stem'
+  | 'plan-handle'
   | 'plan-placeholder'
   | 'cabinet-panel-oak'
   | 'cabinet-panel-walnut'
@@ -179,7 +182,11 @@ export type StyleKey =
   | 'cabinet-divider-white'
   | 'cabinet-divider-birch'
   | 'cabinet-divider-mdf'
-  | 'cabinet-divider:selected'
+  | 'cabinet-divider-oak:selected'
+  | 'cabinet-divider-walnut:selected'
+  | 'cabinet-divider-white:selected'
+  | 'cabinet-divider-birch:selected'
+  | 'cabinet-divider-mdf:selected'
   | 'cabinet-unit-hit'
   | 'cabinet-unit-active'
   | 'cabinet-drawer-frame'
@@ -217,6 +224,9 @@ export type SizeRole =
   | 'plan-origin-line'
   | 'plan-origin-arm'
   | 'plan-origin-dot'
+  | 'plan-handle-reach'
+  | 'plan-handle-r'
+  | 'plan-handle-stroke'
   | 'cabinet-dimension'
   | 'cabinet-space-label'
   | 'cabinet-lock-icon'
@@ -295,6 +305,12 @@ export type Style = {
   size?: SizeRole
   /** A rounded corner's radius, for the rows drawn as a rounded rect. */
   corner?: SizeRole
+  /**
+   * `'none'`: this takes no pointer. The Plan View's measurements, Item Origins and Plan
+   * Image lie on top of the footprints they annotate, and a canvas whose crosshair swallows
+   * the click meant for the Item under it cannot be used.
+   */
+  hit?: 'none'
 }
 
 /**

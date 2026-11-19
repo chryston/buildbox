@@ -1,1 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"><g data-layer="plan-image"><path d="M 0 0 L 800 0 L 800 600 L 0 600 Z" fill="var(--bb-bg-card)" stroke="var(--bb-border-card)" stroke-width="2" /></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"><g data-layer="plan-image"><path d="M 0 0 L 800 0 L 800 600 L 0 600 Z" fill="var(--bb-bg-card)" stroke="var(--bb-border-card)" stroke-width="2" pointer-events="none" /></g></svg>

@@ -35,6 +35,14 @@ export type SvgNode = {
 }
 
 /**
+ * Which entities the caller wants drawn differently.
+ *
+ * The display list itself never mentions emphasis: a drag or a hover changes what the caller
+ * passes here, not the list, so a gesture repaints without deriving anything (#60).
+ */
+export type Emphasis = { selected?: ReadonlySet<string>; hovered?: string }
+
+/**
  * What the caller knows that the list does not: which entities are emphasised, where an
  * image's bytes actually live, and how big a millimetre is on this surface.
  *
@@ -46,7 +54,7 @@ export type SvgNode = {
 export type SvgOptions = {
   sizing: Sizing
   includeRefs: boolean
-  emphasis?: { selected?: ReadonlySet<string>; hovered?: string }
+  emphasis?: Emphasis
   resolveAsset: (hash: string) => string | null
 }
 
@@ -195,6 +203,7 @@ function pathNode(item: Extract<DisplayItem, { kind: 'path' }>, o: SvgOptions): 
   const dash = dashArray(style, o.sizing)
   if (dash !== undefined) attrs.push(['stroke-dasharray', dash])
   if (style.opacity !== undefined) attrs.push(['opacity', n(style.opacity)])
+  if (style.hit === 'none') attrs.push(['pointer-events', 'none'])
   // `corner` is deliberately unread here: a rounded corner is a radius the *builder* baked
   // into the commands, because a path's shape is one thing and its paint is another.
   return { tag: 'path', attrs }
@@ -227,6 +236,7 @@ function textNode(item: Extract<DisplayItem, { kind: 'text' }>, o: SvgOptions): 
   if (item.rotationDeg !== 0) {
     attrs.push(['transform', `rotate(${n(item.rotationDeg)}, ${n(item.at.x)}, ${n(item.at.y)})`])
   }
+  if (style.hit === 'none') attrs.push(['pointer-events', 'none'])
   return { tag: 'text', attrs, text: item.text }
 }
 
@@ -255,6 +265,9 @@ function imageNode(item: Extract<DisplayItem, { kind: 'image' }>, o: SvgOptions)
       ['transform', matrixToSvg(matrix)],
       ['preserveAspectRatio', 'none'],
       ['opacity', n(item.opacity)],
+      // The Plan Image is a tracing reference laid under the drawing: the pointer has to
+      // reach the footprints on top of it, and the canvas itself takes the pan.
+      ['pointer-events', 'none'],
     ],
   }
 }

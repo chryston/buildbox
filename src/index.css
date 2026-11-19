@@ -6,3 +6,9 @@
   --color-dim-label: #a1a1aa;
   --color-accent: #0a84ff;
 }
+
+/*
+ * The face every drawing is measured and drawn in (#60) arrives with the commit that switches
+ * the canvases to it: until then the style table names the UI's own stack, and an `@font-face`
+ * nothing asks for would only add a 22 kB request to every page load.
+ */

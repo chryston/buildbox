@@ -114,6 +114,8 @@ export function FloorWorkspace(): ReactNode {
   const image = planImageForView(project, view, imageSrc)
   const items = planItemsForFloor(project, floorId)
   const library = itemLibrary(project)
+  /** The Floor the canvas draws, from the session's one derive cache (#60 criterion 3). */
+  const derivedFloor = floorId === null ? null : session.deriveFloor(floorId)
 
   const tool = useWorkspace((state) => state.activeTool)
   const setTool = useWorkspace((state) => state.setTool)
@@ -751,6 +753,9 @@ export function FloorWorkspace(): ReactNode {
         inspector={
           <SelectionInspector
             item={selected}
+            bounds={selection === null || derivedFloor === null
+              ? null
+              : derivedFloor.placements.find((p) => p.id === selection)?.worldBounds ?? null}
             design={selectedDesign}
             unit={project.preferences.displayUnit}
             precision={project.preferences.displayPrecision}
@@ -776,11 +781,13 @@ export function FloorWorkspace(): ReactNode {
         }
         canvas={
           <>
+            {derivedFloor !== null && (
             <PlanViewCanvas
               hostRef={hostRef}
               svgRef={svgRef}
-              items={items}
-              image={image}
+              floor={derivedFloor}
+              showPlanImage={view?.showPlanImage ?? false}
+              imageSrc={imageSrc}
               viewport={viewport ?? null}
               onViewport={setViewport}
               tool={tool}
@@ -809,6 +816,7 @@ export function FloorWorkspace(): ReactNode {
                 />
               ) : undefined}
             />
+            )}
             <input
               ref={fileInputRef}
               data-testid="plan-image-input"

@@ -33,6 +33,7 @@ import { measureRect } from './font/layoutText'
 import { drawPlanView } from './planView'
 import { drawSelectionAnnotations } from './annotations'
 import { serializeSvg, toSvgTree } from './svg'
+import { FONT_STACK } from './styles'
 import type { DisplayList, Sizing } from './types'
 import { basicProject } from '../derive/testing'
 
@@ -271,8 +272,11 @@ describe('golden: what the bytes say (#60 criteria 8, 9, 10, 12)', () => {
   })
 
   it.each(everyGolden)('%s names the face on every word it draws', (_name, svg) => {
+    // The stack as it appears once XML-escaped, so the golden says the drawing asked for a
+    // face by name rather than inheriting whatever the host page happened to set.
+    const face = FONT_STACK.replace(/"/g, '&quot;')
     for (const tag of svg.match(/<text\b[^>]*>/g) ?? []) {
-      expect(tag).toContain('font-family="&quot;Noto Sans&quot;, sans-serif"')
+      expect(tag).toContain(`font-family="${face}"`)
     }
   })
 

@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest'
 import { affineScale, affineTranslate, affineMultiply } from '../derive'
 import type { Pt } from '../geometry'
 import { rectCommands } from './path'
+import { FONT_STACK } from './styles'
 import { serializeSvg, toSvgTree } from './svg'
 import type { SvgOptions } from './svg'
 import type { DisplayItem, DisplayList, Rect } from './types'
@@ -93,6 +94,7 @@ const PATH_ATTRS = [
   'stroke-width',
   'stroke-dasharray',
   'opacity',
+  'pointer-events',
 ] as const
 
 const TEXT_ATTRS = [
@@ -109,6 +111,7 @@ const TEXT_ATTRS = [
   'text-decoration',
   'opacity',
   'transform',
+  'pointer-events',
 ] as const
 
 const IMAGE_ATTRS = [
@@ -122,6 +125,7 @@ const IMAGE_ATTRS = [
   'transform',
   'preserveAspectRatio',
   'opacity',
+  'pointer-events',
 ] as const
 
 describe('toSvgTree', () => {
@@ -181,12 +185,24 @@ describe('toSvgTree', () => {
     expect(attr(attrs, 'fill')).toBe('transparent')
   })
 
+  // The Plan View's measurements and Item Origins lie on top of the footprints they annotate,
+  // so the attribute that keeps a click reaching the Item below is part of the drawing, not of
+  // whichever host happens to be showing it.
+  it('writes pointer-events for a row that takes no pointer', () => {
+    const cross = firstAttrs(listOf([pathItem({ style: 'plan-origin' })]), screen())
+    expect(attr(cross, 'pointer-events')).toBe('none')
+    const label = firstAttrs(listOf([textItem({ style: 'plan-label' })]), screen())
+    expect(attr(label, 'pointer-events')).toBe('none')
+    const footprint = firstAttrs(listOf([pathItem()]), screen())
+    expect(attr(footprint, 'pointer-events')).toBeUndefined()
+  })
+
   it('writes text in millimetres, with the anchor and baseline only when they differ', () => {
     const attrs = firstAttrs(listOf([textItem()]), screen())
     orderedAs(attrs.map(([key]) => key), TEXT_ATTRS)
     expect(attr(attrs, 'x')).toBe('20')
     expect(attr(attrs, 'y')).toBe('30')
-    expect(attr(attrs, 'font-family')).toBe('"Noto Sans", sans-serif')
+    expect(attr(attrs, 'font-family')).toBe(FONT_STACK)
     expect(attr(attrs, 'font-size')).toBe('12')
     expect(attr(attrs, 'text-anchor')).toBe('middle')
     expect(attr(attrs, 'dominant-baseline')).toBe('middle')
@@ -202,6 +218,7 @@ describe('toSvgTree', () => {
       'font-family',
       'font-size',
       'fill',
+      'pointer-events',
     ])
   })
 

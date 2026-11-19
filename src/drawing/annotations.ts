@@ -77,6 +77,7 @@ export function drawSelectionAnnotations(
   if (annotations.length > 0) layers.push({ key: 'plan-annotations', items: annotations })
   if (dimensions.length > 0) layers.push({ key: 'plan-dimensions', items: dimensions })
   if (chipItems.length > 0) layers.push({ key: 'plan-chip', items: chipItems })
+  if (focus !== null) layers.push({ key: 'plan-handle', items: [rotateHandle(focus, sizing)] })
   if (layers.length === 0) return null
 
   let bounds = focus.world
@@ -264,6 +265,47 @@ function boundsChip(
         role: 'chip',
         style: 'plan-chip-text',
         layout,
+      },
+    ],
+  }
+}
+
+/**
+ * The rotate handle: a stem from the Item Origin to a grip past the footprint's furthest
+ * corner, far enough out that it stays a 24 CSS px reach whatever the zoom.
+ *
+ * It is drawn here rather than left in the canvas because its geometry is a Floor-space
+ * transform — the grip is a footprint-local point taken through the placement's own matrix —
+ * and criterion 6 is that no such transform happens in `ui`. What stays in `ui` is the drag:
+ * the angle the pointer asks for, and the one Intent that commits the whole turn.
+ */
+function rotateHandle(f: DrawnPlacement, sizing: DrawOptions['sizing']): DisplayItem {
+  const reach = resolveSize('plan-handle-reach', sizing).mm
+  const r = resolveSize('plan-handle-r', sizing).mm
+  const { origin } = f.placement
+  const { w, h } = f.local
+  let corner = 0
+  for (const [x, y] of [[0, 0], [w, 0], [w, h], [0, h]] as const) {
+    corner = Math.max(corner, Math.hypot(x - origin.x, y - origin.y))
+  }
+  const grip = affineApply(f.toFloor, { x: origin.x, y: origin.y - (corner + reach) })
+  return {
+    kind: 'group',
+    ref: { id: f.placement.id, role: 'rotate-handle-group' },
+    items: [
+      {
+        kind: 'path',
+        segments: lineCommands(f.originAt, grip),
+        closed: false,
+        style: 'plan-rotate-stem',
+      },
+      {
+        kind: 'path',
+        ref: { id: f.placement.id, role: 'rotate-handle' },
+        // A circle, which is a rounded rect whose radius is half its side.
+        segments: roundedRectCommands(grip.x - r, grip.y - r, r * 2, r * 2, r),
+        closed: true,
+        style: 'plan-handle',
       },
     ],
   }

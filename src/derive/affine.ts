@@ -63,3 +63,24 @@ export const affineApply = (m: Affine, at: { x: number; y: number }): { x: numbe
 /** `matrix(a,b,c,d,e,f)` as SVG spells it, with no spaces after the commas. */
 export const affineToSvg = (m: Affine): string =>
   `matrix(${m.a},${m.b},${m.c},${m.d},${m.e},${m.f})`
+
+/**
+ * The matrix that undoes `m`.
+ *
+ * A placement is a rigid motion — a rotation about the Item Origin and a translation, never a
+ * shear — so the determinant is 1 and no near-singular case arises. It is still checked rather
+ * than assumed: a Footprint that ever grew a scale of 0 would otherwise answer with `NaN`
+ * coordinates that a snap would happily accept.
+ */
+export function affineInvert(m: Affine): Affine {
+  const det = m.a * m.d - m.b * m.c
+  if (det === 0) throw new Error('derive: a singular Affine has no inverse')
+  return {
+    a: m.d / det,
+    b: -m.b / det,
+    c: -m.c / det,
+    d: m.a / det,
+    e: (m.c * m.f - m.d * m.e) / det,
+    f: (m.b * m.e - m.a * m.f) / det,
+  }
+}
