@@ -16,7 +16,6 @@ import {
   calibrateByMeasuring,
   FIRST_PROJECT,
   floorOptions,
-  floorPlanCanvas,
   openManageFloors,
   openPreviewApp,
   placedObject,
