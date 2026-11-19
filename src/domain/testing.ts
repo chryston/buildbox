@@ -196,9 +196,15 @@ const arbUpToMm = (max: number): fc.Arbitrary<number> =>
 const arbSize = fc.record({ width: arbMm, depth: arbMm })
 const arbBigSize = fc.record({ width: arbBigMm, depth: arbBigMm })
 
-/** Four corner radii that together fit the side they sit on. */
+/**
+ * Four corner radii that together fit the side they sit on.
+ *
+ * A quarter of the shorter side, not a half: the constraint is per side — the two radii on a
+ * side must sum to no more than it — and a quarter is what makes that true for every pair
+ * without threading one radius through the next.
+ */
 const arbCornerRadii = (width: number, depth: number): fc.Arbitrary<CornerRadii> => {
-  const radius = arbUpToMm(Math.min(width, depth) / 2)
+  const radius = arbUpToMm(Math.min(width, depth) / 4)
   return fc.record({
     topLeft: radius,
     topRight: radius,
@@ -222,14 +228,17 @@ const arbPreset: fc.Arbitrary<Preset> = fc.oneof(
   arbSize.map(({ width, depth }): Preset => ({ kind: 'rectangle', width, depth })),
   arbBigSize.chain(({ width, depth }) =>
     fc.oneof(
-      arbUpToMm(Math.min(width, depth) / 2).map((radius): Preset => ({ kind: 'roundedRectangle', width, depth, radius })),
+      // Half the shorter side would leave no straight edge at all — a Rounded Rectangle whose
+      // radius reaches half the side is a circle, and the kernel says so.
+      arbUpToMm(Math.min(width, depth) / 2 - 10).map((radius): Preset => ({ kind: 'roundedRectangle', width, depth, radius })),
       arbCornerRadii(width, depth).map((radii): Preset => ({ kind: 'roundedRectangle', width, depth, radii })),
     ),
   ),
   arbMm.map((diameter): Preset => ({ kind: 'circle', diameter })),
   arbSize.map(({ width, depth }): Preset => ({ kind: 'ellipse', width, depth })),
   arbBigSize.chain(({ width }) =>
-    arbUpToMm(6000 - width).map((extra): Preset => ({ kind: 'capsule', width, length: width + 1 + extra })),
+    // The straight run between the two ends has to have a length of its own.
+    arbUpToMm(6000 - width).map((extra): Preset => ({ kind: 'capsule', width, length: width + 100 + extra })),
   ),
   arbSize.chain(({ width: baseWidth, depth }) =>
     fc.option(arbUpToMm(baseWidth).map((offset) => offset - baseWidth / 2), { nil: undefined }).map(
@@ -711,8 +720,10 @@ const impossibleShape: CorruptionMaker = (project) => {
   }
   return {
     project: { ...project, itemDesigns: [...project.itemDesigns, design] },
-    path: `itemDesigns[${index}].footprint.preset`,
-    code: 'bad-format',
+    // The footprint as a whole, under the geometry kernel's own code: an impossible shape is
+    // refused in the kernel's words, not paraphrased as a field the validator disliked.
+    path: `itemDesigns[${index}].footprint`,
+    code: 'corner-radii-overlap',
   }
 }
 

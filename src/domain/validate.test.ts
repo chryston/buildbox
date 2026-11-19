@@ -327,7 +327,7 @@ describe('validateProject — Item Designs', () => {
     expectProblems(project, [{ path: 'itemDesigns[1].footprint.kind', code: 'not-one-of' }])
 
     bed.footprint = rectangleFootprint(0, 1980)
-    expectProblems(project, [{ path: 'itemDesigns[1].footprint.preset.width', code: 'out-of-range' }])
+    expectProblems(project, [{ path: 'itemDesigns[1].footprint', code: 'size-not-positive' }])
 
     bed.footprint = rectangleFootprint(1820, 1980)
     bed.height = Number.NaN
