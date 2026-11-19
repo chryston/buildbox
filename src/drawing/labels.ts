@@ -1,37 +1,29 @@
 /**
- * Where the Plan View puts its measurement chips and warning badges (#57 criterion 12).
+ * Where a drawing puts its labels (#57 criterion 12, moved here by #60 §7).
  *
- * A Floor can be rotated to any angle, so the text that names its bounds has to find a
- * clear box beside the Floor rather than on it — at 37° as well as at 0°. That is a
- * placement question, not a rendering one: the candidates are rings of boxes around the
- * footprint, tried nearest the label's own anchor first, and the answer is the first that
- * touches nothing already claimed.
+ * A Floor can be rotated to any angle, so the text that names its bounds has to find a clear
+ * box beside the Floor rather than on it — at 37° as well as at 0°. That is a placement
+ * question, not a rendering one: the candidates are rings of boxes around the footprint,
+ * tried nearest the label's own anchor first, and the answer is the first that touches
+ * nothing already claimed.
+ *
+ * It lived beside the Plan View only because nothing else could use it from there. The Item
+ * Detail has the same problem in miniature — a dimension text and a space label that both
+ * want the middle of a gap — and #60's display list is built once for both surfaces, so the
+ * placer moves with it. The arithmetic is unchanged in every particular, including the
+ * tie-breaks: the same frame still places the same chip in the same pixel.
  *
  * The footprint arrives as an axis-aligned box because the caller has already rotated and
- * projected it: screen space here *is* world millimetres, +X right and +Y down. This file
- * therefore imports nothing at all — `ui` may not reach into `geometry`, and the arithmetic
- * it would have offered is two subtractions and a `Math.max`.
+ * projected it: screen space here *is* world millimetres, +X right and +Y down.
  */
-
-/** An axis-aligned box in world millimetres. */
-export interface Rect {
-  readonly x: number
-  readonly y: number
-  readonly w: number
-  readonly h: number
-}
-
-/** A point in world millimetres. */
-export interface Point {
-  readonly x: number
-  readonly y: number
-}
+import type { Pt } from '../geometry'
+import type { Rect } from './types'
 
 /** One label that wants to be drawn, and where it would like to sit. */
 export interface LabelRequest {
   readonly id: string
   /** Where the label would like to sit: its centre. */
-  readonly anchor: Point
+  readonly anchor: Pt
   readonly w: number
   readonly h: number
 }

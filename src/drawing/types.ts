@@ -1,0 +1,368 @@
+/**
+ * The display list: the one description of what a drawing looks like (#60, #20 §9).
+ *
+ * The Plan View and the Item Detail used to answer that question twice, in JSX, with the
+ * colour and the `/ zoom` arithmetic written out at each site — which is how the two drifted
+ * apart in the first place. A display list answers it once, in millimetres, as data: a
+ * z-ordered list of paths, text and images in which every colour and every width is a *key*
+ * into `styles.ts` rather than a literal. One list can therefore be drawn on a screen at
+ * 0.4 px per millimetre and on paper at 1:20 without either renderer owning a number.
+ *
+ * Nothing here is a colour, a size or a DOM node: those are `styles.ts` and `svg.ts`. This
+ * file is the vocabulary only, so that `export` (#62) and the two on-screen surfaces are
+ * reading the same answer rather than a copy of it.
+ */
+import type { Affine } from '../derive'
+import type { Pt } from '../geometry'
+
+/**
+ * The domain entity a drawn shape came from, and which part of it: `{ id: voidNodeId,
+ * role: 'void' }`. The renderer writes it into `data-ref` when the caller asks for it, so a
+ * hit test recovers the entity the user actually pressed on instead of guessing from a
+ * coordinate.
+ */
+export type Ref = { readonly id: string; readonly role: string }
+
+/**
+ * An axis-aligned box in millimetres.
+ *
+ * `geometry` measures a path as a `Bounds` of two corners, which is what the kernel wants;
+ * a box that is *drawn* or *avoided* — a display list's extent, the label placer's
+ * obstacle — is an origin and a size, which is the shape both `svg.ts` and `labels.ts`
+ * want and the shape `DisplayList.bounds` reports.
+ */
+export type Rect = {
+  readonly x: number
+  readonly y: number
+  readonly w: number
+  readonly h: number
+}
+
+/**
+ * Every layer the two surfaces can draw, and nothing else.
+ *
+ * #60 §3: the z-order is a property of the vocabulary, not of a renderer. A later issue that
+ * wants a new band — #66's warning badge, #69's elevation marks — inserts a key here and in
+ * `LAYER_ORDER`, and every surface picks it up because there is no other mechanism.
+ *
+ * The three Plan View bands that sit between the footprints and the labels are not
+ * decorations. `plan-annotations` is the Item Origin crosshairs, which draw after the
+ * footprints they sit on and before the measurements that point at them; `plan-dimensions` is
+ * the selected placement's dimension lines *and* their two texts, one band because a line and
+ * the number over it are one measurement and one is meaningless without the other; and
+ * `plan-chip` is the `Floor bounds` chip, which is the last thing drawn because it is the one
+ * thing that must always be readable.
+ */
+export type LayerKey =
+  | 'plan-image'
+  | 'placed-items'
+  | 'plan-annotations'
+  | 'placed-item-labels'
+  | 'plan-dimensions'
+  | 'plan-chip'
+  | 'cabinet-units'
+  | 'cabinet-panels'
+  | 'cabinet-voids'
+  | 'cabinet-dividers'
+  | 'cabinet-accessories'
+  | 'cabinet-dimensions'
+  | 'cabinet-marks'
+  | 'item-footprint'
+  | 'item-labels'
+
+/**
+ * THE single z-order source (#60 §3): the order the `<g>` bands are emitted in, back to
+ * front. `toSvgTree` walks a list's own `layers`, so a builder that leaves a layer out
+ * simply draws nothing there — but it may not reorder these keys, and no renderer may sort
+ * them again.
+ *
+ * The order reproduces what `PlanViewCanvas` draws today: inside the viewport matrix, image →
+ * footprints → origin markers → dimension lines; in the untransformed text layer above it,
+ * item labels → dimension texts → chip. `plan-dimensions` spans both halves because the
+ * renderer already splits paths from text into separate groups, and each half keeps its
+ * relative order within the band.
+ */
+export const LAYER_ORDER: readonly LayerKey[] = [
+  'plan-image',
+  'placed-items',
+  'plan-annotations',
+  'placed-item-labels',
+  'plan-dimensions',
+  'plan-chip',
+  'cabinet-units',
+  'cabinet-panels',
+  'cabinet-voids',
+  'cabinet-dividers',
+  'cabinet-accessories',
+  'cabinet-dimensions',
+  'cabinet-marks',
+  'item-footprint',
+  'item-labels',
+]
+
+/**
+ * One drawing command, in the same millimetre frame as the rest of the list.
+ *
+ * `A` is a circular arc and `E` an elliptical one, both spelled the way SVG spells them so
+ * `svg.ts` writes them out without re-deriving a flag. `largeArc` and `sweep` are already
+ * resolved booleans: `path.ts` decides them once from the kernel's signed sweep, and every
+ * consumer — screen, paper, Backup preview — gets the same curve.
+ */
+export type PathCommand =
+  | { readonly k: 'M' | 'L'; readonly to: Pt }
+  | {
+      readonly k: 'A'
+      readonly to: Pt
+      readonly r: number
+      readonly largeArc: boolean
+      readonly sweep: boolean
+    }
+  | {
+      readonly k: 'E'
+      readonly to: Pt
+      readonly rx: number
+      readonly ry: number
+      readonly xRotDeg: number
+      readonly largeArc: boolean
+      readonly sweep: boolean
+    }
+
+/**
+ * A paint: a CSS colour literal, `'none'`, or `'item'` for the drawn thing's own colour.
+ *
+ * `'item'` is the only indirection a style may have, and it is what lets `plan-item` be one
+ * row for every Placed Item while each still wears its Item Design's colour.
+ */
+export type Paint = string
+
+/** What a piece of text is for, which is how a renderer styles a whole class at once. */
+export type TextRole = 'label' | 'dimension' | 'chip' | 'space-label'
+
+/** Where text sits against its `x`: its left edge, its centre, or its right edge. */
+export type TextAnchor = 'start' | 'middle' | 'end'
+
+/** How text sits against its `y`: on the baseline, vertically centred, or hanging below. */
+export type TextBaseline = 'alphabetic' | 'middle' | 'hanging'
+
+/**
+ * Every row of `STYLES`, spelled out here rather than derived from it.
+ *
+ * The union is written by hand and the table is typed `Record<StyleKey, Style>`, so a row
+ * missing from the table is a type error and a row missing from the union is one too. The
+ * alternative — deriving the union from the table — would let a typo in a row become a
+ * legal key nobody asked for.
+ */
+export type StyleKey =
+  | 'plan-item'
+  | 'plan-item:selected'
+  | 'plan-label'
+  | 'plan-dimension'
+  | 'plan-dimension-line'
+  | 'plan-chip-box'
+  | 'plan-chip-text'
+  | 'plan-origin'
+  | 'plan-origin:preview'
+  | 'plan-origin-dot'
+  | 'plan-origin-dot:preview'
+  | 'plan-rotate-stem'
+  | 'plan-placeholder'
+  | 'cabinet-panel-oak'
+  | 'cabinet-panel-walnut'
+  | 'cabinet-panel-white'
+  | 'cabinet-panel-birch'
+  | 'cabinet-panel-mdf'
+  | 'cabinet-void'
+  | 'cabinet-void:selected'
+  | 'cabinet-divider'
+  | 'cabinet-divider-oak'
+  | 'cabinet-divider-walnut'
+  | 'cabinet-divider-white'
+  | 'cabinet-divider-birch'
+  | 'cabinet-divider-mdf'
+  | 'cabinet-divider:selected'
+  | 'cabinet-unit-hit'
+  | 'cabinet-unit-active'
+  | 'cabinet-drawer-frame'
+  | 'cabinet-drawer-pull-dot'
+  | 'cabinet-door'
+  | 'cabinet-drawer-front'
+  | 'cabinet-pull'
+  | 'cabinet-hinge'
+  | 'cabinet-dimension'
+  | 'cabinet-dimension:locked'
+  | 'cabinet-space-label'
+  | 'cabinet-lock-mark'
+  | 'cabinet-unlock-mark'
+  | 'item-footprint'
+  | 'item-label'
+
+/**
+ * Every row of `SIZE_ROLES`.
+ *
+ * A role names a *thing that has a size* — the plan's label text, a cabinet's outline — and
+ * never a number, which is the whole reason one display list can be drawn at two scales. A
+ * distance the drawing lays itself out by is a role too: how far outside a footprint a
+ * dimension line runs is as much a size as the stroke that draws it, and more so, because it
+ * decides where the text lands.
+ */
+export type SizeRole =
+  | 'plan-label'
+  | 'plan-dimension'
+  | 'plan-chip'
+  | 'plan-dim-offset'
+  | 'plan-dim-gap'
+  | 'plan-dim-tick'
+  | 'plan-chip-height'
+  | 'plan-chip-char'
+  | 'plan-origin-line'
+  | 'plan-origin-arm'
+  | 'plan-origin-dot'
+  | 'cabinet-dimension'
+  | 'cabinet-space-label'
+  | 'cabinet-lock-icon'
+  | 'plan-line'
+  | 'plan-line-selected'
+  | 'hairline'
+  | 'plan-placeholder-line'
+  | 'cabinet-outline'
+  | 'cabinet-outline-bold'
+  | 'cabinet-outline-medium'
+  | 'cabinet-active'
+  | 'cabinet-active-dash'
+  | 'cabinet-active-gap'
+  | 'cabinet-outline-dash'
+  | 'cabinet-outline-gap'
+  | 'cabinet-corner'
+  | 'cabinet-corner-small'
+  | 'plan-chip-corner'
+
+/**
+ * One column of a `SIZE_ROLES` row: `{ px }` is a device-pixel floor that a zoom defeats,
+ * `{ mm }` is a real-world size that a zoom reveals, and `{ px, mm }` is the larger of the
+ * two — the legacy canvas's `Math.max(12 / zoom, 8)`.
+ */
+export type SizeSpec =
+  | { readonly px: number; readonly mm?: number }
+  | { readonly mm: number }
+
+/**
+ * A size in both sizing modes.
+ *
+ * The screen column reproduces what the legacy canvas drew at a given zoom; the paper column
+ * is what the same thing measures on a printed sheet, which is the only column #62's export
+ * reads. Both are here because a role that reads well on a screen at 12 px is 2.5 mm on
+ * paper, and neither number belongs at a call site.
+ */
+export type SizeRow = { readonly screen: SizeSpec; readonly paper: SizeSpec }
+
+/**
+ * One resolved length.
+ *
+ * `mm` is the answer the drawing works in; `px` is the same length in the device or sheet
+ * units it came from, kept only so a renderer that still thinks in pixels can skip the
+ * multiply. In screen mode `px` is `mm * pxPerMm`; in paper mode it is `mm * scale`, the
+ * millimetres of ink a millimetre of model becomes on the sheet.
+ */
+export type ResolvedSize = { mm: number; px: number }
+
+/**
+ * How big a millimetre is right now: on a screen, by the zoom in pixels per millimetre; on
+ * paper, by the drawing scale, where `0.05` is 1:20.
+ */
+export type Sizing = { kind: 'screen'; pxPerMm: number } | { kind: 'paper'; scale: number }
+
+/** What every drawing function is told about the surface it is drawing for (#60 §4). */
+export type DrawOptions = { sizing: Sizing }
+
+/**
+ * How a shape is painted, named by role.
+ *
+ * A `Style` never holds a resolved length: `strokeWidth`, `dash` and `corner` are
+ * `SizeRole`s, so the same row is 1 px on a screen at zoom 1 and 0.25 mm on paper.
+ */
+export type Style = {
+  stroke?: Paint
+  strokeWidth?: SizeRole
+  fill?: Paint
+  /** Multiplies the alpha of a `fill` that came from the item's own colour, e.g. 0x33/0xff. */
+  fillAlpha?: number
+  /** The dash and the gap, as two roles: a dash that scales with the drawing is a different row. */
+  dash?: readonly [SizeRole, SizeRole]
+  opacity?: number
+  fontFamily?: string
+  fontWeight?: number
+  /** Text only: the role whose `SIZE_ROLES` row gives the size. */
+  size?: SizeRole
+  /** A rounded corner's radius, for the rows drawn as a rounded rect. */
+  corner?: SizeRole
+}
+
+/**
+ * One drawn thing.
+ *
+ * `color` is what a `'item'` paint reads — the Placed Item's own colour — and is absent
+ * whenever no style in the row needs it. `layout` is carried by text because the label
+ * placer and the display list's own `bounds` both need the box the string occupies, and
+ * measuring it twice, twice, is how a chip and its obstacle disagreed (#57).
+ */
+export type DisplayItem =
+  | {
+      kind: 'path'
+      ref?: Ref
+      segments: PathCommand[]
+      closed: boolean
+      style: StyleKey
+      color?: string
+    }
+  | {
+      kind: 'text'
+      ref?: Ref
+      text: string
+      at: Pt
+      anchor: TextAnchor
+      baseline: TextBaseline
+      rotationDeg: number
+      role: TextRole
+      style: StyleKey
+      decoration?: 'underline'
+      color?: string
+      opacity?: number
+      layout: { width: number; ascent: number; descent: number }
+    }
+  | {
+      kind: 'image'
+      ref?: Ref
+      assetHash: string
+      widthPx: number
+      heightPx: number
+      /** Maps the image's own pixel space into the drawing's millimetres. */
+      transform: Affine
+      opacity: number
+    }
+  | { kind: 'group'; ref?: Ref; transform?: Affine; items: DisplayItem[] }
+
+/** One z-ordered band of the list, named by its `LayerKey`. */
+export type DisplayLayer = { key: LayerKey; items: DisplayItem[] }
+
+/**
+ * Text the bundled face has no glyph for (#19 §4).
+ *
+ * The list reports it instead of staying quiet, because the Plan View has to say so on
+ * screen — a name drawn as boxes is a name the user cannot read, and silence would let
+ * #19's font work look finished when it is not.
+ */
+export type MissingGlyph = { ref: Ref | null; text: string; chars: string[] }
+
+/**
+ * A whole drawing: one surface's worth of layers, in `LAYER_ORDER` order.
+ *
+ * `bounds` is in millimetres and already includes the laid-out text extents, so a caller can
+ * fit a viewport or size a sheet from the list alone — which is what makes the Item Detail's
+ * export (#62) a serialisation of this and nothing more.
+ */
+export type DisplayList = {
+  space: 'floor' | 'design-local'
+  bounds: Rect
+  layers: DisplayLayer[]
+  missingGlyphs: MissingGlyph[]
+}
