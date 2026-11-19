@@ -20,7 +20,7 @@
  * from the Item Design and the Placed Item it came with.
  */
 import { applyTransform, bounds, endpoints, midpoints, normaliseDeg, pt, rotate, TOLERANCE_MM } from '../geometry'
-import type { Bounds, ClosedPath, Pt, Transform } from '../geometry'
+import type { Bounds, ClosedPath, Pt, SnapCandidate, Transform } from '../geometry'
 import { designFootprintSize, designOrigin, footprintPath } from '../domain'
 import type { EntityId, ItemDesign, PlacedItem } from '../domain'
 
@@ -173,18 +173,25 @@ export const originCandidates = (design: ItemDesign): Pt[] => {
   return [...endpoints(path), ...midpoints(path), pathOrigin(path)]
 }
 
-/** The nearest candidate within `toleranceMm`, or `null` when the pick is on its own. */
-export const nearestOriginCandidate = (candidates: readonly Pt[], at: Pt, toleranceMm: number): Pt | null => {
-  let best: Pt | null = null
-  let bestDistance = toleranceMm
-  for (const candidate of candidates) {
-    const distance = Math.hypot(candidate.x - at.x, candidate.y - at.y)
-    if (distance <= bestDistance) {
-      best = candidate
-      bestDistance = distance
-    }
-  }
-  return best
+/**
+ * The same candidates, each with the kind and the words the snap indicator shows (#59 §5).
+ *
+ * #59 retired the hand-rolled "nearest within tolerance" pick: `Pick on canvas` now goes
+ * through `resolveSnap` like every other tool, so it acquires in screen pixels, breaks ties
+ * the same way and honours the same nine switches. That needs candidates the resolver can
+ * rank, which is what this adds over the bare points above.
+ */
+export const originSnapCandidates = (design: ItemDesign): SnapCandidate[] => {
+  const path = designOutline(design)
+  return [
+    ...endpoints(path).map((point): SnapCandidate => ({ point, kind: 'endpoint', label: 'Corner' })),
+    ...midpoints(path).map((point, index): SnapCandidate => ({
+      point,
+      kind: 'midpoint',
+      label: `Midpoint of edge ${index + 1}`,
+    })),
+    { point: pathOrigin(path), kind: 'centre', label: 'Centre of shape' },
+  ]
 }
 
 /** One turn: clockwise degrees normalised to `[0, 360)`. */

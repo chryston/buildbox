@@ -76,13 +76,17 @@ export type { LinearElement } from './offset'
 export { classify, interval, overlapLength } from './interval'
 export type { Interval } from './interval'
 export {
+  SNAP_ACQUISITION_PX,
+  SNAP_PRIORITY,
   centres,
   endpoints,
   intersections,
   midpoints,
   perpendicularFoot,
+  resolveSnap,
   tangentPoints,
 } from './snap'
+export type { Snap, SnapCandidate, SnapKind } from './snap'
 export { toValidationProblems, validateLoop } from './validate'
 export type { LoopInput } from './validate'
 export { geometryProblem, pt, TOLERANCE_MM } from './types'

@@ -9,11 +9,21 @@
 import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
 import { useShallow } from 'zustand/react/shallow'
+import { enabledSnapKinds } from '../../derive'
+import type { SnapKind } from '../../derive'
 import type { ItemFootprint, Point2 } from '../../domain'
 import type { ShapeDraft } from './shape/proposal'
 import type { Viewport } from './viewport'
 
-export type WorkspaceTool = 'select' | 'pan'
+/**
+ * The tools the toolbar registry knows about (#55, #59).
+ *
+ * The three drawing tools are registered here because the registry is the one place that
+ * says which tools measure geometry and must therefore wait for a calibrated Floor (#56).
+ * The Floor workspace does not offer them yet — a Custom Path has no Room target until #67 —
+ * so only the Item Design editor renders them, and they are still gated by the same rule.
+ */
+export type WorkspaceTool = 'select' | 'pan' | 'line' | 'arc' | 'ellipticalArc'
 
 /**
  * The live drag: the Item being moved and where its Item Origin is going, in Floor
@@ -32,6 +42,73 @@ export interface AngleSnap {
   readonly enabled: boolean
   readonly incrementDeg: number
 }
+
+/**
+ * The eight `Snaps ▾` rows that are a plain on/off, named by the row that edits them.
+ *
+ * `angle` is absent because it carries an increment as well as a switch, and it is the one
+ * piece of snapping #57 already had — the rotate handle reads the very same value.
+ */
+export type SnapToggle =
+  | 'grid'
+  | 'endpoints'
+  | 'centres'
+  | 'intersections'
+  | 'wallFaces'
+  | 'axis'
+  | 'perpendicular'
+  | 'tangent'
+
+/**
+ * The nine object-snap rows (#59 §5, behaviours 22–25).
+ *
+ * This is **UI-session state**: device-local, never undoable, never in a Backup and never in
+ * the Project (#20 §7, #26). A snap writes coordinates and leaves no relationship behind, so
+ * what is switched on today cannot change what a shape drawn last week means tomorrow.
+ */
+export interface SnapSettings {
+  grid: boolean
+  /** 10 / 50 / 100 / 500 mm; 100 is the default the issue sets. */
+  gridSpacingMm: number
+  endpoints: boolean
+  centres: boolean
+  intersections: boolean
+  /** Enabled from the start, but it yields nothing until #64 gives Walls faces (#59 §5). */
+  wallFaces: boolean
+  axis: boolean
+  angle: AngleSnap
+  perpendicular: boolean
+  tangent: boolean
+}
+
+/**
+ * What is selected in the Edges tab (#59 §3, §4).
+ *
+ * An edge opens its editor; a vertex opens `Corner radius`. They are mutually exclusive
+ * because the two editors answer different questions about the same corner, and a row that
+ * was both would have to show both.
+ */
+export type ShapeSelection = { readonly edge: number } | { readonly vertex: number } | null
+
+/**
+ * The kinds the nine rows currently switch on, for `resolveSnap` (#59 §5).
+ *
+ * The one place the rows are translated into kinds, so the Item Design editor and the Floor
+ * canvas cannot drift into honouring different subsets of the same panel. `Angle` carries an
+ * increment as well as a switch; only the switch decides whether the kind is offered.
+ */
+export const enabledKindsOf = (settings: SnapSettings): Set<SnapKind> =>
+  enabledSnapKinds({
+    grid: settings.grid,
+    endpoints: settings.endpoints,
+    centres: settings.centres,
+    intersections: settings.intersections,
+    wallFaces: settings.wallFaces,
+    axis: settings.axis,
+    angle: settings.angle.enabled,
+    perpendicular: settings.perpendicular,
+    tangent: settings.tangent,
+  })
 
 /**
  * A design edit awaiting `Apply` (D3). The values are the ones about to be written to the
@@ -84,8 +161,10 @@ export interface WorkspaceState {
   /** The selected Placed Item, or `null`. Selection is UI state, never Project data. */
   selection: string | null
   dragPreview: ItemDragPreview | null
-  /** Angle snap for the rotate handle (#57); #59 exposes it, defaulting the same way. */
-  snapSettings: { angle: AngleSnap }
+  /** The nine `Snaps ▾` rows (#59 §5); `angle` is the same state the rotate handle reads (#57). */
+  snapSettings: SnapSettings
+  /** What the Edges tab has selected: one Edge, one vertex, or nothing (#59 §3, §4). */
+  shapeSelection: ShapeSelection
   /**
    * The design edit awaiting `Apply` (D3), or `null`. One at a time: a second choice
    * replaces the pending one rather than stacking previews.
@@ -124,6 +203,12 @@ export interface WorkspaceActions {
   select(id: string | null): void
   setDragPreview(preview: ItemDragPreview | null): void
   setAngleSnap(enabled: boolean, incrementDeg?: number): void
+  /** One `Snaps ▾` checkbox (#59 §5). UI-session state, never undoable (#26). */
+  setSnapEnabled(toggle: SnapToggle, enabled: boolean): void
+  /** The `Grid` row's spacing select: 10 / 50 / 100 / 500 mm. */
+  setGridSpacing(spacingMm: number): void
+  /** What the Edges tab has selected. Choosing an Edge drops the vertex and the other way about. */
+  setShapeSelection(selection: ShapeSelection): void
   /** Arm or disarm `Pick on canvas`; arming drops any other pending preview. */
   setPickingOrigin(picking: boolean): void
   /** The pending design edit, or `null` to drop it. */
@@ -155,7 +240,21 @@ const INITIAL: WorkspaceState = {
   activeTool: 'select',
   selection: null,
   dragPreview: null,
-  snapSettings: { angle: { enabled: true, incrementDeg: 15 } },
+  snapSettings: {
+    // All nine are on by default (#59 §5). `wallFaces` is on but silent until #64 gives it
+    // a source, which is what lets #64 add a candidate source without touching this UI.
+    grid: true,
+    gridSpacingMm: 100,
+    endpoints: true,
+    centres: true,
+    intersections: true,
+    wallFaces: true,
+    axis: true,
+    angle: { enabled: true, incrementDeg: 15 },
+    perpendicular: true,
+    tangent: true,
+  },
+  shapeSelection: null,
   designPreview: null,
   pickingOrigin: false,
   itemDetail: null,
@@ -180,11 +279,13 @@ function movedAway(
   state: WorkspaceSnapshot,
   floorId: string | null,
   viewsByFloor: Record<string, string>,
-): { selection: null; shapeDraft: null } | Record<string, never> {
-  if (floorId === null || floorId !== state.activeFloorId) return { selection: null, shapeDraft: null }
+): { selection: null; shapeDraft: null; shapeSelection: null } | Record<string, never> {
+  if (floorId === null || floorId !== state.activeFloorId) {
+    return { selection: null, shapeDraft: null, shapeSelection: null }
+  }
   return viewsByFloor[floorId] === state.activeViewByFloor[floorId]
     ? {}
-    : { selection: null, shapeDraft: null }
+    : { selection: null, shapeDraft: null, shapeSelection: null }
 }
 
 export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
@@ -193,17 +294,27 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
   // A proposal is about the thing selected, so a new selection ends it (#58 criterion 9). It is
   // discarded rather than kept out of sight: coming back to the design must show the shape it
   // has, not a half-typed one that a later Apply could write.
-  select: (selection) => set({ selection, shapeDraft: null }),
+  select: (selection) => set({ selection, shapeDraft: null, shapeSelection: null }),
   setDragPreview: (dragPreview) => set({ dragPreview }),
   setAngleSnap: (enabled, incrementDeg) =>
     set((state) => ({
       snapSettings: {
+        ...state.snapSettings,
         angle: {
           enabled,
           incrementDeg: incrementDeg ?? state.snapSettings.angle.incrementDeg,
         },
       },
     })),
+  setSnapEnabled: (toggle, enabled) =>
+    set((state) => {
+      const snapSettings: SnapSettings = { ...state.snapSettings }
+      snapSettings[toggle] = enabled
+      return { snapSettings }
+    }),
+  setGridSpacing: (gridSpacingMm) =>
+    set((state) => ({ snapSettings: { ...state.snapSettings, gridSpacingMm } })),
+  setShapeSelection: (shapeSelection) => set({ shapeSelection }),
   // Arming the pick drops a pending size or colour preview: one edit is in flight at a time,
   // and `Apply` would otherwise write the outline the person has stopped looking at.
   setPickingOrigin: (pickingOrigin) =>
@@ -212,7 +323,7 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
   openItemDetail: (itemDesignId, from) => set({ itemDetail: { itemDesignId, from } }),
   // Leaving Item Detail takes the draft with it: a proposal is not something to come back to,
   // and a shape that failed validation must not be waiting on the next design opened.
-  closeItemDetail: () => set({ itemDetail: null, shapeDraft: null }),
+  closeItemDetail: () => set({ itemDetail: null, shapeDraft: null, shapeSelection: null }),
   setShapeDraft: (itemDesignId, draft) =>
     set({ shapeDraft: draft === null ? null : { itemDesignId, draft } }),
   setShapeTab: (shapeTab) => set({ shapeTab }),
