@@ -68,13 +68,20 @@ export function ShapeTab(props: ShapeTabProps): ReactNode {
         {preset === null ? 'Custom Path' : PRESET_NAMES[preset.kind]}
       </p>
 
-      <ShapeField label="Position X" testId="shape-position-x" kind="mm" value={centre.x}
-        format={format} invalid={invalidField === 'positionX'} readOnly={readOnly} problem={problem('positionX')}
-        onPropose={(value, final) => propose('positionX', value, final)} onDiscard={props.onDiscard} />
-      <ShapeField label="Position Y" testId="shape-position-y" kind="mm" value={centre.y}
-        format={format} invalid={invalidField === 'positionY'} readOnly={readOnly} problem={problem('positionY')}
-        onPropose={(value, final) => propose('positionY', value, final)} onDiscard={props.onDiscard} />
-      {preset !== null && (
+      {/* A read-only Shape tab reports the shape, not where it is. Position belongs to the Placed
+          Item and Orientation to the design, and the hosts that show these tabs read-only — the
+          Floor inspector, a cabinet's Item Detail — already say both elsewhere. */}
+      {!readOnly && (
+        <>
+          <ShapeField label="Position X" testId="shape-position-x" kind="mm" value={centre.x}
+            format={format} invalid={invalidField === 'positionX'} readOnly={readOnly} problem={problem('positionX')}
+            onPropose={(value, final) => propose('positionX', value, final)} onDiscard={props.onDiscard} />
+          <ShapeField label="Position Y" testId="shape-position-y" kind="mm" value={centre.y}
+            format={format} invalid={invalidField === 'positionY'} readOnly={readOnly} problem={problem('positionY')}
+            onPropose={(value, final) => propose('positionY', value, final)} onDiscard={props.onDiscard} />
+        </>
+      )}
+      {preset !== null && !readOnly && (
         <ShapeField label="Orientation" testId="shape-orientation" kind="deg" value={orientationDeg}
           format={format} invalid={invalidField === 'orientation'} readOnly={readOnly} problem={problem('orientation')}
           onPropose={(value, final) => propose('orientation', value, final)} onDiscard={props.onDiscard} />

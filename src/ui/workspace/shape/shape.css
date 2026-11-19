@@ -62,6 +62,30 @@
   padding-bottom: 20px;
 }
 
+/* The same three tabs inside a panel that is already a column — the Floor selection inspector.
+   They take the panel's width and add no frame of their own, because the panel has one; and
+   they are read-only, so there is nothing to scroll to. */
+.bb-shape-editor[data-layout='stacked'] {
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.bb-shape-editor[data-layout='stacked'] .bb-shape-rail {
+  width: auto;
+  flex: 1;
+  padding: 0;
+  overflow: visible;
+  background: none;
+  border-right: 0;
+}
+
+/* The tabs sit between the design's Name and its Colour, so they take a row's separation. */
+.bb-inspector-shape {
+  margin: 10px 0 12px;
+}
+
 .bb-shape-rail-note {
   margin: 0;
   font-size: 11px;

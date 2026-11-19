@@ -54,12 +54,20 @@ export interface ShapeEditorProps {
   readonly design: ItemDesign
   /**
    * `editor` is the Item Design editor: the tool row, the rail and a canvas of its own.
-   * `inspector` is the same three tabs with no canvas, for a host that already has a drawing
-   * to look at — a cabinet's Item Detail, whose canvas is the cabinet editor, and from #59 the
-   * Floor selection inspector's read-only tabs. Nothing else about the editor changes, which is
-   * the point: one set of tabs, one set of labels, one controller behind both.
+   * `inspector` is the same three tabs with no canvas, for a host that already owns a drawing
+   * and gives this one a column of its own — a cabinet's Item Detail, whose canvas is the
+   * cabinet editor. `stacked` is the same tabs again in a host that is already a narrow panel
+   * and has a frame of its own to sit inside — the Floor selection inspector. Nothing else about
+   * the editor changes, which is the point: one set of tabs, one set of labels, one controller
+   * behind all three.
    */
-  readonly layout?: 'editor' | 'inspector'
+  readonly layout?: 'editor' | 'inspector' | 'stacked'
+  /**
+   * Show the shape without offering to change it. The Floor selection inspector reads a Placed
+   * Item's footprint here; editing it belongs to the Item Design editor, because it would move
+   * every other placement (#58 §2).
+   */
+  readonly readOnly?: boolean
 }
 
 const TABS: readonly { id: ShapeTabName; label: string }[] = [
@@ -74,7 +82,7 @@ export const CABINET_SHAPE_NOTE = 'Size comes from the cabinet construction'
 const IDLE = (footprint: ItemFootprint): ShapeDraft => ({ proposal: { state: 'idle' }, lastValid: footprint })
 
 export function ShapeEditor(props: ShapeEditorProps): ReactNode {
-  const { itemDesignId, design, layout = 'editor' } = props
+  const { itemDesignId, design, layout = 'editor', readOnly = false } = props
   const { session, services } = useWorkspaceRoot()
   const project = useWorkspaceProject(session)
   const dispatch = useWorkspaceDispatch()
@@ -188,7 +196,7 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
     commit(footprintAsPath(shown))
   }
 
-  const inspector = layout === 'inspector'
+  const inspector = layout !== 'editor'
 
   return (
     <div className="bb-shape-editor" data-testid="shape-editor" data-layout={layout}>
@@ -249,7 +257,7 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
                 format={format}
                 invalidField={field}
                 invalidMessage={field === null ? null : message}
-                readOnly={isCabinet}
+                readOnly={isCabinet || readOnly}
                 onGesture={gesture}
                 onDiscard={dropDraft}
                 onConvert={() => setConvertOpen(true)}

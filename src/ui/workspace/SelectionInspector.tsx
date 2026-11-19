@@ -15,12 +15,12 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { designOutline, pathOrigin } from '../../derive'
-import { designFootprintSize } from '../../domain'
 import type { DisplayUnit, ItemDesign, Point2 } from '../../domain'
 import { PLAN_SWATCHES } from './planColors'
 import { formatMm, parseToMm } from './displayUnits'
 import type { PlanItemView } from './planModel'
 import { quarterTurn } from './rotateHandle'
+import { ShapeEditor } from './shape/ShapeEditor'
 import type { DesignEditPreview } from './workspaceStore'
 
 /**
@@ -171,9 +171,6 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
     onSetPosition, onSetRotation, onEditDesign, onPreviewOrigin, onApplyPreview,
     onCancelPreview, onTogglePick, onFork, onOpenDetail, onDelete, onTransfer,
   } = props
-  const { width, depth } = design === null
-    ? { width: item.width, depth: item.depth }
-    : designFootprintSize(design)
   const isCabinet = design === null || design.kind === 'cabinet'
   const pending = preview !== null && preview.itemDesignId === item.designId ? preview : null
   const count = item.placementCount
@@ -186,14 +183,6 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
       <span className="bb-workspace-field-label" data-testid="inspector-design-label">
         Item Design: {item.label}
       </span>
-      <button
-        type="button"
-        data-testid="open-item-detail"
-        className="bb-workspace-tool-button"
-        onClick={onOpenDetail}
-      >
-        Open Item Detail
-      </button>
       <NumberField
         label="Position X"
         testId="inspector-position-x"
@@ -303,24 +292,30 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
             value={pending?.name ?? design.name}
             onChange={(event) => onEditDesign({ name: event.target.value })}
           />
+          {/* #58 §2: the Item Footprint is read here and written only in the Item Design editor,
+              because a footprint change moves every placement of the design. The same three tabs
+              as that editor, read-only, leading with the way there — for a cabinet too, whose
+              Shape tab says the size comes from the construction (criterion 18). */}
+          <button
+            type="button"
+            data-testid="open-item-detail"
+            className="bb-workspace-tool-button"
+            onClick={onOpenDetail}
+          >
+            Edit Item Design
+          </button>
+          <div className="bb-inspector-shape" data-testid="inspector-shape">
+            <ShapeEditor
+              itemDesignId={item.designId}
+              design={design}
+              layout="stacked"
+              readOnly
+            />
+          </div>
           {/* A cabinet's footprint, origin and colour are its construction (#42 §2), so the
               rows that would edit them are not offered — Item Detail edits the cabinet. */}
           {!isCabinet && (
             <>
-              {/* #58: an Item Footprint is a shape, not two numbers, so it has no field here.
-                  These rows say the size and point at the page that changes it. */}
-              <ReadOnlyRow
-                testId="inspector-width"
-                label="Width"
-                value={size(width)}
-                hint="Set in Item Detail"
-              />
-              <ReadOnlyRow
-                testId="inspector-depth"
-                label="Depth"
-                value={size(depth)}
-                hint="Set in Item Detail"
-              />
               <label className="bb-workspace-field-label">Colour</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {PLAN_SWATCHES.map((color) => (
