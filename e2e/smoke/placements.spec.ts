@@ -3,12 +3,16 @@ import type { Page } from '@playwright/test'
 import { canonical, previewSeed, storedProject } from '../support/libraryApp'
 import {
   addFloorPlanObject,
+  dragBy,
+  FIRST_PROJECT,
   floorPlanCanvas,
   openPreviewApp,
+  openProjectFromLibrary,
   placedObject,
   revealOnCanvas,
   showFloorPlan,
 } from '../support/previewApp'
+import { persistedPlacedItemTranslation } from '../support/seedPreviewDb'
 
 /**
  * Placed Items on the Plan View (#57): turning an item about its Item Origin, the numbers the
@@ -192,6 +196,49 @@ test.describe('a Placed Item on the Plan View', () => {
     // One Edit Transaction: undo puts the placement back on the design it shared.
     await page.keyboard.press('Control+z')
     expect((await title.innerText()).toLowerCase()).toContain('shared by 2 placements')
+  })
+})
+
+/**
+ * The two migrated cabinet units of the seeded Kitchen Wall are Placed Items like any other
+ * (#57 criterion 18): each one turns and moves on the Floor on its own, and the Floor keeps both.
+ */
+test.describe('the migrated cabinet units', () => {
+  test('move and turn independently on the Floor and survive a reload', async ({ page }) => {
+    const recordId = previewSeed.projects[0]!.id
+    const base = placedObject(page, 'seed-002')
+    const tall = placedObject(page, 'seed-003')
+    const stored = (id: string) => persistedPlacedItemTranslation(page, recordId, id)
+
+    await openPreviewApp(page)
+    const baseAt = await stored('seed-002')
+    const tallAt = await stored('seed-003')
+    expect(baseAt).not.toBeNull()
+
+    await revealOnCanvas(page, base)
+    await base.click()
+    await expect(page.getByTestId('inspector-design-label')).toContainText('Base Unit')
+    await page.getByTestId('rotate-plus-90').click()
+    await expect(rotation(page)).toHaveValue('90')
+    await dragBy(page, base, 40, 60)
+    await expect.poll(() => stored('seed-002')).not.toEqual(baseAt)
+
+    // The other unit is untouched by its neighbour's edit: same place, same turn.
+    expect(await stored('seed-003')).toEqual(tallAt)
+    await revealOnCanvas(page, tall)
+    await tall.click()
+    await expect(rotation(page)).toHaveValue('0')
+
+    await page.reload({ waitUntil: 'networkidle' })
+    await openProjectFromLibrary(page, FIRST_PROJECT)
+    await revealOnCanvas(page, base)
+    await base.click()
+    await expect(rotation(page)).toHaveValue('90')
+    expect(await stored('seed-002')).not.toEqual(baseAt)
+    await revealOnCanvas(page, tall)
+    await tall.click()
+    await expect(rotation(page)).toHaveValue('0')
+    expect(await stored('seed-003')).toEqual(tallAt)
   })
 })
 
