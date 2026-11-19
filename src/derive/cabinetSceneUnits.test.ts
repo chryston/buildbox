@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { cabinetSceneUnits } from './index'
+import { rectangleFootprint } from '../domain'
 import type { CabinetItemDesign, CabinetNode, GenericItemDesign, GlobalSettings, PlacedItem, Project } from '../domain'
 
 const SETTINGS: GlobalSettings = {
@@ -26,7 +27,7 @@ const generic = (id: string): GenericItemDesign => ({
   id,
   kind: 'generic',
   name: `Sofa ${id}`,
-  footprint: { kind: 'rectangle', width: 2000, depth: 900 },
+  footprint: rectangleFootprint(2000, 900),
   origin: { x: 1000, y: 450 },
   height: 850,
   heightIsTypical: true,

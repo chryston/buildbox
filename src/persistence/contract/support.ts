@@ -6,7 +6,7 @@
  * the ports. Nothing may assume how an adapter stores anything — this file is what lets
  * the same suite run against memory, `fake-indexeddb` and a real browser unchanged (#46).
  */
-import { DOMAIN_SCHEMA_VERSION, summarizeProject, type Project } from '../../domain'
+import { DOMAIN_SCHEMA_VERSION, rectangleFootprint, summarizeProject, type Project } from '../../domain'
 import { canonicalJson, sha256Hex } from '../../lib'
 import type { FaultMethod } from '../faults'
 import type {
@@ -91,7 +91,7 @@ export function projectFixture(planImageHash: string | null, id: string = PROJEC
         id: `${id}-design-bed`,
         kind: 'generic',
         name: 'King Bed',
-        footprint: { kind: 'rectangle', width: 1820, depth: 1980 },
+        footprint: rectangleFootprint(1820, 1980),
         origin: { x: 910, y: 990 },
         height: 500,
         heightIsTypical: true,
@@ -101,7 +101,7 @@ export function projectFixture(planImageHash: string | null, id: string = PROJEC
         id: `${id}-design-rug`,
         kind: 'generic',
         name: 'Runner Rug',
-        footprint: { kind: 'rectangle', width: 2400, depth: 800 },
+        footprint: rectangleFootprint(2400, 800),
         origin: { x: 1200, y: 400 },
         height: 12,
         heightIsTypical: false,

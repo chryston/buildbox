@@ -16,8 +16,8 @@ import { createMemoryAdapter, withFaults } from '../persistence'
 import type { Ports, ProjectRecord } from '../persistence'
 import { canonicalJson } from '../lib'
 import { encodeProject } from '../package'
-import { DOMAIN_SCHEMA_VERSION, validateProject } from '../domain'
-import type { CabinetNode, EntityId, Project } from '../domain'
+import { DOMAIN_SCHEMA_VERSION, migrateProject, summarizeProject, validateProject } from '../domain'
+import type { CabinetNode, EntityId, GenericItemDesign, PlacedItem, Project } from '../domain'
 import {
   commitRestore,
   copyNameFor,
@@ -323,6 +323,132 @@ describe('committing a restore', () => {
     if (!loaded.ok) throw new Error('load failed')
     expect(loaded.value.revision).toBe(5)
   })
+
+  it('replaces a record the previous build left at an older domain version (#58)', async () => {
+    const { ports, archive } = await stagedBackup()
+    const original = withGenericRectangle(testProject(KITCHEN, 'Kitchen'))
+    await seedProject(ports, original, { revision: 4 })
+    const v2 = demoteFootprintsToV2(original)
+    const world = restoreWorld(leftAtVersion(ports, KITCHEN, 2, v2))
+    const { package: pkg, collision } = await stage(world, archive)
+    expect(collision).not.toBeNull()
+
+    const applied = await commitRestore(world.deps, targetFor(pkg, collision, 'replace'))
+    expect(applied.ok).toBe(true)
+    if (!applied.ok) return
+
+    // The Point keeps the bytes as they were stored, at the version that wrote them, so
+    // restoring it re-runs the same chain — but its summary describes a Project, which is what
+    // the Recovery Point picker draws.
+    const points = await pointsOfKind(world.ports, KITCHEN, 'pre-import-replace')
+    expect(points).toHaveLength(1)
+    expect(points[0]?.schemaVersion).toBe(2)
+    expect(points[0]?.summary).toEqual(summarizeProject(migratedFrom(v2, 2)))
+    const stored = await world.ports.recovery.load(points[0]!.id)
+    if (!stored.ok) throw new Error('recovery.load failed')
+    expect(canonicalJson(stored.value.data)).toBe(canonicalJson(v2))
+
+    // And the store is left holding data that matches the version it is stamped with: a commit
+    // always stamps this build's, so what it is handed has to be readable at that version.
+    const loaded = await world.ports.projects.load(KITCHEN)
+    if (!loaded.ok) throw new Error('load failed')
+    expect(loaded.value.schemaVersion).toBe(DOMAIN_SCHEMA_VERSION)
+    expect(validateProject(loaded.value.data).ok).toBe(true)
+  })
+
+  /**
+   * `project` with one generic Item Design and a Placed Item wearing it.
+   *
+   * The cabinet alone would not exercise anything: its footprint comes from its construction
+   * settings, which v2 wrote the same way this build does. A generic design is where the
+   * Item Footprint lives, and so where the two versions disagree.
+   */
+  function withGenericRectangle(project: Project): Project {
+    const design: GenericItemDesign = {
+      id: `${project.id}-washer`,
+      kind: 'generic',
+      name: 'Washer',
+      footprint: {
+        kind: 'preset',
+        preset: { kind: 'rectangle', width: 600, depth: 600 },
+        centre: { x: 300, y: 300 },
+        orientationDeg: 0,
+      },
+      origin: { x: 300, y: 300 },
+      height: 850,
+      heightIsTypical: true,
+      color: '#cccccc',
+    }
+    const placed: PlacedItem = {
+      id: `${project.id}-washer-place`,
+      itemDesignId: design.id,
+      floorId: project.floors[0]!.id,
+      translation: { x: 1000, y: 1000 },
+      rotationDeg: 0,
+      baseElevation: 0,
+    }
+    return {
+      ...project,
+      itemDesigns: [...project.itemDesigns, design],
+      existingModel: { ...project.existingModel, placedItems: [...project.existingModel.placedItems, placed] },
+    }
+  }
+
+  /**
+   * `project` with every generic Item Footprint written the way v2 wrote it: a `kind` and a
+   * pair of numbers, no shape (#58). This is the record a Replace meets in the wild — the store
+   * keeps whatever version last *wrote* a Project, and one the app has only ever listed or
+   * backed up is still the version the seed or the previous build left it at.
+   *
+   * The result is deliberately `unknown`: it is not a Project this build can read, which is the
+   * whole difficulty, and the only place it is called a Project is the store that lies about it.
+   */
+  function demoteFootprintsToV2(project: Project): unknown {
+    return {
+      ...project,
+      itemDesigns: project.itemDesigns.map((design) => {
+        if (design.kind === 'cabinet' || design.footprint.kind !== 'preset') return design
+        if (design.footprint.preset.kind !== 'rectangle') return design
+        const { width, depth } = design.footprint.preset
+        return { ...design, footprint: { kind: 'rectangle', width, depth } }
+      }),
+    }
+  }
+
+  /**
+   * `ports` with `id`'s record left at an older domain version, holding `data` as written.
+   *
+   * The lie stops at the first commit: what is in the store after a write is what the write put
+   * there, and criterion 10's read-back has to read the truth for the restore to be judged on
+   * the Project it actually landed.
+   */
+  function leftAtVersion(ports: Ports, id: string, schemaVersion: number, data: unknown): Ports {
+    let stale = true
+    return {
+      ...ports,
+      projects: {
+        ...ports.projects,
+        async commit(input, expectedRevision) {
+          const committed = await ports.projects.commit(input, expectedRevision)
+          if (committed.ok) stale = false
+          return committed
+        },
+        async load(loadedId) {
+          const loaded = await ports.projects.load(loadedId)
+          if (!loaded.ok || loadedId !== id || !stale) return loaded
+          // The lie: a record whose bytes are older than the version the store stamps.
+          return { ok: true, value: { ...loaded.value, schemaVersion, data: data as Project } }
+        },
+      },
+    }
+  }
+
+  /** `data`, read up to this build's domain version the way opening a Project reads it up. */
+  function migratedFrom(data: unknown, fromVersion: number): Project {
+    const migrated = migrateProject(data, fromVersion, idSource('view'))
+    if (!migrated.ok) throw new Error(`migrateProject: ${migrated.error.kind}`)
+    return migrated.project
+  }
 
   it('brings back a Project the Backup was trashed under', async () => {
     const { ports, project, archive } = await stagedBackup()

@@ -6,6 +6,7 @@
  * which half of that pair a patch is allowed to touch.
  */
 import { describe, expect, it } from 'vitest'
+import { rectangleFootprint } from '../../domain'
 import type { GenericItemDesign, Project } from '../../domain'
 import { canonicalJson } from '../../lib'
 import { applyIntent } from '../apply'
@@ -54,7 +55,7 @@ describe('plan.addObject', () => {
       id: itemDesignId,
       kind: 'generic',
       name: entry.label,
-      footprint: { kind: 'rectangle', width: entry.w, depth: entry.h },
+      footprint: rectangleFootprint(entry.w, entry.h),
       origin: { x: entry.w / 2, y: entry.h / 2 },
       height: entry.height,
       heightIsTypical: true,
@@ -188,7 +189,7 @@ describe('plan.addTemplate and plan.removeTemplate', () => {
       id: itemDesignId,
       kind: 'generic',
       name: 'Bay window',
-      footprint: { kind: 'rectangle', width: 1200, depth: 400 },
+      footprint: rectangleFootprint(1200, 400),
       origin: { x: 600, y: 200 },
       height: CUSTOM_PLAN_ENTRY.height,
       heightIsTypical: true,

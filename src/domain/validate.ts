@@ -17,10 +17,14 @@
  * the reference targets, and the tree walks are iterative — a stored tree is untrusted
  * input, so recursion depth is not an option.
  */
+import { PRESET_KINDS, toValidationProblems } from '../geometry'
+import type { ClosedPath, CornerRadii, Preset, Pt, Segment } from '../geometry'
 import { ROOT_PATH, childPath, problem, type ValidationProblem } from '../lib'
 import { MAX_TREE_DEPTH } from './cabinetPayload'
+import { formatGeometryProblem, type DisplayFormat } from './formatGeometryProblem'
+import { footprintProblems } from './footprint'
 import { nameKey } from './floorNames'
-import type { Project } from './project'
+import type { DisplayUnit, ItemFootprint, Project } from './project'
 
 export type ValidateProjectResult =
   | { ok: true; project: Project }
@@ -58,7 +62,7 @@ const MEDIA_TYPES = [
 ] as const
 const DESIGN_KINDS = ['cabinet', 'generic'] as const
 const VIEW_KINDS = ['plan'] as const
-const FOOTPRINT_KINDS = ['rectangle'] as const
+const FOOTPRINT_KINDS = ['preset', 'path'] as const
 const CABINET_UNITS = ['mm', 'cm', 'in'] as const
 const MATERIALS = ['oak', 'walnut', 'white', 'birch', 'mdf'] as const
 const SPLIT_AXES = ['horizontal', 'vertical'] as const
@@ -80,7 +84,28 @@ const GENERIC_DESIGN_FIELDS = [
   'id', 'kind', 'name', 'footprint', 'origin', 'height', 'heightIsTypical', 'color',
   'catalogKey', 'isCustom',
 ]
-const FOOTPRINT_FIELDS = ['kind', 'width', 'depth']
+// The Item Footprint of #58: a preset with parameters, or a Custom Path. Each preset kind
+// has its own list, because `unknown-field` is what catches a radius left on a Rectangle.
+const PRESET_FOOTPRINT_FIELDS = ['kind', 'preset', 'centre', 'orientationDeg']
+const PATH_FOOTPRINT_FIELDS = ['kind', 'path']
+const PRESET_FIELDS: Record<string, readonly string[]> = {
+  square: ['kind', 'side'],
+  rectangle: ['kind', 'width', 'depth'],
+  roundedRectangle: ['kind', 'width', 'depth', 'radius', 'radii'],
+  circle: ['kind', 'diameter'],
+  ellipse: ['kind', 'width', 'depth'],
+  capsule: ['kind', 'length', 'width'],
+  triangle: ['kind', 'baseWidth', 'depth', 'apexOffset'],
+  regularPolygon: ['kind', 'sideCount', 'sideLength'],
+}
+const CORNER_RADII_FIELDS = ['topLeft', 'topRight', 'bottomRight', 'bottomLeft']
+const CLOSED_PATH_FIELDS = ['start', 'segments']
+const SEGMENT_FIELDS: Record<string, readonly string[]> = {
+  line: ['kind', 'to'],
+  arc: ['kind', 'to', 'center', 'sweepDeg'],
+  ellipticalArc: ['kind', 'to', 'center', 'rx', 'ry', 'rotationDeg', 'sweepDeg'],
+}
+const SEGMENT_KINDS = ['line', 'arc', 'ellipticalArc'] as const
 const POINT_FIELDS = ['x', 'y']
 const EXISTING_MODEL_FIELDS = ['placedItems']
 const PLACED_ITEM_FIELDS = ['id', 'itemDesignId', 'floorId', 'translation', 'rotationDeg', 'baseElevation']
@@ -264,19 +289,26 @@ function checkOptionalBoolean(value: unknown, path: string, what: string, add: A
   checkBoolean(value, path, what, add)
 }
 
-/** A point in millimetres: both coordinates present and finite. */
-function checkPoint(value: unknown, path: string, what: string, add: Add): void {
+/**
+ * A point in millimetres: both coordinates present and finite.
+ *
+ * The point comes back as well, because a footprint has to *use* the point it has just
+ * checked — hand it to the geometry kernel to be validated — where every other point in the
+ * schema is only checked.
+ */
+function readPoint(value: unknown, path: string, what: string, add: Add): Pt | null {
   if (value === undefined) {
     add(path, MISSING, `Missing ${what}.`)
-    return
+    return null
   }
   if (!isRecord(value)) {
     add(path, WRONG_TYPE, `Expected ${what} as a point.`)
-    return
+    return null
   }
-  checkNumber(value.x, childPath(path, 'x'), `${what} X`, add)
-  checkNumber(value.y, childPath(path, 'y'), `${what} Y`, add)
+  const x = checkNumber(value.x, childPath(path, 'x'), `${what} X`, add)
+  const y = checkNumber(value.y, childPath(path, 'y'), `${what} Y`, add)
   checkUnknownFields(value, path, POINT_FIELDS, add)
+  return x === null || y === null ? null : { x, y }
 }
 
 function checkArray(value: unknown, path: string, what: string, add: Add): unknown[] | null {
@@ -806,26 +838,221 @@ function validateConstruction(raw: unknown, path: string, add: Add): void {
 
 // --- Item Designs, the Existing Model, and the entry point ---------------------
 
-function validateGenericDesign(design: Rec, path: string, add: Add): void {
+/**
+ * The Item Footprint (#58): a preset with parameters, or a Custom Path.
+ *
+ * Two layers, in this order. The structural layer asks whether this is a footprint this
+ * build can name at all — a kind it knows, the fields that kind carries, numbers where
+ * numbers go — and stops there when it is not, because a footprint with a missing side has
+ * no shape to check. The geometric layer then asks the same question the editor asks before
+ * it will commit: does this describe a shape? `footprintProblems` is that one question, so
+ * a Backup cannot smuggle in the impossible radius the editor refuses to save, and the
+ * message is the same `formatGeometryProblem` sentence in both places.
+ *
+ * Values are checked for being numbers, never for being sensible sizes: `size-not-positive`
+ * and `corner-radii-overlap` are the geometry kernel's to report, and reporting a bad size
+ * twice — once as `out-of-range`, once as a shape problem — would be two answers to one
+ * complaint.
+ */
+function validateFootprint(footprint: Rec, path: string, format: DisplayFormat, add: Add): void {
+  const kind = checkOneOf(
+    footprint.kind,
+    childPath(path, 'kind'),
+    'the Item Footprint shape',
+    FOOTPRINT_KINDS,
+    add,
+  )
+  if (kind === 'preset') {
+    const preset = validatePreset(footprint.preset, childPath(path, 'preset'), add)
+    const centre = readPoint(footprint.centre, childPath(path, 'centre'), 'the Item Footprint position', add)
+    const orientationDeg = checkNumber(
+      footprint.orientationDeg,
+      childPath(path, 'orientationDeg'),
+      'the Item Footprint orientation',
+      add,
+    )
+    checkUnknownFields(footprint, path, PRESET_FOOTPRINT_FIELDS, add)
+    if (preset === null || centre === null || orientationDeg === null) return
+    reportFootprint({ kind: 'preset', preset, centre, orientationDeg }, path, format, add)
+  } else if (kind === 'path') {
+    const closed = validateClosedPath(footprint.path, childPath(path, 'path'), add)
+    checkUnknownFields(footprint, path, PATH_FOOTPRINT_FIELDS, add)
+    if (closed === null) return
+    reportFootprint({ kind: 'path', path: closed }, path, format, add)
+  }
+}
+
+/** The shape's own problems, reported where the shape lives. */
+function reportFootprint(footprint: ItemFootprint, path: string, format: DisplayFormat, add: Add): void {
+  const problems = toValidationProblems(footprintProblems(footprint), path, (one) =>
+    formatGeometryProblem(one, format),
+  )
+  for (const one of problems) add(one.path, one.code, one.message)
+}
+
+/** One preset and its parameters, or `null` when the parameters are not there to read. */
+function validatePreset(raw: unknown, path: string, add: Add): Preset | null {
+  if (raw === undefined) {
+    add(path, MISSING, 'Missing the preset shape.')
+    return null
+  }
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected the preset shape.')
+    return null
+  }
+  const kind = checkOneOf(raw.kind, childPath(path, 'kind'), 'the preset shape', PRESET_KINDS, add)
+  if (kind === null || PRESET_FIELDS[kind] === undefined) return null
+  const fields = PRESET_FIELDS[kind]
+  const num = (key: string, what: string): number | null =>
+    checkNumber(raw[key], childPath(path, key), what, add)
+
+  let preset: Preset | null = null
+  switch (kind) {
+    case 'square': {
+      const side = num('side', 'the Square side')
+      preset = side === null ? null : { kind: 'square', side }
+      break
+    }
+    case 'rectangle': {
+      const width = num('width', 'the Rectangle width')
+      const depth = num('depth', 'the Rectangle depth')
+      preset = width === null || depth === null ? null : { kind: 'rectangle', width, depth }
+      break
+    }
+    case 'ellipse': {
+      const width = num('width', 'the Ellipse width')
+      const depth = num('depth', 'the Ellipse depth')
+      preset = width === null || depth === null ? null : { kind: 'ellipse', width, depth }
+      break
+    }
+    case 'roundedRectangle': {
+      const width = num('width', 'the Rounded Rectangle width')
+      const depth = num('depth', 'the Rounded Rectangle depth')
+      const radius = raw.radius === undefined ? undefined : num('radius', 'the corner radius')
+      const radii = raw.radii === undefined ? undefined : readCornerRadii(raw.radii, childPath(path, 'radii'), add)
+      preset =
+        width === null || depth === null || radius === null || radii === null
+          ? null
+          : { kind: 'roundedRectangle', width, depth, ...(radius === undefined ? {} : { radius }), ...(radii === undefined ? {} : { radii }) }
+      break
+    }
+    case 'circle': {
+      const diameter = num('diameter', 'the Circle diameter')
+      preset = diameter === null ? null : { kind: 'circle', diameter }
+      break
+    }
+    case 'capsule': {
+      const length = num('length', 'the Capsule length')
+      const width = num('width', 'the Capsule width')
+      preset = length === null || width === null ? null : { kind: 'capsule', length, width }
+      break
+    }
+    case 'triangle': {
+      const baseWidth = num('baseWidth', 'the Triangle base width')
+      const depth = num('depth', 'the Triangle depth')
+      const apexOffset = raw.apexOffset === undefined ? undefined : num('apexOffset', 'the Triangle apex offset')
+      preset =
+        baseWidth === null || depth === null || apexOffset === null
+          ? null
+          : { kind: 'triangle', baseWidth, depth, ...(apexOffset === undefined ? {} : { apexOffset }) }
+      break
+    }
+    case 'regularPolygon': {
+      const sideCount = num('sideCount', 'the Regular Polygon side count')
+      const sideLength = num('sideLength', 'the Regular Polygon side length')
+      preset =
+        sideCount === null || sideLength === null ? null : { kind: 'regularPolygon', sideCount, sideLength }
+      break
+    }
+  }
+  checkUnknownFields(raw, path, fields, add)
+  return preset
+}
+
+/** The four corner radii, when all four are there and finite. */
+function readCornerRadii(raw: unknown, path: string, add: Add): CornerRadii | null {
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected the four corner radii.')
+    return null
+  }
+  const read = (key: keyof CornerRadii): number | null =>
+    checkNumber(raw[key], childPath(path, key), `the ${key} corner radius`, add)
+  const topLeft = read('topLeft')
+  const topRight = read('topRight')
+  const bottomRight = read('bottomRight')
+  const bottomLeft = read('bottomLeft')
+  checkUnknownFields(raw, path, CORNER_RADII_FIELDS, add)
+  return topLeft === null || topRight === null || bottomRight === null || bottomLeft === null
+    ? null
+    : { topLeft, topRight, bottomRight, bottomLeft }
+}
+
+/** A Custom Path: a start point and a list of Edges, each one of the three kinds. */
+function validateClosedPath(raw: unknown, path: string, add: Add): ClosedPath | null {
+  if (raw === undefined) {
+    add(path, MISSING, 'Missing the Custom Path.')
+    return null
+  }
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected the Custom Path.')
+    return null
+  }
+  const start = readPoint(raw.start, childPath(path, 'start'), 'the Custom Path start', add)
+  const rawSegments = checkArray(raw.segments, childPath(path, 'segments'), 'the Custom Path Edges', add)
+  checkUnknownFields(raw, path, CLOSED_PATH_FIELDS, add)
+  if (start === null || rawSegments === null) return null
+  const segments: Segment[] = []
+  let broken = false
+  rawSegments.forEach((segment, i) => {
+    const one = validateSegment(segment, childPath(childPath(path, 'segments'), i), add)
+    if (one === null) broken = true
+    else segments.push(one)
+  })
+  return broken ? null : { start, segments }
+}
+
+function validateSegment(raw: unknown, path: string, add: Add): Segment | null {
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected an Edge of the Custom Path.')
+    return null
+  }
+  const kind = checkOneOf(raw.kind, childPath(path, 'kind'), 'the Edge kind', SEGMENT_KINDS, add)
+  if (kind === null) return null
+  const to = readPoint(raw.to, childPath(path, 'to'), 'the Edge end', add)
+  const centre = kind === 'line'
+    ? (raw.center === undefined ? { x: 0, y: 0 } : readPoint(raw.center, childPath(path, 'center'), 'the Arc centre', add))
+    : readPoint(raw.center, childPath(path, 'center'), 'the Arc centre', add)
+  const sweepDeg = kind === 'line'
+    ? null
+    : checkNumber(raw.sweepDeg, childPath(path, 'sweepDeg'), 'the Arc sweep', add)
+
+  let segment: Segment | null = null
+  if (kind === 'line') segment = to === null ? null : { kind: 'line', to }
+  else if (kind === 'arc') segment = to === null || centre === null || sweepDeg === null ? null : { kind: 'arc', to, center: centre, sweepDeg }
+  else {
+    const rx = checkNumber(raw.rx, childPath(path, 'rx'), 'the elliptical Arc x radius', add)
+    const ry = checkNumber(raw.ry, childPath(path, 'ry'), 'the elliptical Arc y radius', add)
+    const rotationDeg = checkNumber(raw.rotationDeg, childPath(path, 'rotationDeg'), 'the elliptical Arc rotation', add)
+    segment =
+      to === null || centre === null || sweepDeg === null || rx === null || ry === null || rotationDeg === null
+        ? null
+        : { kind: 'ellipticalArc', to, center: centre, rx, ry, rotationDeg, sweepDeg }
+  }
+  checkUnknownFields(raw, path, SEGMENT_FIELDS[kind], add)
+  return segment
+}
+
+function validateGenericDesign(design: Rec, path: string, format: DisplayFormat, add: Add): void {
   const footprintPath = childPath(path, 'footprint')
   if (design.footprint === undefined) {
     add(footprintPath, MISSING, 'Missing the Item Footprint.')
   } else if (!isRecord(design.footprint)) {
     add(footprintPath, WRONG_TYPE, 'Expected the Item Footprint.')
   } else {
-    checkOneOf(
-      design.footprint.kind,
-      childPath(footprintPath, 'kind'),
-      'the Item Footprint shape',
-      FOOTPRINT_KINDS,
-      add,
-    )
-    checkPositive(design.footprint.width, childPath(footprintPath, 'width'), 'the Item Footprint width', add)
-    checkPositive(design.footprint.depth, childPath(footprintPath, 'depth'), 'the Item Footprint depth', add)
-    checkUnknownFields(design.footprint, footprintPath, FOOTPRINT_FIELDS, add)
+    validateFootprint(design.footprint, footprintPath, format, add)
   }
 
-  checkPoint(design.origin, childPath(path, 'origin'), 'the Item Origin', add)
+  readPoint(design.origin, childPath(path, 'origin'), 'the Item Origin', add)
   checkPositive(design.height, childPath(path, 'height'), 'the Item Design height', add)
   checkBoolean(design.heightIsTypical, childPath(path, 'heightIsTypical'), 'the typical-height flag', add)
 
@@ -847,7 +1074,7 @@ function validateGenericDesign(design: Rec, path: string, add: Add): void {
   checkOptionalBoolean(design.isCustom, childPath(path, 'isCustom'), 'the custom-design flag', add)
 }
 
-function validateItemDesign(raw: unknown, path: string, index: IdIndex, add: Add): void {
+function validateItemDesign(raw: unknown, path: string, index: IdIndex, format: DisplayFormat, add: Add): void {
   if (!isRecord(raw)) {
     add(path, WRONG_TYPE, 'Expected an Item Design.')
     return
@@ -864,15 +1091,15 @@ function validateItemDesign(raw: unknown, path: string, index: IdIndex, add: Add
     validateConstruction(raw.construction, childPath(path, 'construction'), add)
     checkUnknownFields(raw, path, CABINET_DESIGN_FIELDS, add)
   } else if (kind === 'generic') {
-    validateGenericDesign(raw, path, add)
+    validateGenericDesign(raw, path, format, add)
     checkUnknownFields(raw, path, GENERIC_DESIGN_FIELDS, add)
   }
 }
 
-function validateItemDesigns(raw: unknown, path: string, index: IdIndex, add: Add): void {
+function validateItemDesigns(raw: unknown, path: string, index: IdIndex, format: DisplayFormat, add: Add): void {
   const designs = checkArray(raw, path, 'the Item Designs', add)
   if (designs === null) return
-  designs.forEach((design, i) => validateItemDesign(design, childPath(path, i), index, add))
+  designs.forEach((design, i) => validateItemDesign(design, childPath(path, i), index, format, add))
 }
 
 function validatePlacedItem(raw: unknown, path: string, index: IdIndex, add: Add): void {
@@ -896,7 +1123,7 @@ function validatePlacedItem(raw: unknown, path: string, index: IdIndex, add: Add
     add(floorPath, DANGLING_REFERENCE, 'Placed Item refers to a Floor that is not in this Project.')
   }
 
-  checkPoint(raw.translation, childPath(path, 'translation'), 'the Placed Item position', add)
+  readPoint(raw.translation, childPath(path, 'translation'), 'the Placed Item position', add)
   checkRange(
     raw.rotationDeg,
     childPath(path, 'rotationDeg'),
@@ -928,7 +1155,28 @@ function validateExistingModel(raw: unknown, path: string, index: IdIndex, add: 
 }
 
 /**
- * Validate an unknown value as a domain v1 {@link Project}.
+ * The Project's own display settings, for the words around a geometry problem.
+ *
+ * Validity never depends on this — only the numbers in the message do — so a Project whose
+ * preferences are themselves broken is validated at `mm` / 0 dp rather than skipped, and the
+ * `preferences` problems are reported by `validatePreferences` in their own right.
+ */
+function displayFormatOf(value: Rec): DisplayFormat {
+  const preferences = isRecord(value.preferences) ? value.preferences : {}
+  const unit = DISPLAY_UNITS.includes(preferences.displayUnit as DisplayUnit)
+    ? (preferences.displayUnit as DisplayUnit)
+    : 'mm'
+  const precision = preferences.displayPrecision
+  return {
+    unit,
+    precision: typeof precision === 'number' && Number.isInteger(precision) && precision >= 0 && precision <= 4
+      ? precision
+      : 0,
+  }
+}
+
+/**
+ * Validate an unknown value as a current-schema {@link Project}.
  *
  * On success the *same object reference* comes back typed as `Project`: nothing is
  * copied, rebuilt or defaulted, so a caller can hand the result straight to `immer` or
@@ -958,7 +1206,7 @@ export function validateProject(value: unknown): ValidateProjectResult {
   validatePreferences(value.preferences, childPath(ROOT_PATH, 'preferences'), add)
   validateFloors(value.floors, childPath(ROOT_PATH, 'floors'), index, add)
   validateViews(value.views, childPath(ROOT_PATH, 'views'), index, add)
-  validateItemDesigns(value.itemDesigns, childPath(ROOT_PATH, 'itemDesigns'), index, add)
+  validateItemDesigns(value.itemDesigns, childPath(ROOT_PATH, 'itemDesigns'), index, displayFormatOf(value), add)
   validateExistingModel(value.existingModel, childPath(ROOT_PATH, 'existingModel'), index, add)
   checkUnknownFields(value, ROOT_PATH, PROJECT_FIELDS, add)
 

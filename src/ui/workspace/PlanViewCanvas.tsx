@@ -22,6 +22,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import { localPointOf, nearestOriginCandidate, worldPointOf } from '../../derive'
 import type { PlacementContext } from '../../derive'
+import { footprintSize } from '../../domain'
 import type { DisplayUnit, Point2 } from '../../domain'
 import { formatMm } from './displayUnits'
 import { placeLabels } from './labelPlacer'
@@ -311,14 +312,19 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   const effective = (item: PlanItemView): { context: PlacementContext; width: number; depth: number } => {
     const isTurned = turn !== null && item.id === selected?.id
     const pending = designPreview !== null && designPreview.itemDesignId === item.designId
+      ? designPreview.footprint
+      : null
+    // A pending footprint previews by its own bounds: the Floor plan draws boxes, and the
+    // shape itself is drawn where it is edited — the Item Design canvas (#58 §3).
+    const size = pending === null ? { width: item.width, depth: item.depth } : footprintSize(pending)
     return {
       context: contextAs(
         item,
         isTurned ? (turn as number) : item.rotationDeg,
         { x: item.translation.x + moveDelta(item).x, y: item.translation.y + moveDelta(item).y },
       ),
-      width: pending && designPreview?.width != null ? designPreview.width : item.width,
-      depth: pending && designPreview?.depth != null ? designPreview.depth : item.depth,
+      width: size.width,
+      depth: size.depth,
     }
   }
 

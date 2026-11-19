@@ -19,6 +19,7 @@
  * - Geometry is canonical millimetres; the display unit and precision are Project
  *   preferences that never rewrite geometry (#13).
  */
+import type { ClosedPath, Preset } from '../geometry'
 import type { CabinetNode, GlobalSettings } from './cabinetPayload'
 
 /**
@@ -164,14 +165,41 @@ export interface GenericItemDesign {
   isCustom?: boolean
 }
 
-/** The closed plan boundary of an Item Design in local coordinates. */
-export type ItemFootprint = RectangleFootprint
+/** The closed plan boundary of an Item Design in local coordinates (#58). */
+export type ItemFootprint = PresetItemFootprint | PathItemFootprint
 
-/** Local corners `(0,0)`, `(width,0)`, `(width,depth)`, `(0,depth)`. */
-export interface RectangleFootprint {
-  kind: 'rectangle'
-  width: number
-  depth: number
+/**
+ * A shape the presets module knows how to evaluate (#54, #58): the preset and its
+ * parameters, where its local bounds sit, and how it is turned.
+ *
+ * `centre` is the centre of the preset's local bounds and `orientationDeg` is clockwise in
+ * the same +Y-down frame everything else uses, so the footprint is exactly what
+ * `evaluatePreset(preset, { centre, orientationDeg })` draws — the one call the Floor
+ * canvas, the Item Design canvas and the exporter all make.
+ *
+ * A preset is a *description*, which is what makes it editable: the Shape tab changes one
+ * number and every placement of the design follows. It is also the reason a footprint can
+ * be invalid — a radius of 1,001 mm on a 2,000 mm side parameterises a shape that does not
+ * exist — which is why {@link footprintProblems} is the gate in front of every commit.
+ */
+export interface PresetItemFootprint {
+  kind: 'preset'
+  preset: Preset
+  /** Footprint-local millimetres: the centre of the preset's local bounds. */
+  centre: Point2
+  /** Clockwise degrees in the +Y-down frame. */
+  orientationDeg: number
+}
+
+/**
+ * A Custom Path: the shape itself, as one closed loop in footprint-local millimetres, with
+ * no parameters left to re-evaluate. This is what `Convert to Custom Path` produces and
+ * what #59's edge editing edits. The path is stored rather than derived, so a Custom Path
+ * survives every later edit to the design unchanged.
+ */
+export interface PathItemFootprint {
+  kind: 'path'
+  path: ClosedPath
 }
 
 /** The one shared representation of the property as surveyed (#15.1). */

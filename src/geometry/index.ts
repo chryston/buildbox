@@ -18,6 +18,7 @@ export {
   cornerRadiiOf,
   evaluatePreset,
   presetArea,
+  presetInBox,
   presetParametersValid,
   presetPerimeter,
   ramanujanPerimeter,
@@ -35,6 +36,7 @@ export type {
   RectanglePreset,
   RegularPolygonPreset,
   RoundedRectanglePreset,
+  SizeBox,
   SquarePreset,
   TrianglePreset,
 } from './presets'

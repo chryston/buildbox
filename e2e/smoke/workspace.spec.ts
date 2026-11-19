@@ -192,17 +192,19 @@ test('the display unit changes the inspector and is one undo step', async ({ pag
   await openPreviewApp(page)
   await showFloorPlan(page)
   await addFloorPlanObject(page, 'Sofa 2-seater')
-  const width = page.getByTestId('inspector-width')
+  // #58: the Item Footprint's Width is read in the inspector's own read-only Shape tab now — it
+  // is edited in Item Detail — so this reads the field rather than typing into it.
+  const width = page.getByTestId('shape-width')
   const mmValue = await width.inputValue()
 
   await page.getByTestId('project-settings').click()
   await expect(page.getByTestId('project-settings-dialog')).toBeVisible()
   await page.getByTestId('settings-unit').selectOption('cm')
   await page.getByTestId('settings-save').click()
-  await expect(page.getByTestId('inspector-width')).not.toHaveValue(mmValue)
-  await expect(page.getByTestId('inspector-width')).toHaveValue(/.+/)
+  await expect(page.getByTestId('shape-width')).not.toHaveValue(mmValue)
+  await expect(page.getByTestId('shape-width')).not.toHaveValue('')
 
   // One Intent, one transaction: Undo restores mm and the original value.
   await undoButton(page).click()
-  await expect(page.getByTestId('inspector-width')).toHaveValue(mmValue)
+  await expect(page.getByTestId('shape-width')).toHaveValue(mmValue)
 })

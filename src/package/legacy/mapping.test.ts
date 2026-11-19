@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { convertLegacy, type LegacyConversionResult } from '../index'
+import { rectangleFootprint } from '../../domain'
 import type { GenericItemDesign, Project } from '../../domain'
 import type { LegacyFloorPlanObjectType } from './types'
 
@@ -189,7 +190,7 @@ describe('FloorPlanObject → generic Item Design and placement', () => {
         id: 'new-1',
         kind: 'generic',
         name: 'Fabric sofa',
-        footprint: { kind: 'rectangle', width: 2200, depth: 900 },
+        footprint: rectangleFootprint(2200, 900),
         origin: { x: 1100, y: 450 },
         height: 850,
         heightIsTypical: true,
@@ -273,7 +274,7 @@ describe('CustomTemplate → generic Item Design', () => {
         id: 'tpl-island',
         kind: 'generic',
         name: 'Island',
-        footprint: { kind: 'rectangle', width: 1200, depth: 800 },
+        footprint: rectangleFootprint(1200, 800),
         origin: { x: 600, y: 400 },
         height: 900,
         heightIsTypical: true,

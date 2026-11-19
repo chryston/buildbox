@@ -2,7 +2,7 @@
  * The `geometry` module's second entry point (#42 §7): the shared fixtures later issues'
  * tests build on, reachable from a `*.test.ts(x)` file and from nothing else.
  *
- * The Kitchen is the prototype's seeded L-shaped Custom Path, the Bedroom is the
+ * The Kitchen is the prototype's seeded six-corner Custom Path, the Bedroom is the
  * prototype's Rectangle preset, and `Base 600` is an Item Footprint in its local frame.
  * Nothing here seeds a Room 150–200 mm inside a wall face — #67 aligns its own fixtures to
  * faces.

@@ -1,8 +1,8 @@
 /**
  * Where a Placed Item actually sits (#57, #16).
  *
- * An Item Design owns one Item Footprint in its own local coordinates — the v1 rectangle
- * runs from (0,0) to (width,depth) with +Y down — plus one editable Item Origin inside it.
+ * An Item Design owns one Item Footprint in its own local coordinates — a preset with
+ * parameters, or a Custom Path (#58) — plus one editable Item Origin inside it.
  * A Placed Item owns placement context only: where that Origin stands on the Floor and how
  * the design is turned about it.
  *
@@ -21,7 +21,7 @@
  */
 import { applyTransform, bounds, endpoints, midpoints, normaliseDeg, pt, rotate, TOLERANCE_MM } from '../geometry'
 import type { Bounds, ClosedPath, Pt, Transform } from '../geometry'
-import { designFootprintSize, designOrigin } from '../domain'
+import { designFootprintSize, designOrigin, footprintPath } from '../domain'
 import type { EntityId, ItemDesign, PlacedItem } from '../domain'
 
 /** One placement's placement context, spelled shortly for the pure helpers below. */
@@ -31,8 +31,20 @@ export interface PlacementContext {
   readonly origin: Pt
 }
 
-/** The Item Footprint as a closed path in local coordinates, origin at (0,0). */
-export function footprintPath(design: ItemDesign): ClosedPath {
+/**
+ * The Item Design's outline: its Item Footprint as a closed path in local coordinates.
+ *
+ * A generic design's footprint is whatever its preset evaluates to, or the Custom Path it
+ * stores (#58) — the same call the Item Design canvas and the Measurements tab make, so the
+ * Floor outline and the editor cannot disagree. A cabinet's footprint is still derived from
+ * its construction settings, and it is still the rectangle from `(0,0)` to `(width,depth)`.
+ *
+ * Named for what it takes — an Item Design — because #58 put a `footprintPath` beside it that
+ * takes the Item Footprint itself, and a proposal on the way to becoming a design is exactly
+ * what the shape editor has to draw.
+ */
+export function designOutline(design: ItemDesign): ClosedPath {
+  if (design.kind === 'generic') return footprintPath(design.footprint)
   const { width, depth } = designFootprintSize(design)
   return {
     start: pt(0, 0),
@@ -58,7 +70,7 @@ export const pathOrigin = (path: ClosedPath): Pt => {
 }
 
 /** The default Item Origin of an Item Design (#57 D4). */
-export const designDefaultOrigin = (design: ItemDesign): Pt => pathOrigin(footprintPath(design))
+export const designDefaultOrigin = (design: ItemDesign): Pt => pathOrigin(designOutline(design))
 
 /** The placement context of one Placed Item against its Item Design. */
 export const placementContext = (design: ItemDesign, placed: PlacedItem): PlacementContext => ({
@@ -96,7 +108,7 @@ export const worldPoint = (design: ItemDesign, placed: PlacedItem, at: Pt): Pt =
 
 /** The axis-aligned box one placement covers on its Floor (#57 behaviour 32, derived). */
 export const floorBounds = (design: ItemDesign, placed: PlacedItem): Bounds =>
-  bounds(footprintPath(design), placementTransform(design, placed))
+  bounds(designOutline(design), placementTransform(design, placed))
 
 /** The `W × D` the `Floor bounds` row reads: the placement's Floor-space size. */
 export const floorBoundsSize = (design: ItemDesign, placed: PlacedItem): { width: number; depth: number } => {
@@ -110,7 +122,7 @@ export const floorBoundsSize = (design: ItemDesign, placed: PlacedItem): { width
  * point the user is dragging, which reads as the item jumping.
  */
 export const localPointValid = (design: ItemDesign, at: Pt): boolean => {
-  const box = bounds(footprintPath(design))
+  const box = bounds(designOutline(design))
   return (
     at.x >= box.minX - TOLERANCE_MM &&
     at.x <= box.maxX + TOLERANCE_MM &&
@@ -157,7 +169,7 @@ export function originMoveTranslations(
  * primitives, so a pick lands on the outline rather than on the polyline that draws it.
  */
 export const originCandidates = (design: ItemDesign): Pt[] => {
-  const path = footprintPath(design)
+  const path = designOutline(design)
   return [...endpoints(path), ...midpoints(path), pathOrigin(path)]
 }
 

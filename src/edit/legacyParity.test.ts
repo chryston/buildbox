@@ -95,6 +95,8 @@ const EXTRA_INTENTS = [
   'view.rename',
   'view.delete',
   'view.setShowPlanImage',
+  // #58: the Item Design editor restates a footprint wholesale; no legacy action did.
+  'design.setFootprint',
 ]
 
 describe('action coverage', () => {

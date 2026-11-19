@@ -9,13 +9,14 @@
  */
 import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
+import { rectangleFootprint } from '../domain'
 import type { GenericItemDesign, PlacedItem } from '../domain'
 import type { ClosedPath, Pt } from '../geometry'
 import { pt } from '../geometry'
 import {
   designDefaultOrigin,
   floorBoundsSize,
-  footprintPath,
+  designOutline,
   localPointOf,
   nearestOriginCandidate,
   normaliseRotation,
@@ -32,7 +33,7 @@ const base600 = (overrides: Partial<GenericItemDesign> = {}): GenericItemDesign 
   id: 'design-base',
   kind: 'generic',
   name: 'Base 600',
-  footprint: { kind: 'rectangle', width: 600, depth: 400 },
+  footprint: rectangleFootprint(600, 400),
   origin: { x: 300, y: 200 },
   height: 900,
   heightIsTypical: true,
@@ -55,11 +56,11 @@ const turned = onFloor({ id: 'place-2', translation: { x: 5150, y: 4500 }, rotat
 
 /** The four footprint corners, in footprint-local millimetres. */
 const localCorners = (design: GenericItemDesign): Pt[] =>
-  footprintPath(design).segments.map((segment) => segment.to)
+  designOutline(design).segments.map((segment) => segment.to)
 
-describe('footprintPath and pathOrigin', () => {
+describe('designOutline and pathOrigin', () => {
   it('is a closed rectangle from the design size, starting at the local origin', () => {
-    const path = footprintPath(base600())
+    const path = designOutline(base600())
     expect(path.segments.map((segment) => segment.to)).toEqual([
       pt(600, 0),
       pt(600, 400),
@@ -161,7 +162,7 @@ describe('originMoveTranslations', () => {
         }),
         (spec) => {
           const design = base600({
-            footprint: { kind: 'rectangle', width: spec.width, depth: spec.depth },
+            footprint: rectangleFootprint(spec.width, spec.depth),
             origin: { x: spec.originX * spec.width, y: spec.originY * spec.depth },
           })
           const placed = onFloor({ rotationDeg: spec.rotationDeg, translation: { x: spec.x, y: spec.y } })

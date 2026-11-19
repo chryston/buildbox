@@ -14,23 +14,25 @@
  */
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { footprintPath, pathOrigin } from '../../derive'
-import { designFootprintSize } from '../../domain'
+import { designOutline, pathOrigin } from '../../derive'
 import type { DisplayUnit, ItemDesign, Point2 } from '../../domain'
 import { PLAN_SWATCHES } from './planColors'
 import { formatMm, parseToMm } from './displayUnits'
 import type { PlanItemView } from './planModel'
 import { quarterTurn } from './rotateHandle'
+import { ShapeEditor } from './shape/ShapeEditor'
 import type { DesignEditPreview } from './workspaceStore'
 
-/** The smallest footprint the handlers accept (`MIN_PLAN_SIZE_MM`). */
-const MIN_SIZE_MM = 50
-
-/** A design edit, as the inspector asks for it: only the fields the person touched. */
+/**
+ * An Item Design edit the Floor workspace can commit: the two fields that belong to the
+ * Item Design and not to its shape.
+ *
+ * `width` and `depth` were here until #58 took them out of `design.update`. A footprint is
+ * no longer two numbers, so it is no longer a field — the Shape tab of Item Detail edits it,
+ * and the rows here say where it went.
+ */
 export interface DesignEdit {
   name?: string
-  width?: number
-  depth?: number
   color?: string
 }
 
@@ -145,7 +147,7 @@ function ReadOnlyRow(props: { testId: string; label: string; value: string; hint
 
 /** The four corners of the local bounds plus its centre: the `Item Origin` quick choices. */
 function originChoices(design: ItemDesign): readonly { label: string; point: Point2 }[] {
-  const path = footprintPath(design)
+  const path = designOutline(design)
   const points = [path.start, ...path.segments.map((segment) => segment.to)]
   const xs = points.map((point) => point.x)
   const ys = points.map((point) => point.y)
@@ -169,9 +171,6 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
     onSetPosition, onSetRotation, onEditDesign, onPreviewOrigin, onApplyPreview,
     onCancelPreview, onTogglePick, onFork, onOpenDetail, onDelete, onTransfer,
   } = props
-  const { width, depth } = design === null
-    ? { width: item.width, depth: item.depth }
-    : designFootprintSize(design)
   const isCabinet = design === null || design.kind === 'cabinet'
   const pending = preview !== null && preview.itemDesignId === item.designId ? preview : null
   const count = item.placementCount
@@ -184,14 +183,6 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
       <span className="bb-workspace-field-label" data-testid="inspector-design-label">
         Item Design: {item.label}
       </span>
-      <button
-        type="button"
-        data-testid="open-item-detail"
-        className="bb-workspace-tool-button"
-        onClick={onOpenDetail}
-      >
-        Open Item Detail
-      </button>
       <NumberField
         label="Position X"
         testId="inspector-position-x"
@@ -301,30 +292,30 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
             value={pending?.name ?? design.name}
             onChange={(event) => onEditDesign({ name: event.target.value })}
           />
+          {/* #58 §2: the Item Footprint is read here and written only in the Item Design editor,
+              because a footprint change moves every placement of the design. The same three tabs
+              as that editor, read-only, leading with the way there — for a cabinet too, whose
+              Shape tab says the size comes from the construction (criterion 18). */}
+          <button
+            type="button"
+            data-testid="open-item-detail"
+            className="bb-workspace-tool-button"
+            onClick={onOpenDetail}
+          >
+            Edit Item Design
+          </button>
+          <div className="bb-inspector-shape" data-testid="inspector-shape">
+            <ShapeEditor
+              itemDesignId={item.designId}
+              design={design}
+              layout="stacked"
+              readOnly
+            />
+          </div>
           {/* A cabinet's footprint, origin and colour are its construction (#42 §2), so the
               rows that would edit them are not offered — Item Detail edits the cabinet. */}
           {!isCabinet && (
             <>
-              <NumberField
-                label="Width"
-                testId="inspector-width"
-                kind="mm"
-                value={pending?.width ?? width}
-                unit={unit}
-                precision={precision}
-                min={MIN_SIZE_MM}
-                onCommit={(next) => onEditDesign({ width: next })}
-              />
-              <NumberField
-                label="Depth"
-                testId="inspector-depth"
-                kind="mm"
-                value={pending?.depth ?? depth}
-                unit={unit}
-                precision={precision}
-                min={MIN_SIZE_MM}
-                onCommit={(next) => onEditDesign({ depth: next })}
-              />
               <label className="bb-workspace-field-label">Colour</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {PLAN_SWATCHES.map((color) => (

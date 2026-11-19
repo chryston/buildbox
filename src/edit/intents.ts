@@ -21,6 +21,7 @@ import type {
   ElementType,
   EntityId,
   GlobalSettings,
+  ItemFootprint,
   PlanImage,
   Point2,
   Project,
@@ -63,6 +64,7 @@ export type IntentType =
   | 'plan.copyToFloor'
   | 'plan.moveToFloor'
   | 'design.update'
+  | 'design.setFootprint'
   | 'design.setOrigin'
   | 'design.fork'
   | 'floor.create'
@@ -250,13 +252,14 @@ export type CopyPlanObjectsToFloor = TransferPlanObjectsToFloor
 export type MovePlanObjectsToFloor = TransferPlanObjectsToFloor
 
 /**
- * The design-level half of the inspector (#57 behaviour 30): name, colour and, for a
- * rectangle footprint, size. Every Placed Item of this Item Design changes with it, which
- * is why the view previews the result and says `Affects N placements` before it commits.
+ * The design-level fields the Placed Item inspector edits (#57 behaviour 30): name and
+ * colour. Every Placed Item of this Item Design changes with it, which is why the view
+ * previews the result and says `Affects N placements` before it commits.
  *
- * A size change keeps the Item Origin where it is — the footprint grows about the point the
- * placement is pinned to — unless the Origin sat at the old footprint's centre, in which
- * case it follows the new one so `Centre` keeps meaning centre.
+ * The Item Footprint is not one of these fields (#58): a shape is edited in the Item Design
+ * editor, where the outline is on screen and the parameters have names, and it goes through
+ * `design.setFootprint`. A size edit here would have to guess which parameter a number was
+ * meant to be.
  */
 export interface UpdateItemDesign {
   itemDesignId: EntityId
@@ -264,9 +267,22 @@ export interface UpdateItemDesign {
     name?: string
     /** `#rrggbb`, lowercase. */
     color?: string
-    width?: number
-    depth?: number
   }
+}
+/**
+ * Restate an Item Design's Item Footprint (#58): a preset with new parameters, or the Custom
+ * Path a conversion produced.
+ *
+ * The footprint arrives whole rather than as a field patch, because a shape is one value —
+ * `radius: 1001` on a 2,000 mm side is not a legal design with one illegal number, it is no
+ * design at all — and because conversion replaces the footprint outright instead of editing
+ * it. The handler refuses a footprint that describes no shape, so no caller can put an
+ * invalid outline into the model or into the undo history; the Item Origin is left where it
+ * is, since it belongs to the design and not to the shape.
+ */
+export interface SetItemDesignFootprint {
+  itemDesignId: EntityId
+  footprint: ItemFootprint
 }
 /**
  * Move the Item Origin inside the footprint (#57 behaviour 31, D3). Every placement of the
@@ -390,6 +406,7 @@ export interface IntentPayloads {
   'plan.copyToFloor': CopyPlanObjectsToFloor
   'plan.moveToFloor': MovePlanObjectsToFloor
   'design.update': UpdateItemDesign
+  'design.setFootprint': SetItemDesignFootprint
   'design.setOrigin': SetItemDesignOrigin
   'design.fork': ForkItemDesign
   'floor.create': CreateFloor
@@ -479,6 +496,7 @@ export const INTENT_ID_ORDER: Record<IntentType, readonly string[]> = {
   'plan.copyToFloor': ['placedItemId…'],
   'plan.moveToFloor': [],
   'design.update': [],
+  'design.setFootprint': [],
   'design.setOrigin': [],
   'design.fork': ['itemDesignId'],
   'floor.create': ['floorId', 'viewId'],
@@ -551,6 +569,8 @@ export type RejectionCode =
   | 'invalid-size'
   /** An Item Origin outside the Item Footprint, which the canvas never offers (#57). */
   | 'invalid-origin'
+  /** An Item Footprint that describes no shape — overlapping radii, a zero side (#58). */
+  | 'invalid-shape'
   /** `cabinet` refused the tree operation: an already split or over-deep space. */
   | 'invalid-tree'
 

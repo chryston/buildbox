@@ -34,3 +34,32 @@ Item Designs; and the Existing Model's Placed Items — the S4 Local Projects re
 nothing else (#42). Design Options, Building Elements, Rooms, Views, Vertical Extents,
 Drawing Layers, comments, non-rectangle footprints and an editable cabinet Item Origin
 each arrive with their own capability and their own migrator.
+
+## What v2 holds (#56)
+
+One thing: every Floor gains a `views` collection with exactly one default Plan View.
+`migrateV1toV2` invents it — `{ kind: "plan", name: <the Floor's name>, isDefault: true,
+showPlanImage: true }` — and takes a `newId` parameter for the view IDs, because of rule 4.
+Nothing else moves.
+
+## What v3 holds (#58)
+
+One thing: a generic Item Design's footprint became an **Item Footprint** — either a
+`Preset` shape with a position and an orientation, or a `ClosedPath` of lines, arcs and
+elliptical arcs. v1 and v2 stored a bare `{ kind: "rectangle", width, depth }` pair, which
+could describe nothing else, and the shape was drawn from the Placed Item's translation
+rather than from the design.
+
+`migrateV2toV3` restates each rectangle as
+`{ kind: "preset", preset: { kind: "rectangle", width, depth }, centre: { x: width / 2,
+y: depth / 2 }, orientationDeg: 0 }`. It spends no IDs, reads no clock, and leaves the
+geometry it draws exactly where it was: the centre is the old rectangle's own centre in the
+design's local frame, so every Placed Item keeps covering the same patch of Floor. A
+footprint that is already a v3 shape is carried over untouched, which is what lets a v3 file
+pass through the migrator unchanged.
+
+The consequence for validation is the point of the release: a footprint is now validated by
+the geometry kernel on import, so an impossible shape — corner radii that overlap, a path
+that does not close, a size that is not positive — arrives as the kernel's own sentence
+("Corner radii on the top side overlap (1,000 + 1,001 > 2,000 mm)") rather than as a
+field-range complaint.

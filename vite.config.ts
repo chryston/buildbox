@@ -34,7 +34,16 @@ const PURE_INCLUDE = [`src/{${PURE_MODULES.join(',')}}/**/*.test.ts`]
 const PURE_EXCLUDE = ['src/persistence/indexeddb/**']
 // Not a module test, but a Node test all the same: it walks `fixtures/legacy` on disk and
 // hashes the files, and `import.meta.url` is only a file URL outside jsdom.
-const NODE_ONLY_INCLUDE = ['src/test/legacyFixtures.test.ts', 'src/test/legacyMigration.test.ts']
+const NODE_ONLY_INCLUDE = [
+  'src/test/legacyFixtures.test.ts',
+  'src/test/legacyMigration.test.ts',
+  // The invalid-proposal controller (#58 §6) lives in `ui` because it is UI state, but it is
+  // a pure state machine — no React, no DOM — and the issue verifies it under Node.
+  'src/ui/workspace/shape/**/*.test.ts',
+  // #58 criterion 10's property test drives the controller against `edit`, which only the
+  // `src/integration` element may import. It is a Node test all the same.
+  'src/integration/**/*.property.test.ts',
+]
 
 // The adapter's own suites: `fake-indexeddb` under Node, and `*.browser.test.ts` against
 // real IndexedDB in a real browser. Chromium is part of `npm test`; the nightly workflow

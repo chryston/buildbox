@@ -24,13 +24,21 @@
  * the ID allocator all arrive as data, so the whole flow runs under Node against the fakes in
  * `./testing`.
  */
-import { remapIds, summarizeProject, type Project } from '../domain'
+import {
+  DOMAIN_SCHEMA_VERSION,
+  migrateProject,
+  remapIds,
+  summarizeProject,
+  type IdAllocator,
+  type Project,
+} from '../domain'
 import { canonicalJson } from '../lib'
 import type {
   LibraryRecord,
   NewAsset,
   PersistenceError,
   Ports,
+  ProjectRecord,
   RecoveryPoint,
   Result,
 } from '../persistence'
@@ -228,6 +236,37 @@ async function writeNew(deps: RestoreDeps, staged: StagedPackage): Promise<Resul
   return ok({ kind: 'new', id: project.id, name: project.meta.name, migratedFrom: staged.migratedFrom })
 }
 
+/**
+ * The state a Replace is about to overwrite, at this build's domain version.
+ *
+ * A stored record is Project data from whatever version wrote it, and the store only ever
+ * stamps what it was given — a Project this build has opened and saved comes back at
+ * {@link DOMAIN_SCHEMA_VERSION}, one it has only ever listed comes back as the seed or the
+ * previous build left it. So it takes the same chain `loadCurrent` runs when a Project is
+ * opened before anything reads it as a Project: #58 moved an Item Footprint from a pair of
+ * numbers to a shape, and `summarizeProject` — like the commit it feeds — cannot read the old
+ * description.
+ *
+ * The Recovery Point keeps the bytes exactly as they were stored, because restoring one has to
+ * re-run the chain from the version that wrote it. Only what this build *reads* is migrated:
+ * the summary, and the state the rollback puts back — a commit stamps
+ * {@link DOMAIN_SCHEMA_VERSION}, so committing unmigrated bytes would leave a record that
+ * claims a version it does not have. A record that will not migrate stops the Replace before
+ * anything is written: overwriting a Project with a Point that cannot describe it is the one
+ * outcome a Replace must never produce.
+ */
+function previousState(
+  record: ProjectRecord,
+  allocateId: IdAllocator,
+): Result<Project, PersistenceError> {
+  if (record.schemaVersion === DOMAIN_SCHEMA_VERSION) return ok(record.data)
+  const migrated = migrateProject(record.data, record.schemaVersion, allocateId)
+  if (!migrated.ok) {
+    return err({ kind: 'unavailable', reason: `schema-${record.schemaVersion}-unreadable` })
+  }
+  return ok(migrated.project)
+}
+
 async function writeReplace(
   deps: RestoreDeps,
   staged: StagedPackage,
@@ -241,6 +280,9 @@ async function writeReplace(
   const stored = await deps.ports.projects.load(collision.existing.id)
   if (!stored.ok) return err({ kind: 'session', error: stored.error })
 
+  const previous = previousState(stored.value, deps.ids)
+  if (!previous.ok) return err({ kind: 'session', error: previous.error })
+
   // The Recovery Point goes in first, in its own transaction, because the repair below reads it
   // back — a rollback that depends on a point that was never written is no repair at all.
   const point: RecoveryPoint = {
@@ -250,7 +292,7 @@ async function writeReplace(
     kind: 'pre-import-replace',
     revision: stored.value.revision,
     schemaVersion: stored.value.schemaVersion,
-    summary: summarizeProject(stored.value.data),
+    summary: summarizeProject(previous.value),
     data: stored.value.data,
   }
   const created = await deps.ports.recovery.create(point)
@@ -276,7 +318,7 @@ async function writeReplace(
     // Forward, never backwards: the previous state returns as the next revision, taken from the
     // Recovery Point this call wrote a moment ago.
     await deps.ports.projects.commit(
-      { project: point.data, revision: revision + 1, savedAt: deps.clock.now() },
+      { project: previous.value, revision: revision + 1, savedAt: deps.clock.now() },
       revision,
     )
     return err({ kind: 'unverified' })

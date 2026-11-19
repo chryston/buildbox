@@ -41,6 +41,7 @@ export const INTENT_LABELS = {
   'plan.copyToFloor': 'Copy to floor',
   'plan.moveToFloor': 'Move to floor',
   'design.update': 'Edit item design',
+  'design.setFootprint': 'Edit item shape',
   'design.setOrigin': 'Move item origin',
   'design.fork': 'Fork design',
   'floor.create': 'Add floor',

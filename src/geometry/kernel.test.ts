@@ -10,6 +10,7 @@ import {
   area,
   editLineEdge,
   evaluate,
+  evaluatePreset,
   fillet,
   isTangentFillet,
   classifyPoint,
@@ -90,6 +91,22 @@ describe('#54 criterion 1 / 11: the corner-radius equality case', () => {
     expect(problems[0].code).toBe('corner-radii-overlap')
     expect(problems[0].values).toEqual([1000, 1001, 2000])
     expect(problems[0].side).toBe('top')
+  })
+
+  it('marks the middle of the side the problem names, turned with the footprint', () => {
+    const radii = { topLeft: 1000, topRight: 1001, bottomRight: 0, bottomLeft: 0 }
+    const at = (orientationDeg: number, centre: Pt = { x: 0, y: 0 }): Pt | undefined => validateLoop({
+      preset: { kind: 'roundedRectangle', width: 2000, depth: 3000, radii },
+      placement: { centre, orientationDeg },
+    })[0].at
+    // #58 behaviour 17: the canvas marker sits at the failure location. The overlapping radii
+    // are a side, so the location is its middle — the top side of a 2,000 × 3,000 Rounded
+    // Rectangle centred on the Item Origin runs at y = -1,500.
+    expect(at(0)).toEqual({ x: 0, y: -1500 })
+    // Turned a quarter turn clockwise it is the right-hand side, and it travels with the origin.
+    const turned = at(90, { x: 400, y: 250 })
+    expect(turned?.x).toBeCloseTo(1900, 6)
+    expect(turned?.y).toBeCloseTo(250, 6)
   })
 })
 
@@ -318,5 +335,45 @@ describe('#54 criteria 15 and 16: tolerance, not sampling', () => {
     expect(first).toEqual([])
     expect(validateLoop(normaliseOrientation(kitchen))).toEqual(first)
     expect(validateLoop(normaliseOrientation(kitchen))).toEqual([])
+  })
+})
+
+/**
+ * A rotation turns an arc; it does not make it longer.
+ *
+ * `transformSegment` used to add the placement's rotation to `sweepDeg` as well as to the
+ * ellipse's own `rotationDeg`. A Circle is four 90° arcs, so turning it by 1° made them four
+ * 91° arcs, each ending a little past where the next began — and `validateLoop` reported
+ * `edges-touch` on a perfectly good Circle. Nothing caught it because every preset property
+ * in this file evaluated at `orientationDeg: 0`.
+ */
+describe('a turned arc keeps its own sweep (#54, found by #58)', () => {
+  const ORIGIN = { x: 0, y: 0 }
+  const angles = [0, 1, 12, 37, 90, 181, 359]
+  const circles = [1, 180, 1600, 6000]
+
+  it.each(angles)('validates a Ø%x-turned Circle at every size', (orientationDeg) => {
+    for (const diameter of circles) {
+      const path = evaluatePreset({ kind: 'circle', diameter }, { centre: ORIGIN, orientationDeg })
+      expect(validateLoop(path), `Ø${diameter} at ${orientationDeg}°`).toEqual([])
+      expect(area(path)).toBeCloseTo((Math.PI * diameter * diameter) / 4, 1)
+    }
+  })
+
+  it.each(angles)('validates a %x°-turned Ellipse at every size', (orientationDeg) => {
+    for (const [width, depth] of [[1, 1], [1600, 600], [2400, 900]] as const) {
+      const path = evaluatePreset({ kind: 'ellipse', width, depth }, { centre: ORIGIN, orientationDeg })
+      expect(validateLoop(path), `${width}×${depth} at ${orientationDeg}°`).toEqual([])
+      expect(area(path)).toBeCloseTo(Math.PI * (width / 2) * (depth / 2), 1)
+    }
+  })
+
+  it.each(angles)('turns a Circle to the same outline the same shape draws unturned', (orientationDeg) => {
+    // A Circle is rotation-symmetric: turning it may move the vertices, but the outline —
+    // and so the area, the perimeter and the bounds — is the shape's, unchanged.
+    const plain = evaluatePreset({ kind: 'circle', diameter: 1600 }, { centre: ORIGIN, orientationDeg: 0 })
+    const turned = evaluatePreset({ kind: 'circle', diameter: 1600 }, { centre: ORIGIN, orientationDeg })
+    expect(area(turned)).toBeCloseTo(area(plain), 6)
+    expect(perimeter(turned)).toBeCloseTo(perimeter(plain), 6)
   })
 })

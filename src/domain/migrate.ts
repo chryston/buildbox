@@ -16,7 +16,7 @@ import type { Floor, PlanView, Project } from './project'
 import { validateProject } from './validate'
 
 /** The domain schema this build writes and understands at the top of the chain. */
-export const DOMAIN_SCHEMA_VERSION = 2
+export const DOMAIN_SCHEMA_VERSION = 3
 
 /**
  * One pure vN → vN+1 step. Its input is already a copy; it never reads the clock, and a
@@ -27,7 +27,7 @@ export type Migrator = (data: unknown, allocateId: IdAllocator) => unknown
 /**
  * `MIGRATORS[i]` migrates v(i+1) → v(i+2), so index 0 is v1 → v2.
  */
-export const MIGRATORS: readonly Migrator[] = [migrateV1toV2]
+export const MIGRATORS: readonly Migrator[] = [migrateV1toV2, migrateV2toV3]
 
 /**
  * v1 → v2 (#56): the Project gains `views`, and each Floor gains the one default Plan
@@ -62,6 +62,48 @@ export function migrateV1toV2(data: unknown, allocateId: IdAllocator): unknown {
     showPlanImage: true,
   }))
   return { ...record, views }
+}
+
+/**
+ * v2 → v3 (#58): an Item Footprint becomes a shape rather than a pair of numbers.
+ *
+ * Every v2 footprint is the same Rectangle preset, placed so that it draws exactly what v2
+ * drew: local corners `(0,0)` to `(width,depth)`, which is what a Rectangle centred at
+ * `(width / 2, depth / 2)` with no turn evaluates to. The geometry is therefore identical,
+ * which is the whole point — a Project that never opens the shape editor keeps the outline,
+ * the measurements and the Item Origin it had, and only the *description* of the shape has
+ * changed.
+ *
+ * A footprint this build cannot read is left exactly as it is for `validateProject` to
+ * refuse: a migrator repairs versions, it never repairs data. Nothing else moves, and no ID
+ * is spent.
+ */
+export function migrateV2toV3(data: unknown): unknown {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return data
+  const record = data as Record<string, unknown>
+  if (!Array.isArray(record.itemDesigns)) return data
+  return {
+    ...record,
+    itemDesigns: record.itemDesigns.map((design) => {
+      if (design === null || typeof design !== 'object' || Array.isArray(design)) return design
+      const entry = design as Record<string, unknown>
+      const footprint = entry.footprint
+      if (footprint === null || typeof footprint !== 'object' || Array.isArray(footprint)) return design
+      const shape = footprint as Record<string, unknown>
+      if (shape.kind !== 'rectangle') return design
+      const { width, depth } = shape
+      if (typeof width !== 'number' || typeof depth !== 'number') return design
+      return {
+        ...entry,
+        footprint: {
+          kind: 'preset',
+          preset: { kind: 'rectangle', width, depth },
+          centre: { x: width / 2, y: depth / 2 },
+          orientationDeg: 0,
+        },
+      }
+    }),
+  }
 }
 
 export type MigrateError =

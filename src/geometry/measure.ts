@@ -217,12 +217,20 @@ const ellipseExtremaBases = (form: ArcForm): number[] => {
 export const applyTransform = (p: Pt, transform: Transform): Pt =>
   add(rotate(sub(p, transform.pivot), transform.rotationDeg), add(transform.pivot, transform.translation))
 
-/** A segment with its centre, sweep and rotation carried through a placement. */
+/**
+ * A segment with its centre, sweep and rotation carried through a placement.
+ *
+ * A rotation turns the arc; it does not make it longer. `sweepDeg` is the arc's own angular
+ * extent, which is the same however the shape is turned, so it is carried over untouched —
+ * adding the placement's rotation to it turned a quarter arc into a 91° arc and left the next
+ * one starting where the last one no longer ended. Only an *ellipse* has an axis for a
+ * rotation to move, which is why `rotationDeg` is the one angle that grows.
+ */
 export const transformSegment = (segment: Segment, transform: Transform): Segment => {
   const to = applyTransform(segment.to, transform)
   if (segment.kind === 'line') return { kind: 'line', to }
   const center = applyTransform(segment.center, transform)
-  if (segment.kind === 'arc') return { kind: 'arc', to, center, sweepDeg: segment.sweepDeg + transform.rotationDeg }
+  if (segment.kind === 'arc') return { kind: 'arc', to, center, sweepDeg: segment.sweepDeg }
   return {
     kind: 'ellipticalArc',
     to,
@@ -230,7 +238,7 @@ export const transformSegment = (segment: Segment, transform: Transform): Segmen
     rx: segment.rx,
     ry: segment.ry,
     rotationDeg: segment.rotationDeg + transform.rotationDeg,
-    sweepDeg: segment.sweepDeg + transform.rotationDeg,
+    sweepDeg: segment.sweepDeg,
   }
 }
 

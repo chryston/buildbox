@@ -402,8 +402,8 @@ describe('stageImport: hashes and assets', () => {
 
 describe('stageImport: the migrator chain', () => {
   it('refuses a Project saved by a newer BuildBox before touching a field', async () => {
-    await expectProblem(withManifest(await validArchive(), (m) => { m.domainSchemaVersion = 3 }), 'newer-schema', {
-      detail: { detected: 3, supported: 2 },
+    await expectProblem(withManifest(await validArchive(), (m) => { m.domainSchemaVersion = 4 }), 'newer-schema', {
+      detail: { detected: 4, supported: 3 },
     })
   })
 

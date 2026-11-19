@@ -11,8 +11,9 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import fc from 'fast-check'
 import { beforeAll, describe, expect, it } from 'vitest'
-import type { CabinetItemDesign, CabinetNode, GenericItemDesign, ItemDesign, PlacedItem, Project } from '../domain'
-import { validateProject } from '../domain'
+import type { CabinetItemDesign, CabinetNode, GenericItemDesign, ItemDesign, ItemFootprint, PlacedItem, Project } from '../domain'
+import { footprintSize, validateProject } from '../domain'
+import type { Preset } from '../geometry'
 import { arbProject } from '../domain/testing'
 import { canonicalJson } from '../lib'
 import { convertLegacy } from '../package'
@@ -76,6 +77,30 @@ const bool = (g: Gen): boolean => g.rand() < 0.5
 
 const designOf = (g: Gen, placed: PlacedItem): ItemDesign | undefined =>
   g.project.itemDesigns.find((design) => design.id === placed.itemDesignId)
+
+/**
+ * An Item Footprint that always describes a shape, from the same seeded stream as the rest
+ * of the Intent. Rounded corners stay under half the shorter side, so no two of them can
+ * overlap and the generator never produces a shape the handler is right to refuse.
+ */
+function footprintOf(g: Gen): ItemFootprint {
+  const width = real(g, 100, 4000)
+  const depth = real(g, 100, 4000)
+  const centre = { x: real(g, -500, 8000), y: real(g, -500, 8000) }
+  const orientationDeg = int(g, 0, 359)
+  const preset: Preset =
+    !bool(g)
+      ? { kind: 'rectangle', width, depth }
+      : bool(g)
+        ? { kind: 'circle', diameter: real(g, 100, 3000) }
+        : {
+            kind: 'roundedRectangle',
+            width,
+            depth,
+            radius: real(g, 0, Math.min(width, depth) / 2),
+          }
+  return { kind: 'preset', preset, centre, orientationDeg }
+}
 const cabinets = (g: Gen): CabinetItemDesign[] =>
   g.project.itemDesigns.filter((design): design is CabinetItemDesign => design.kind === 'cabinet')
 const generics = (g: Gen): GenericItemDesign[] => g.project.itemDesigns.filter((d): d is GenericItemDesign => d.kind === 'generic')
@@ -251,19 +276,23 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
     if (design === undefined) return null
     const patch: PayloadOf<'design.update'>['patch'] = {}
     if (bool(g)) patch.name = `Object ${int(g, 1, 99)}`
-    if (design.kind === 'generic') {
-      if (bool(g)) patch.color = `#${int(g, 0, 0xffffff).toString(16).padStart(6, '0')}`
-      if (bool(g)) patch.width = real(g, 10, 4000)
-      if (bool(g)) patch.depth = real(g, 10, 4000)
-    }
+    if (design.kind === 'generic' && bool(g)) patch.color = `#${int(g, 0, 0xffffff).toString(16).padStart(6, '0')}`
     return intent('design.update', { itemDesignId: design.id, patch })
+  },
+  (g) => {
+    // A restated Item Footprint (#58): always a shape that exists, because what the property
+    // checks is that a valid one round-trips. The impossible ones are refused by name in
+    // `intents/design.test.ts`, where the message can be asserted as well as the code.
+    const design = pick(g, generics(g))
+    if (design === undefined) return null
+    return intent('design.setFootprint', { itemDesignId: design.id, footprint: footprintOf(g) })
   },
   (g) => {
     const design = pick(g, generics(g))
     if (design === undefined) return null
     return intent('design.setOrigin', {
       itemDesignId: design.id,
-      origin: { x: real(g, 0, design.footprint.width), y: real(g, 0, design.footprint.depth) },
+      origin: { x: real(g, 0, footprintSize(design.footprint).width), y: real(g, 0, footprintSize(design.footprint).depth) },
     })
   },
   (g) => {

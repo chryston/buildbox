@@ -8,7 +8,7 @@
  * what it stores is the Item Origin's Floor position, which for a design whose Origin is its
  * centre is the same number (#43).
  */
-import { designFootprintSize } from '../../domain'
+import { designFootprintSize, rectangleFootprint } from '../../domain'
 import type { EntityId, Project } from '../../domain'
 import { normaliseDeg } from '../../geometry'
 import { CUSTOM_PLAN_ENTRY, PLAN_CATALOGUE } from '../planCatalogue'
@@ -41,9 +41,6 @@ type PlanHandlers = {
     'plan.removeImage' | 'plan.copyToFloor' | 'plan.moveToFloor'
   >]: IntentHandler<T>
 }
-
-/** The legacy 10 mm floor, which the UI clamps to before it sends the Intent. */
-export const MIN_PLAN_SIZE_MM = 10
 
 /** The legacy sidebar drops a new object with its top-left corner here. */
 const LEGACY_SPAWN_X_MM = 100
@@ -91,7 +88,7 @@ const addObject: Handler<'plan.addObject'> = (ctx) => {
     id: itemDesignId,
     kind: 'generic',
     name: entry.label,
-    footprint: { kind: 'rectangle', width: entry.w, depth: entry.h },
+    footprint: rectangleFootprint(entry.w, entry.h),
     origin: { x: entry.w / 2, y: entry.h / 2 },
     height: entry.height,
     heightIsTypical: true,
@@ -174,7 +171,7 @@ const addTemplate: Handler<'plan.addTemplate'> = (ctx) => {
     id: itemDesignId,
     kind: 'generic',
     name: label,
-    footprint: { kind: 'rectangle', width: w, depth: h },
+    footprint: rectangleFootprint(w, h),
     origin: { x: w / 2, y: h / 2 },
     height: CUSTOM_PLAN_ENTRY.height,
     heightIsTypical: true,

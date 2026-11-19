@@ -6,13 +6,21 @@
  *
  * Placements never copy, scale or swap design dimensions (#16): read them here instead.
  */
+import { footprintSize } from './footprint'
 import type { ItemDesign, Point2 } from './project'
 
-/** The Item Footprint size in millimetres. */
+/**
+ * The Item Footprint size in millimetres.
+ *
+ * A generic design's size is the size of its local bounds (#58), not a field: a preset has
+ * no width to read except the one its parameters evaluate to, and a Custom Path has none at
+ * all. A turned shape reports the bounds it draws, which is what the Library outline and the
+ * inspector's read-only `Width` / `Depth` rows have to agree with.
+ */
 export function designFootprintSize(design: ItemDesign): { width: number; depth: number } {
   return design.kind === 'cabinet'
     ? { width: design.construction.settings.width, depth: design.construction.settings.depth }
-    : { width: design.footprint.width, depth: design.footprint.depth }
+    : footprintSize(design.footprint)
 }
 
 /** The design height in millimetres. */

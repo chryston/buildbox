@@ -117,6 +117,7 @@ describe('the Floor workspace', () => {
     await user.click(screen.getByTestId('add-item-menu'))
     await user.click(screen.getByTestId('add-sofa-2'))
     expect(screen.getByTestId('selection-inspector')).toBeInTheDocument()
+    const mmWidth = (screen.getByTestId('shape-width') as HTMLInputElement).value
 
     await user.click(screen.getByTestId('project-settings'))
     await user.selectOptions(screen.getByTestId('settings-unit'), 'cm')
@@ -126,7 +127,32 @@ describe('the Floor workspace', () => {
 
     expect(view.project().preferences.displayUnit).toBe('cm')
     expect(view.project().preferences.displayPrecision).toBe(1)
-    // Position X, Position Y, Width and Depth all carry the unit suffix (#57 §2).
+    // The Placed Item's own two rows and the read-only Shape tab's two size fields all carry the
+    // unit suffix. The Shape tab's Position rows are gone: a read-only tab reports the shape,
+    // not where it is (#58 §2), so the rail does not say `Position X` twice with two meanings.
     expect(screen.getAllByText('(cm)')).toHaveLength(4)
+    const width = screen.getByTestId('shape-width')
+    expect(width).not.toHaveValue(mmWidth)
+    expect(width).not.toHaveValue('')
+  })
+
+  it('offers no way to change the Item Footprint from the Floor inspector (#58)', async () => {
+    const user = userEvent.setup()
+    await renderWorkspace()
+    await user.click(screen.getByTestId('add-item-menu'))
+    await user.click(screen.getByTestId('add-sofa-2'))
+
+    // The Item Footprint is read here through the same three tabs the Item Design editor has,
+    // and nothing in them writes: a footprint change moves every placement of the design, which
+    // is why it happens in the Item Design editor and nowhere else (#58 §2).
+    expect(screen.getByTestId('inspector-shape')).toBeInTheDocument()
+    expect(screen.getByTestId('shape-width')).toHaveAttribute('readonly')
+    expect(screen.getByTestId('shape-depth')).toHaveAttribute('readonly')
+    expect(screen.getByTestId('shape-convert')).toBeDisabled()
+    expect(screen.queryByTestId('shape-placing')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('footprint-canvas')).not.toBeInTheDocument()
+    expect(screen.getByTestId('open-item-detail')).toHaveTextContent('Edit Item Design')
+    // Name and Colour are still the Item Design's own and still editable here.
+    expect(screen.getByTestId('design-name')).toBeInTheDocument()
   })
 })

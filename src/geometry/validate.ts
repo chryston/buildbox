@@ -8,7 +8,7 @@
  */
 import { distanceBetweenSegments, intersectSegments } from './curve'
 import { perimeter, segmentBounds, signedArea } from './measure'
-import { presetParametersValid, evaluatePreset } from './presets'
+import { presetParametersValid, evaluatePreset, sideMidpoint } from './presets'
 import type { Placement, Preset } from './presets'
 import { distance, lengthOf, segmentStart } from './segment'
 import type { ClosedPath, GeometryProblem, Pt, Segment } from './types'
@@ -32,7 +32,14 @@ const isPresetInput = (input: LoopInput): input is { preset: Preset; placement: 
 export const validateLoop = (input: LoopInput): GeometryProblem[] => {
   if (isPresetInput(input)) {
     const parameters = presetParametersValid(input.preset)
-    return parameters.length > 0 ? parameters : validateLoop(evaluatePreset(input.preset, input.placement))
+    // A parameter problem that names a side has a place to mark after all: the middle of that
+    // side, where the two radii would have met. The canvas marker reads `problem.at`.
+    if (parameters.length === 0) return validateLoop(evaluatePreset(input.preset, input.placement))
+    return parameters.map((problem) => {
+      if (problem.at !== undefined || problem.side === undefined) return problem
+      const at = sideMidpoint(input.preset, problem.side, input.placement)
+      return at === null ? problem : { ...problem, at }
+    })
   }
   const path = input
   const n = path.segments.length
