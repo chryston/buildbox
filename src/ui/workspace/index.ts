@@ -8,6 +8,8 @@
  */
 export * from './displayUnits'
 export * from './planModel'
+export * from './shape/proposal'
+export * from './shape/shapeTarget'
 export * from './toolbarRegistry'
 export * from './viewport'
 export { WorkspaceProvider, useWorkspaceRoot, useWorkspaceProject } from './WorkspaceRoot'
