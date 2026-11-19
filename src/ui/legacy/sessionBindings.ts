@@ -20,7 +20,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import type { CabinetMaterialId, DrawerConfig, ElementType, GlobalSettings } from '../../domain'
-import type { Intent, IntentType, Locator, PayloadOf } from '../../edit'
+import type { Intent, IntentType, PayloadOf } from '../../edit'
 import type { ProjectSession, SaveState, SessionAsset } from '../../session'
 import { useProject, useProjectSelector, useSession } from './useProject'
 import { useUi } from './uiStore'
@@ -77,10 +77,8 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
   const activeItemDesignId = useUi((state) => state.activeItemDesignId)
   const selectedNodeId = useUi((state) => state.selectedNodeId)
   const snapGrid = useUi((state) => state.snapGrid)
-  const activeModule = useUi((state) => state.activeModule)
   const setActiveItemDesign = useUi((state) => state.setActiveItemDesign)
   const selectNode = useUi((state) => state.selectNode)
-  const setActiveModule = useUi((state) => state.setActiveModule)
 
   // The cabinet view shows a Design by id and falls back to the first one when nothing is
   // selected; the session holds no such pointer, so the projection decides it (#49).
@@ -96,13 +94,6 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
     shownSessionId.current = session.id
     setActiveItemDesign(units[0]?.id ?? null)
   }, [session.id, units, setActiveItemDesign])
-
-  // Undo and redo name the Floor and view their Intent landed on; #14's session publishes
-  // that as navigation, and the legacy view's only notion of it is which tab is showing.
-  // The Plan View's own selection is the workspace store's business (#55).
-  useEffect(() => session.onNavigate((locator: Locator) => {
-    setActiveModule(locator.view === 'plan' ? 'floorplan' : 'cabinet')
-  }), [session, setActiveModule])
 
   const dispatch = useCallback(
     (intent: Intent, newAssets?: readonly SessionAsset[]) => {
@@ -221,9 +212,6 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
       parentNodeId,
       ratio,
     })),
-
-    activeModule,
-    setActiveModule,
   }), [
     session,
     host,
@@ -237,8 +225,6 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
     selectedNodeId,
     selectNode,
     snapGrid,
-    activeModule,
-    setActiveModule,
     dispatch,
     send,
     onUnit,

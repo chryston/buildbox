@@ -22,6 +22,8 @@ export type {
   WorkspaceServices,
 } from './WorkspaceRoot'
 export { FloorWorkspace } from './FloorWorkspace'
+export { ItemDetailView } from './ItemDetailView'
+export type { ItemDetailViewProps } from './ItemDetailView'
 export { WorkspaceShell } from './WorkspaceShell'
 export type { WorkspaceShellProps } from './WorkspaceShell'
 export { ToolbarMenu, ToolbarMenuItem, WorkspaceToolbar } from './WorkspaceToolbar'

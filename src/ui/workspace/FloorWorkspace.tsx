@@ -151,9 +151,11 @@ export function FloorWorkspace(): ReactNode {
   const narrow = useNarrow()
   const uncalibrated = floorNeedsCalibration(planImage)
 
-  // Another Project opened: its placements, Floors and open view are not this one's.
+  // Another Project opened: its placements, Floors and open view are not this one's. The store
+  // was already emptied when its Project was opened (`WorkspaceProvider` owns that), so arriving
+  // here from Item Detail — which unmounts this view and mounts it again — keeps the Placed Item
+  // the back link navigated to (#57 §6).
   useEffect(() => {
-    workspaceStore.getState().reset()
     let live = true
     void services.viewportCache.readActive().then((active) => {
       if (!live) return

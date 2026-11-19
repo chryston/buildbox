@@ -58,11 +58,11 @@ describe('the legacy localStorage key', () => {
       view,
     )
 
-    // A cabinet edit, a floor-plan edit, a module switch and an undo: the four actions the
+    // A cabinet edit, a return to the Floor, a plan edit and an undo: the four actions the
     // `persist` middleware used to flush to localStorage.
     await user.click(screen.getAllByTestId(/^void-/)[0]!)
     await user.click(screen.getByRole('button', { name: /add shelf/i }))
-    await user.click(screen.getByRole('button', { name: /floor plan/i }))
+    await user.click(screen.getByTestId('item-detail-back'))
     await user.click(screen.getByTestId('add-item-menu'))
     await user.click(screen.getByTestId('add-sofa-2'))
     await user.keyboard('{Control>}z{/Control}')

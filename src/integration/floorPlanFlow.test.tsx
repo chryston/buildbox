@@ -41,8 +41,8 @@ function testWorkspaceServices(): WorkspaceServices {
 
 let view: TestView
 
-function renderWorkspace() {
-  return render(
+async function renderWorkspace() {
+  const result = render(
     <WorkspaceProvider
       session={view.session}
       services={testWorkspaceServices()}
@@ -52,7 +52,12 @@ function renderWorkspace() {
       <App />
     </WorkspaceProvider>,
     view,
+    { onWorkspace: true },
   )
+  // The workspace mounts with the render now, so its one async step — the viewport cache
+  // answering for this view — settles inside the test that asked for it, not after.
+  await screen.findByTestId('floor-plan-canvas')
+  return result
 }
 
 describe('the Floor workspace', () => {
@@ -61,10 +66,8 @@ describe('the Floor workspace', () => {
     workspaceStore.getState().reset()
   })
 
-  it('opens on the workspace shell when the Floor Plan module is active', async () => {
-    const user = userEvent.setup()
-    renderWorkspace()
-    await user.click(screen.getByRole('button', { name: /floor plan/i }))
+  it('opens on the workspace shell, which is where the app now starts', async () => {
+    await renderWorkspace()
     expect(screen.getByTestId('floor-workspace')).toBeInTheDocument()
     expect(screen.getByTestId('workspace-toolbar')).toBeInTheDocument()
     // The cabinet chrome is gone from this module (#55 criterion 1).
@@ -73,8 +76,7 @@ describe('the Floor workspace', () => {
 
   it('adds an item through the toolbar; the Project holds it and the canvas draws it', async () => {
     const user = userEvent.setup()
-    renderWorkspace()
-    await user.click(screen.getByRole('button', { name: /floor plan/i }))
+    await renderWorkspace()
     await user.click(screen.getByTestId('add-item-menu'))
     await user.click(screen.getByTestId('add-sofa-2'))
 
@@ -95,8 +97,7 @@ describe('the Floor workspace', () => {
 
   it('undoes and redoes the add through the header', async () => {
     const user = userEvent.setup()
-    renderWorkspace()
-    await user.click(screen.getByRole('button', { name: /floor plan/i }))
+    await renderWorkspace()
     await user.click(screen.getByTestId('add-item-menu'))
     await user.click(screen.getByTestId('add-sofa-2'))
     const floorId = view.project().floors[0]?.id ?? null
@@ -112,8 +113,7 @@ describe('the Floor workspace', () => {
 
   it('changes the display unit through Project settings, and the inspector follows', async () => {
     const user = userEvent.setup()
-    renderWorkspace()
-    await user.click(screen.getByRole('button', { name: /floor plan/i }))
+    await renderWorkspace()
     await user.click(screen.getByTestId('add-item-menu'))
     await user.click(screen.getByTestId('add-sofa-2'))
     expect(screen.getByTestId('selection-inspector')).toBeInTheDocument()

@@ -7,8 +7,9 @@
  * root — which is why the editor has no Project switcher and asks the app to go back to the
  * Library instead.
  *
- * It holds no state of its own: selection, module and tool live in the UI store, the document
- * in the session, the list of Projects in the Library.
+ * It holds no state of its own: selection lives in the UI store, the document in the session,
+ * the list of Projects in the Library, and which Floor, view and Item Detail are on screen in
+ * the workspace store.
  */
 import { useCallback, useMemo, type ReactNode } from 'react'
 import type { ProjectSession } from '../../session'
