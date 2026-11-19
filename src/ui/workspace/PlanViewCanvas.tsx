@@ -161,7 +161,13 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     return () => el.removeEventListener('wheel', onWheel)
   }, [svgRef, viewport, onViewport])
 
+  /** True while a footprint or the handle has taken the pointer for this gesture. */
+  const consumedPointer = useRef(false)
+
   const onPointerDown = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
+    // A pointerdown that reaches the Floor starts a fresh gesture: whatever a footprint or the
+    // handle took last time is over, so this click is a click on the Floor again.
+    consumedPointer.current = false
     if (overlay !== undefined) return // the calibration overlay owns the pointer
     const isPanGesture = tool === 'pan' || event.button === 1
     if (!isPanGesture || viewport === null) return
@@ -185,6 +191,11 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   }, [])
 
   const onBackgroundClick = useCallback(() => {
+    // A pointerdown that a footprint or the rotate handle took is not a click on the Floor,
+    // even when the click itself lands on the root — which is what a drag does, its pointer
+    // coming up somewhere else. Clearing the selection there would undo the selection the
+    // same gesture just made.
+    if (consumedPointer.current) return
     if (overlay !== undefined || panMoved.current) return
     if (tool === 'select') onSelect(null)
   }, [overlay, panMoved, tool, onSelect])
@@ -203,6 +214,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   function startItemDrag(event: React.PointerEvent<SVGGElement>, item: PlanItemView): void {
     if (tool !== 'select' || viewport === null) return
     event.stopPropagation()
+    consumedPointer.current = true
     // `Pick on canvas` armed: this click sets the Item Origin preview rather than dragging.
     if (pickingOrigin && selection === item.id) {
       const at = toFloor(event.clientX, event.clientY)
@@ -249,6 +261,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   function startRotateDrag(event: React.PointerEvent<SVGCircleElement>, item: PlanItemView): void {
     if (tool !== 'select' || viewport === null) return
     event.stopPropagation()
+    consumedPointer.current = true
     const target = event.currentTarget
     let latest = item.rotationDeg
     let turned = false
@@ -458,6 +471,9 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
                   data-testid={`placed-object-${item.id}`}
                   style={{ cursor: tool === 'select' ? (pickingOrigin && isSelected ? 'crosshair' : 'move') : undefined }}
                   onPointerDown={(event) => startItemDrag(event, item)}
+                  // A click that started on a footprint is not a click on the Floor: without
+                  // this the root's deselect-on-click undoes the selection this pointerdown
+                  // just made, and nothing on the canvas can be selected at all.
                   onClick={(event) => event.stopPropagation()}
                 >
                   <polygon
@@ -513,6 +529,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
                     strokeWidth={1.5 / zoom}
                     style={{ cursor: 'grab' }}
                     onPointerDown={(event) => startRotateDrag(event, selected)}
+                    onClick={(event) => event.stopPropagation()}
                   />
                 </g>
               )
