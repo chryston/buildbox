@@ -10,6 +10,7 @@ import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
 import { useShallow } from 'zustand/react/shallow'
 import type { ItemFootprint, Point2 } from '../../domain'
+import type { ShapeDraft } from './shape/proposal'
 import type { Viewport } from './viewport'
 
 export type WorkspaceTool = 'select' | 'pan'
@@ -63,6 +64,21 @@ export interface ItemDetailState {
   readonly from: ItemDetailReturn
 }
 
+/** Which of Item Detail's three rail tabs is open (#58 §3). */
+export type ShapeTab = 'shape' | 'edges' | 'measurements'
+
+/**
+ * The shape editor's transient draft (#58 §Notes).
+ *
+ * A proposal is UI-session state and nothing else: it is never in the Project snapshot, never
+ * in history, and never survives leaving Item Detail. Keyed by Item Design so a second design
+ * opened without leaving the page cannot inherit the first one's half-typed shape.
+ */
+export interface ShapeDraftState {
+  readonly itemDesignId: string
+  readonly draft: ShapeDraft
+}
+
 export interface WorkspaceState {
   activeTool: WorkspaceTool
   /** The selected Placed Item, or `null`. Selection is UI state, never Project data. */
@@ -82,6 +98,10 @@ export interface WorkspaceState {
   pickingOrigin: boolean
   /** The Item Detail View on screen, or `null` for the Floor workspace (#57 §6). */
   itemDetail: ItemDetailState | null
+  /** The shape editor's proposal, or `null` while nothing is being drafted (#58 §6). */
+  shapeDraft: ShapeDraftState | null
+  /** Item Detail's open rail tab (#58 §3). */
+  shapeTab: ShapeTab
   /** The last viewport per view key, in memory for this tab; the cache persists it. */
   viewports: Record<string, Viewport>
   /** View keys whose device-local cache entry has already been read this session. */
@@ -112,6 +132,10 @@ export interface WorkspaceActions {
   openItemDetail(itemDesignId: string, from: ItemDetailReturn): void
   /** Back to the Floor, the view and the Placed Item Item Detail came from. */
   closeItemDetail(): void
+  /** Put a shape proposal on screen for one Item Design; `null` discards it (#58 §6). */
+  setShapeDraft(itemDesignId: string, draft: ShapeDraft | null): void
+  /** Item Detail's rail tab. Navigation, never history (#26). */
+  setShapeTab(shapeTab: ShapeTab): void
   setViewport(viewKey: string, viewport: Viewport): void
   markHydrated(viewKey: string): void
   setRailOpen(open: boolean): void
@@ -135,6 +159,8 @@ const INITIAL: WorkspaceState = {
   designPreview: null,
   pickingOrigin: false,
   itemDetail: null,
+  shapeDraft: null,
+  shapeTab: 'shape',
   viewports: {},
   hydrated: {},
   railOpen: false,
@@ -176,7 +202,12 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
     set(pickingOrigin ? { pickingOrigin, designPreview: null } : { pickingOrigin }),
   setDesignPreview: (designPreview) => set({ designPreview }),
   openItemDetail: (itemDesignId, from) => set({ itemDetail: { itemDesignId, from } }),
-  closeItemDetail: () => set({ itemDetail: null }),
+  // Leaving Item Detail takes the draft with it: a proposal is not something to come back to,
+  // and a shape that failed validation must not be waiting on the next design opened.
+  closeItemDetail: () => set({ itemDetail: null, shapeDraft: null }),
+  setShapeDraft: (itemDesignId, draft) =>
+    set({ shapeDraft: draft === null ? null : { itemDesignId, draft } }),
+  setShapeTab: (shapeTab) => set({ shapeTab }),
   setViewport: (viewKey, viewport) =>
     set((state) => ({ viewports: { ...state.viewports, [viewKey]: viewport } })),
   markHydrated: (viewKey) =>

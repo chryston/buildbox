@@ -1,0 +1,410 @@
+/*
+ * The Item Detail shape editor (#58 §3).
+ *
+ * Same ribbon density as the Floor workspace — a fixed-height toolbar, a rail of the same
+ * width, 10px uppercase card titles, 96px label columns — because it is the same kind of tool
+ * and a person moving between the Floor and an Item Design should not have to relearn where
+ * things are. The colours and radii come from the Project's own tokens, not from the prototype
+ * that tried the layout out: the prototype was Variant A, and its palette was never the app's.
+ */
+
+.bb-shape-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  border: 1px solid var(--bb-border-card);
+  border-radius: var(--bb-radius-card);
+  background: var(--bb-bg-app);
+  overflow: hidden;
+}
+
+.bb-shape-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  height: var(--bb-workspace-toolbar-height);
+  padding: 0 12px;
+  border-bottom: 1px solid var(--bb-border-header);
+  background: var(--bb-bg-header);
+}
+
+.bb-shape-toolbar-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--bb-text-muted);
+}
+
+/* The same three tabs in a host that owns the drawing — a cabinet's Item Detail. The rail is
+   the whole panel here, so it takes the panel's width and stops being a rail beside a canvas. */
+.bb-shape-editor[data-layout='inspector'] {
+  flex: 0 0 var(--bb-workspace-rail-width);
+  border-right: 1px solid var(--bb-border-header);
+  background: var(--bb-bg-header);
+}
+
+.bb-shape-editor[data-layout='inspector'] .bb-shape-rail {
+  width: auto;
+  flex: 1;
+  border-right: 0;
+  padding-bottom: 20px;
+}
+
+.bb-shape-rail-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--bb-text-muted);
+}
+
+.bb-shape-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* The rail holds the tab strip and one panel; the panel is the column that scrolls. */
+.bb-shape-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bb-shape-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: var(--bb-workspace-rail-width);
+  flex: none;
+  padding: 12px;
+  overflow-y: auto;
+  background: var(--bb-bg-header);
+  border-right: 1px solid var(--bb-border-header);
+}
+
+.bb-shape-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--bb-border-header);
+  padding-bottom: 8px;
+}
+
+.bb-shape-tab-button {
+  flex: 1;
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: var(--bb-radius-button);
+  border: 1px solid transparent;
+  background: none;
+  color: var(--bb-text-muted);
+  cursor: pointer;
+}
+
+.bb-shape-tab-button:hover {
+  color: var(--bb-text);
+}
+
+.bb-shape-tab-button[data-active='true'] {
+  border-color: var(--bb-border-button);
+  background: var(--bb-bg-button);
+  color: var(--bb-text-strong);
+}
+
+/* The kind of shape in hand, above its parameters: the answer to "what am I editing". */
+.bb-shape-kind {
+  margin: 0 0 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bb-text-muted);
+}
+
+.bb-shape-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/*
+ * One parameter: a 96px label column and the field beside it. The column is fixed rather than
+ * content-sized so that eight rows of differently-named fields still read as a column of
+ * numbers to scan down, which is what a person does with a shape's parameters.
+ */
+.bb-shape-row {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.bb-shape-row[data-invalid='true'] .bb-shape-row-label {
+  color: var(--bb-danger-text);
+}
+
+.bb-shape-row[data-invalid='true'] .bb-workspace-input {
+  border-color: var(--bb-danger-text);
+}
+
+/* The sentence spans the row: it is about the field, but it is wider than the field's label. */
+.bb-shape-problem {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--bb-danger-text);
+}
+
+.bb-shape-row-label {
+  font-size: 12px;
+  color: var(--bb-text-muted);
+}
+
+.bb-shape-static {
+  font-size: 12px;
+  color: var(--bb-text);
+}
+
+.bb-shape-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--bb-text-muted);
+  cursor: pointer;
+}
+
+.bb-shape-convert {
+  margin-top: 10px;
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: var(--bb-radius-button);
+  border: 1px solid var(--bb-border-button);
+  background: var(--bb-bg-button);
+  color: var(--bb-text-button);
+  cursor: pointer;
+  text-align: left;
+}
+
+.bb-shape-convert:hover:not(:disabled) {
+  border-color: var(--bb-accent);
+}
+
+.bb-shape-convert:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.bb-shape-canvas-host {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  background: var(--bb-bg-app);
+}
+
+.bb-shape-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* The Item Design's own axes, through the Item Origin: what Position X and Y count from. */
+.bb-shape-axis {
+  stroke: var(--bb-border-card);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.bb-shape-outline {
+  fill: var(--bb-bg-accent-soft);
+  stroke: var(--bb-text);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The last valid shape, behind a proposal that will not commit: what is being given up. */
+.bb-shape-ghost {
+  fill: none;
+  stroke: var(--bb-text-subtle);
+  stroke-width: 1;
+  stroke-dasharray: 6 5;
+  vector-effect: non-scaling-stroke;
+}
+
+.bb-shape-canvas[data-invalid='true'] .bb-shape-outline {
+  fill: none;
+  stroke: var(--bb-danger-text);
+}
+
+.bb-shape-origin {
+  stroke: var(--bb-accent);
+  stroke-width: 1.5;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.bb-shape-origin circle {
+  fill: var(--bb-bg-app);
+}
+
+.bb-shape-marker {
+  fill: var(--bb-danger-dot);
+  stroke: var(--bb-danger-text);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.bb-shape-draft-bar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: var(--bb-radius-choice);
+  border: 1px solid var(--bb-warn-border);
+  background: var(--bb-warn-bg);
+  color: var(--bb-warn-text);
+  font-size: 13px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 35%);
+}
+
+.bb-shape-draft-bar[data-invalid='true'] {
+  border-color: var(--bb-failure-border);
+  background: var(--bb-bg-modal);
+  color: var(--bb-danger-text);
+}
+
+.bb-shape-draft-bar button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/*
+ * The Shapes menu: eight presets in two columns, each drawn as the preset it is. The glyphs
+ * are evaluated geometry rather than icons, so a Rounded Rectangle in the menu has the corners
+ * of a Rounded Rectangle and the menu cannot misrepresent the shape it offers.
+ */
+.bb-shapes-gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  width: 208px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.bb-shapes-gallery-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px;
+  border-radius: var(--bb-radius-choice);
+  border: 1px solid transparent;
+  background: none;
+  color: var(--bb-text-muted);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.bb-shapes-gallery-item:hover {
+  background: var(--bb-bg-choice);
+  color: var(--bb-text);
+}
+
+.bb-shapes-gallery-item[data-current='true'] {
+  border-color: var(--bb-accent);
+  color: var(--bb-text-strong);
+}
+
+.bb-shape-glyph {
+  width: 34px;
+  height: 34px;
+  fill: var(--bb-bg-accent-soft);
+  stroke: var(--bb-text-muted);
+  stroke-width: 4;
+}
+
+.bb-shapes-gallery-item[data-current='true'] .bb-shape-glyph {
+  stroke: var(--bb-accent);
+}
+
+.bb-edges-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.bb-edges-table th {
+  text-align: left;
+  padding: 2px 6px 6px 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bb-text-muted);
+  border-bottom: 1px solid var(--bb-border-header);
+}
+
+.bb-edges-table td {
+  padding: 4px 6px 4px 0;
+  color: var(--bb-text);
+  border-bottom: 1px solid var(--bb-border-inset);
+}
+
+.bb-edges-caption {
+  caption-side: bottom;
+  padding-top: 8px;
+  font-size: 11px;
+  color: var(--bb-text-subtle);
+  text-align: left;
+}
+
+.bb-measurements {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 6px 8px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.bb-measurements dt {
+  color: var(--bb-text-muted);
+}
+
+.bb-measurements dd {
+  margin: 0;
+  color: var(--bb-text);
+}
+
+.bb-shape-convert-dialog {
+  max-width: 420px;
+}
+
+.bb-shape-dialog-eyebrow {
+  margin: 0 0 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bb-danger-text);
+}
+
+.bb-shape-dialog-body {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--bb-text-muted);
+}
+
+.bb-shape-destructive {
+  background: var(--bb-danger-button);
+  border-color: var(--bb-border-failure-button);
+}
