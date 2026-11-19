@@ -34,6 +34,20 @@ export type ShapeFieldId =
   | 'apexOffset'
   | 'sides'
   | 'sideLength'
+  /**
+   * The Edges tab's own fields (#59 §3, §4). They are part of this union because a problem's
+   * `field` is what tells the editor which box to mark and the draft bar to stay quiet for —
+   * two messages on screen is the failure #58 criterion 11 forbids, and it is the field list,
+   * not the tab, that decides which one of them speaks.
+   */
+  | 'edgeLength'
+  | 'edgeDirection'
+  | 'arcRadius'
+  | 'arcSweep'
+  | 'semiAxisA'
+  | 'semiAxisB'
+  | 'axisRotation'
+  | 'cornerRadius'
 
 const CORNER_FIELDS: readonly ShapeFieldId[] = ['topLeft', 'topRight', 'bottomRight', 'bottomLeft']
 

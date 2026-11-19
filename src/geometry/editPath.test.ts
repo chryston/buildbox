@@ -1,0 +1,193 @@
+/**
+ * `moveVertex` (#59 §2, behaviour 8): dragging one vertex moves only the two Edges that meet
+ * there, a curved Edge keeps its sweep, and a drag that breaks the loop is reported rather than
+ * silently dropped. These are the three properties the canvas drag depends on, and none of them
+ * is visible from `editLineEdge`'s tests, which edit an Edge rather than its endpoint.
+ */
+import { describe, expect, it } from 'vitest'
+import { TOLERANCE_MM, area, editLineEdge, lengthOf, moveVertex, perimeter, pt, segmentStart, validateLoop } from './index'
+import type { ArcSegment, ClosedPath } from './index'
+import { kitchenFixture } from './testing'
+
+/**
+ * A three-Edge loop with one arc: `start` (0, 0), a quarter arc of radius 1 000 about (0, 1000)
+ * to (1000, 1000), then two straight Edges home. Vertex 2 is the arc's far end.
+ */
+const arcLoop = (): ClosedPath => ({
+  start: pt(0, 0),
+  segments: [
+    { kind: 'arc', to: pt(1000, 1000), center: pt(0, 1000), sweepDeg: 90 },
+    { kind: 'line', to: pt(0, 1000) },
+    { kind: 'line', to: pt(0, 0) },
+  ],
+})
+
+const radiusOf = (segment: ArcSegment): number => Math.hypot(segment.center.x, segment.center.y)
+
+/**
+ * True when nothing in the path is NaN or infinite. A `d` attribute built from NaN renders
+ * nothing at all, so a shape that is merely invalid must still be a shape.
+ */
+const allFinite = (path: ClosedPath): boolean => [path.start, ...path.segments.flatMap((segment) => [segment, segment.to])]
+  .flatMap((part) => Object.values(part))
+  .every((value) => typeof value !== 'number' || Number.isFinite(value))
+
+describe('moveVertex on a chain of straight Edges', () => {
+  it('moves only the two Edges that meet at the vertex (criterion 8)', () => {
+    const kitchen = kitchenFixture()
+    const before = perimeter(kitchen)
+    const moved = moveVertex(kitchen, 2, pt(5300, 1300))
+    expect(moved.problems).toEqual([])
+    // Vertex 2 is (4800, 1300): Edge 1 runs to it and Edge 2 runs from it.
+    expect(moved.path.segments[0]).toEqual({ kind: 'line', to: pt(5300, 1300) })
+    expect(moved.path.segments[1].to).toEqual(pt(4800, 4000))
+    // Edges 3 to 6 are untouched, which is what makes a drag local in a way a typed length is not.
+    for (let index = 2; index < 6; index += 1) {
+      expect(moved.path.segments[index]).toEqual(kitchen.segments[index])
+    }
+    expect(moved.path.start).toEqual(kitchen.start)
+    // Edge 1 grows by the 500 it was dragged, and Edge 2 — which used to run straight down from
+    // the vertex — becomes the hypotenuse of that 500 against its own 2 700.
+    expect(perimeter(moved.path)).toBeCloseTo(before + 500 - 2700 + Math.hypot(500, 2700), 6)
+  })
+
+  it('moves `start` itself, and with it the last Edge that runs into it', () => {
+    const kitchen = kitchenFixture()
+    const moved = moveVertex(kitchen, 1, pt(1200, 800))
+    expect(moved.problems).toEqual([])
+    expect(moved.path.start).toEqual(pt(1200, 800))
+    expect(moved.path.segments[5].to).toEqual(pt(1200, 800))
+    expect(moved.path.segments[0].to).toEqual(pt(4800, 1300))
+    expect(segmentStart(moved.path, 0)).toEqual(pt(1200, 800))
+    expect(validateLoop(moved.path)).toEqual([])
+  })
+
+  it('keeps the loop closed whichever vertex is dragged', () => {
+    const kitchen = kitchenFixture()
+    for (let vertex = 1; vertex <= 6; vertex += 1) {
+      const moved = moveVertex(kitchen, vertex, pt(2000 + vertex * 100, 2100))
+      // The chain stays joined: every Edge still starts where the one before ended, and the last
+      // one lands back on `start`, whatever the drag did to the two Edges it touched.
+      expect(moved.path.segments[moved.path.segments.length - 1].to).toEqual(moved.path.start)
+      for (let index = 0; index < moved.path.segments.length; index += 1) {
+        const from = index === 0 ? moved.path.start : moved.path.segments[index - 1].to
+        expect(segmentStart(moved.path, index), `vertex ${vertex} edge ${index + 1}`).toEqual(from)
+      }
+    }
+  })
+})
+
+describe('moveVertex beside a curved Edge', () => {
+  it('keeps the arc sweep and re-finds the centre its new chord implies (criterion 8, D2)', () => {
+    const loop = arcLoop()
+    const moved = moveVertex(loop, 2, pt(2000, 1000))
+    expect(moved.problems).toEqual([])
+    const arc = moved.path.segments[0]
+    expect(arc.kind).toBe('arc')
+    if (arc.kind !== 'arc') return
+    expect(arc.sweepDeg).toBe(90)
+    expect(arc.to).toEqual(pt(2000, 1000))
+    // Both ends sit on the circle it found, and the radius has moved with the chord.
+    const far = Math.hypot(arc.center.x - arc.to.x, arc.center.y - arc.to.y)
+    expect(far).toBeCloseTo(radiusOf(arc), 6)
+    expect(radiusOf(arc)).not.toBeCloseTo(1000, 6)
+    // The straight Edge that starts at the vertex keeps its own endpoint.
+    expect(moved.path.segments[1].to).toEqual(pt(0, 1000))
+  })
+
+  it('re-chords the arc on the incoming side without touching the one being dragged past', () => {
+    const loop = arcLoop()
+    const moved = moveVertex(loop, 3, pt(0, 1500))
+    expect(moved.problems).toEqual([])
+    expect(moved.path.segments[0]).toEqual(loop.segments[0])
+    expect(moved.path.segments[1]).toEqual({ kind: 'line', to: pt(0, 1500) })
+    expect(moved.path.segments[2]).toEqual(loop.segments[2])
+  })
+})
+
+describe('a chord with no length (#59 regression)', () => {
+  it('reports the collapsed Edge and keeps every number finite, so the canvas goes red rather than blank', () => {
+    const loop = arcLoop()
+    const moved = moveVertex(loop, 2, loop.start)
+    expect(moved.problems.map((problem) => problem.code)).toContain('edge-no-length')
+    // The centre used to come back NaN. `moveVertex` hands the dragged shape back on purpose, so
+    // that NaN travelled into the SVG `d` attribute and erased the whole drawing: an invalid drag
+    // has to *look* invalid, not absent.
+    expect(allFinite(moved.path)).toBe(true)
+    expect(() => perimeter(moved.path)).not.toThrow()
+    expect(Number.isFinite(area(moved.path))).toBe(true)
+    expect(Number.isFinite(perimeter(moved.path))).toBe(true)
+    // And the chain still joins: an Edge with no length is not an Edge that came apart.
+    expect(moved.path.segments[0].to).toEqual(loop.start)
+    expect(segmentStart(moved.path, 1)).toEqual(moved.path.segments[0].to)
+  })
+
+  it('keeps a zero-sweep arc finite when a neighbour absorbs a straight Edge edit', () => {
+    // A sweep of 0° has no finite centre for *any* chord: the offset is a division by zero. The
+    // absorber of `editLineEdge` is re-chorded, so this reaches the same line of code from the
+    // typed-edit side, and unlike a drag the edited path is returned whenever nothing is broken.
+    const flat: ClosedPath = {
+      start: pt(0, 0),
+      segments: [
+        { kind: 'line', to: pt(1000, 0) },
+        { kind: 'line', to: pt(1000, 1000) },
+        { kind: 'arc', to: pt(0, 0), center: pt(500, 0), sweepDeg: 0 },
+      ],
+    }
+    const edited = editLineEdge(flat, 1, { length: 500 }, 'start')
+    expect(edited.problems).toEqual([])
+    expect(edited.path).not.toEqual(flat)
+    expect(allFinite(edited.path)).toBe(true)
+  })
+})
+
+describe('moveVertex on a drag that breaks the loop', () => {
+  it('reports the collapsed Edge and still returns the dragged shape, so the canvas can go red', () => {
+    const loop = arcLoop()
+    // Vertex 3 dragged onto vertex 2 leaves Edge 2 with no length. The arc is not the Edge that
+    // breaks, because a zero-chord arc has no centre to report and the loop would not survive it.
+    const moved = moveVertex(loop, 3, pt(1000, 1000))
+    expect(moved.problems.length).toBeGreaterThan(0)
+    // Deliberate, and unlike `editLineEdge`: a drag is under the cursor, and the crossing has to
+    // be on screen for the red to mean anything. Committing is the caller's decision.
+    expect(moved.path.segments[1]).toEqual({ kind: 'line', to: pt(1000, 1000) })
+    expect(lengthOf(moved.path.segments[1], pt(1000, 1000))).toBeLessThan(TOLERANCE_MM)
+    expect(moved.path.segments[0]).toEqual(loop.segments[0])
+  })
+
+  it('leaves a valid loop no smaller than it was when the vertex only slides outward', () => {
+    const kitchen = kitchenFixture()
+    const before = area(kitchen)
+    const moved = moveVertex(kitchen, 2, pt(5300, 800))
+    expect(validateLoop(moved.path)).toEqual([])
+    expect(area(moved.path)).toBeGreaterThan(before)
+  })
+})
+
+describe('keeping the far end fixed (#59 criterion 10)', () => {
+  it('carries the first Edge whole, start and all, when the propagation reaches it', () => {
+    const kitchen = kitchenFixture()
+    const result = editLineEdge(kitchen, 2, { length: 3200 }, 'end')
+    expect(result.problems).toEqual([])
+    const path = result.path
+    // Edge 2 holds its new length and its far corner stays put.
+    expect(lengthOf(path.segments[1], segmentStart(path, 1))).toBeCloseTo(3200, 6)
+    expect(path.segments[1].to).toEqual(pt(4800, 4000))
+    // Edge 1 has been shifted whole: same direction, same 3,600. It hangs from `path.start`, so
+    // that is what had to move — leaving it behind stretched the first Edge into a 3,634 diagonal
+    // and the loop closed only by the arithmetic, not by the shape.
+    expect(lengthOf(path.segments[0], path.start)).toBeCloseTo(3600, 6)
+    expect(path.start).toEqual(pt(1200, 800))
+    expect(validateLoop(path)).toEqual([])
+  })
+
+  it('moves the start itself when the edited Edge is the first one', () => {
+    const kitchen = kitchenFixture()
+    const result = editLineEdge(kitchen, 1, { length: 4100 }, 'end')
+    expect(result.problems).toEqual([])
+    expect(result.path.start).toEqual(pt(700, 1300))
+    expect(lengthOf(result.path.segments[0], result.path.start)).toBeCloseTo(4100, 6)
+    expect(result.path.segments[0].to).toEqual(pt(4800, 1300))
+    expect(validateLoop(result.path)).toEqual([])
+  })
+})

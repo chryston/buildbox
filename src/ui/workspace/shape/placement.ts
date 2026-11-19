@@ -92,6 +92,28 @@ export function clientToLocal(
   return { x: frame.minX + (clientX - originX) * mmPerPx, y: frame.minY + (clientY - originY) * mmPerPx }
 }
 
+/**
+ * Where a point of the shape lands inside the host, in CSS pixels from its top-left — the
+ * inverse of `clientToLocal`, and the same arithmetic read the other way (#59 §1).
+ *
+ * The typed-length field is HTML sitting over the SVG, so it needs a pixel position rather than
+ * a coordinate in the drawing. `null` for the same reason `clientToLocal` is: no measured host.
+ */
+export function localToHost(
+  host: { readonly width: number; readonly height: number },
+  frame: { readonly minX: number; readonly minY: number; readonly maxX: number; readonly maxY: number },
+  point: Pt,
+): { readonly x: number; readonly y: number } | null {
+  const frameWidth = frame.maxX - frame.minX
+  const frameHeight = frame.maxY - frame.minY
+  if (host.width <= 0 || host.height <= 0 || frameWidth <= 0 || frameHeight <= 0) return null
+  const mmPerPx = Math.max(frameWidth / host.width, frameHeight / host.height)
+  return {
+    x: (host.width - frameWidth / mmPerPx) / 2 + (point.x - frame.minX) / mmPerPx,
+    y: (host.height - frameHeight / mmPerPx) / 2 + (point.y - frame.minY) / mmPerPx,
+  }
+}
+
 /** What the pointer did: dragged a box, or clicked a point. */
 export type PlacementGesture = { readonly box: DragBox } | { readonly point: Pt }
 

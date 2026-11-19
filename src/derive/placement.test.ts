@@ -11,19 +11,20 @@ import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { rectangleFootprint } from '../domain'
 import type { GenericItemDesign, PlacedItem } from '../domain'
-import type { ClosedPath, Pt } from '../geometry'
+import type { ClosedPath, Pt, SnapKind } from '../geometry'
 import { pt } from '../geometry'
 import {
   designDefaultOrigin,
   floorBoundsSize,
   designOutline,
   localPointOf,
-  nearestOriginCandidate,
   normaliseRotation,
   originCandidates,
   originMoveTranslations,
+  originSnapCandidates,
   pathOrigin,
   placementContext,
+  resolveSnap,
   worldPoint,
 } from './index'
 
@@ -194,8 +195,12 @@ describe('originCandidates', () => {
       ]),
     )
     // 12 CSS px at 2 mm per pixel is 24 mm of reach; the bottom-left corner is 10 mm away.
-    expect(nearestOriginCandidate(candidates, pt(0, 410), 24)).toEqual(pt(0, 400))
-    expect(nearestOriginCandidate(candidates, pt(120, 410), 24)).toBeNull()
+    // #59 routes the pick through the same resolver every tool uses, so the reach is spelled
+    // in pixels and the candidates carry the kinds the resolver ranks them by.
+    const picks = originSnapCandidates(base600())
+    const kinds = new Set<SnapKind>(['endpoint', 'midpoint', 'centre'])
+    expect(resolveSnap(picks, pt(0, 410), 2, kinds)?.point).toEqual(pt(0, 400))
+    expect(resolveSnap(picks, pt(120, 410), 2, kinds)).toBeNull()
   })
 })
 

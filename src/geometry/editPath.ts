@@ -87,7 +87,17 @@ export const editLineEdge = (
     segments[absorber] = { ...reChord(segments[absorber], segmentStart(path, absorber), moved), to: moved }
   }
   const edited: ClosedPath = {
-    start: keepFixed === 'end' && i === 0 ? free : path.start,
+    // The chain's one open end. `Keep fixed: end` runs the propagation backwards, and it reaches
+    // `path.start` two different ways: the edited Edge may *be* the first one, in which case its
+    // own start is the free end; or the carrier may be, in which case the whole first Edge has
+    // just been shifted and its start has to shift with it. Leaving either behind unjoins the
+    // loop — and a first Edge whose start stayed put has quietly changed its own direction and
+    // length, which is the one thing the absorbing rule promises it will not do (#59 criterion 10).
+    start: keepFixed === 'end' && i === 0
+      ? free
+      : keepFixed === 'end' && carrier === 0
+        ? add(path.start, delta)
+        : path.start,
     segments,
   }
   const problems = brokenEdges(path, edited)
@@ -115,6 +125,15 @@ const reChord = (segment: Segment, from: Pt, to: Pt, oldFrom = from): Segment =>
   if (segment.kind === 'arc') {
     const sweep = segment.sweepDeg * DEG
     const offset = length / (2 * Math.tan(sweep / 2))
+    // A chord with no length has no perpendicular bisector to stand a centre on, and a sweep of
+    // 0° or 360° has no finite centre either; both divide by something that is not a number. The
+    // NaN would travel straight into the SVG `d` attribute and silently erase the shape, which is
+    // worse than the lie the rest of the kernel already tells about a zero-length Edge. So the
+    // centre goes on the chord itself: finite, joined, radius zero, and `brokenEdges` reports the
+    // Edge as having no length either way — an invalid proposal, not a vanished drawing.
+    if (length <= TOLERANCE_MM || !Number.isFinite(offset)) {
+      return { kind: 'arc', to, center: to, sweepDeg: segment.sweepDeg }
+    }
     const normal = turnNormal(unitOf(chord))
     return {
       kind: 'arc',
@@ -138,6 +157,42 @@ const reChord = (segment: Segment, from: Pt, to: Pt, oldFrom = from): Segment =>
 }
 
 const add = (a: Pt, b: Pt): Pt => pt(a.x + b.x, a.y + b.y)
+
+/**
+ * Drag one vertex of a closed chain to a new point (#59 §2, behaviour 8).
+ *
+ * Only the two Edges that meet there follow. A straight one takes the new endpoint; a curved one
+ * keeps its sweep and finds the centre — and for a circular arc the radius — its new chord
+ * implies, which is the same absorbing rule `editLineEdge` uses (D2). Nothing else in the chain is
+ * touched, which is what makes a drag local in a way that typing a length is not.
+ *
+ * `vertexIndex` is 1-based and counts from `path.start` exactly as `fillet` counts it, so the
+ * vertex a handle selects and the vertex `Corner radius` rounds are the same number.
+ *
+ * Unlike `editLineEdge`, the dragged shape comes back even when `problems` is not empty. A typed
+ * edit leaves the drawing alone and puts its sentence under the field; a drag is *under the
+ * cursor*, and a person has to see the crossing they are dragging into for the red to mean
+ * anything. Committing is the caller's decision, and `problems` plus the loop's own validation are
+ * what tell it that this one commits nothing.
+ */
+export const moveVertex = (path: ClosedPath, vertexIndex: number, to: Pt): EditResult => {
+  const n = path.segments.length
+  const incoming = (vertexIndex - 2 + n) % n
+  const outgoing = (vertexIndex - 1) % n
+  const inSeg = path.segments[incoming]
+  const outSeg = path.segments[outgoing]
+  const segments = [...path.segments]
+  segments[incoming] = inSeg.kind === 'line'
+    ? { kind: 'line', to }
+    : reChord(inSeg, segmentStart(path, incoming), to)
+  // A straight outgoing Edge keeps its own endpoint: its start is the vertex, so it follows on
+  // its own. A curved one re-chords, and `reChord` needs the start it is re-chording *from*.
+  segments[outgoing] = outSeg.kind === 'line'
+    ? outSeg
+    : reChord(outSeg, to, outSeg.to, segmentStart(path, outgoing))
+  const edited: ClosedPath = { start: outgoing === 0 ? to : path.start, segments }
+  return { path: edited, problems: brokenEdges(path, edited) }
+}
 
 /**
  * Change a circular arc's radius or sweep with **both endpoints fixed**, which is what the

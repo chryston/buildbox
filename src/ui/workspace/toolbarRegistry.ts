@@ -14,6 +14,7 @@
  * draw because a Floor has no underlay would be refusing to work.
  */
 import type { PlanImage } from '../../domain'
+import type { DrawTool } from './shape/draftPath'
 import type { WorkspaceTool } from './workspaceStore'
 
 /** One tool the toolbar can hold. */
@@ -23,6 +24,22 @@ export interface WorkspaceToolDefinition {
   readonly testId: string
   /** Whether this tool draws measured geometry, and so needs a calibrated Plan Image. */
   readonly requiresCalibratedFloor: boolean
+  /**
+   * A glyph drawn in a 20 × 20 box, in front of the words (#59 §1).
+   *
+   * The three drawing tools carry one because the prototype's tool row was a strip of bare
+   * icons with no words at all, and a person had to hover to learn what they were. The words
+   * are the label; the glyph only makes the row scannable.
+   */
+  readonly icon?: string
+}
+
+/**
+ * A drawing tool: a `WorkspaceToolDefinition` whose id is one of the three the Custom Path
+ * editor arms, so the editor can hand `id` straight to the draft machine without a cast (#59 §1).
+ */
+export interface DrawToolDefinition extends WorkspaceToolDefinition {
+  readonly id: DrawTool
 }
 
 /** The explanation a gated tool gives. One sentence, wherever it is read. */
@@ -49,4 +66,38 @@ export function toolIsGated(tool: WorkspaceToolDefinition, planImage: PlanImage 
 export const WORKSPACE_TOOLS: readonly WorkspaceToolDefinition[] = [
   { id: 'select', label: 'Select', testId: 'tool-select', requiresCalibratedFloor: false },
   { id: 'pan', label: 'Pan', testId: 'tool-pan', requiresCalibratedFloor: false },
+]
+
+/**
+ * The three Custom Path drawing tools (#59 §1).
+ *
+ * They are registered here rather than hard-wired into the editor because this registry is the
+ * one place that says which tools write millimetres, and all three do: a point placed against
+ * an uncalibrated Plan Image is a number with no meaning. The Item Design editor renders them;
+ * the Floor workspace does not yet, because a drawn path has nowhere to be aimed until Rooms
+ * arrive in #67 — the target registers later through the same adapter, and it inherits this
+ * gating for free.
+ */
+export const DRAW_TOOLS: readonly DrawToolDefinition[] = [
+  {
+    id: 'line',
+    label: 'Line',
+    testId: 'draw-line',
+    requiresCalibratedFloor: true,
+    icon: 'M3 17 L17 3',
+  },
+  {
+    id: 'arc',
+    label: 'Arc',
+    testId: 'draw-arc',
+    requiresCalibratedFloor: true,
+    icon: 'M3 17 A 14 14 0 0 1 17 3',
+  },
+  {
+    id: 'ellipticalArc',
+    label: 'Elliptical arc',
+    testId: 'draw-elliptical-arc',
+    requiresCalibratedFloor: true,
+    icon: 'M2 15 A 8 6 0 0 1 18 15',
+  },
 ]

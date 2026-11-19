@@ -77,3 +77,81 @@ export const tangentPoints = (at: Pt, segment: Segment, from: Pt): Pt[] => {
     form.center.y + form.rx * Math.sin(angle),
   ))
 }
+
+// ---------------------------------------------------------------------------
+// Resolver (#59 §5)
+
+/** The ten things a snap can be, in the D6 tie-break order (nearest wins, this breaks ties). */
+export type SnapKind =
+  | 'endpoint' | 'intersection' | 'midpoint' | 'centre' | 'tangent'
+  | 'perpendicular' | 'wallFace' | 'axis' | 'angle' | 'grid'
+
+/**
+ * The D6 order (#59 behaviour 23): vertex/endpoint > intersection > midpoint > centre >
+ * tangent > perpendicular > wall face > axis > angle > grid. The longest-standing target
+ * first, so a corner that is also a grid point reads as a corner.
+ */
+export const SNAP_PRIORITY: readonly SnapKind[] = [
+  'endpoint', 'intersection', 'midpoint', 'centre', 'tangent',
+  'perpendicular', 'wallFace', 'axis', 'angle', 'grid',
+]
+
+/** One point the tools would offer, with the plain words that name it. */
+export interface SnapCandidate {
+  readonly point: Pt
+  readonly kind: SnapKind
+  /** Plain words for the indicator, e.g. `Corner of Kitchen`, `Midpoint of edge 3`, `Grid`. */
+  readonly label: string
+}
+
+/** A completed snap: the exact canonical point, its kind, and the candidate behind it. */
+export interface Snap {
+  readonly point: Pt
+  readonly kind: SnapKind
+  /** The candidate it resolved to — the same object, so the caller can read `label`. */
+  readonly target: SnapCandidate
+}
+
+/**
+ * The acquisition radius (#59 behaviour 22): 12 CSS px at every zoom. Never a world-space
+ * constant — that was the prototype's 200 mm defect.
+ */
+export const SNAP_ACQUISITION_PX = 12
+
+/**
+ * The one snap resolver (#59 §5): the highest-priority enabled candidate within the screen-pixel
+ * acquisition radius, `SNAP_PRIORITY` deciding first and distance only breaking ties within one
+ * kind. It resolves to the candidate's exact canonical coordinate, never the cursor (#59
+ * behaviour 20), and it stores nothing — a snap writes coordinates only, never a relationship
+ * (#59 behaviour 25).
+ *
+ * Priority has to dominate distance, not merely break a tie inside it. The axis, angle and
+ * perpendicular candidates are constructed *on* the cursor, so their distance is always zero and
+ * a nearest-first rule lets one of them beat a real corner a millimetre away every single time —
+ * which is behaviour 20 failing with the default settings on. D6's list is the order the tools
+ * prefer, and "a corner that is also a grid point reads as a corner" is the same argument.
+ */
+export const resolveSnap = (
+  candidates: readonly SnapCandidate[],
+  cursorWorld: Pt,
+  mmPerPx: number,
+  enabledKinds: ReadonlySet<SnapKind>,
+): Snap | null => {
+  if (!(mmPerPx > 0)) return null
+  // Twelve screen pixels, in millimetres: the canvas reports its own millimetres per pixel, so
+  // that is the number this takes. The reciprocal would read the same at 1 and quietly make the
+  // reach 12 mm at a zoom of 12 mm per pixel, which is the defect the criterion names.
+  const reach = SNAP_ACQUISITION_PX * mmPerPx
+  const within = candidates
+    .filter((candidate) => enabledKinds.has(candidate.kind))
+    .map((candidate) => ({ candidate, distance: distance(candidate.point, cursorWorld) }))
+    .filter((found) => found.distance <= reach)
+  if (within.length === 0) return null
+  const winner = within.reduce((best, found) => {
+    const r = SNAP_PRIORITY.indexOf(found.candidate.kind)
+    const br = SNAP_PRIORITY.indexOf(best.candidate.kind)
+    if (r !== br) return r < br ? found : best
+    return found.distance < best.distance ? found : best
+  }).candidate
+  return { point: winner.point, kind: winner.kind, target: winner }
+}

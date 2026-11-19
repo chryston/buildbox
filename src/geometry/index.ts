@@ -69,20 +69,24 @@ export { classifyPoint, containment, intersect, isBoundary, overlap } from './in
 export type { Overlap, OverlapInterval, PathIntersections } from './intersect'
 export { fillet, isTangentFillet, roundAllCorners, setFilletRadius, tangentAt } from './fillet'
 export type { EditResult } from './fillet'
-export { editArc, editEllipticalArc, editLineEdge } from './editPath'
+export { editArc, editEllipticalArc, editLineEdge, moveVertex } from './editPath'
 export type { ArcChange, EllipticalArcChange, KeepFixed, LineEdgeChange } from './editPath'
 export { linearElement, offset } from './offset'
 export type { LinearElement } from './offset'
 export { classify, interval, overlapLength } from './interval'
 export type { Interval } from './interval'
 export {
+  SNAP_ACQUISITION_PX,
+  SNAP_PRIORITY,
   centres,
   endpoints,
   intersections,
   midpoints,
   perpendicularFoot,
+  resolveSnap,
   tangentPoints,
 } from './snap'
+export type { Snap, SnapCandidate, SnapKind } from './snap'
 export { toValidationProblems, validateLoop } from './validate'
 export type { LoopInput } from './validate'
 export { geometryProblem, pt, TOLERANCE_MM } from './types'

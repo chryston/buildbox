@@ -20,8 +20,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
-import { localPointOf, nearestOriginCandidate, worldPointOf } from '../../derive'
-import type { PlacementContext } from '../../derive'
+import { localPointOf, resolveSnap, worldPointOf } from '../../derive'
+import type { PlacementContext, SnapCandidate, SnapKind } from '../../derive'
 import { footprintSize } from '../../domain'
 import type { DisplayUnit, Point2 } from '../../domain'
 import { formatMm } from './displayUnits'
@@ -35,8 +35,6 @@ import type { AngleSnap, DesignEditPreview, ItemDragPreview, WorkspaceTool } fro
 
 const WHEEL_IN = 1.25
 const WHEEL_OUT = 0.8
-/** `Pick on canvas` snaps to a footprint vertex, edge midpoint or bounds centre this close. */
-const PICK_SNAP_PX = 12
 /** How far outside the footprint the dimension lines run, and their text beyond them. */
 const DIM_OFFSET_PX = 22
 const DIM_TEXT_GAP_PX = 8
@@ -90,7 +88,9 @@ export interface PlanViewCanvasProps {
   /** `Pick on canvas` armed: the next click on the selected placement sets the Item Origin. */
   pickingOrigin: boolean
   /** Item Origin candidates of the selected placement's design, for the pick's snap. */
-  originCandidates: readonly Point2[]
+  originCandidates: readonly SnapCandidate[]
+  /** The kinds the nine `Snaps ▾` rows switch on; the pick honours them like every other tool. */
+  snapKinds: ReadonlySet<SnapKind>
   /** The pick's answer, in footprint-local millimetres. Opens the preview; commits nothing. */
   onPickOrigin: (origin: Point2) => void
   unit: DisplayUnit
@@ -118,7 +118,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   const {
     hostRef, svgRef, items, image, viewport, onViewport, tool, selection, onSelect,
     dragPreview, onDragPreview, onMoveItem, onRotateItem, designPreview, pickingOrigin,
-    originCandidates, onPickOrigin, unit, precision, angleSnap, overlay,
+    originCandidates, snapKinds, onPickOrigin, unit, precision, angleSnap, overlay,
   } = props
   const [hostSize, setHostSize] = useState({ width: 0, height: 0 })
   const [dragging, setDragging] = useState(false)
@@ -221,8 +221,11 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       const at = toFloor(event.clientX, event.clientY)
       if (at === null) return
       const local = localPointOf(item.context, at)
-      const snapped = nearestOriginCandidate(originCandidates, local, PICK_SNAP_PX / viewport.zoom)
-      onPickOrigin(snapped ?? local)
+      // #59 §5: `Pick on canvas` is a tool like any other, so it goes through the same
+      // resolver — the same 12 CSS px of acquisition at this zoom, the same tie-break, and the
+      // same nine switches. `viewport.zoom` is pixels per millimetre, which is what converts.
+      const snap = resolveSnap(originCandidates, local, viewport.zoom, snapKinds)
+      onPickOrigin(snap?.point ?? local)
       return
     }
     onSelect(item.id)

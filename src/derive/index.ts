@@ -19,6 +19,8 @@
  */
 export { cabinetSceneUnits } from './cabinetSceneUnits'
 export { pathToSvg } from './svg'
+export { SNAP_ROW_KINDS, enabledSnapKinds, snapCandidates } from './snapCandidates'
+export type { SnapGeometry, SnapSettingKinds, SnapSourceInput, WallFaceSource } from './snapCandidates'
 export {
   designDefaultOrigin,
   designOutline,
@@ -26,10 +28,10 @@ export {
   floorBoundsSize,
   localPointOf,
   localPointValid,
-  nearestOriginCandidate,
   normaliseRotation,
   originCandidates,
   originMoveTranslations,
+  originSnapCandidates,
   pathOrigin,
   placementContext,
   placementTransform,
@@ -39,28 +41,49 @@ export {
 export type { OriginMove, PlacementContext } from './placement'
 export {
   PRESET_KINDS,
+  SNAP_ACQUISITION_PX,
+  SNAP_PRIORITY,
+  TOLERANCE_MM,
   cornerRadiiOf,
   directionDeg,
   distance,
+  editArc,
+  editEllipticalArc,
+  editLineEdge,
   endpoints,
   evaluatePreset,
+  fillet,
+  isTangentFillet,
   lengthOf,
   midpoints,
+  moveVertex,
   normaliseDeg,
   presetInBox,
   presetParametersValid,
   pt,
   regularPolygonMetrics,
+  resolveSnap,
+  roundAllCorners,
   segmentStart,
+  setFilletRadius,
+  toValidationProblems,
   validateLoop,
   vertices,
 } from '../geometry'
 export type {
+  ArcChange,
+  ArcSegment,
   Bounds,
   ClosedPath,
   CornerRadii,
+  EditResult,
+  EllipticalArcChange,
+  EllipticalArcSegment,
   GeometryProblem,
   GeometryProblemCode,
+  KeepFixed,
+  LineEdgeChange,
+  LineSegment,
   Pt,
   Preset,
   PresetKind,
@@ -68,4 +91,7 @@ export type {
   Segment,
   SideName,
   SizeBox,
+  Snap,
+  SnapCandidate,
+  SnapKind,
 } from '../geometry'

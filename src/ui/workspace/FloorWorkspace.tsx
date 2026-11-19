@@ -15,9 +15,9 @@
  * owners of it (#25): every selector below takes the Floor id, so nothing drawn, snapped or
  * selected can cross a Floor boundary.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { originCandidates as originCandidatePoints } from '../../derive'
+import { originSnapCandidates } from '../../derive'
 import type { Point2, Project } from '../../domain'
 import { summarizeFloorDependencies } from '../../domain'
 import type { SessionAsset } from '../../session'
@@ -44,7 +44,7 @@ import {
 import { CALIBRATION_REQUIRED_HINT, WORKSPACE_TOOLS, floorNeedsCalibration, toolIsGated } from './toolbarRegistry'
 import { fitViewport } from './viewport'
 import type { Viewport } from './viewport'
-import { useWorkspace, workspaceStore } from './workspaceStore'
+import { enabledKindsOf, useWorkspace, workspaceStore } from './workspaceStore'
 import { WorkspaceShell } from './WorkspaceShell'
 import { ToolbarMenu, ToolbarMenuItem, WorkspaceToolbar } from './WorkspaceToolbar'
 import type { ToolbarGroup } from './WorkspaceToolbar'
@@ -122,6 +122,9 @@ export function FloorWorkspace(): ReactNode {
   const dragPreview = useWorkspace((state) => state.dragPreview)
   const setDragPreview = useWorkspace((state) => state.setDragPreview)
   const angleSnap = useWorkspace((state) => state.snapSettings.angle)
+  const snapSettings = useWorkspace((state) => state.snapSettings)
+  /** The kinds the nine `Snaps ▾` rows switch on, recomputed only when a row changes. */
+  const snapKinds = useMemo(() => enabledKindsOf(snapSettings), [snapSettings])
   const designPreview = useWorkspace((state) => state.designPreview)
   const setDesignPreview = useWorkspace((state) => state.setDesignPreview)
   const pickingOrigin = useWorkspace((state) => state.pickingOrigin)
@@ -789,7 +792,8 @@ export function FloorWorkspace(): ReactNode {
               onRotateItem={(id, rotationDeg) => send('plan.rotatePlacement', { placedItemId: id, rotationDeg })}
               designPreview={designPreview}
               pickingOrigin={pickingOrigin}
-              originCandidates={selectedDesign === null ? [] : originCandidatePoints(selectedDesign)}
+              originCandidates={selectedDesign === null ? [] : originSnapCandidates(selectedDesign)}
+              snapKinds={snapKinds}
               onPickOrigin={previewOrigin}
               unit={project.preferences.displayUnit}
               precision={project.preferences.displayPrecision}
