@@ -92,6 +92,22 @@ describe('#54 criterion 1 / 11: the corner-radius equality case', () => {
     expect(problems[0].values).toEqual([1000, 1001, 2000])
     expect(problems[0].side).toBe('top')
   })
+
+  it('marks the middle of the side the problem names, turned with the footprint', () => {
+    const radii = { topLeft: 1000, topRight: 1001, bottomRight: 0, bottomLeft: 0 }
+    const at = (orientationDeg: number, centre: Pt = { x: 0, y: 0 }): Pt | undefined => validateLoop({
+      preset: { kind: 'roundedRectangle', width: 2000, depth: 3000, radii },
+      placement: { centre, orientationDeg },
+    })[0].at
+    // #58 behaviour 17: the canvas marker sits at the failure location. The overlapping radii
+    // are a side, so the location is its middle — the top side of a 2,000 × 3,000 Rounded
+    // Rectangle centred on the Item Origin runs at y = -1,500.
+    expect(at(0)).toEqual({ x: 0, y: -1500 })
+    // Turned a quarter turn clockwise it is the right-hand side, and it travels with the origin.
+    const turned = at(90, { x: 400, y: 250 })
+    expect(turned?.x).toBeCloseTo(1900, 6)
+    expect(turned?.y).toBeCloseTo(250, 6)
+  })
 })
 
 describe('#54 criterion 5: the self-crossing fixture', () => {

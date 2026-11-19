@@ -400,6 +400,33 @@ export const roundedRectangleOverlap = (preset: RoundedRectanglePreset): Geometr
 }
 
 /**
+ * The middle of the side a parameter problem names, in the frame the placement draws it in.
+ *
+ * A Rounded Rectangle's overlapping radii are a side rather than a point, and `SIDES` names
+ * the side by its corners **at 0°**. So the point is taken from the unturned shape and then
+ * turned and moved with it, which puts the canvas marker on the side the message means
+ * whichever way the footprint is facing. Only a Rounded Rectangle has named sides; every other
+ * preset's problem has no place to mark.
+ */
+export const sideMidpoint = (preset: Preset, side: SideName, placement: Placement): Pt | null => {
+  if (preset.kind !== 'roundedRectangle') return null
+  const found = SIDES.find((entry) => entry.side === side)
+  if (found === undefined) return null
+  const corner = (name: keyof CornerRadii): Pt => pt(
+    name === 'topLeft' || name === 'bottomLeft' ? -preset.width / 2 : preset.width / 2,
+    name === 'topLeft' || name === 'topRight' ? -preset.depth / 2 : preset.depth / 2,
+  )
+  const a = corner(found.from)
+  const b = corner(found.to)
+  const mid = pt((a.x + b.x) / 2, (a.y + b.y) / 2)
+  return applyTransform(mid, {
+    rotationDeg: normaliseDeg(placement.orientationDeg),
+    translation: placement.centre,
+    pivot: pt(0, 0),
+  })
+}
+
+/**
  * The parameter-level problems of a preset (#54 §5): non-positive sizes, a side count below
  * 3 or not an integer, the capsule rule and the corner-radius rule.
  */

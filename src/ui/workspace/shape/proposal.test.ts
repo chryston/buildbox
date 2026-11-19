@@ -185,6 +185,14 @@ describe('where the one message goes', () => {
     expect(markerPoint(propose(target, openShape(target), CANVAS, BOWTIE))).toEqual({ x: 50, y: 50 })
   })
 
+  it('marks the middle of the side whose radii overlap', () => {
+    const target = targetFor(topRadii(1000))
+    const refused = propose(target, openShape(target), field('topRight'), topRadii(1001))
+    // The failure is a side, not a point, so the place is its middle: the top side of a
+    // 2,000 × 3,000 Rounded Rectangle whose origin sits at (1,000, 1,500) runs at y = 0.
+    expect(markerPoint(refused)).toEqual({ x: 1000, y: 0 })
+  })
+
   it('has no marker when the failure has no place', () => {
     const target = targetFor(topRadii(1000))
     expect(markerPoint(propose(target, openShape(target), CANVAS, rectangleFootprint(0, 400)))).toBeNull()
