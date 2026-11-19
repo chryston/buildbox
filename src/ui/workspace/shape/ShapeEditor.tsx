@@ -620,7 +620,20 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
                 onConvert={() => setConvertOpen(true)}
               />
             )}
-            {tab === 'edges' && <EdgesTab path={designOutline(design)} format={format} />}
+            {tab === 'edges' && (
+              <EdgesTab
+                path={footprintAsPath(shown).path}
+                format={format}
+                selection={shapeSelection}
+                invalidField={field}
+                invalidMessage={message}
+                readOnly={isCabinet || readOnly}
+                editable={committed.kind === 'path' && !isCabinet && !readOnly}
+                onSelect={workspaceStore.getState().setShapeSelection}
+                onGesture={gesture}
+                onDiscard={dropDraft}
+              />
+            )}
             {tab === 'measurements' && (
               <MeasurementsTab footprint={shown} format={format} boundsLabel="Bounds" />
             )}
