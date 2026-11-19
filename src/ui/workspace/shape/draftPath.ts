@@ -359,17 +359,14 @@ export interface DraftChip {
 }
 
 /**
- * The chip numbers for the draft (#59 §1): chord and direction always, radius and arc
- * length for a circular arc, semi-axes and arc length for an elliptical one. The arc
- * length comes from `derive`'s `lengthOf`, the same adaptive-Simpson quadrature of the
- * curve's speed that measures every committed Edge — so the chip and the final perimeter
- * cannot disagree.
+ * The chip numbers for one Edge (#59 §1): chord and direction always, radius and arc length
+ * for a circular arc, semi-axes and arc length for an elliptical one. Every placed Edge carries
+ * a chip while the draft is open, not only the one in progress, so this reads a segment rather
+ * than a draft. The arc length comes from `derive`'s `lengthOf`, the same adaptive-Simpson
+ * quadrature of the curve's speed that measures every committed Edge — so the chip and the
+ * final perimeter cannot disagree.
  */
-export const draftChip = (draft: PathDraft): DraftChip | null => {
-  const placed = placedEdges(draft)
-  const edge = rubberBand(draft) ?? placed[placed.length - 1]
-  if (edge === undefined) return null
-  const { segment, from } = edge
+export const chipForSegment = (segment: Segment, from: Pt): DraftChip => {
   const chord = distance(from, segment.to)
   const base = {
     kind: segment.kind,
@@ -384,4 +381,11 @@ export const draftChip = (draft: PathDraft): DraftChip | null => {
   if (segment.kind === 'arc')
     return { ...base, radiusMm: distance(from, segment.center), arcLengthMm: lengthOf(segment, from) }
   return { ...base, arcLengthMm: lengthOf(segment, from), rx: segment.rx, ry: segment.ry }
+}
+
+/** The chip for the segment in progress, or the last placed Edge when there is no band. */
+export const draftChip = (draft: PathDraft): DraftChip | null => {
+  const placed = placedEdges(draft)
+  const edge = rubberBand(draft) ?? placed[placed.length - 1]
+  return edge === undefined ? null : chipForSegment(edge.segment, edge.from)
 }

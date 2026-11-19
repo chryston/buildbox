@@ -69,7 +69,7 @@ export { classifyPoint, containment, intersect, isBoundary, overlap } from './in
 export type { Overlap, OverlapInterval, PathIntersections } from './intersect'
 export { fillet, isTangentFillet, roundAllCorners, setFilletRadius, tangentAt } from './fillet'
 export type { EditResult } from './fillet'
-export { editArc, editEllipticalArc, editLineEdge } from './editPath'
+export { editArc, editEllipticalArc, editLineEdge, moveVertex } from './editPath'
 export type { ArcChange, EllipticalArcChange, KeepFixed, LineEdgeChange } from './editPath'
 export { linearElement, offset } from './offset'
 export type { LinearElement } from './offset'

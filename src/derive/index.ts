@@ -56,6 +56,7 @@ export {
   isTangentFillet,
   lengthOf,
   midpoints,
+  moveVertex,
   normaliseDeg,
   presetInBox,
   presetParametersValid,

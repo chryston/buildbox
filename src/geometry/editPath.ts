@@ -140,6 +140,42 @@ const reChord = (segment: Segment, from: Pt, to: Pt, oldFrom = from): Segment =>
 const add = (a: Pt, b: Pt): Pt => pt(a.x + b.x, a.y + b.y)
 
 /**
+ * Drag one vertex of a closed chain to a new point (#59 §2, behaviour 8).
+ *
+ * Only the two Edges that meet there follow. A straight one takes the new endpoint; a curved one
+ * keeps its sweep and finds the centre — and for a circular arc the radius — its new chord
+ * implies, which is the same absorbing rule `editLineEdge` uses (D2). Nothing else in the chain is
+ * touched, which is what makes a drag local in a way that typing a length is not.
+ *
+ * `vertexIndex` is 1-based and counts from `path.start` exactly as `fillet` counts it, so the
+ * vertex a handle selects and the vertex `Corner radius` rounds are the same number.
+ *
+ * Unlike `editLineEdge`, the dragged shape comes back even when `problems` is not empty. A typed
+ * edit leaves the drawing alone and puts its sentence under the field; a drag is *under the
+ * cursor*, and a person has to see the crossing they are dragging into for the red to mean
+ * anything. Committing is the caller's decision, and `problems` plus the loop's own validation are
+ * what tell it that this one commits nothing.
+ */
+export const moveVertex = (path: ClosedPath, vertexIndex: number, to: Pt): EditResult => {
+  const n = path.segments.length
+  const incoming = (vertexIndex - 2 + n) % n
+  const outgoing = (vertexIndex - 1) % n
+  const inSeg = path.segments[incoming]
+  const outSeg = path.segments[outgoing]
+  const segments = [...path.segments]
+  segments[incoming] = inSeg.kind === 'line'
+    ? { kind: 'line', to }
+    : reChord(inSeg, segmentStart(path, incoming), to)
+  // A straight outgoing Edge keeps its own endpoint: its start is the vertex, so it follows on
+  // its own. A curved one re-chords, and `reChord` needs the start it is re-chording *from*.
+  segments[outgoing] = outSeg.kind === 'line'
+    ? outSeg
+    : reChord(outSeg, to, outSeg.to, segmentStart(path, outgoing))
+  const edited: ClosedPath = { start: outgoing === 0 ? to : path.start, segments }
+  return { path: edited, problems: brokenEdges(path, edited) }
+}
+
+/**
  * Change a circular arc's radius or sweep with **both endpoints fixed**, which is what the
  * arc handle does: the centre moves to wherever the chord and the new sweep put it. A
  * radius under half the chord cannot reach and is `arc-radius-too-small`.

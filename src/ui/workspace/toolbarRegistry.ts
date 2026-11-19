@@ -14,6 +14,7 @@
  * draw because a Floor has no underlay would be refusing to work.
  */
 import type { PlanImage } from '../../domain'
+import type { DrawTool } from './shape/draftPath'
 import type { WorkspaceTool } from './workspaceStore'
 
 /** One tool the toolbar can hold. */
@@ -31,6 +32,14 @@ export interface WorkspaceToolDefinition {
    * are the label; the glyph only makes the row scannable.
    */
   readonly icon?: string
+}
+
+/**
+ * A drawing tool: a `WorkspaceToolDefinition` whose id is one of the three the Custom Path
+ * editor arms, so the editor can hand `id` straight to the draft machine without a cast (#59 §1).
+ */
+export interface DrawToolDefinition extends WorkspaceToolDefinition {
+  readonly id: DrawTool
 }
 
 /** The explanation a gated tool gives. One sentence, wherever it is read. */
@@ -69,7 +78,7 @@ export const WORKSPACE_TOOLS: readonly WorkspaceToolDefinition[] = [
  * arrive in #67 — the target registers later through the same adapter, and it inherits this
  * gating for free.
  */
-export const DRAW_TOOLS: readonly WorkspaceToolDefinition[] = [
+export const DRAW_TOOLS: readonly DrawToolDefinition[] = [
   {
     id: 'line',
     label: 'Line',
