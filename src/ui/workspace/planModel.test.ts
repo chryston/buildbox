@@ -7,9 +7,10 @@
 import { describe, expect, it } from 'vitest'
 import type { GenericItemDesign, Project } from '../../domain'
 import {
-  customTemplates,
   decodeActiveViews,
   encodeActiveViews,
+  itemLibrary,
+  placementGroups,
   planImageForView,
   planItemsForFloor,
   planViewKey,
@@ -63,29 +64,56 @@ const project = (over: Partial<Project> = {}): Project => ({
 describe('planItemsForFloor', () => {
   it('draws the footprint from the Item Origin as centre', () => {
     const [item] = planItemsForFloor(project(), 'floor-1')
-    expect(item).toEqual({
+    expect(item).toMatchObject({
       id: 'placed-1',
+      designId: 'design-1',
       label: 'Sofa 3-seater',
-      x: 120,
-      y: 340,
-      w: 600,
-      h: 220,
+      isCabinet: false,
+      width: 600,
+      depth: 220,
+      origin: { x: 300, y: 110 },
+      translation: { x: 420, y: 450 },
       rotationDeg: 0,
       color: '#6366f1',
+      placementCount: 1,
     })
+    // The Item Origin is the one point the rotation turns about; here it is the centre, so
+    // the world corners are the footprint laid out about (420, 450).
+    expect(item?.corners).toEqual([
+      { x: 120, y: 340 },
+      { x: 720, y: 340 },
+      { x: 720, y: 560 },
+      { x: 120, y: 560 },
+    ])
+    expect(item?.boundsWidth).toBe(600)
+    expect(item?.boundsDepth).toBe(220)
   })
 
-  it('snaps a rotation to the nearest quarter turn', () => {
-    const drift = (rotationDeg: number): Project => {
+  it('keeps the footprint\'s own numbers and grows the Floor bounds as it turns (#57)', () => {
+    const turned = (rotationDeg: number): Project => {
       const p = project()
       p.existingModel.placedItems[0].rotationDeg = rotationDeg
       return p
     }
-    expect(planItemsForFloor(drift(91), 'floor-1')[0].rotationDeg).toBe(90)
-    expect(planItemsForFloor(drift(359), 'floor-1')[0].rotationDeg).toBe(0)
+    // 90°: still 600 wide and 220 deep locally, but the box it covers has swapped.
+    const at90 = planItemsForFloor(turned(90), 'floor-1')[0]
+    expect(at90.rotationDeg).toBe(90)
+    expect(at90.width).toBe(600)
+    expect(at90.depth).toBe(220)
+    expect(at90.boundsWidth).toBeCloseTo(220, 6)
+    expect(at90.boundsDepth).toBeCloseTo(600, 6)
+    // Free rotation: 37° is kept as it is, no quarter-turn snapping anywhere.
+    const at37 = planItemsForFloor(turned(37), 'floor-1')[0]
+    expect(at37.rotationDeg).toBe(37)
+    const rad = 37 * Math.PI / 180
+    expect(at37.boundsWidth).toBeCloseTo(600 * Math.cos(rad) + 220 * Math.sin(rad), 6)
+    expect(at37.boundsDepth).toBeCloseTo(600 * Math.sin(rad) + 220 * Math.cos(rad), 6)
+    // Turning never moves the Item Origin, so the corners stay the same distance from it.
+    expect(at37.corners.map((corner) => Math.hypot(corner.x - 420, corner.y - 450).toFixed(3)))
+      .toEqual(['319.531', '319.531', '319.531', '319.531'])
   })
 
-  it('shows only the Floor\'s generic items', () => {
+  it('shows every placement of this Floor', () => {
     const withOther = project()
     withOther.floors.push({ id: 'floor-2', name: 'Upstairs', planImage: null })
     withOther.existingModel.placedItems.push({
@@ -94,6 +122,8 @@ describe('planItemsForFloor', () => {
     })
     expect(planItemsForFloor(withOther, 'floor-1').map((i) => i.id)).toEqual(['placed-1'])
     expect(planItemsForFloor(withOther, 'floor-2').map((i) => i.id)).toEqual(['placed-2'])
+    // Both placements share one design, so each knows the other exists (D3's N).
+    expect(planItemsForFloor(withOther, 'floor-1')[0].placementCount).toBe(2)
   })
 
   it('is stable while the Project object is', () => {
@@ -156,22 +186,29 @@ describe('planImageForView', () => {
   })
 })
 
-describe('customTemplates', () => {
-  it('offers a custom design that is placed nowhere', () => {
+describe('itemLibrary', () => {
+  it('lists every design of the Project, placed or not, with its count (#57)', () => {
     const p = project()
-    p.itemDesigns.push(genericDesign({ id: 'design-2', name: 'Island', isCustom: true }))
-    expect(customTemplates(p)).toEqual([{ itemDesignId: 'design-2', label: 'Island' }])
-    expect(customTemplates(p)).toBe(customTemplates(p))
-    const placedAgain: Project = {
-      ...p,
-      existingModel: {
-        placedItems: [...p.existingModel.placedItems, {
-          id: 'placed-2', itemDesignId: 'design-2', floorId: 'floor-1',
-          translation: { x: 0, y: 0 }, rotationDeg: 0, baseElevation: 0,
-        }],
-      },
-    }
-    expect(customTemplates(placedAgain)).toEqual([])
+    p.itemDesigns.push(genericDesign({ id: 'design-2', name: 'Island' }))
+    expect(itemLibrary(p).map((entry) => [entry.itemDesignId, entry.placementCount]))
+      .toEqual([['design-1', 1], ['design-2', 0]])
+    expect(itemLibrary(p)[0]).toMatchObject({ label: 'Sofa 3-seater', width: 600, depth: 220, color: '#6366f1', isCabinet: false })
+    expect(itemLibrary(p)).toBe(itemLibrary(p))
+  })
+
+  it('counts one design placed twice, and says where (#57 criterion 13)', () => {
+    const p = project()
+    p.existingModel.placedItems.push({
+      id: 'placed-2', itemDesignId: 'design-1', floorId: 'floor-1',
+      translation: { x: 900, y: 450 }, rotationDeg: 90, baseElevation: 0,
+    })
+    expect(itemLibrary(p)[0].placementCount).toBe(2)
+    const groups = placementGroups(p, 'design-1')
+    expect(groups).toHaveLength(1)
+    expect(groups[0].floorId).toBe('floor-1')
+    expect(groups[0].floorName).toBe('Flat')
+    expect(groups[0].items).toEqual([{ id: 'placed-1', label: 'Sofa 3-seater' }, { id: 'placed-2', label: 'Sofa 3-seater' }])
+    expect(placementGroups(p, 'design-2')).toEqual([])
   })
 })
 

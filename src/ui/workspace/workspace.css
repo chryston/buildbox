@@ -539,3 +539,86 @@
 .bb-workspace-dependency-text {
   flex: 1;
 }
+
+/* #57: the Placed Item / Item Design split in the inspector. */
+
+.bb-workspace-button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+
+.bb-workspace-static-value {
+  display: block;
+  min-height: 20px;
+  font-size: 13px;
+  color: var(--bb-text);
+}
+
+.bb-workspace-field-hint {
+  display: block;
+  margin: -6px 0 8px;
+  font-size: 11px;
+  color: var(--bb-text-subtle);
+}
+
+.bb-workspace-design-section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bb-border-card);
+}
+
+.bb-workspace-preview {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: var(--bb-radius-button);
+  border: 1px solid var(--bb-accent);
+  background: var(--bb-bg-accent-soft);
+  font-size: 12px;
+  color: var(--bb-text);
+}
+
+/* #57: the library popover's three sections. */
+
+.bb-workspace-library-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  background: none;
+  color: var(--bb-text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bb-workspace-library-item:hover:not(:disabled) {
+  background: var(--bb-bg-button);
+}
+
+.bb-workspace-library-item:disabled {
+  color: var(--bb-text-subtle);
+  cursor: default;
+}
+
+.bb-workspace-library-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.bb-workspace-library-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bb-workspace-library-meta {
+  font-size: 11px;
+  color: var(--bb-text-subtle);
+}

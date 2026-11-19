@@ -1,22 +1,66 @@
 /**
- * The Floor workspace's own UI state (#55) — tool, selection, drag preview, viewports,
- * rail drawer. Like `uiStore` before it, none of this is Project data or history: undo
- * must never move a viewport or change a selection. It is a module singleton because
- * there is one workspace on screen at a time, and it lives beside the legacy store
- * rather than inside it so the Plan View can grow without touching the cabinet chrome.
+ * The Floor workspace's own UI state (#55, #57) — tool, selection, drag preview, angle snap,
+ * the pending design preview, Item Detail, viewports, rail drawer. Like `uiStore` before it,
+ * none of this is Project data or history: undo must never move a viewport, change a
+ * selection, or undo a navigation. It is a module singleton because there is one workspace on
+ * screen at a time, and it lives beside the legacy store rather than inside it so the Plan
+ * View can grow without touching the cabinet chrome.
  */
 import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
 import { useShallow } from 'zustand/react/shallow'
+import type { Point2 } from '../../domain'
 import type { Viewport } from './viewport'
 
 export type WorkspaceTool = 'select' | 'pan'
 
-/** The live drag: the Item being moved and where its top-left is going, in mm. */
+/**
+ * The live drag: the Item being moved and where its Item Origin is going, in Floor
+ * millimetres. The Origin rather than the top-left, because the Origin is what a placement
+ * owns (#57) — the drawn box is derived from it, so a preview that carried a corner would
+ * have to redo that derivation to draw the same box the model describes.
+ */
 export interface ItemDragPreview {
   readonly id: string
   readonly x: number
   readonly y: number
+}
+
+/** One angle-snap setting (#57). #59 exposes these in `Snaps ▾`; there is only this state. */
+export interface AngleSnap {
+  readonly enabled: boolean
+  readonly incrementDeg: number
+}
+
+/**
+ * A design edit awaiting `Apply` (D3). The values are the ones about to be written to the
+ * Item Design; the canvas draws them on every placement of that design on the current Floor
+ * so the person sees the blast radius before committing. Nothing here has touched the
+ * Project: `Apply` dispatches the Intent, `Cancel` and Esc drop this and change nothing.
+ */
+export interface DesignEditPreview {
+  readonly itemDesignId: string
+  /** The pending Item Origin, footprint-local millimetres. Footprints do not move. */
+  readonly origin: Point2 | null
+  /** The pending Item Design name, for a rename that reaches every placement. */
+  readonly name: string | null
+  /** The pending Item Footprint size, and the colour, for a size or colour preview. */
+  readonly width: number | null
+  readonly depth: number | null
+  readonly color: string | null
+}
+
+/** Where Item Detail was opened from, so `← Back` returns to exactly that (#57). */
+export interface ItemDetailReturn {
+  readonly floorId: string
+  readonly viewId: string | null
+  readonly placedItemId: string
+}
+
+/** The Item Detail View being read: an Item Design, and the way back to it. */
+export interface ItemDetailState {
+  readonly itemDesignId: string
+  readonly from: ItemDetailReturn
 }
 
 export interface WorkspaceState {
@@ -24,6 +68,20 @@ export interface WorkspaceState {
   /** The selected Placed Item, or `null`. Selection is UI state, never Project data. */
   selection: string | null
   dragPreview: ItemDragPreview | null
+  /** Angle snap for the rotate handle (#57); #59 exposes it, defaulting the same way. */
+  snapSettings: { angle: AngleSnap }
+  /**
+   * The design edit awaiting `Apply` (D3), or `null`. One at a time: a second choice
+   * replaces the pending one rather than stacking previews.
+   */
+  designPreview: DesignEditPreview | null
+  /**
+   * `Pick on canvas` is armed: the next click on the selected placement sets the Item Origin
+   * preview rather than selecting anything (#57 §5).
+   */
+  pickingOrigin: boolean
+  /** The Item Detail View on screen, or `null` for the Floor workspace (#57 §6). */
+  itemDetail: ItemDetailState | null
   /** The last viewport per view key, in memory for this tab; the cache persists it. */
   viewports: Record<string, Viewport>
   /** View keys whose device-local cache entry has already been read this session. */
@@ -45,6 +103,15 @@ export interface WorkspaceActions {
   setTool(tool: WorkspaceTool): void
   select(id: string | null): void
   setDragPreview(preview: ItemDragPreview | null): void
+  setAngleSnap(enabled: boolean, incrementDeg?: number): void
+  /** Arm or disarm `Pick on canvas`; arming drops any other pending preview. */
+  setPickingOrigin(picking: boolean): void
+  /** The pending design edit, or `null` to drop it. */
+  setDesignPreview(preview: DesignEditPreview | null): void
+  /** Open the Item Detail View of one Item Design. Navigation, never history (#26). */
+  openItemDetail(itemDesignId: string, from: ItemDetailReturn): void
+  /** Back to the Floor, the view and the Placed Item Item Detail came from. */
+  closeItemDetail(): void
   setViewport(viewKey: string, viewport: Viewport): void
   markHydrated(viewKey: string): void
   setRailOpen(open: boolean): void
@@ -64,6 +131,10 @@ const INITIAL: WorkspaceState = {
   activeTool: 'select',
   selection: null,
   dragPreview: null,
+  snapSettings: { angle: { enabled: true, incrementDeg: 15 } },
+  designPreview: null,
+  pickingOrigin: false,
+  itemDetail: null,
   viewports: {},
   hydrated: {},
   railOpen: false,
@@ -90,6 +161,22 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
   setTool: (activeTool) => set({ activeTool }),
   select: (selection) => set({ selection }),
   setDragPreview: (dragPreview) => set({ dragPreview }),
+  setAngleSnap: (enabled, incrementDeg) =>
+    set((state) => ({
+      snapSettings: {
+        angle: {
+          enabled,
+          incrementDeg: incrementDeg ?? state.snapSettings.angle.incrementDeg,
+        },
+      },
+    })),
+  // Arming the pick drops a pending size or colour preview: one edit is in flight at a time,
+  // and `Apply` would otherwise write the outline the person has stopped looking at.
+  setPickingOrigin: (pickingOrigin) =>
+    set(pickingOrigin ? { pickingOrigin, designPreview: null } : { pickingOrigin }),
+  setDesignPreview: (designPreview) => set({ designPreview }),
+  openItemDetail: (itemDesignId, from) => set({ itemDetail: { itemDesignId, from } }),
+  closeItemDetail: () => set({ itemDetail: null }),
   setViewport: (viewKey, viewport) =>
     set((state) => ({ viewports: { ...state.viewports, [viewKey]: viewport } })),
   markHydrated: (viewKey) =>

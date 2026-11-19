@@ -1,32 +1,59 @@
 /**
- * Project → Plan View view-models (#55).
+ * Project → Plan View view-models (#55, #57).
  *
- * The projection is the exact inverse of what #43's handlers wrote, the same one the S4
- * adapter drew: a placement's Item Origin is its footprint centre, so the drawn top-left
- * is `translation − size / 2`, and the Plan View has only ever offered the four quarter
- * rotations (#57 adds free rotation). The Plan Image is drawn at `widthPx / pixelsPerMm`
- * millimetres — and at raw pixels while it is uncalibrated, because an uncalibrated image
- * is evidence, not a scale.
+ * Every position here is derived, never stored: the placement maths lives in
+ * `derive/placement.ts` — the one pinned reading of Item Origin, rotation and Item
+ * Footprint — because `ui` may not import `geometry` (#20 §2). So a `PlanItemView` carries
+ * the placement's own `PlacementContext` and the canvas asks it where a local point lands,
+ * which is how the drawn footprint, the rotate handle and the dimension lines are all
+ * guaranteed to agree with what the Intent will write.
+ *
+ * The Plan Image is drawn at `widthPx / pixelsPerMm` millimetres — and at raw pixels while
+ * it is uncalibrated, because an uncalibrated image is evidence, not a scale.
  *
  * Like `projectUnits` before it, each projection is cached against the Project object it
  * came from: a `useSyncExternalStore` selector that returned a fresh array per call would
  * make React re-render forever, and a commit replaces the Project — exactly the
  * granularity the cache wants.
  */
-import type { EntityId, GenericItemDesign, PlanView, PlacedItem, Project } from '../../domain'
+import { floorBoundsSize, footprintPath, normaliseRotation, placementContext, worldPointOf } from '../../derive'
+import type { PlacementContext } from '../../derive'
+import { designFootprintSize, designOrigin } from '../../domain'
+import type { EntityId, ItemDesign, PlanView, PlacedItem, Point2, Project } from '../../domain'
+
+/**
+ * How a cabinet's footprint is drawn: it has no `color` of its own, because a cabinet's
+ * appearance is its construction (#42 §2), so every cabinet placement takes this one slate.
+ */
+export const CABINET_PLAN_COLOR = '#475569'
 
 /** One Placed Item as the Plan View draws it: a footprint outline with a label. */
 export interface PlanItemView {
   readonly id: EntityId
+  readonly designId: EntityId
+  /** The Item Design's name: a Placed Item owns no name of its own (#57 §3). */
   readonly label: string
-  /** Top-left in Floor-local millimetres, before the quarter-turn. */
-  readonly x: number
-  readonly y: number
-  readonly w: number
-  readonly h: number
-  readonly rotationDeg: 0 | 90 | 180 | 270
   /** `#rrggbb`, lowercase — Item Design data, not chrome. */
   readonly color: string
+  readonly isCabinet: boolean
+  /** The Item Footprint's `Width` and `Depth` in Item Design millimetres. Never swapped. */
+  readonly width: number
+  readonly depth: number
+  /** The Item Origin, footprint-local millimetres. */
+  readonly origin: Point2
+  /** The Item Origin's Floor position — what `Position X` and `Position Y` read. */
+  readonly translation: Point2
+  /** Free rotation, degrees clockwise with +Y down, normalised to [0, 360). */
+  readonly rotationDeg: number
+  /** The placement's own context, so the canvas can project any other local point. */
+  readonly context: PlacementContext
+  /** The Item Footprint's four corners in Floor millimetres, from local (0, 0). */
+  readonly corners: readonly Point2[]
+  /** The `Floor bounds` the inspector reads: the box this placement covers on the Floor. */
+  readonly boundsWidth: number
+  readonly boundsDepth: number
+  /** Placements of the same Item Design, on every Floor — the `Affects N placements` N. */
+  readonly placementCount: number
 }
 
 /** The Floor's Plan Image, ready to draw. `null` when the Floor has none. */
@@ -121,9 +148,8 @@ export const resolvePlanView = (
 /**
  * Where a Placed Item actually sits on its Floor, for the copy/move preview (#56).
  *
- * `PlanItemView` carries the drawn top-left, which is the Item Origin minus half the
- * footprint; the Intent speaks Item Origin and base elevation, so the preview reads the
- * placement rather than the projection.
+ * The Intent speaks Item Origin and base elevation, so the preview reads the placement
+ * rather than the projection.
  */
 export function placedOrigin(
   project: Project,
@@ -139,29 +165,44 @@ export function placedOrigin(
   }
 }
 
-/** `0 ≤ r < 360` to the four rotations the Plan View has. */
-function quarterTurn(rotationDeg: number): 0 | 90 | 180 | 270 {
-  return ((Math.round(rotationDeg / 90) % 4) * 90) as 0 | 90 | 180 | 270
+/** The four footprint corners of one design, local millimetres, from local (0, 0). */
+function localCorners(design: ItemDesign): readonly Point2[] {
+  const path = footprintPath(design)
+  // The ring from (0, 0): the path's start, then every segment end but the closing one.
+  return [path.start, ...path.segments.slice(0, -1).map((segment) => segment.to)]
 }
 
-function itemView(design: GenericItemDesign, placed: PlacedItem): PlanItemView {
-  const w = design.footprint.width
-  const h = design.footprint.depth
+function itemView(design: ItemDesign, placed: PlacedItem, placementCount: number): PlanItemView {
+  const { width, depth } = designFootprintSize(design)
+  const context = placementContext(design, placed)
+  const box = floorBoundsSize(design, placed)
   return {
     id: placed.id,
+    designId: design.id,
     label: design.name,
-    x: placed.translation.x - w / 2,
-    y: placed.translation.y - h / 2,
-    w,
-    h,
-    rotationDeg: quarterTurn(placed.rotationDeg),
-    color: design.color,
+    color: design.kind === 'cabinet' ? CABINET_PLAN_COLOR : design.color,
+    isCabinet: design.kind === 'cabinet',
+    width,
+    depth,
+    origin: designOrigin(design),
+    translation: placed.translation,
+    rotationDeg: normaliseRotation(placed.rotationDeg),
+    context,
+    corners: localCorners(design).map((corner) => worldPointOf(context, corner)),
+    boundsWidth: box.width,
+    boundsDepth: box.depth,
+    placementCount,
   }
 }
 
 const itemsCache = new WeakMap<Project, Map<EntityId | null, readonly PlanItemView[]>>()
 
-/** The generic Placed Items of one Floor, stable while the Project object is. */
+/**
+ * Every Placed Item of one Floor, stable while the Project object is.
+ *
+ * Cabinet designs are drawn here too: a migrated legacy Design is an Item Design like any
+ * other, and its units are positioned and turned on the Floor on their own (#11-5).
+ */
 export function planItemsForFloor(project: Project, floorId: EntityId | null): readonly PlanItemView[] {
   let byFloor = itemsCache.get(project)
   if (byFloor === undefined) {
@@ -171,14 +212,35 @@ export function planItemsForFloor(project: Project, floorId: EntityId | null): r
   const cached = byFloor.get(floorId)
   if (cached !== undefined) return cached
   const designs = new Map(project.itemDesigns.map((design) => [design.id, design]))
+  const counts = placementCounts(project)
   const items: PlanItemView[] = []
   for (const placed of project.existingModel.placedItems) {
     if (placed.floorId !== floorId) continue
     const design = designs.get(placed.itemDesignId)
-    if (design?.kind === 'generic') items.push(itemView(design, placed))
+    if (design === undefined) continue
+    items.push(itemView(design, placed, counts.get(design.id) ?? 0))
   }
   byFloor.set(floorId, items)
   return items
+}
+
+const countsCache = new WeakMap<Project, Map<EntityId, number>>()
+
+/** How many Placed Items reference each Item Design, across every Floor. */
+function placementCounts(project: Project): Map<EntityId, number> {
+  const cached = countsCache.get(project)
+  if (cached !== undefined) return cached
+  const counts = new Map<EntityId, number>()
+  for (const placed of project.existingModel.placedItems) {
+    counts.set(placed.itemDesignId, (counts.get(placed.itemDesignId) ?? 0) + 1)
+  }
+  countsCache.set(project, counts)
+  return counts
+}
+
+/** How many Placed Items share this Item Design, on every Floor (#57 §2, D3). */
+export function placementCountFor(project: Project, itemDesignId: EntityId): number {
+  return placementCounts(project).get(itemDesignId) ?? 0
 }
 
 const imageCache = new WeakMap<Project, { src: string | null; key: string | null; view: PlanImageView | null }>()
@@ -217,21 +279,75 @@ export function planImageForView(
   return drawn
 }
 
-/** A custom shape that is placed nowhere: placeable again from `Add item ▾`. */
-export interface CustomTemplateView {
+/**
+ * One Item Design as the library popover lists it (#57 §2): name, size and how many
+ * Placed Items already use it. Placing one of these reuses it — no design is created.
+ */
+export interface ItemLibraryEntry {
   readonly itemDesignId: EntityId
   readonly label: string
+  readonly width: number
+  readonly depth: number
+  readonly placementCount: number
+  readonly color: string
+  readonly isCabinet: boolean
 }
 
-const templatesCache = new WeakMap<Project, readonly CustomTemplateView[]>()
+const libraryCache = new WeakMap<Project, readonly ItemLibraryEntry[]>()
 
-export function customTemplates(project: Project): readonly CustomTemplateView[] {
-  const cached = templatesCache.get(project)
+export function itemLibrary(project: Project): readonly ItemLibraryEntry[] {
+  const cached = libraryCache.get(project)
   if (cached !== undefined) return cached
-  const placed = new Set(project.existingModel.placedItems.map((item) => item.itemDesignId))
-  const templates = project.itemDesigns
-    .filter((design) => design.kind === 'generic' && design.isCustom === true && !placed.has(design.id))
-    .map((design) => ({ itemDesignId: design.id, label: design.name }))
-  templatesCache.set(project, templates)
-  return templates
+  const counts = placementCounts(project)
+  const library = project.itemDesigns.map((design) => {
+    const { width, depth } = designFootprintSize(design)
+    return {
+      itemDesignId: design.id,
+      label: design.name,
+      width,
+      depth,
+      placementCount: counts.get(design.id) ?? 0,
+      color: design.kind === 'cabinet' ? CABINET_PLAN_COLOR : design.color,
+      isCabinet: design.kind === 'cabinet',
+    }
+  })
+  libraryCache.set(project, library)
+  return library
+}
+
+/** The Placed Items of one Item Design, grouped by the Floor they sit on (#57 §6). */
+export interface PlacementGroup {
+  readonly floorId: EntityId
+  readonly floorName: string
+  readonly items: readonly { id: EntityId; label: string }[]
+}
+
+const groupsCache = new WeakMap<Project, Map<EntityId, readonly PlacementGroup[]>>()
+
+export function placementGroups(project: Project, itemDesignId: EntityId): readonly PlacementGroup[] {
+  let byDesign = groupsCache.get(project)
+  if (byDesign === undefined) {
+    byDesign = new Map()
+    groupsCache.set(project, byDesign)
+  }
+  const cached = byDesign.get(itemDesignId)
+  if (cached !== undefined) return cached
+  const name = project.itemDesigns.find((design) => design.id === itemDesignId)?.name ?? ''
+  const byFloor = new Map<EntityId, { id: EntityId; label: string }[]>()
+  for (const placed of project.existingModel.placedItems) {
+    if (placed.itemDesignId !== itemDesignId) continue
+    const group = byFloor.get(placed.floorId) ?? []
+    group.push({ id: placed.id, label: name })
+    byFloor.set(placed.floorId, group)
+  }
+  // Floors in Project order, so the list reads the way the Floor switcher does.
+  const groups: PlacementGroup[] = []
+  for (const floor of project.floors) {
+    const items = byFloor.get(floor.id)
+    if (items !== undefined && items.length > 0) {
+      groups.push({ floorId: floor.id, floorName: floor.name, items })
+    }
+  }
+  byDesign.set(itemDesignId, groups)
+  return groups
 }

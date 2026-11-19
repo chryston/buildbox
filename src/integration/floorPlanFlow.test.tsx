@@ -81,10 +81,14 @@ describe('the Floor workspace', () => {
     const floorId = view.project().floors[0]?.id ?? null
     expect(floorId).not.toBeNull()
     const items = planItemsForFloor(view.project(), floorId)
-    expect(items).toHaveLength(1)
-    expect(items[0].label).toBe('Sofa 2-seater')
+    // The Floor's own cabinet placement is drawn here too (#57 criterion 18), so the sofa is
+    // the second item on a Floor that started with one cabinet.
+    expect(items).toHaveLength(2)
+    const sofa = items.find((item) => item.label === 'Sofa 2-seater')
+    expect(sofa).toBeDefined()
+    expect(items.filter((item) => item.isCabinet)).toHaveLength(1)
     // The first viewport arrives from `Fit` once the host reports a size.
-    expect(await screen.findByTestId(`placed-object-${items[0].id}`)).toBeInTheDocument()
+    expect(await screen.findByTestId(`placed-object-${sofa?.id}`)).toBeInTheDocument()
     // Adding selects the placement: the inspector appears in the rail.
     expect(screen.getByTestId('selection-inspector')).toBeInTheDocument()
   })
@@ -96,14 +100,14 @@ describe('the Floor workspace', () => {
     await user.click(screen.getByTestId('add-item-menu'))
     await user.click(screen.getByTestId('add-sofa-2'))
     const floorId = view.project().floors[0]?.id ?? null
-    expect(planItemsForFloor(view.project(), floorId)).toHaveLength(1)
+    expect(planItemsForFloor(view.project(), floorId)).toHaveLength(2)
 
     await user.click(screen.getByTestId('undo-button'))
-    expect(planItemsForFloor(view.project(), floorId)).toHaveLength(0)
+    expect(planItemsForFloor(view.project(), floorId)).toHaveLength(1)
     await waitFor(() => expect(screen.getByTestId('undo-button')).toBeDisabled())
 
     await user.click(screen.getByTestId('redo-button'))
-    expect(planItemsForFloor(view.project(), floorId)).toHaveLength(1)
+    expect(planItemsForFloor(view.project(), floorId)).toHaveLength(2)
   })
 
   it('changes the display unit through Project settings, and the inspector follows', async () => {
@@ -122,6 +126,7 @@ describe('the Floor workspace', () => {
 
     expect(view.project().preferences.displayUnit).toBe('cm')
     expect(view.project().preferences.displayPrecision).toBe(1)
-    expect(screen.getAllByText('(cm)')).toHaveLength(2)
+    // Position X, Position Y, Width and Depth all carry the unit suffix (#57 §2).
+    expect(screen.getAllByText('(cm)')).toHaveLength(4)
   })
 })
