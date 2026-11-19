@@ -280,6 +280,33 @@ describe('golden: what the bytes say (#60 criteria 8, 9, 10, 12)', () => {
     }
   })
 
+  // #57 criterion 3 through the shared list: a pending Item Origin change moves the crosshair
+  // and nothing else. The committed pivot stays on screen beside it, so both are emitted.
+  it('shows a pending Item Origin without moving the footprint', () => {
+    const floor = effectiveFloor(CURVES, 1, 'floor-1', null)
+    const still = drawSelectionAnnotations(floor, 'p-rounded', { sizing: SCREEN, formatLength: wholeMm })
+    const moved = drawSelectionAnnotations(floor, 'p-rounded', {
+      sizing: SCREEN,
+      formatLength: wholeMm,
+      preview: { scope: 'design', id: 'd-rounded', origin: { x: 0, y: 400 } },
+    })
+    expect(moved).not.toBeNull()
+    const roles = (list: DisplayList | null): string[] =>
+      (list === null ? '' : serializeSvg(toSvgTree(list, { sizing: SCREEN, includeRefs: true, resolveAsset: () => null })))
+        .match(/data-ref-role="(origin[a-z-]*)"/g)?.map((m) => m.slice(15, -1)) ?? []
+    expect(roles(still)).toEqual(['origin-marker'])
+    expect(roles(moved)).toEqual(['origin-preview', 'origin-marker'])
+    const paths = (list: DisplayList | null): string[] =>
+      (list === null ? '' : serializeSvg(toSvgTree(list, { sizing: SCREEN, includeRefs: false, resolveAsset: () => null })))
+        .match(/data-layer="plan-annotations"[\s\S]*?<\/g><\/g>/)?.[0]
+        .match(/ d="[^"]+"/g) ?? []
+    // Two crosshairs where there was one, and the committed one is byte-identical: the
+    // footprint is not in this band at all, so nothing about it can have moved.
+    expect(paths(moved)).toHaveLength(4)
+    expect(paths(still)).toHaveLength(2)
+    expect(paths(moved).slice(2)).toEqual(paths(still))
+  })
+
   it('keeps a reflex arc reflex', () => {
     // Three quarters of a circle, so the large-arc flag has to be 1; a converter that always
     // wrote 0 would close the shape the short way round and still look like a drawing.

@@ -47,7 +47,7 @@ export type PlanPreview =
       footprint?: ClosedPath
       origin?: Pt
     }
-  | { scope: 'design'; id: EntityId; footprint: ClosedPath; origin?: Pt }
+  | { scope: 'design'; id: EntityId; footprint?: ClosedPath; origin?: Pt }
 
 /** What the Plan View surface knows that the derived Floor does not. */
 export type PlanViewInput = {
@@ -230,7 +230,9 @@ export function drawPlacement(p: DerivedPlacement, preview: PlanPreview | undefi
 
   // The footprint itself is unchanged, so the preview is a movement of what `derive` has
   // already projected: `R(θ)(q − o) + t` to `R(θ′)(q − o) + t′` is a turn of `θ′ − θ` about
-  // the Item Origin's own Floor position, followed by the slide the pointer asked for.
+  // the Item Origin's own Floor position, followed by the slide the pointer asked for. A
+  // pending Item Origin change alone moves nothing but the pivot (#57 criterion 3): the
+  // footprint stays exactly where it is and the crosshair moves inside it.
   const delta = affineMultiply(
     affineMultiply(
       affineTranslate(translation.x, translation.y),
@@ -250,7 +252,9 @@ export function drawPlacement(p: DerivedPlacement, preview: PlanPreview | undefi
     transform: delta,
     toFloor: affineMultiply(delta, p.worldTransform),
     originAt: translation,
-    previewOriginAt: null,
+    previewOriginAt: over.scope === 'design' && over.origin !== undefined
+      ? affineApply(p.worldTransform, over.origin)
+      : null,
     labelAt: centre(world),
     world,
     local: p.localBounds,

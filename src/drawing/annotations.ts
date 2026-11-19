@@ -62,7 +62,13 @@ export function drawSelectionAnnotations(
 
   const missingGlyphs: MissingGlyph[] = []
   const annotations: DisplayItem[] = []
-  for (const f of drawn.values()) annotations.push(originMarker(f, sizing))
+  // The pending pivot first and the committed one over it: a design edit shows on every
+  // Placed Item of that design, and the crosshair it moves is the one the Item already had
+  // (#57 criterion 3), so both are on screen until `Apply`.
+  for (const f of drawn.values()) {
+    if (f.previewOriginAt !== null) annotations.push(originMarker(f, sizing, true))
+  }
+  for (const f of drawn.values()) annotations.push(originMarker(f, sizing, false))
 
   const dimensions: DisplayItem[] = []
   const chipItems: DisplayItem[] = []
@@ -93,13 +99,12 @@ export function drawSelectionAnnotations(
  * of their own frame, because that position is the one thing the rotate handle needs to read
  * back off the rendered node.
  */
-function originMarker(f: DrawnPlacement, sizing: DrawOptions['sizing']): DisplayItem {
+function originMarker(f: DrawnPlacement, sizing: DrawOptions['sizing'], preview: boolean): DisplayItem {
   const arm = resolveSize('plan-origin-arm', sizing).mm
   const dot = resolveSize('plan-origin-dot', sizing).mm
-  const preview = f.previewOriginAt !== null
   const style = preview ? 'plan-origin:preview' as const : 'plan-origin' as const
   const dotStyle = preview ? 'plan-origin-dot:preview' as const : 'plan-origin-dot' as const
-  const at = preview ? f.previewOriginAt! : f.originAt
+  const at = preview ? f.previewOriginAt ?? f.originAt : f.originAt
   return {
     kind: 'group',
     ref: { id: f.placement.id, role: preview ? 'origin-preview' : 'origin-marker' },

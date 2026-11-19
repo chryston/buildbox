@@ -289,11 +289,12 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
    * turned at where the pointer says it is, and the annotations follow it, so a measurement
    * reads the size the Item is being shown at rather than the size it was last committed at.
    */
-  const preview: PlanPreview | null = designPreview !== null && designPreview.footprint !== null
+  const preview: PlanPreview | null = designPreview !== null
+    && (designPreview.footprint !== null || designPreview.origin !== null)
     ? {
       scope: 'design',
       id: designPreview.itemDesignId,
-      footprint: footprintPath(designPreview.footprint),
+      ...(designPreview.footprint === null ? {} : { footprint: footprintPath(designPreview.footprint) }),
       ...(designPreview.origin === null ? {} : { origin: designPreview.origin }),
     }
     : selection !== null && (dragPreview?.id === selection || turnPreview?.id === selection)

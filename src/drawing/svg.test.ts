@@ -188,6 +188,27 @@ describe('toSvgTree', () => {
   // The Plan View's measurements and Item Origins lie on top of the footprints they annotate,
   // so the attribute that keeps a click reaching the Item below is part of the drawing, not of
   // whichever host happens to be showing it.
+  // The Placed Item's footprint is a `<path>` inside a `<g data-ref="p1">`: the group names
+  // what is drawn and the path is the shape, so the selected outline only thickens if the
+  // group's ref reaches the path's style lookup.
+  it('emphasises a child of a group that names it', () => {
+    const list = listOf([{
+      kind: 'group',
+      ref: { id: 'p1', role: 'placed-item' },
+      items: [{ kind: 'path', segments: box, closed: true, style: 'plan-item', color: '#475569' }],
+    }])
+    const footprintOf = (o: SvgOptions): [string, string][] => {
+      const group = toSvgTree(list, o).children?.[0]?.children?.[0]
+      const path = group?.children?.[0]
+      expect(path).toBeDefined()
+      return path?.attrs ?? []
+    }
+    expect(attr(footprintOf(screen()), 'stroke-width')).toBe('1')
+    const chosen = footprintOf({ ...screen(), emphasis: { selected: new Set(['p1']) } })
+    expect(attr(chosen, 'stroke')).toBe('var(--bb-text)')
+    expect(attr(chosen, 'stroke-width')).toBe('2')
+  })
+
   it('writes pointer-events for a row that takes no pointer', () => {
     const cross = firstAttrs(listOf([pathItem({ style: 'plan-origin' })]), screen())
     expect(attr(cross, 'pointer-events')).toBe('none')

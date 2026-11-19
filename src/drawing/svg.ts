@@ -186,8 +186,8 @@ const dashArray = (style: Style, sizing: Sizing): string | undefined => {
   return `${n(resolveSize(on, sizing).mm)} ${n(resolveSize(off, sizing).mm)}`
 }
 
-function pathNode(item: Extract<DisplayItem, { kind: 'path' }>, o: SvgOptions): SvgNode {
-  const style = STYLES[emphasised(item.style, item.ref, o.emphasis)]
+function pathNode(item: Extract<DisplayItem, { kind: 'path' }>, o: SvgOptions, ref?: Ref): SvgNode {
+  const style = STYLES[emphasised(item.style, ref, o.emphasis)]
   const attrs: [string, string][] = [
     ...refAttrs(item.ref, o.includeRefs),
     ['d', pathData(item.segments, item.closed)],
@@ -209,8 +209,8 @@ function pathNode(item: Extract<DisplayItem, { kind: 'path' }>, o: SvgOptions): 
   return { tag: 'path', attrs }
 }
 
-function textNode(item: Extract<DisplayItem, { kind: 'text' }>, o: SvgOptions): SvgNode {
-  const style = STYLES[emphasised(item.style, item.ref, o.emphasis)]
+function textNode(item: Extract<DisplayItem, { kind: 'text' }>, o: SvgOptions, ref?: Ref): SvgNode {
+  const style = STYLES[emphasised(item.style, ref, o.emphasis)]
   if (style.size === undefined) {
     // A text row with no size is a bug in the table, not a thing a caller can recover from:
     // the alternative is a `<text>` the browser sizes from its own default, silently mislaid
@@ -272,17 +272,21 @@ function imageNode(item: Extract<DisplayItem, { kind: 'image' }>, o: SvgOptions)
   }
 }
 
-function itemNode(item: DisplayItem, o: SvgOptions): SvgNode | null {
+function itemNode(item: DisplayItem, o: SvgOptions, inherited?: Ref): SvgNode | null {
   switch (item.kind) {
     case 'path':
-      return pathNode(item, o)
+      return pathNode(item, o, item.ref ?? inherited)
     case 'text':
-      return textNode(item, o)
+      return textNode(item, o, item.ref ?? inherited)
     case 'image':
       return imageNode(item, o)
     case 'group': {
+      // A group's `ref` is what its children stand for, so it is what an emphasis looks up —
+      // the Placed Item's footprint is a `<path>` inside a `<g data-ref="p1">`, and the
+      // selected outline has to thicken even though the path itself names nothing.
+      const ref = item.ref ?? inherited
       const children = item.items
-        .map((child) => itemNode(child, o))
+        .map((child) => itemNode(child, o, ref))
         .filter((child): child is SvgNode => child !== null)
       const attrs: [string, string][] = [...refAttrs(item.ref, o.includeRefs)]
       if (item.transform !== undefined) attrs.push(['transform', matrixToSvg(item.transform)])
