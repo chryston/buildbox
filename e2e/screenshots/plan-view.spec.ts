@@ -36,8 +36,6 @@ test('empty Plan View: a new Project with no image and no items', async ({ page 
   await page.goto('./', { waitUntil: 'networkidle' })
   await expect(libraryHeading(page)).toBeVisible()
   await page.locator('.new-card').click()
-  await expect(page.getByTestId('cabinet-canvas')).toBeVisible()
-  await page.getByRole('button', { name: 'Floor Plan', exact: true }).click()
 
   const canvas = floorPlanCanvas(page)
   await expect(canvas).toBeVisible()
@@ -53,8 +51,6 @@ test('populated Plan View: the v3-large-image Plan Image and every Placed Item',
   await seedPreviewDb(page, populatedSeed)
   await page.goto('./', { waitUntil: 'networkidle' })
   await cardButton(page, populatedProjectName, 'Open').click()
-  await expect(page.getByTestId('cabinet-canvas')).toBeVisible()
-  await page.getByRole('button', { name: 'Floor Plan', exact: true }).click()
 
   const canvas = floorPlanCanvas(page)
   await expect(canvas).toBeVisible()
@@ -64,6 +60,8 @@ test('populated Plan View: the v3-large-image Plan Image and every Placed Item',
   await waitForFonts(page)
   // Auto-fit runs once on the first measured frame; the scene group settles with it.
   await waitForStablePaint(canvas.locator('g').first())
-  await expect(canvas.locator('[data-testid^="placed-object-"]')).toHaveCount(7)
+  // Nine, not the fixture's seven generic objects: the two migrated cabinet units are Placed
+  // Items on the Floor too now (#57), which is what lets them be moved independently.
+  await expect(canvas.locator('[data-testid^="placed-object-"]')).toHaveCount(9)
   await expect(canvas).toHaveScreenshot('plan-view-populated.png')
 })
