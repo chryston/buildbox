@@ -170,22 +170,30 @@ const INITIAL: WorkspaceState = {
 }
 
 /**
- * The part of a Floor/view move that touches the selection: `{ selection: null }` when the
- * pair being opened is not the one already open, and nothing at all when it is.
+ * The part of a Floor/view move that touches the selection: nothing selected and nothing
+ * proposed when the pair being opened is not the one already open, and nothing at all when it
+ * is. A proposal belongs to the thing it was made on, so it goes wherever the selection goes —
+ * criterion 9's "selecting something else" arrives here too when that something else is on
+ * another Floor.
  */
 function movedAway(
   state: WorkspaceSnapshot,
   floorId: string | null,
   viewsByFloor: Record<string, string>,
-): { selection: null } | Record<string, never> {
-  if (floorId === null || floorId !== state.activeFloorId) return { selection: null }
-  return viewsByFloor[floorId] === state.activeViewByFloor[floorId] ? {} : { selection: null }
+): { selection: null; shapeDraft: null } | Record<string, never> {
+  if (floorId === null || floorId !== state.activeFloorId) return { selection: null, shapeDraft: null }
+  return viewsByFloor[floorId] === state.activeViewByFloor[floorId]
+    ? {}
+    : { selection: null, shapeDraft: null }
 }
 
 export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
   ...INITIAL,
   setTool: (activeTool) => set({ activeTool }),
-  select: (selection) => set({ selection }),
+  // A proposal is about the thing selected, so a new selection ends it (#58 criterion 9). It is
+  // discarded rather than kept out of sight: coming back to the design must show the shape it
+  // has, not a half-typed one that a later Apply could write.
+  select: (selection) => set({ selection, shapeDraft: null }),
   setDragPreview: (dragPreview) => set({ dragPreview }),
   setAngleSnap: (enabled, incrementDeg) =>
     set((state) => ({

@@ -238,6 +238,51 @@ describe('the Item Detail shape editor', () => {
     expect(after.project).toEqual(before.project)
   })
 
+  it('leaves the Project alone when an invalid number is only blurred', async () => {
+    // Nothing is written on blur either: the proposal is not a change until it is applied, and
+    // Apply is disabled while it is invalid. Tabbing out must not be a way round that.
+    const view = await openShapeEditor(withSofa(testProject('p-1'), rectangleFootprint(1200, 600)))
+    const before = view.session.getSnapshot()
+    const width = screen.getByTestId('shape-width')
+    await userEvent.clear(width)
+    await userEvent.type(width, '0')
+    await userEvent.tab()
+
+    expect(screen.getByTestId('shape-width-row')).toHaveAttribute('data-invalid', 'true')
+    expect(screen.getByTestId('shape-draft-bar')).toBeInTheDocument()
+    expect(screen.getByTestId('shape-apply')).toBeDisabled()
+    const after = view.session.getSnapshot()
+    expect(after.revision).toBe(before.revision)
+    expect(after.project).toEqual(before.project)
+  })
+
+  it('selecting another object discards the invalid proposal (criterion 9)', async () => {
+    const view = await openShapeEditor(
+      withSofa(testProject('p-1'), rounded(1000, 600, { topLeft: 100, topRight: 100, bottomRight: 100, bottomLeft: 100 })),
+    )
+    const before = view.session.getSnapshot()
+    const topRight = screen.getByTestId('shape-topRight')
+    await userEvent.clear(topRight)
+    await userEvent.type(topRight, '901{Enter}')
+    expect(screen.getByTestId('shape-draft-bar')).toBeInTheDocument()
+
+    // The Item Design editor stays open — the proposal was about this design — but the proposal
+    // itself is gone, not hidden: coming back must show the shape the design has.
+    act(() => workspaceStore.getState().select('p-1-place'))
+
+    expect(workspaceStore.getState().shapeDraft).toBeNull()
+    expect(screen.queryByTestId('shape-draft-bar')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('footprint-ghost')).not.toBeInTheDocument()
+    expect(screen.getByTestId('footprint-canvas')).toHaveAttribute('data-invalid', 'false')
+    expect((topRight as HTMLInputElement).value).toBe('100')
+    expect(topRight).toHaveAttribute('aria-invalid', 'false')
+
+    const after = view.session.getSnapshot()
+    expect(after.revision).toBe(before.revision)
+    expect(after.history).toEqual(before.history)
+    expect(after.project).toEqual(before.project)
+  })
+
   it('puts the one message in the draft bar when the gesture had no field to mark', async () => {
     // A Square is 600 × 600, and the Capsule that fits it is 600 long and 600 wide — which is
     // a Circle wearing a name. The kernel says so, and there is no field to say it under.
