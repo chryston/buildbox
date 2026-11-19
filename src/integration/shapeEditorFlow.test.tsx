@@ -17,8 +17,9 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import type { CornerRadii, Preset } from '../derive'
+import { vertices } from '../derive'
 import type { ItemDesign, ItemFootprint, PlacedItem, Project } from '../domain'
-import { rectangleFootprint } from '../domain'
+import { footprintPath, rectangleFootprint } from '../domain'
 import { openTestView, renderWithBindings as render, type TestView } from '../ui/legacy/testing'
 import { testProject } from '../session/testing'
 import { workspaceStore } from '../ui'
@@ -347,6 +348,133 @@ describe('the Item Detail shape editor', () => {
 
     await act(async () => { view.session.undo() })
     expect(sofa(view.project()).footprint).toEqual(rectangleFootprint(1000, 600))
+  })
+
+  it('converts a Rectangle into the four edges it already was (criterion 13)', async () => {
+    const footprint = rectangleFootprint(600, 400)
+    const view = await openShapeEditor(withSofa(testProject('p-1'), footprint))
+    const before = vertices(footprintPath(footprint))
+    await userEvent.click(screen.getByTestId('shape-convert'))
+    await userEvent.click(await screen.findByTestId('convert-confirm'))
+    await waitFor(() => expect(sofa(view.project()).footprint.kind).toBe('path'))
+
+    await userEvent.click(screen.getByTestId('shape-tab-edges'))
+    const edges = screen.getByTestId('edges-tab')
+    expect(within(edges).getAllByTestId(/^edge-row-\d+$/)).toHaveLength(4)
+    for (const [index, length] of [1, 2, 3, 4].map((n, i) => [n, i % 2 === 0 ? 600 : 400] as const)) {
+      expect(within(edges).getByTestId(`edge-kind-${index}`)).toHaveTextContent('Line')
+      expect(within(edges).getByTestId(`edge-length-${index}`)).toHaveTextContent(`${length} mm`)
+    }
+
+    await userEvent.click(screen.getByTestId('shape-tab-measurements'))
+    expect(screen.getByTestId('measurements-area')).toHaveTextContent('0.24 m²')
+
+    // Nothing moved: the Custom Path holds the same four corners the Rectangle drew.
+    const after = vertices(footprintPath(sofa(view.project()).footprint))
+    expect(after).toHaveLength(before.length)
+    before.forEach((point, index) => {
+      const moved = after[index]
+      expect(moved).toBeDefined()
+      expect(Math.hypot(moved.x - point.x, moved.y - point.y)).toBeLessThan(0.01)
+    })
+
+    await act(async () => { view.session.undo() })
+    expect(sofa(view.project()).footprint).toEqual(rectangleFootprint(600, 400))
+  })
+
+  it('opens a Rounded Rectangle into four corners, and the top-left is the one it says (criterion 6)', async () => {
+    const shared: ItemFootprint = {
+      kind: 'preset',
+      preset: { kind: 'roundedRectangle', width: 1200, depth: 800, radius: 100 },
+      centre: { x: 600, y: 400 },
+      orientationDeg: 0,
+    }
+    const view = await openShapeEditor(withSofa(testProject('p-1'), shared))
+    // One field while every corner shares it…
+    expect(screen.getByTestId('shape-radius')).toBeInTheDocument()
+    await userEvent.click(screen.getByTestId('shape-per-corner-radii'))
+
+    // …four once they need not, named for the corner each rounds.
+    for (const id of ['topLeft', 'topRight', 'bottomRight', 'bottomLeft']) {
+      expect(screen.getByTestId(`shape-${id}`)).toBeInTheDocument()
+    }
+    expect(screen.getByText('Top-left')).toBeInTheDocument()
+    expect(screen.getByText('Top-right')).toBeInTheDocument()
+    expect(screen.getByText('Bottom-right')).toBeInTheDocument()
+    expect(screen.getByText('Bottom-left')).toBeInTheDocument()
+    expect(screen.queryByTestId('shape-radius')).not.toBeInTheDocument()
+
+    const topLeft = screen.getByTestId('shape-topLeft')
+    await userEvent.clear(topLeft)
+    await userEvent.type(topLeft, '400{Enter}')
+    await waitFor(() => expect(presetOf(view.project())).toEqual({
+      kind: 'roundedRectangle', width: 1200, depth: 800,
+      radii: { topLeft: 400, topRight: 100, bottomRight: 100, bottomLeft: 100 },
+    }))
+
+    // The 400 landed on the corner that draws at the top left: its arc is centred 400 in from
+    // the left edge and 400 down from the top, while the other three stay 100 from their corners.
+    const arcs = footprintPath(sofa(view.project()).footprint).segments
+      .filter((segment) => segment.kind === 'arc')
+      .map((segment) => segment.center)
+    expect(arcs).toEqual([
+      { x: 400, y: 400 },
+      { x: 1100, y: 100 },
+      { x: 1100, y: 700 },
+      { x: 100, y: 700 },
+    ])
+  })
+
+  it('defaults a Triangle’s apex to the middle of its base, and 0 squares it off (criterion 7)', async () => {
+    const triangle = (apexOffset?: number): ItemFootprint => ({
+      kind: 'preset',
+      preset: { kind: 'triangle', baseWidth: 900, depth: 600, ...(apexOffset === undefined ? {} : { apexOffset }) },
+      centre: { x: 0, y: 0 },
+      orientationDeg: 0,
+    })
+    const view = await openShapeEditor(withSofa(testProject('p-1'), triangle()))
+    // Half the base, said back as a number rather than as "the default".
+    expect(await fieldOf('shape-apexOffset')).toBe('450')
+
+    const apex = screen.getByTestId('shape-apexOffset')
+    await userEvent.clear(apex)
+    await userEvent.type(apex, '0{Enter}')
+    await waitFor(() => expect(presetOf(view.project())).toEqual({
+      kind: 'triangle', baseWidth: 900, depth: 600, apexOffset: 0,
+    }))
+
+    // A right angle at the base-left corner: the left edge goes straight up from it and the
+    // base goes straight along, so the apex sits above the base's left end.
+    const [baseLeft, apexPoint, baseRight] = vertices(footprintPath(sofa(view.project()).footprint))
+    expect(Math.abs(apexPoint.x - baseLeft.x)).toBeLessThan(0.01)
+    expect(Math.abs(baseRight.y - baseLeft.y)).toBeLessThan(0.01)
+  })
+
+  it('refuses a polygon with two sides, or three and a half, by marking the field (criterion 7)', async () => {
+    const view = await openShapeEditor(withSofa(testProject('p-1'), {
+      kind: 'preset',
+      preset: { kind: 'regularPolygon', sideCount: 6, sideLength: 300 },
+      centre: { x: 0, y: 0 },
+      orientationDeg: 0,
+    }))
+    const before = view.session.getSnapshot()
+    const sides = screen.getByTestId('shape-sides')
+
+    for (const rejected of ['2', '3.5']) {
+      await userEvent.clear(sides)
+      await userEvent.type(sides, `${rejected}{Enter}`)
+      expect(sides).toHaveAttribute('aria-invalid', 'true')
+      expect(screen.getByTestId('shape-sides-row')).toHaveAttribute('data-invalid', 'true')
+      expect(screen.getAllByTestId('shape-problem-message')).toHaveLength(1)
+      expect(screen.getByTestId('shape-apply')).toBeDisabled()
+      expect(view.session.getSnapshot()).toEqual(before)
+    }
+
+    // Five is a polygon: the mark goes and the number lands.
+    await userEvent.clear(sides)
+    await userEvent.type(sides, '5{Enter}')
+    await waitFor(() => expect(presetOf(view.project())).toEqual({ kind: 'regularPolygon', sideCount: 5, sideLength: 300 }))
+    expect(screen.getByTestId('shape-sides-row')).toHaveAttribute('data-invalid', 'false')
   })
 
   it('picking a preset arms a placement and changes nothing until the canvas is used (criterion 3)', async () => {

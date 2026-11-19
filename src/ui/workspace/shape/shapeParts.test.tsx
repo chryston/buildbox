@@ -7,7 +7,7 @@
  * `src/integration/shapeEditorFlow.test.tsx`; keeping these separate is what lets a wrong number
  * be blamed on the one component that printed it.
  */
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { rectangleFootprint } from '../../../domain'
@@ -151,6 +151,20 @@ describe('the Shapes gallery', () => {
     for (const kind of ['square', 'circle', 'capsule']) {
       expect(screen.getByTestId(`shape-preset-${kind}`)).toHaveAttribute('aria-checked', 'false')
     }
+  })
+
+  it('lists exactly the eight presets, each with a name a person can read (criterion 1)', () => {
+    render(<ShapesGallery current={null} onPick={vi.fn()} />)
+    const entries = within(screen.getByTestId('shapes-gallery')).getAllByRole('menuitemradio')
+    // In this order, because it is the order §3 lists them and the order the gallery is read.
+    expect(entries.map((entry) => entry.textContent?.trim())).toEqual([
+      'Square', 'Rectangle', 'Rounded Rectangle', 'Circle', 'Ellipse', 'Capsule', 'Triangle', 'Regular Polygon',
+    ])
+    // A glyph alone would leave a screen reader with nothing to say.
+    for (const entry of entries) expect(entry.textContent?.trim() ?? '').not.toBe('')
+    // The prototype's two odd shapes are not entries: Custom Path is reached through Convert
+    // until #59 adds the Line tool that starts one.
+    expect(entries.map((entry) => entry.textContent).join(' ')).not.toMatch(/l-shape|u-shape/i)
   })
 })
 

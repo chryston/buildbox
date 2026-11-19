@@ -276,7 +276,10 @@ function ShapeField(props: {
     if (!/^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(raw.trim())) return null
     const parsed = Number(raw)
     if (!Number.isFinite(parsed)) return null
-    return kind === 'mm' ? parseToMm(parsed, format.unit) : kind === 'count' ? Math.round(parsed) : parsed
+    // Only millimetres are rescaled. A count is passed through as typed rather than rounded to
+    // the nearest whole one, because 3.5 sides is a mistake to be told about, not a 4 to be
+    // given — and the kernel is the thing that says so, in the same sentence as 2 sides.
+    return kind === 'mm' ? parseToMm(parsed, format.unit) : parsed
   }
 
   return (

@@ -75,7 +75,10 @@ export function withParameter(footprint: ItemFootprint, field: ShapeFieldId, val
       : { ...preset, radius: undefined, radii: { ...radii, [field]: value } }
     return { ...footprint, preset: next }
   }
-  return { ...footprint, preset: { ...preset, [field]: value } as Preset }
+  // `Sides` is the label and `sideCount` is the property; the field id follows the label, so
+  // the one place the two names meet is here.
+  const key = field === 'sides' ? 'sideCount' : field
+  return { ...footprint, preset: { ...preset, [key]: value } as Preset }
 }
 
 /**
