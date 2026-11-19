@@ -27,3 +27,20 @@ export function formatMm(mm: number, unit: DisplayUnit, precision: number): stri
 export function parseToMm(value: number, unit: DisplayUnit): number {
   return Number((value * UNIT_TO_MM[unit]).toFixed(6))
 }
+
+/**
+ * A number being read rather than typed: grouped, with the unit after it.
+ *
+ * An input wants `5027` — group separators are characters a caret cannot sit between, and a
+ * field has to hold what it parses. A readout wants the opposite: `5,027 mm` is scannable and
+ * says what it is, and a Measurements panel with four bare numbers in it leaves the person
+ * working out which of them are millimetres.
+ */
+export function readoutMm(mm: number, unit: DisplayUnit, precision: number): string {
+  const value = mm / UNIT_TO_MM[unit]
+  const grouped = new Intl.NumberFormat('en-GB', {
+    minimumFractionDigits: precision,
+    maximumFractionDigits: precision,
+  }).format(value)
+  return `${grouped} ${unit}`
+}
