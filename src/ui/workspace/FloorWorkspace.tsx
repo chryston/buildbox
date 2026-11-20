@@ -41,7 +41,7 @@ import {
   placedOrigin,
   resolvePlanView,
 } from './planModel'
-import { CALIBRATION_REQUIRED_HINT, WORKSPACE_TOOLS, floorNeedsCalibration, toolIsGated } from './toolbarRegistry'
+import { CALIBRATION_REQUIRED_HINT, WORKSPACE_TOOLS, floorNeedsCalibration, toolIsGated, toolTitle } from './toolbarRegistry'
 import { WallDraftOverlay, emptyWallDraft } from './wall/WallDraftOverlay'
 import { WallInspector } from './wall/WallInspector'
 import { mergeableNeighbour } from './wall/wallDraft'
@@ -577,7 +577,7 @@ export function FloorWorkspace(): ReactNode {
                 type="button"
                 data-testid={definition.testId}
                 aria-pressed={tool === definition.id ? 'true' : 'false'}
-                title={gated ? CALIBRATION_REQUIRED_HINT : undefined}
+                title={toolTitle(definition, planImage)}
                 className="bb-workspace-tool-button"
                 disabled={gated}
                 onClick={() => setTool(definition.id)}

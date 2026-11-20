@@ -14,6 +14,7 @@ import {
   WORKSPACE_TOOLS,
   floorNeedsCalibration,
   toolIsGated,
+  toolTitle,
 } from './toolbarRegistry'
 import type { WorkspaceToolDefinition } from './toolbarRegistry'
 
@@ -86,5 +87,14 @@ describe('the registry', () => {
 
   it('states the reason in the words the issue prescribes', () => {
     expect(CALIBRATION_REQUIRED_HINT).toBe("Calibrate this Floor's Plan Image to draw measured shapes")
+  })
+
+  it('puts that reason on the gated Wall button, and nowhere else (#64 criterion 11)', () => {
+    const wall = WORKSPACE_TOOLS.find((each) => each.id === 'wall')!
+    const pointer = WORKSPACE_TOOLS.find((each) => each.id === 'select')!
+    expect(toolTitle(wall, image(null))).toBe(CALIBRATION_REQUIRED_HINT)
+    expect(toolTitle(wall, image(0.08))).toBeUndefined()
+    expect(toolTitle(wall, null)).toBeUndefined()
+    expect(toolTitle(pointer, image(null))).toBeUndefined()
   })
 })

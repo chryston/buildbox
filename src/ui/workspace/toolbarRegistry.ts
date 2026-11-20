@@ -59,6 +59,15 @@ export function toolIsGated(tool: WorkspaceToolDefinition, planImage: PlanImage 
 }
 
 /**
+ * The tooltip a tool button carries: the one sentence that says why it is out of reach, and
+ * nothing when it is reachable (#64 criterion 11). A disabled button that says nothing is a bug
+ * report waiting to happen, so the reason travels with the gate rather than with the button.
+ */
+export function toolTitle(tool: WorkspaceToolDefinition, planImage: PlanImage | null): string | undefined {
+  return toolIsGated(tool, planImage) ? CALIBRATION_REQUIRED_HINT : undefined
+}
+
+/**
  * The tools the Plan View ships today. `Select` moves what is already placed and `Pan` moves
  * the camera, so neither measures; `Wall` writes millimetre coordinates and so waits for a
  * calibrated Plan Image (#64 criterion 11), which is the one rule this registry owns.
