@@ -16,6 +16,7 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { designOutline, pathOrigin } from '../../derive'
 import type { DisplayUnit, ItemDesign, Point2 } from '../../domain'
+import type { Rect } from '../../drawing'
 import { PLAN_SWATCHES } from './planColors'
 import { formatMm, parseToMm } from './displayUnits'
 import type { PlanItemView } from './planModel'
@@ -38,6 +39,12 @@ export interface DesignEdit {
 
 export interface SelectionInspectorProps {
   item: PlanItemView | null
+  /**
+   * The box the selected Placed Item covers on the Floor, in Floor millimetres — read from
+   * the derived placement, because projecting a footprint is `derive`'s work, not the
+   * inspector's (#60 criterion 6).
+   */
+  bounds: Rect | null
   /** The Item Design the selected Placed Item references. */
   design: ItemDesign | null
   unit: DisplayUnit
@@ -167,7 +174,7 @@ function originChoices(design: ItemDesign): readonly { label: string; point: Poi
 
 function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): ReactNode {
   const {
-    item, design, unit, precision, canTransfer, preview, pickingOrigin,
+    item, bounds, design, unit, precision, canTransfer, preview, pickingOrigin,
     onSetPosition, onSetRotation, onEditDesign, onPreviewOrigin, onApplyPreview,
     onCancelPreview, onTogglePick, onFork, onOpenDetail, onDelete, onTransfer,
   } = props
@@ -244,7 +251,7 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
       <ReadOnlyRow
         testId="floor-bounds"
         label="Floor bounds"
-        value={`${size(item.boundsWidth)} × ${size(item.boundsDepth)}`}
+        value={bounds === null ? '—' : `${size(bounds.w)} × ${size(bounds.h)}`}
       />
       <div style={{ marginTop: 12 }}>
         <button

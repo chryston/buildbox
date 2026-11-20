@@ -25,11 +25,11 @@ import {
   midpoints,
   moveVertex,
   pathOrigin,
-  pathToSvg,
   resolveSnap,
   snapCandidates,
   vertices,
 } from '../../../derive'
+import { commandsToPath, pathToCommands } from '../../../drawing'
 import { formatMm, parseToMm } from '../displayUnits'
 import { SnapsMenu } from '../SnapsMenu'
 import { DRAW_TOOLS } from '../toolbarRegistry'
@@ -366,7 +366,7 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
     const placed = draftSegments(pathDraft)
     const preview = draftPreviewSegments(pathDraft)
     const view = (segment: Segment, from: Pt): DraftEdgeView => ({
-      d: pathToSvg({ start: from, segments: [segment] }),
+      d: commandsToPath(pathToCommands({ start: from, segments: [segment] })),
       label: chipLabel(chipForSegment(segment, from)),
       at: midpoints({ start: from, segments: [segment] })[0],
     })

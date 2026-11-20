@@ -1,17 +1,10 @@
 /**
- * The rotate handle's geometry (#57 criterion 12): the 15° snap, the 0.1° free follow, the
- * quarter turns that wrap, and the handle sitting a constant 24 CSS px past the footprint's
- * furthest corner whatever the zoom.
+ * The rotate handle's answer (#57 criterion 12): the 15° snap, the 0.1° free follow and the
+ * quarter turns that wrap. Where the grip draws is `drawing/annotations.ts`'s business now
+ * (#60), so nothing here transforms a Floor point.
  */
 import { describe, expect, it } from 'vitest'
-import {
-  HANDLE_REACH_PX,
-  cornerReach,
-  handlePoint,
-  handleRadiusMm,
-  quarterTurn,
-  rotationFromPointer,
-} from './rotateHandle'
+import { quarterTurn, rotationFromPointer } from './rotateHandle'
 
 const SNAP = { enabled: true, incrementDeg: 15 }
 const FREE = { enabled: false, incrementDeg: 15 }
@@ -66,27 +59,5 @@ describe('quarterTurn', () => {
     expect(quarterTurn(0, -1)).toBe(270)
     expect(quarterTurn(270, 1)).toBe(0)
     expect(quarterTurn(37.5, 1)).toBe(127.5)
-  })
-})
-
-describe('handleRadiusMm', () => {
-  it('is the furthest corner plus a reach that stays 24 CSS px at any zoom', () => {
-    const centre = { x: 300, y: 200 }
-    expect(cornerReach(600, 400, centre)).toBeCloseTo(Math.hypot(300, 200), 9)
-    expect(handleRadiusMm(600, 400, centre, 1)).toBeCloseTo(Math.hypot(300, 200) + HANDLE_REACH_PX, 9)
-    expect(handleRadiusMm(600, 400, centre, 4)).toBeCloseTo(Math.hypot(300, 200) + 6, 9)
-    // An off-centre origin reaches further to the corner it is nearest to, not to the centre.
-    expect(cornerReach(600, 400, { x: 0, y: 0 })).toBeCloseTo(Math.hypot(600, 400), 9)
-  })
-})
-
-describe('handlePoint', () => {
-  it('sits straight above the Item Origin at 0° and turns with the placement', () => {
-    const context = { rotationDeg: 0, translation: { x: 1000, y: 800 }, origin: { x: 300, y: 200 } }
-    expect(handlePoint(context, 100)).toEqual({ x: 1000, y: 700 })
-    const turned = { ...context, rotationDeg: 90 }
-    // 90° clockwise: local −Y now points to the right of the screen.
-    expect(handlePoint(turned, 100).x).toBeCloseTo(1100, 9)
-    expect(handlePoint(turned, 100).y).toBeCloseTo(800, 9)
   })
 })

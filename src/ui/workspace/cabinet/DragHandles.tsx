@@ -1,12 +1,13 @@
 import { useCallback, useRef } from 'react'
-import type { LayoutDivider } from '../../cabinet'
-import { useLegacyBindings } from '../../ui/legacy/bindings'
+import type { LayoutDivider } from './layout'
 
 interface Props {
   dividers: LayoutDivider[]
   snapGrid: number
   svgRef: React.RefObject<SVGSVGElement | null>
   zoom: number
+  /** The one thing a finished drag asks of the app: rewrite this divider's ratio. */
+  onCommitDrag: (parentNodeId: string, ratio: number) => void
 }
 
 export function snapToAlignment(y: number, candidates: number[], threshold: number): number {
@@ -16,8 +17,7 @@ export function snapToAlignment(y: number, candidates: number[], threshold: numb
   return Math.abs(nearest - y) <= threshold ? nearest : y
 }
 
-export default function DragHandles({ dividers, snapGrid, svgRef, zoom }: Props) {
-  const { commitDrag } = useLegacyBindings()
+export default function DragHandles({ dividers, snapGrid, svgRef, zoom, onCommitDrag }: Props) {
   const alignmentYs = useRef<number[]>([])
   const dragging = useRef<{
     dividerId: string
@@ -111,7 +111,7 @@ export default function DragHandles({ dividers, snapGrid, svgRef, zoom }: Props)
     const effectiveDelta = finalSizeA - originSizeA
     const finalSizeB = Math.max(50, originSizeB - effectiveDelta)
     const ratio = finalSizeA / (finalSizeA + finalSizeB)
-    commitDrag(parentNodeId, ratio)
+    onCommitDrag(parentNodeId, ratio)
     dragging.current = null
     alignmentYs.current = []
   }
@@ -135,7 +135,7 @@ export default function DragHandles({ dividers, snapGrid, svgRef, zoom }: Props)
             width={hW}
             height={hH}
             fill="rgba(124,58,237,0.3)"
-            stroke="#7c3aed"
+            stroke="var(--color-cabinet-handle)"
             strokeWidth={1}
             cursor={isHoriz ? 'ns-resize' : 'ew-resize'}
             rx={3}

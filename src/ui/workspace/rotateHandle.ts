@@ -11,36 +11,12 @@
  * `atan2` already grows clockwise when +Y points down, so the pointer's own angle *is* the
  * rotation, once the handle's 90° offset is taken back off — no drag-start reference, which
  * is why grabbing the handle again after a turn does not jump.
+ *
+ * Where the handle *draws* is no longer here: #60 moved the grip, its stem and its reach into
+ * `drawing/annotations.ts`, so that the only Floor-space transform on the screen is the one
+ * `derive` already did. What is left is the pointer's answer, which is a screen question.
  */
-import { normaliseRotation, worldPointOf } from '../../derive'
-import type { PlacementContext } from '../../derive'
-
-/** How far the handle sits past the footprint's furthest corner, in CSS pixels. */
-export const HANDLE_REACH_PX = 24
-
-/** The footprint's furthest corner from the Item Origin, in footprint-local millimetres. */
-export function cornerReach(width: number, depth: number, origin: { x: number; y: number }): number {
-  let reach = 0
-  for (const [x, y] of [[0, 0], [width, 0], [width, depth], [0, depth]] as const) {
-    reach = Math.max(reach, Math.hypot(x - origin.x, y - origin.y))
-  }
-  return reach
-}
-
-/**
- * The handle's distance from the Item Origin in Floor millimetres: every corner of the
- * footprint, plus a reach that stays 24 CSS px however far the view is zoomed.
- */
-export const handleRadiusMm = (
-  width: number,
-  depth: number,
-  origin: { x: number; y: number },
-  zoom: number,
-): number => cornerReach(width, depth, origin) + HANDLE_REACH_PX / zoom
-
-/** Where the handle draws, in Floor millimetres. */
-export const handlePoint = (context: PlacementContext, radiusMm: number): { x: number; y: number } =>
-  worldPointOf(context, { x: context.origin.x, y: context.origin.y - radiusMm })
+import { normaliseRotation } from '../../derive'
 
 /**
  * The rotation the pointer asks for: the angle from the Item Origin to the pointer, plus the

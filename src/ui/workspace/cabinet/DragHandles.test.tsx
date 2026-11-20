@@ -1,35 +1,14 @@
 import { createRef } from 'react'
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, screen, waitFor } from '@testing-library/react'
-import type { Project } from '../../domain'
-import type { LayoutDivider } from '../../cabinet'
-import { testCabinet, testProject } from '../../session/testing'
-import { openTestView, renderWithBindings as render, type TestView } from '../../ui/legacy/testing'
-import DragHandles from './DragHandles'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import DragHandles, { snapToAlignment } from './DragHandles'
+import type { LayoutDivider } from './layout'
 
 /**
- * A cabinet whose one space is split in two: the divider between `top` and `bottom` is what
- * the handle drags, and the ratio it commits lands on the node that split them.
+ * The divider handle (#60). A finished drag used to reach the store through the bindings seam;
+ * it now reaches the app through one callback, so these tests watch that callback and check the
+ * arithmetic the handle owns — pointer space, zoom, the snap grid, and the sibling's share.
  */
-function splitProject(): Project {
-  const project = testProject('p-1')
-  const design = testCabinet(project)
-  return {
-    ...project,
-    itemDesigns: [{
-      ...design,
-      construction: {
-        ...design.construction,
-        root: {
-          id: 'root',
-          splitAxis: 'horizontal',
-          splitRatio: 0.5,
-          children: [{ id: 'top', elementType: 'void' }, { id: 'bottom', elementType: 'void' }],
-        },
-      },
-    }],
-  }
-}
 
 const DIVIDER = {
   nodeId: 'top-shelf',
@@ -53,9 +32,6 @@ describe('DragHandles', () => {
     }
   })
 
-  let view: TestView
-  beforeEach(async () => { view = await openTestView(splitProject()) })
-
   function renderDragHandles({
     divider,
     snapGrid = 1,
@@ -67,12 +43,18 @@ describe('DragHandles', () => {
   }) {
     const svgRef = createRef<SVGSVGElement>()
     const setPointerCapture = vi.fn()
+    const onCommitDrag = vi.fn()
 
     const { container } = render(
       <svg ref={svgRef}>
-        <DragHandles dividers={[divider]} snapGrid={snapGrid} svgRef={svgRef} zoom={zoom} />
+        <DragHandles
+          dividers={[divider]}
+          snapGrid={snapGrid}
+          svgRef={svgRef}
+          zoom={zoom}
+          onCommitDrag={onCommitDrag}
+        />
       </svg>,
-      view,
     )
 
     const svg = container.querySelector('svg') as SVGSVGElement
@@ -85,11 +67,8 @@ describe('DragHandles', () => {
     const handle = screen.getByTestId(`drag-handle-${divider.nodeId}`)
     ;((handle as unknown) as SVGRectElement & { setPointerCapture: ReturnType<typeof vi.fn> }).setPointerCapture = setPointerCapture
 
-    return { handle, setPointerCapture }
+    return { handle, setPointerCapture, onCommitDrag }
   }
-
-  /** The ratio the split node holds after the last commit. */
-  const rootRatio = (): number | undefined => testCabinet(view.project()).construction.root.splitRatio
 
   it('anchors handle movement to the initial handle position during drag', () => {
     const { handle } = renderDragHandles({ divider: DIVIDER })
@@ -105,37 +84,38 @@ describe('DragHandles', () => {
     expect(handle).toHaveAttribute('y', '133')
   })
 
-  it('scales pointer movement by zoom before committing the drag ratio', async () => {
-    const { handle } = renderDragHandles({ divider: DIVIDER, zoom: 2 })
+  it('scales pointer movement by zoom before committing the drag ratio', () => {
+    const { handle, onCommitDrag } = renderDragHandles({ divider: DIVIDER, zoom: 2 })
 
     fireEvent.pointerDown(handle, { pointerId: 1, clientY: 0 })
     fireEvent.pointerUp(handle, { pointerId: 1, clientY: 20 })
 
-    await waitFor(() => expect(rootRatio()).toBeCloseTo(0.55, 5))
+    expect(onCommitDrag).toHaveBeenCalledWith('root', expect.closeTo(0.55, 5))
   })
 
-  it('uses the snapped effective delta for the sibling size before committing the ratio', async () => {
-    const { handle } = renderDragHandles({ divider: DIVIDER, snapGrid: 10 })
+  it('uses the snapped effective delta for the sibling size before committing the ratio', () => {
+    const { handle, onCommitDrag } = renderDragHandles({ divider: DIVIDER, snapGrid: 10 })
 
     fireEvent.pointerDown(handle, { pointerId: 1, clientY: 0 })
     fireEvent.pointerUp(handle, { pointerId: 1, clientY: 13 })
 
-    await waitFor(() => expect(rootRatio()).toBeCloseTo(0.55, 5))
+    expect(onCommitDrag).toHaveBeenCalledWith('root', expect.closeTo(0.55, 5))
   })
 
-  it('commits the drag ratio to the split parent node', async () => {
-    const { handle } = renderDragHandles({ divider: DIVIDER })
+  it('commits the drag ratio to the split parent node, once, on pointer-up', () => {
+    const { handle, onCommitDrag } = renderDragHandles({ divider: DIVIDER })
 
     fireEvent.pointerDown(handle, { pointerId: 1, clientY: 0 })
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 10 })
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 20 })
+    expect(onCommitDrag).not.toHaveBeenCalled()
+
     fireEvent.pointerUp(handle, { pointerId: 1, clientY: 20 })
 
-    await waitFor(() => expect(rootRatio()).toBe(0.6))
-    const root = testCabinet(view.project()).construction.root
-    expect(root.children?.[0].splitRatio).toBeUndefined()
+    expect(onCommitDrag).toHaveBeenCalledTimes(1)
+    expect(onCommitDrag).toHaveBeenCalledWith('root', 0.6)
   })
 })
-
-import { snapToAlignment } from './DragHandles'
 
 describe('snapToAlignment', () => {
   it('snaps to nearest candidate within threshold', () => {

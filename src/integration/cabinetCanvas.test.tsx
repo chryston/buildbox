@@ -1,12 +1,17 @@
 import { createRef } from 'react'
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, screen } from '@testing-library/react'
-import { computeUnitLayout, type CabinetSceneUnit, type SceneLayout } from '../../cabinet'
-import { openTestView, renderWithBindings as render, type TestView } from '../../ui/legacy/testing'
-import CabinetCanvas from './CabinetCanvas'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { computeUnitLayout, type CabinetSceneUnit, type SceneLayout } from '../cabinet'
+import { CabinetCanvas } from '../ui'
+import type { CabinetCanvasProps, CabinetDetail } from '../ui'
 
-/** The one unit the layout is computed from. `Design` is gone with the legacy store (#53), and
- * the canvas only ever needed a unit's settings and root. */
+/**
+ * The cabinet canvas (#60). It no longer reads the store: the scene arrives as an Item Detail
+ * and every edit leaves as a callback, so a test supplies the callbacks it wants to watch
+ * rather than a session.
+ */
+
+/** The one unit the layout is computed from. The canvas only needs a unit's settings and root. */
 function createUnit(): CabinetSceneUnit {
   return {
     type: 'cabinet',
@@ -78,17 +83,31 @@ function unitToSceneLayout(firstUnit: CabinetSceneUnit): SceneLayout {
   }
 }
 
-function renderCabinetCanvas(view: TestView) {
-  const sceneLayout = unitToSceneLayout(createUnit())
+const detailOf = (layout: SceneLayout, designId: string): CabinetDetail =>
+  ({ kind: 'cabinet', designId, layout })
+
+const noop = (): undefined => undefined
+
+function renderCabinet(
+  layout: SceneLayout,
+  designId = 'unit-1',
+  overrides: Partial<CabinetCanvasProps> = {},
+) {
   const svgRef = createRef<SVGSVGElement>()
   const result = render(
     <CabinetCanvas
-      sceneLayout={sceneLayout}
+      detail={detailOf(layout, designId)}
       svgRef={svgRef}
-      onUnlockNode={() => {}}
-      onUnitClick={() => {}}
+      selectedNodeId={null}
+      snapGrid={0}
+      onUnitClick={noop}
+      onSelectNode={noop}
+      onCommitSize={noop}
+      onCommitLabel={noop}
+      onCommitDrag={noop}
+      onUnlockNode={noop}
+      {...overrides}
     />,
-    view,
   )
   const svg = screen.getByTestId('cabinet-canvas') as unknown as SVGSVGElement
   const getViewport = () => {
@@ -109,13 +128,8 @@ describe('CabinetCanvas', () => {
     }
   })
 
-  // The canvas reads its snap grid and commits its drags through the seam, so every test here
-  // renders against a real session over the in-memory store (#49).
-  let view: TestView
-  beforeEach(async () => { view = await openTestView() })
-
   it('uses a matrix transform so panning stays screen-space after zooming', () => {
-    const { svg, getViewport } = renderCabinetCanvas(view)
+    const { svg, getViewport } = renderCabinet(unitToSceneLayout(createUnit()))
 
     ;(svg as SVGSVGElement & { setPointerCapture: ReturnType<typeof vi.fn> }).setPointerCapture = vi.fn()
 
@@ -127,7 +141,7 @@ describe('CabinetCanvas', () => {
   })
 
   it('captures the pointer on the svg element even when panning starts on a child shape', () => {
-    const { svg } = renderCabinetCanvas(view)
+    const { svg } = renderCabinet(unitToSceneLayout(createUnit()))
     const voidRect = screen.getByTestId('void-root-void')
     const originalSetPointerCapture = Element.prototype.setPointerCapture
     const setPointerCapture = vi.fn()
@@ -145,7 +159,7 @@ describe('CabinetCanvas', () => {
   })
 
   it('stops panning when the active pointer is cancelled', () => {
-    const { svg, getViewport } = renderCabinetCanvas(view)
+    const { svg, getViewport } = renderCabinet(unitToSceneLayout(createUnit()))
 
     ;(svg as SVGSVGElement & { setPointerCapture: ReturnType<typeof vi.fn> }).setPointerCapture = vi.fn()
 
@@ -160,53 +174,23 @@ describe('CabinetCanvas', () => {
   })
 
   it('renders one <g> group per unit', () => {
-    const sceneLayout = makeSceneLayout(2)
-    render(
-      <CabinetCanvas
-        sceneLayout={sceneLayout}
-        svgRef={createRef()}
-        onUnlockNode={() => {}}
-        onUnitClick={() => {}}
-      />,
-      view,
-    )
+    renderCabinet(makeSceneLayout(2), 'u1')
     const groups = document.querySelectorAll('[data-unit-id]')
     expect(groups).toHaveLength(2)
   })
 
   it('clicking a unit group fires onUnitClick with that unit id', () => {
-    const sceneLayout = makeSceneLayout(2)
     const onUnitClick = vi.fn()
-    render(
-      <CabinetCanvas
-        sceneLayout={sceneLayout}
-        svgRef={createRef()}
-        onUnlockNode={() => {}}
-        onUnitClick={onUnitClick}
-      />,
-      view,
-    )
+    renderCabinet(makeSceneLayout(2), 'u1', { onUnitClick })
     const groups = document.querySelectorAll('[data-unit-id]')
-    fireEvent.click(groups[1].querySelector('rect')!)
+    fireEvent.click(groups[1].querySelector('[data-ref-role="unit-hit"]')!)
     expect(onUnitClick).toHaveBeenCalledWith('u2')
   })
 
-  it('renders dashed border rect for active unit only', () => {
-    const sceneLayout = makeSceneLayout(2)
-    render(
-      <CabinetCanvas
-        sceneLayout={sceneLayout}
-        svgRef={createRef()}
-        onUnlockNode={() => {}}
-        onUnitClick={() => {}}
-      />,
-      view,
-    )
-    const groups = document.querySelectorAll('[data-unit-id]')
-    const activeGroup = groups[0]
-    const dashedRects = activeGroup.querySelectorAll('rect[stroke-dasharray]')
-    expect(dashedRects.length).toBeGreaterThan(0)
-    const inactiveGroup = groups[1]
-    expect(inactiveGroup.querySelectorAll('rect[stroke-dasharray]').length).toBe(0)
+  it('draws the dashed outline around the active unit only', () => {
+    renderCabinet(makeSceneLayout(2), 'u1')
+    // The drawing names what each shape is, so the assertion does not have to know whether a
+    // box reached the browser as a `<rect>` or as a `<path>`.
+    expect(document.querySelectorAll('[data-ref-role="unit-active"]')).toHaveLength(1)
   })
 })

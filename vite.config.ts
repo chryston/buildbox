@@ -37,6 +37,10 @@ const PURE_EXCLUDE = ['src/persistence/indexeddb/**']
 const NODE_ONLY_INCLUDE = [
   'src/test/legacyFixtures.test.ts',
   'src/test/legacyMigration.test.ts',
+  // Criterion 5 of #60 holds the derived cabinet Item Detail against `computeSceneLayout` over
+  // every legacy fixture, which needs `package`'s converter, so it is a Node test in the
+  // `test-support` element — and `import.meta.url` is only a file URL outside jsdom.
+  'src/test/deriveCabinetItemDetail.test.ts',
   // The invalid-proposal controller (#58 §6) lives in `ui` because it is UI state, but it is
   // a pure state machine — no React, no DOM — and the issue verifies it under Node.
   'src/ui/workspace/shape/**/*.test.ts',

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { fromMm, toMm } from '../../domain'
-import type { Unit } from '../../domain'
+import { fromMm, toMm } from '../../../domain'
+import type { Unit } from '../../../domain'
 
 interface Anchor {
   x: number
@@ -65,6 +65,7 @@ export default function DimensionEditor({ anchor, currentMm, unit, onCommit, onC
       <input
         ref={inputRef}
         type="number"
+        data-testid="dimension-editor"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={onKeyDown}

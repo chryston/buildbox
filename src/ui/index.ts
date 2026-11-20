@@ -22,6 +22,7 @@ import './library/library.css'
 export { STRINGS } from './strings'
 export type { ActiveViewState, Viewport, ViewportCache } from './workspace'
 export {
+  CabinetCanvas,
   FloorWorkspace,
   ItemDetailView,
   PLAN_IMAGE_ACCEPT,
@@ -54,6 +55,8 @@ export {
   type ShapeTarget,
   type WorkspaceAssetUrls,
   type WorkspaceIntentBuilder,
+  type CabinetCanvasProps,
+  type CabinetDetail,
   type ItemDetailViewProps,
   type WorkspaceServices,
 } from './workspace'

@@ -15,8 +15,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import { pathToSvg } from '../../../derive'
 import type { PresetKind, Pt } from '../../../derive'
+import { commandsToPath, pathToCommands } from '../../../drawing'
 import { footprintPath } from '../../../domain'
 import type { ItemFootprint, Point2 } from '../../../domain'
 import { chipsFor, clientToLocal, dragBox, isClick, localToHost } from './placement'
@@ -277,12 +277,12 @@ export function FootprintCanvas(props: FootprintCanvasProps): ReactNode {
         y2={box.maxY}
       />
       {ghost !== null && (
-        <path className="bb-shape-ghost" data-testid="footprint-ghost" d={pathToSvg(footprintPath(ghost))} />
+        <path className="bb-shape-ghost" data-testid="footprint-ghost" d={commandsToPath(pathToCommands(footprintPath(ghost)))} />
       )}
       <path
         className="bb-shape-outline"
         data-testid="footprint-outline"
-        d={pathToSvg(footprintPath(footprint))}
+        d={commandsToPath(pathToCommands(footprintPath(footprint)))}
       />
       <g className="bb-shape-origin" data-testid="footprint-origin" transform={`translate(${origin.x} ${origin.y})`}>
         <circle r={PAD_MM / 4} />
