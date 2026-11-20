@@ -300,11 +300,12 @@ describe('golden: what the bytes say (#60 criteria 8, 9, 10, 12)', () => {
       (list === null ? '' : serializeSvg(toSvgTree(list, { sizing: SCREEN, includeRefs: false, resolveAsset: () => null })))
         .match(/data-layer="plan-annotations"[\s\S]*?<\/g><\/g>/)?.[0]
         .match(/ d="[^"]+"/g) ?? []
-    // Two crosshairs where there was one, and the committed one is byte-identical: the
-    // footprint is not in this band at all, so nothing about it can have moved.
-    expect(paths(moved)).toHaveLength(4)
-    expect(paths(still)).toHaveLength(2)
-    expect(paths(moved).slice(2)).toEqual(paths(still))
+    // Two crosshairs where there was one — three paths each, two arms and a dot — and the
+    // committed one is byte-identical: the footprint is not in this band at all, so nothing
+    // about it can have moved.
+    expect(paths(moved)).toHaveLength(6)
+    expect(paths(still)).toHaveLength(3)
+    expect(paths(moved).slice(3)).toEqual(paths(still))
   })
 
   it('keeps a reflex arc reflex', () => {

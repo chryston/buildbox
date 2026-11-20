@@ -350,27 +350,56 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
               sizing={sizing}
               matrix={matrix}
               textSpace="screen"
+              textLayer={annotations === null ? 'with' : 'none'}
               screen={{ pxPerUnit: zoom, panX, panY }}
               emphasis={{ selected: selection === null ? undefined : new Set([selection]) }}
               resolveAsset={resolveAsset}
               interactions={interactions}
             />
-            {/* The selection's measurements and Item Origins are a second list, keyed by a click
-                rather than by the revision, so a gesture does not rebuild a hundred footprints. */}
             {annotations === null
               ? overlay !== undefined && <g transform={matrix}>{overlay}</g>
               : (
-                <DisplayListSvg
-                  list={annotations}
-                  sizing={sizing}
-                  matrix={matrix}
-                  textSpace="screen"
-                  screen={{ pxPerUnit: zoom, panX, panY }}
-                  resolveAsset={resolveAsset}
-                  interactions={interactions}
-                >
-                  {overlay}
-                </DisplayListSvg>
+                <>
+                  {/* The selection's measurements and Item Origins are a second list, keyed by a
+                      click rather than by the revision, so a gesture does not rebuild a hundred
+                      footprints. */}
+                  <DisplayListSvg
+                    list={annotations}
+                    sizing={sizing}
+                    matrix={matrix}
+                    textSpace="screen"
+                    textLayer="none"
+                    screen={{ pxPerUnit: zoom, panX, panY }}
+                    resolveAsset={resolveAsset}
+                    interactions={interactions}
+                  >
+                    {overlay}
+                  </DisplayListSvg>
+                  {/* Then every word of both lists, last and flat on the screen, exactly as one
+                      canvas draws them: a label that crosses an Item Origin paints over the
+                      crosshair, not under it. */}
+                  <DisplayListSvg
+                    list={list}
+                    sizing={sizing}
+                    matrix={matrix}
+                    textSpace="screen"
+                    textLayer="only"
+                    screen={{ pxPerUnit: zoom, panX, panY }}
+                    emphasis={{ selected: selection === null ? undefined : new Set([selection]) }}
+                    resolveAsset={resolveAsset}
+                    interactions={interactions}
+                  />
+                  <DisplayListSvg
+                    list={annotations}
+                    sizing={sizing}
+                    matrix={matrix}
+                    textSpace="screen"
+                    textLayer="only"
+                    screen={{ pxPerUnit: zoom, panX, panY }}
+                    resolveAsset={resolveAsset}
+                    interactions={interactions}
+                  />
+                </>
               )}
           </>
         )}

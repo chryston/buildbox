@@ -110,15 +110,12 @@ function originMarker(f: DrawnPlacement, sizing: DrawOptions['sizing'], preview:
     ref: { id: f.placement.id, role: preview ? 'origin-preview' : 'origin-marker' },
     transform: affineTranslate(at.x, at.y),
     items: [
-      {
-        kind: 'path',
-        segments: [
-          ...lineCommands({ x: -arm, y: 0 }, { x: arm, y: 0 }),
-          ...lineCommands({ x: 0, y: -arm }, { x: 0, y: arm }),
-        ],
-        closed: false,
-        style,
-      },
+      // Two arms, two paths. One `d` with two subpaths is stroked as a single unioned
+      // outline, and Chromium antialiases that union across the whole crosshair: the arms
+      // come out a hair heavier than the two `<line>`s this replaces. Separate paths paint
+      // separately and land on the same pixels.
+      { kind: 'path', segments: lineCommands({ x: -arm, y: 0 }, { x: arm, y: 0 }), closed: false, style },
+      { kind: 'path', segments: lineCommands({ x: 0, y: -arm }, { x: 0, y: arm }), closed: false, style },
       {
         kind: 'path',
         segments: roundedRectCommands(-dot, -dot, dot * 2, dot * 2, dot),

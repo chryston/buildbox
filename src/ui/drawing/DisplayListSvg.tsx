@@ -47,6 +47,9 @@ import type {
 /** Where the words of a list are drawn: with the geometry, or flat on the screen. */
 export type TextSpace = 'screen' | 'list'
 
+/** Where one pass of a list puts its words, when several passes share a canvas. */
+export type TextLayer = 'with' | 'none' | 'only'
+
 /** The gestures a canvas hands back, keyed by the `Ref.id` the element was drawn for. */
 export interface DisplayListInteractions {
   /** The group around a Placed Item's outline: it starts a drag or a pick. */
@@ -67,6 +70,15 @@ export interface DisplayListSvgProps {
   /** The `matrix(...)` that puts the list's unit on screen; `undefined` draws it untransformed. */
   matrix?: string
   textSpace: TextSpace
+  /**
+   * Whether this pass draws the words. `'with'` (the default) puts them above the geometry,
+   * `'none'` leaves them to a later pass, `'only'` draws nothing but words.
+   *
+   * Two lists that share one canvas — a Floor and its selection annotations — have to interleave
+   * the way a single canvas does: all the geometry, then every word. Otherwise an Item label that
+   * crosses an Item Origin paints under the crosshair instead of over it.
+   */
+  textLayer?: TextLayer
   /**
    * CSS pixels per list unit, and the pan, both only read when `textSpace` is `'screen'`:
    * they are what a millimetre coordinate and a millimetre font size are multiplied by.
@@ -133,10 +145,15 @@ function toScreenAttrs(
   const { pxPerUnit, panX, panY } = screen
   const at = (value: string | undefined, pan: number): string | undefined =>
     value === undefined ? undefined : String(Number(value) * pxPerUnit + pan)
+  /* A millimetre font size is stored on the list's three-decimal grid, so multiplying it back
+     out lands a hair off the size that was asked for — `12` comes back as `12.0004`. Centred
+     text is laid out from its own width, so that hair slides every glyph sideways; the size
+     goes back onto the grid it left. */
+  const grid = (value: number): string => String(Math.round(value * 1000) / 1000)
   return attrs.map(([key, value]) => {
     if (key === 'x') return ['x', at(value, panX) as string]
     if (key === 'y') return ['y', at(value, panY) as string]
-    if (key === 'font-size') return ['font-size', String(Number(value) * pxPerUnit)]
+    if (key === 'font-size') return ['font-size', grid(Number(value) * pxPerUnit)]
     return [key, value]
   })
 }
@@ -289,17 +306,20 @@ interface RenderOptions {
  */
 export function DisplayListSvg(props: DisplayListSvgProps): ReactNode {
   const { list, sizing, matrix, textSpace, screen, emphasis, resolveAsset, interactions, children } = props
+  const layer = props.textLayer ?? 'with'
   const options = { sizing, includeRefs: true, emphasis, resolveAsset }
   const render = (keep: 'geometry' | 'text' | 'all', screenAttrs: DisplayListSvgProps['screen']): ReactNode =>
     (toSvgTree(splitList(list, keep), options).children ?? [])
-      .map((layer, index) => renderNode(layer, index, { interactions, screen: screenAttrs }))
+      .map((band, index) => renderNode(band, index, { interactions, screen: screenAttrs }))
   return (
     <>
-      <g transform={matrix}>
-        {render(textSpace === 'screen' ? 'geometry' : 'all', undefined)}
-        {children}
-      </g>
-      {textSpace === 'screen' && (
+      {layer !== 'only' && (
+        <g transform={matrix}>
+          {render(textSpace === 'screen' ? 'geometry' : 'all', undefined)}
+          {children}
+        </g>
+      )}
+      {textSpace === 'screen' && layer !== 'none' && (
         /* Every word, in CSS pixels and with no transform of any kind: a footprint turns, its
            name never does (#57 criterion 11). */
         <g data-testid="plan-text-layer" style={{ pointerEvents: 'none', userSelect: 'none' }}>
