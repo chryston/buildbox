@@ -7,7 +7,7 @@
  * same bytes out.
  */
 
-import type { DisplayList, LayerKey, Rect } from '../drawing'
+import type { LayerKey } from '../drawing'
 import type { DisplayUnit, Project } from '../domain'
 
 /** The three formats #61 writes. One export writes one of them. */
@@ -234,16 +234,4 @@ export interface ExportDeps {
   readonly rasterizer?: Rasterizer
   readonly assets?: AssetBytes
   readonly onProgress?: (progress: ExportProgress) => void
-}
-
-/** One drawing's geometry on the sheet, in millimetres of paper. */
-export interface PlacedDrawing {
-  /** The display list already in paper millimetres, sheet coordinates. */
-  readonly list: DisplayList
-  /** Where the drawing sits on the sheet. */
-  readonly rect: Rect
-  /** The denominator actually used; `null` when the sheet is not to scale. */
-  readonly denominator: number | null
-  /** True when the scale was chosen to fit rather than named. */
-  readonly fitted: boolean
 }
