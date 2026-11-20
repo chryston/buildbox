@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MAX_TREE_DEPTH, rectangleFootprint, validateProject } from './index'
-import type { CabinetNode, GenericItemDesign, Project } from './index'
+import type { CabinetNode, GenericItemDesign, Opening, Project } from './index'
 
 // A Project small enough to read and complete enough to reach every level of the schema:
 // two Floors, one cabinet Item Design whose root splits into two voids, one generic Item
@@ -708,6 +708,161 @@ describe('validateProject — the Existing Model', () => {
     expectProblems(project, [
       { path: 'existingModel.placedItems[0].translation.y', code: 'out-of-range' },
     ])
+  })
+})
+
+/**
+ * An Opening needs a Wall to be cut into, so these cases start from one 4 000 mm Wall
+ * along the X axis — free at both ends, so its usable interval is its whole length.
+ */
+function withWall(project: Project): Project {
+  project.existingModel.walls = [
+    {
+      id: 'wall-0',
+      ref: 'W-1',
+      floorId: 'floor-0',
+      line: { kind: 'line', start: { x: 0, y: 0 }, end: { x: 4000, y: 0 } },
+      thickness: 100,
+      justification: 'centre',
+      baseElevation: 0,
+      height: 2600,
+    },
+  ]
+  return project
+}
+
+function doorOpening(over: Partial<Opening> = {}): Opening {
+  return {
+    id: 'opening-0',
+    floorId: 'floor-0',
+    hostWallId: 'wall-0',
+    kind: 'door',
+    label: 'Door 1',
+    start: 1200,
+    width: 900,
+    sill: 0,
+    head: 2100,
+    swing: 'left',
+    hingeSide: 'start',
+    ...over,
+  }
+}
+
+function withOpenings(project: Project, openings: readonly Opening[]): Project {
+  project.existingModel.openings = [...openings]
+  return project
+}
+
+/** The sentences, in the order reported — the words a user would actually be shown. */
+function messagesOf(value: unknown): string[] {
+  const result = validateProject(value)
+  return result.ok ? [] : result.problems.map((problem) => problem.message)
+}
+
+/**
+ * The Openings collection, checked strictly (#65 §9). An Opening is an absence in exactly
+ * one Wall, so most of what can go wrong is a reference or a position that no longer
+ * describes a hole in that Wall — and every one of those is refused rather than drawn
+ * somewhere near.
+ */
+describe('validateProject — the Openings collection (#65)', () => {
+  it('accepts a door, a window and a removed section on one Wall', () => {
+    const project = withOpenings(withWall(baseProject()), [
+      doorOpening(),
+      doorOpening({ id: 'opening-1', kind: 'window', label: 'Window 1', start: 2400, sill: 1050, head: 2300, swing: undefined, hingeSide: undefined }),
+      doorOpening({ id: 'opening-2', kind: 'removed_section', label: 'Removed section 1', start: 3700, width: 300, head: 2600, swing: undefined, hingeSide: undefined }),
+    ])
+    expectProblems(project, [])
+  })
+
+  it('refuses an Opening whose Wall is not in the Project', () => {
+    const project = withOpenings(withWall(baseProject()), [doorOpening({ hostWallId: 'wall-missing' })])
+    expectProblems(project, [
+      { path: 'existingModel.openings[0].hostWallId', code: 'dangling-reference' },
+    ])
+  })
+
+  it('refuses an Opening whose Wall stands on another Floor', () => {
+    const project = withOpenings(withWall(baseProject()), [doorOpening({ floorId: 'floor-1' })])
+    expectProblems(project, [
+      { path: 'existingModel.openings[0].hostWallId', code: 'dangling-reference' },
+    ])
+  })
+
+  it('refuses an Opening past the end of its Wall, in the words the editor shows', () => {
+    const project = withOpenings(withWall(baseProject()), [doorOpening({ start: 3200 })])
+    expectProblems(project, [{ path: 'existingModel.openings[0].start', code: 'out-of-range' }])
+    expect(messagesOf(project)).toEqual(['Door 1 would run past the end of W-1. Move or narrow it first.'])
+  })
+
+  it('refuses an Opening that would cross the join it is centred on', () => {
+    const project = withOpenings(withWall(baseProject()), [doorOpening({ start: 1050 })])
+    project.existingModel.walls.push({
+      ...project.existingModel.walls[0]!,
+      id: 'wall-1',
+      ref: 'W-2',
+      // A hosted Junction stores its end on the host, so the branch begins at 1 500.
+      line: { kind: 'line', start: { x: 1500, y: 0 }, end: { x: 1500, y: 1500 } },
+    })
+    project.existingModel.wallJunctions = [
+      {
+        id: 'junction-0',
+        floorId: 'floor-0',
+        ends: [{ wallId: 'wall-1', end: 'start' }],
+        host: { wallId: 'wall-0', at: 1500 },
+      },
+    ]
+    expect(messagesOf(project)).toEqual(['Door 1 would cross the join with W-2.'])
+  })
+
+  it('says the Wall is shorter than the Opening when there is no room anywhere', () => {
+    const project = withOpenings(withWall(baseProject()), [doorOpening({ width: 4500 })])
+    expectProblems(project, [{ path: 'existingModel.openings[0].start', code: 'out-of-range' }])
+    expect(messagesOf(project)).toEqual(['This wall is shorter than a 4500 mm door.'])
+  })
+
+  it('refuses an Opening whose top is at or below its bottom', () => {
+    const project = withOpenings(withWall(baseProject()), [doorOpening({ head: 0 })])
+    expectProblems(project, [{ path: 'existingModel.openings[0].head', code: 'out-of-range' }])
+  })
+
+  it('refuses an Opening with no width', () => {
+    const project = withOpenings(withWall(baseProject()), [doorOpening({ width: 0 })])
+    expectProblems(project, [{ path: 'existingModel.openings[0].width', code: 'out-of-range' }])
+  })
+
+  it('refuses a door that does not say which way it swings', () => {
+    const project = withOpenings(withWall(baseProject()), [doorOpening({ swing: undefined })])
+    expectProblems(project, [{ path: 'existingModel.openings[0].swing', code: 'missing-field' }])
+  })
+
+  it('refuses a hinged door that does not say which jamb it hangs on', () => {
+    const project = withOpenings(withWall(baseProject()), [doorOpening({ hingeSide: undefined })])
+    expectProblems(project, [{ path: 'existingModel.openings[0].hingeSide', code: 'missing-field' }])
+  })
+
+  it('refuses a sliding door that still names a jamb', () => {
+    const project = withOpenings(withWall(baseProject()), [doorOpening({ swing: 'sliding' })])
+    expectProblems(project, [{ path: 'existingModel.openings[0].hingeSide', code: 'unknown-field' }])
+  })
+
+  it('refuses a window carrying door fields', () => {
+    const project = withOpenings(withWall(baseProject()), [doorOpening({ kind: 'window' })])
+    expectProblems(project, [
+      { path: 'existingModel.openings[0].swing', code: 'unknown-field' },
+      { path: 'existingModel.openings[0].hingeSide', code: 'unknown-field' },
+    ])
+  })
+
+  it('refuses a field no Opening has', () => {
+    const project = withOpenings(withWall(baseProject()), [doorOpening()])
+    ;(project.existingModel.openings[0] as unknown as Record<string, unknown>).fireRating = 'EI 30'
+    expectProblems(project, [{ path: 'existingModel.openings[0].fireRating', code: 'unknown-field' }])
+  })
+
+  it('claims an Opening ID, so no second entity may use it', () => {
+    const project = withOpenings(withWall(baseProject()), [doorOpening({ id: 'floor-0' })])
+    expectProblems(project, [{ path: 'existingModel.openings[0].id', code: 'duplicate-id' }])
   })
 })
 
