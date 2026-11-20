@@ -65,6 +65,7 @@ export default function DimensionEditor({ anchor, currentMm, unit, onCommit, onC
       <input
         ref={inputRef}
         type="number"
+        data-testid="dimension-editor"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={onKeyDown}
