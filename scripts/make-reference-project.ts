@@ -44,7 +44,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { canonicalJson } from '../src/lib/canonicalJson.ts'
-import { DOMAIN_SCHEMA_VERSION, migrateV1toV2, migrateV2toV3, migrateV3toV4 } from '../src/domain/migrate.ts'
+import { migrateV1toV2, migrateV2toV3, migrateV3toV4 } from '../src/domain/migrate.ts'
 import type {
   CabinetItemDesign,
   CabinetNode,
@@ -287,10 +287,13 @@ writeFileSync(OUT_FILE_V2, `${canonicalJson({ domainSchemaVersion: 2, project: v
 const v3Project = migrateV2toV3(v2Project)
 writeFileSync(OUT_FILE_V3, `${canonicalJson({ domainSchemaVersion: 3, project: v3Project })}\n`)
 
-// The current-schema twin: the same Project with a default Wall height and no Walls yet
-// (#64). No new IDs, and nothing about the geometry it draws changes.
+// The v4 twin: the same Project with a default Wall height and no Walls yet (#64). No new IDs,
+// and nothing about the geometry it draws changes. Stamped 4 on purpose, like the v2 and v3
+// twins above: it is the record a v4 BuildBox wrote, and `DOMAIN_SCHEMA_VERSION` has moved on
+// since, so writing that here would restamp this fixture with the next schema every time a
+// field is added.
 const v4Project = migrateV3toV4(v3Project)
-writeFileSync(OUT_FILE_V4, `${canonicalJson({ domainSchemaVersion: DOMAIN_SCHEMA_VERSION, project: v4Project })}\n`)
+writeFileSync(OUT_FILE_V4, `${canonicalJson({ domainSchemaVersion: 4, project: v4Project })}\n`)
 
 const nodes = (node: CabinetNode): number =>
   node.children === undefined ? 1 : 1 + nodes(node.children[0]) + nodes(node.children[1])
