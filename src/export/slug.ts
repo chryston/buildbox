@@ -12,6 +12,7 @@
  * the Project. What it drops is anything a file system or a shell would argue with.
  */
 
+import type { TableId } from './csv/tables'
 import type { DrawingFormat as FileFormat } from './types'
 
 /** What a segment falls back to when nothing in it survives. */
@@ -88,6 +89,22 @@ export function drawingFileName(parts: NameParts, format: FileFormat): string {
 /** `<project>_drawings_<YYYYMMDD>.zip` — the archive that holds more than one file. */
 export function archiveName(project: string, date: string): string {
   return `${slug(project)}_drawings_${date}.zip`
+}
+
+/**
+ * `<project>_items_<YYYYMMDD>.csv`, `<project>_cut-list_<YYYYMMDD>.csv` (#62 §10).
+ *
+ * The table segment is the contract's own id, `cut-list` and all: the file is named after the
+ * table it holds, and a name that renamed the table to make a tidier segment would be a second
+ * name for one thing.
+ */
+export function listFileName(project: string, table: TableId, date: string): string {
+  return `${slug(project)}_${table}_${date}.csv`
+}
+
+/** `<project>_lists_<YYYYMMDD>.zip` — the archive that holds two or more tables. */
+export function listsArchiveName(project: string, date: string): string {
+  return `${slug(project)}_lists_${date}.zip`
 }
 
 /**

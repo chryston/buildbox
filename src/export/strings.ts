@@ -11,6 +11,7 @@
  * it and what the reader owes the site, and stops.
  */
 
+import type { RenovationState } from '../derive'
 import type { Orientation, PageSize } from './types'
 
 /** The fixed footer, verbatim from #61 §5. Every format writes this one string. */
@@ -59,6 +60,27 @@ export const unitStatement = (unit: string): string =>
 
 /** The label of the scale bar's one-metre segment: `1 m`. */
 export const SCALE_BAR_LABEL = '1 m'
+
+/**
+ * The words the Lists dialog's scope summary is built from (#62 §7).
+ *
+ * The summary is a sentence, so it needs the connective tissue a table of labels has no use for.
+ * `Existing only` is `DESIGN_OPTION`, the same words the title block uses for the same fact.
+ */
+export const SCOPE = {
+  separator: ' · ',
+  join: ', ',
+  allFloors: 'All Floors',
+  existingOnly: DESIGN_OPTION,
+  states: {
+    existing: 'Existing',
+    demolition: 'Demolition',
+    proposed: 'Proposed',
+  } as Readonly<Record<RenovationState, string>>,
+  allLayers: 'all layers incl. Unlayered',
+  selectedLayers: 'selected layers',
+  inclUnlayered: ' incl. Unlayered',
+} as const
 
 /**
  * A scale denominator as paper wants it: `50`, not `50.0`, and `37.4` not `37.400000000000006`.

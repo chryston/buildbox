@@ -50,6 +50,19 @@ export type {
 } from './effective'
 export { DERIVE_CACHE_MAX_ENTRIES, createDeriveCache } from './cache'
 export type { DeriveCache } from './cache'
+export { isCutListCapable, cutListParts } from './quantities/cutList'
+export type { CutListPart, CutListRow } from './quantities/cutList'
+export { itemListRowsForFloor } from './quantities/itemList'
+export type { ItemListRow } from './quantities/itemList'
+export { quantities, quantitiesForFloor } from './quantities/quantities'
+export type { FloorQuantities, Quantities } from './quantities/quantities'
+export { RENOVATION_STATES, layerMatches } from './quantities/scope'
+export type {
+  LayerScope,
+  OptionColumns,
+  QuantityScope,
+  RenovationState,
+} from './quantities/scope'
 export {
   designDefaultOrigin,
   designOutline,

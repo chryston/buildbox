@@ -29,11 +29,19 @@ import type {
   ExportProgress,
   ExportResult,
   ExportSnapshot,
+  ListsRecipe,
   Rasterizer,
   Recipe,
   RecipeViewRef,
 } from '../export'
-import type { ExportMeasurement, ExportPort, ExportRunOutcome, ExportableView } from '../ui'
+import type { QuantityScope } from '../derive'
+import type {
+  ExportMeasurement,
+  ExportPort,
+  ExportRunOutcome,
+  ExportableView,
+  ListsOptions,
+} from '../ui'
 import type { PrefsRepository } from '../persistence'
 import type { ProjectSession } from '../session'
 import type { Project } from '../domain'
@@ -59,6 +67,43 @@ export interface ExportPortDeps {
 interface RememberedRecipe {
   readonly key: string
   readonly recipe: Recipe
+}
+
+/** The same pair for the Lists tab, kept under its own preference key (#62 criterion 11). */
+interface RememberedListsRecipe {
+  readonly key: string
+  readonly recipe: ListsRecipe
+}
+
+const TABLE_IDS = ['items', 'cut-list'] as const
+const RENOVATION_STATES = ['existing', 'demolition', 'proposed'] as const
+
+/**
+ * Is this the shape of a lists recipe?
+ *
+ * The same rule as `asRecipe`: the device's own history is read back before it is trusted, so a
+ * recipe written by a build this one has not met is ignored rather than half-applied. A scope with
+ * no Floor in it is refused — the dialog would show an empty statement and write an empty file.
+ */
+function asListsRecipe(value: unknown): ListsRecipe | null {
+  const held = fields(value)
+  if (held === null) return null
+  if (!Array.isArray(held.tables) || !held.tables.every((table) => oneOf(table, TABLE_IDS))) return null
+  const scope = fields(held.scope)
+  if (scope === null) return null
+  if (!Array.isArray(scope.floorIds) || scope.floorIds.length === 0) return null
+  if (!scope.floorIds.every((id) => typeof id === 'string')) return null
+  const options = scope.designOptionIds
+  if (options !== 'existing-only' && !(Array.isArray(options) && options.every((id) => typeof id === 'string'))) {
+    return null
+  }
+  if (!Array.isArray(scope.renovationStates) || scope.renovationStates.length === 0) return null
+  if (!scope.renovationStates.every((state) => oneOf(state, RENOVATION_STATES))) return null
+  if (scope.drawingLayers !== 'all' && !(Array.isArray(scope.drawingLayers) && scope.drawingLayers.every((id) => typeof id === 'string'))) {
+    return null
+  }
+  if (scope.itemDesignId !== undefined && typeof scope.itemDesignId !== 'string') return null
+  return value as ListsRecipe
 }
 
 const FORMATS = ['svg', 'png', 'pdf'] as const
@@ -144,6 +189,13 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
     return rows.filter(isRemembered)
   }
 
+  const readListsRecipes = async (): Promise<RememberedListsRecipe[]> => {
+    const found = await deps.prefs.get('exportListsRecipes')
+    const rows: unknown = found.ok ? found.value : undefined
+    if (!Array.isArray(rows)) return []
+    return rows.filter(isRememberedLists)
+  }
+
   const loadFont = async (): Promise<Uint8Array> => {
     if (fontBytes !== null) return fontBytes
     // The asset URL lives in a module of its own, loaded on demand, so the font's name never
@@ -159,15 +211,17 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
     request: ExportRunRequest,
     onProgress: (progress: ExportProgress) => void,
   ): Promise<ExportResult> => {
-    const { exportFiles } = await import('../export')
+    const { exportFiles, exportLists } = await import('../export')
+    const clock = { now: () => request.deps.instant, localDate: () => request.deps.localDay }
+    if (request.job.kind === 'lists') {
+      return exportLists(request.snapshot, request.job.recipe, { ...request.deps, clock, onProgress })
+    }
     if (mainThread === null) mainThread = createRasterizer() ?? null
-    const lookup = new Map(request.assets.map((one) => [one.sha256, one]))
-    return exportFiles(request.snapshot, request.recipe, {
-      clock: { now: () => request.deps.instant, localDate: () => request.deps.localDay },
-      buildboxVersion: request.deps.buildboxVersion,
-      contractVersion: request.deps.contractVersion,
-      unsavedChanges: request.deps.unsavedChanges,
-      font: request.font === undefined ? undefined : { bytes: request.font },
+    const lookup = new Map(request.job.assets.map((one) => [one.sha256, one]))
+    return exportFiles(request.snapshot, request.job.recipe, {
+      ...request.deps,
+      clock,
+      font: request.job.font === undefined ? undefined : { bytes: request.job.font },
       rasterizer: mainThread ?? undefined,
       assets: async (sha256) => {
         const held = lookup.get(sha256)
@@ -175,6 +229,36 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
       },
       onProgress,
     })
+  }
+
+  /** One handover per export, and none at all when the run did not finish (#61 criterion 15). */
+  const handOver = (result: ExportResult): ExportRunOutcome => {
+    if (!result.ok) return { kind: 'failed', failures: result.failures }
+    // A set goes as the archive alone — the parts are inside it, and handing the browser the
+    // parts as well would be a folder of loose files wherever the person asked for one thing.
+    const handed = result.kind === 'single' ? [result.file] : [result.archive]
+    for (const file of handed) downloadFile(file.name, file.mediaType, file.bytes)
+    return {
+      kind: 'downloaded',
+      files: result.kind === 'single' ? 1 : result.files.length,
+      missingGlyphs: result.missingGlyphs,
+    }
+  }
+
+  /** Worker first, this thread if it declines: one run, whichever thread wrote it. */
+  const runJob = async (
+    request: ExportRunRequest,
+    onProgress: (progress: ExportProgress) => void,
+    fallback: () => Promise<ExportResult>,
+  ): Promise<ExportRunOutcome> => {
+    if (cancelled) return { kind: 'cancelled' }
+    const outcome = await runner.run(request, onProgress)
+    if (cancelled || outcome.kind === 'cancelled') return { kind: 'cancelled' }
+    // The Worker declined: the same function, the same arguments, this thread. No message,
+    // because there is nothing the reader could do with one.
+    const result = outcome.kind === 'done' ? outcome.result : await fallback()
+    if (cancelled) return { kind: 'cancelled' }
+    return handOver(result)
   }
 
   return {
@@ -239,38 +323,72 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
       )
       const request: ExportRunRequest = {
         snapshot,
-        recipe,
         deps: {
           instant: deps.clock.now(),
           localDay: deps.clock.localDate(),
           buildboxVersion: deps.buildboxVersion,
           unsavedChanges,
         },
-        font: recipe.format === 'pdf' ? await loadFont() : undefined,
-        assets: gathered.filter((one) => one !== null),
+        job: {
+          kind: 'drawings',
+          recipe,
+          ...(recipe.format === 'pdf' ? { font: await loadFont() } : {}),
+          assets: gathered.filter((one) => one !== null),
+        },
       }
-      if (cancelled) return { kind: 'cancelled' }
+      return runJob(request, onProgress, () => runHere(request, onProgress))
+    },
 
-      const outcome = await runner.run(request, onProgress)
-      if (cancelled || outcome.kind === 'cancelled') return { kind: 'cancelled' }
-      // The Worker declined: same function, same arguments, this thread. No message, because
-      // there is nothing the reader could do with one.
-      const result = outcome.kind === 'done' ? outcome.result : await runHere(request, onProgress)
-      if (cancelled) return { kind: 'cancelled' }
-      if (!result.ok) return { kind: 'failed', failures: result.failures }
-
-      // One handover per export. A set goes as the archive alone — the drawings and the manifest are
-      // inside it, and handing the browser the parts as well would be a folder of loose files
-      // wherever the person asked for one thing (criterion 6).
-      const handed = result.kind === 'single' ? [result.file] : [result.archive]
-      for (const file of handed) downloadFile(file.name, file.mediaType, file.bytes)
+    listsOptions(): ListsOptions {
+      const project = deps.session().getSnapshot().project
       return {
-        kind: 'downloaded',
-        files: result.kind === 'single' ? 1 : result.files.length,
-        missingGlyphs: result.missingGlyphs,
+        floors: project.floors.map((floor) => ({ id: floor.id, label: floor.name })),
+        // Design Options are #73's; until a Project can hold one the control reads `Existing only`.
+        designOptions: [],
       }
     },
+
+    async summariseLists(scope: QuantityScope) {
+      // `listsSummary` is the cheap half of `export` — the derivation, not the writers — and it is
+      // still loaded on demand so the first paint never waits for the module.
+      const { listsSummary } = await import('../export')
+      return listsSummary(snapshotOf(), scope)
+    },
+
+    async recallLists(key: string): Promise<ListsRecipe | null> {
+      const rows = await readListsRecipes()
+      const row = rows.find((each) => each.key === key)
+      return row === undefined ? null : asListsRecipe(row.recipe)
+    },
+
+    rememberLists(key: string, recipe: ListsRecipe): void {
+      void readListsRecipes()
+        .then((rows) => [...rows.filter((each) => each.key !== key), { key, recipe }])
+        .then((rows) => deps.prefs.set('exportListsRecipes', rows))
+    },
+
+    async runLists(recipe: ListsRecipe, onProgress: (progress: ExportProgress) => void): Promise<ExportRunOutcome> {
+      cancelled = false
+      const unsavedChanges = deps.session().getSnapshot().save.kind !== 'saved'
+      const request: ExportRunRequest = {
+        snapshot: snapshotOf(),
+        deps: {
+          instant: deps.clock.now(),
+          localDay: deps.clock.localDate(),
+          buildboxVersion: deps.buildboxVersion,
+          unsavedChanges,
+        },
+        job: { kind: 'lists', recipe },
+      }
+      return runJob(request, onProgress, () => runHere(request, onProgress))
+    },
   }
+}
+
+function isRememberedLists(value: unknown): value is RememberedListsRecipe {
+  const held = fields(value)
+  if (held === null) return false
+  return typeof held.key === 'string' && typeof held.recipe === 'object' && held.recipe !== null
 }
 
 function isRemembered(value: unknown): value is RememberedRecipe {

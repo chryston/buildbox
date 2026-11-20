@@ -119,6 +119,10 @@ const LEGACY_ELEMENTS = [
       'legacy-utils',
       'legacy-data',
       'legacy-types',
+      // #62: a component renders the rows `derive` derived — the Cut List panel shows the very
+      // rows the CSV export writes. Reading a derived row is not computing one: the cut-list
+      // engine in `cabinet` stays out of the views, which `CutListPanel.test.tsx` scans for.
+      'derive',
     ],
   },
   // Renamed from S0's `app` so it does not collide with the target `app` module.
@@ -132,6 +136,17 @@ const LEGACY_ELEMENTS = [
     // imports nothing but `domain` and `lib`.
     name: 'legacy-parity-test',
     pattern: ['src/package/legacy/parity.test.ts'],
+    mode: 'file',
+    allow: ['*'],
+    pure: true,
+  },
+  {
+    // The one file in `derive` allowed to reach `package`: #62's Cut List parity test has to
+    // hold the legacy converter and the `cabinet` engine the migrated rows are compared
+    // against, which no source file under `src/derive` may import (#20 §2). It is a test file,
+    // it stays pure, and it ships nothing.
+    name: 'derive-quantities-parity-test',
+    pattern: ['src/derive/quantities/cutList.parity.test.ts'],
     mode: 'file',
     allow: ['*'],
     pure: true,

@@ -13,8 +13,8 @@
  * decides whether a Worker exists: `run` answers with a finished download or a failure, because
  * a fallback the user has to understand is a fallback that did not work.
  */
-import type { ExportFailure, ExportProgress, Recipe, RecipeViewRef } from '../../../export'
-import type { Rect } from '../../../derive'
+import type { ExportFailure, ExportProgress, ListsRecipe, ListsSummary, Recipe, RecipeViewRef } from '../../../export'
+import type { QuantityScope, Rect } from '../../../derive'
 
 /** One view the picker can offer, already named the way the Project names it. */
 export interface ExportableView {
@@ -49,6 +49,25 @@ export function viewKey(ref: RecipeViewRef): string {
   return ref.kind === 'plan' ? `plan:${ref.viewId}` : `item:${ref.itemDesignId}`
 }
 
+/** One Floor or Design Option the Lists tab can put in scope, named as the Project names it. */
+export interface ListsChoice {
+  readonly id: string
+  readonly label: string
+}
+
+/**
+ * What the Lists tab can offer.
+ *
+ * The dialog still never sees a Project: it is told which Floors there are and which Design
+ * Options exist, and that is the whole of what it needs to draw its controls. `designOptions` is
+ * empty for every Project until #73 gives them content, which is why the control reads
+ * `Existing only`.
+ */
+export interface ListsOptions {
+  readonly floors: readonly ListsChoice[]
+  readonly designOptions: readonly ListsChoice[]
+}
+
 export interface ExportPort {
   /** Every view Export can draw, in the order the picker lists them. */
   views(): readonly ExportableView[]
@@ -60,5 +79,20 @@ export interface ExportPort {
   recall(key: string): Promise<Recipe | null>
   remember(key: string, recipe: Recipe): void
   run(recipe: Recipe, onProgress: (progress: ExportProgress) => void): Promise<ExportRunOutcome>
+
+  /** The Floors and Design Options the Lists tab offers, in the Project's own order. */
+  listsOptions(): ListsOptions
+  /**
+   * What a scope would export, as the controls move: the plain-words statement, the rows each
+   * table would hold, and whether a design with parts to cut is in scope at all.
+   *
+   * Asynchronous for the same reason `measure` is: the derivation lives in `export`, which is
+   * loaded on demand so that a reader who never presses Export does not download it.
+   */
+  summariseLists(scope: QuantityScope): Promise<ListsSummary>
+  /** The last lists recipe used for this view on this device, if there is one. */
+  recallLists(key: string): Promise<ListsRecipe | null>
+  rememberLists(key: string, recipe: ListsRecipe): void
+  runLists(recipe: ListsRecipe, onProgress: (progress: ExportProgress) => void): Promise<ExportRunOutcome>
   cancel(): void
 }

@@ -4,12 +4,15 @@ import ProjectsNav from './components/ProjectsNav/ProjectsNav'
 import Sidebar from './components/Sidebar/Sidebar'
 import Toolbar from './components/Toolbar/Toolbar'
 import WarningBanner from './components/WarningBanner/WarningBanner'
-import { computeCutListForUnits, computeSceneLayout, findNode } from './cabinet'
+import { computeSceneLayout, findNode } from './cabinet'
 import type { LayoutVoid } from './cabinet'
 import type { GlobalSettings } from './domain'
 import { CabinetCanvas, FloorWorkspace, ItemDetailView, STRINGS, useWorkspace } from './ui'
 import type { CabinetDetail } from './ui'
 import { useLegacyBindings } from './ui/legacy/bindings'
+import { useProject } from './ui/legacy/useProject'
+import { quantities } from './derive'
+import type { QuantityScope } from './derive'
 
 const defaultSettings: GlobalSettings = {
   unit: 'mm',
@@ -39,9 +42,22 @@ export default function App() {
     () => (selectedNodeId && activeUnit ? findNode(activeUnit.root, selectedNodeId) ?? null : null),
     [selectedNodeId, activeUnit],
   )
+  // The panel shows the rows the CSV export writes for the same scope (#62 criterion 8). The
+  // scope is a constant because the Lists dialog is where a scope becomes a choice; until it is,
+  // the panel and a file must still say the same thing about the same Project.
+  const { project, revision } = useProject()
+  const cutListScope = useMemo<QuantityScope>(
+    () => ({
+      floorIds: project.floors.length > 0 ? [project.floors[0]!.id] : [],
+      designOptionIds: 'existing-only',
+      renovationStates: ['existing'],
+      drawingLayers: 'all',
+    }),
+    [project],
+  )
   const cutList = useMemo(
-    () => (units.length > 0 ? computeCutListForUnits(units) : []),
-    [units]
+    () => quantities(project, revision, cutListScope).cuts,
+    [project, revision, cutListScope]
   )
   const sceneLayout = useMemo(
     () => (units.length > 0 ? computeSceneLayout(units, shownDesignId) : null),

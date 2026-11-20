@@ -26,6 +26,8 @@ export {
   viewKey,
   type ExportMeasurement,
   type ExportPort,
+  type ListsOptions,
+  type ListsChoice,
   type ExportRunOutcome,
   type ExportableView,
 } from './workspace/export/port'

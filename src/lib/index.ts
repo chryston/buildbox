@@ -10,7 +10,7 @@
 export { decodeBase64 } from './base64'
 export { CanonicalJsonError, canonicalJson, canonicalJsonBytes } from './canonicalJson'
 export { sha256Hex } from './sha256Hex'
-export { stableSort } from './stableSort'
+export { compareCodePoints, stableSort } from './stableSort'
 export {
   ROOT_PATH,
   childPath,

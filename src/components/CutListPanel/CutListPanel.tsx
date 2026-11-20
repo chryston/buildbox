@@ -1,11 +1,19 @@
-import type { CutListEntry } from '../../cabinet'
+import type { CutListRow } from '../../derive'
 
 interface Props {
-  entries: CutListEntry[]
+  /** The Cut List rows of one scope — the same rows the CSV export writes (#62 criterion 8). */
+  rows: readonly CutListRow[]
 }
 
-export default function CutListPanel({ entries }: Props) {
-  if (entries.length === 0) {
+/**
+ * The Cut List panel: the parts of the model, as the contract names them.
+ *
+ * It renders rows and nothing else. The quantities are `derive`'s, so the numbers here are the
+ * numbers a `.csv` would carry for the same scope — including `Qty`, which is `qty_in_scope`:
+ * what the reader is about to cut, not what one cabinet of the design needs.
+ */
+export default function CutListPanel({ rows }: Props) {
+  if (rows.length === 0) {
     return (
       <div className="p-4 text-center text-sm text-text-muted">
         No parts to show
@@ -21,21 +29,21 @@ export default function CutListPanel({ entries }: Props) {
           <tr className="border-b border-divider text-xs text-text-muted">
             <th className="py-1 text-left">Part</th>
             <th className="py-1 text-right">Qty</th>
-            <th className="py-1 text-right">W</th>
-            <th className="py-1 text-right">H</th>
-            <th className="py-1 text-right">D</th>
+            <th className="py-1 text-right">Length</th>
+            <th className="py-1 text-right">Width</th>
+            <th className="py-1 text-right">Thickness</th>
             <th className="py-1 pl-2 text-left">Notes</th>
           </tr>
         </thead>
         <tbody>
-          {entries.map((entry, index) => (
+          {rows.map((row, index) => (
             <tr key={index} className="border-b border-divider hover:bg-surface-raised">
-              <td className="py-1">{entry.label}</td>
-              <td className="py-1 text-right">{entry.qty}</td>
-              <td className="py-1 text-right">{Math.round(entry.width)}</td>
-              <td className="py-1 text-right">{Math.round(entry.height)}</td>
-              <td className="py-1 text-right">{Math.round(entry.depth)}</td>
-              <td className="py-1 pl-2 text-left text-xs text-text-muted">{entry.notes}</td>
+              <td className="py-1">{row.part}</td>
+              <td className="py-1 text-right">{row.qtyInScope}</td>
+              <td className="py-1 text-right">{Math.round(row.lengthMm)}</td>
+              <td className="py-1 text-right">{Math.round(row.widthMm)}</td>
+              <td className="py-1 text-right">{Math.round(row.thicknessMm)}</td>
+              <td className="py-1 pl-2 text-left text-xs text-text-muted">{row.notes}</td>
             </tr>
           ))}
         </tbody>

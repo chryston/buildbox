@@ -422,6 +422,24 @@ export const STRINGS = {
   exportEmptyViewNotice: 'A view with nothing in it still exports, with its title block.',
   /** The Backup is the thing that keeps the work; the dialog points at it and stops. */
   exportBackupLink: 'To keep everything, including images and comments, use Download Backup in the Project Library.',
+  /** The Lists tab (#62). `Item List` and `Cut List` are the contract's own table names. */
+  exportListsGroupTables: 'Tables',
+  exportListsGroupScope: 'Scope',
+  exportListItems: 'Item List',
+  exportListCutList: 'Cut List',
+  /** The Cut List checkbox is absent rather disabled when nothing in scope has parts to cut. */
+  exportListsNoCabinets: 'No cabinet designs in this scope',
+  exportListsFloors: 'Floors',
+  exportListsDesignOption: 'Design Option',
+  exportListsExistingOnly: 'Existing only',
+  exportListsStates: 'Renovation States',
+  exportListsAllLayers: 'All layers incl. Unlayered',
+  /** Beside each table: the rows it holds. `0 rows` is criterion 5's notice, in the same words. */
+  exportListsRows: (count: number): string => `${count} ${count === 1 ? 'row' : 'rows'}`,
+  /** A bare CSV has nowhere to put the Project, the revision or the recipe (export contract §9). */
+  exportListsSingleNotice:
+    'A single CSV file carries no provenance information. Choose two or more tables to get a ZIP with a manifest.',
+  exportListsNeedTables: 'Choose at least one table to export.',
   exportRun: 'Export',
   exportRunning: 'Exporting…',
   /** Blocking explanations: Export stays disabled and says why in one line. */
@@ -443,6 +461,7 @@ export const STRINGS = {
       'out-of-paper': 'It does not fit the page at that scale.',
       'empty-drawing': 'There was nothing in it to draw.',
       'unknown-view': 'That view is no longer in the Project.',
+      'empty-tables': 'No table was chosen.',
       'no-font': 'The drawing font was missing.',
       'font-refused': 'The drawing font could not be read.',
       'no-rasterizer': 'This browser cannot make a PNG image.',

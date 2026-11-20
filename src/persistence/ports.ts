@@ -181,6 +181,11 @@ export interface PrefsMap {
   [key: `activeView:${string}`]: { floorId: string | null; viewsByFloor: Record<string, string> }
   exportRecipes: unknown[]
   /**
+   * #62: the Lists tab's recipe, remembered per Project and saved view. Opaque for the same
+   * reason as `exportRecipes` — the shape belongs to `export`, which reads it back before use.
+   */
+  exportListsRecipes: unknown[]
+  /**
    * #51 §6: whether the browser was asked to keep this origin's storage, and what it said.
    *
    * `askedAt` is when the question was put, which for a refusal is also the moment to start

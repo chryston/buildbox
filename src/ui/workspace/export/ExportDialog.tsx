@@ -21,6 +21,7 @@ import { Modal } from '../../library/Modal'
 import { STRINGS } from '../../strings'
 import { fitCheck, suggestionsFor } from '../../../export'
 import type { ExportProgress, Orientation, Recipe, RecipeViewRef, ScaleDenominator } from '../../../export'
+import { ListsPanel } from './ListsPanel'
 import { viewKey } from './port'
 import type { ExportPort, ExportRunOutcome } from './port'
 import type { Rect } from '../../../derive'
@@ -84,6 +85,9 @@ export const ExportDialog = ({
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<ExportProgress | null>(null)
   const [outcome, setOutcome] = useState<ExportRunOutcome | null>(null)
+  // Two tabs, one dialog: `Drawing` writes sheets, `Lists` writes tables (#62). The Handoff pack
+  // stays a disabled tab until #85 gives it something to do.
+  const [tab, setTab] = useState<'drawing' | 'lists'>('drawing')
 
   // The remembered recipe is a device preference read, so it arrives after the first paint. The
   // unit and precision are not remembered: they are the Project's, copied when the dialog opens.
@@ -185,10 +189,28 @@ export const ExportDialog = ({
   return (
     <Modal eyebrow={STRINGS.exportEyebrow} heading={STRINGS.exportHeading} onClose={busy ? undefined : onClose}>
       <div className="bb-export-tabs" role="tablist" data-testid="export-tabs">
-        <button type="button" role="tab" aria-selected="true" data-testid="export-tab-drawing" className="active">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'drawing'}
+          data-testid="export-tab-drawing"
+          className={tab === 'drawing' ? 'active' : undefined}
+          onClick={() => {
+            setTab('drawing')
+          }}
+        >
           {STRINGS.exportTabDrawing}
         </button>
-        <button type="button" role="tab" aria-selected="false" disabled title={STRINGS.exportTabComingSoon}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'lists'}
+          data-testid="export-tab-lists"
+          className={tab === 'lists' ? 'active' : undefined}
+          onClick={() => {
+            setTab('lists')
+          }}
+        >
           {STRINGS.exportTabLists}
         </button>
         <button type="button" role="tab" aria-selected="false" disabled title={STRINGS.exportTabComingSoon}>
@@ -196,231 +218,235 @@ export const ExportDialog = ({
         </button>
       </div>
 
-      <fieldset disabled={busy}>
-        <legend>{STRINGS.exportGroupViews}</legend>
-        <ul className="bb-export-views" data-testid="export-views">
-          {views.map((view) => (
-            <li key={viewKey(view.ref)}>
+      {tab === 'lists' && <ListsPanel origin={origin} unsavedChanges={unsavedChanges} port={port} onClose={onClose} />}
+
+      {tab === 'drawing' && (
+        <>
+          <fieldset disabled={busy}>
+            <legend>{STRINGS.exportGroupViews}</legend>
+            <ul className="bb-export-views" data-testid="export-views">
+              {views.map((view) => (
+                <li key={viewKey(view.ref)}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      data-testid={`export-view-${viewKey(view.ref)}`}
+                      checked={selected.some((held) => viewKey(held) === viewKey(view.ref))}
+                      disabled={isPdf && !selected.some((held) => viewKey(held) === viewKey(view.ref))}
+                      onChange={() => {
+                        toggle(view.ref)
+                      }}
+                    />
+                    <span>{view.label}</span>
+                    <span className="helper">{view.group}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+            {isPdf && selected.length > 0 && <p className="helper">{STRINGS.exportPdfSingleView}</p>}
+          </fieldset>
+
+          <fieldset disabled={busy}>
+            <legend>{STRINGS.exportGroupFiles}</legend>
+            <label>
+              <span>{STRINGS.exportFormat}</span>
+              <select
+                data-testid="export-format"
+                value={recipe.format}
+                onChange={(event) => {
+                  setFormat(event.target.value as Recipe['format'])
+                }}
+              >
+                {FORMATS.map((format) => (
+                  <option key={format} value={format}>
+                    {format.toUpperCase()}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {recipe.format === 'png' && (
               <label>
-                <input
-                  type="checkbox"
-                  data-testid={`export-view-${viewKey(view.ref)}`}
-                  checked={selected.some((held) => viewKey(held) === viewKey(view.ref))}
-                  disabled={isPdf && !selected.some((held) => viewKey(held) === viewKey(view.ref))}
-                  onChange={() => {
-                    toggle(view.ref)
-                  }}
-                />
-                <span>{view.label}</span>
-                <span className="helper">{view.group}</span>
-              </label>
-            </li>
-          ))}
-        </ul>
-        {isPdf && selected.length > 0 && <p className="helper">{STRINGS.exportPdfSingleView}</p>}
-      </fieldset>
-
-      <fieldset disabled={busy}>
-        <legend>{STRINGS.exportGroupFiles}</legend>
-        <label>
-          <span>{STRINGS.exportFormat}</span>
-          <select
-            data-testid="export-format"
-            value={recipe.format}
-            onChange={(event) => {
-              setFormat(event.target.value as Recipe['format'])
-            }}
-          >
-            {FORMATS.map((format) => (
-              <option key={format} value={format}>
-                {format.toUpperCase()}
-              </option>
-            ))}
-          </select>
-        </label>
-        {recipe.format === 'png' && (
-          <label>
-            <span>{STRINGS.exportPngSize}</span>
-            <select
-              data-testid="export-png-size"
-              value={recipe.pngLongEdge}
-              onChange={(event) => {
-                patch({ pngLongEdge: Number(event.target.value) as Recipe['pngLongEdge'] })
-              }}
-            >
-              {PNG_SIZES.map((pixels) => (
-                <option key={pixels} value={pixels}>
-                  {STRINGS.exportPngLongEdge(pixels)}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <label>
-          <input
-            type="checkbox"
-            data-testid="export-title-block"
-            checked={recipe.titleBlock}
-            onChange={(event) => {
-              patch({ titleBlock: event.target.checked })
-            }}
-          />
-          <span>{STRINGS.exportTitleBlock}</span>
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            data-testid="export-grid"
-            checked={recipe.grid}
-            onChange={(event) => {
-              patch({ grid: event.target.checked })
-            }}
-          />
-          <span>{STRINGS.exportGrid}</span>
-        </label>
-      </fieldset>
-
-      {isPdf && (
-        <fieldset disabled={busy}>
-          <legend>{STRINGS.exportGroupSheet}</legend>
-          <label>
-            <span>{STRINGS.exportPageSize}</span>
-            <select
-              data-testid="export-page-size"
-              value={recipe.pageSize}
-              onChange={(event) => {
-                patch({ pageSize: event.target.value as Recipe['pageSize'] })
-              }}
-            >
-              {PAGE_SIZES.map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>{STRINGS.exportOrientation}</span>
-            <select
-              data-testid="export-orientation"
-              value={recipe.orientation}
-              onChange={(event) => {
-                patch({ orientation: event.target.value as Recipe['orientation'] })
-              }}
-            >
-              {ORIENTATIONS.map((hold) => (
-                <option key={hold} value={hold}>
-                  {hold === 'auto'
-                    ? STRINGS.exportOrientationAuto
-                    : hold === 'portrait'
-                      ? STRINGS.exportOrientationPortrait
-                      : STRINGS.exportOrientationLandscape}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>{STRINGS.exportScale}</span>
-            <select
-              data-testid="export-scale"
-              value={recipe.scale}
-              onChange={(event) => {
-                const value = event.target.value
-                patch({ scale: value === 'fit' ? 'fit' : (Number(value) as ScaleDenominator) })
-              }}
-            >
-              {SCALES.map((scale) => (
-                <option key={scale} value={scale}>
-                  {scale === 'fit' ? STRINGS.exportFitToPage : STRINGS.exportScaleRatio(scale)}
-                </option>
-              ))}
-            </select>
-          </label>
-        </fieldset>
-      )}
-
-      <p className="helper" data-testid="export-unit-line">
-        {STRINGS.exportDimensionsIn(UNIT_LABEL[unit])}
-      </p>
-
-      <div className="bb-export-notices" data-testid="export-notices">
-        <p data-testid="export-notice-privacy">{STRINGS.exportPrivacy}</p>
-        <p data-testid="export-notice-warnings">{STRINGS.exportWarningCount(warnings)}</p>
-        {unsavedChanges && <p data-testid="export-notice-unsaved">{STRINGS.exportUnsavedNotice}</p>}
-        {empty && <p data-testid="export-notice-empty">{STRINGS.exportEmptyViewNotice}</p>}
-        {glyphs.length > 0 && (
-          <p data-testid="export-notice-glyphs">{STRINGS.exportMissingGlyphNotice(glyphs.join(', '))}</p>
-        )}
-        <p className="helper" data-testid="export-backup-link">
-          {STRINGS.exportBackupLink}
-        </p>
-      </div>
-
-      {blocked !== null && (
-        <p className="bb-export-blocked" data-testid="export-blocked" role="alert">
-          {blocked}
-          {fixes.length > 0 && (
-            <>
-              {' '}
-              {STRINGS.exportScaleNoFitFixes}{' '}
-              {fixes.map((fix, index) => (
-                <button
-                  key={`${fix.page}-${fix.orientation}-${fix.scale}`}
-                  type="button"
-                  data-testid={`export-fix-${index}`}
-                  onClick={() => {
-                    patch({ pageSize: fix.page, orientation: fix.orientation, scale: fix.scale })
+                <span>{STRINGS.exportPngSize}</span>
+                <select
+                  data-testid="export-png-size"
+                  value={recipe.pngLongEdge}
+                  onChange={(event) => {
+                    patch({ pngLongEdge: Number(event.target.value) as Recipe['pngLongEdge'] })
                   }}
                 >
-                  {typeof fix.scale === 'number'
-                    ? STRINGS.exportFixScale(fix.scale)
-                    : STRINGS.exportFixFit}
-                  {` (${fix.page}, ${fix.orientation})`}
-                </button>
-              ))}
-            </>
+                  {PNG_SIZES.map((pixels) => (
+                    <option key={pixels} value={pixels}>
+                      {STRINGS.exportPngLongEdge(pixels)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label>
+              <input
+                type="checkbox"
+                data-testid="export-title-block"
+                checked={recipe.titleBlock}
+                onChange={(event) => {
+                  patch({ titleBlock: event.target.checked })
+                }}
+              />
+              <span>{STRINGS.exportTitleBlock}</span>
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                data-testid="export-grid"
+                checked={recipe.grid}
+                onChange={(event) => {
+                  patch({ grid: event.target.checked })
+                }}
+              />
+              <span>{STRINGS.exportGrid}</span>
+            </label>
+          </fieldset>
+
+          {isPdf && (
+            <fieldset disabled={busy}>
+              <legend>{STRINGS.exportGroupSheet}</legend>
+              <label>
+                <span>{STRINGS.exportPageSize}</span>
+                <select
+                  data-testid="export-page-size"
+                  value={recipe.pageSize}
+                  onChange={(event) => {
+                    patch({ pageSize: event.target.value as Recipe['pageSize'] })
+                  }}
+                >
+                  {PAGE_SIZES.map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>{STRINGS.exportOrientation}</span>
+                <select
+                  data-testid="export-orientation"
+                  value={recipe.orientation}
+                  onChange={(event) => {
+                    patch({ orientation: event.target.value as Recipe['orientation'] })
+                  }}
+                >
+                  {ORIENTATIONS.map((hold) => (
+                    <option key={hold} value={hold}>
+                      {hold === 'auto'
+                        ? STRINGS.exportOrientationAuto
+                        : hold === 'portrait'
+                          ? STRINGS.exportOrientationPortrait
+                          : STRINGS.exportOrientationLandscape}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>{STRINGS.exportScale}</span>
+                <select
+                  data-testid="export-scale"
+                  value={recipe.scale}
+                  onChange={(event) => {
+                    const value = event.target.value
+                    patch({ scale: value === 'fit' ? 'fit' : (Number(value) as ScaleDenominator) })
+                  }}
+                >
+                  {SCALES.map((scale) => (
+                    <option key={scale} value={scale}>
+                      {scale === 'fit' ? STRINGS.exportFitToPage : STRINGS.exportScaleRatio(scale)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </fieldset>
           )}
-        </p>
-      )}
 
-      {outcome?.kind === 'failed' && (
-        <div className="bb-export-failed" data-testid="export-failed" role="alert">
-          <p>{STRINGS.exportFailedHeading}</p>
-          <ul>
-            {outcome.failures.map((failure) => (
-              <li key={`${failure.output}-${failure.reason}`}>
-                {STRINGS.exportFailedRow(failure.output, STRINGS.exportFailedReason(failure.reason))}
-              </li>
-            ))}
-          </ul>
-          <p className="helper">{STRINGS.exportFailedRetry}</p>
-        </div>
-      )}
+          <p className="helper" data-testid="export-unit-line">
+            {STRINGS.exportDimensionsIn(UNIT_LABEL[unit])}
+          </p>
 
-      <div className="modal-actions">
-        {busy ? (
-          <button type="button" data-testid="export-cancel" onClick={() => port.cancel()}>
-            {STRINGS.cancel}
-          </button>
-        ) : (
-          <button type="button" data-testid="export-close" onClick={onClose}>
-            {STRINGS.close}
-          </button>
-        )}
-        <button
-          type="button"
-          className="button primary"
-          data-testid="export-run"
-          disabled={busy || blocked !== null}
-          onClick={run}
-        >
-          {busy && progress !== null
-            ? `${STRINGS.exportRunning} ${progress.done}/${progress.total}`
-            : busy
-              ? STRINGS.exportRunning
-              : STRINGS.exportRun}
-        </button>
-      </div>
+          <div className="bb-export-notices" data-testid="export-notices">
+            <p data-testid="export-notice-privacy">{STRINGS.exportPrivacy}</p>
+            <p data-testid="export-notice-warnings">{STRINGS.exportWarningCount(warnings)}</p>
+            {unsavedChanges && <p data-testid="export-notice-unsaved">{STRINGS.exportUnsavedNotice}</p>}
+            {empty && <p data-testid="export-notice-empty">{STRINGS.exportEmptyViewNotice}</p>}
+            {glyphs.length > 0 && (
+              <p data-testid="export-notice-glyphs">{STRINGS.exportMissingGlyphNotice(glyphs.join(', '))}</p>
+            )}
+            <p className="helper" data-testid="export-backup-link">
+              {STRINGS.exportBackupLink}
+            </p>
+          </div>
+
+          {blocked !== null && (
+            <p className="bb-export-blocked" data-testid="export-blocked" role="alert">
+              {blocked}
+              {fixes.length > 0 && (
+                <>
+                  {' '}
+                  {STRINGS.exportScaleNoFitFixes}{' '}
+                  {fixes.map((fix, index) => (
+                    <button
+                      key={`${fix.page}-${fix.orientation}-${fix.scale}`}
+                      type="button"
+                      data-testid={`export-fix-${index}`}
+                      onClick={() => {
+                        patch({ pageSize: fix.page, orientation: fix.orientation, scale: fix.scale })
+                      }}
+                    >
+                      {typeof fix.scale === 'number' ? STRINGS.exportFixScale(fix.scale) : STRINGS.exportFixFit}
+                      {` (${fix.page}, ${fix.orientation})`}
+                    </button>
+                  ))}
+                </>
+              )}
+            </p>
+          )}
+
+          {outcome?.kind === 'failed' && (
+            <div className="bb-export-failed" data-testid="export-failed" role="alert">
+              <p>{STRINGS.exportFailedHeading}</p>
+              <ul>
+                {outcome.failures.map((failure) => (
+                  <li key={`${failure.output}-${failure.reason}`}>
+                    {STRINGS.exportFailedRow(failure.output, STRINGS.exportFailedReason(failure.reason))}
+                  </li>
+                ))}
+              </ul>
+              <p className="helper">{STRINGS.exportFailedRetry}</p>
+            </div>
+          )}
+
+          <div className="modal-actions">
+            {busy ? (
+              <button type="button" data-testid="export-cancel" onClick={() => port.cancel()}>
+                {STRINGS.cancel}
+              </button>
+            ) : (
+              <button type="button" data-testid="export-close" onClick={onClose}>
+                {STRINGS.close}
+              </button>
+            )}
+            <button
+              type="button"
+              className="button primary"
+              data-testid="export-run"
+              disabled={busy || blocked !== null}
+              onClick={run}
+            >
+              {busy && progress !== null
+                ? `${STRINGS.exportRunning} ${progress.done}/${progress.total}`
+                : busy
+                  ? STRINGS.exportRunning
+                  : STRINGS.exportRun}
+            </button>
+          </div>
+        </>
+      )}
     </Modal>
   )
 }
