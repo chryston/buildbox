@@ -40,6 +40,23 @@ describe('createDeriveCache', () => {
     expect(cache.itemDetail(BASIC, 7, 'design-base-cabinet', 'floor-main')).toBe(detail)
   })
 
+  it('never answers one Project from another at the same revision (#60 criterion 3)', () => {
+    const cache = createDeriveCache()
+    // Two tabs of one Project, each sitting at revision 7 with its own contents: this tab's
+    // edit, and the stored Project handed back by "Reload the latest version". Same id, same
+    // revision, different Floor — a key of `(revision, entity)` answers the reload with the
+    // picture of the edit the reload just threw away.
+    const mine = moved(BASIC, 'place-bed', 1200)
+    const theirs = moved(BASIC, 'place-bed', 4000)
+    const fromMine = cache.floor(mine, 7, 'floor-mezz', null)
+    const fromTheirs = cache.floor(theirs, 7, 'floor-mezz', null)
+    expect(fromTheirs).not.toBe(fromMine)
+    expect(fromTheirs).not.toEqual(fromMine)
+    // Each Project keeps its own answer, so a hit is still a hit and neither evicts the other.
+    expect(cache.floor(theirs, 7, 'floor-mezz', null)).toBe(fromTheirs)
+    expect(cache.floor(mine, 7, 'floor-mezz', null)).toBe(fromMine)
+  })
+
   it('never shares an entry between two caches (#60 criterion 2)', () => {
     const one = createDeriveCache()
     const two = createDeriveCache()
