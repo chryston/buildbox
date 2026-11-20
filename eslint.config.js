@@ -137,6 +137,17 @@ const LEGACY_ELEMENTS = [
     pure: true,
   },
   {
+    // The one file in `derive` allowed to reach `package`: #62's Cut List parity test has to
+    // hold the legacy converter and the `cabinet` engine the migrated rows are compared
+    // against, which no source file under `src/derive` may import (#20 §2). It is a test file,
+    // it stays pure, and it ships nothing.
+    name: 'derive-quantities-parity-test',
+    pattern: ['src/derive/quantities/cutList.parity.test.ts'],
+    mode: 'file',
+    allow: ['*'],
+    pure: true,
+  },
+  {
     // The two `edit` tests that hold both sides of the parity check (#47 criterion 4) and
     // the converted fixtures the random sequences start from (criterion 1): each needs the
     // legacy store or the legacy converter next to `edit`, which no source file of `edit`
