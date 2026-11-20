@@ -129,7 +129,9 @@ export function modelBounds(snapshot: ExportSnapshot, view: RecipeViewRef): Rect
   if (view.kind === 'plan') {
     const planView = project.views.find((each) => each.id === view.viewId)
     if (planView === undefined) return null
-    return effectiveFloor(project, revision, planView.floorId, null).bounds
+    // A Floor with no Plan Image and nothing on it has no extent, which is not the same as there
+    // being no such view: criterion 7 wants its sheet drawn, frame and all.
+    return effectiveFloor(project, revision, planView.floorId, null).bounds ?? { x: 0, y: 0, w: 0, h: 0 }
   }
   const design = project.itemDesigns.find((each) => each.id === view.itemDesignId)
   if (design === undefined) return null
@@ -147,6 +149,10 @@ export function scaleRect(rect: Rect, factor: number): Rect {
  *
  * A fixed scale that does not fit is a failure and never a clip: a drawing that quietly loses half
  * a kitchen is worse than no drawing, so the caller is told and offered the fixes `fitCheck` found.
+ *
+ * A view with nothing in it is not a failure. Criterion 7 wants its sheet — frame, title block,
+ * footer, and an empty middle — because a person exporting a whole set expects every view they
+ * ticked to come back, and a blank sheet says more clearly than an error that the Floor is empty.
  */
 export function composeSheet(
   snapshot: ExportSnapshot,
@@ -157,7 +163,6 @@ export function composeSheet(
 ): ComposedSheet {
   const bounds = modelBounds(snapshot, view)
   if (bounds === null) return { ok: false, reason: 'unknown-view' }
-  if (bounds.w <= 0 || bounds.h <= 0) return { ok: false, reason: 'empty-drawing' }
 
   const orientation = recipe.orientation === 'auto' ? autoOrientation(bounds, recipe.pageSize) : recipe.orientation
   const check = fitCheck(bounds, recipe.pageSize, orientation, recipe.scale)
@@ -167,7 +172,6 @@ export function composeSheet(
   const raw = rawDrawing(snapshot, view, recipe, denominator)
   if (!raw.ok) return raw
   const drawn = raw.drawing.list
-  if (!drawn.layers.some((layer) => layer.items.length > 0)) return { ok: false, reason: 'empty-drawing' }
 
   const sheet = sheetOf(recipe.pageSize, orientation, { titleBlock: recipe.titleBlock })
   const scale = recipe.scale === 'fit' ? NOT_TO_SCALE : scaleStatement(recipe.scale)

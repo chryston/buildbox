@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { referenceProject } from '../derive/testing'
+import { basicProject, referenceProject } from '../derive/testing'
+import type { Project } from '../domain'
 import { exportFiles } from './index'
 import type { ExportClock, ExportDeps, ExportFile, ExportSnapshot, Recipe } from './types'
 import { EXPORT_FOOTER, NOT_TO_SCALE } from './strings'
@@ -79,6 +80,30 @@ describe('exportFiles', () => {
     expect(text).toContain('/ID [')
     expect(text).toContain('+NotoSans')
     expect(first.bytes).toEqual(second.bytes)
+  })
+
+  it('draws a sheet for a Plan View with nothing in it (#61 criterion 7)', async () => {
+    // The Mezzanine of the basic Project: take its Plan Image away and the cabinet off it, and the
+    // view is left with no extent at all. It still gets a sheet — frame, title block, footer — and
+    // the sheet says which Floor it is, so an empty one reads as empty rather than as a failure.
+    const base = basicProject()
+    const project: Project = {
+      ...base,
+      floors: base.floors.map((floor) => (floor.id === 'floor-mezz' ? { ...floor, planImage: null } : floor)),
+      existingModel: {
+        ...base.existingModel,
+        placedItems: base.existingModel.placedItems.filter((one) => one.floorId !== 'floor-mezz'),
+      },
+    }
+    const view = project.views.find((one) => one.kind === 'plan' && one.floorId === 'floor-mezz')
+    if (view === undefined || view.kind !== 'plan') throw new Error('the basic Project has no Mezzanine view')
+
+    const svg = new TextDecoder().decode(single(await exportFiles({ project, revision: 1 }, recipeFor(view.id), deps)).bytes)
+    expect(svg).toContain('data-layer="sheet-furniture"')
+    expect(svg).toContain(EXPORT_FOOTER)
+    expect(svg).toContain(base.meta.name)
+    expect(svg).toContain('Mezzanine')
+    expect(svg).toContain(NOT_TO_SCALE)
   })
 })
 
