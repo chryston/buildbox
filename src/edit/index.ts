@@ -13,7 +13,7 @@
  */
 export { applyIntent, applyPatches, previewIntent } from './apply'
 export { createProject, type CreateProjectArgs } from './create'
-export { LEGACY_DEFAULT_SETTINGS } from './defaults'
+export { DEFAULT_WALL_THICKNESS_MM, LEGACY_DEFAULT_SETTINGS, newWallDefaults } from './defaults'
 export {
   type AddAccessory,
   type AddDivider,
@@ -24,10 +24,16 @@ export {
   type Applied,
   type CabinetIntent,
   type CalibratePlan,
+  chainJunctionCount,
   type ClearPlan,
+  type CreateWallChain,
   type DeleteBoard,
+  type DeleteWall,
   type DesignIntent,
   type DistributeEvenly,
+  type DragWallBody,
+  type DragWallEndpoint,
+  type DragWallJunction,
   type ForkItemDesign,
   type Intent,
   INTENT_ID_ORDER,
@@ -36,7 +42,9 @@ export {
   type IntentPayloads,
   type IntentType,
   type Locator,
+  type MergeWalls,
   type MovePlanPlacement,
+  type OffsetWall,
   type PayloadOf,
   type PinNode,
   type PlacePlanDesign,
@@ -60,9 +68,17 @@ export {
   type SetPlanImage,
   type SetProjectPreferences,
   type SetSplitRatio,
+  type SetWallArc,
+  type SetWallDirection,
+  type SetWallLength,
+  type SetWallThickness,
+  type SplitWall,
   type UnpinNode,
   type UpdateCabinetSettings,
   type UpdateItemDesign,
+  type WallDraft,
+  type WallEndTarget,
+  type WallIntent,
 } from './intents'
 export { INTENT_LABELS } from './labels'
 export { CUSTOM_PLAN_ENTRY, PLAN_CATALOGUE, type PlanCatalogueEntry } from './planCatalogue'

@@ -11,14 +11,15 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import fc from 'fast-check'
 import { beforeAll, describe, expect, it } from 'vitest'
-import type { CabinetItemDesign, CabinetNode, GenericItemDesign, ItemDesign, ItemFootprint, PlacedItem, Project } from '../domain'
+import type { CabinetItemDesign, CabinetNode, GenericItemDesign, ItemDesign, ItemFootprint, PlacedItem, Project, Wall, WallJunction } from '../domain'
 import { footprintSize, validateProject } from '../domain'
 import type { Preset } from '../geometry'
+import { DEG, normaliseDeg, pt, refLength, refPointAt } from '../geometry'
 import { arbProject } from '../domain/testing'
 import { canonicalJson } from '../lib'
 import { convertLegacy } from '../package'
-import type { Intent, IntentType, PayloadOf } from './index'
-import { applyIntent, applyPatches, createProject, INTENT_LABELS, PLAN_CATALOGUE } from './index'
+import type { Intent, IntentType, PayloadOf, WallDraft, WallEndTarget } from './index'
+import { applyIntent, applyPatches, chainJunctionCount, createProject, INTENT_LABELS, PLAN_CATALOGUE } from './index'
 import { intent, NOW } from './testing'
 
 const fixturesRoot = fileURLToPath(new URL('../../fixtures/legacy', import.meta.url))
@@ -109,6 +110,8 @@ const planPlacements = (g: Gen): PlacedItem[] => placements(g).filter((p) => des
 const templates = (g: Gen): GenericItemDesign[] =>
   generics(g).filter((design) => design.isCustom === true && placements(g).every((p) => p.itemDesignId !== design.id))
 const floorsWithImage = (g: Gen) => g.project.floors.filter((floor) => floor.planImage !== null)
+const wallList = (g: Gen): Wall[] => g.project.existingModel.walls
+const junctionList = (g: Gen): WallJunction[] => g.project.existingModel.wallJunctions
 
 function walk(node: CabinetNode, into: CabinetNode[] = []): CabinetNode[] {
   into.push(node)
@@ -416,6 +419,146 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
       },
       copy ? g.ids(items.length) : [],
     )
+  },
+  // --- Walls (#64) -----------------------------------------------------------
+  // A chained draw walks a polyline, so every link it names really is coincident: the point one
+  // segment ends at is the point the next starts from.
+  (g) => {
+    const floor = pick(g, g.project.floors)
+    if (floor === undefined) return null
+    const count = int(g, 1, 3)
+    const straight = bool(g)
+    const thickness = pick(g, [100, 150, 200])!
+    const justification = pick(g, ['left', 'centre', 'right'] as const)!
+    const height = floor.defaultWallHeight ?? g.project.preferences.defaultWallHeight
+    const drafts: WallDraft[] = []
+    const starts: WallEndTarget[] = []
+    const ends: WallEndTarget[] = []
+    let here = pt(real(g, -4000, 4000), real(g, -4000, 4000))
+    let heading = real(g, 0, 359)
+    // Attaching the first start to something that already exists takes its point from that Wall,
+    // which is what makes the join the validator asks for true.
+    const anchor = pick(g, wallList(g))
+    if (anchor !== undefined && bool(g)) {
+      if (bool(g)) {
+        const end = pick(g, ['start', 'end'] as const)!
+        starts.push({ kind: 'wall', wallId: anchor.id, end })
+        here = end === 'start' ? anchor.line.start : anchor.line.end
+      } else {
+        starts.push({ kind: 'host', wallId: anchor.id })
+        here = refPointAt(anchor.line, refLength(anchor.line) / 2)
+      }
+    } else {
+      starts.push({ kind: 'free' })
+    }
+    for (let index = 0; index < count; index += 1) {
+      const length = real(g, 800, 5000)
+      if (!straight) heading = normaliseDeg(heading + real(g, -70, 70))
+      const rad = heading * DEG
+      const there = pt(here.x + Math.cos(rad) * length, here.y + Math.sin(rad) * length)
+      const mid = pt((here.x + there.x) / 2, (here.y + there.y) / 2)
+      const bulge = real(g, 100, 900)
+      drafts.push({
+        line: bool(g)
+          ? {
+              kind: 'arc',
+              start: here,
+              end: there,
+              through: pt(mid.x - Math.sin(rad) * bulge, mid.y + Math.cos(rad) * bulge),
+            }
+          : { kind: 'line', start: here, end: there },
+        thickness,
+        justification,
+        baseElevation: 0,
+        height,
+      })
+      ends.push({ kind: 'free' })
+      if (index + 1 < count) {
+        starts.push({ kind: 'segment', index, end: 'end' })
+        here = there
+      }
+    }
+    const chain = { floorId: floor.id, walls: drafts, starts, ends }
+    return intent('wall.createChain', chain, g.ids(drafts.length + chainJunctionCount(chain)))
+  },
+  (g) => {
+    const junction = pick(g, junctionList(g))
+    return junction === undefined
+      ? null
+      : intent('wall.dragJunction', { junctionId: junction.id, delta: pt(real(g, -600, 600), real(g, -600, 600)) })
+  },
+  (g) => {
+    const wall = pick(g, wallList(g))
+    if (wall === undefined) return null
+    const end = pick(g, ['start', 'end'] as const)!
+    if (junctionList(g).some((junction) => junction.ends.some((member) => member.wallId === wall.id && member.end === end))) {
+      return null
+    }
+    const from = end === 'start' ? wall.line.start : wall.line.end
+    return intent('wall.dragEndpoint', { wallId: wall.id, end, to: pt(from.x + real(g, -800, 800), from.y + real(g, -800, 800)) })
+  },
+  (g) => {
+    const wall = pick(g, wallList(g))
+    return wall === undefined
+      ? null
+      : intent('wall.dragBody', { wallId: wall.id, delta: pt(real(g, -800, 800), real(g, -800, 800)) })
+  },
+  (g) => {
+    const wall = pick(g, wallList(g))
+    return wall === undefined
+      ? null
+      : intent('wall.setLength', { wallId: wall.id, length: real(g, 200, 8000), keepFixed: pick(g, ['start', 'end'] as const)! })
+  },
+  (g) => {
+    const wall = pick(g, wallList(g))
+    return wall === undefined ? null : intent('wall.setDirection', { wallId: wall.id, directionDeg: real(g, 0, 359) })
+  },
+  (g) => {
+    const wall = pick(g, wallList(g).filter((candidate) => candidate.line.kind === 'arc'))
+    if (wall === undefined) return null
+    return bool(g)
+      ? intent('wall.setArc', { wallId: wall.id, radius: real(g, 300, 9000) })
+      : intent('wall.setArc', { wallId: wall.id, sweepDeg: real(g, 15, 320) })
+  },
+  (g) => {
+    const wall = pick(g, wallList(g))
+    return wall === undefined ? null : intent('wall.setThickness', { wallId: wall.id, thickness: pick(g, [60, 100, 150, 200])! })
+  },
+  (g) => {
+    const wall = pick(g, wallList(g))
+    return wall === undefined
+      ? null
+      : intent('wall.offset', { wallId: wall.id, distance: real(g, -900, 900), side: pick(g, ['left', 'right'] as const)! })
+  },
+  (g) => {
+    const wall = pick(g, wallList(g).filter((candidate) => refLength(candidate.line) > 600))
+    if (wall === undefined) return null
+    return intent('wall.split', { wallId: wall.id, at: refLength(wall.line) * 0.37 }, g.ids(2))
+  },
+  (g) => {
+    // Two Walls meeting at a junction of their own, with nothing that differs between them.
+    for (const junction of junctionList(g)) {
+      if (junction.host !== undefined || junction.ends.length !== 2) continue
+      const first = wallList(g).find((candidate) => candidate.id === junction.ends[0]!.wallId)
+      const second = wallList(g).find((candidate) => candidate.id === junction.ends[1]!.wallId)
+      if (first === undefined || second === undefined) continue
+      if (
+        first.thickness !== second.thickness ||
+        first.justification !== second.justification ||
+        first.classification !== second.classification ||
+        first.constructionLabel !== second.constructionLabel ||
+        first.baseElevation !== second.baseElevation ||
+        first.height !== second.height
+      ) {
+        continue
+      }
+      return intent('wall.merge', { wallIds: [first.id, second.id] })
+    }
+    return null
+  },
+  (g) => {
+    const wall = pick(g, wallList(g))
+    return wall === undefined ? null : intent('wall.delete', { wallId: wall.id })
   },
 ]
 

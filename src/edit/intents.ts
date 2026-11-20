@@ -25,7 +25,11 @@ import type {
   PlanImage,
   Point2,
   Project,
+  WallClassification,
+  WallJustification,
+  WallRefLine,
 } from '../domain'
+import type { KeepFixed, Pt } from '../geometry'
 import type { ValidationProblem } from '../lib'
 
 /** Every Intent type in the #47 catalogue, one per current store action. */
@@ -63,6 +67,18 @@ export type IntentType =
   | 'plan.clear'
   | 'plan.copyToFloor'
   | 'plan.moveToFloor'
+  | 'wall.createChain'
+  | 'wall.dragJunction'
+  | 'wall.dragEndpoint'
+  | 'wall.dragBody'
+  | 'wall.setLength'
+  | 'wall.setDirection'
+  | 'wall.setArc'
+  | 'wall.setThickness'
+  | 'wall.offset'
+  | 'wall.split'
+  | 'wall.merge'
+  | 'wall.delete'
   | 'design.update'
   | 'design.setFootprint'
   | 'design.setOrigin'
@@ -370,6 +386,116 @@ export interface SetPlanViewShowsPlanImage {
   showPlanImage: boolean
 }
 
+/**
+ * One segment of a chained Wall draw: everything a Wall needs before it has an ID and a `ref`,
+ * which the caller pre-allocates (#64 §11).
+ */
+export interface WallDraft {
+  line: WallRefLine
+  thickness: number
+  justification: WallJustification
+  classification?: WallClassification
+  constructionLabel?: string
+  baseElevation: number
+  height: number
+}
+
+/**
+ * Where one drawn end goes, and so what Junction the gesture creates (#64 §9). A Junction is
+ * created only by an explicit target: an end near another end with no target stays free.
+ *
+ * - `free` — nothing: the end is a free end.
+ * - `segment` — another segment of this same gesture. Both sides name each other, which is the
+ *   chain link; closing on the chain's first point is the same link back to index 0.
+ * - `wall` — an existing Wall's end: `Join to end of W-3`. That end joins the new Junction too.
+ * - `host` — an existing Wall's reference line, mid-span: `Attach to W-3`. The end is stored on
+ *   the host's line at the projection of the drawn point, and the host is never split.
+ */
+export type WallEndTarget =
+  | { kind: 'free' }
+  | { kind: 'segment'; index: number; end: 'start' | 'end' }
+  | { kind: 'wall'; wallId: EntityId; end: 'start' | 'end' }
+  | { kind: 'host'; wallId: EntityId }
+
+export interface CreateWallChain {
+  floorId: EntityId
+  walls: readonly WallDraft[]
+  /** One per segment: where its start attaches. */
+  starts: readonly WallEndTarget[]
+  /** One per segment: where its end attaches. */
+  ends: readonly WallEndTarget[]
+}
+
+/** Move a Junction: every member end moves with it, and a hosted Junction slides its host. */
+export interface DragWallJunction {
+  junctionId: EntityId
+  delta: Pt
+}
+
+/** Move one free end. An end that belongs to a Junction is moved by dragging the Junction. */
+export interface DragWallEndpoint {
+  wallId: EntityId
+  end: 'start' | 'end'
+  to: Pt
+}
+
+/** Move a whole Wall: its Junctions move with it and the other members stretch. */
+export interface DragWallBody {
+  wallId: EntityId
+  delta: Pt
+}
+
+export interface SetWallLength {
+  wallId: EntityId
+  /** Millimetres along the reference line. */
+  length: number
+  /** Which end stays where it is while the other moves. */
+  keepFixed: KeepFixed
+}
+
+export interface SetWallDirection {
+  wallId: EntityId
+  /** Degrees clockwise from +X, the reference line's own direction (#64 §10). */
+  directionDeg: number
+}
+
+export interface SetWallArc {
+  wallId: EntityId
+  /** Millimetres. Scales the arc about its centre; the sweep is unchanged. */
+  radius?: number
+  /** Degrees, signed: the direction of travel is the current one. */
+  sweepDeg?: number
+}
+
+export interface SetWallThickness {
+  wallId: EntityId
+  thickness: number
+}
+
+/** The secondary `Offset wall by … mm`: the reference line moves perpendicular, to a side. */
+export interface OffsetWall {
+  wallId: EntityId
+  /** Millimetres, may be negative. */
+  distance: number
+  /** Which side of the reference line's own direction it moves toward. */
+  side: 'left' | 'right'
+}
+
+export interface SplitWall {
+  wallId: EntityId
+  /** Distance along the reference line, in millimetres. */
+  at: number
+}
+
+/** Merge two Walls joined by a two-end Junction; the first keeps its ID and `ref` (#64 §10). */
+export interface MergeWalls {
+  wallIds: readonly [EntityId, EntityId]
+}
+
+export interface DeleteWall {
+  wallId: EntityId
+}
+
 /** `type → payload`, the one place the catalogue's shape is written down. */
 export interface IntentPayloads {
   'project.rename': RenameProject
@@ -405,6 +531,18 @@ export interface IntentPayloads {
   'plan.clear': ClearPlan
   'plan.copyToFloor': CopyPlanObjectsToFloor
   'plan.moveToFloor': MovePlanObjectsToFloor
+  'wall.createChain': CreateWallChain
+  'wall.dragJunction': DragWallJunction
+  'wall.dragEndpoint': DragWallEndpoint
+  'wall.dragBody': DragWallBody
+  'wall.setLength': SetWallLength
+  'wall.setDirection': SetWallDirection
+  'wall.setArc': SetWallArc
+  'wall.setThickness': SetWallThickness
+  'wall.offset': OffsetWall
+  'wall.split': SplitWall
+  'wall.merge': MergeWalls
+  'wall.delete': DeleteWall
   'design.update': UpdateItemDesign
   'design.setFootprint': SetItemDesignFootprint
   'design.setOrigin': SetItemDesignOrigin
@@ -453,6 +591,7 @@ export type Intent<T extends IntentType = IntentType> = {
 export type ProjectIntent = Intent<'project.rename' | 'project.setPreferences'>
 export type CabinetIntent = Intent<Extract<IntentType, `cabinet.${string}`>>
 export type PlanIntent = Intent<Extract<IntentType, `plan.${string}`>>
+export type WallIntent = Intent<Extract<IntentType, `wall.${string}`>>
 export type DesignIntent = Intent<Extract<IntentType, `design.${string}`>>
 export type FloorIntent = Intent<Extract<IntentType, `floor.${string}`>>
 export type ViewIntent = Intent<Extract<IntentType, `view.${string}`>>
@@ -495,6 +634,18 @@ export const INTENT_ID_ORDER: Record<IntentType, readonly string[]> = {
   'plan.clear': [],
   'plan.copyToFloor': ['placedItemId…'],
   'plan.moveToFloor': [],
+  'wall.createChain': ['wallId…', 'junctionId…'],
+  'wall.dragJunction': [],
+  'wall.dragEndpoint': [],
+  'wall.dragBody': [],
+  'wall.setLength': [],
+  'wall.setDirection': [],
+  'wall.setArc': [],
+  'wall.setThickness': [],
+  'wall.offset': [],
+  'wall.split': ['wallId', 'junctionId'],
+  'wall.merge': [],
+  'wall.delete': [],
   'design.update': [],
   'design.setFootprint': [],
   'design.setOrigin': [],
@@ -521,6 +672,31 @@ export const INTENT_ID_ORDER: Record<IntentType, readonly string[]> = {
  */
 const VARIADIC_ID_COUNT = 2
 
+/**
+ * The Junction one drawn end takes part in, in the caller's vocabulary. Two ends share a
+ * Junction exactly when their keys match: a chain link names the pair of ends in a fixed order,
+ * a join to an existing end names that end, and a T-attach is its own Junction — two branches
+ * butting the same host at the same point are two Junctions, because each has its own host
+ * distance (#64 §9).
+ */
+export function wallEndKey(target: WallEndTarget, index: number, end: 'start' | 'end'): string {
+  if (target.kind === 'free') return ''
+  if (target.kind === 'segment') {
+    return `s:${[`${target.index}:${target.end}`, `${index}:${end}`].sort().join('+')}`
+  }
+  if (target.kind === 'wall') return `w:${target.wallId}:${target.end}`
+  return `h:${target.wallId}:${index}:${end}`
+}
+
+/** How many Junctions one chained draw creates: every distinct target its ends name. */
+export function chainJunctionCount(payload: CreateWallChain): number {
+  const keys = new Set<string>()
+  payload.starts.forEach((target, index) => keys.add(wallEndKey(target, index, 'start')))
+  payload.ends.forEach((target, index) => keys.add(wallEndKey(target, index, 'end')))
+  keys.delete('')
+  return keys.size
+}
+
 export function intentIdCount(type: IntentType, payload?: PayloadOf): number {
   const order = INTENT_ID_ORDER[type]
   if (order[order.length - 1]?.endsWith('…') !== true) return order.length
@@ -531,6 +707,10 @@ export function intentIdCount(type: IntentType, payload?: PayloadOf): number {
       return fixed + (payload as DuplicateFloor).placedItemIds.length
     case 'plan.copyToFloor':
       return (payload as CopyPlanObjectsToFloor).placedItemIds.length
+    case 'wall.createChain': {
+      const chain = payload as CreateWallChain
+      return chain.walls.length + chainJunctionCount(chain)
+    }
     default:
       return fixed + VARIADIC_ID_COUNT
   }
@@ -573,6 +753,13 @@ export type RejectionCode =
   | 'invalid-shape'
   /** `cabinet` refused the tree operation: an already split or over-deep space. */
   | 'invalid-tree'
+  /** A Wall edit the model cannot represent: a hosted end dragged off its host, a Junction
+   * whose chain link does not name itself back, a length that leaves nothing behind (#64). */
+  | 'invalid-wall'
+  /** Two Walls that do not match well enough to become one; the message says what differs (#64 §10). */
+  | 'merge-mismatch'
+  /** A split point too close to a hosted Junction, where the host's `at` would go out of range (#64 §10). */
+  | 'split-blocked'
 
 export interface Applied {
   ok: true

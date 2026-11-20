@@ -97,6 +97,20 @@ const EXTRA_INTENTS = [
   'view.setShowPlanImage',
   // #58: the Item Design editor restates a footprint wholesale; no legacy action did.
   'design.setFootprint',
+  // #64: Walls have no legacy equivalent at all — the old store kept no wall geometry — so the
+  // whole family is new rather than a split of an action.
+  'wall.createChain',
+  'wall.dragJunction',
+  'wall.dragEndpoint',
+  'wall.dragBody',
+  'wall.setLength',
+  'wall.setDirection',
+  'wall.setArc',
+  'wall.setThickness',
+  'wall.offset',
+  'wall.split',
+  'wall.merge',
+  'wall.delete',
 ]
 
 describe('action coverage', () => {
