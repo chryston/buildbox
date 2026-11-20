@@ -1,4 +1,7 @@
-# `v3/` — the Backup this build writes (#58)
+# `v3/` — the Backup #58 wrote
+
+> This build writes v4 now (#64): see `v4/README.md`. Everything below is still true of these
+> bytes; only the claim that they are the current ones is not.
 
 `PACKAGE_FORMAT_VERSION` is still `1`: the archive is the same three-entry ZIP with the same
 manifest. What changed is the **domain schema** the `project.json` entry carries — v3, where
@@ -35,7 +38,7 @@ exactly the patch of Floor the v2 record put under the Placed Item.
 buildboxVersion: "0.0.0", preview: false })`, with `project.json` written beside it from
 `lib.canonicalJson` plus one trailing newline, and the PNG copied from `../v2/assets/`.
 
-`src/package/fixtures.test.ts` proves three things about this folder on every run: staging it
-needs no migration, this build re-encodes it byte for byte, and `project.json` is the
-canonical record and nothing else. `../v1` and `../v2` stay exactly as they are — they are
+`src/package/fixtures.test.ts` proves two things about this folder on every run: staging it
+runs the one step #64 added and lands on the current Project, and `project.json` is the
+canonical v3 record and nothing else. `../v1` and `../v2` stay exactly as they are — they are
 what a v1 and a v2 BuildBox wrote, and staging them now runs the migration #58 added.

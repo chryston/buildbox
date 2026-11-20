@@ -1,12 +1,12 @@
 /**
- * The golden fixtures (#44, #56, #58): `fixtures/package/v1/`, `v2/` and `v3/` are committed,
- * never deleted and never edited. Whatever each says a Backup is, this BuildBox has to keep
- * reading — and keep writing byte for byte, for the version it writes.
+ * The golden fixtures (#44, #56, #58, #64): `fixtures/package/v1/`, `v2/`, `v3/` and `v4/`
+ * are committed, never deleted and never edited. Whatever each says a Backup is, this
+ * BuildBox has to keep reading — and keep writing byte for byte, for the version it writes.
  *
  * v1 is the compatibility evidence #44 left behind; #56 made it evidence of a different kind,
- * because a v1 Backup has no Plan Views and staging one has to invent them. v3 is the version
- * this build writes: an Item Footprint became a preset or a Custom Path (#58), which is what
- * makes v1 and v2 compatibility evidence rather than something to re-issue.
+ * because a v1 Backup has no Plan Views and staging one has to invent them. v4 is the version
+ * this build writes: a Project gained its Walls and a default Wall height (#64), which is
+ * what makes v1, v2 and v3 compatibility evidence rather than something to re-issue.
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -25,7 +25,7 @@ import {
 
 const ASSET_ENTRY = `assets/${FIXTURE_PLAN_IMAGE_HASH}.png`
 
-type FixtureVersion = 'v1' | 'v2' | 'v3'
+type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4'
 
 const fixtureDir = (version: FixtureVersion): URL => new URL(`../../fixtures/package/${version}/`, import.meta.url)
 const readFrom = (version: FixtureVersion) => (relative: string): Uint8Array =>
@@ -34,10 +34,12 @@ const readFrom = (version: FixtureVersion) => (relative: string): Uint8Array =>
 const readV1 = readFrom('v1')
 const readV2 = readFrom('v2')
 const readV3 = readFrom('v3')
+const readV4 = readFrom('v4')
 
 const ARCHIVE_V1 = readV1('reference.buildbox')
 const ARCHIVE_V2 = readV2('reference.buildbox')
 const ARCHIVE_V3 = readV3('reference.buildbox')
+const ARCHIVE_V4 = readV4('reference.buildbox')
 const ASSET_BYTES = readV2(ASSET_ENTRY)
 const assetSource = async (): Promise<{ bytes: Uint8Array; mediaType: string }> => ({
   bytes: ASSET_BYTES,
@@ -90,6 +92,14 @@ const manifestOf = async (canonical: string, domainSchemaVersion: number) => ({
     { path: ASSET_ENTRY, mediaType: 'image/png', byteLength: ASSET_BYTES.length, sha256: FIXTURE_PLAN_IMAGE_HASH },
   ],
 })
+
+/** The record the v3 file was written from: the current Project without the v4 additions. */
+function v3FixtureRecord(): unknown {
+  const project = fixtureProject()
+  const preferences: Record<string, unknown> = { ...project.preferences }
+  delete preferences.defaultWallHeight
+  return { ...project, preferences, existingModel: { placedItems: project.existingModel.placedItems } }
+}
 
 describe('the committed v1 Backup', () => {
   it('stages into the current Project, with one default Plan View per Floor (#56)', async () => {
@@ -146,19 +156,18 @@ describe('the committed v2 Backup (#56)', () => {
 })
 
 describe('the committed v3 Backup (#58)', () => {
-  it('stages into the Project it was written from, unmigrated', async () => {
+  it('stages into the current Project, gaining the Wall fields (#64)', async () => {
     const result = await stageImport(ARCHIVE_V3, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
     expect(result.staged.project).toEqual(fixtureProject())
-    expect(result.staged.migratedFrom).toBeNull()
-  })
-
-  it('is re-encoded byte for byte by this build', async () => {
-    expect(await encodeProject(fixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V3)
+    // v3 is no longer the current schema: staging it runs the one step #64 added.
+    expect(result.staged.migratedFrom).toBe(3)
   })
 
   it('holds the canonical Project record, and nothing else', async () => {
-    const canonical = canonicalOf(fixtureProject())
+    // The pre-v4 record: no default Wall height and no Wall collections. The file is
+    // compatibility evidence, so it keeps the bytes it was written from.
+    const canonical = canonicalOf(v3FixtureRecord())
     expect(new TextDecoder().decode(readV3('project.json'))).toBe(`${canonical}\n`)
 
     const staged = await stageImport(ARCHIVE_V3, { acceptPreview: false, allocateId: allocateIds() })
@@ -175,5 +184,44 @@ describe('the committed v3 Backup (#58)', () => {
       centre: { x: 910, y: 990 },
       orientationDeg: 0,
     })
+  })
+})
+
+describe('the committed v4 Backup (#64)', () => {
+  it('stages into the Project it was written from, unmigrated', async () => {
+    const result = await stageImport(ARCHIVE_V4, { acceptPreview: false, allocateId: allocateIds() })
+    if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
+    expect(result.staged.project).toEqual(fixtureProject())
+    expect(result.staged.migratedFrom).toBeNull()
+  })
+
+  it('is re-encoded byte for byte by this build', async () => {
+    expect(await encodeProject(fixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V4)
+  })
+
+  it('holds the canonical Project record, and nothing else', async () => {
+    const canonical = canonicalOf(fixtureProject())
+    expect(new TextDecoder().decode(readV4('project.json'))).toBe(`${canonical}\n`)
+
+    const staged = await stageImport(ARCHIVE_V4, { acceptPreview: false, allocateId: allocateIds() })
+    if (!staged.ok) throw new Error('the fixture must stage')
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonical, 4))
+  })
+
+  it('carries the same asset, byte for byte', () => {
+    expect(readV4(ASSET_ENTRY)).toEqual(ASSET_BYTES)
+  })
+
+  it('names the two Wall collections, which is what the whole step was for', () => {
+    const record = fixtureProject()
+    // A Project with no Walls yet is a valid v4 Project: the collections exist and are empty,
+    // and `defaultWallHeight` is stored rather than implied.
+    expect(record.existingModel.walls).toEqual([])
+    expect(record.existingModel.wallJunctions).toEqual([])
+    expect(record.preferences.defaultWallHeight).toBe(2600)
+    // The v3 record beside it carries neither, which is the whole step in one comparison.
+    const prior = v3FixtureRecord() as { preferences: Record<string, unknown>; existingModel: Record<string, unknown> }
+    expect(prior.preferences).not.toHaveProperty('defaultWallHeight')
+    expect(prior.existingModel).not.toHaveProperty('walls')
   })
 })

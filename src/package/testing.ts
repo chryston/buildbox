@@ -178,8 +178,14 @@ export function fixtureProject(): Project {
  */
 export function legacyFixtureRecord(): unknown {
   const project = fixtureProject()
+  const preferences: Record<string, unknown> = { ...project.preferences }
+  delete preferences.defaultWallHeight
   return {
     ...project,
+    // Both files predate Walls (#64): neither the default height nor the two collections is
+    // in the bytes they were written from, so the record stops at the Placed Items.
+    preferences,
+    existingModel: { placedItems: project.existingModel.placedItems },
     itemDesigns: project.itemDesigns.map((design) =>
       design.kind === 'generic' && design.footprint.kind === 'preset' && design.footprint.preset.kind === 'rectangle'
         ? { ...design, footprint: legacyFootprint(design.footprint.preset.width, design.footprint.preset.depth) }
