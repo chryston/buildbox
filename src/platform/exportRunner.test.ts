@@ -30,7 +30,7 @@ const recipe: Recipe = {
 const request: ExportRunRequest = {
   snapshot,
   recipe,
-  deps: { clock: { now: () => '2026-03-04T09:30:00.000Z', localDate: () => '2026-03-04' }, buildboxVersion: 'test' },
+  deps: { instant: '2026-03-04T09:30:00.000Z', localDay: '2026-03-04', buildboxVersion: 'test' },
   assets: [],
 }
 

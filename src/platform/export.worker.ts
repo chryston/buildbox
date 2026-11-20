@@ -23,7 +23,17 @@ import { createRasterizer } from './rasterizer'
 
 /** The parts of `ExportDeps` that are plain data, and so cross the boundary as themselves. */
 export interface ExportWorkerDeps {
-  readonly clock: { now(): string; localDate(): string }
+  /**
+   * One reading of the host's clock, taken when the request was built: the UTC instant the metadata
+   * carries and the local calendar date the title block prints.
+   *
+   * A `ClockPort` cannot be sent — `postMessage` clones data, and a function is not data — so the
+   * clock crosses as the two strings this run will answer with, and each side rebuilds the object
+   * around them. One export is one instant either way, which is also what makes the Worker's bytes
+   * and the main thread's bytes comparable.
+   */
+  readonly instant: string
+  readonly localDay: string
   readonly buildboxVersion: string
   readonly contractVersion?: string
   readonly unsavedChanges?: boolean
@@ -74,6 +84,7 @@ scope.onmessage = (event) => {
   const rasterizer = createRasterizer() ?? undefined
   void exportFiles(snapshot, recipe, {
     ...deps,
+    clock: { now: () => deps.instant, localDate: () => deps.localDay },
     ...(font === undefined ? {} : { font: { bytes: font } }),
     ...(rasterizer === undefined ? {} : { rasterizer }),
     assets: async (sha256) => {

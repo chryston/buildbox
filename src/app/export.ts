@@ -170,7 +170,7 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
     if (mainThread === null) mainThread = createRasterizer() ?? null
     const lookup = new Map(request.assets.map((one) => [one.sha256, one]))
     return exportFiles(request.snapshot, request.recipe, {
-      clock: request.deps.clock,
+      clock: { now: () => request.deps.instant, localDate: () => request.deps.localDay },
       buildboxVersion: request.deps.buildboxVersion,
       contractVersion: request.deps.contractVersion,
       unsavedChanges: request.deps.unsavedChanges,
@@ -247,7 +247,12 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
       const request: ExportRunRequest = {
         snapshot,
         recipe,
-        deps: { clock: deps.clock, buildboxVersion: deps.buildboxVersion, unsavedChanges },
+        deps: {
+          instant: deps.clock.now(),
+          localDay: deps.clock.localDate(),
+          buildboxVersion: deps.buildboxVersion,
+          unsavedChanges,
+        },
         font: recipe.format === 'pdf' ? await loadFont() : undefined,
         assets: gathered.filter((one) => one !== null),
       }
