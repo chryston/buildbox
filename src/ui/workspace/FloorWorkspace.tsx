@@ -889,7 +889,7 @@ export function FloorWorkspace(): ReactNode {
                 <WallDraftOverlay
                   viewport={viewport}
                   floorWalls={floorWalls}
-                  draft={wallDraft ?? emptyWallDraft({ x: 0, y: 0 })}
+                  draft={wallDraft ?? emptyWallDraft()}
                   onDraft={setWallDraft}
                   onCancel={() => {
                     setWallDraft(null)

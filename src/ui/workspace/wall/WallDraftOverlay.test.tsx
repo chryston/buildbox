@@ -15,7 +15,7 @@ import type { FloorWalls, Pt, SnapKind } from '../../../derive'
 import type { Project, Wall } from '../../../domain'
 import { WallDraftOverlay } from './WallDraftOverlay'
 import type { WallToolDefaults } from './WallDraftOverlay'
-import { startWallDraft } from './wallDraft'
+import { emptyWallDraft } from './wallDraft'
 import type { WallChainDraft, WallDraft } from './wallDraft'
 
 const PAN = { x: 100, y: 100 }
@@ -72,7 +72,7 @@ type Callbacks = {
 /** The draft lives in the caller, exactly as the Floor workspace keeps it (#64 §12). */
 function Harness(props: Callbacks): ReactNode {
   const { onFinish = () => undefined, onCancel = () => undefined, onOptions = () => undefined } = props
-  const [draft, setDraft] = useState<WallDraft>(() => startWallDraft({ x: 0, y: 0 }))
+  const [draft, setDraft] = useState<WallDraft>(() => emptyWallDraft())
   return (
     <WallDraftOverlay
       viewport={viewport}
@@ -136,12 +136,16 @@ describe('WallDraftOverlay', () => {
   it('measures the segment in progress in the chip', () => {
     render(<Harness />)
     expect(chip()).toBe('')
+    // The first click starts the chain; the second is what the chip measures.
+    clickAt({ x: 0, y: 0 })
+    expect(chip()).toBe('')
     clickAt({ x: 4000, y: 0 })
     expect(chip()).toBe('4,000 mm · 0°')
   })
 
   it('undoes the last point, which leaves nothing to finish', () => {
     render(<Harness />)
+    clickAt({ x: 0, y: 0 })
     clickAt({ x: 4000, y: 0 })
     expect(screen.getByTestId('wall-finish')).not.toBeDisabled()
     fireEvent.click(screen.getByTestId('wall-undo'))
@@ -152,6 +156,7 @@ describe('WallDraftOverlay', () => {
   it('finishes the whole chain as one Intent carrying the tool defaults', () => {
     const onFinish = vi.fn()
     render(<Harness onFinish={onFinish} />)
+    clickAt({ x: 0, y: 0 })
     clickAt({ x: 4000, y: 0 })
     clickAt({ x: 4000, y: 3000 })
     fireEvent.click(screen.getByTestId('wall-finish'))
@@ -169,6 +174,7 @@ describe('WallDraftOverlay', () => {
     const onFinish = vi.fn()
     const onCancel = vi.fn()
     render(<Harness onFinish={onFinish} onCancel={onCancel} />)
+    clickAt({ x: 0, y: 0 })
     clickAt({ x: 4000, y: 0 })
     fireEvent.click(screen.getByTestId('wall-cancel'))
     expect(onCancel).toHaveBeenCalledTimes(1)
@@ -177,6 +183,7 @@ describe('WallDraftOverlay', () => {
 
   it('opens the length field with the digit that opened it', () => {
     render(<Harness />)
+    clickAt({ x: 0, y: 0 })
     hoverAt({ x: 4000, y: 0 })
     fireEvent.keyDown(layer(), { key: '2' })
     const field = screen.getByTestId('wall-length-field') as HTMLInputElement

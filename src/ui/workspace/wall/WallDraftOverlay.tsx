@@ -26,7 +26,6 @@ import {
   draftSegments,
   joinLabel,
   placePoint,
-  startWallDraft,
   toChainPayload,
   undoPoint,
   wallTargetAt,
@@ -409,5 +408,5 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
   )
 }
 
-/** A draft with nothing in it, for the caller that arms the tool. */
-export const emptyWallDraft = (at: Pt): WallDraft => startWallDraft(at)
+/** The armed draft the workspace shows before the first click (#64 §12). */
+export { emptyWallDraft } from './wallDraft'

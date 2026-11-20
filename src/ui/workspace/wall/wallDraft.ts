@@ -140,7 +140,11 @@ export interface WallDraftNode {
 
 export interface WallDraft {
   readonly tool: WallSegmentTool
-  /** At least one node: the start point. */
+  /**
+   * The clicks placed so far, empty until the first one. The first click IS the start of the
+   * chain: a draft armed with a phantom start point at the origin would draw a Wall from there
+   * to wherever the person meant to begin, which is the defect this replaces.
+   */
   readonly nodes: readonly WallDraftNode[]
   /** The rubber band, or `null` before the pointer has moved onto the canvas. */
   readonly cursor: WallDraftNode | null
@@ -148,10 +152,21 @@ export interface WallDraft {
   readonly typedLength: number | null
 }
 
-/** Open a draft at its first point. */
+/** Open a draft at its first point: what a click on an armed draft does, given that point. */
 export const startWallDraft = (at: Pt, tool: WallSegmentTool = 'line'): WallDraft => ({
   tool,
   nodes: [{ at, role: 'end', target: FREE_TARGET }],
+  cursor: null,
+  typedLength: null,
+})
+
+/**
+ * The armed draft with nothing on it yet: the tool is in hand, no point has been clicked. This
+ * is what the workspace arms the tool with (#64 §12); `startWallDraft` is one click into it.
+ */
+export const emptyWallDraft = (tool: WallSegmentTool = 'line'): WallDraft => ({
+  tool,
+  nodes: [],
   cursor: null,
   typedLength: null,
 })
@@ -160,11 +175,11 @@ export const withWallTool = (draft: WallDraft, tool: WallSegmentTool): WallDraft
 
 /**
  * Whether the next click with the `Arc` tool gives the segment in progress its curve: the end
- * is clicked first, the bulge second, so an odd number of clicks after the start means the
- * curve is still missing.
+ * is clicked first, the bulge second, so a pair of clicks with the curve still missing means
+ * the bulge is what is wanted. Nothing clicked, or only the start, still wants an end.
  */
 export const pendingBulge = (draft: WallDraft): boolean =>
-  draft.tool === 'arc' && draft.nodes.length % 2 === 0
+  draft.tool === 'arc' && draft.nodes.length >= 2 && draft.nodes.length % 2 === 0
 
 export const withWallCursor = (draft: WallDraft, at: Pt | null, target: WallSnapTarget = FREE_TARGET): WallDraft => ({
   ...draft,
@@ -176,8 +191,9 @@ export const withTypedLength = (draft: WallDraft, typedLength: number | null): W
   typedLength,
 })
 
-/** The last placed node, which is where the segment in progress starts. */
-export const lastNode = (draft: WallDraft): WallDraftNode => draft.nodes[draft.nodes.length - 1]!
+/** The last placed node, which is where the segment in progress starts; `null` before the first click. */
+export const lastNode = (draft: WallDraft): WallDraftNode | null =>
+  draft.nodes.length === 0 ? null : draft.nodes[draft.nodes.length - 1]!
 
 /** The last placed `end`, which is the start of the segment the next click will finish. */
 const lastEnd = (draft: WallDraft): WallDraftNode | null => {
@@ -277,14 +293,24 @@ const throughOn = (cx: number, cy: number, start: Pt, end: Pt): Pt => {
  * Place the cursor: the click lands where the rubber band is, or — with a typed length — at
  * exactly that distance along the direction being drawn (#64 §12). `Arc from last` inserts its
  * bulge itself, because that arc is fully determined by the previous tangent and the new end.
+ * With nothing clicked yet the click IS the start of the chain, so a typed length has no
+ * direction to run out along and is dropped.
  */
 export const placePoint = (draft: WallDraft): WallDraft | null => {
   if (draft.cursor === null) return null
-  const from = lastNode(draft).at
-  const at = draft.typedLength === null ? draft.cursor.at : along(from, draft.cursor.at, draft.typedLength)
+  const from = lastNode(draft)
+  if (from === null) {
+    return {
+      ...draft,
+      nodes: [{ at: draft.cursor.at, role: 'end', target: draft.cursor.target }],
+      typedLength: null,
+      cursor: null,
+    }
+  }
+  const at = draft.typedLength === null ? draft.cursor.at : along(from.at, draft.cursor.at, draft.typedLength)
   const node: WallDraftNode = { at, role: draft.cursor.role, target: draft.cursor.target }
   if (draft.tool === 'arcFromLast' && node.role === 'end' && lastEnd(draft) !== null && draft.nodes.length >= 2) {
-    const through = tangentArcThrough(from, draftHeadingDeg(draft), at)
+    const through = tangentArcThrough(from.at, draftHeadingDeg(draft), at)
     if (through !== null) {
       return {
         ...draft,
@@ -297,9 +323,9 @@ export const placePoint = (draft: WallDraft): WallDraft | null => {
   return { ...draft, nodes: [...draft.nodes, node], typedLength: null, cursor: null }
 }
 
-/** `Undo point`: the last click goes; the start point stays until the draft is cancelled. */
+/** `Undo point`: the last click goes, the start with it — an undone chain is an armed tool. */
 export const undoPoint = (draft: WallDraft): WallDraft =>
-  draft.nodes.length <= 1 ? draft : { ...draft, nodes: draft.nodes.slice(0, -1) }
+  draft.nodes.length === 0 ? draft : { ...draft, nodes: draft.nodes.slice(0, -1) }
 
 /** `Finish` needs at least one whole segment: a start and one placed end. */
 export const canFinish = (draft: WallDraft): boolean =>

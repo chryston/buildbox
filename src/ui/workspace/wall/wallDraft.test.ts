@@ -17,7 +17,10 @@ import {
   draftChip,
   draftHeadingDeg,
   draftSegments,
+  emptyWallDraft,
   joinLabel,
+  lastNode,
+  pendingBulge,
   placePoint,
   startWallDraft,
   toChainPayload,
@@ -84,10 +87,33 @@ describe('the draft', () => {
     expect(placed.nodes[1]!.at).toEqual(at(2000, 0))
   })
 
-  it('undoes the last click and keeps the start point', () => {
+  it('undoes the last click, the start point with it', () => {
     const draft = draw(at(0, 0), { at: at(2000, 0) }, { at: at(2000, 1500) })
     expect(draftSegments(undoPoint(draft))).toHaveLength(1)
-    expect(undoPoint(startWallDraft(at(0, 0))).nodes).toHaveLength(1)
+    expect(undoPoint(startWallDraft(at(0, 0))).nodes).toHaveLength(0)
+  })
+
+  it('takes the first click as the start of the chain', () => {
+    // The tool is armed with nothing on it: the click that begins the chain must not also draw
+    // a Wall from wherever the draft happened to be armed to the point under the pointer.
+    const armed = emptyWallDraft()
+    expect(armed.nodes).toHaveLength(0)
+    expect(draftSegments(armed)).toHaveLength(0)
+    expect(lastNode(armed)).toBeNull()
+    expect(canFinish(armed)).toBe(false)
+    expect(toChainPayload(armed, 'floor-main', defaults)).toBeNull()
+    expect(pendingBulge(withWallTool(armed, 'arc'))).toBe(false)
+
+    const started = placePoint(withWallCursor(armed, at(1200, 800), endTarget('W-1')))!
+    expect(started.nodes).toHaveLength(1)
+    expect(started.nodes[0]).toMatchObject({ at: at(1200, 800), role: 'end', target: endTarget('W-1') })
+    // Nothing is drawn yet: one point is a point, not a Wall.
+    expect(draftSegments(started)).toHaveLength(0)
+    expect(canFinish(started)).toBe(false)
+    // A typed length has no direction to run out along before the first point exists.
+    expect(placePoint(withTypedLength(withWallCursor(armed, at(500, 0)), 3000))!.nodes[0]!.at).toEqual(at(500, 0))
+    // Undoing the only click arms the tool again.
+    expect(undoPoint(started).nodes).toHaveLength(0)
   })
 })
 
