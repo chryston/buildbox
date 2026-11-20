@@ -90,7 +90,9 @@ function fields(value: unknown): Record<string, unknown> | null {
 function asRecipe(value: unknown): Recipe | null {
   const held = fields(value)
   if (held === null) return null
-  if (!Array.isArray(held.views) || !held.views.every(isViewRef)) return null
+  // The dialog cannot run a recipe with no view in it, so one that arrived with none was not
+  // written by the dialog and has nothing to say about what the next one should default to.
+  if (!Array.isArray(held.views) || held.views.length === 0 || !held.views.every(isViewRef)) return null
   if (!oneOf(held.format, FORMATS)) return null
   if (!oneOf(held.pageSize, PAGE_SIZES)) return null
   if (!oneOf(held.orientation, ORIENTATIONS)) return null
@@ -99,7 +101,7 @@ function asRecipe(value: unknown): Recipe | null {
   }
   if (held.pngLongEdge !== 2048 && held.pngLongEdge !== 4096) return null
   if (typeof held.titleBlock !== 'boolean' || typeof held.grid !== 'boolean') return null
-  if (held.unit !== 'mm' && held.unit !== 'cm' && held.unit !== 'metres') return null
+  if (held.unit !== 'mm' && held.unit !== 'cm' && held.unit !== 'm') return null
   if (typeof held.precision !== 'number') return null
   return value as Recipe
 }

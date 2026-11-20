@@ -47,6 +47,10 @@ const NODE_ONLY_INCLUDE = [
   // #58 criterion 10's property test drives the controller against `edit`, which only the
   // `src/integration` element may import. It is a Node test all the same.
   'src/integration/**/*.property.test.ts',
+  // The remembered recipe is read out of the preference store by `app`, and the test seeds it with
+  // a Project from `derive/testing`, which reads `fixtures/` off disk — so `import.meta.url` has to
+  // be a file URL. jsdom gives it as an http URL, which `fileURLToPath` refuses.
+  'src/app/export.test.ts',
 ]
 
 // The adapter's own suites: `fake-indexeddb` under Node, and `*.browser.test.ts` against

@@ -81,7 +81,8 @@ function afterIhdr(bytes: Uint8Array): number | null {
   if (bytes.length < 12) return null
   if (!SIGNATURE.every((byte, index) => bytes[index] === byte)) return null
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  if (typeAt(bytes, 12) !== 'IHDR') return null
+  // The first chunk starts at 8, past the signature: its length is at 8, its type at 12.
+  if (typeAt(bytes, 8) !== 'IHDR') return null
   return 12 + 8 + view.getUint32(8)
 }
 
