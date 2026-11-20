@@ -18,6 +18,7 @@ import {
   arcFromThrough,
   distance,
   normaliseDeg,
+  offsetRefLine,
   pt,
   refLength,
   refParamAt,
@@ -413,24 +414,18 @@ const setThickness: Handler<'wall.setThickness'> = (ctx) => {
   wall.thickness = thickness
 }
 
-/** `Offset wall by … mm`: the reference line moves perpendicular, to the chosen side (#64 §10). */
+/** `Offset wall by … mm`: the reference line moves perpendicular, to the chosen side (#64 §10).
+ * The side is read in the reference line's own direction, and a curve offsets concentrically —
+ * the same normal `derive` offsets the faces by, so the line can reach a face. */
 const offsetWall: Handler<'wall.offset'> = (ctx) => {
   const { wallId, distance: amount, side } = ctx.intent.payload
   const wall = editWall(ctx.draft, wallId)
-  const along = side === 'left' ? -amount : amount
-  if (wall.line.kind === 'line') {
-    const d = { x: wall.line.end.x - wall.line.start.x, y: wall.line.end.y - wall.line.start.y }
-    const l = Math.hypot(d.x, d.y) || 1
-    wall.line = translateLine(wall.line, pt((-d.y / l) * along, (d.x / l) * along))
-    return
+  const along = side === 'left' ? amount : -amount
+  const next = offsetRefLine(wall.line, along)
+  if (wall.line.kind === 'arc' && next.kind === 'line') {
+    refuse('invalid-wall', wallPath(wallId), 'That would turn the curve inside out.')
   }
-  const arc = circleOf(wall.line)
-  if (arc === null) refuse('invalid-wall', wallPath(wallId), 'That curve is not a circular arc.')
-  const next = arc.radius + along
-  if (next <= 0) refuse('invalid-wall', wallPath(wallId), 'That would turn the curve inside out.')
-  const scale = (at: { x: number; y: number }): { x: number; y: number } =>
-    pt(arc.center.x + ((at.x - arc.center.x) * next) / arc.radius, arc.center.y + ((at.y - arc.center.y) * next) / arc.radius)
-  wall.line = { kind: 'arc', start: scale(wall.line.start), through: scale(wall.line.through), end: scale(wall.line.end) }
+  wall.line = next
 }
 
 /**

@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { Project, Wall, WallJunction, WallRefLine } from '../../domain'
-import { distance, pt } from '../../geometry'
+import { arcFromThrough, distance, pt, refLength, refTangentDeg } from '../../geometry'
 import { newWallDefaults } from '../defaults'
 import type { WallDraft, WallEndTarget } from '../intents'
 import { chainJunctionCount } from '../intents'
@@ -235,5 +235,343 @@ describe('wall.createChain', () => {
       intent('wall.createChain', { floorId: floorIdOf(project), walls: [draft(line(0, 0, 1000, 0))], starts: [free], ends: [] }, source(1)),
       'invalid-wall',
     )
+  })
+})
+
+/** The arc through a third point, bulged `bulge` mm to the left of its own direction. */
+const arc = (x1: number, y1: number, x2: number, y2: number, bulge: number): WallRefLine => {
+  const dx = x2 - x1
+  const dy = y2 - y1
+  const length = Math.hypot(dx, dy) || 1
+  return {
+    kind: 'arc',
+    start: pt(x1, y1),
+    end: pt(x2, y2),
+    through: pt((x1 + x2) / 2 - (dy / length) * bulge, (y1 + y2) / 2 + (dx / length) * bulge),
+  }
+}
+
+/** One Wall on its own, straight from (0,0) to (3000,0) unless a line is given. */
+function withWall(l: WallRefLine = line(0, 0, 3000, 0)): { project: Project; wall: string } {
+  const drawn = chain(newProject(), [draft(l)], [free], [free])
+  return { project: drawn.project, wall: drawn.ids[0]! }
+}
+
+const near = (a: { x: number; y: number }, b: { x: number; y: number }): number => distance(a, b)
+
+describe('wall.dragJunction', () => {
+  it('moves every member of an L together', () => {
+    const { project, first, second } = withL()
+    const junction = junctionsOf(project)[0]!
+    const applied = expectRoundTrip(project, intent('wall.dragJunction', { junctionId: junction.id, delta: pt(100, -50) }, []))
+    const moved = wallsOf(applied.project)
+    expect(moved.find((wall) => wall.id === first)!.line).toEqual(line(0, 0, 3100, -50))
+    expect(moved.find((wall) => wall.id === second)!.line).toEqual(line(3100, -50, 3000, 2000))
+  })
+
+  it('slides a hosted Junction along its host and takes the branch with it', () => {
+    const { project, host, branch, junction } = withT()
+    const applied = expectApplied(project, intent('wall.dragJunction', { junctionId: junction.id, delta: pt(600, 300) }, []))
+    expect(junctionsOf(applied.project)[0]!.host).toEqual({ wallId: host, at: 1800 })
+    expect(wallsOf(applied.project).find((wall) => wall.id === branch)!.line).toEqual(line(1800, 0, 1200, 2400))
+  })
+
+  it('keeps a hosted Junction on its host when dragged off it', () => {
+    const { project, host, junction } = withT()
+    const applied = expectApplied(project, intent('wall.dragJunction', { junctionId: junction.id, delta: pt(2400, 900) }, []))
+    const moved = junctionsOf(applied.project)[0]!.host!
+    expect(moved.wallId).toBe(host)
+    expect(moved.at).toBeLessThan(3000)
+    expect(moved.at).toBeGreaterThan(2999)
+    // The branch end is back on the host's reference line.
+    const branchEnd = wallsOf(applied.project).find((wall) => wall.id !== host)!.line.start
+    expect(near(branchEnd, pt(moved.at, 0))).toBeLessThan(0.01)
+  })
+
+  it('is one transaction', () => {
+    const { project } = withL()
+    expectDeterministic(project, intent('wall.dragJunction', { junctionId: junctionsOf(project)[0]!.id, delta: pt(10, 10) }, []))
+  })
+})
+
+describe('wall.dragEndpoint', () => {
+  it('moves a free end and leaves the joined one where it was', () => {
+    const { project, branch } = withT()
+    const applied = expectApplied(project, intent('wall.dragEndpoint', { wallId: branch, end: 'end', to: pt(1200, 3000) }, []))
+    expect(wallsOf(applied.project).find((wall) => wall.id === branch)!.line).toEqual(line(1200, 0, 1200, 3000))
+  })
+
+  it('refuses to drag an end that joins another Wall', () => {
+    const { project, first } = withL()
+    const rejection = expectRejection(project, intent('wall.dragEndpoint', { wallId: first, end: 'end', to: pt(4000, 0) }, []), 'invalid-wall')
+    expect(rejection.problems[0]!.message).toContain('move that junction instead')
+  })
+})
+
+describe('wall.dragBody', () => {
+  it('moves the Wall, carries its Junction along and stretches the other member', () => {
+    const { project, first, second } = withL()
+    const applied = expectRoundTrip(project, intent('wall.dragBody', { wallId: second, delta: pt(0, 500) }, []))
+    const walls = wallsOf(applied.project)
+    expect(walls.find((wall) => wall.id === second)!.line).toEqual(line(3000, 500, 3000, 2500))
+    expect(walls.find((wall) => wall.id === first)!.line).toEqual(line(0, 0, 3000, 500))
+  })
+
+  it('keeps a hosted end on its host while the rest of the Wall moves', () => {
+    const { project, host, branch, junction } = withT()
+    const applied = expectApplied(project, intent('wall.dragBody', { wallId: branch, delta: pt(300, 0) }, []))
+    expect(junctionsOf(applied.project)[0]!.host).toEqual({ wallId: host, at: 1500 })
+    expect(wallsOf(applied.project).find((wall) => wall.id === branch)!.line).toEqual(line(1500, 0, 1500, 2400))
+    expect(junction.ends).toHaveLength(1)
+  })
+})
+
+describe('the numeric edits', () => {
+  it('runs a Wall to a new length with its start held', () => {
+    const { project, wall } = withWall()
+    const applied = expectApplied(project, intent('wall.setLength', { wallId: wall, length: 1500, keepFixed: 'start' }, []))
+    expect(wallsOf(applied.project)[0]!.line).toEqual(line(0, 0, 1500, 0))
+  })
+
+  it('runs a Wall to a new length with its end held', () => {
+    const { project, wall } = withWall()
+    const applied = expectApplied(project, intent('wall.setLength', { wallId: wall, length: 1500, keepFixed: 'end' }, []))
+    expect(wallsOf(applied.project)[0]!.line).toEqual(line(1500, 0, 3000, 0))
+  })
+
+  it('rejects a typed length of 0 whole', () => {
+    const { project, wall } = withWall()
+    expectRejection(project, intent('wall.setLength', { wallId: wall, length: 0, keepFixed: 'start' }, []), 'invalid-wall')
+  })
+
+  it('runs a curved Wall to a new length along its own curve', () => {
+    const { project, wall } = withWall(arc(0, 0, 2000, 0, 500))
+    const before = wallsOf(project)[0]!.line
+    const applied = expectApplied(project, intent('wall.setLength', { wallId: wall, length: 1000, keepFixed: 'start' }, []))
+    const after = wallsOf(applied.project)[0]!.line
+    expect(after.kind).toBe('arc')
+    expect(refLength(after)).toBeCloseTo(1000, 4)
+    if (after.kind !== 'arc') return
+    expect(after.start).toEqual(before.start)
+  })
+
+  it('turns a Wall to a new direction about its start', () => {
+    const { project, wall } = withWall()
+    const applied = expectApplied(project, intent('wall.setDirection', { wallId: wall, directionDeg: 45 }, []))
+    const after = wallsOf(applied.project)[0]!.line
+    expect(refTangentDeg(after, 'start')).toBeCloseTo(45, 9)
+    expect(refLength(after)).toBeCloseTo(3000, 6)
+  })
+
+  it('refuses to give a radius to a straight Wall', () => {
+    const { project, wall } = withWall()
+    expectRejection(project, intent('wall.setArc', { wallId: wall, radius: 2500 }, []), 'invalid-wall')
+  })
+
+  it('refuses a curve edit that changes nothing', () => {
+    const { project, wall } = withWall(arc(0, 0, 2000, 0, 500))
+    expectRejection(project, intent('wall.setArc', { wallId: wall }, []), 'invalid-wall')
+  })
+
+  it('opens a curved Wall to a new radius about its own centre', () => {
+    const { project, wall } = withWall(arc(0, 0, 2000, 0, 500))
+    const applied = expectApplied(project, intent('wall.setArc', { wallId: wall, radius: 2500 }, []))
+    const after = wallsOf(applied.project)[0]!.line
+    if (after.kind !== 'arc') throw new Error('a curved Wall stopped being a curve')
+    const circle = arcFromThrough(after.start, after.through, after.end)!
+    expect(circle.radius).toBeCloseTo(2500, 6)
+  })
+
+  it('swings a curved Wall to a new sweep from the same start', () => {
+    const { project, wall } = withWall(arc(0, 0, 2000, 0, 500))
+    const before = wallsOf(project)[0]!.line
+    const applied = expectApplied(project, intent('wall.setArc', { wallId: wall, sweepDeg: 60 }, []))
+    const after = wallsOf(applied.project)[0]!.line
+    if (after.kind !== 'arc') throw new Error('a curved Wall stopped being a curve')
+    const circle = arcFromThrough(after.start, after.through, after.end)!
+    expect(Math.abs(circle.t1 - circle.t0)).toBeCloseTo((60 * Math.PI) / 180, 6)
+    expect(after.start).toEqual(before.start)
+  })
+
+  it('restates the thickness, and refuses one of 0', () => {
+    const { project, wall } = withWall()
+    expect(wallsOf(expectApplied(project, intent('wall.setThickness', { wallId: wall, thickness: 150 }, [])).project)[0]!.thickness).toBe(150)
+    expectRejection(project, intent('wall.setThickness', { wallId: wall, thickness: 0 }, []), 'invalid-wall')
+  })
+
+  it('moves the reference line to the chosen side', () => {
+    const { project, wall } = withWall()
+    const left = wallsOf(expectApplied(project, intent('wall.offset', { wallId: wall, distance: 200, side: 'left' }, [])).project)[0]!.line
+    const right = wallsOf(expectApplied(project, intent('wall.offset', { wallId: wall, distance: 200, side: 'right' }, [])).project)[0]!.line
+    expect(left).toEqual(line(0, 200, 3000, 200))
+    expect(right).toEqual(line(0, -200, 3000, -200))
+  })
+  it('offsets a curved Wall concentrically, and refuses to turn it inside out', () => {
+    const { project, wall } = withWall(arc(0, 0, 2000, 0, 500))
+    const before = wallsOf(project)[0]!.line
+    if (before.kind !== 'arc') throw new Error('a curved Wall stopped being a curve')
+    const original = arcFromThrough(before.start, before.through, before.end)!
+    const applied = expectApplied(project, intent('wall.offset', { wallId: wall, distance: 100, side: 'left' }, []))
+    const after = wallsOf(applied.project)[0]!.line
+    if (after.kind !== 'arc') throw new Error('a curved Wall stopped being a curve')
+    const circle = arcFromThrough(after.start, after.through, after.end)!
+    expect(Math.abs(circle.radius - original.radius)).toBeCloseTo(100, 6)
+    expectRejection(project, intent('wall.offset', { wallId: wall, distance: 5000, side: 'right' }, []), 'invalid-wall')
+  })
+})
+
+/** One split, with exactly the two IDs it spends. */
+function splitAt(project: Project, wallId: string, at: number): { project: Project; newId: string; seam: string } {
+  const [newId, seam] = source(2)
+  const applied = expectApplied(project, intent('wall.split', { wallId, at }, [newId, seam]))
+  return { project: applied.project, newId, seam }
+}
+
+describe('wall.split', () => {
+  it('keeps the ID and the reference for the start piece and gives the next one to the rest', () => {
+    const { project, wall } = withWall()
+    const applied = expectRoundTrip(project, intent('wall.split', { wallId: wall, at: 1000 }, source(2)))
+    const kept = wallByRef(applied.project, 'W-1')
+    const added = wallByRef(applied.project, 'W-2')
+    expect(kept.id).toBe(wall)
+    expect(kept.line).toEqual(line(0, 0, 1000, 0))
+    expect(added.line).toEqual(line(1000, 0, 3000, 0))
+    expect(added).toMatchObject({ thickness: 100, justification: 'centre', baseElevation: 0, height: 2600 })
+    expect(junctionsOf(applied.project)).toHaveLength(1)
+    const seam = junctionsOf(applied.project)[0]!
+    expect(seam.ends).toEqual([
+      { wallId: wall, end: 'end' },
+      { wallId: added.id, end: 'start' },
+    ])
+  })
+
+  it('leaves an attachment on the piece it lies on', () => {
+    const { project, host, junction } = withT()
+    const split = splitAt(project, host, 2000)
+    expect(junctionsOf(split.project).find((candidate) => candidate.id === junction.id)!.host).toEqual({ wallId: host, at: 1200 })
+  })
+
+  it('moves an attachment to the new piece when the split falls before it', () => {
+    const { project, host, junction } = withT()
+    const split = splitAt(project, host, 600)
+    expect(junctionsOf(split.project).find((candidate) => candidate.id === junction.id)!.host).toEqual({ wallId: split.newId, at: 600 })
+    expect(wallsOf(split.project).find((candidate) => candidate.id === split.newId)!.line).toEqual(line(600, 0, 3000, 0))
+  })
+
+  it('moves the far end of the Wall onto the new piece', () => {
+    const { project, first, second } = withL()
+    const split = splitAt(project, first, 1000)
+    const corner = junctionFor(split.project, second, 'start')!
+    expect(corner.ends).toEqual([
+      { wallId: split.newId, end: 'end' },
+      { wallId: second, end: 'start' },
+    ])
+    expect(junctionFor(split.project, first, 'end')!.id).toBe(split.seam)
+  })
+
+  it('cuts a curved Wall into two curved Walls that still add up', () => {
+    const { project, wall } = withWall(arc(0, 0, 2000, 0, 500))
+    const before = refLength(wallsOf(project)[0]!.line)
+    const split = splitAt(project, wall, 400)
+    const pieces = wallsOf(split.project)
+    expect(pieces.every((piece) => piece.line.kind === 'arc')).toBe(true)
+    expect(refLength(pieces[0]!.line) + refLength(pieces[1]!.line)).toBeCloseTo(before, 4)
+  })
+
+  it('blocks a split exactly where another Wall attaches', () => {
+    const { project, host } = withT()
+    const rejection = expectRejection(project, intent('wall.split', { wallId: host, at: 1200 }, source(2)), 'split-blocked')
+    expect(rejection.problems[0]!.message).toContain('Move the attachment first')
+  })
+
+  it('refuses a split at an end', () => {
+    const { project, wall } = withWall()
+    expectRejection(project, intent('wall.split', { wallId: wall, at: 3000 }, source(2)), 'invalid-wall')
+  })
+})
+
+describe('wall.merge', () => {
+  it('puts a split Wall back together under its original ID', () => {
+    const { project, wall } = withWall()
+    const original = wallsOf(project)[0]!.line
+    const split = splitAt(project, wall, 1000)
+    const merged = expectRoundTrip(split.project, intent('wall.merge', { wallIds: [wall, split.newId] }, []))
+    expect(wallsOf(merged.project)).toHaveLength(1)
+    expect(wallsOf(merged.project)[0]!.id).toBe(wall)
+    expect(wallsOf(merged.project)[0]!.ref).toBe('W-1')
+    expect(near(wallsOf(merged.project)[0]!.line.start, original.start)).toBeLessThan(0.01)
+    expect(near(wallsOf(merged.project)[0]!.line.end, original.end)).toBeLessThan(0.01)
+    expect(junctionsOf(merged.project)).toEqual([])
+  })
+
+  it('keeps the corner and the attachment when the pieces go back together', () => {
+    const { project, host } = withT()
+    const split = splitAt(project, host, 600)
+    const merged = expectApplied(split.project, intent('wall.merge', { wallIds: [host, split.newId] }, []))
+    expect(wallsOf(merged.project)).toHaveLength(2)
+    expect(junctionsOf(merged.project)).toHaveLength(1)
+    expect(junctionsOf(merged.project)[0]!.host).toEqual({ wallId: host, at: 1200 })
+  })
+
+  it('blocks two Walls of different thicknesses with the plain message', () => {
+    const drawn = chain(
+      newProject(),
+      [draft(line(0, 0, 1500, 0), 100), draft(line(1500, 0, 3000, 0), 150)],
+      [free, link(0, 'end')],
+      [link(1, 'start'), free],
+    )
+    const rejection = expectRejection(
+      drawn.project,
+      intent('wall.merge', { wallIds: [drawn.ids[0]!, drawn.ids[1]!] }, []),
+      'merge-mismatch',
+    )
+    expect(rejection.problems[0]!.message).toBe('These walls have different thicknesses (100 mm and 150 mm).')
+  })
+
+  it('blocks two Walls that do not meet at a junction of their own', () => {
+    const drawn = chain(newProject(), [draft(line(0, 0, 1500, 0)), draft(line(2000, 0, 3000, 0))], [free, free], [free, free])
+    const rejection = expectRejection(drawn.project, intent('wall.merge', { wallIds: [drawn.ids[0]!, drawn.ids[1]!] }, []), 'merge-mismatch')
+    expect(rejection.problems[0]!.message).toContain('do not meet at a junction of their own')
+  })
+
+  it('blocks two Walls that are not one straight run', () => {
+    const { project, first, second } = withL()
+    const rejection = expectRejection(project, intent('wall.merge', { wallIds: [first, second] }, []), 'merge-mismatch')
+    expect(rejection.problems[0]!.message).toBe('These walls are not one straight run.')
+  })
+})
+
+describe('wall.delete', () => {
+  it('removes the attachments to a host and leaves the branch standing free', () => {
+    const { project, host, branch } = withT()
+    const applied = expectRoundTrip(project, intent('wall.delete', { wallId: host }, []))
+    expect(wallsOf(applied.project).map((wall) => wall.id)).toEqual([branch])
+    expect(junctionsOf(applied.project)).toEqual([])
+    expect(wallsOf(applied.project)[0]!.line).toEqual(wallByRef(project, 'W-2').line)
+  })
+
+  it('removes the junction when one Wall of an L goes', () => {
+    const { project, first, second } = withL()
+    const applied = expectApplied(project, intent('wall.delete', { wallId: first }, []))
+    expect(wallsOf(applied.project).map((wall) => wall.id)).toEqual([second])
+    expect(junctionsOf(applied.project)).toEqual([])
+  })
+
+  it('keeps a corner that still has two ends after one Wall goes', () => {
+    const { project, first, second } = withL()
+    const drawn = chain(project, [draft(line(3000, 0, 5000, -1200))], [join(first, 'end')], [free])
+    expect(junctionsOf(drawn.project)[0]!.ends).toHaveLength(3)
+    const applied = expectApplied(drawn.project, intent('wall.delete', { wallId: second }, []))
+    expect(wallsOf(applied.project)).toHaveLength(2)
+    // The three-way corner loses one end and stays a corner between the other two Walls.
+    expect(junctionsOf(applied.project)[0]!.ends).toEqual([
+      { wallId: first, end: 'end' },
+      { wallId: drawn.ids[0], end: 'start' },
+    ])
+  })
+
+  it('is one reproducible transaction', () => {
+    const { project, host } = withT()
+    expectDeterministic(project, intent('wall.delete', { wallId: host }, []))
   })
 })
