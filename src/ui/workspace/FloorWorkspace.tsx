@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { originSnapCandidates } from '../../derive'
-import type { Point2, Project } from '../../domain'
+import type { Point2, Project, WallClassification } from '../../domain'
 import { summarizeFloorDependencies } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { IntentType, PayloadOf } from '../../edit'
@@ -42,6 +42,8 @@ import {
   resolvePlanView,
 } from './planModel'
 import { CALIBRATION_REQUIRED_HINT, WORKSPACE_TOOLS, floorNeedsCalibration, toolIsGated } from './toolbarRegistry'
+import { WallDraftOverlay, emptyWallDraft } from './wall/WallDraftOverlay'
+import type { WallChainDraft, WallDraft } from './wall/wallDraft'
 import { fitViewport } from './viewport'
 import type { Viewport } from './viewport'
 import { enabledKindsOf, useWorkspace, workspaceStore } from './workspaceStore'
@@ -117,6 +119,20 @@ export function FloorWorkspace(): ReactNode {
   const library = itemLibrary(project)
   /** The Floor the canvas draws, from the session's one derive cache (#60 criterion 3). */
   const derivedFloor = floorId === null ? null : session.deriveFloor(floorId)
+  /** The tidied Walls, faces and corners the Wall tool snaps to, from the same cache (#64 §6). */
+  const floorWalls = floorId === null ? null : session.deriveWalls(floorId)
+  /**
+   * The chain being drawn, or `null` (#64 §12). Local like the shape draft: a half-drawn chain is
+   * not a proposal and must not survive a reload, a Floor change or the tool being put down.
+   */
+  const [wallDraft, setWallDraft] = useState<WallDraft | null>(null)
+  /** The tool options (#64 §13): what the next Wall inherits. UI state, never Project data. */
+  const [wallOptions, setWallOptions] = useState<{
+    thickness: number
+    justification: 'left' | 'centre' | 'right'
+    classification: WallClassification | null
+    constructionLabel: string
+  }>({ thickness: 100, justification: 'centre', classification: null, constructionLabel: '' })
 
   const tool = useWorkspace((state) => state.activeTool)
   const setTool = useWorkspace((state) => state.setTool)
@@ -128,6 +144,19 @@ export function FloorWorkspace(): ReactNode {
   const snapSettings = useWorkspace((state) => state.snapSettings)
   /** The kinds the nine `Snaps ▾` rows switch on, recomputed only when a row changes. */
   const snapKinds = useMemo(() => enabledKindsOf(snapSettings), [snapSettings])
+  // A half-drawn chain belongs to the tool and to the Floor it was started on (#64 §12).
+  useEffect(() => {
+    if (tool !== 'wall') setWallDraft(null)
+  }, [tool])
+  useEffect(() => {
+    setWallDraft(null)
+  }, [floorId])
+  /** What the next Wall gets: the tool options plus the Floor's or Project's default height (#64 §16). */
+  const wallDefaults = {
+    ...wallOptions,
+    baseElevation: 0,
+    height: floor?.defaultWallHeight ?? project.preferences.defaultWallHeight,
+  }
   const designPreview = useWorkspace((state) => state.designPreview)
   const setDesignPreview = useWorkspace((state) => state.setDesignPreview)
   const pickingOrigin = useWorkspace((state) => state.pickingOrigin)
@@ -807,6 +836,35 @@ export function FloorWorkspace(): ReactNode {
                     setIsCalibrating(false)
                     setPendingDistancePx(distancePx)
                   }}
+                />
+              ) : tool === 'wall' && floorId !== null && floorWalls !== null && viewport !== null && viewport !== undefined ? (
+                <WallDraftOverlay
+                  viewport={viewport}
+                  floorWalls={floorWalls}
+                  draft={wallDraft ?? emptyWallDraft({ x: 0, y: 0 })}
+                  onDraft={setWallDraft}
+                  onCancel={() => {
+                    setWallDraft(null)
+                    setTool('select')
+                  }}
+                  onFinish={(chain: WallChainDraft) => {
+                    // One chain, one Intent, one undo step (#26, #64 criterion 9).
+                    send('wall.createChain', chain)
+                    setWallDraft(null)
+                  }}
+                  floorId={floorId}
+                  defaults={wallDefaults}
+                  onOptions={(next) => setWallOptions({
+                    thickness: next.thickness,
+                    justification: next.justification,
+                    classification: next.classification,
+                    constructionLabel: next.constructionLabel,
+                  })}
+                  snapKinds={snapKinds}
+                  gridSpacingMm={snapSettings.gridSpacingMm}
+                  angleIncrementDeg={snapSettings.angle.incrementDeg}
+                  unit={project.preferences.displayUnit}
+                  precision={project.preferences.displayPrecision}
                 />
               ) : undefined}
             />

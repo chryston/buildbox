@@ -10,12 +10,67 @@
  * The words are the acceptance text: `Join to end of W-3`, `Attach to W-3`, `2,000 mm · 90°`,
  * `R 1,500 · 2,356 mm`. Never a side, never a centreline (#64 §7, D6).
  */
-import type { Pt } from '../../../derive'
+import type { Pt, WallFaceSource } from '../../../derive'
 import { distance, normaliseDeg, pt } from '../../../derive'
 import type { WallEndTarget } from '../../../edit'
+import type { WallClassification } from '../../../domain'
+
+/** How close a resolved snap point has to be to a face's end for that end to be the target. */
+const SNAP_MATCH_MM = 0.5
 
 /** The direction from `a` to `b` in degrees, clockwise from +X, in the +Y-down frame. */
 const directionBetween = (a: Pt, b: Pt): number => (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI
+
+/**
+ * What a snapped point means for the chain: the end of a Wall, a face to attach to, or nothing.
+ *
+ * The shared resolver decides *where* the point is (#59 §5); this decides *what it is*, by
+ * matching the point back against the tidied faces it came from. A corner shared by two Walls
+ * answers with either of them — both ends already sit in one Junction, so the clean-up lands the
+ * new end in the same place whichever way round it is named.
+ */
+export const wallTargetAt = (point: Pt, walls: readonly WallFaceSource[]): WallSnapTarget => {
+  for (const wall of walls) {
+    const first = wall.faces[0]
+    const last = wall.faces[wall.faces.length - 1]
+    if (first !== undefined && distance(first.from, point) <= SNAP_MATCH_MM) {
+      const ref = refOf(wall)
+      return ref === null ? FREE_TARGET : { kind: 'end', wallId: wall.id, ref, end: 'start' }
+    }
+    if (last !== undefined && distance(last.to, point) <= SNAP_MATCH_MM) {
+      const ref = refOf(wall)
+      return ref === null ? FREE_TARGET : { kind: 'end', wallId: wall.id, ref, end: 'end' }
+    }
+  }
+  for (const wall of walls) {
+    const onFace = wall.faces.some((face) => distance(face.from, point) <= SNAP_MATCH_MM
+      || distance(face.to, point) <= SNAP_MATCH_MM
+      || faceOnSegment(face, point))
+    if (onFace) {
+      const ref = refOf(wall)
+      return ref === null ? FREE_TARGET : { kind: 'face', wallId: wall.id, ref }
+    }
+  }
+  return FREE_TARGET
+}
+
+/** The Wall's display reference, read out of the label the snap source carries. */
+const refOf = (wall: WallFaceSource): string | null => {
+  const match = /^(\S+)/.exec(wall.label)
+  return match === null ? null : match[1]!
+}
+
+/** Whether `point` lies on the straight span of one face, within the same tolerance. */
+const faceOnSegment = (face: { from: Pt; to: Pt }, point: Pt): boolean => {
+  const dx = face.to.x - face.from.x
+  const dy = face.to.y - face.from.y
+  const dd = dx * dx + dy * dy
+  if (dd === 0) return false
+  const t = ((point.x - face.from.x) * dx + (point.y - face.from.y) * dy) / dd
+  if (t < 0 || t > 1) return false
+  const foot = pt(face.from.x + dx * t, face.from.y + dy * t)
+  return distance(foot, point) <= SNAP_MATCH_MM
+}
 
 /** The three segment modes of the Wall tool (#64 §12). */
 export type WallSegmentTool = 'line' | 'arc' | 'arcFromLast'
@@ -268,7 +323,6 @@ export const draftChip = (segment: WallDraftSegment, num: (mm: number) => string
   return `R ${num(radius)} ${unit} · ${num(arcLength)} ${unit}`
 }
 
-/** What a finished chain sends: one Wall per segment, plus the Junctions the clicks named. */
 export interface WallChainDraft {
   readonly floorId: string
   readonly walls: readonly {
@@ -277,6 +331,8 @@ export interface WallChainDraft {
     justification: 'left' | 'centre' | 'right'
     baseElevation: number
     height: number
+    classification?: WallClassification
+    constructionLabel?: string
   }[]
   readonly starts: readonly WallEndTarget[]
   readonly ends: readonly WallEndTarget[]
@@ -295,6 +351,8 @@ export const toChainPayload = (
     justification: 'left' | 'centre' | 'right'
     baseElevation: number
     height: number
+    classification?: WallClassification
+    constructionLabel?: string
   },
 ): WallChainDraft | null => {
   const segments = draftSegments(draft)
@@ -307,6 +365,10 @@ export const toChainPayload = (
     justification: defaults.justification,
     baseElevation: defaults.baseElevation,
     height: defaults.height,
+    ...(defaults.classification === undefined ? {} : { classification: defaults.classification }),
+    ...(defaults.constructionLabel === undefined || defaults.constructionLabel === ''
+      ? {}
+      : { constructionLabel: defaults.constructionLabel }),
   }))
   const starts = segments.map((segment) => toEndTarget(segment.startTarget))
   const ends = segments.map((segment) => toEndTarget(segment.endTarget))
