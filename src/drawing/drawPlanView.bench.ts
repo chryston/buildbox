@@ -32,11 +32,15 @@ const SOURCES = import.meta.glob<string>('/fixtures/domain/v3/reference-project.
 const raw = Object.values(SOURCES)[0]
 if (raw === undefined) throw new Error('fixtures/domain/v3/reference-project.json is missing')
 const envelope = JSON.parse(raw) as { domainSchemaVersion: number; project: Project }
-let issued = 0
-const migrated = migrateProject(envelope.project, envelope.domainSchemaVersion, (count = 1) =>
-  Array.from({ length: count }, () => `bench-view-${String(++issued)}`))
-if (!migrated.ok) throw new Error(`reference-project.json: ${migrated.error.message}`)
-const project = migrated.project
+// The allocator counts as it issues, and the count lives inside the call: nothing in `drawing`
+// may hold module-level mutable state, and a bench is in `drawing`.
+const project = (() => {
+  let issued = 0
+  const migrated = migrateProject(envelope.project, envelope.domainSchemaVersion, (count = 1) =>
+    Array.from({ length: count }, () => `bench-view-${String(++issued)}`))
+  if (!migrated.ok) throw new Error(`reference-project.json: ${migrated.error.message}`)
+  return migrated.project
+})()
 
 const floorId = project.floors[0]?.id
 if (floorId === undefined) throw new Error('the reference project has no Floor')
