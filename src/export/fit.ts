@@ -29,8 +29,14 @@ export const FRAME_INSET_MM = 2
 /** The band the fixed footer is centred in, at the bottom of the printable area. */
 export const FOOTER_BAND_MM = 6
 
-/** The band a title block occupies above the footer band. */
-export const TITLE_BAND_MM = 30
+/**
+ * The band a title block occupies above the footer band.
+ *
+ * Three rows of label-over-value pairs under the Project name: the name, two rows of pairs, and the
+ * unit and page statements on a row of their own. Anything tighter and a value prints on top of the
+ * statement below it, which is the one mistake a reader cannot correct with a tape measure.
+ */
+export const TITLE_BAND_MM = 37
 
 /** The gap between the drawing area and the bands below it. */
 export const BAND_GAP_MM = 3

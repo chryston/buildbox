@@ -38,6 +38,8 @@ export type ComposedSheet =
       readonly ok: true
       readonly sheet: Sheet
       readonly list: DisplayList
+      /** The drawing with no sheet furniture on it: what the content hash is taken over. */
+      readonly drawing: DisplayList
       /** The view's name, as the title block and the filename both say it. */
       readonly viewName: string
       /** The subject row's label: `Floor` for a Plan View, `Item` for an Item Detail View. */
@@ -204,6 +206,15 @@ export function composeSheet(
   return {
     ok: true,
     sheet,
+    // The drawing on its own, with no frame, title block, footer or scale bar on it. The content hash
+    // is taken over these bytes and not over `list`, because a title block prints the day and the day
+    // a sheet was printed is not part of the drawing on it.
+    drawing: {
+      space: drawn.space,
+      bounds: { x: 0, y: 0, w: sheet.widthMm, h: sheet.heightMm },
+      layers: recipe.layers === undefined ? placed.layers : keepLayers(placed.layers, recipe.layers),
+      missingGlyphs: placed.missingGlyphs,
+    },
     list: {
       space: drawn.space,
       bounds: { x: 0, y: 0, w: sheet.widthMm, h: sheet.heightMm },

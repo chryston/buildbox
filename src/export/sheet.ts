@@ -117,6 +117,7 @@ export function titleBlockItems(rect: Rect, fields: TitleBlockFields): DisplayIt
   const top = rect.y + PAD_MM
   const row1 = top + 6.5
   const row2 = row1 + ROW_PITCH_MM
+  const row3 = row2 + ROW_PITCH_MM
   const col2 = rect.x + rect.w * 0.34
   const col3 = rect.x + rect.w * 0.7
   return [
@@ -126,10 +127,10 @@ export function titleBlockItems(rect: Rect, fields: TitleBlockFields): DisplayIt
     ...pair(TITLE_BLOCK.designOption, DESIGN_OPTION, { x: left, y: row2 }),
     ...pair(TITLE_BLOCK.view, fields.view, { x: col2, y: row1 }),
     ...pair(TITLE_BLOCK.scale, fields.scale, { x: col2, y: row2 }),
-    text('sheet-value', fields.unit, { x: col2, y: row2 + VALUE_OFFSET_MM }),
+    text('sheet-value', fields.unit, { x: col2, y: row3 }),
     ...pair(TITLE_BLOCK.date, fields.date, { x: col3, y: row1 }),
     ...pair(TITLE_BLOCK.version, fields.version, { x: col3, y: row2 }),
-    text('sheet-value', pageStatement(1, 1), { x: col3, y: row2 + VALUE_OFFSET_MM }),
+    text('sheet-value', pageStatement(1, 1), { x: col3, y: row3 }),
   ]
 }
 

@@ -214,7 +214,7 @@ async function writeOne(
       provenance,
       fontBytes: deps.font.bytes,
       images,
-      contentHash: await contentHashOf(provenance, ops),
+      contentHash: await contentHashOf(provenance, flatten(composed.drawing, SHEET_SIZING)),
       when: deps.clock.now(),
     })
     return { ok: true, warnings, file: { name, mediaType: MEDIA_TYPE.pdf, bytes } }
