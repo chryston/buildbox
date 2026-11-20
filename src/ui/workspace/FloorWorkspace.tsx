@@ -43,6 +43,8 @@ import {
 } from './planModel'
 import { CALIBRATION_REQUIRED_HINT, WORKSPACE_TOOLS, floorNeedsCalibration, toolIsGated } from './toolbarRegistry'
 import { WallDraftOverlay, emptyWallDraft } from './wall/WallDraftOverlay'
+import { WallInspector } from './wall/WallInspector'
+import { mergeableNeighbour } from './wall/wallDraft'
 import type { WallChainDraft, WallDraft } from './wall/wallDraft'
 import { fitViewport } from './viewport'
 import type { Viewport } from './viewport'
@@ -138,6 +140,23 @@ export function FloorWorkspace(): ReactNode {
   const setTool = useWorkspace((state) => state.setTool)
   const selection = useWorkspace((state) => state.selection)
   const select = useWorkspace((state) => state.select)
+  /** The Wall the inspector edits, or `null` (#64 §14). A Wall and an Item are never both. */
+  const wallSelection = useWorkspace((state) => state.wallSelection)
+  const selectWall = useWorkspace((state) => state.selectWall)
+  /** The Wall the inspector edits: its own numbers, its tidied length, its merge candidate. */
+  const selectedWallData = wallSelection === null
+    ? null
+    : project.existingModel.walls.find((wall) => wall.id === wallSelection) ?? null
+  const selectedWallDerived = selectedWallData === null || floorWalls === null
+    ? null
+    : floorWalls.byId.get(selectedWallData.id) ?? null
+  const selectedWall = selectedWallData === null || selectedWallDerived === null || floorWalls === null
+    ? null
+    : {
+        wall: selectedWallData,
+        derived: selectedWallDerived,
+        mergeableWith: mergeableNeighbour(project.existingModel.walls, floorWalls, selectedWallData.id),
+      }
   const dragPreview = useWorkspace((state) => state.dragPreview)
   const setDragPreview = useWorkspace((state) => state.setDragPreview)
   const angleSnap = useWorkspace((state) => state.snapSettings.angle)
@@ -774,7 +793,8 @@ export function FloorWorkspace(): ReactNode {
           />
         }
         inspector={
-          <SelectionInspector
+          selectedWall === null
+            ? <SelectionInspector
             item={selected}
             bounds={selection === null || derivedFloor === null
               ? null
@@ -801,6 +821,27 @@ export function FloorWorkspace(): ReactNode {
               select(null)
             }}
           />
+            : <WallInspector
+                wall={selectedWall.wall}
+                derived={selectedWall.derived}
+                mergeableWith={selectedWall.mergeableWith}
+                unit={project.preferences.displayUnit}
+                precision={project.preferences.displayPrecision}
+                onSetLength={(length) => send('wall.setLength', {
+                  wallId: selectedWall.wall.id,
+                  length,
+                  keepFixed: 'start',
+                })}
+                onSetRadius={(radius) => send('wall.setArc', { wallId: selectedWall.wall.id, radius })}
+                onSetThickness={(thickness) => send('wall.setThickness', { wallId: selectedWall.wall.id, thickness })}
+                onOffset={(distance, side) => send('wall.offset', { wallId: selectedWall.wall.id, distance, side })}
+                onSplit={() => send('wall.split', { wallId: selectedWall.wall.id, at: selectedWall.derived.length / 2 })}
+                onMerge={(otherId) => send('wall.merge', { wallIds: [selectedWall.wall.id, otherId] as const })}
+                onDelete={() => {
+                  send('wall.delete', { wallId: selectedWall.wall.id })
+                  selectWall(null)
+                }}
+              />
         }
         canvas={
           <>

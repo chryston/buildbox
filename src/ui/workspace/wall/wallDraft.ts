@@ -10,16 +10,42 @@
  * The words are the acceptance text: `Join to end of W-3`, `Attach to W-3`, `2,000 mm · 90°`,
  * `R 1,500 · 2,356 mm`. Never a side, never a centreline (#64 §7, D6).
  */
-import type { Pt, WallFaceSource } from '../../../derive'
+import type { FloorWalls, Pt, WallFaceSource } from '../../../derive'
 import { distance, normaliseDeg, pt } from '../../../derive'
 import type { WallEndTarget } from '../../../edit'
-import type { WallClassification } from '../../../domain'
+import type { EntityId, Wall, WallClassification } from '../../../domain'
 
 /** How close a resolved snap point has to be to a face's end for that end to be the target. */
 const SNAP_MATCH_MM = 0.5
 
 /** The direction from `a` to `b` in degrees, clockwise from +X, in the +Y-down frame. */
 const directionBetween = (a: Pt, b: Pt): number => (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI
+
+/**
+ * The Wall this one could merge with (#64 §10, §14): a corner of exactly two Walls, both
+ * straight, running along the same line. Anything else — an arc, an angle, a three-way corner —
+ * is a junction a person chose, not a seam they would want closed.
+ */
+export const mergeableNeighbour = (
+  walls: readonly Wall[],
+  floorWalls: FloorWalls,
+  wallId: EntityId,
+): { id: EntityId; ref: string } | null => {
+  const self = walls.find((wall) => wall.id === wallId)
+  if (self === undefined || self.line.kind !== 'line') return null
+  const selfDeg = directionBetween(self.line.start, self.line.end)
+  for (const corner of floorWalls.corners) {
+    if (corner.wallIds.length !== 2 || !corner.wallIds.includes(wallId)) continue
+    const other = walls.find((wall) => wall.id === corner.wallIds.find((id) => id !== wallId))
+    if (other === undefined || other.line.kind !== 'line') continue
+    const delta = normaliseDeg(directionBetween(other.line.start, other.line.end) - selfDeg)
+    // Same line either way round: 0° apart, or 180° because the references run opposite.
+    if (Math.min(Math.abs(delta), Math.abs(Math.abs(delta) - 180)) <= 0.01) {
+      return { id: other.id, ref: other.ref }
+    }
+  }
+  return null
+}
 
 /**
  * What a snapped point means for the chain: the end of a Wall, a face to attach to, or nothing.
