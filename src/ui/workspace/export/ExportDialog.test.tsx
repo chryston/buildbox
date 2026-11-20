@@ -375,6 +375,17 @@ describe('the Lists tab', () => {
   })
 
   /**
+   * A beat inside `act`: the panel asks for its counts and the answer arrives a microtask later,
+   * and an update that lands outside `act` is an error this repo's setup turns into a failure.
+   */
+  async function settle(): Promise<void> {
+    await act(async () => {
+      // The executor form, not `Promise.withResolvers`: the project's lib is ES2022.
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    })
+  }
+
+  /**
    * The Lists tab's own opening: the panel mounts on the click and then asks for the remembered
    * recipe and the summary, both of which land a microtask later. Settling them inside `act` keeps
    * the assertions below reading a panel that has finished arriving.
@@ -382,8 +393,8 @@ describe('the Lists tab', () => {
   async function openLists(): Promise<void> {
     await act(async () => {
       fireEvent.click(screen.getByTestId('export-tab-lists'))
-      for (let tick = 0; tick < 4; tick += 1) await Promise.resolve()
     })
+    await settle()
   }
 
   /** Criterion 5: a table with no rows says so beside the table and is still exportable. */
@@ -413,9 +424,11 @@ describe('the Lists tab', () => {
     expect(screen.queryByTestId('export-lists-notice-single')).toBeNull()
 
     fireEvent.click(screen.getByTestId('export-lists-table-items'))
+    await settle()
     expect(screen.getByTestId('export-lists-notice-single')).toBeInTheDocument()
 
     fireEvent.click(screen.getByTestId('export-lists-table-items'))
+    await settle()
     expect(screen.queryByTestId('export-lists-notice-single')).toBeNull()
   })
 
@@ -431,6 +444,7 @@ describe('the Lists tab', () => {
     expect(checked('export-lists-state-proposed')).toBe(true)
 
     fireEvent.click(screen.getByTestId('export-lists-table-items'))
+    await settle()
 
     expect(checked('export-lists-state-existing')).toBe(true)
     expect(checked('export-lists-state-demolition')).toBe(false)
