@@ -37,7 +37,7 @@ export type {
   TextRole,
 } from './types'
 export { FONT_STACK, SIZE_ROLES, STYLES, resolveSize, resolveStyle } from './styles'
-export { lineCommands, pathToCommands, rectCommands, roundedRectCommands } from './path'
+export { commandsToPath, lineCommands, pathToCommands, rectCommands, roundedRectCommands } from './path'
 export { serializeSvg, toSvgTree } from './svg'
 export type { Emphasis, SvgNode, SvgOptions } from './svg'
 export { layoutText, measureRect } from './font/layoutText'

@@ -14,6 +14,8 @@
  * View and the Item Detail share one list-building pass.
  */
 import type { Affine } from '../derive'
+import { mmText as n } from './format'
+import { commandsToPath } from './path'
 import { STYLES, resolveSize } from './styles'
 import type {
   DisplayItem,
@@ -59,49 +61,13 @@ export type SvgOptions = {
 }
 
 /**
- * Millimetres to three decimals: a micrometre, and never `-0`.
+ * The `d` of one path, closed with `Z` only when the item says it is closed (#58 §8).
  *
- * The rounding is the rule `derive/svg.ts` writes path data with (#58 §8), for the same
- * reason — a float64 sum printed in full is seventeen characters of noise that changes when
- * nothing moved. What this adds is the exponent: past 1e21 both `String` and `toFixed` switch
- * to `1e+30`, which is not a number SVG can read, and a golden file that differs by one
- * scientific notation is a diff nobody can review. A value that large is an integer already,
- * so `BigInt` can spell it out.
+ * The commands themselves are written by `path.ts`, which is also the thing that read them
+ * out of a `ClosedPath`: one file owns the letters, this one owns the element they go on.
  */
-const n = (value: number): string => {
-  const rounded = Math.round(value * 1000) / 1000
-  const plain = Object.is(rounded, -0) ? 0 : rounded
-  const text = Math.abs(plain) >= 1e21 ? BigInt(plain).toString() : String(plain)
-  return text.includes('.') ? text.replace(/\.?0+$/, '') : text
-}
-
-const point = (at: { x: number; y: number }): string => `${n(at.x)} ${n(at.y)}`
-
-const flag = (set: boolean): string => (set ? '1' : '0')
-
-/** One command as SVG path data. `E` is an `A` with two radii, which is what SVG's `A` is. */
-function commandData(command: PathCommand): string {
-  switch (command.k) {
-    case 'M':
-      return `M ${point(command.to)}`
-    case 'L':
-      return `L ${point(command.to)}`
-    case 'A':
-      return (
-        `A ${n(command.r)} ${n(command.r)} 0 ` +
-        `${flag(command.largeArc)} ${flag(command.sweep)} ${point(command.to)}`
-      )
-    case 'E':
-      return (
-        `A ${n(command.rx)} ${n(command.ry)} ${n(command.xRotDeg)} ` +
-        `${flag(command.largeArc)} ${flag(command.sweep)} ${point(command.to)}`
-      )
-  }
-}
-
-/** The `d` of one path, closed with `Z` only when the item says it is closed (#58 §8). */
 const pathData = (segments: readonly PathCommand[], closed: boolean): string =>
-  segments.map(commandData).join(' ') + (closed ? ' Z' : '')
+  commandsToPath(segments) + (closed ? ' Z' : '')
 
 /**
  * The item's own colour at a fraction of its alpha, as the eight-digit hex the Plan View

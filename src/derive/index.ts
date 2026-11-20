@@ -2,12 +2,14 @@
  * The pure read-only derivations that turn domain data into the shapes the rest of the app
  * consumes (#43, #20 §13.4, #57, #60).
  *
- * Four families live here. `cabinetSceneUnits` is the inverse projection back into the
+ * Three families live here. `cabinetSceneUnits` is the inverse projection back into the
  * cabinet scene vocabulary; `placement` is where a Placed Item actually sits — the one
  * pinned reading of Item Origin, rotation and Item Footprint, which `ui` can only reach
- * through this module because it may not import `geometry` (#20 §2); `svg` writes a closed
- * path as SVG path data, arcs included; and `effective` is the effective model of one Floor
- * or one Item Design, with `cache` the only place its results are remembered.
+ * through this module because it may not import `geometry` (#20 §2); and `effective` is the
+ * effective model of one Floor or one Item Design, with `cache` the only place its results
+ * are remembered. Writing a path out again — as commands, or as the text a browser draws —
+ * left for `drawing/path.ts` with #60, so that the flags deciding which arc is drawn are
+ * spelled in one file rather than two.
  *
  * `affine` is the one 2×3 matrix in the codebase. It is exported rather than kept private
  * because it is part of what `effective` hands out — a Plan Image's calibration is a matrix,
@@ -25,7 +27,6 @@
  * by `session`, never a module-level map.
  */
 export { cabinetSceneUnits } from './cabinetSceneUnits'
-export { pathToSvg } from './svg'
 export { SNAP_ROW_KINDS, enabledSnapKinds, snapCandidates } from './snapCandidates'
 export type { SnapGeometry, SnapSettingKinds, SnapSourceInput, WallFaceSource } from './snapCandidates'
 export {

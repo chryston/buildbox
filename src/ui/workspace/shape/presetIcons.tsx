@@ -2,14 +2,16 @@
  * The Shapes gallery's glyphs (#58 §4).
  *
  * Each one is the preset itself, evaluated at a demo size and drawn through the same
- * `pathToSvg` the Plan View and the SVG export use — not a hand-drawn icon. A gallery whose
+ * converter the Plan View and the SVG export use — `pathToCommands` then `commandsToPath`,
+ * the one route from a kernel path to path data — not a hand-drawn icon. A gallery whose
  * rounded rectangle is drawn by a different rule than the shape it places is a gallery that
  * lies about what you are about to get, and the corner radii are exactly where that would
  * first show.
  */
 import type { ReactNode } from 'react'
-import { evaluatePreset, pathToSvg } from '../../../derive'
+import { evaluatePreset } from '../../../derive'
 import type { Preset, PresetKind } from '../../../derive'
+import { commandsToPath, pathToCommands } from '../../../drawing'
 
 /** A demo preset of each kind, sized to sit inside a 100 × 100 box centred on (50, 50). */
 const DEMO: Record<PresetKind, Preset> = {
@@ -49,7 +51,7 @@ export function PresetGlyph(props: { kind: PresetKind; label: string; size?: num
       aria-label={label}
       data-testid={`preset-glyph-${kind}`}
     >
-      <path d={pathToSvg(path)} />
+      <path d={commandsToPath(pathToCommands(path))} />
     </svg>
   )
 }

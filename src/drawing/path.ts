@@ -1,19 +1,20 @@
 /**
- * A path as drawing commands, and nothing else (#60 §5).
+ * A path as drawing commands, and those commands as path data (#60 §5, criterion 13).
  *
  * `geometry` stores a closed path as a start point plus typed segments, because that is what
  * a kernel measures; a renderer wants `M`/`L`/`A`/`E`, because that is what SVG and PDF and a
- * plotter draw. This file is the only place in the codebase that crosses that seam, so the
- * two flags that decide *which* arc gets drawn are derived once, here, rather than once per
- * surface — which is how the on-screen outline and the exported one could disagree about a
- * major arc before #60 existed.
+ * plotter draw. This file is the only place in the codebase that crosses that seam, and the
+ * only place that crosses back, so the two flags that decide *which* arc gets drawn are
+ * derived once and spelled once — which is how the on-screen outline and the exported one
+ * could disagree about a major arc before #60 existed.
  *
  * Both frames are +X right, +Y down and both measure a positive sweep clockwise, so
  * `sweepDeg > 0` is SVG's `sweep-flag: 1` and a sweep past a half turn is the large arc: no
- * sign flip and no complement, for the reason `derive/svg.ts` gives (#58 §8).
+ * sign flip and no complement, for the reason #58 §8 gives.
  */
 import { DEG, pt, rotate } from '../geometry'
 import type { ArcSegment, ClosedPath, EllipticalArcSegment, Pt, Segment } from '../geometry'
+import { mmText as n } from './format'
 import type { PathCommand } from './types'
 
 /** The two SVG flags for one signed sweep in degrees. */
@@ -174,3 +175,40 @@ export const lineCommands = (from: Pt, to: Pt): PathCommand[] => [
   { k: 'M', to: from },
   { k: 'L', to },
 ]
+
+// ------------------------------------------------------- commands as the text a browser draws
+const point = (at: Pt): string => `${n(at.x)} ${n(at.y)}`
+
+const flag = (set: boolean): string => (set ? '1' : '0')
+
+/** One command as path data. `E` is an `A` with two radii, which is what SVG's `A` is. */
+function commandData(command: PathCommand): string {
+  switch (command.k) {
+    case 'M':
+      return `M ${point(command.to)}`
+    case 'L':
+      return `L ${point(command.to)}`
+    case 'A':
+      return (
+        `A ${n(command.r)} ${n(command.r)} 0 ` +
+        `${flag(command.largeArc)} ${flag(command.sweep)} ${point(command.to)}`
+      )
+    case 'E':
+      return (
+        `A ${n(command.rx)} ${n(command.ry)} ${n(command.xRotDeg)} ` +
+        `${flag(command.largeArc)} ${flag(command.sweep)} ${point(command.to)}`
+      )
+  }
+}
+
+/**
+ * The commands as the text a browser, a plotter or a PDF writes into a path.
+ *
+ * The pair with `pathToCommands`, and the only place a command becomes a string: the `d` of a
+ * `<path>` on screen, the `d` of an exported SVG and the outline of a Shape proposal all come
+ * through here, so the flags that decide *which* arc is drawn are spelled once. Nothing is
+ * closed — `closed` is a property of the display item, not of the commands — so a caller that
+ * wants a `Z` says so.
+ */
+export const commandsToPath = (commands: readonly PathCommand[]): string =>
+  commands.map(commandData).join(' ')
