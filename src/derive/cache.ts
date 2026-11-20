@@ -31,6 +31,8 @@
 import type { EntityId, Project } from '../domain'
 import { effectiveFloor, effectiveItemDetail } from './effective'
 import type { DerivedFloor, DerivedItemDetail } from './effective'
+import { quantitiesForFloor } from './quantities/quantities'
+import type { FloorQuantities } from './quantities/quantities'
 
 /** How many entries a cache holds before the least-recently-used one goes. */
 export const DERIVE_CACHE_MAX_ENTRIES = 8
@@ -39,6 +41,15 @@ export const DERIVE_CACHE_MAX_ENTRIES = 8
 export interface DeriveCache {
   floor(project: Project, revision: number, floorId: EntityId, optionId: EntityId | null): DerivedFloor
   itemDetail(project: Project, revision: number, designId: EntityId, floorId?: EntityId): DerivedItemDetail
+  /**
+   * The Item List and Cut List rows of one Floor under one Design Option (#62 §6).
+   *
+   * A Cut List is the most expensive thing the app derives for a scope — every cabinet's panels,
+   * from scratch — and a scope is a set of Floors, so this is the stage worth holding. The scope's
+   * own filters are applied above it, which is what lets one Floor's entry serve every scope that
+   * mentions the Floor.
+   */
+  quantities(project: Project, revision: number, floorId: EntityId, optionId: EntityId | null): FloorQuantities
 }
 
 interface Entry {
@@ -84,7 +95,7 @@ export function createDeriveCache(opts: { maxEntries?: number } = {}): DeriveCac
    * revision replaces, which is why an old revision is never answered from a new one.
    */
   const remember = <T>(
-    kind: 'floor' | 'item',
+    kind: 'floor' | 'item' | 'quantities',
     projectToken: number,
     revision: number,
     id: EntityId,
@@ -117,5 +128,7 @@ export function createDeriveCache(opts: { maxEntries?: number } = {}): DeriveCac
       remember('floor', tokenOf(project), revision, floorId, optionId, () => effectiveFloor(project, revision, floorId, optionId)),
     itemDetail: (project, revision, designId, floorId) =>
       remember('item', tokenOf(project), revision, designId, floorId ?? null, () => effectiveItemDetail(project, revision, designId, floorId)),
+    quantities: (project, revision, floorId, optionId) =>
+      remember('quantities', tokenOf(project), revision, floorId, optionId, () => quantitiesForFloor(project, floorId, optionId)),
   }
 }

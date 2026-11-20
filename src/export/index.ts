@@ -318,6 +318,18 @@ export { composeSheet, modelBounds } from './compose'
 export type { ComposedDrawing, ComposedSheet } from './compose'
 export { fitCheck, suggestionsFor, downsampledSize, pngSize, PAGE_MM, MARGIN_MM, FIXED_SCALES } from './fit'
 export { EXPORT_FOOTER, NOT_TO_SCALE, scaleStatement } from './strings'
+export { defaultCutListStates, describeScope } from './scope'
+export { LENGTH_DP, AREA_DP, ANGLE_DP, INTEGER_DP, formatNumber, neutralise, quote } from './csv/format'
+export {
+  CSV_CONTRACT_VERSION,
+  CUT_LIST_TABLE,
+  ITEMS_TABLE,
+  TABLES,
+  headerLine,
+} from './csv/tables'
+export type { Column, ColumnKind, TableId, TableSpec } from './csv/tables'
+export { CSV_BOM, writeCsv } from './csv/write'
+export type { Cell, CsvRow } from './csv/write'
 export { slug, drawingFileName, archiveName } from './slug'
 export { provenanceOf, provenanceJson } from './provenance'
 export { manifestOf, manifestBytes, zipOf } from './zip'

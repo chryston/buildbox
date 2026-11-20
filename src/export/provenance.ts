@@ -16,10 +16,10 @@
  */
 
 import { canonicalJson } from '../lib'
+// The export contract has one version, and `csv/tables.ts` is where it is written (#62 §5): a
+// drawing and a CSV carry the same number because they read the same constant.
+import { CSV_CONTRACT_VERSION } from './csv/tables'
 import type { ExportDeps, ExportSnapshot, Recipe } from './types'
-
-/** The export contract's version, written into every output (#20 §10). */
-export const DEFAULT_CONTRACT_VERSION = '1.0'
 
 /**
  * The provenance of one export.
@@ -47,7 +47,7 @@ export function provenanceOf(
   return {
     generator: 'BuildBox',
     buildbox_version: deps.buildboxVersion,
-    contract_version: deps.contractVersion ?? DEFAULT_CONTRACT_VERSION,
+    contract_version: deps.contractVersion ?? CSV_CONTRACT_VERSION,
     exported_at: deps.clock.now(),
     project_id: snapshot.project.id,
     project_revision: snapshot.revision,
