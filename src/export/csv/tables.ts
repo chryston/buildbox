@@ -59,58 +59,81 @@ export interface TableSpec {
 /** The tables this build writes. Later issues add rows here, and nowhere else. */
 export type TableId = 'items' | 'cut-list'
 
-/** A column of a table: the row's key, the file's header, the kind of its cell. */
-const col = (key: string, header: string, kind: ColumnKind): Column => ({ key, header, kind })
+/**
+ * A table's columns, in contract order: the header line supplies the file's words, the pairs
+ * supply each column's row key and cell kind.
+ */
+function columnsFor(header: string, columns: readonly (readonly [key: string, kind: ColumnKind])[]): Column[] {
+  const headers = header.split(',')
+  // A header and a column list of different lengths is a table that lost a column at one end,
+  // which the contract calls a major version — so it throws rather than write a file whose first
+  // line and rows describe different tables.
+  if (headers.length !== columns.length) {
+    throw new TypeError(`${String(headers.length)} headers for ${String(columns.length)} columns: ${header}`)
+  }
+  return columns.map(([key, kind], index) => ({ key, header: headers[index]!, kind }))
+}
 
 /**
- * The Item List: Placed Items grouped by Item Design (export contract §7).
+ * The Item List header, one published identifier (#62 §5, export contract §7).
+ *
+ * It is written as the line the file starts with, because that is the thing the contract's
+ * versioning rule is about — append a column in a minor version, rename or reorder only in a
+ * major — and because a reviewer should be able to grep for it. `tables.test.ts` fails if this
+ * line is spelled in any other non-test file, and the golden under `fixtures/export/golden/`
+ * holds the same bytes for a reviewer who never opens TypeScript.
  *
  * Width, depth and height are the Item Design's *local* extents, never the placement's bounding
  * box, so a design turned 90° on plan still reports the width the carpenter cuts.
  */
+const ITEMS_HEADER = 'floor_id,floor,design_option_id,design_option,renovation_state,item_design_id,item_design,count,width_mm,depth_mm,height_mm'
+
 export const ITEMS_TABLE: TableSpec = {
   id: 'items',
-  columns: [
-    col('floorId', 'floor_id', 'id'),
-    col('floor', 'floor', 'text'),
-    col('designOptionId', 'design_option_id', 'id'),
-    col('designOption', 'design_option', 'text'),
-    col('renovationState', 'renovation_state', 'enum'),
-    col('itemDesignId', 'item_design_id', 'id'),
-    col('itemDesign', 'item_design', 'text'),
-    col('count', 'count', 'integer'),
-    col('widthMm', 'width_mm', 'length_mm'),
-    col('depthMm', 'depth_mm', 'length_mm'),
-    col('heightMm', 'height_mm', 'length_mm'),
-  ],
+  columns: columnsFor(ITEMS_HEADER, [
+    ['floorId', 'id'],
+    ['floor', 'text'],
+    ['designOptionId', 'id'],
+    ['designOption', 'text'],
+    ['renovationState', 'enum'],
+    ['itemDesignId', 'id'],
+    ['itemDesign', 'text'],
+    ['count', 'integer'],
+    ['widthMm', 'length_mm'],
+    ['depthMm', 'length_mm'],
+    ['heightMm', 'length_mm'],
+  ]),
 }
 
 /**
- * The Cut List: the panels of every cut-list-capable Item Design (export contract §7).
+ * The Cut List header (export contract §7).
  *
  * There are no legacy-parity columns. The export contract §10 asked for frozen columns for edge
  * banding, grain and cutouts; the architecture's inventory (§8, §15.2) found the legacy cut list
  * emits none of those, so the list below is the whole of v1.0 — the same decision the manifest
  * took.
  */
+const CUT_LIST_HEADER =
+  'design_option_id,design_option,renovation_state,item_design_id,item_design,part,length_mm,width_mm,thickness_mm,material,qty_per_item,item_count,qty_in_scope,notes'
+
 export const CUT_LIST_TABLE: TableSpec = {
   id: 'cut-list',
-  columns: [
-    col('designOptionId', 'design_option_id', 'id'),
-    col('designOption', 'design_option', 'text'),
-    col('renovationState', 'renovation_state', 'enum'),
-    col('itemDesignId', 'item_design_id', 'id'),
-    col('itemDesign', 'item_design', 'text'),
-    col('part', 'part', 'text'),
-    col('lengthMm', 'length_mm', 'length_mm'),
-    col('widthMm', 'width_mm', 'length_mm'),
-    col('thicknessMm', 'thickness_mm', 'length_mm'),
-    col('material', 'material', 'enum'),
-    col('qtyPerItem', 'qty_per_item', 'integer'),
-    col('itemCount', 'item_count', 'integer'),
-    col('qtyInScope', 'qty_in_scope', 'integer'),
-    col('notes', 'notes', 'text'),
-  ],
+  columns: columnsFor(CUT_LIST_HEADER, [
+    ['designOptionId', 'id'],
+    ['designOption', 'text'],
+    ['renovationState', 'enum'],
+    ['itemDesignId', 'id'],
+    ['itemDesign', 'text'],
+    ['part', 'text'],
+    ['lengthMm', 'length_mm'],
+    ['widthMm', 'length_mm'],
+    ['thicknessMm', 'length_mm'],
+    ['material', 'enum'],
+    ['qtyPerItem', 'integer'],
+    ['itemCount', 'integer'],
+    ['qtyInScope', 'integer'],
+    ['notes', 'text'],
+  ]),
 }
 
 /** Every table by name, in the order a ZIP writes them. */

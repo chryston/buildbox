@@ -21,8 +21,14 @@ import { designFootprintSize, designHeight } from '../../domain'
 import type { EntityId, ItemDesign, Project } from '../../domain'
 import type { OptionColumns, RenovationState } from './scope'
 
-/** One row of the Item List, keyed as `ITEMS_TABLE` declares its columns. */
-export interface ItemListRow {
+/**
+ * One row of the Item List, keyed as `ITEMS_TABLE` declares its columns.
+ *
+ * A type rather than an interface, because it is also the row object `writeCsv` takes: only an
+ * object type gets the implicit index signature that makes it a `CsvRow`, and a row that needed
+ * a mapping function on the way to a file is a row that can lose a column in silence.
+ */
+export type ItemListRow = {
   readonly floorId: EntityId
   readonly floor: string
   readonly designOptionId: EntityId

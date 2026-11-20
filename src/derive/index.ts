@@ -56,7 +56,7 @@ export { itemListRowsForFloor } from './quantities/itemList'
 export type { ItemListRow } from './quantities/itemList'
 export { quantities, quantitiesForFloor } from './quantities/quantities'
 export type { FloorQuantities, Quantities } from './quantities/quantities'
-export { RENOVATION_STATES, layerMatches, optionColumns } from './quantities/scope'
+export { RENOVATION_STATES, layerMatches } from './quantities/scope'
 export type {
   LayerScope,
   OptionColumns,

@@ -23,8 +23,13 @@ import type { CabinetUnit } from '../../cabinet'
 import type { CabinetItemDesign, EntityId, ItemDesign } from '../../domain'
 import type { OptionColumns, RenovationState } from './scope'
 
-/** One row of the Cut List, keyed as `CUT_LIST_TABLE` declares its columns. */
-export interface CutListRow {
+/**
+ * One row of the Cut List, keyed as `CUT_LIST_TABLE` declares its columns.
+ *
+ * A type rather than an interface, for the same reason as `ItemListRow`: it is the object
+ * `writeCsv` writes, and the compiler checks the table's columns against it directly.
+ */
+export type CutListRow = {
   readonly designOptionId: EntityId
   readonly designOption: string
   readonly renovationState: RenovationState

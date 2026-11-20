@@ -72,11 +72,6 @@ export interface OptionColumns {
   readonly designOption: string
 }
 
-/** The Design Option columns for one option ID; `null` is the Existing Model alone. */
-export function optionColumns(optionId: EntityId | null): OptionColumns {
-  return { designOptionId: optionId ?? '', designOption: '' }
-}
-
 /** Whether content on `layerIds` is inside `scope`. Unlayered content carries no layer. */
 export function layerMatches(scope: LayerScope, layerIds: readonly EntityId[]): boolean {
   if (scope === 'all') return true
