@@ -113,6 +113,21 @@ const floorsWithImage = (g: Gen) => g.project.floors.filter((floor) => floor.pla
 const wallList = (g: Gen): Wall[] => g.project.existingModel.walls
 const junctionList = (g: Gen): WallJunction[] => g.project.existingModel.wallJunctions
 
+/**
+ * Whether two Walls lie on one straight line. A Junction has already put an end of each at the
+ * same point, so parallel directions are enough to say the two reference lines are one line —
+ * which is what `wall.merge` asks for before it will join them.
+ */
+function collinear(a: Wall, b: Wall): boolean {
+  if (a.line.kind !== 'line' || b.line.kind !== 'line') return false
+  const ax = a.line.end.x - a.line.start.x
+  const ay = a.line.end.y - a.line.start.y
+  const bx = b.line.end.x - b.line.start.x
+  const by = b.line.end.y - b.line.start.y
+  const scale = Math.max(1, Math.hypot(ax, ay) * Math.hypot(bx, by))
+  return Math.abs(ax * by - ay * bx) <= 1e-6 * scale
+}
+
 function walk(node: CabinetNode, into: CabinetNode[] = []): CabinetNode[] {
   into.push(node)
   for (const child of node.children ?? []) walk(child, into)
@@ -479,7 +494,10 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
         baseElevation: 0,
         height,
       })
-      ends.push({ kind: 'free' })
+      // A chain link has to be named by both of its ends, or the whole draw is refused: the
+      // end of this segment names the start of the next one, and the next one's start names it
+      // back below.
+      ends.push(index + 1 < count ? { kind: 'segment', index: index + 1, end: 'start' } : { kind: 'free' })
       if (index + 1 < count) {
         starts.push({ kind: 'segment', index, end: 'end' })
         here = there
@@ -543,12 +561,18 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
     return intent('wall.split', { wallId: wall.id, at: refLength(wall.line) * 0.37 }, g.ids(2))
   },
   (g) => {
-    // Two Walls meeting at a junction of their own, with nothing that differs between them.
+    // Two Walls meeting at a junction of their own, with nothing that differs between them,
+    // and lying on one straight line: a merge of two Walls that meet at an angle is refused,
+    // and a generator that can only ever be refused proves nothing about the handler.
     for (const junction of junctionList(g)) {
       if (junction.host !== undefined || junction.ends.length !== 2) continue
+      // One Wall's start at the other's end: a butt joint. Two ends of the same kind meeting is
+      // a fold, and the handler refuses to merge a Wall back along itself.
+      if (junction.ends[0]!.end === junction.ends[1]!.end) continue
       const first = wallList(g).find((candidate) => candidate.id === junction.ends[0]!.wallId)
       const second = wallList(g).find((candidate) => candidate.id === junction.ends[1]!.wallId)
       if (first === undefined || second === undefined) continue
+      if (!collinear(first, second)) continue
       if (
         first.thickness !== second.thickness ||
         first.justification !== second.justification ||
@@ -574,9 +598,19 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
  * sequence keeps its length budget for the Intents that do apply.
  */
 function randomIntent(g: Gen): Intent | null {
-  const start = int(g, 0, GENERATORS.length - 1)
-  for (let attempt = 0; attempt < GENERATORS.length; attempt++) {
-    const next = GENERATORS[(start + attempt) % GENERATORS.length]!(g)
+  // A random rotation rather than a fixed one. First-fit from a random start lets the
+  // generators near the front of the list win almost every step, and the ones with a
+  // precondition that only occasionally holds — `wall.merge` wants two collinear Walls at a
+  // Junction of their own — then go untried often enough to make the coverage below flaky.
+  const order = GENERATORS.map((_, index) => index)
+  for (let index = order.length - 1; index > 0; index -= 1) {
+    const swap = int(g, 0, index)
+    const held = order[index]!
+    order[index] = order[swap]!
+    order[swap] = held
+  }
+  for (const index of order) {
+    const next = GENERATORS[index]!(g)
     if (next !== null) return next
   }
   return null
