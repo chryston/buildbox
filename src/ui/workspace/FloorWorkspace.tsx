@@ -517,7 +517,7 @@ export function FloorWorkspace(): ReactNode {
   const groups: ToolbarGroup[] = [
     {
       id: 'tools',
-      width: 132,
+      width: 196,
       label: 'Tools',
       content: (
         <>

@@ -59,13 +59,20 @@ export function toolIsGated(tool: WorkspaceToolDefinition, planImage: PlanImage 
 }
 
 /**
- * The tools the Plan View ships today. Neither measures — `Select` moves what is already
- * placed and `Pan` moves the camera — so nothing is gated on any Floor; the shape, wall,
- * opening and room tools that follow set the flag and inherit the rule.
+ * The tools the Plan View ships today. `Select` moves what is already placed and `Pan` moves
+ * the camera, so neither measures; `Wall` writes millimetre coordinates and so waits for a
+ * calibrated Plan Image (#64 criterion 11), which is the one rule this registry owns.
  */
 export const WORKSPACE_TOOLS: readonly WorkspaceToolDefinition[] = [
   { id: 'select', label: 'Select', testId: 'tool-select', requiresCalibratedFloor: false },
   { id: 'pan', label: 'Pan', testId: 'tool-pan', requiresCalibratedFloor: false },
+  {
+    id: 'wall',
+    label: 'Wall',
+    testId: 'tool-wall',
+    requiresCalibratedFloor: true,
+    icon: 'M2 6 H18 M2 14 H18 M6 6 V14',
+  },
 ]
 
 /**

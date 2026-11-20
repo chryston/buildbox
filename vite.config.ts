@@ -44,6 +44,8 @@ const NODE_ONLY_INCLUDE = [
   // The invalid-proposal controller (#58 §6) lives in `ui` because it is UI state, but it is
   // a pure state machine — no React, no DOM — and the issue verifies it under Node.
   'src/ui/workspace/shape/**/*.test.ts',
+  // The Wall draft machine (#64 §12) is the same kind of thing: UI state, no React, no DOM.
+  'src/ui/workspace/wall/**/*.test.ts',
   // #58 criterion 10's property test drives the controller against `edit`, which only the
   // `src/integration` element may import. It is a Node test all the same.
   'src/integration/**/*.property.test.ts',
