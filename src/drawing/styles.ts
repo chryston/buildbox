@@ -125,6 +125,16 @@ export const STYLES: Record<StyleKey, Style> = {
     strokeWidth: 'plan-line-selected',
   },
   'plan-label': { fill: 'item', size: 'plan-label', fontFamily: FONT_STACK, hit: 'none' },
+  // A Wall band is solid ink at a third of the strength, so a filled footprint still reads as
+  // something standing on the Floor rather than something cut out of the Wall.
+  'wall': { fill: 'var(--bb-text)', fillAlpha: 0x55 / 0xff, stroke: 'var(--bb-text)', strokeWidth: 'plan-line' },
+  'wall:selected': {
+    fill: 'var(--bb-text)',
+    fillAlpha: 0x55 / 0xff,
+    stroke: 'var(--bb-accent)',
+    strokeWidth: 'plan-line-selected',
+  },
+  'wall-face': { stroke: 'var(--bb-text)', strokeWidth: 'plan-line', hit: 'none' },
   'plan-dimension': { fill: 'var(--bb-accent)', size: 'plan-dimension', fontFamily: FONT_STACK, hit: 'none' },
   'plan-dimension-line': { stroke: 'var(--bb-accent)', strokeWidth: 'hairline', hit: 'none' },
   'plan-chip-box': {

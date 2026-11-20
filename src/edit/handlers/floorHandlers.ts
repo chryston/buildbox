@@ -114,6 +114,18 @@ const setFloorLimits: Handler<'floor.setLimits'> = (ctx) => {
 }
 
 /**
+ * `Default wall height` for one Floor (#64 §16). `null` removes the override, which hands the
+ * decision back to the Project — the Floor never restates the Project's number as its own.
+ */
+const setFloorDefaultWallHeight: Handler<'floor.setDefaultWallHeight'> = (ctx) => {
+  const { floorId, defaultWallHeight } = ctx.intent.payload
+  requireFloor(ctx.project, floorId)
+  const draftFloor = requireFloor(ctx.draft, floorId)
+  if (defaultWallHeight === null) delete draftFloor.defaultWallHeight
+  else draftFloor.defaultWallHeight = defaultWallHeight
+}
+
+/**
  * Delete a Floor, and with it only the default Plan View that is part of it.
  *
  * Anything else still on the Floor — Placed Items, a Plan Image, a named Plan View — is a
@@ -346,6 +358,10 @@ export const FLOOR_HANDLERS: { [T in FloorIntent['type']]: IntentHandler<T> } = 
   'floor.rename': { run: renameFloor, locate: (_project, intent) => floorLocator(_project, intent.payload.floorId) },
   'floor.reorder': { run: reorderFloor, locate: (project, intent) => floorLocator(project, intent.payload.floorId) },
   'floor.setLimits': { run: setFloorLimits, locate: (project, intent) => floorLocator(project, intent.payload.floorId) },
+  'floor.setDefaultWallHeight': {
+    run: setFloorDefaultWallHeight,
+    locate: (project, intent) => floorLocator(project, intent.payload.floorId),
+  },
   'floor.delete': { run: deleteFloor, locate: (project, intent) => floorLocator(project, intent.payload.floorId) },
   'floor.duplicate': {
     run: duplicateFloor,

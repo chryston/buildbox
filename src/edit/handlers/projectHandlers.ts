@@ -17,6 +17,7 @@ const renameProject: Handler<'project.rename'> = (ctx) => {
 const setProjectPreferences: Handler<'project.setPreferences'> = (ctx) => {
   ctx.draft.preferences.displayUnit = ctx.intent.payload.displayUnit
   ctx.draft.preferences.displayPrecision = ctx.intent.payload.displayPrecision
+  ctx.draft.preferences.defaultWallHeight = ctx.intent.payload.defaultWallHeight
 }
 
 /** A Project rename is seen everywhere and nowhere: no Floor, no Item Design. */

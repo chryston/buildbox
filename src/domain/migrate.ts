@@ -16,7 +16,7 @@ import type { Floor, PlanView, Project } from './project'
 import { validateProject } from './validate'
 
 /** The domain schema this build writes and understands at the top of the chain. */
-export const DOMAIN_SCHEMA_VERSION = 3
+export const DOMAIN_SCHEMA_VERSION = 4
 
 /**
  * One pure vN → vN+1 step. Its input is already a copy; it never reads the clock, and a
@@ -27,7 +27,7 @@ export type Migrator = (data: unknown, allocateId: IdAllocator) => unknown
 /**
  * `MIGRATORS[i]` migrates v(i+1) → v(i+2), so index 0 is v1 → v2.
  */
-export const MIGRATORS: readonly Migrator[] = [migrateV1toV2, migrateV2toV3]
+export const MIGRATORS: readonly Migrator[] = [migrateV1toV2, migrateV2toV3, migrateV3toV4]
 
 /**
  * v1 → v2 (#56): the Project gains `views`, and each Floor gains the one default Plan
@@ -104,6 +104,45 @@ export function migrateV2toV3(data: unknown): unknown {
       }
     }),
   }
+}
+
+/**
+ * The Wall height a Project without one gets: the HDB BTO typical ceiling height from the
+ * pack entry `height.ceiling` (#33, #63).
+ *
+ * The number is written here rather than read from the pack because a migrator is a record
+ * of what this release did: if the pack's typical ceiling ever changed, projects migrated
+ * from v3 would silently change height. `migrate.test.ts` pins it to the pack entry it came
+ * from, so the two cannot drift unnoticed.
+ */
+export const DEFAULT_WALL_HEIGHT_MM = 2600
+
+/**
+ * v3 → v4 (#64): the Existing Model gains the two Wall collections, and the Project gains a
+ * default Wall height.
+ *
+ * `existingModel.walls` and `existingModel.wallJunctions` start empty — no v3 data describes
+ * a Wall, and the legacy `wall-hack` sketch stays discarded rather than becoming a Wall
+ * (#20 §12) — and `preferences.defaultWallHeight` is the pack's ceiling height, which is what
+ * a Wall drawn by this build's Wall tool gets unless the Floor says otherwise. A Floor's own
+ * `defaultWallHeight` stays absent: nobody measured a Floor in v3 that had one.
+ *
+ * Nothing else moves, no ID is spent, and a value that is not a Project shape is left for
+ * `validateProject` to refuse.
+ */
+export function migrateV3toV4(data: unknown): unknown {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return data
+  const record = data as Record<string, unknown>
+  const next: Record<string, unknown> = { ...record }
+  if (record.preferences !== null && typeof record.preferences === 'object' && !Array.isArray(record.preferences)) {
+    const preferences = record.preferences as Record<string, unknown>
+    next.preferences = { ...preferences, defaultWallHeight: DEFAULT_WALL_HEIGHT_MM }
+  }
+  if (record.existingModel !== null && typeof record.existingModel === 'object' && !Array.isArray(record.existingModel)) {
+    const existingModel = record.existingModel as Record<string, unknown>
+    next.existingModel = { ...existingModel, walls: [], wallJunctions: [] }
+  }
+  return next
 }
 
 export type MigrateError =

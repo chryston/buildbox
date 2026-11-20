@@ -19,14 +19,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import { affineApply, affineInvert, resolveSnap } from '../../derive'
-import type { DerivedFloor, SnapCandidate, SnapKind } from '../../derive'
+import type { DerivedFloor, FloorWalls, SnapCandidate, SnapKind } from '../../derive'
 import type { DisplayUnit, Point2 } from '../../domain'
 import { footprintPath } from '../../domain'
 import {
+  LAYER_ORDER,
   drawPlanView,
   drawSelectionAnnotations,
+  drawWalls,
+  unionRect,
 } from '../../drawing'
-import type { DisplayList, PlanPreview, Sizing } from '../../drawing'
+import type { DisplayLayer, DisplayList, PlanPreview, Sizing } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
 import type { DisplayListInteractions } from '../drawing/DisplayListSvg'
 import { formatMm } from './displayUnits'
@@ -74,8 +77,22 @@ export interface PlanViewCanvasProps {
   unit: DisplayUnit
   precision: number
   angleSnap: AngleSnap
-  /** Drawn above the items while calibrating; it owns the pointer meanwhile. */
+  /** The Floor's tidied Walls, drawn as bands under the footprints (#64 §15). */
+  walls?: FloorWalls | null
+  /** The selected Wall: drawn with a heavier line and its end handles (#64 §15). */
+  selectedWallId?: string | null
+  /** A Wall band was clicked; the selection moves to it (#64 §15). */
+  onSelectWall?: (id: string) => void
+  /** Drawn above the items while calibrating; it owns the pointer meanwhile. SVG: it lives in
+   * the scene's own `<g>`, so it must be drawn in the Floor's millimetres. */
   overlay?: ReactNode
+  /**
+   * An HTML layer over the canvas — the Wall draft's bar and chips, which are words and
+   * controls, not geometry. It sits on the canvas host, whose box is the same one the scene's
+   * matrix is measured from, so a point placed at `x·zoom + panX` lands where the scene draws
+   * `x`. It owns the pointer meanwhile.
+   */
+  htmlOverlay?: ReactNode
 }
 
 /**
@@ -90,7 +107,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     hostRef, svgRef, floor, showPlanImage, imageSrc, viewport, onViewport,
     tool, selection, onSelect, dragPreview, onDragPreview, onMoveItem, onRotateItem,
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
-    angleSnap, overlay,
+    angleSnap, overlay, htmlOverlay, walls, selectedWallId = null, onSelectWall,
   } = props
   const [hostSize, setHostSize] = useState({ width: 0, height: 0 })
   const [dragging, setDragging] = useState(false)
@@ -135,19 +152,23 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     onViewport(fitViewport(hostSize.width, hostSize.height, contentW, contentH))
   }, [viewport, hostSize, contentW, contentH, onViewport])
 
-  // Wheel zoom needs a non-passive listener to keep the page from scrolling.
+  // Wheel zoom needs a non-passive listener to keep the page from scrolling. It goes on the
+  // canvas host rather than the `<svg>`, because an HTML overlay over the canvas — the Wall
+  // draft — is a sibling of the `<svg>` and would otherwise swallow the wheel: putting down a
+  // Wall must not cost a person the ability to zoom while they place it (#64 §12).
   useEffect(() => {
-    const el = svgRef.current
+    const el = hostRef.current ?? svgRef.current
     if (el === null) return
-    const onWheel = (event: WheelEvent): void => {
-      event.preventDefault()
+    const onWheel = (event: Event): void => {
+      const wheel = event as WheelEvent
+      wheel.preventDefault()
       if (viewport === null) return
       const rect = el.getBoundingClientRect()
-      onViewport(zoomAround(viewport, event.deltaY < 0 ? WHEEL_IN : WHEEL_OUT, event.clientX - rect.left, event.clientY - rect.top))
+      onViewport(zoomAround(viewport, wheel.deltaY < 0 ? WHEEL_IN : WHEEL_OUT, wheel.clientX - rect.left, wheel.clientY - rect.top))
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [svgRef, viewport, onViewport])
+  }, [hostRef, svgRef, viewport, onViewport])
 
   /** True while a footprint or the handle has taken the pointer for this gesture. */
   const consumedPointer = useRef(false)
@@ -156,14 +177,14 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     // A pointerdown that reaches the Floor starts a fresh gesture: whatever a footprint or the
     // handle took last time is over, so this click is a click on the Floor again.
     consumedPointer.current = false
-    if (overlay !== undefined) return // the calibration overlay owns the pointer
+    if (overlay !== undefined || htmlOverlay !== undefined) return // it owns the pointer
     const isPanGesture = tool === 'pan' || event.button === 1
     if (!isPanGesture || viewport === null) return
     panning.current = true
     panMoved.current = false
     lastPan.current = { x: event.clientX, y: event.clientY }
     svgRef.current?.setPointerCapture(event.pointerId)
-  }, [overlay, tool, viewport, svgRef])
+  }, [overlay, htmlOverlay, tool, viewport, svgRef])
 
   const onPointerMove = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
     if (!panning.current || viewport === null) return
@@ -184,9 +205,9 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     // coming up somewhere else. Clearing the selection there would undo the selection the
     // same gesture just made.
     if (consumedPointer.current) return
-    if (overlay !== undefined || panMoved.current) return
+    if (overlay !== undefined || htmlOverlay !== undefined || panMoved.current) return
     if (tool === 'select') onSelect(null)
-  }, [overlay, panMoved, tool, onSelect])
+  }, [overlay, htmlOverlay, panMoved, tool, onSelect])
 
   /** Client pixels to Floor millimetres — the one place the viewport is inverted. */
   const toFloor = useCallback((clientX: number, clientY: number): Point2 | null => {
@@ -277,7 +298,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   const matrix = viewport === null
     ? undefined
     : `matrix(${viewport.zoom},0,0,${viewport.zoom},${panX},${panY})`
-  const cursor = overlay !== undefined
+  const cursor = overlay !== undefined || htmlOverlay !== undefined
     ? 'crosshair'
     : dragging
       ? tool === 'pan' ? 'grabbing' : 'move'
@@ -314,6 +335,24 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     floor.planImage !== null && floor.planImage.assetHash === hash ? imageSrc : null
 
   const list = drawPlanView(floor, { showPlanImage, preview }, { sizing })
+  // Walls and footprints are two lists built for two reasons, but they share one z-order:
+  // `LAYER_ORDER` is the only source, so the bands are interleaved by layer rather than
+  // appended, or a Wall would land on top of the Item standing in it (#60 §3, #64 §15).
+  const wallList = walls === undefined || walls === null || walls.walls.length === 0
+    ? null
+    : drawWalls(walls, { sizing, selectedWallId })
+  const withWalls: DisplayList = wallList === null
+    ? list
+    : {
+        ...list,
+        bounds: unionRect(list.bounds, wallList.bounds),
+        layers: LAYER_ORDER.flatMap((key): DisplayLayer[] => {
+          const items = [...list.layers, ...wallList.layers]
+            .filter((layer) => layer.key === key)
+            .flatMap((layer) => layer.items)
+          return items.length === 0 ? [] : [{ key, items }]
+        }),
+      }
   const annotations = overlay === undefined
     ? drawSelectionAnnotations(floor, selection, { sizing, formatLength, preview })
     : null
@@ -322,10 +361,15 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   // but they reach the screen as a single untransformed group, which is what keeps a label
   // upright and addressable by one name.
   const textOnly: DisplayList = annotations === null
-    ? list
-    : { ...annotations, layers: [...list.layers, ...annotations.layers] }
+    ? withWalls
+    : { ...annotations, layers: [...withWalls.layers, ...annotations.layers] }
 
   const interactions: DisplayListInteractions = {
+    onWallPointerDown: onSelectWall === undefined
+      ? undefined
+      : (id) => {
+          onSelectWall(id)
+        },
     onItemPointerDown: (id, event) => {
       lastClient.current = { x: event.clientX, y: event.clientY }
       lastPointer.current = toFloor(event.clientX, event.clientY)
@@ -353,7 +397,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
         {matrix !== undefined && (
           <>
             <DisplayListSvg
-              list={list}
+              list={withWalls}
               sizing={sizing}
               matrix={matrix}
               textSpace="screen"
@@ -401,6 +445,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
           </>
         )}
       </svg>
+      {htmlOverlay}
       {pixelsPerMm !== null && (
         <div className="bb-workspace-scale-hint" data-testid="scale-hint">
           Scale: 1px = {(1 / pixelsPerMm).toFixed(2)}mm

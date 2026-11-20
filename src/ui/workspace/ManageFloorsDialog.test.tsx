@@ -24,13 +24,13 @@ const floor = (id: string, name: string, over: Partial<Floor> = {}): Floor => ({
 const project = (floors: Floor[]): Project => ({
   id: 'project-1',
   meta: { name: 'Home' },
-  preferences: { displayUnit: 'mm', displayPrecision: 0 },
+  preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 },
   floors,
   views: floors.map((each) => ({
     id: `view-${each.id}`, kind: 'plan', floorId: each.id, name: each.name, isDefault: true, showPlanImage: true,
   })),
   itemDesigns: [],
-  existingModel: { placedItems: [] },
+  existingModel: { placedItems: [], walls: [], wallJunctions: [] },
 })
 
 const open = (floors: Floor[], over: Partial<Parameters<typeof ManageFloorsDialog>[0]> = {}) => {
@@ -42,6 +42,7 @@ const open = (floors: Floor[], over: Partial<Parameters<typeof ManageFloorsDialo
     onRename: vi.fn(),
     onReorder: vi.fn(),
     onSetLimits: vi.fn(),
+    onSetWallHeight: vi.fn(),
     onAddFloor: vi.fn(),
     onDuplicate: vi.fn(),
     onDelete: vi.fn(),

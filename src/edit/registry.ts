@@ -13,11 +13,13 @@ import { DESIGN_HANDLERS } from './handlers/designHandlers'
 import { FLOOR_HANDLERS, PLAN_FLOOR_HANDLERS, VIEW_HANDLERS } from './handlers/floorHandlers'
 import { PLAN_HANDLERS } from './handlers/planHandlers'
 import { PROJECT_HANDLERS } from './handlers/projectHandlers'
+import { WALL_HANDLERS } from './handlers/wallHandlers'
 
 export const INTENT_HANDLERS: { [T in IntentType]: IntentHandler<T> } = {
   ...PROJECT_HANDLERS,
   ...CABINET_HANDLERS,
   ...PLAN_HANDLERS,
+  ...WALL_HANDLERS,
   ...DESIGN_HANDLERS,
   ...PLAN_FLOOR_HANDLERS,
   ...FLOOR_HANDLERS,

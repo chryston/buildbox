@@ -3,12 +3,15 @@
  *
  * Run with `node scripts/make-reference-project.ts`; it rewrites
  * `fixtures/domain/v1/reference-project.json`,
- * `fixtures/domain/v2/reference-project.json` and
- * `fixtures/domain/v3/reference-project.json` byte for byte. All three are committed, and
+ * `fixtures/domain/v2/reference-project.json`,
+ * `fixtures/domain/v3/reference-project.json` and
+ * `fixtures/domain/v4/reference-project.json` byte for byte. All four are committed, and
  * `src/domain/fixtures.test.ts` migrates and canonicalises each on every run like any other
  * domain fixture. The v2 file is the v1 one through `migrateV1toV2` — the same Project, plus
- * the default Plan View each Floor comes with (#56) — and the v3 file is that one through
- * `migrateV2toV3`, with every Item Footprint restated as a Rectangle preset (#58). That is
+ * the default Plan View each Floor comes with (#56) — the v3 file is that one through
+ * `migrateV2toV3`, with every Item Footprint restated as a Rectangle preset (#58), and the
+ * v4 file is that one through `migrateV3toV4`, which gives it a default Wall height and the
+ * two empty Wall collections (#64). That is
  * how a benchmark can measure the current schema without rewriting the compatibility evidence
  * next to it.
  *
@@ -41,7 +44,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { canonicalJson } from '../src/lib/canonicalJson.ts'
-import { DOMAIN_SCHEMA_VERSION, migrateV1toV2, migrateV2toV3 } from '../src/domain/migrate.ts'
+import { DOMAIN_SCHEMA_VERSION, migrateV1toV2, migrateV2toV3, migrateV3toV4 } from '../src/domain/migrate.ts'
 import type {
   CabinetItemDesign,
   CabinetNode,
@@ -59,6 +62,7 @@ import type {
 const OUT_FILE = fileURLToPath(new URL('../fixtures/domain/v1/reference-project.json', import.meta.url))
 const OUT_FILE_V2 = fileURLToPath(new URL('../fixtures/domain/v2/reference-project.json', import.meta.url))
 const OUT_FILE_V3 = fileURLToPath(new URL('../fixtures/domain/v3/reference-project.json', import.meta.url))
+const OUT_FILE_V4 = fileURLToPath(new URL('../fixtures/domain/v4/reference-project.json', import.meta.url))
 
 const FLOOR_NAMES = ['Floor 1', 'Floor 2', 'Floor 3']
 const CABINET_COUNT = 30
@@ -278,16 +282,21 @@ writeFileSync(OUT_FILE, `${canonicalJson(envelope)}\n`)
 const v2Project = migrateV1toV2(project, (count) => Array.from({ length: count }, (_, index) => `view-${index}`))
 writeFileSync(OUT_FILE_V2, `${canonicalJson({ domainSchemaVersion: 2, project: v2Project })}\n`)
 
-// The current-schema twin: the same Project again, with every Item Footprint restated as a
-// Rectangle preset (#58). No new IDs, and the geometry it draws is identical.
+// The v3 twin: the same Project again, with every Item Footprint restated as a Rectangle
+// preset (#58). Stamped 3 on purpose — it is the record a v3 BuildBox wrote.
 const v3Project = migrateV2toV3(v2Project)
-writeFileSync(OUT_FILE_V3, `${canonicalJson({ domainSchemaVersion: DOMAIN_SCHEMA_VERSION, project: v3Project })}\n`)
+writeFileSync(OUT_FILE_V3, `${canonicalJson({ domainSchemaVersion: 3, project: v3Project })}\n`)
+
+// The current-schema twin: the same Project with a default Wall height and no Walls yet
+// (#64). No new IDs, and nothing about the geometry it draws changes.
+const v4Project = migrateV3toV4(v3Project)
+writeFileSync(OUT_FILE_V4, `${canonicalJson({ domainSchemaVersion: DOMAIN_SCHEMA_VERSION, project: v4Project })}\n`)
 
 const nodes = (node: CabinetNode): number =>
   node.children === undefined ? 1 : 1 + nodes(node.children[0]) + nodes(node.children[1])
 
 console.log(
-  `${OUT_FILE}\n  ${OUT_FILE_V2}\n` +
+  `${OUT_FILE}\n  ${OUT_FILE_V2}\n  ${OUT_FILE_V3}\n  ${OUT_FILE_V4}\n` +
     `  floors: ${project.floors.length}\n` +
     `  item designs: ${project.itemDesigns.length} (cabinet tree nodes: ${nodes(project.itemDesigns[0]!.kind === 'cabinet' ? project.itemDesigns[0]!.construction.root : { id: 'x' })})\n` +
     `  placed items: ${project.existingModel.placedItems.length}\n`,

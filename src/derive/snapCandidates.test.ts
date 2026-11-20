@@ -108,11 +108,16 @@ describe('wall faces (#59 criterion 21, the A-snap regression)', () => {
   /** Centreline (0,0)→(5000,0), thickness 200: faces at y = ±100. */
   const wall: WallFaceSource = {
     id: 'W-5',
-    label: 'W-5 · Kitchen side face',
-    corners: [pt(0, -100), pt(5000, -100), pt(0, 100), pt(5000, 100)],
+    label: 'W-5 · face',
+    corners: [
+      { point: pt(0, -100), label: 'End of W-5' },
+      { point: pt(5000, -100), label: 'Corner of W-5 and W-6' },
+      { point: pt(0, 100), label: 'End of W-5' },
+      { point: pt(5000, 100), label: 'Corner of W-5 and W-6' },
+    ],
     faces: [
-      { from: pt(0, -100), to: pt(5000, -100) },
-      { from: pt(0, 100), to: pt(5000, 100) },
+      { from: pt(0, -100), to: pt(5000, -100), segment: { kind: 'line', to: pt(5000, -100) } },
+      { from: pt(0, 100), to: pt(5000, 100), segment: { kind: 'line', to: pt(5000, 100) } },
     ],
   }
 
@@ -128,11 +133,42 @@ describe('wall faces (#59 criterion 21, the A-snap regression)', () => {
 
   it('offers face corners and face projections, never a centreline point', () => {
     const found = only(pt(2500, 0), [wall])
-    for (const corner of wall.corners) expect(at(found, corner.x, corner.y)).toBe(true)
+    for (const corner of wall.corners) expect(at(found, corner.point.x, corner.point.y)).toBe(true)
     expect(at(found, 0, 0)).toBe(false)
     expect(at(found, 5000, 0)).toBe(false)
     expect(found.some((c) => c.point.y === 0 && c.point.x >= 0 && c.point.x <= 5000)).toBe(false)
     expect(at(found, 2500, -100)).toBe(true)
+  })
+
+  it('names a corner after the Walls that meet and a face point after its Wall (#64 §7)', () => {
+    const found = only(pt(2500, 0), [wall])
+    expect(found.find((c) => c.point.x === 5000 && c.point.y === -100)?.label).toBe('Corner of W-5 and W-6')
+    expect(found.find((c) => c.point.x === 0 && c.point.y === 100)?.label).toBe('End of W-5')
+    expect(found.find((c) => c.point.x === 2500 && c.point.y === -100)?.label).toBe('W-5 · face')
+    // No left/right wording, and no reference-line wording, anywhere in the list (#64 §7).
+    for (const candidate of found) expect(candidate.label).not.toMatch(/left|right|centreline|centerline/i)
+  })
+
+  it('snaps an arc face onto the arc, not onto its chord', () => {
+    // A quarter arc of radius 1000 about the origin, from (1000, 0) to (0, 1000).
+    const curved: WallFaceSource = {
+      id: 'W-9',
+      label: 'W-9 · face',
+      corners: [],
+      faces: [
+        {
+          from: pt(1000, 0),
+          to: pt(0, 1000),
+          segment: { kind: 'arc', to: pt(0, 1000), center: pt(0, 0), sweepDeg: 90 },
+        },
+      ],
+    }
+    const found = only(pt(700, 700), [curved])
+    expect(found).toHaveLength(1)
+    const at = found[0]!.point
+    expect(Math.hypot(at.x, at.y)).toBeCloseTo(1000, 6)
+    expect(at.x).toBeCloseTo(at.y, 6)
+    expect(at.x).toBeGreaterThan(0)
   })
 
   it('offers nothing while Walls do not exist', () => {

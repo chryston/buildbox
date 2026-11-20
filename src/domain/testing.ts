@@ -40,8 +40,11 @@ import type {
   PresetItemFootprint,
   Project,
   ProjectMeta,
+  Wall,
+  WallJustification,
+  WallJunction,
 } from './project'
-import type { CornerRadii, Preset } from '../geometry'
+import type { CornerRadii, Preset, Pt } from '../geometry'
 
 /** A Project that breaks exactly one invariant, and where the validator must say so. */
 export interface Corruption {
@@ -348,6 +351,26 @@ const arbPlacement = fc.record({
 })
 
 /**
+ * A Wall Junction star (#64): k ends that all meet at one point, which is the only shape a
+ * valid Junction has. Each Wall runs away from the meeting point at its own angle, so the
+ * star covers Ls, T-less multi-ways and near-parallel pairs as the angles get close.
+ */
+const arbWallStar = fc.record({
+  floor: fc.nat({ max: 31 }),
+  centre: arbPoint,
+  count: fc.integer({ min: 0, max: 4 }),
+  angles: fc.array(fc.integer({ min: 0, max: 359 }), { minLength: 4, maxLength: 4 }),
+  lengths: fc.array(fc.integer({ min: 50, max: 8000 }), { minLength: 4, maxLength: 4 }),
+  thicknesses: fc.array(fc.constantFrom(50, 75, 100, 120, 150, 175, 300), { minLength: 4, maxLength: 4 }),
+  justifications: fc.array(fc.constantFrom('left' as const, 'centre' as const, 'right' as const), {
+    minLength: 4,
+    maxLength: 4,
+  }),
+  kinds: fc.array(fc.constantFrom('line' as const, 'arc' as const), { minLength: 4, maxLength: 4 }),
+  bulges: fc.array(fc.integer({ min: 20, max: 500 }), { minLength: 4, maxLength: 4 }),
+})
+
+/**
  * Valid domain v1 Projects: unique IDs across the whole Project namespace, references
  * that always resolve, cabinet trees no deeper than `MAX_TREE_DEPTH`, 0–4 Floors each with
  * its default Plan View, and
@@ -361,10 +384,12 @@ export function arbProject(): fc.Arbitrary<Project> {
       address: fc.option(arbText(1, 24), { nil: undefined }),
       displayUnit: ARB_DISPLAY_UNIT,
       displayPrecision: fc.integer({ min: 0, max: 4 }),
+      defaultWallHeight: fc.constantFrom(2400, 2600, 2800),
       floors: fc.array(arbFloorBody, { maxLength: 4 }),
       cabinets: fc.array(arbCabinetBody, { maxLength: 2 }),
       generics: fc.array(arbGenericBody, { maxLength: 3 }),
       placements: fc.array(arbPlacement, { maxLength: 6 }),
+      star: arbWallStar,
     })
     .map((skeleton) => {
       const floors: Floor[] = skeleton.floors.map((body, index) => {
@@ -429,14 +454,57 @@ export function arbProject(): fc.Arbitrary<Project> {
           }))
         : []
 
+      // The Wall star (#64): every member starts at one point and runs away from it, so the
+      // Junction that joins them is valid by construction — its ends coincide exactly.
+      const { star } = skeleton
+      const wallFloor = floors.length === 0 ? null : floors[star.floor % floors.length]
+      const walls: Wall[] = []
+      const wallJunctions: WallJunction[] = []
+      if (wallFloor !== null) {
+        for (let index = 0; index < star.count; index += 1) {
+          const angle = (star.angles[index] as number) * (Math.PI / 180)
+          const length = star.lengths[index] as number
+          const start = star.centre
+          const end = { x: start.x + Math.cos(angle) * length, y: start.y + Math.sin(angle) * length }
+          const bulge = star.bulges[index] as number
+          const through = star.kinds[index] === 'arc'
+            ? {
+                x: (start.x + end.x) / 2 - ((end.y - start.y) / length) * bulge,
+                y: (start.y + end.y) / 2 + ((end.x - start.x) / length) * bulge,
+              }
+            : null
+          walls.push({
+            id: `wall-${index}`,
+            ref: `W-${index + 1}`,
+            floorId: wallFloor.id,
+            line: through === null ? { kind: 'line', start, end } : { kind: 'arc', start, end, through },
+            thickness: star.thicknesses[index] as number,
+            justification: star.justifications[index] as WallJustification,
+            baseElevation: 0,
+            height: skeleton.defaultWallHeight,
+          })
+        }
+        if (walls.length >= 2) {
+          wallJunctions.push({
+            id: 'wall-junction-0',
+            floorId: wallFloor.id,
+            ends: walls.map((wall) => ({ wallId: wall.id, end: 'start' as const })),
+          })
+        }
+      }
+
       return {
         id: 'project-0',
         meta: { name: skeleton.name, address: skeleton.address },
-        preferences: { displayUnit: skeleton.displayUnit, displayPrecision: skeleton.displayPrecision },
+        preferences: {
+          displayUnit: skeleton.displayUnit,
+          displayPrecision: skeleton.displayPrecision,
+          defaultWallHeight: skeleton.defaultWallHeight,
+        },
         floors,
         views,
         itemDesigns: designs,
-        existingModel: { placedItems },
+        existingModel: { placedItems, walls, wallJunctions },
       }
     })
 }
@@ -543,7 +611,7 @@ const danglingDesign: CorruptionMaker = (project) => {
     project: {
       ...project,
       floors,
-      existingModel: { placedItems: [...project.existingModel.placedItems, item] },
+      existingModel: { ...project.existingModel, placedItems: [...project.existingModel.placedItems, item] },
     },
     path: `existingModel.placedItems[${index}].itemDesignId`,
     code: 'dangling-reference',
@@ -560,7 +628,7 @@ const missingFloor: CorruptionMaker = (project) => {
     project: {
       ...project,
       itemDesigns: designs,
-      existingModel: { placedItems: [...project.existingModel.placedItems, item] },
+      existingModel: { ...project.existingModel, placedItems: [...project.existingModel.placedItems, item] },
     },
     path: `existingModel.placedItems[${index}].floorId`,
     code: 'dangling-reference',
@@ -713,6 +781,224 @@ const impossibleShape: CorruptionMaker = (project) => {
   }
 }
 
+// --- Wall corruptions (#64) ---------------------------------------------------
+
+/** Two Walls that meet at `{0, 0}`, and the Junction that joins their meeting ends. */
+function injectedWallPair(floorId: string): { walls: Wall[]; junctions: WallJunction[] } {
+  const wall = (index: number, end: Pt): Wall => ({
+    id: `${INJECT}-wall-${index}`,
+    ref: `W-9${index}`,
+    floorId,
+    line: { kind: 'line', start: { x: 0, y: 0 }, end },
+    thickness: 100,
+    justification: 'centre',
+    baseElevation: 0,
+    height: 2600,
+  })
+  return {
+    walls: [wall(0, { x: 3000, y: 0 }), wall(1, { x: 0, y: 2400 })],
+    junctions: [
+      {
+        id: `${INJECT}-wall-junction`,
+        floorId,
+        ends: [
+          { wallId: `${INJECT}-wall-0`, end: 'start' },
+          { wallId: `${INJECT}-wall-1`, end: 'start' },
+        ],
+      },
+    ],
+  }
+}
+
+/** The Project's first Floor, or one that is injected along with its default Plan View. */
+function floorForWalls(project: Project): { floors: Floor[]; views: PlanView[]; floorId: string } {
+  if (project.floors.length > 0) {
+    return { floors: project.floors, views: project.views, floorId: project.floors[0].id }
+  }
+  const floor = injectedFloor(0)
+  return {
+    floors: [...project.floors, floor],
+    views: [...project.views, injectedPlanView(0, floor.id, { isDefault: true })],
+    floorId: floor.id,
+  }
+}
+
+/** A Wall whose reference line has no length. */
+const zeroLengthWall: CorruptionMaker = (project) => {
+  const { floors, views, floorId } = floorForWalls(project)
+  const { walls, junctions } = injectedWallPair(floorId)
+  const broken: Wall = { ...walls[0], line: { kind: 'line', start: { x: 0, y: 0 }, end: { x: 0, y: 0 } } }
+  return {
+    project: {
+      ...project,
+      floors,
+      views,
+      existingModel: { ...project.existingModel, walls: [broken, walls[1]], wallJunctions: junctions },
+    },
+    path: 'existingModel.walls[0].line',
+    code: 'out-of-range',
+  }
+}
+
+/** A Wall whose arc passes through a point on its own chord. */
+const degenerateArc: CorruptionMaker = (project) => {
+  const { floors, views, floorId } = floorForWalls(project)
+  const { walls, junctions } = injectedWallPair(floorId)
+  const broken: Wall = {
+    ...walls[0],
+    line: { kind: 'arc', start: { x: 0, y: 0 }, end: { x: 3000, y: 0 }, through: { x: 1500, y: 0 } },
+  }
+  return {
+    project: {
+      ...project,
+      floors,
+      views,
+      existingModel: { ...project.existingModel, walls: [broken, walls[1]], wallJunctions: junctions },
+    },
+    path: 'existingModel.walls[0].line.through',
+    code: 'out-of-range',
+  }
+}
+
+/** A Wall with no thickness. */
+const zeroThickness: CorruptionMaker = (project) => {
+  const { floors, views, floorId } = floorForWalls(project)
+  const { walls, junctions } = injectedWallPair(floorId)
+  const broken: Wall = { ...walls[0], thickness: 0 }
+  return {
+    project: {
+      ...project,
+      floors,
+      views,
+      existingModel: { ...project.existingModel, walls: [broken, walls[1]], wallJunctions: junctions },
+    },
+    path: 'existingModel.walls[0].thickness',
+    code: 'out-of-range',
+  }
+}
+
+/** A Wall standing on a Floor this Project does not have. */
+const wallOnMissingFloor: CorruptionMaker = (project) => {
+  const { walls, junctions } = injectedWallPair(`${INJECT}-missing-floor`)
+  return {
+    project: { ...project, existingModel: { ...project.existingModel, walls, wallJunctions: junctions } },
+    path: 'existingModel.walls[0].floorId',
+    code: 'dangling-reference',
+  }
+}
+
+/** Two Walls answering to the same `W-n`. */
+const duplicateWallRef: CorruptionMaker = (project) => {
+  const { floors, views, floorId } = floorForWalls(project)
+  const { walls, junctions } = injectedWallPair(floorId)
+  return {
+    project: {
+      ...project,
+      floors,
+      views,
+      existingModel: { ...project.existingModel, walls: [walls[0], { ...walls[1], ref: walls[0].ref }], wallJunctions: junctions },
+    },
+    path: 'existingModel.walls[1].ref',
+    code: 'duplicate-name',
+  }
+}
+
+/** A Junction naming a Wall that is not in the Project. */
+const junctionMissingWall: CorruptionMaker = (project) => {
+  const { floors, views, floorId } = floorForWalls(project)
+  const { walls, junctions } = injectedWallPair(floorId)
+  const broken: WallJunction = { ...junctions[0], ends: [{ wallId: `${INJECT}-gone`, end: 'start' }, junctions[0].ends[1]] }
+  return {
+    project: { ...project, floors, views, existingModel: { ...project.existingModel, walls, wallJunctions: [broken] } },
+    path: 'existingModel.wallJunctions[0].ends[0].wallId',
+    code: 'dangling-reference',
+  }
+}
+
+/** A Junction whose ends are half a millimetre apart. */
+const junctionOffByHalfMm: CorruptionMaker = (project) => {
+  const { floors, views, floorId } = floorForWalls(project)
+  const { walls, junctions } = injectedWallPair(floorId)
+  const moved: Wall = { ...walls[1], line: { kind: 'line', start: { x: 0.5, y: 0 }, end: { x: 0.5, y: 2400 } } }
+  return {
+    project: { ...project, floors, views, existingModel: { ...project.existingModel, walls: [walls[0], moved], wallJunctions: junctions } },
+    path: 'existingModel.wallJunctions[0].ends',
+    code: 'out-of-range',
+  }
+}
+
+/** A Junction with one end and nothing to host it. */
+const junctionSingleEnd: CorruptionMaker = (project) => {
+  const { floors, views, floorId } = floorForWalls(project)
+  const { walls, junctions } = injectedWallPair(floorId)
+  const broken: WallJunction = { ...junctions[0], ends: [junctions[0].ends[0]] }
+  return {
+    project: { ...project, floors, views, existingModel: { ...project.existingModel, walls, wallJunctions: [broken] } },
+    path: 'existingModel.wallJunctions[0].ends',
+    code: 'out-of-range',
+  }
+}
+
+/** A Junction hosted at the very end of its host Wall, where a corner belongs instead. */
+const hostAtWallEnd: CorruptionMaker = (project) => {
+  const { floors, views, floorId } = floorForWalls(project)
+  const { walls } = injectedWallPair(floorId)
+  const host = walls[0]
+  const junction: WallJunction = {
+    id: `${INJECT}-wall-junction`,
+    floorId,
+    ends: [{ wallId: walls[1].id, end: 'start' }],
+    host: { wallId: host.id, at: 3000 },
+  }
+  return {
+    project: { ...project, floors, views, existingModel: { ...project.existingModel, walls, wallJunctions: [junction] } },
+    path: 'existingModel.wallJunctions[0].host.at',
+    code: 'out-of-range',
+  }
+}
+
+/** One Wall end claimed by two Junctions. */
+const endClaimedTwice: CorruptionMaker = (project) => {
+  const { floors, views, floorId } = floorForWalls(project)
+  const { walls, junctions } = injectedWallPair(floorId)
+  const other: Wall = { ...walls[0], id: `${INJECT}-wall-2`, ref: 'W-92', line: { kind: 'line', start: { x: 0, y: 0 }, end: { x: 0, y: -1800 } } }
+  const second: WallJunction = {
+    id: `${INJECT}-wall-junction-2`,
+    floorId,
+    ends: [
+      { wallId: `${INJECT}-wall-0`, end: 'start' },
+      { wallId: `${INJECT}-wall-2`, end: 'start' },
+    ],
+  }
+  return {
+    project: {
+      ...project,
+      floors,
+      views,
+      existingModel: { ...project.existingModel, walls: [...walls, other], wallJunctions: [...junctions, second] },
+    },
+    path: 'existingModel.wallJunctions[1].ends[0]',
+    code: 'duplicate-member',
+  }
+}
+
+/** A Wall justified somewhere other than left, centre or right. */
+const unknownJustification: CorruptionMaker = (project) => {
+  const { floors, views, floorId } = floorForWalls(project)
+  const { walls, junctions } = injectedWallPair(floorId)
+  const broken: Wall = { ...walls[0], justification: 'middle' as WallJustification }
+  return {
+    project: {
+      ...project,
+      floors,
+      views,
+      existingModel: { ...project.existingModel, walls: [broken, walls[1]], wallJunctions: junctions },
+    },
+    path: 'existingModel.walls[0].justification',
+    code: 'not-one-of',
+  }
+}
+
 const CORRUPTIONS: readonly CorruptionMaker[] = [
   duplicateId,
   danglingDesign,
@@ -728,6 +1014,17 @@ const CORRUPTIONS: readonly CorruptionMaker[] = [
   viewOnMissingFloor,
   zeroScale,
   impossibleShape,
+  zeroLengthWall,
+  degenerateArc,
+  zeroThickness,
+  wallOnMissingFloor,
+  duplicateWallRef,
+  junctionMissingWall,
+  junctionOffByHalfMm,
+  junctionSingleEnd,
+  hostAtWallEnd,
+  endClaimedTwice,
+  unknownJustification,
 ]
 
 /**

@@ -6,7 +6,7 @@ they remain permanent compatibility evidence — `src/package/fixtures.test.ts` 
 file in this folder on every run, and a future package version has to keep that passing.
 Only the folder holding the version this build writes is re-encoded byte for byte; the older
 ones are read and migrated, which is the half that matters to a user with an old Backup.
-See `v3/README.md` for the current one (#58).
+See `v4/README.md` for the current one (#64).
 
 ## Contents
 

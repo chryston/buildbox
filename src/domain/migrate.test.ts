@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_WALL_HEIGHT_MM,
   DOMAIN_SCHEMA_VERSION,
   footprintPath,
   footprintSize,
+  listPresetEntries,
   migrateProject,
   migrateV1toV2,
+  migrateV3toV4,
   rectangleFootprint,
   runMigrationChain,
   type IdAllocator,
@@ -23,7 +26,7 @@ function validProject(): Project {
   return {
     id: 'project-0',
     meta: { name: 'Maple Street Kitchen' },
-    preferences: { displayUnit: 'mm', displayPrecision: 0 },
+    preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 },
     floors: [{ id: 'floor-0', name: 'Floor 1', planImage: null }],
     views: [{ id: 'view-0', kind: 'plan', floorId: 'floor-0', name: 'Floor 1', isDefault: true, showPlanImage: true }],
     itemDesigns: [
@@ -39,6 +42,8 @@ function validProject(): Project {
       },
     ],
     existingModel: {
+      walls: [],
+      wallJunctions: [],
       placedItems: [
         {
           id: 'place-0',
@@ -61,8 +66,8 @@ function v1Project(): Record<string, unknown> {
 }
 
 describe('DOMAIN_SCHEMA_VERSION', () => {
-  it('is 3, one step above the version #56 shipped', () => {
-    expect(DOMAIN_SCHEMA_VERSION).toBe(3)
+  it('is 4, one step above the version #63 shipped', () => {
+    expect(DOMAIN_SCHEMA_VERSION).toBe(4)
   })
 })
 
@@ -109,12 +114,12 @@ describe('migrateV1toV2 — one default Plan View per Floor (#56)', () => {
 
 describe('migrateProject — the envelope version (#14)', () => {
   it('refuses a newer schema before touching the data', () => {
-    const result = migrateProject(validProject(), 4, allocator())
+    const result = migrateProject(validProject(), 5, allocator())
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.error.kind).toBe('newer-schema')
     if (result.error.kind !== 'newer-schema') return
-    expect(result.error.found).toBe(4)
+    expect(result.error.found).toBe(5)
     expect(result.error.supported).toBe(DOMAIN_SCHEMA_VERSION)
     expect(result.error.message).toContain('saved by a newer BuildBox')
   })
@@ -352,5 +357,47 @@ describe('runMigrationChain — the mechanics', () => {
     expect(input).toEqual(untouched)
     expect(result).not.toBe(input)
     expect((result as typeof input).note).toBe('rewritten')
+  })
+})
+
+describe('migrateV3toV4 — a Project gains its Walls (#64)', () => {
+  /** The same Project as its v3 twin: no default Wall height, no Wall collections. */
+  function v3Record(): Record<string, unknown> {
+    const project = validProject()
+    const preferences: Record<string, unknown> = { ...project.preferences }
+    delete preferences.defaultWallHeight
+    return { ...project, preferences, existingModel: { placedItems: project.existingModel.placedItems } }
+  }
+
+  it('adds the default Wall height and the two empty collections, and spends no IDs', () => {
+    const asked: number[] = []
+    const result = migrateProject(v3Record(), 3, (count) => {
+      asked.push(count)
+      return allocator()(count)
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(asked).toEqual([])
+    expect(result.project.preferences.defaultWallHeight).toBe(DEFAULT_WALL_HEIGHT_MM)
+    expect(result.project.existingModel.walls).toEqual([])
+    expect(result.project.existingModel.wallJunctions).toEqual([])
+
+    // Nothing else moved: put the v3 shape back and the Project is the record again.
+    const prior = v3Record() as Record<string, unknown>
+    expect({ ...result.project, ...prior }).toEqual(prior)
+  })
+
+  it('takes the height from the preset pack entry it was read from', () => {
+    const ceiling = listPresetEntries('hdb-bto-typical', 'height').find((entry) => entry.id === 'height.ceiling')
+    // The migrator's constant is frozen, so this is the check that it still says what the
+    // pack says. A pack edit that moves the ceiling height has to move this number too.
+    expect(ceiling?.values.height).toBe(DEFAULT_WALL_HEIGHT_MM)
+  })
+
+  it('leaves a v4 Project exactly as it found it', () => {
+    const migrated = migrateProject(v3Record(), 3, allocator())
+    expect(migrated.ok).toBe(true)
+    if (!migrated.ok) return
+    expect(migrateV3toV4(migrated.project)).toEqual(migrated.project)
   })
 })

@@ -65,6 +65,12 @@ export interface ProjectPreferences {
   displayUnit: DisplayUnit
   /** Displayed decimal places: mm 0 dp, cm 1 dp, m 3 dp are the #19 defaults. */
   displayPrecision: number
+  /**
+   * The height a new Wall takes when its Floor gives none (#64), in millimetres above the
+   * Floor Datum. It comes from the Preset Pack's `height.ceiling` entry — 2,600 mm — and is
+   * resolved once at creation, so editing a Wall never points back at the pack.
+   */
+  defaultWallHeight: number
 }
 
 /** An independent spatial silo: its own local X/Y, Floor Datum at Z = 0, Plan Image (#25). */
@@ -75,6 +81,12 @@ export interface Floor {
   planImage: PlanImage | null
   /** The Floor's own vertical extent (#56); absent when the user has given none. */
   limits?: FloorLimits
+  /**
+   * The height a new Wall on this Floor takes, in millimetres (#64). Absent means "use the
+   * Project's `defaultWallHeight`"; it is a default only, and never restates a Wall's own
+   * `height`.
+   */
+  defaultWallHeight?: number
 }
 
 /**
@@ -205,6 +217,87 @@ export interface PathItemFootprint {
 /** The one shared representation of the property as surveyed (#15.1). */
 export interface ExistingModel {
   placedItems: PlacedItem[]
+  /**
+   * The Walls of this Floor set (#64), the first Building Element. Design Option ownership
+   * arrives in #69; until then every Wall is Existing Model.
+   */
+  walls: Wall[]
+  /** The Wall Junctions (#64): the only thing that joins two Walls. */
+  wallJunctions: WallJunction[]
+}
+
+/** Where the reference line sits within the thickness, relative to its own direction (#64). */
+export type WallJustification = 'left' | 'centre' | 'right'
+
+/** What a Wall is, in the homeowner's words; data only, never a drawing Layer (#64). */
+export type WallClassification = 'external' | 'internal' | 'partition'
+
+/** Which end of a reference line a Junction member holds. */
+export type WallEnd = 'start' | 'end'
+
+/**
+ * A Wall's reference line: straight, or a circular arc through a third point.
+ *
+ * `through` is any point on the arc strictly between `start` and `end`, so the sweep is
+ * whatever those three points describe and may exceed 180°. The arc is derived from the
+ * three points and never stored as a centre, which is what lets a bulge be dragged without
+ * re-solving an identity.
+ */
+export type WallRefLine =
+  | { kind: 'line'; start: Point2; end: Point2 }
+  | { kind: 'arc'; start: Point2; end: Point2; through: Point2 }
+
+/**
+ * One Wall (#64): a reference line, its own constant thickness, a justification, and a
+ * constant floor-relative Vertical Extent. Its faces are derived, never stored — see
+ * `derive`'s wall faces — and its Renovation State comes from ownership, never from type.
+ */
+export interface Wall {
+  id: EntityId
+  /**
+   * The display reference `W-<n>`, sequential within the Project and never reused (#64).
+   * Not editable: deleting a Wall leaves its number spent.
+   */
+  ref: string
+  floorId: EntityId
+  line: WallRefLine
+  /** Millimetres, greater than 0. */
+  thickness: number
+  /**
+   * Where the reference line sits within the thickness, relative to the reference line's own
+   * direction. Data only: it is never shown to the user as left or right (#64).
+   */
+  justification: WallJustification
+  classification?: WallClassification
+  /** Free text, e.g. `Load-bearing block`. */
+  constructionLabel?: string
+  /** Millimetres above the Floor Datum; the base of the Wall's Vertical Extent (#15). */
+  baseElevation: number
+  /** Millimetres. A constant Vertical Extent; the editing UI arrives in #74. */
+  height: number
+}
+
+/**
+ * A shared connection point where Wall ends meet, or where one Wall attaches to another's
+ * reference line (#64). Its position is derived, never stored.
+ *
+ * Without a host it needs at least two ends whose endpoints coincide within the topology
+ * tolerance. With a host it needs at least one end sitting on the host's reference line at
+ * `at` — a distance along the reference line, or an arc length on an arc — strictly inside
+ * `(0, hostLength)`. A T-attach never splits its host: the host keeps its ID and its line.
+ */
+export interface WallJunction {
+  id: EntityId
+  floorId: EntityId
+  ends: WallJunctionEnd[]
+  /** The hosted form: the Wall this Junction attaches to, and where along it. */
+  host?: { wallId: EntityId; at: number }
+}
+
+/** One member end of a Junction, and the Wall end it holds. */
+export interface WallJunctionEnd {
+  wallId: EntityId
+  end: WallEnd
 }
 
 /** A placement of an Item Design: placement context only, never a copy of its dimensions (#16). */

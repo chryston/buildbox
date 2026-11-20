@@ -636,6 +636,8 @@ function createSession(record: ProjectRecord, deps: SessionDeps, firstHandle: Lo
       deriveCache.floor(snapshot.project, snapshot.revision, floorId, optionId),
     deriveItemDetail: (designId, floorId = null) =>
       deriveCache.itemDetail(snapshot.project, snapshot.revision, designId, floorId ?? undefined),
+    deriveWalls: (floorId, optionId = null) =>
+      deriveCache.walls(snapshot.project, snapshot.revision, floorId, optionId),
     subscribe(listener) {
       listeners.add(listener)
       return () => {

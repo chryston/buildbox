@@ -1,12 +1,11 @@
 /**
- * The measured-tool gate (#56 criterion 6).
+ * The measured-tool gate (#56 criterion 6, #64 criterion 11).
  *
  * The rule is one line — a measured tool needs a calibrated Floor — but it is the line that
  * decides whether the app is honest about a number, so it is written once here and asserted
- * against a tool definition rather than against a click. The registry holds no shipping
- * measured tool yet (#54's Wall tool is the first), which is exactly why the test supplies
- * its own: the gate must already be in place when that tool lands, and a rule nothing
- * exercises is a rule that gets dropped.
+ * against a tool definition rather than against a click. `Wall` is the first shipping tool
+ * that measures; the tests below kept asserting against a made-up definition even after it
+ * landed, because the gate has to hold for the next measured tool too.
  */
 import { describe, expect, it } from 'vitest'
 import type { PlanImage } from '../../domain'
@@ -15,6 +14,7 @@ import {
   WORKSPACE_TOOLS,
   floorNeedsCalibration,
   toolIsGated,
+  toolTitle,
 } from './toolbarRegistry'
 import type { WorkspaceToolDefinition } from './toolbarRegistry'
 
@@ -71,11 +71,30 @@ describe('toolIsGated', () => {
 
 describe('the registry', () => {
   it('holds the pointer tools, which measure nothing and so are never gated', () => {
-    expect(WORKSPACE_TOOLS.map((each) => each.id)).toEqual(['select', 'pan'])
-    expect(WORKSPACE_TOOLS.every((each) => toolIsGated(each, image(null)))).toBe(false)
+    const pointer = WORKSPACE_TOOLS.filter((each) => !each.requiresCalibratedFloor)
+    expect(pointer.map((each) => each.id)).toEqual(['select', 'pan'])
+    expect(pointer.every((each) => toolIsGated(each, image(null)))).toBe(false)
+  })
+
+  it('gates the Wall tool on an uncalibrated Floor, and nowhere else (#64 criterion 11)', () => {
+    const wall = WORKSPACE_TOOLS.find((each) => each.id === 'wall')!
+    expect(wall.label).toBe('Wall')
+    expect(wall.testId).toBe('tool-wall')
+    expect(toolIsGated(wall, image(null))).toBe(true)
+    expect(toolIsGated(wall, image(0.08))).toBe(false)
+    expect(toolIsGated(wall, null)).toBe(false)
   })
 
   it('states the reason in the words the issue prescribes', () => {
     expect(CALIBRATION_REQUIRED_HINT).toBe("Calibrate this Floor's Plan Image to draw measured shapes")
+  })
+
+  it('puts that reason on the gated Wall button, and nowhere else (#64 criterion 11)', () => {
+    const wall = WORKSPACE_TOOLS.find((each) => each.id === 'wall')!
+    const pointer = WORKSPACE_TOOLS.find((each) => each.id === 'select')!
+    expect(toolTitle(wall, image(null))).toBe(CALIBRATION_REQUIRED_HINT)
+    expect(toolTitle(wall, image(0.08))).toBeUndefined()
+    expect(toolTitle(wall, null)).toBeUndefined()
+    expect(toolTitle(pointer, image(null))).toBeUndefined()
   })
 })

@@ -46,11 +46,13 @@ const genericDesign = (over: Partial<GenericItemDesign> = {}): GenericItemDesign
 const project = (over: Partial<Project> = {}): Project => ({
   id: 'project-1',
   meta: { name: 'Home' },
-  preferences: { displayUnit: 'mm', displayPrecision: 0 },
+  preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 },
   floors: [{ id: 'floor-1', name: 'Flat', planImage: null }],
   views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Flat', isDefault: true, showPlanImage: true }],
   itemDesigns: [genericDesign()],
   existingModel: {
+    walls: [],
+    wallJunctions: [],
     placedItems: [{
       id: 'placed-1',
       itemDesignId: 'design-1',

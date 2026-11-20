@@ -57,6 +57,19 @@ and a copy is taken of the current schema. The benchmarks read the v1 file and m
 load, so they measure the migrator as part of the path a real open takes. The v1 and v2 files
 stay untouched as the compatibility evidence they were.
 
+## `v4/` — domain schema v4 (#64)
+
+`v4/project-basic.json` and `v4/reference-project.json` are the two v3 files run through
+`migrateV3toV4`: the same Project, plus `preferences.defaultWallHeight: 2600` and the two
+empty Wall collections. The step spends no IDs and moves no geometry, so the pinned
+entity-ID count is still 16,597 and `src/domain/remapIds.property.test.ts` now reads the v4
+file as the current schema.
+
+`v4/walls.json` is the new golden for the Wall shape itself: three Walls on one Floor — two
+straight ones meeting in an L and one arc — joined by two Junctions, one per meeting point.
+It is the file that proves a Project carrying Walls round-trips through the strict validator
+and the canonical writer.
+
 ## How it was produced
 
 Hand-authored as a plain object, then written with `lib.canonicalJson` — keys sorted, no

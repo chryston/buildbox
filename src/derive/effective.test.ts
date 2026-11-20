@@ -87,11 +87,11 @@ const projectWith = (
 ): Project => ({
   id: 'project-1',
   meta: { name: 'Derive' },
-  preferences: { displayUnit: 'mm', displayPrecision: 0 },
+  preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 },
   floors,
   views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Floor 1', isDefault: true, showPlanImage: true }],
   itemDesigns: designs,
-  existingModel: { placedItems: placements },
+  existingModel: { placedItems: placements, walls: [], wallJunctions: [] },
 })
 
 /** The corners of a closed path, the start included: the points a renderer draws through. */

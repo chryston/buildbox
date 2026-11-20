@@ -246,7 +246,7 @@ describe('the display unit stays inside the cabinet payload (#43 criterion 9)', 
 
     expect(unit.construction.settings.unit).toBe('in')
     expect(unit.construction.settings.width).toBe(42)
-    expect(vanity.project.preferences).toEqual({ displayUnit: 'mm', displayPrecision: 0 })
+    expect(vanity.project.preferences).toEqual({ displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 })
   })
 })
 

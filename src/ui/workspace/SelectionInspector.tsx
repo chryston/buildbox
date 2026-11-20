@@ -78,7 +78,7 @@ export function SelectionInspector(props: SelectionInspectorProps): ReactNode {
 }
 
 /** One number field: the person's text while typing, the Project's value otherwise. */
-function NumberField(props: {
+export function NumberField(props: {
   label: string
   testId: string
   value: number

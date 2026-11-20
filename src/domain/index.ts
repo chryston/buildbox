@@ -49,11 +49,13 @@ export {
 } from './floorDependencies'
 export { defaultPlanView, floorNameTaken, nameKey, nextFloorName, planViewNameTaken } from './floorNames'
 export {
+  DEFAULT_WALL_HEIGHT_MM,
   DOMAIN_SCHEMA_VERSION,
   MIGRATORS,
   migrateProject,
   migrateV1toV2,
   migrateV2toV3,
+  migrateV3toV4,
   runMigrationChain,
   type Migrator,
   type MigrateError,
@@ -114,6 +116,13 @@ export type {
   Project,
   ProjectMeta,
   ProjectPreferences,
+  Wall,
+  WallClassification,
+  WallEnd,
+  WallJustification,
+  WallJunction,
+  WallJunctionEnd,
+  WallRefLine,
 } from './project'
 export { remapIds, type IdAllocator } from './remapIds'
 export {

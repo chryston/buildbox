@@ -54,6 +54,8 @@ export type TextLayer = 'with' | 'none' | 'only'
 export interface DisplayListInteractions {
   /** The group around a Placed Item's outline: it starts a drag or a pick. */
   onItemPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
+  /** A Wall band, clicked where it is drawn: it becomes the selected Wall (#64 §15). */
+  onWallPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
   /** The rotate grip: it starts a turn. */
   onRotatePointerDown?: (id: string, event: React.PointerEvent<SVGPathElement>) => void
   /** A click anywhere on a unit's own box. */
@@ -105,6 +107,7 @@ const TEST_IDS: Readonly<Record<string, (id: string) => string>> = {
   'dimension-width': () => 'dimension-width',
   'dimension-depth': () => 'dimension-depth',
   'floor-bounds-chip': () => 'floor-bounds-chip',
+  'wall': (id) => `wall-band-${id}`,
   'rotate-handle-group': () => 'rotate-handle-group',
   'rotate-handle': () => 'rotate-handle',
   void: (id) => `void-${id}`,
@@ -247,6 +250,14 @@ function renderNode(
       props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => start(id, event)) as never
       props.onClick = ((event: React.MouseEvent) => event.stopPropagation()) as never
       props.style = { cursor: 'move' }
+    }
+    if (role === 'wall' && interactions?.onWallPointerDown !== undefined) {
+      const pick = interactions.onWallPointerDown
+      props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => {
+        event.stopPropagation()
+        pick(id, event)
+      }) as never
+      props.style = { cursor: 'pointer' }
     }
     if (role === 'rotate-handle' && interactions?.onRotatePointerDown !== undefined) {
       const start = interactions.onRotatePointerDown

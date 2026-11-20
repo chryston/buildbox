@@ -13,7 +13,7 @@
  */
 import type { Applied, Intent, Locator, Rejection } from '../edit'
 import type { LibraryRecord, PersistenceError, RecoveryPointKind, Result } from '../persistence'
-import type { DerivedFloor, DerivedItemDetail } from '../derive'
+import type { DerivedFloor, DerivedItemDetail, FloorWalls } from '../derive'
 import type { EntityId, Project } from '../domain'
 import type { ValidationProblem } from '../lib'
 
@@ -147,6 +147,8 @@ export interface ProjectSession {
   deriveFloor(floorId: EntityId, optionId?: EntityId | null): DerivedFloor
   /** The Item Design as the Item Detail draws it, through the same cache. */
   deriveItemDetail(designId: EntityId, floorId?: EntityId | null): DerivedItemDetail
+  /** The Floor's tidied Walls, faces and corners, through the same cache (#64 §6). */
+  deriveWalls(floorId: EntityId, optionId?: EntityId | null): FloorWalls
   /** Undo as a forward revision (#26). Works while save has failed. */
   undo(): Result<void, 'no-history'>
   /** Redo as a forward revision (#26). Works while save has failed. */

@@ -33,6 +33,8 @@ import { effectiveFloor, effectiveItemDetail } from './effective'
 import type { DerivedFloor, DerivedItemDetail } from './effective'
 import { quantitiesForFloor } from './quantities/quantities'
 import type { FloorQuantities } from './quantities/quantities'
+import { deriveWalls } from './walls'
+import type { FloorWalls } from './walls'
 
 /** How many entries a cache holds before the least-recently-used one goes. */
 export const DERIVE_CACHE_MAX_ENTRIES = 8
@@ -50,6 +52,13 @@ export interface DeriveCache {
    * mentions the Floor.
    */
   quantities(project: Project, revision: number, floorId: EntityId, optionId: EntityId | null): FloorQuantities
+  /**
+   * The tidied Walls, faces, corners and lengths of one Floor (#64 §6). Faces and corners are
+   * what every tool snaps to, and the Plan View asks for them on every pointer move, so the
+   * same slot discipline as a Cut List applies: one entry per Floor, replaced by its own next
+   * revision.
+   */
+  walls(project: Project, revision: number, floorId: EntityId, optionId: EntityId | null): FloorWalls
 }
 
 interface Entry {
@@ -95,7 +104,7 @@ export function createDeriveCache(opts: { maxEntries?: number } = {}): DeriveCac
    * revision replaces, which is why an old revision is never answered from a new one.
    */
   const remember = <T>(
-    kind: 'floor' | 'item' | 'quantities',
+    kind: 'floor' | 'item' | 'quantities' | 'walls',
     projectToken: number,
     revision: number,
     id: EntityId,
@@ -130,5 +139,7 @@ export function createDeriveCache(opts: { maxEntries?: number } = {}): DeriveCac
       remember('item', tokenOf(project), revision, designId, floorId ?? null, () => effectiveItemDetail(project, revision, designId, floorId)),
     quantities: (project, revision, floorId, optionId) =>
       remember('quantities', tokenOf(project), revision, floorId, optionId, () => quantitiesForFloor(project, floorId, optionId)),
+    walls: (project, revision, floorId, optionId) =>
+      remember('walls', tokenOf(project), revision, floorId, optionId, () => deriveWalls(project, floorId)),
   }
 }

@@ -24,7 +24,7 @@ import type { ShapeGesture, ShapeTarget } from './proposal'
 import { rectangleFootprint } from '../../../domain'
 import type { ItemFootprint, Project } from '../../../domain'
 
-const MM: Project['preferences'] = { displayUnit: 'mm', displayPrecision: 0 }
+const MM: Project['preferences'] = { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 }
 
 const CANVAS: ShapeGesture = { via: 'canvas' }
 const field = (name: string): ShapeGesture => ({ via: 'field', field: name })

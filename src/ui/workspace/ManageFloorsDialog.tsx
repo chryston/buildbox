@@ -26,6 +26,8 @@ export interface ManageFloorsDialogProps {
   onRename(floorId: string, name: string): void
   onReorder(floorId: string, toIndex: number): void
   onSetLimits(floorId: string, lowerMm: number | null, upperMm: number | null): void
+  /** `Default wall height` for one Floor; `null` hands it back to the Project (#64 §16). */
+  onSetWallHeight(floorId: string, defaultWallHeight: number | null): void
   onAddFloor(): void
   onDuplicate(floorId: string): void
   onDelete(floorId: string): void
@@ -103,9 +105,10 @@ function FloorRow(props: ManageFloorsDialogProps & {
   index: number
   count: number
 }): ReactNode {
-  const { floor, index, count, project, unit, precision, onRename, onReorder, onSetLimits, onDuplicate, onDelete } = props
+  const { floor, index, count, project, unit, precision, onRename, onReorder, onSetLimits, onSetWallHeight, onDuplicate, onDelete } = props
   const [name, setName] = useState<string | null>(null)
   const [nameError, setNameError] = useState<string | null>(null)
+  const [heightText, setHeightText] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const limits = floor.limits ?? {}
   const shown = (mm: number | undefined): string => (mm === undefined ? '' : formatMm(mm, unit, precision))
@@ -238,14 +241,43 @@ function FloorRow(props: ManageFloorsDialogProps & {
             value={upperText ?? shown(limits.upperMm)}
             onChange={(event) => setUpperText(event.target.value)}
           />
-          <button
-            type="button"
-            data-testid={`floor-limits-save-${floor.id}`}
-            className="bb-workspace-secondary-button"
-            onClick={commitLimits}
-          >
-            Save limits
-          </button>
+          {/* A Floor's own Wall height, or blank to take the Project's (#64 §16). */}
+          <label className="bb-workspace-field-label" htmlFor={`floor-wall-height-${floor.id}`}>
+            Default wall height <span className="bb-workspace-unit-suffix">({unit})</span>
+          </label>
+          <input
+            id={`floor-wall-height-${floor.id}`}
+            className="bb-workspace-input"
+            data-testid={`floor-wall-height-${floor.id}`}
+            type="number"
+            step="any"
+            placeholder={`project default`}
+            value={heightText ?? shown(floor.defaultWallHeight)}
+            onChange={(event) => setHeightText(event.target.value)}
+          />
+          <div className="bb-workspace-button-row">
+            <button
+              type="button"
+              data-testid={`floor-wall-height-save-${floor.id}`}
+              className="bb-workspace-secondary-button"
+              onClick={() => {
+                const parsed = Number((heightText ?? '').trim())
+                const mm = Number.isFinite(parsed) && parsed > 0 ? Math.round(parseToMm(parsed, unit)) : null
+                onSetWallHeight(floor.id, mm !== null && mm > 0 ? mm : null)
+                setHeightText(null)
+              }}
+            >
+              Use this height
+            </button>
+            <button
+              type="button"
+              data-testid={`floor-limits-save-${floor.id}`}
+              className="bb-workspace-secondary-button"
+              onClick={commitLimits}
+            >
+              Save limits
+            </button>
+          </div>
           {limitsError !== null && (
             <p className="bb-workspace-field-error" data-testid={`floor-limits-error-${floor.id}`} role="alert">
               {limitsError}

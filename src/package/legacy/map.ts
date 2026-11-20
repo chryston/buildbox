@@ -11,7 +11,7 @@
  * fields are read as the shapes `types.ts` describes them.
  */
 import { decodeBase64, problem, sha256Hex, type ValidationProblem } from '../../lib'
-import { defaultPlanView, rectangleFootprint } from '../../domain'
+import { DEFAULT_WALL_HEIGHT_MM, defaultPlanView, rectangleFootprint } from '../../domain'
 import type {
   CabinetItemDesign,
   CabinetNode,
@@ -38,7 +38,7 @@ import type {
 export const FLOOR_ONE_NAME = 'Floor 1'
 
 /** Domain v1 defaults: geometry is millimetres, and the display unit is a preference (#13). */
-export const MIGRATED_PREFERENCES: ProjectPreferences = { displayUnit: 'mm', displayPrecision: 0 }
+export const MIGRATED_PREFERENCES: ProjectPreferences = { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: DEFAULT_WALL_HEIGHT_MM }
 
 /**
  * "Typical — measure yours" heights for the legacy catalog (#43). Base elevation is 0
@@ -93,7 +93,7 @@ export function projectFromDesign(design: LegacyDesign, newId: () => string): Pr
     floors: [{ id: floorId, name: FLOOR_ONE_NAME, planImage: null }],
     views: [defaultPlanView(newId(), { id: floorId, name: FLOOR_ONE_NAME, planImage: null })],
     itemDesigns: design.units.map((unit) => cabinetItemDesign(unit)),
-    existingModel: { placedItems: design.units.map((unit) => cabinetPlacement(unit, floorId, newId())) },
+    existingModel: { placedItems: design.units.map((unit) => cabinetPlacement(unit, floorId, newId())), walls: [], wallJunctions: [] },
   }
 }
 
