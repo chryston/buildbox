@@ -126,6 +126,36 @@ describe('exportFiles', () => {
     expect(single(result).mediaType).toBe('application/pdf')
     expect(result.missingGlyphs).toEqual(['Island 🏠'])
   })
+
+  it('hands back nothing when the second of three sheets cannot be written (#61 criterion 6)', async () => {
+    // Three Plan Views, and the Plan Image of the middle one comes back in a format no PDF writer
+    // takes. The answer is no files and no archive — a ZIP of two sheets out of three would be the
+    // partial export criterion 6 forbids — and the failure names the sheet that could not be made.
+    const project = referenceProject()
+    const [first, second, third] = project.views
+    const hashed = project.floors.find((floor) => floor.planImage !== null)
+    if (hashed === undefined || hashed.planImage === null) throw new Error('the reference Project has no Plan Image')
+    const badHash = hashed.planImage.assetHash
+    const views: Recipe['views'] = [
+      { kind: 'plan', viewId: second!.id },
+      { kind: 'plan', viewId: first!.id },
+      { kind: 'plan', viewId: third!.id },
+    ]
+    const tiff: ExportDeps = {
+      ...withFont,
+      assets: async (hash) => (hash === badHash ? { mediaType: 'image/tiff', bytes: new Uint8Array() } : null),
+    }
+
+    const result = await exportFiles(
+      { project, revision: 3 },
+      recipeFor(first!.id, { format: 'pdf', views }),
+      tiff,
+    )
+    if (result.ok) throw new Error('expected the export to refuse')
+    expect(result.failures).toHaveLength(1)
+    expect(result.failures[0]!.reason).toBe('image-format')
+    expect(result.failures[0]!.output).toContain('Floor-1')
+  })
 })
 
 /** The one file an export of one view produced, or the failures that stopped it. */
