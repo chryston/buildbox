@@ -83,8 +83,16 @@ export interface PlanViewCanvasProps {
   selectedWallId?: string | null
   /** A Wall band was clicked; the selection moves to it (#64 §15). */
   onSelectWall?: (id: string) => void
-  /** Drawn above the items while calibrating; it owns the pointer meanwhile. */
+  /** Drawn above the items while calibrating; it owns the pointer meanwhile. SVG: it lives in
+   * the scene's own `<g>`, so it must be drawn in the Floor's millimetres. */
   overlay?: ReactNode
+  /**
+   * An HTML layer over the canvas — the Wall draft's bar and chips, which are words and
+   * controls, not geometry. It sits on the canvas host, whose box is the same one the scene's
+   * matrix is measured from, so a point placed at `x·zoom + panX` lands where the scene draws
+   * `x`. It owns the pointer meanwhile.
+   */
+  htmlOverlay?: ReactNode
 }
 
 /**
@@ -99,7 +107,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     hostRef, svgRef, floor, showPlanImage, imageSrc, viewport, onViewport,
     tool, selection, onSelect, dragPreview, onDragPreview, onMoveItem, onRotateItem,
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
-    angleSnap, overlay, walls, selectedWallId = null, onSelectWall,
+    angleSnap, overlay, htmlOverlay, walls, selectedWallId = null, onSelectWall,
   } = props
   const [hostSize, setHostSize] = useState({ width: 0, height: 0 })
   const [dragging, setDragging] = useState(false)
@@ -165,14 +173,14 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     // A pointerdown that reaches the Floor starts a fresh gesture: whatever a footprint or the
     // handle took last time is over, so this click is a click on the Floor again.
     consumedPointer.current = false
-    if (overlay !== undefined) return // the calibration overlay owns the pointer
+    if (overlay !== undefined || htmlOverlay !== undefined) return // it owns the pointer
     const isPanGesture = tool === 'pan' || event.button === 1
     if (!isPanGesture || viewport === null) return
     panning.current = true
     panMoved.current = false
     lastPan.current = { x: event.clientX, y: event.clientY }
     svgRef.current?.setPointerCapture(event.pointerId)
-  }, [overlay, tool, viewport, svgRef])
+  }, [overlay, htmlOverlay, tool, viewport, svgRef])
 
   const onPointerMove = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
     if (!panning.current || viewport === null) return
@@ -193,9 +201,9 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     // coming up somewhere else. Clearing the selection there would undo the selection the
     // same gesture just made.
     if (consumedPointer.current) return
-    if (overlay !== undefined || panMoved.current) return
+    if (overlay !== undefined || htmlOverlay !== undefined || panMoved.current) return
     if (tool === 'select') onSelect(null)
-  }, [overlay, panMoved, tool, onSelect])
+  }, [overlay, htmlOverlay, panMoved, tool, onSelect])
 
   /** Client pixels to Floor millimetres — the one place the viewport is inverted. */
   const toFloor = useCallback((clientX: number, clientY: number): Point2 | null => {
@@ -286,7 +294,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   const matrix = viewport === null
     ? undefined
     : `matrix(${viewport.zoom},0,0,${viewport.zoom},${panX},${panY})`
-  const cursor = overlay !== undefined
+  const cursor = overlay !== undefined || htmlOverlay !== undefined
     ? 'crosshair'
     : dragging
       ? tool === 'pan' ? 'grabbing' : 'move'
@@ -433,6 +441,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
           </>
         )}
       </svg>
+      {htmlOverlay}
       {pixelsPerMm !== null && (
         <div className="bb-workspace-scale-hint" data-testid="scale-hint">
           Scale: 1px = {(1 / pixelsPerMm).toFixed(2)}mm

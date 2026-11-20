@@ -884,7 +884,8 @@ export function FloorWorkspace(): ReactNode {
                     setPendingDistancePx(distancePx)
                   }}
                 />
-              ) : tool === 'wall' && floorId !== null && floorWalls !== null && viewport !== null && viewport !== undefined ? (
+              ) : undefined}
+              htmlOverlay={tool === 'wall' && floorId !== null && floorWalls !== null && viewport !== null && viewport !== undefined ? (
                 <WallDraftOverlay
                   viewport={viewport}
                   floorWalls={floorWalls}
