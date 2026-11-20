@@ -47,12 +47,12 @@ export interface SnapGeometry {
 export interface WallFaceSource {
   /** `W-5` */
   readonly id: string
-  /** `W-5 · Kitchen side face` */
+  /** `W-5 · face` — the wording for a point on a face (#64 §7; #67 upgrades it to Room sides). */
   readonly label: string
   /** Face corners: where two faces meet, or a face ends (D6: these ARE targets). */
-  readonly corners: readonly Pt[]
-  /** The faces themselves, as straight spans. */
-  readonly faces: readonly { from: Pt; to: Pt }[]
+  readonly corners: readonly { point: Pt; label: string }[]
+  /** The faces themselves, on their real curves: an arc face snaps to the arc, not its chord. */
+  readonly faces: readonly { from: Pt; to: Pt; segment: Segment }[]
 }
 
 export interface SnapSourceInput {
@@ -134,6 +134,37 @@ export const enabledSnapKinds = (settings: {
     if (settings[row]) for (const kind of SNAP_ROW_KINDS[row]) kinds.add(kind)
   }
   return kinds
+}
+
+/**
+ * The nearest point of one tidied face to the cursor (#64 §7). A straight face is the
+ * projection onto its span, clamped to its ends. An arc face is the point of its circle on the
+ * ray from the centre through the cursor, clamped to the arc: the chord would offer a point
+ * that is not on any wall.
+ */
+const nearestOnFace = (face: { from: Pt; to: Pt; segment: Segment }, cursor: Pt): Pt | null => {
+  const { segment } = face
+  if (segment.kind !== 'arc') {
+    const d = { x: face.to.x - face.from.x, y: face.to.y - face.from.y }
+    const dd = d.x * d.x + d.y * d.y
+    if (dd === 0) return null
+    const t = Math.min(1, Math.max(0, ((cursor.x - face.from.x) * d.x + (cursor.y - face.from.y) * d.y) / dd))
+    return pt(face.from.x + d.x * t, face.from.y + d.y * t)
+  }
+  const centre = segment.center
+  const radius = distance(centre, face.from)
+  if (radius === 0) return null
+  const degrees = (at: Pt): number => (Math.atan2(at.y - centre.y, at.x - centre.x) * 180) / Math.PI
+  const start = degrees(face.from)
+  const sweep = segment.sweepDeg
+  // The cursor’s bearing from the arc’s start, wound into the direction the arc turns and then
+  // clamped to the arc’s own length.
+  const bearing = degrees(cursor)
+  const around = (at: number): number => ((at % 360) + 360) % 360
+  const offset = sweep >= 0 ? around(bearing - start) : -around(start - bearing)
+  const along = sweep >= 0 ? Math.min(sweep, offset) : Math.max(sweep, offset)
+  const angle = (start + along) * DEG
+  return pt(centre.x + radius * Math.cos(angle), centre.y + radius * Math.sin(angle))
 }
 
 /**
@@ -261,16 +292,12 @@ export const snapCandidates = (input: SnapSourceInput): SnapCandidate[] => {
   if (enabled.has('wallFace')) {
     for (const wall of walls ?? []) {
       const seen: Pt[] = []
-      for (const at of wall.corners) {
-        if (fresh(seen, at)) out.push({ point: at, kind: 'wallFace', label: wall.label })
+      for (const corner of wall.corners) {
+        if (fresh(seen, corner.point)) out.push({ point: corner.point, kind: 'wallFace', label: corner.label })
       }
       for (const face of wall.faces) {
-        const d = { x: face.to.x - face.from.x, y: face.to.y - face.from.y }
-        const dd = d.x * d.x + d.y * d.y
-        if (dd === 0) continue
-        const t = Math.min(1, Math.max(0, ((cursor.x - face.from.x) * d.x + (cursor.y - face.from.y) * d.y) / dd))
-        const at = pt(face.from.x + d.x * t, face.from.y + d.y * t)
-        if (fresh(seen, at)) out.push({ point: at, kind: 'wallFace', label: wall.label })
+        const at = nearestOnFace(face, cursor)
+        if (at !== null && fresh(seen, at)) out.push({ point: at, kind: 'wallFace', label: wall.label })
       }
     }
   }

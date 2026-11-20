@@ -29,6 +29,8 @@
 export { cabinetSceneUnits } from './cabinetSceneUnits'
 export { SNAP_ROW_KINDS, enabledSnapKinds, snapCandidates } from './snapCandidates'
 export type { SnapGeometry, SnapSettingKinds, SnapSourceInput, WallFaceSource } from './snapCandidates'
+export { deriveWalls } from './walls'
+export type { DerivedCorner, DerivedFace, DerivedWall, FloorWalls } from './walls'
 export {
   AFFINE_IDENTITY,
   affineApply,
