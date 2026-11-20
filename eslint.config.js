@@ -119,6 +119,10 @@ const LEGACY_ELEMENTS = [
       'legacy-utils',
       'legacy-data',
       'legacy-types',
+      // #62: a component renders the rows `derive` derived — the Cut List panel shows the very
+      // rows the CSV export writes. Reading a derived row is not computing one: the cut-list
+      // engine in `cabinet` stays out of the views, which `CutListPanel.test.tsx` scans for.
+      'derive',
     ],
   },
   // Renamed from S0's `app` so it does not collide with the target `app` module.

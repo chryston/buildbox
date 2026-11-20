@@ -11,12 +11,13 @@ import type {
   SlideType,
   Unit,
 } from '../../domain'
-import type { CabinetUnit, CutListEntry, LayoutVoid } from '../../cabinet'
+import type { CabinetUnit, LayoutVoid } from '../../cabinet'
+import type { CutListRow } from '../../derive'
 import { fromMm, toMm } from '../../domain'
 import { MATERIALS } from '../../utils/materials'
 
 interface Props {
-  cutList?: CutListEntry[]
+  cutList?: readonly CutListRow[]
   selectedId: string | null
   selectedNode: CabinetNode | null
   selectedVoid?: LayoutVoid | null
@@ -143,11 +144,14 @@ export default function Sidebar({
   onSelectUnit = () => {},
   onRenameUnit = () => {},
 }: Props) {
-  const grouped = cutList.reduce<Record<string, { label: string; entries: CutListEntry[] }>>((acc, e) => {
-    if (!acc[e.unitId]) acc[e.unitId] = { label: e.unitLabel, entries: [] }
-    acc[e.unitId].entries.push(e)
-    return acc
-  }, {})
+  // One heading per Item Design: the rows are the contract's, and the design is what a person
+  // reading the panel calls the thing by.
+  const grouped: Record<string, { label: string; rows: CutListRow[] }> = {}
+  for (const row of cutList) {
+    const group = grouped[row.itemDesignId]
+    if (group === undefined) grouped[row.itemDesignId] = { label: row.itemDesign, rows: [row] }
+    else group.rows.push(row)
+  }
   const isVoid = !selectedNode?.splitAxis
   const isLocked = selectedNode?.locked ?? false
   const [revealStr, setRevealStr] = useState(String(selectedNode?.drawerConfig?.reveal ?? 3))
@@ -327,15 +331,15 @@ export default function Sidebar({
           Cut List ({cutList.length} parts)
         </summary>
         <div className="max-h-64 overflow-y-auto">
-          {Object.entries(grouped).map(([unitId, { label, entries }]) => (
-            <div key={unitId}>
+          {Object.entries(grouped).map(([itemDesignId, { label, rows }]) => (
+            <div key={itemDesignId}>
               {Object.keys(grouped).length > 1 && (
                 <p className="text-xs font-semibold text-text-muted mt-2 mb-1 px-4">{label}</p>
               )}
-              <CutListPanel entries={entries} />
+              <CutListPanel rows={rows} />
             </div>
           ))}
-          {cutList.length === 0 && <CutListPanel entries={[]} />}
+          {cutList.length === 0 && <CutListPanel rows={[]} />}
         </div>
       </details>
     </aside>
