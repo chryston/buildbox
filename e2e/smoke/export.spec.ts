@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+import { unzipSync } from 'fflate'
 import { expect, test } from '../support/fixtures'
 import { readDownload } from '../support/libraryApp'
 import { FIRST_PROJECT, openPreviewApp, openProjectFromLibrary, showFloorPlan } from '../support/previewApp'
@@ -123,4 +125,91 @@ test('a PDF is one drawing per file, and the file is a PDF', async ({ page }) =>
   expect(file.buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-')
   // The subset font is embedded, so the file carries its own letters and not a name to look up.
   expect(file.buffer.subarray(-1024).toString('latin1')).toContain('%%EOF')
+})
+
+test('Cancel stops the run and hands over nothing', async ({ page }) => {
+  await openPreviewApp(page)
+  await showFloorPlan(page)
+  let downloads = 0
+  page.on('download', () => {
+    downloads += 1
+  })
+
+  await page.getByTestId('export-open').click()
+  // PNG at the largest size is the slowest thing the dialog can be asked for, which is what makes
+  // the cancel button reachable while the drawing is still being written.
+  await page.getByTestId('export-format').selectOption('png')
+  await page.getByTestId('export-png-size').selectOption('4096')
+  await page.getByTestId('export-run').click()
+  await expect(page.getByTestId('export-cancel')).toBeVisible()
+  await page.getByTestId('export-cancel').click()
+
+  // Criterion 15: the run is abandoned, the dialog stays open and usable, and the browser was never
+  // handed a file — not a partial one, not the finished bytes late.
+  await expect(page.getByTestId('export-cancel')).toHaveCount(0)
+  await expect(page.getByTestId('export-run')).toBeVisible()
+  expect(downloads).toBe(0)
+
+  // Pressing Export again works: the only download this page makes is the one that was allowed to
+  // finish, which is also the proof that the first run left nothing queued behind it.
+  const pending = page.waitForEvent('download')
+  await page.getByTestId('export-run').click()
+  const file = await readDownload(await pending)
+  expect(file.name).toMatch(/\.png$/)
+  expect(downloads).toBe(1)
+})
+
+test('two views as SVG arrive as one archive with a manifest', async ({ page }) => {
+  await openPreviewApp(page)
+  await showFloorPlan(page)
+  await page.getByTestId('export-open').click()
+
+  const boxes = page.locator('[data-testid^="export-view-"]')
+  const chosen = page.locator('[data-testid^="export-view-"]:checked')
+  const total = await boxes.count()
+  expect(total, 'the seed Project has fewer than two views').toBeGreaterThan(1)
+  // The dialog opens with the view it was called from already chosen, so the way to two is to add
+  // one more — switching one off would be a different recipe from the one the picker shows.
+  for (let index = 0; index < total; index += 1) {
+    if ((await chosen.count()) >= 2) break
+    const box = boxes.nth(index)
+    if (await box.isChecked()) continue
+    await box.click()
+  }
+  await expect(chosen).toHaveCount(2)
+
+  const pending = page.waitForEvent('download')
+  await page.getByTestId('export-run').click()
+  const file = await readDownload(await pending)
+
+  expect(file.name).toMatch(/_drawings_\d{8}\.zip$/)
+  const entries = unzipSync(new Uint8Array(file.buffer))
+  const names = Object.keys(entries).sort()
+  expect(names).toContain('manifest.json')
+  // The archive holds the two drawings and the manifest, and nothing else: no directory entries, no
+  // timestamps of the machine that wrote them.
+  expect(names.filter((one) => one.endsWith('.svg'))).toHaveLength(2)
+  expect(names).toHaveLength(3)
+
+  const manifest = JSON.parse(new TextDecoder().decode(entries['manifest.json'])) as {
+    format: string
+    manifest_version: number
+    contract_version: string
+    files: Array<{ path: string; kind: string; bytes?: number; sha256?: string; warnings: string[] }>
+    recipe: { format: string; views: unknown[] }
+  }
+  expect(manifest.format).toBe('buildbox-export')
+  expect(manifest.manifest_version).toBe(1)
+  expect(manifest.contract_version).toMatch(/^\d+\.\d+$/)
+  const drawings = manifest.files.filter((one) => one.kind === 'drawing')
+  expect(drawings.map((one) => one.path).sort()).toEqual(names.filter((one) => one.endsWith('.svg')))
+  for (const one of drawings) {
+    expect(one.bytes, one.path).toBe(entries[one.path]!.length)
+    expect(one.sha256, one.path).toBe(createHash('sha256').update(entries[one.path]!).digest('hex'))
+    expect(one.warnings).toEqual([])
+  }
+  expect(manifest.recipe.format).toBe('svg')
+  expect(manifest.recipe.views).toHaveLength(2)
+  // The manifest describes itself, so an extracted archive explains where it came from.
+  expect(manifest.files.some((one) => one.kind === 'manifest' && one.path === 'manifest.json')).toBe(true)
 })

@@ -16,15 +16,20 @@ import { zipEntries } from '../lib'
 import type { Recipe, ExportFile, ExportSnapshot } from './types'
 import type { Provenance } from './provenance'
 
-/** What one file in the archive is. */
+/** What one file in the archive is (export contract §9). */
 export interface ManifestFile {
-  readonly name: string
+  /** Where the file sits in the archive. */
+  readonly path: string
   /** `manifest` for this file itself, so an extracted archive explains itself. */
   readonly kind: 'drawing' | 'manifest'
   readonly format: string
   readonly media_type: string
   /** The size of the file in the archive; absent for the manifest, which cannot know its own. */
   readonly bytes?: number
+  /** The same, so a reader can check the file survived the trip; absent for the manifest. */
+  readonly sha256?: string
+  /** Which export contract wrote this entry. */
+  readonly contract_version: string
   /** The view a drawing shows; absent on the manifest. */
   readonly view?: string
   /** The floor or Item Design the drawing is of. */
@@ -35,8 +40,15 @@ export interface ManifestFile {
   readonly warnings: readonly string[]
 }
 
+/** What a reader of `manifest.json` matches on to know what it is holding. */
+export const MANIFEST_FORMAT = 'buildbox-export'
+/** Bumped when the fields below change meaning, not when one is added. */
+export const MANIFEST_VERSION = 1
+
 /** The archive's own contents, as a reader finds them. */
 export interface Manifest {
+  readonly format: typeof MANIFEST_FORMAT
+  readonly manifest_version: number
   readonly contract_version: string
   readonly generator: 'BuildBox'
   readonly buildbox_version: string
@@ -48,14 +60,22 @@ export interface Manifest {
   readonly files: readonly ManifestFile[]
 }
 
-/** The manifest for one export, from the same provenance the files carry. */
-export function manifestOf(
+/**
+ * The manifest for one export, from the same provenance the files carry.
+ *
+ * Asynchronous because an entry carries the SHA-256 of the file it describes, and the only SHA-256
+ * worth having is the host's own — the one the Backup and the `.buildbox` codec already use, so a
+ * digest in a manifest means the same thing as one in a Package.
+ */
+export async function manifestOf(
   snapshot: ExportSnapshot,
   recipe: Recipe,
   provenance: Provenance,
   files: readonly ManifestFile[],
-): Manifest {
+): Promise<Manifest> {
   return {
+    format: MANIFEST_FORMAT,
+    manifest_version: MANIFEST_VERSION,
     contract_version: provenance.contract_version,
     generator: provenance.generator,
     buildbox_version: provenance.buildbox_version,

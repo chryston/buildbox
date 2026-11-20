@@ -100,11 +100,13 @@ export async function exportFiles(
     }
     files.push(written.file)
     entries.push({
-      name,
+      path: name,
       kind: 'drawing',
       format: recipe.format,
       media_type: written.file.mediaType,
       bytes: written.file.bytes.length,
+      sha256: await sha256Hex(written.file.bytes),
+      contract_version: provenance.contract_version,
       view: item.composed.viewName,
       subject: item.composed.subject,
       scale: item.composed.scale,
@@ -122,9 +124,16 @@ export async function exportFiles(
     name: 'manifest.json',
     mediaType: 'application/json',
     bytes: manifestBytes(
-      manifestOf(snapshot, recipe, provenance, [
+      await manifestOf(snapshot, recipe, provenance, [
         ...entries,
-        { name: 'manifest.json', kind: 'manifest', format: 'json', media_type: 'application/json', warnings: [] },
+        {
+          path: 'manifest.json',
+          kind: 'manifest',
+          format: 'json',
+          media_type: 'application/json',
+          contract_version: provenance.contract_version,
+          warnings: [],
+        },
       ]),
     ),
   }

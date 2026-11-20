@@ -7,7 +7,9 @@
  * path, a locale, a time zone, an author, a user agent and a device name are all shapes, so the
  * test looks for the shapes rather than for a list of fields the writers happened to have yesterday.
  */
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
+import { unzipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import { referenceProject } from '../derive/testing'
@@ -181,6 +183,53 @@ describe('the print palette', () => {
         }
       }),
     )
+  })
+})
+
+describe('the archive', () => {
+  const twoViews = (): { snapshot: ExportSnapshot; views: string[] } => {
+    const project = referenceProject()
+    return {
+      snapshot: { project, revision: 3 },
+      views: project.views.slice(0, 2).map((view) => view.id),
+    }
+  }
+
+  it('carries a manifest that says what each file is', async () => {
+    const { snapshot, views } = twoViews()
+    const result = await exportFiles(snapshot, recipeFor(views[0]!, { views: views.map((id) => ({ kind: 'plan', viewId: id })) }), deps)
+    if (!result.ok || result.kind !== 'archive') throw new Error('expected an archive')
+    const manifest = JSON.parse(new TextDecoder().decode(result.manifest.bytes)) as {
+      format: string
+      manifest_version: number
+      files: Array<{ path: string; kind: string; bytes?: number; sha256?: string; contract_version: string }>
+    }
+    expect(manifest.format).toBe('buildbox-export')
+    expect(manifest.manifest_version).toBe(1)
+    const drawings = manifest.files.filter((one) => one.kind === 'drawing')
+    expect(drawings.map((one) => one.path)).toEqual(result.files.map((one) => one.name))
+    for (const [index, one] of drawings.entries()) {
+      expect(one.bytes).toBe(result.files[index]!.bytes.length)
+      expect(one.sha256).toBe(createHash('sha256').update(result.files[index]!.bytes).digest('hex'))
+      expect(one.contract_version).toBe('1.0')
+    }
+    // The manifest lists itself last, so an extracted archive explains itself without a reader.
+    expect(manifest.files[manifest.files.length - 1]).toMatchObject({ path: 'manifest.json', kind: 'manifest' })
+  })
+
+  it('writes its entries in the order given and the same bytes twice', async () => {
+    const { snapshot, views } = twoViews()
+    const recipe = recipeFor(views[0]!, { views: views.map((id) => ({ kind: 'plan', viewId: id })) })
+    const first = await exportFiles(snapshot, recipe, deps)
+    const second = await exportFiles(snapshot, recipe, deps)
+    if (!first.ok || !second.ok || first.kind !== 'archive' || second.kind !== 'archive') {
+      throw new Error('expected two archives')
+    }
+    // Criterion 1: the archive is the same bytes twice, because the only thing that could differ is
+    // the clock, and the archiver does not use it.
+    expect(Buffer.from(second.archive.bytes)).toEqual(Buffer.from(first.archive.bytes))
+    const entries = unzipSync(first.archive.bytes)
+    expect(Object.keys(entries)).toEqual([...first.files.map((one) => one.name), 'manifest.json'])
   })
 })
 

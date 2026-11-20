@@ -129,9 +129,16 @@ function assetHashes(project: Project, views: readonly RecipeViewRef[]): string[
 function manifestWarnings(result: ExportResult): string[] {
   if (!result.ok || result.kind !== 'archive') return []
   const parsed: unknown = JSON.parse(new TextDecoder().decode(result.manifest.bytes))
-  if (typeof parsed !== 'object' || parsed === null || !('warnings' in parsed)) return []
-  const warnings: unknown = parsed.warnings
-  return Array.isArray(warnings) ? warnings.filter((one): one is string => typeof one === 'string') : []
+  if (typeof parsed !== 'object' || parsed === null || !('files' in parsed)) return []
+  const files: unknown = parsed.files
+  if (!Array.isArray(files)) return []
+  const warnings: string[] = []
+  for (const file of files) {
+    if (typeof file !== 'object' || file === null || !('warnings' in file)) continue
+    const listed: unknown = file.warnings
+    if (Array.isArray(listed)) warnings.push(...listed.filter((one): one is string => typeof one === 'string'))
+  }
+  return warnings
 }
 
 export function createExportPort(deps: ExportPortDeps): ExportPort {
@@ -268,9 +275,16 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
       if (cancelled) return { kind: 'cancelled' }
       if (!result.ok) return { kind: 'failed', failures: result.failures }
 
-      const files = result.kind === 'single' ? [result.file] : [...result.files, result.manifest, result.archive]
-      for (const file of files) downloadFile(file.name, file.mediaType, file.bytes)
-      return { kind: 'downloaded', files: files.length, missingGlyphs: manifestWarnings(result) }
+      // One handover per export. A set goes as the archive alone — the drawings and the manifest are
+      // inside it, and handing the browser the parts as well would be a folder of loose files
+      // wherever the person asked for one thing (criterion 6).
+      const handed = result.kind === 'single' ? [result.file] : [result.archive]
+      for (const file of handed) downloadFile(file.name, file.mediaType, file.bytes)
+      return {
+        kind: 'downloaded',
+        files: result.kind === 'single' ? 1 : result.files.length,
+        missingGlyphs: manifestWarnings(result),
+      }
     },
   }
 }
