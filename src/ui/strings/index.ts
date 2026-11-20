@@ -21,6 +21,7 @@
  */
 
 import type { MigrationStage, PersistenceError, RecoveryPointKind, SaveFailureReason } from '../../session'
+import type { ExportFailureReason } from '../../export'
 
 /** `1 Floor` / `2 Floors` and the same for every countable noun the Library shows. */
 export const plural = (count: number, one: string, many: string): string =>
@@ -378,6 +379,77 @@ export const STRINGS = {
   /** Criterion 17: a legacy file picked from `Restore Backup` goes to the review instead. */
   migrationFileDetected: 'That file is old BuildBox data. Review it instead?',
   migrationReviewTheFile: 'Review this file',
+
+  /* ---------------------------------------------------------- #61: Export… */
+
+  /** The ellipsis is the contract: the action opens a dialog, it does not download. */
+  exportAction: 'Export…',
+  exportEyebrow: 'Export',
+  exportHeading: 'Export drawings?',
+  /** `Drawing` is the only live tab; the other two name what is coming so the row is final. */
+  exportTabDrawing: 'Drawing',
+  exportTabLists: 'Lists',
+  exportTabHandoff: 'Handoff pack',
+  exportTabComingSoon: 'Coming soon',
+  exportGroupViews: 'Views',
+  exportGroupSheet: 'Sheet',
+  exportGroupFiles: 'Files',
+  exportFormat: 'Format',
+  exportPageSize: 'Page size',
+  exportOrientation: 'Orientation',
+  exportOrientationAuto: 'Auto',
+  exportOrientationPortrait: 'Portrait',
+  exportOrientationLandscape: 'Landscape',
+  exportScale: 'Scale',
+  exportFitToPage: 'Fit to page',
+  exportScaleRatio: (denominator: number): string => `1:${denominator}`,
+  exportPngSize: 'PNG size',
+  exportPngLongEdge: (pixels: number): string => `${pixels} px long edge`,
+  exportTitleBlock: 'Title block',
+  exportGrid: 'Grid',
+  /** The read-only line: the drawing's unit is the Project's, never a choice here. */
+  exportDimensionsIn: (unit: string): string => `Dimensions in ${unit}`,
+  /** The privacy line, verbatim from the export contract §11. */
+  exportPrivacy: 'Files include the Project name and any label text you typed.',
+  /** Save failed: export still runs, from the in-memory snapshot, and says so. */
+  exportUnsavedNotice: 'Exported from unsaved changes. Download a Backup to keep them.',
+  /** Reads 0 until the warnings engine lands; the count is `derive`'s, not the dialog's. */
+  exportWarningCount: (count: number): string => `${count} unacknowledged warnings in this scope`,
+  /** Criterion 11: the export completes, and names the labels the font cannot draw. */
+  exportMissingGlyphNotice: (labels: string): string =>
+    `The PDF font can't render some characters in ${labels}. They are drawn as a box.`,
+  /** An empty view is not an error; it exports with its title block and says so. */
+  exportEmptyViewNotice: 'A view with nothing in it still exports, with its title block.',
+  /** The Backup is the thing that keeps the work; the dialog points at it and stops. */
+  exportBackupLink: 'To keep everything, including images and comments, use Download Backup in the Project Library.',
+  exportRun: 'Export',
+  exportRunning: 'Exporting…',
+  /** Blocking explanations: Export stays disabled and says why in one line. */
+  exportNeedViews: 'Choose at least one view to export.',
+  exportPdfSingleView: 'PDF exports one view at a time.',
+  exportScaleNoFit: (denominator: number): string =>
+    `At 1:${denominator} the drawing is bigger than the page.`,
+  exportScaleNoFitFixes: 'One-click fixes:',
+  exportFixScale: (denominator: number): string => `Use 1:${denominator}`,
+  exportFixFit: 'Use Fit to page',
+  exportFixPage: (pageSize: string, orientation: string): string => `Use ${pageSize}, ${orientation}`,
+  /** Criterion 15: a failure names the output and the reason, and nothing else. */
+  exportFailedHeading: 'Nothing was downloaded.',
+  exportFailedRow: (output: string, reason: string): string => `${output}: ${reason}`,
+  // One sentence per reason `export` can answer with. The machine key never reaches the screen: a
+  // person reading `raster-failed` learns nothing they can act on.
+  exportFailedReason: (reason: ExportFailureReason): string =>
+    ({
+      'out-of-paper': 'It does not fit the page at that scale.',
+      'empty-drawing': 'There was nothing in it to draw.',
+      'unknown-view': 'That view is no longer in the Project.',
+      'no-font': 'The drawing font was missing.',
+      'font-refused': 'The drawing font could not be read.',
+      'no-rasterizer': 'This browser cannot make a PNG image.',
+      'raster-failed': 'The image could not be made.',
+      'image-format': 'A Plan Image is in a format that cannot be placed.',
+    })[reason],
+  exportFailedRetry: 'Untick that view and try again.',
 } as const
 
 /**

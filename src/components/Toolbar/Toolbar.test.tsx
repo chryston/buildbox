@@ -25,13 +25,6 @@ describe('Toolbar', () => {
     expect(screen.queryByRole('button', { name: /import workspace/i })).not.toBeInTheDocument()
   })
 
-  it('still offers the drawing export that has no replacement yet (#61)', () => {
-    const onExport = vi.fn()
-    render(<Toolbar settings={settings} onSettingsChange={vi.fn()} onExport={onExport} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Export SVG' }))
-    expect(onExport).toHaveBeenCalled()
-  })
-
   it('shows the save status as plain text when there is no dialog to open', () => {
     render(<Toolbar settings={settings} onSettingsChange={vi.fn()} saveStatus={{ text: 'Saved', failed: false }} />)
     expect(screen.getByRole('status')).toHaveTextContent('Saved')

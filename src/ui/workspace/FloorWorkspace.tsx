@@ -63,7 +63,8 @@ import { TransferToFloorDialog } from './TransferToFloorDialog'
 import type { TransferTarget } from './TransferToFloorDialog'
 import { CalibrationOverlay } from './CalibrationOverlay'
 import { ScaleCalibrationModal } from './ScaleCalibrationModal'
-import { downloadSvg } from './exportSvg'
+import { STRINGS } from '../strings'
+import { ExportDialog } from './export/ExportDialog'
 
 /** The package's per-file limit (#6): the largest Plan Image a file may be. */
 const MAX_PLAN_IMAGE_BYTES = 50 * 1024 * 1024
@@ -143,6 +144,7 @@ export function FloorWorkspace(): ReactNode {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [isCalibrating, setIsCalibrating] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
   const [pendingDistancePx, setPendingDistancePx] = useState<number | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -413,18 +415,9 @@ export function FloorWorkspace(): ReactNode {
     commitImage(read.image)
   }
 
-  const handleExportSvg = (): void => {
+  const openExport = (): void => {
     select(null)
-    setTimeout(() => {
-      const svg = svgRef.current
-      if (svg === null) return
-      const rect = svg.getBoundingClientRect()
-      svg.setAttribute('width', String(Math.round(rect.width)))
-      svg.setAttribute('height', String(Math.round(rect.height)))
-      downloadSvg(svg, 'floor-plan')
-      svg.removeAttribute('width')
-      svg.removeAttribute('height')
-    }, 50)
+    setIsExporting(true)
   }
 
   const openFloor = (nextFloorId: string): void => {
@@ -628,16 +621,17 @@ export function FloorWorkspace(): ReactNode {
     },
     {
       id: 'export',
-      width: 112,
+      width: 104,
       label: 'Export',
       content: (
         <button
           type="button"
-          data-testid="export-svg"
+          data-testid="export-open"
           className="bb-workspace-tool-button"
-          onClick={handleExportSvg}
+          disabled={view === null}
+          onClick={openExport}
         >
-          Export SVG
+          {STRINGS.exportAction}
         </button>
       ),
     },
@@ -853,6 +847,18 @@ export function FloorWorkspace(): ReactNode {
             setPendingDistancePx(null)
           }}
           onClose={() => setPendingDistancePx(null)}
+        />
+      )}
+      {isExporting && view !== null && (
+        <ExportDialog
+          origin={{ kind: 'plan', viewId: view.id }}
+          unit={project.preferences.displayUnit}
+          precision={project.preferences.displayPrecision}
+          unsavedChanges={session.getSnapshot().save.kind !== 'saved'}
+          port={services.exportDrawings}
+          onClose={() => {
+            setIsExporting(false)
+          }}
         />
       )}
       {settingsOpen && (

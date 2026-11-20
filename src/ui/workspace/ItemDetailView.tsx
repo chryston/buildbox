@@ -10,11 +10,13 @@
  * Navigation only: nothing here dispatches an Intent (#26). `← Back` and the `Placements` list
  * both move the Floor and Plan View pointers and reselect one Placed Item.
  */
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useWorkspaceProject, useWorkspaceRoot } from './WorkspaceRoot'
 import { itemLibrary, planViewsForFloor, placementGroups } from './planModel'
 import { ShapeEditor } from './shape/ShapeEditor'
 import { useWorkspace, workspaceStore } from './workspaceStore'
+import { STRINGS } from '../strings'
+import { ExportDialog } from './export/ExportDialog'
 
 export interface ItemDetailViewProps {
   /** The Item Design on screen — the one `Open Item Detail` was pressed for. */
@@ -35,8 +37,9 @@ function gotoPlacement(floorId: string, viewId: string | null, placedItemId: str
 }
 
 export function ItemDetailView({ itemDesignId, children }: ItemDetailViewProps) {
-  const { session } = useWorkspaceRoot()
+  const { session, services } = useWorkspaceRoot()
   const project = useWorkspaceProject(session)
+  const [isExporting, setIsExporting] = useState(false)
   const detail = useWorkspace((state) => state.itemDetail)
   const entry = itemLibrary(project).find((each) => each.itemDesignId === itemDesignId) ?? null
   const design = project.itemDesigns.find((each) => each.id === itemDesignId) ?? null
@@ -67,7 +70,30 @@ export function ItemDetailView({ itemDesignId, children }: ItemDetailViewProps) 
         <span className="bb-item-detail-title" data-testid="item-detail-title">
           {entry?.label ?? ''}
         </span>
+        <button
+          type="button"
+          className="bb-item-detail-export"
+          data-testid="export-open"
+          disabled={design === null}
+          onClick={() => {
+            setIsExporting(true)
+          }}
+        >
+          {STRINGS.exportAction}
+        </button>
       </header>
+      {isExporting && (
+        <ExportDialog
+          origin={{ kind: 'item-detail', itemDesignId }}
+          unit={project.preferences.displayUnit}
+          precision={project.preferences.displayPrecision}
+          unsavedChanges={session.getSnapshot().save.kind !== 'saved'}
+          port={services.exportDrawings}
+          onClose={() => {
+            setIsExporting(false)
+          }}
+        />
+      )}
       <div className="bb-item-detail-body">
         <nav
           className="bb-item-detail-placements"

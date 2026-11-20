@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../App'
 import { LEGACY_STORE_KEY } from '../platform'
 import { PLAN_IMAGE_ACCEPT, WorkspaceProvider, type WorkspaceServices } from '../ui'
-import { openTestView, renderWithBindings as render, type TestView } from '../ui/legacy/testing'
+import { openTestView, renderWithBindings as render, TEST_EXPORT_PORT, type TestView } from '../ui/legacy/testing'
 
 /** Every key a `Storage.prototype.setItem` call named since the last `beforeEach`. */
 let written: string[]
@@ -45,6 +45,7 @@ describe('the legacy localStorage key', () => {
       planImageAccept: PLAN_IMAGE_ACCEPT,
       planCatalogue: [{ key: 'sofa-2', label: 'Sofa 2-seater' }],
       viewportCache: { read: async () => undefined, write: () => {}, readActive: async () => null, writeActive: () => {} },
+      exportDrawings: TEST_EXPORT_PORT,
     }
     render(
       <WorkspaceProvider

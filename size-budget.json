@@ -1,6 +1,7 @@
 {
   "appShellGzipBytes": 91436,
   "maxGrowth": 0.15,
+  "exportChunkGzipBytes": 700000,
   "baselineCommit": "cddb1b6b574bd1f850cf993a6a5e34353534dca4",
-  "note": "S0 baseline, #20 §12. Do not re-record without an explicit decision."
+  "note": "S0 baseline, #20 §12. Do not re-record without an explicit decision. exportChunkGzipBytes is a hard cap on the lazy export chunk (#61 §11), not a baseline with growth."
 }

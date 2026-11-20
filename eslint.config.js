@@ -47,14 +47,6 @@ const TARGET_MODULES = [
 const LEGACY_TARGET_MODULES = ['lib', 'domain', 'cabinet', 'package']
 
 const LEGACY_ELEMENTS = [
-  {
-    name: 'legacy-utils-dom',
-    // The download helper uses document/URL, so it must be claimed before `legacy-utils`, and
-    // so must the test that drives it through a real jsdom document.
-    pattern: ['src/utils/exportSVG.ts', 'src/utils/exportSVG.test.ts'],
-    mode: 'file',
-    allow: ['legacy-types', 'legacy-utils-dom'],
-  },
   { name: 'legacy-types', pattern: ['src/types'], mode: 'folder', allow: ['legacy-types'], pure: true },
   {
     // #49's test of the session-backed bindings: it opens a real session over the in-memory
@@ -125,7 +117,6 @@ const LEGACY_ELEMENTS = [
       // session itself, which is what keeps them replaceable.
       'legacy-view',
       'legacy-utils',
-      'legacy-utils-dom',
       'legacy-data',
       'legacy-types',
     ],
@@ -172,6 +163,22 @@ const PLATFORM_BACKUP_ELEMENT = {
   mode: 'file',
 }
 
+// The drawing exporter is the second part of `platform` allowed a module of its own (#61): the
+// Worker entry that writes SVG, PDF and PNG, its main-thread host, and the `OffscreenCanvas`
+// rasterizer both of them paint through. Claimed out by file name for the same reason as the
+// Backup codec — so "platform imports nothing but `lib`" still holds for every other file in that
+// folder, and the exception is three files long with the reason written next to it.
+const PLATFORM_EXPORT_ELEMENT = {
+  type: 'platform-export',
+  pattern: [
+    'src/platform/rasterizer.ts',
+    'src/platform/export.worker.ts',
+    'src/platform/exportRunner.ts',
+    'src/platform/exportRunner.test.ts',
+  ],
+  mode: 'file',
+}
+
 const TARGET_MODULE_NAMES = TARGET_MODULES.map((module) => module.name)
 
 // Elements whose files are importable individually: legacy code has no entry point until
@@ -179,6 +186,7 @@ const TARGET_MODULE_NAMES = TARGET_MODULES.map((module) => module.name)
 const OPEN_ENTRY_ELEMENT_NAMES = [
   ADAPTER_ELEMENT.type,
   PLATFORM_BACKUP_ELEMENT.type,
+  PLATFORM_EXPORT_ELEMENT.type,
   ...LEGACY_ELEMENTS.map((element) => element.name),
 ]
 
@@ -188,6 +196,7 @@ const legacyElement = (element) => ({ type: element.name, pattern: element.patte
 const ELEMENTS = [
   ADAPTER_ELEMENT,
   PLATFORM_BACKUP_ELEMENT,
+  PLATFORM_EXPORT_ELEMENT,
   ...LEGACY_ELEMENTS.filter((element) => element.mode === 'file' || element.beforeTargets).map(legacyElement),
   ...TARGET_MODULES.map((module) => ({ type: module.name, pattern: [`src/${module.name}`], mode: 'folder' })),
   ...LEGACY_ELEMENTS.filter((element) => element.mode === 'folder' && !element.beforeTargets).map(legacyElement),
@@ -338,10 +347,13 @@ const elementTypeRules = [
   // the port declarations, `domain` and `lib` are what it is built from, and no other
   // module may be reached from it (#46).
   { from: [ADAPTER_ELEMENT.type], allow: ['persistence', 'domain', 'lib', ADAPTER_ELEMENT.type] },
-  // `platform`'s index re-exports the Backup codec it claims out by file name, so the folder is
-  // allowed that one element. This row comes first because the plugin stops at the first rule
+  // `platform`'s index re-exports the two codecs it claims out by file name, so the folder is
+  // allowed those elements. This row comes first because the plugin stops at the first rule
   // whose `from` matches: after the generic `platform` row below it would never be read.
-  { from: ['platform'], allow: ['platform', 'lib', PLATFORM_BACKUP_ELEMENT.type] },
+  {
+    from: ['platform'],
+    allow: ['platform', 'lib', PLATFORM_BACKUP_ELEMENT.type, PLATFORM_EXPORT_ELEMENT.type],
+  },
   // The Backup codec speaks `session`'s port shapes and `domain`'s Project, both as types only;
   // `package` is the one value it may reach, because writing the archive is the whole exception.
   {
@@ -350,6 +362,10 @@ const elementTypeRules = [
     importKind: 'type',
   },
   { from: [PLATFORM_BACKUP_ELEMENT.type], allow: ['package', PLATFORM_BACKUP_ELEMENT.type] },
+  // The drawing exporter reaches `export` as a value — running it is the whole exception — and
+  // needs `domain`'s Project only to type the snapshot it is handed.
+  { from: [PLATFORM_EXPORT_ELEMENT.type], allow: ['domain', 'export'], importKind: 'type' },
+  { from: [PLATFORM_EXPORT_ELEMENT.type], allow: ['export', PLATFORM_EXPORT_ELEMENT.type] },
   // Type-only exceptions first: a value import of the same target falls through to the
   // module's own row below and is rejected there.
   ...[...TARGET_MODULES, ...LEGACY_ELEMENTS].filter((module) => module.typeOnly).map((module) => ({

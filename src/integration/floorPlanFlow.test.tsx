@@ -14,7 +14,7 @@ import App from '../App'
 import { PLAN_IMAGE_ACCEPT, WorkspaceProvider, type WorkspaceServices } from '../ui'
 import { planItemsForFloor, workspaceStore } from '../ui'
 import type { Viewport, ViewportCache } from '../ui'
-import { openTestView, renderWithBindings as render, type TestView } from '../ui/legacy/testing'
+import { openTestView, renderWithBindings as render, TEST_EXPORT_PORT, type TestView } from '../ui/legacy/testing'
 
 function testWorkspaceServices(): WorkspaceServices {
   const cache = new Map<string, Viewport>()
@@ -36,6 +36,7 @@ function testWorkspaceServices(): WorkspaceServices {
       { key: 'fridge', label: 'Fridge' },
     ],
     viewportCache,
+    exportDrawings: TEST_EXPORT_PORT,
   }
 }
 

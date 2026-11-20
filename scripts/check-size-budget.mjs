@@ -45,14 +45,75 @@ function shellFile(ref) {
   throw new Error(`dist/index.html references ${ref}, which is not in dist/`)
 }
 
-function appShellGzipBytes() {
+function appShellFiles() {
   const indexPath = path.join(DIST, 'index.html')
   if (!existsSync(indexPath)) throw new Error('dist/index.html not found — run `npm run build` first')
   const files = shellRefs(readFileSync(indexPath, 'utf8'))
     .map(shellFile)
     .filter((file) => ['.js', '.css'].includes(path.extname(file)))
   if (files.length === 0) throw new Error('dist/index.html references no JS or CSS — the app shell is empty')
-  return files.reduce((total, file) => total + gzipSync(readFileSync(file), { level: 9 }).length, 0)
+  return files
+}
+
+function appShellGzipBytes(files) {
+  return files.reduce((total, file) => total + gzipOf(file), 0)
+}
+
+// The export chunk (#61 §11): `pdf-lib`, `@pdf-lib/fontkit` and the subset face are named one
+// lazy chunk in `vite.config.ts`. Two things are checked about it — that it is a chunk of its own
+// and small enough, and that none of it leaked into what a first visit downloads. The second is
+// the one that matters: a single accidental static import of `export` from the workspace would
+// fold a megabyte into the app shell, the shell budget would still pass on a day when it happens
+// to fit, and every reader would pay for a feature they never opened.
+const EXPORT_CHUNK = /^export-[A-Za-z0-9_-]+\.js$/
+const EXPORT_MARKERS = [
+  // A string literal pdf-lib writes into every document it produces, and one fontkit reads out of
+  // a font's `name` table. Both survive minification because both are data, not identifiers.
+  'pdf-lib (https://github.com/Hopding/pdf-lib)',
+  'BaseFontName',
+  // The subset face the PDF embeds, by emitted asset name. It is a pattern and not a literal
+  // because Vite hashes the file name, and it is `.ttf` specifically: the interface has always
+  // shipped a `NotoSans-Latin1` *woff2* from the app shell's CSS, and that one is not the export.
+  /NotoSans-Latin1-[A-Za-z0-9_-]+\.ttf/,
+]
+
+function exportChunkFiles() {
+  const assets = path.join(DIST, 'assets')
+  if (!existsSync(assets)) return []
+  return readdirSync(assets).filter((name) => EXPORT_CHUNK.test(name)).map((name) => path.join(assets, name))
+}
+
+function gzipOf(file) {
+  return gzipSync(readFileSync(file), { level: 9 }).length
+}
+
+function checkExportChunk(shellFiles, cap) {
+  const chunks = exportChunkFiles()
+  if (chunks.length === 0) {
+    console.error('no `export-*.js` chunk in dist/assets: the export is not a chunk of its own (#61 §11)')
+    process.exit(1)
+  }
+  const bytes = chunks.reduce((total, file) => total + gzipOf(file), 0)
+  const eager = shellFiles.filter((file) => chunks.includes(file))
+  console.log(`export chunk: ${bytes} B gzip (cap ${cap}) across ${chunks.length} file(s)`)
+  if (eager.length > 0) {
+    console.error(`the export chunk is loaded eagerly by dist/index.html (#61 §11): ${eager.map((f) => path.basename(f)).join(', ')}`)
+    process.exit(1)
+  }
+  if (bytes > cap) {
+    console.error(`over budget: the export chunk is ${bytes - cap} B above its ${cap} B cap (#61 §11)`)
+    process.exit(1)
+  }
+  for (const file of shellFiles) {
+    const text = readFileSync(file, 'utf8')
+    for (const marker of EXPORT_MARKERS) {
+      const found = typeof marker === 'string' ? text.includes(marker) : marker.test(text)
+      if (!found) continue
+      const name = typeof marker === 'string' ? `\`${marker}\`` : marker.source
+      console.error(`${path.basename(file)} contains ${name}: the export reached the app shell (#61 §11)`)
+      process.exit(1)
+    }
+  }
 }
 
 // Every app chunk the build emitted, eager or lazy. Since #53 the editor is a dynamic import,
@@ -99,20 +160,28 @@ function findGitDir(startDir) {
   }
 }
 
-const bytes = appShellGzipBytes()
+const shellFiles = appShellFiles()
+const bytes = appShellGzipBytes(shellFiles)
 
 if (process.argv.includes('--record')) {
-  const budget = { appShellGzipBytes: bytes, maxGrowth: 0.15, baselineCommit: currentCommit(ROOT), note: NOTE }
+  const budget = {
+    appShellGzipBytes: bytes,
+    maxGrowth: 0.15,
+    exportChunkGzipBytes: JSON.parse(readFileSync(BUDGET_FILE, 'utf8')).exportChunkGzipBytes ?? 700000,
+    baselineCommit: currentCommit(ROOT),
+    note: NOTE,
+  }
   writeFileSync(BUDGET_FILE, `${JSON.stringify(budget, null, 2)}\n`)
   console.log(`recorded app shell: ${bytes} B gzip at ${budget.baselineCommit} -> size-budget.json`)
   process.exit(0)
 }
 
 if (!existsSync(BUDGET_FILE)) throw new Error('size-budget.json not found — record one with `node scripts/check-size-budget.mjs --record`')
-const { appShellGzipBytes: baseline, maxGrowth } = JSON.parse(readFileSync(BUDGET_FILE, 'utf8'))
+const { appShellGzipBytes: baseline, maxGrowth, exportChunkGzipBytes: exportCap } = JSON.parse(readFileSync(BUDGET_FILE, 'utf8'))
 const limit = Math.floor(baseline * (1 + maxGrowth))
 console.log(`app shell: ${bytes} B gzip (baseline ${baseline}, limit ${limit})`)
 console.log(`all app chunks: ${allChunksGzipBytes()} B gzip (informational; the budget gates the eager shell only)`)
+checkExportChunk(shellFiles, exportCap)
 if (bytes > limit) {
   const growth = (((bytes - baseline) / baseline) * 100).toFixed(1)
   console.error(`over budget: app shell is ${bytes - baseline} B (+${growth}%) above the S0 baseline; limit is ${limit} B (#20 §12). Shrink the app shell or record a new baseline with an explicit decision.`)

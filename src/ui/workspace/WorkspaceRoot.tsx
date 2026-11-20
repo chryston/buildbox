@@ -26,6 +26,7 @@ import type { ProjectSession, SaveState, SessionAsset } from '../../session'
 import type { PlanImageMediaType } from '../../domain'
 import { workspaceStore } from './workspaceStore'
 import type { ViewportCache } from './viewport'
+import type { ExportPort } from './export/port'
 
 /** An Intent, fully formed; `app` builds it from `edit`'s label table and id order. */
 export interface WorkspaceIntentBuilder {
@@ -79,6 +80,11 @@ export interface WorkspaceServices {
   /** The catalog `Add item ▾` lists; `app` reads it from `edit`. */
   readonly planCatalogue: readonly PlanCatalogueOption[]
   readonly viewportCache: ViewportCache
+  /**
+   * The Export dialog's whole reach into the rest of the app (#61): the Worker client, the
+   * remembered recipe, the view list. The dialog never touches a Project or an Intent.
+   */
+  readonly exportDrawings: ExportPort
 }
 
 /** What only the root above the workspace can do: leave, and open the dialog above it. */
