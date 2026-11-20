@@ -26,7 +26,7 @@ import {
   drawPlanView,
   drawSelectionAnnotations,
 } from '../../drawing'
-import type { PlanPreview, Sizing } from '../../drawing'
+import type { DisplayList, PlanPreview, Sizing } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
 import type { DisplayListInteractions } from '../drawing/DisplayListSvg'
 import { formatMm } from './displayUnits'
@@ -317,6 +317,13 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   const annotations = overlay === undefined
     ? drawSelectionAnnotations(floor, selection, { sizing, formatLength, preview })
     : null
+  // One flat text layer, not two. The drawing's words and the selection's words are built as
+  // separate lists because they are keyed differently — one by the revision, one by a click —
+  // but they reach the screen as a single untransformed group, which is what keeps a label
+  // upright and addressable by one name.
+  const textOnly: DisplayList = annotations === null
+    ? list
+    : { ...annotations, layers: [...list.layers, ...annotations.layers] }
 
   const interactions: DisplayListInteractions = {
     onItemPointerDown: (id, event) => {
@@ -379,23 +386,13 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
                       canvas draws them: a label that crosses an Item Origin paints over the
                       crosshair, not under it. */}
                   <DisplayListSvg
-                    list={list}
+                    list={textOnly}
                     sizing={sizing}
                     matrix={matrix}
                     textSpace="screen"
                     textLayer="only"
                     screen={{ pxPerUnit: zoom, panX, panY }}
                     emphasis={{ selected: selection === null ? undefined : new Set([selection]) }}
-                    resolveAsset={resolveAsset}
-                    interactions={interactions}
-                  />
-                  <DisplayListSvg
-                    list={annotations}
-                    sizing={sizing}
-                    matrix={matrix}
-                    textSpace="screen"
-                    textLayer="only"
-                    screen={{ pxPerUnit: zoom, panX, panY }}
                     resolveAsset={resolveAsset}
                     interactions={interactions}
                   />

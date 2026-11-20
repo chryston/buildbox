@@ -249,16 +249,20 @@ function boundsChip(
   const corner = resolveSize('plan-chip-corner', sizing).mm
   return {
     kind: 'group',
-    ref: { id: f.placement.id, role: 'floor-bounds-chip' },
     items: [
       {
         kind: 'path',
+        ref: { id: f.placement.id, role: 'floor-bounds-chip-box' },
         segments: roundedRectCommands(box.x, box.y, box.w, box.h, Math.min(corner, box.w / 2, box.h / 2)),
         closed: true,
         style: 'plan-chip-box',
       },
       {
+        // The word carries the address, not the box around it: the box is geometry and stays
+        // behind the transform, while the number is lifted into the flat text layer, and the
+        // number is what a reader — or a test — asks the chip for.
         kind: 'text',
+        ref: { id: f.placement.id, role: 'floor-bounds-chip' },
         text,
         at: { x: box.x + box.w / 2, y: box.y + box.h / 2 },
         anchor: 'middle',
