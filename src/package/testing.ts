@@ -169,6 +169,51 @@ export function fixtureProject(): Project {
 }
 
 /**
+ * The same Project with one Wall and one door cut into it (#65): the record
+ * `fixtures/package/v5/openings.buildbox` was written from. The v4 fixture beside it stays a
+ * Project with no Walls at all, which is the whole step in one comparison — this one carries
+ * an Opening rather than only the collection that holds it.
+ */
+export function openingsFixtureProject(): Project {
+  const project = fixtureProject()
+  return {
+    ...project,
+    existingModel: {
+      ...project.existingModel,
+      walls: [
+        {
+          id: 'wall-1',
+          ref: 'W-1',
+          floorId: 'floor-0',
+          line: { kind: 'line', start: { x: 0, y: 0 }, end: { x: 4000, y: 0 } },
+          thickness: 100,
+          justification: 'centre',
+          baseElevation: 0,
+          height: 2600,
+        },
+      ],
+      openings: [
+        {
+          id: 'opening-1',
+          floorId: 'floor-0',
+          hostWallId: 'wall-1',
+          kind: 'door',
+          label: 'Door 1',
+          // 1200 along a 4000 mm Wall with no Junctions: the usable interval is the whole
+          // reference line, so this is the plainest Opening a fixture can hold.
+          start: 1200,
+          width: 900,
+          sill: 0,
+          head: 2100,
+          swing: 'left',
+          hingeSide: 'start',
+        },
+      ],
+    },
+  }
+}
+
+/**
  * The same fixture as the v1 and v2 golden files store it: an Item Footprint was a kind, a
  * width and a depth until v3 restated it as a preset (#58).
  *

@@ -21,11 +21,12 @@ import {
   FIXTURE_PLAN_IMAGE_HASH,
   fixtureProject,
   legacyFixtureRecord,
+  openingsFixtureProject,
 } from './testing'
 
 const ASSET_ENTRY = `assets/${FIXTURE_PLAN_IMAGE_HASH}.png`
 
-type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4'
+type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4' | 'v5'
 
 const fixtureDir = (version: FixtureVersion): URL => new URL(`../../fixtures/package/${version}/`, import.meta.url)
 const readFrom = (version: FixtureVersion) => (relative: string): Uint8Array =>
@@ -35,11 +36,15 @@ const readV1 = readFrom('v1')
 const readV2 = readFrom('v2')
 const readV3 = readFrom('v3')
 const readV4 = readFrom('v4')
+const readV5 = readFrom('v5')
 
 const ARCHIVE_V1 = readV1('reference.buildbox')
 const ARCHIVE_V2 = readV2('reference.buildbox')
 const ARCHIVE_V3 = readV3('reference.buildbox')
 const ARCHIVE_V4 = readV4('reference.buildbox')
+// The v5 file is named for what the step added, not for the reference Project: it is the
+// first Backup whose Project carries an Opening (#65).
+const ARCHIVE_V5 = readV5('openings.buildbox')
 const ASSET_BYTES = readV2(ASSET_ENTRY)
 const assetSource = async (): Promise<{ bytes: Uint8Array; mediaType: string }> => ({
   bytes: ASSET_BYTES,
@@ -99,6 +104,14 @@ function v3FixtureRecord(): unknown {
   const preferences: Record<string, unknown> = { ...project.preferences }
   delete preferences.defaultWallHeight
   return { ...project, preferences, existingModel: { placedItems: project.existingModel.placedItems } }
+}
+
+/** The record the v4 file was written from: the current Project without the v5 addition. */
+function v4FixtureRecord(): Project {
+  const project = fixtureProject()
+  const existingModel: Record<string, unknown> = { ...project.existingModel }
+  delete existingModel.openings
+  return { ...project, existingModel } as unknown as Project
 }
 
 describe('the committed v1 Backup', () => {
@@ -188,19 +201,15 @@ describe('the committed v3 Backup (#58)', () => {
 })
 
 describe('the committed v4 Backup (#64)', () => {
-  it('stages into the Project it was written from, unmigrated', async () => {
+  it('stages into the current Project, gaining the empty Opening collection (#65)', async () => {
     const result = await stageImport(ARCHIVE_V4, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
     expect(result.staged.project).toEqual(fixtureProject())
-    expect(result.staged.migratedFrom).toBeNull()
-  })
-
-  it('is re-encoded byte for byte by this build', async () => {
-    expect(await encodeProject(fixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V4)
+    expect(result.staged.migratedFrom).toBe(4)
   })
 
   it('holds the canonical Project record, and nothing else', async () => {
-    const canonical = canonicalOf(fixtureProject())
+    const canonical = canonicalOf(v4FixtureRecord())
     expect(new TextDecoder().decode(readV4('project.json'))).toBe(`${canonical}\n`)
 
     const staged = await stageImport(ARCHIVE_V4, { acceptPreview: false, allocateId: allocateIds() })
@@ -223,5 +232,39 @@ describe('the committed v4 Backup (#64)', () => {
     const prior = v3FixtureRecord() as { preferences: Record<string, unknown>; existingModel: Record<string, unknown> }
     expect(prior.preferences).not.toHaveProperty('defaultWallHeight')
     expect(prior.existingModel).not.toHaveProperty('walls')
+  })
+})
+
+describe('the committed v5 Backup (#65)', () => {
+  it('stages into the Project it was written from, unmigrated', async () => {
+    const result = await stageImport(ARCHIVE_V5, { acceptPreview: false, allocateId: allocateIds() })
+    if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
+    expect(result.staged.project).toEqual(openingsFixtureProject())
+    expect(result.staged.migratedFrom).toBeNull()
+  })
+
+  it('is re-encoded byte for byte by this build', async () => {
+    expect(await encodeProject(openingsFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V5)
+  })
+
+  it('holds the canonical Project record, and nothing else', async () => {
+    const canonical = canonicalOf(openingsFixtureProject())
+    expect(new TextDecoder().decode(readV5('project.json'))).toBe(`${canonical}\n`)
+
+    const staged = await stageImport(ARCHIVE_V5, { acceptPreview: false, allocateId: allocateIds() })
+    if (!staged.ok) throw new Error('the fixture must stage')
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonical, 5))
+  })
+
+  it('carries the same asset, byte for byte', () => {
+    expect(readV5(ASSET_ENTRY)).toEqual(ASSET_BYTES)
+  })
+
+  it('carries a door cut into a Wall, which is what the whole step was for', () => {
+    const record = openingsFixtureProject()
+    expect(record.existingModel.openings).toHaveLength(1)
+    expect(record.existingModel.openings[0]?.hostWallId).toBe('wall-1')
+    // The v4 record beside it has no Opening collection at all — the step in one comparison.
+    expect(v4FixtureRecord().existingModel).not.toHaveProperty('openings')
   })
 })
