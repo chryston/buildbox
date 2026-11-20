@@ -9,7 +9,6 @@ import type { LayoutVoid } from './cabinet'
 import type { GlobalSettings } from './domain'
 import { CabinetCanvas, FloorWorkspace, ItemDetailView, STRINGS, useWorkspace } from './ui'
 import type { CabinetDetail } from './ui'
-import { downloadSVG } from './utils/exportSVG'
 import { useLegacyBindings } from './ui/legacy/bindings'
 
 const defaultSettings: GlobalSettings = {
@@ -134,11 +133,6 @@ export default function App() {
               onUndo={bindings.undo}
               canRedo={bindings.canRedo}
               onRedo={bindings.redo}
-              onExport={() => {
-                if (svgRef.current) {
-                  downloadSVG(svgRef.current, bindings.activeProjectName)
-                }
-              }}
               saveStatus={bindings.saveStatus}
               onSaveStatusClick={bindings.reopenSaveFailure}
             />

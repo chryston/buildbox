@@ -14,7 +14,9 @@ import { extname, join, relative } from 'node:path'
 import process from 'node:process'
 
 const outDir = process.argv[2] ?? 'dist'
-const FORBIDDEN = ['.buildbox.json', '-floor-plan.json', 'VITE_FF_PROJECTS_V2', '__PROJECTS_V2__']
+// `floor-plan.svg` is the file name the removed `Export SVG` button produced (#61 criterion 8).
+// It is forbidden here so the old path cannot come back as a helper nobody thought to delete.
+const FORBIDDEN = ['.buildbox.json', '-floor-plan.json', 'floor-plan.svg', 'VITE_FF_PROJECTS_V2', '__PROJECTS_V2__']
 // Only the files that could contain application code: an image or a font cannot.
 const SCANNED = new Set(['.js', '.mjs', '.css', '.html', '.json', '.svg', '.txt', '.map'])
 

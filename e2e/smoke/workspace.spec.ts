@@ -54,7 +54,7 @@ test('no toolbar control is clipped at 1024 px: everything is inline or in More'
     await more.click()
   }
   // Every control the wide toolbar shows inline is reachable at 1024, directly or via More.
-  for (const testId of ['tool-select', 'tool-pan', 'add-item-menu', 'plan-image-menu', 'export-svg']) {
+  for (const testId of ['tool-select', 'tool-pan', 'add-item-menu', 'plan-image-menu', 'export-open']) {
     await expect(page.getByTestId(testId), `${testId} unreachable at 1024 px`).toBeVisible()
   }
 })

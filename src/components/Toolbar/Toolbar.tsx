@@ -5,7 +5,6 @@ import UndoRedo from './UndoRedo'
 interface Props {
   settings: GlobalSettings
   onSettingsChange: (patch: Partial<GlobalSettings>) => void
-  onExport?: () => void
   canUndo?: boolean
   onUndo?: () => void
   canRedo?: boolean
@@ -27,7 +26,6 @@ const UNITS: Unit[] = ['mm', 'cm', 'in']
 export default function Toolbar({
   settings,
   onSettingsChange,
-  onExport,
   canUndo = false,
   onUndo,
   canRedo = false,
@@ -54,9 +52,10 @@ export default function Toolbar({
       </div>
 
       {/* The row keeps its 34 px minimum height: the two workspace buttons that used to sit here
-          added 2 px with their ↓/↑ glyphs (fallback-font ascent: 34 px against Export SVG's 32),
-          and a shorter row would lift every view below it two pixels off the S0 baselines
-          (#53 criterion 12). */}
+          added 2 px with their ↓/↑ glyphs (fallback-font ascent: 34 px against the 32 px the
+          drawing-export button measured), and a shorter row would lift every view below it two
+          pixels off the S0 baselines (#53 criterion 12). The height stays now that both are gone,
+          because every view below was laid out against it. */}
       <div className="ml-auto flex min-h-[34px] items-center gap-2">
         {saveStatus && (
           <span
@@ -73,12 +72,6 @@ export default function Toolbar({
           </span>
         )}
         <UndoRedo canUndo={canUndo} onUndo={onUndo ?? (() => {})} canRedo={canRedo} onRedo={onRedo ?? (() => {})} />
-        <button
-          onClick={onExport}
-          className="rounded bg-accent px-3 py-1.5 text-sm text-white hover:bg-accent-hover"
-        >
-          Export SVG
-        </button>
       </div>
     </header>
   )

@@ -47,14 +47,6 @@ const TARGET_MODULES = [
 const LEGACY_TARGET_MODULES = ['lib', 'domain', 'cabinet', 'package']
 
 const LEGACY_ELEMENTS = [
-  {
-    name: 'legacy-utils-dom',
-    // The download helper uses document/URL, so it must be claimed before `legacy-utils`, and
-    // so must the test that drives it through a real jsdom document.
-    pattern: ['src/utils/exportSVG.ts', 'src/utils/exportSVG.test.ts'],
-    mode: 'file',
-    allow: ['legacy-types', 'legacy-utils-dom'],
-  },
   { name: 'legacy-types', pattern: ['src/types'], mode: 'folder', allow: ['legacy-types'], pure: true },
   {
     // #49's test of the session-backed bindings: it opens a real session over the in-memory
@@ -125,7 +117,6 @@ const LEGACY_ELEMENTS = [
       // session itself, which is what keeps them replaceable.
       'legacy-view',
       'legacy-utils',
-      'legacy-utils-dom',
       'legacy-data',
       'legacy-types',
     ],
