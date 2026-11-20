@@ -143,3 +143,11 @@ _Avoid_: 3D view, multi-floor view, side image, item preview
 **Clearance Envelope**:
 An explicit user- or manufacturer-supplied volume that should remain free around an entity.
 _Avoid_: Building-code rule, structural check, visual padding
+
+**Preset Pack**:
+A named, versioned table of starting-point dimensions shipped with the product, which a tool offers by entry ID. An entry is resolved to millimetres when the element is created, so no element points back at the pack: editing an element never changes the pack, and changing the pack never edits an element.
+_Avoid_: Template, catalogue, default setting, shape preset
+
+**Household Shelter**:
+The enclosed shelter a flat's layout provides, carried as a fixed preset entry whose walls, rooms and door are created as ordinary editable elements.
+_Avoid_: Bomb shelter, structural core, locked element

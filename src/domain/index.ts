@@ -59,6 +59,41 @@ export {
   type MigrateError,
   type MigrateResult,
 } from './migrate'
+export {
+  FixedPreset,
+  UnknownPreset,
+  defaultPresetFor,
+  getPresetEntry,
+  getPresetPack,
+  listPresetEntries,
+  overridableCopyOf,
+  presetDisplayName,
+  type DefaultableKind,
+  type DefaultPresetOf,
+  type PresetOf,
+} from './presets'
+export type {
+  DoorPreset,
+  DoorValues,
+  HeightPreset,
+  HeightValues,
+  PresetAlternative,
+  PresetConfidence,
+  PresetEntry,
+  PresetKind,
+  PresetPack,
+  PresetValueMap,
+  PresetValues,
+  ShelterPreset,
+  ShelterValues,
+  SourceKey,
+  SourceRef,
+  ValueConfidence,
+  WallPreset,
+  WallValues,
+  WindowPreset,
+  WindowValues,
+} from './presets'
 export type {
   CabinetItemDesign,
   DisplayUnit,
@@ -90,7 +125,7 @@ export {
   type ProjectOutline,
   type ProjectSummary,
 } from './summarizeProject'
-export { formatDisplay, fromMm, toMm } from './units/unitConversion'
+export { formatDisplay, formatLength, fromMm, toMm } from './units/unitConversion'
 export { formatGeometryProblem } from './formatGeometryProblem'
 export type { DisplayFormat } from './formatGeometryProblem'
 export { validateProject, type ValidateProjectResult } from './validate'
