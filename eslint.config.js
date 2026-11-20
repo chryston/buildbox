@@ -162,6 +162,18 @@ const LEGACY_ELEMENTS = [
     allow: ['*'],
     pure: true,
   },
+  {
+    // #63's no-live-link test: it builds a Project from the preset pack and reads it back
+    // through `derive`, which no source file of `domain` may import (#20 §2). It is a test
+    // file, it stays pure, and it ships nothing — every real source file under
+    // `src/domain/presets` still reaches nothing but `domain` and `lib`, which the folder's
+    // own `purity.test.ts` reads for itself.
+    name: 'presets-no-live-link-test',
+    pattern: ['src/domain/presets/noLiveLink.test.ts'],
+    mode: 'file',
+    allow: ['*'],
+    pure: true,
+  },
 ]
 
 // The IndexedDB adapter is the one part of `persistence` allowed a DOM: the only element
