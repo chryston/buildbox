@@ -2,7 +2,7 @@
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import type { CabinetNode, EntityId, IdAllocator, Project } from './index'
-import { remapIds, validateProject } from './index'
+import { migrateProject, remapIds, validateProject } from './index'
 import { arbProject } from './testing'
 
 /**
@@ -29,6 +29,7 @@ function entityIds(project: Project): EntityId[] {
   for (const item of project.existingModel.placedItems) ids.push(item.id)
   for (const wall of project.existingModel.walls) ids.push(wall.id)
   for (const junction of project.existingModel.wallJunctions) ids.push(junction.id)
+  for (const opening of project.existingModel.openings) ids.push(opening.id)
   return ids
 }
 
@@ -66,7 +67,7 @@ function contractedMap(
 }
 
 /** The keys that hold an entity ID or a reference to one, and nothing else. */
-const ID_FIELDS: readonly string[] = ['id', 'itemDesignId', 'floorId', 'wallId']
+const ID_FIELDS: readonly string[] = ['id', 'itemDesignId', 'floorId', 'wallId', 'hostWallId']
 
 /**
  * The Project with every ID-bearing key removed, key for key otherwise: what a copy must
@@ -171,7 +172,13 @@ const envelope = JSON.parse(raw) as { domainSchemaVersion: number; project: Proj
 if (envelope.domainSchemaVersion !== 4) {
   throw new Error(`unsupported domainSchemaVersion ${String(envelope.domainSchemaVersion)}`)
 }
-const reference = envelope.project
+// Read the way an import reads it: the v4 record through the chain, which is the step that
+// gives it the Opening collection (#65) and spends no IDs on the way.
+const read = migrateProject(envelope.project, envelope.domainSchemaVersion, (count) =>
+  Array.from({ length: count }, (_, index) => `reference-view-${index}`),
+)
+if (!read.ok) throw new Error(`the reference Project does not migrate: ${read.error.message}`)
+const reference = read.project
 
 /**
  * `project.id`, 3 Floors, 3 Plan Views, 630 Item Designs and 630 Placed Items, plus the

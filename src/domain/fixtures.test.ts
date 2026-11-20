@@ -76,9 +76,15 @@ describe('domain fixtures (#42 §6)', () => {
     const identity = (designs: Identified[]) =>
       designs.map((design) => ({ id: design.id, name: design.name, height: design.height }))
     expect(result.project.floors).toEqual(prior.floors)
-    // #64: the chain now ends at v4, which adds the two empty Wall collections to every
-    // Existing Model. Nothing else about it changes on the way up.
-    expect(result.project.existingModel).toEqual({ ...(prior.existingModel as object), walls: [], wallJunctions: [] })
+    // #64: the chain adds the two empty Wall collections to an Existing Model that predates
+    // them, and #65 adds the empty Opening collection. A fixture that already has Walls —
+    // `v4/walls.json` — keeps the ones it was written with.
+    const priorModel = prior.existingModel as Record<string, unknown>
+    expect(result.project.existingModel).toEqual({
+      ...priorModel,
+      ...('walls' in priorModel ? {} : { walls: [], wallJunctions: [] }),
+      openings: [],
+    })
     expect(identity(result.project.itemDesigns)).toEqual(identity(prior.itemDesigns))
   })
 })

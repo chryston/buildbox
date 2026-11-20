@@ -16,7 +16,7 @@ import type { Floor, PlanView, Project } from './project'
 import { validateProject } from './validate'
 
 /** The domain schema this build writes and understands at the top of the chain. */
-export const DOMAIN_SCHEMA_VERSION = 4
+export const DOMAIN_SCHEMA_VERSION = 5
 
 /**
  * One pure vN → vN+1 step. Its input is already a copy; it never reads the clock, and a
@@ -27,7 +27,7 @@ export type Migrator = (data: unknown, allocateId: IdAllocator) => unknown
 /**
  * `MIGRATORS[i]` migrates v(i+1) → v(i+2), so index 0 is v1 → v2.
  */
-export const MIGRATORS: readonly Migrator[] = [migrateV1toV2, migrateV2toV3, migrateV3toV4]
+export const MIGRATORS: readonly Migrator[] = [migrateV1toV2, migrateV2toV3, migrateV3toV4, migrateV4toV5]
 
 /**
  * v1 → v2 (#56): the Project gains `views`, and each Floor gains the one default Plan
@@ -143,6 +143,33 @@ export function migrateV3toV4(data: unknown): unknown {
     next.existingModel = { ...existingModel, walls: [], wallJunctions: [] }
   }
   return next
+}
+
+/**
+ * v4 → v5 (#65): the Existing Model gains the Opening collection.
+ *
+ * `existingModel.openings` starts empty — no v4 data describes a door or a window, and an
+ * Opening is an absence in a Wall rather than a thing that can be inferred from a floor
+ * plan — and nothing else moves. Every v4 field keeps its meaning: an Opening is hosted by
+ * a Wall, and Walls arrived with v4, so there is no older shape to carry forward. No ID is
+ * spent, and a value that is not a Project shape is left for `validateProject` to refuse.
+ */
+export function migrateV4toV5(data: unknown): unknown {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return data
+  const record = data as Record<string, unknown>
+  if (record.existingModel === null || typeof record.existingModel !== 'object' || Array.isArray(record.existingModel)) {
+    return record
+  }
+  const existingModel = record.existingModel as Record<string, unknown>
+  // A record that already carries the collection keeps it: a step that adds a field never
+  // overwrites the one it was meant to add.
+  return {
+    ...record,
+    existingModel: {
+      ...existingModel,
+      openings: Array.isArray(existingModel.openings) ? existingModel.openings : [],
+    },
+  }
 }
 
 export type MigrateError =

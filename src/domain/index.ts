@@ -49,6 +49,21 @@ export {
 } from './floorDependencies'
 export { defaultPlanView, floorNameTaken, nameKey, nextFloorName, planViewNameTaken } from './floorNames'
 export {
+  defaultOpeningLabel,
+  nextOpeningLabel,
+  openingDependencies,
+  openingHeight,
+  openingNoun,
+  openingSpan,
+  openingsOfFloor,
+  openingsOfWall,
+  wallHasOpenings,
+  fitProblem,
+  type FitFailure,
+  type OpeningDependency,
+  type OpeningSpan,
+} from './openings'
+export {
   DEFAULT_WALL_HEIGHT_MM,
   DOMAIN_SCHEMA_VERSION,
   MIGRATORS,
@@ -56,6 +71,7 @@ export {
   migrateV1toV2,
   migrateV2toV3,
   migrateV3toV4,
+  migrateV4toV5,
   runMigrationChain,
   type Migrator,
   type MigrateError,
@@ -104,8 +120,12 @@ export type {
   Floor,
   FloorLimits,
   GenericItemDesign,
+  HingeSide,
   ItemDesign,
   ItemFootprint,
+  Opening,
+  OpeningKind,
+  OpeningSwing,
   PathItemFootprint,
   PlanImage,
   PlanImageMediaType,

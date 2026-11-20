@@ -55,9 +55,10 @@ export function createProject({ ids, name }: CreateProjectArgs): Project {
         },
       ],
       // A new Project has no Walls yet; the collections exist so the shape is the same one
-      // every later Wall is written into (#64 §1).
+      // every later Wall is written into (#64 §1). Openings come with #65 the same way.
       walls: [],
       wallJunctions: [],
+      openings: [],
     },
   }
 }

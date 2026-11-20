@@ -91,6 +91,7 @@ function projectBuiltFrom(pack: PresetPack): Project {
     existingModel: {
       walls: [],
       wallJunctions: [],
+      openings: [],
       placedItems: [
         {
           id: 'placed-wall',

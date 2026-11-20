@@ -129,6 +129,7 @@ export function fixtureProject(): Project {
     existingModel: {
       walls: [],
       wallJunctions: [],
+      openings: [],
       placedItems: [
         {
           id: 'place-0',

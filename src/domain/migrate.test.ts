@@ -8,6 +8,7 @@ import {
   migrateProject,
   migrateV1toV2,
   migrateV3toV4,
+  migrateV4toV5,
   rectangleFootprint,
   runMigrationChain,
   type IdAllocator,
@@ -44,6 +45,7 @@ function validProject(): Project {
     existingModel: {
       walls: [],
       wallJunctions: [],
+      openings: [],
       placedItems: [
         {
           id: 'place-0',
@@ -66,8 +68,8 @@ function v1Project(): Record<string, unknown> {
 }
 
 describe('DOMAIN_SCHEMA_VERSION', () => {
-  it('is 4, one step above the version #63 shipped', () => {
-    expect(DOMAIN_SCHEMA_VERSION).toBe(4)
+  it('is 5, one step above the version #64 shipped', () => {
+    expect(DOMAIN_SCHEMA_VERSION).toBe(5)
   })
 })
 
@@ -114,12 +116,12 @@ describe('migrateV1toV2 — one default Plan View per Floor (#56)', () => {
 
 describe('migrateProject — the envelope version (#14)', () => {
   it('refuses a newer schema before touching the data', () => {
-    const result = migrateProject(validProject(), 5, allocator())
+    const result = migrateProject(validProject(), 6, allocator())
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.error.kind).toBe('newer-schema')
     if (result.error.kind !== 'newer-schema') return
-    expect(result.error.found).toBe(5)
+    expect(result.error.found).toBe(6)
     expect(result.error.supported).toBe(DOMAIN_SCHEMA_VERSION)
     expect(result.error.message).toContain('saved by a newer BuildBox')
   })
@@ -399,5 +401,67 @@ describe('migrateV3toV4 — a Project gains its Walls (#64)', () => {
     expect(migrated.ok).toBe(true)
     if (!migrated.ok) return
     expect(migrateV3toV4(migrated.project)).toEqual(migrated.project)
+  })
+})
+
+describe('migrateV4toV5 — a Project gains its Openings (#65)', () => {
+  /** The same Project as its v4 twin: Walls named, Openings not yet thought of. */
+  function v4Record(): Record<string, unknown> {
+    const project = validProject()
+    const existingModel: Record<string, unknown> = { ...project.existingModel }
+    delete existingModel.openings
+    return { ...project, existingModel }
+  }
+
+  it('adds the empty Opening collection, and spends no IDs', () => {
+    const asked: number[] = []
+    const result = migrateProject(v4Record(), 4, (count) => {
+      asked.push(count)
+      return allocator()(count)
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(asked).toEqual([])
+    expect(result.project.existingModel.openings).toEqual([])
+    // The Walls it already had are the same objects' values: the step adds a collection and
+    // touches nothing else, so a v4 Project's Walls come through untouched.
+    expect(result.project.existingModel.walls).toEqual(validProject().existingModel.walls)
+
+    const prior = v4Record() as Record<string, unknown>
+    expect({ ...result.project, ...prior }).toEqual(prior)
+  })
+
+  it('leaves a v5 Project exactly as it found it', () => {
+    const migrated = migrateProject(v4Record(), 4, allocator())
+    expect(migrated.ok).toBe(true)
+    if (!migrated.ok) return
+    expect(migrateV4toV5(migrated.project)).toEqual(migrated.project)
+  })
+
+  it('keeps the Openings a record already carries', () => {
+    // A migrator that overwrote a collection it was only meant to add would silently delete
+    // somebody's doors here.
+    const carried: Project = {
+      ...validProject(),
+      existingModel: {
+        ...validProject().existingModel,
+        openings: [
+          {
+            id: 'opening-1',
+            floorId: 'floor-1',
+            hostWallId: 'wall-1',
+            kind: 'door',
+            label: 'Door 1',
+            start: 200,
+            width: 900,
+            sill: 0,
+            head: 2100,
+            swing: 'left',
+            hingeSide: 'start',
+          },
+        ],
+      },
+    }
+    expect(migrateV4toV5(carried)).toEqual(carried)
   })
 })
