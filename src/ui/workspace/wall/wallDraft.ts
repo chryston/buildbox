@@ -57,15 +57,17 @@ export const mergeableNeighbour = (
  */
 export const wallTargetAt = (point: Pt, walls: readonly WallFaceSource[]): WallSnapTarget => {
   for (const wall of walls) {
-    const first = wall.faces[0]
-    const last = wall.faces[wall.faces.length - 1]
-    if (first !== undefined && distance(first.from, point) <= SNAP_MATCH_MM) {
+    // Both faces run from the same cap to the same cap, so a cap is a pair of corners and every
+    // one of them names the same end. Reading only the first face's start and the last face's
+    // end would make one physical end answer `Join to end of …` at one corner and `Attach to …`
+    // at the other, which is the defect this tool exists not to repeat.
+    const atStart = wall.faces.some((face) => distance(face.from, point) <= SNAP_MATCH_MM)
+    const atEnd = wall.faces.some((face) => distance(face.to, point) <= SNAP_MATCH_MM)
+    if (atStart || atEnd) {
       const ref = refOf(wall)
-      return ref === null ? FREE_TARGET : { kind: 'end', wallId: wall.id, ref, end: 'start' }
-    }
-    if (last !== undefined && distance(last.to, point) <= SNAP_MATCH_MM) {
-      const ref = refOf(wall)
-      return ref === null ? FREE_TARGET : { kind: 'end', wallId: wall.id, ref, end: 'end' }
+      return ref === null
+        ? FREE_TARGET
+        : { kind: 'end', wallId: wall.id, ref, end: atStart && !atEnd ? 'start' : 'end' }
     }
   }
   for (const wall of walls) {

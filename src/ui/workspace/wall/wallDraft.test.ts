@@ -22,11 +22,13 @@ import {
   startWallDraft,
   toChainPayload,
   undoPoint,
+  wallTargetAt,
   withTypedLength,
   withWallCursor,
   withWallTool,
 } from './wallDraft'
 import type { WallSnapTarget } from './wallDraft'
+import type { WallFaceSource } from '../../../derive'
 
 const at = (x: number, y: number): Pt => ({ x, y })
 /** The point of a 1,500 mm circle halfway between (-1,500, 0) and (0, 1,500). */
@@ -197,5 +199,32 @@ describe('the committed chain', () => {
 
   it('refuses to send an empty chain', () => {
     expect(toChainPayload(startWallDraft(at(0, 0)), 'floor-1', defaults)).toBeNull()
+  })
+})
+
+describe('wallTargetAt', () => {
+  /** A 100 mm band from (0,0) to (4000,0), both faces running the same way. */
+  const band: WallFaceSource = {
+    id: 'W-1',
+    label: 'W-1 · face',
+    corners: [],
+    faces: [
+      { from: at(0, -50), to: at(4000, -50), segment: { kind: 'line', to: at(4000, -50) } },
+      { from: at(0, 50), to: at(4000, 50), segment: { kind: 'line', to: at(4000, 50) } },
+    ],
+  }
+
+  it('names every corner of a cap as that end, never as a face', () => {
+    for (const corner of [at(0, -50), at(0, 50)]) {
+      expect(wallTargetAt(corner, [band])).toEqual({ kind: 'end', wallId: 'W-1', ref: 'W-1', end: 'start' })
+    }
+    for (const corner of [at(4000, -50), at(4000, 50)]) {
+      expect(wallTargetAt(corner, [band])).toEqual({ kind: 'end', wallId: 'W-1', ref: 'W-1', end: 'end' })
+    }
+  })
+
+  it('names a point along a face as an attach, and empty space as nothing', () => {
+    expect(wallTargetAt(at(2000, 50), [band])).toEqual({ kind: 'face', wallId: 'W-1', ref: 'W-1' })
+    expect(wallTargetAt(at(2000, 900), [band])).toEqual(FREE_TARGET)
   })
 })
