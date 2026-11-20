@@ -35,7 +35,7 @@ function project(): Project {
   return {
     id: 'project-1',
     meta: { name: 'Home' },
-    preferences: { displayUnit: 'mm', displayPrecision: 0 },
+    preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 },
     floors: [floor('floor-kitchen', { planImage: IMAGE }), floor('floor-cellar')],
     views: [
       view('view-kitchen', 'floor-kitchen', true),
@@ -44,6 +44,8 @@ function project(): Project {
     ],
     itemDesigns: [],
     existingModel: {
+      walls: [],
+      wallJunctions: [],
       placedItems: [placed('placed-1', 'floor-kitchen'), placed('placed-2', 'floor-kitchen'), placed('placed-3', 'floor-kitchen')],
     },
   }

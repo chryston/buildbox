@@ -48,11 +48,11 @@ const place = (id: string, itemDesignId: string, over: Partial<PlacedItem> = {})
 const project = (parts: Partial<Project>): Project => ({
   id: 'proj-1',
   meta: { name: 'Test' },
-  preferences: { displayUnit: 'mm', displayPrecision: 0 },
+  preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 },
   floors: [{ id: 'floor-1', name: 'Floor 1', planImage: null }],
   views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Floor 1', isDefault: true, showPlanImage: true }],
   itemDesigns: [],
-  existingModel: { placedItems: [] },
+  existingModel: { placedItems: [], walls: [], wallJunctions: [] },
   ...parts,
 })
 
@@ -61,6 +61,8 @@ describe('cabinetSceneUnits', () => {
     const source = project({
       itemDesigns: [cabinet('unit-a')],
       existingModel: {
+        walls: [],
+        wallJunctions: [],
         placedItems: [place('place-a', 'unit-a', { translation: { x: 1000, y: 250 }, baseElevation: 120 })],
       },
     })
@@ -83,6 +85,8 @@ describe('cabinetSceneUnits', () => {
     const source = project({
       itemDesigns: [cabinet('unit-a'), cabinet('unit-b')],
       existingModel: {
+        walls: [],
+        wallJunctions: [],
         placedItems: [place('place-b', 'unit-b', { translation: { x: 900, y: 250 } }), place('place-a', 'unit-a')],
       },
     })
@@ -93,7 +97,7 @@ describe('cabinetSceneUnits', () => {
   it('reads the settings each Item Design carries, unit and all', () => {
     const source = project({
       itemDesigns: [cabinet('unit-cm', { unit: 'cm', width: 40 })],
-      existingModel: { placedItems: [place('place-cm', 'unit-cm', { translation: { x: 20, y: 18 } })] },
+      existingModel: { placedItems: [place('place-cm', 'unit-cm', { translation: { x: 20, y: 18 } })], walls: [], wallJunctions: [] },
     })
     const [unit] = cabinetSceneUnits(source, 'floor-1')
 
@@ -109,6 +113,8 @@ describe('cabinetSceneUnits', () => {
       ],
       itemDesigns: [cabinet('unit-a'), generic('sofa-1')],
       existingModel: {
+        walls: [],
+        wallJunctions: [],
         placedItems: [
           place('place-a', 'unit-a'),
           place('place-sofa', 'sofa-1', { translation: { x: 4000, y: 4000 } }),

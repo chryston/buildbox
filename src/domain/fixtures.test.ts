@@ -76,7 +76,9 @@ describe('domain fixtures (#42 §6)', () => {
     const identity = (designs: Identified[]) =>
       designs.map((design) => ({ id: design.id, name: design.name, height: design.height }))
     expect(result.project.floors).toEqual(prior.floors)
-    expect(result.project.existingModel).toEqual(prior.existingModel)
+    // #64: the chain now ends at v4, which adds the two empty Wall collections to every
+    // Existing Model. Nothing else about it changes on the way up.
+    expect(result.project.existingModel).toEqual({ ...(prior.existingModel as object), walls: [], wallJunctions: [] })
     expect(identity(result.project.itemDesigns)).toEqual(identity(prior.itemDesigns))
   })
 })

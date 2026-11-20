@@ -8,6 +8,7 @@
  * Projects and a replayed one is the same.
  */
 import type { Project } from '../domain'
+import { DEFAULT_WALL_HEIGHT_MM } from '../domain'
 import { LEGACY_DEFAULT_SETTINGS } from './defaults'
 import { spendIds } from './handlers/support'
 
@@ -29,7 +30,7 @@ export function createProject({ ids, name }: CreateProjectArgs): Project {
   return {
     id: projectId,
     meta: { name },
-    preferences: { displayUnit: 'mm', displayPrecision: 0 },
+    preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: DEFAULT_WALL_HEIGHT_MM },
     floors: [{ id: floorId, name: 'Floor 1', planImage: null }],
     views: [{ id: viewId, kind: 'plan', floorId, name: 'Floor 1', isDefault: true, showPlanImage: true }],
     itemDesigns: [
@@ -53,6 +54,10 @@ export function createProject({ ids, name }: CreateProjectArgs): Project {
           baseElevation: 0,
         },
       ],
+      // A new Project has no Walls yet; the collections exist so the shape is the same one
+      // every later Wall is written into (#64 §1).
+      walls: [],
+      wallJunctions: [],
     },
   }
 }

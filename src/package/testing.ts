@@ -71,7 +71,7 @@ export function fixtureProject(): Project {
   return {
     id: 'project-0',
     meta: { name: 'Maple Street Kitchen', address: '412 Maple Street' },
-    preferences: { displayUnit: 'cm', displayPrecision: 1 },
+    preferences: { displayUnit: 'cm', displayPrecision: 1, defaultWallHeight: 2600 },
     floors: [
       {
         id: 'floor-0',
@@ -127,6 +127,8 @@ export function fixtureProject(): Project {
       },
     ],
     existingModel: {
+      walls: [],
+      wallJunctions: [],
       placedItems: [
         {
           id: 'place-0',

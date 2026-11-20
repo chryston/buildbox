@@ -42,7 +42,7 @@ function projectWithFourPlacements(): Project {
   return {
     id: 'project-1',
     meta: { name: 'Maple Street Kitchen', address: '412 Maple Street' },
-    preferences: { displayUnit: 'mm', displayPrecision: 0 },
+    preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 },
     floors: [
       {
         id: 'floor-0',
@@ -64,6 +64,8 @@ function projectWithFourPlacements(): Project {
       genericDesign('design-1', 'Runner Rug', 2400, 800, 1200, 400),
     ],
     existingModel: {
+      walls: [],
+      wallJunctions: [],
       placedItems: [
         placed('place-0', 'design-0', 1200, 400, 0),
         placed('place-1', 'design-1', 2400, 900, 90),

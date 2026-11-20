@@ -20,7 +20,8 @@
  * order, then each Item Design in array
  * order followed — for a cabinet — by its tree in pre-order (a space, then its dividers,
  * then its accessories, then its left subtree, then its right), then the Placed Items in
- * array order. Slot 0 belongs to the Project and is filled by `newId`, which the caller
+ * array order, then the Walls in array order, then the Wall Junctions in array order
+ * (#64). Slot 0 belongs to the Project and is filled by `newId`, which the caller
  * minted; every later slot takes the allocator's ID at the same index. A test that finds
  * one ID it cannot explain can name the position it went wrong at, and remapping the same
  * Project twice gives the same copy rather than one shaped by enumeration order.
@@ -84,6 +85,16 @@ export function remapIds(project: Project, newId: EntityId, allocate: IdAllocato
         itemDesignId: next(item.itemDesignId),
         floorId: next(item.floorId),
       })),
+      // A Wall and its Junctions are entities too (#64): each carries its own ID, stands on
+      // a Floor, and a Junction names the Walls it joins.
+      walls: project.existingModel.walls.map((wall) => ({ ...wall, id: next(wall.id), floorId: next(wall.floorId) })),
+      wallJunctions: project.existingModel.wallJunctions.map((junction) => ({
+        ...junction,
+        id: next(junction.id),
+        floorId: next(junction.floorId),
+        ends: junction.ends.map((end) => ({ ...end, wallId: next(end.wallId) })),
+        ...(junction.host === undefined ? {} : { host: { ...junction.host, wallId: next(junction.host.wallId) } }),
+      })),
     },
   }
 }
@@ -98,6 +109,8 @@ function entityIds(project: Project): EntityId[] {
     if (design.kind === 'cabinet') collectSpace(design.construction.root, ids)
   }
   for (const item of project.existingModel.placedItems) ids.push(item.id)
+  for (const wall of project.existingModel.walls) ids.push(wall.id)
+  for (const junction of project.existingModel.wallJunctions) ids.push(junction.id)
   return ids
 }
 

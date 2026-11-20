@@ -188,7 +188,7 @@ describe('floorPlanAsProject (#43 criterion 11)', () => {
     expect(made.regeneratedIds).toEqual([])
     expect(made.project.id).toBe('proj-floor-plan')
     expect(made.project.meta).toEqual({ name: 'Floor plan' })
-    expect(made.project.preferences).toEqual({ displayUnit: 'mm', displayPrecision: 0 })
+    expect(made.project.preferences).toEqual({ displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 })
     expect(made.project.floors).toEqual([{ id: 'floor-1', name: 'Floor 1', planImage: content.planImage }])
     // 7 objects + 1 template, and only the objects are placed.
     expect(made.project.itemDesigns).toHaveLength(8)

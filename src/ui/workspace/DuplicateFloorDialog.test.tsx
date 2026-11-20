@@ -16,7 +16,7 @@ import { DuplicateFloorDialog, duplicateGroups } from './DuplicateFloorDialog'
 const project = (): Project => ({
   id: 'project-1',
   meta: { name: 'Home' },
-  preferences: { displayUnit: 'mm', displayPrecision: 0 },
+  preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 },
   floors: [
     { id: 'floor-1', name: 'Kitchen level', planImage: {
       assetHash: 'a'.repeat(64), mediaType: 'image/png', widthPx: 10, heightPx: 10, pixelsPerMm: 0.1,
@@ -32,6 +32,8 @@ const project = (): Project => ({
     { id: 'd-fridge', kind: 'generic', name: 'Fridge', footprint: rectangleFootprint(600, 600), origin: { x: 300, y: 300 }, height: 1800, heightIsTypical: true, color: 'indigo' },
   ],
   existingModel: {
+    walls: [],
+    wallJunctions: [],
     placedItems: [
       { id: 'p1', itemDesignId: 'd-sofa', floorId: 'floor-1', translation: { x: 0, y: 0 }, rotationDeg: 0, baseElevation: 0 },
       { id: 'p2', itemDesignId: 'd-sofa', floorId: 'floor-1', translation: { x: 100, y: 0 }, rotationDeg: 0, baseElevation: 0 },

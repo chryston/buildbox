@@ -21,7 +21,7 @@ const loft: Floor = { id: 'floor-2', name: 'Loft', planImage: null }
 const project = (over: Partial<Project> = {}): Project => ({
   id: 'project-1',
   meta: { name: 'Home' },
-  preferences: { displayUnit: 'mm', displayPrecision: 0 },
+  preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 },
   floors: [kitchen, loft],
   views: [
     { id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Kitchen level', isDefault: true, showPlanImage: true },
@@ -30,6 +30,8 @@ const project = (over: Partial<Project> = {}): Project => ({
   ],
   itemDesigns: [],
   existingModel: {
+    walls: [],
+    wallJunctions: [],
     placedItems: [
       { id: 'p1', itemDesignId: 'd1', floorId: 'floor-1', translation: { x: 0, y: 0 }, rotationDeg: 0, baseElevation: 0 },
       { id: 'p2', itemDesignId: 'd1', floorId: 'floor-1', translation: { x: 0, y: 0 }, rotationDeg: 0, baseElevation: 0 },
@@ -72,7 +74,7 @@ describe('what is leaning on the Floor', () => {
       ...project(),
       floors: [loft],
       views: [{ id: 'view-3', kind: 'plan', floorId: 'floor-2', name: 'Loft', isDefault: true, showPlanImage: true }],
-      existingModel: { placedItems: [] },
+      existingModel: { placedItems: [], walls: [], wallJunctions: [] },
     }
     const props = open(empty, loft)
     expect(screen.getByTestId('dependency-placedItems')).toHaveTextContent('0 Placed Items')

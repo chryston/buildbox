@@ -119,11 +119,11 @@ const placed = (
 const projectOf = (designs: ItemDesign[], placements: PlacedItem[]): Project => ({
   id: 'project-1',
   meta: { name: 'Golden' },
-  preferences: { displayUnit: 'mm', displayPrecision: 0 },
+  preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 },
   floors: [FLOOR],
   views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Floor 1', isDefault: true, showPlanImage: true }],
   itemDesigns: designs,
-  existingModel: { placedItems: placements },
+  existingModel: { placedItems: placements, walls: [], wallJunctions: [] },
 })
 
 /**

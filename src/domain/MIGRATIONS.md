@@ -63,3 +63,19 @@ the geometry kernel on import, so an impossible shape — corner radii that over
 that does not close, a size that is not positive — arrives as the kernel's own sentence
 ("Corner radii on the top side overlap (1,000 + 1,001 > 2,000 mm)") rather than as a
 field-range complaint.
+
+## What v4 holds (#64)
+
+Two things, both additions:
+
+* `preferences.defaultWallHeight` — the height a new Wall gets when the Floor it is drawn on
+  says nothing. `2600`, the preset pack's `height.ceiling` entry, which is the number the
+  legacy "Typical — measure yours" heights already used.
+* `existingModel.walls` and `existingModel.wallJunctions` — the two new collections, empty.
+
+`migrateV3toV4` spends no IDs, reads no clock, and touches nothing else: a Project with no
+Walls draws exactly what it drew at v3. The height is written rather than left absent so
+that the field is required everywhere after the step, including in the strict validator,
+which is the only way a hand-edited or newer-schema file can be caught. A migrator is a
+historical record, so the number is a frozen constant in `migrate.ts` rather than a live read
+of the pack; `src/domain/migrate.test.ts` pins it to the pack entry it came from.

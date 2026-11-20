@@ -84,11 +84,13 @@ function projectBuiltFrom(pack: PresetPack): Project {
   return {
     id: 'project-1',
     meta: { name: 'Flat' },
-    preferences: { displayUnit: 'mm', displayPrecision: 0 },
+    preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 },
     floors: [{ id: 'floor-1', name: 'Home', planImage: null }],
     views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Home', isDefault: true, showPlanImage: false }],
     itemDesigns: [wall, doorDesign],
     existingModel: {
+      walls: [],
+      wallJunctions: [],
       placedItems: [
         {
           id: 'placed-wall',

@@ -73,6 +73,18 @@ export { editArc, editEllipticalArc, editLineEdge, moveVertex } from './editPath
 export type { ArcChange, EllipticalArcChange, KeepFixed, LineEdgeChange } from './editPath'
 export { linearElement, offset } from './offset'
 export type { LinearElement } from './offset'
+export { arcFromThrough, offsetRefLine, refDistance, refLength, refParamAt, refPointAt, refSegment, refTangentDeg } from './wall'
+export type { ArcThrough, WallRefLine } from './wall'
+export { faceOffsets, joinWalls } from './joinWalls'
+export type {
+  JoinEnd,
+  JoinJunction,
+  JoinedFace,
+  JoinedWall,
+  JoinWall,
+  WallJustification,
+  WallSide,
+} from './joinWalls'
 export { classify, interval, overlapLength } from './interval'
 export type { Interval } from './interval'
 export {

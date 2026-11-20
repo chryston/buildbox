@@ -30,11 +30,11 @@ const furnitureView: PlanView = {
 const project = (over: Partial<Project> = {}): Project => ({
   id: 'project-1',
   meta: { name: 'Home' },
-  preferences: { displayUnit: 'mm', displayPrecision: 1 },
+  preferences: { displayUnit: 'mm', displayPrecision: 1, defaultWallHeight: 2600 },
   floors: [kitchen, loft],
   views: [defaultView, furnitureView],
   itemDesigns: [],
-  existingModel: { placedItems: [] },
+  existingModel: { placedItems: [], walls: [], wallJunctions: [] },
   ...over,
 })
 

@@ -72,7 +72,7 @@ export function projectFixture(planImageHash: string | null, id: string = PROJEC
   return {
     id,
     meta: { name: 'Maple Street Kitchen', address: '412 Maple Street' },
-    preferences: { displayUnit: 'mm', displayPrecision: 0 },
+    preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 },
     floors: [
       {
         id: `${id}-floor-1`,
@@ -109,6 +109,8 @@ export function projectFixture(planImageHash: string | null, id: string = PROJEC
       },
     ],
     existingModel: {
+      walls: [],
+      wallJunctions: [],
       placedItems: [
         {
           id: `${id}-place-1`,

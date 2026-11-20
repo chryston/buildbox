@@ -17,14 +17,14 @@
  * the reference targets, and the tree walks are iterative — a stored tree is untrusted
  * input, so recursion depth is not an option.
  */
-import { PRESET_KINDS, toValidationProblems } from '../geometry'
+import { arcFromThrough, PRESET_KINDS, refLength, refPointAt, toValidationProblems, distance, TOLERANCE_MM } from '../geometry'
 import type { ClosedPath, CornerRadii, Preset, Pt, Segment } from '../geometry'
 import { ROOT_PATH, childPath, problem, type ValidationProblem } from '../lib'
 import { MAX_TREE_DEPTH } from './cabinetPayload'
 import { formatGeometryProblem, type DisplayFormat } from './formatGeometryProblem'
 import { footprintProblems } from './footprint'
 import { nameKey } from './floorNames'
-import type { DisplayUnit, ItemFootprint, Project } from './project'
+import type { DisplayUnit, ItemFootprint, Project, WallEnd, WallRefLine } from './project'
 
 export type ValidateProjectResult =
   | { ok: true; project: Project }
@@ -43,6 +43,8 @@ const BAD_FORMAT = 'bad-format'
 const BAD_CHILDREN = 'bad-children'
 const TREE_TOO_DEEP = 'tree-too-deep'
 const DANGLING_REFERENCE = 'dangling-reference'
+/** One thing claimed twice: a Wall end taken by two Junctions (#64 §2). */
+const DUPLICATE_MEMBER = 'duplicate-member'
 
 /** `EntityId` bounds (#42 §3): 1–128 UTF-16 code units, no control characters. */
 const ID_MAX_LENGTH = 128
@@ -51,6 +53,11 @@ const ASSET_HASH = /^[0-9a-f]{64}$/
 const COLOR = /^#[0-9a-f]{6}$/
 
 const DISPLAY_UNITS = ['mm', 'cm', 'm'] as const
+/** The three places the thickness sits relative to the reference line (#64 §1). */
+const WALL_JUSTIFICATIONS = ['left', 'centre', 'right'] as const
+const WALL_CLASSIFICATIONS = ['external', 'internal', 'partition'] as const
+const WALL_LINE_KINDS = ['line', 'arc'] as const
+const WALL_ENDS = ['start', 'end'] as const
 const MEDIA_TYPES = [
   'image/png',
   'image/jpeg',
@@ -74,8 +81,8 @@ const ACCESSORY_TYPES = ['door', 'drawer-front', 'pull', 'hinge'] as const
 // anything else the input carries at that level.
 const PROJECT_FIELDS = ['id', 'meta', 'preferences', 'floors', 'views', 'itemDesigns', 'existingModel']
 const META_FIELDS = ['name', 'address']
-const PREFERENCES_FIELDS = ['displayUnit', 'displayPrecision']
-const FLOOR_FIELDS = ['id', 'name', 'planImage', 'limits']
+const PREFERENCES_FIELDS = ['displayUnit', 'displayPrecision', 'defaultWallHeight']
+const FLOOR_FIELDS = ['id', 'name', 'planImage', 'limits', 'defaultWallHeight']
 const FLOOR_LIMITS_FIELDS = ['lowerMm', 'upperMm']
 const PLAN_VIEW_FIELDS = ['id', 'kind', 'floorId', 'name', 'isDefault', 'showPlanImage']
 const PLAN_IMAGE_FIELDS = ['assetHash', 'mediaType', 'widthPx', 'heightPx', 'pixelsPerMm']
@@ -107,7 +114,24 @@ const SEGMENT_FIELDS: Record<string, readonly string[]> = {
 }
 const SEGMENT_KINDS = ['line', 'arc', 'ellipticalArc'] as const
 const POINT_FIELDS = ['x', 'y']
-const EXISTING_MODEL_FIELDS = ['placedItems']
+const EXISTING_MODEL_FIELDS = ['placedItems', 'walls', 'wallJunctions']
+const WALL_FIELDS = [
+  'id',
+  'ref',
+  'floorId',
+  'line',
+  'thickness',
+  'justification',
+  'classification',
+  'constructionLabel',
+  'baseElevation',
+  'height',
+]
+/** The union's four members: a straight line uses three of them, an arc all four (#64 §1). */
+const WALL_LINE_FIELDS = ['kind', 'start', 'end', 'through']
+const WALL_JUNCTION_FIELDS = ['id', 'floorId', 'ends', 'host']
+const WALL_JUNCTION_END_FIELDS = ['wallId', 'end']
+const WALL_HOST_FIELDS = ['wallId', 'at']
 const PLACED_ITEM_FIELDS = ['id', 'itemDesignId', 'floorId', 'translation', 'rotationDeg', 'baseElevation']
 const CONSTRUCTION_FIELDS = ['settings', 'root']
 const SETTINGS_FIELDS = [
@@ -378,6 +402,21 @@ function indexIds(root: Rec): IdIndex {
       claim(item.id, childPath(childPath(items, i), 'id'))
     })
   }
+  if (isRecord(root.existingModel)) {
+    const model = root.existingModel
+    if (Array.isArray(model.walls)) {
+      const walls = childPath('existingModel', 'walls')
+      model.walls.forEach((wall, i) => {
+        if (isRecord(wall)) claim(wall.id, childPath(childPath(walls, i), 'id'))
+      })
+    }
+    if (Array.isArray(model.wallJunctions)) {
+      const junctions = childPath('existingModel', 'wallJunctions')
+      model.wallJunctions.forEach((junction, i) => {
+        if (isRecord(junction)) claim(junction.id, childPath(childPath(junctions, i), 'id'))
+      })
+    }
+  }
 
   return { first, designIds, floorIds }
 }
@@ -431,6 +470,7 @@ function validatePreferences(raw: unknown, path: string, add: Add): void {
     (n) => Number.isInteger(n) && n >= 0 && n <= 4,
     'to be a whole number from 0 to 4',
   )
+  checkPositive(raw.defaultWallHeight, childPath(path, 'defaultWallHeight'), 'the default Wall height', add)
   checkUnknownFields(raw, path, PREFERENCES_FIELDS, add)
 }
 
@@ -513,6 +553,11 @@ function validateFloor(
 
   validatePlanImage(raw.planImage, childPath(path, 'planImage'), add)
   validateFloorLimits(raw.limits, childPath(path, 'limits'), add)
+  // An optional per-Floor override of the Project's default Wall height (#64 §3): absent
+  // means "use the Project's", so it is never written with a value that means nothing.
+  if (raw.defaultWallHeight !== undefined) {
+    checkPositive(raw.defaultWallHeight, childPath(path, 'defaultWallHeight'), 'the default Wall height for this Floor', add)
+  }
   checkUnknownFields(raw, path, FLOOR_FIELDS, add)
 }
 
@@ -1137,6 +1182,262 @@ function validatePlacedItem(raw: unknown, path: string, index: IdIndex, add: Add
   checkUnknownFields(raw, path, PLACED_ITEM_FIELDS, add)
 }
 
+/**
+ * A Wall's reference line (#64 §1). Straight, or a circular arc through a third point that
+ * lies strictly between the ends — the sweep may exceed 180°, which is why the third point
+ * is stored rather than a centre and a sweep.
+ */
+function validateWallLine(raw: unknown, path: string, add: Add): WallRefLine | null {
+  if (raw === undefined) {
+    add(path, MISSING, 'Missing the Wall reference line.')
+    return null
+  }
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected the Wall reference line.')
+    return null
+  }
+  const kind = checkOneOf(raw.kind, childPath(path, 'kind'), 'the Wall reference line shape', WALL_LINE_KINDS, add)
+  const start = readPoint(raw.start, childPath(path, 'start'), 'the Wall reference line start', add)
+  const end = readPoint(raw.end, childPath(path, 'end'), 'the Wall reference line end', add)
+  checkUnknownFields(raw, path, WALL_LINE_FIELDS, add)
+  if (kind === 'line') {
+    if (raw.through !== undefined) {
+      add(childPath(path, 'through'), UNKNOWN_FIELD, 'A straight Wall reference line has no third point — only an arc does.')
+    }
+    if (start === null || end === null) return null
+    if (distance(start, end) < TOLERANCE_MM) {
+      add(path, OUT_OF_RANGE, `Expected a Wall reference line at least ${TOLERANCE_MM} mm long.`)
+      return null
+    }
+    return { kind: 'line', start, end }
+  }
+  if (kind !== 'arc') return null
+  const through = readPoint(raw.through, childPath(path, 'through'), 'the point the Wall arc passes through', add)
+  if (start === null || end === null || through === null) return null
+  if (arcFromThrough(start, through, end) === null) {
+    add(
+      childPath(path, 'through'),
+      OUT_OF_RANGE,
+      'Expected the Wall arc to bend: its third point lies on the straight line between the two ends.',
+    )
+    return null
+  }
+  return { kind: 'arc', start, end, through }
+}
+
+/** A Wall whose shape read cleanly, kept for the Junction cross-checks. */
+interface WallShape {
+  id: string
+  floorId: string
+  line: WallRefLine
+}
+
+function validateWall(
+  raw: unknown,
+  path: string,
+  index: IdIndex,
+  refs: Map<string, string>,
+  add: Add,
+): WallShape | null {
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected a Wall.')
+    return null
+  }
+  const idPath = childPath(path, 'id')
+  const id = checkEntityId(raw.id, idPath, 'the Wall ID', add)
+  if (id !== null) claimId(id, idPath, 'the Wall ID', index, add)
+
+  // `ref` is the homeowner's label — W-1, W-2 — allocated once and never reused, so two
+  // Walls called the same thing would make every message about them ambiguous (#64 §1).
+  const refPath = childPath(path, 'ref')
+  const ref = checkFilledText(raw.ref, refPath, 'the Wall reference', add)
+  if (ref !== null) {
+    const first = refs.get(ref)
+    if (first !== undefined) {
+      add(refPath, DUPLICATE_NAME, `Expected the Wall reference to be unique in this Project — ${first} already uses it.`)
+    } else {
+      refs.set(ref, path)
+    }
+  }
+
+  const floorPath = childPath(path, 'floorId')
+  const floorId = checkText(raw.floorId, floorPath, 'the Floor this Wall stands on', add)
+  if (floorId !== null && !index.floorIds.has(floorId)) {
+    add(floorPath, DANGLING_REFERENCE, 'Wall refers to a Floor that is not in this Project.')
+  }
+
+  const line = validateWallLine(raw.line, childPath(path, 'line'), add)
+  checkPositive(raw.thickness, childPath(path, 'thickness'), 'the Wall thickness', add)
+  checkOneOf(raw.justification, childPath(path, 'justification'), 'the Wall justification', WALL_JUSTIFICATIONS, add)
+  checkOptionalOneOf(raw.classification, childPath(path, 'classification'), 'the Wall construction type', WALL_CLASSIFICATIONS, add)
+  checkOptionalText(raw.constructionLabel, childPath(path, 'constructionLabel'), 'the Wall construction label', add)
+  // Negative is valid: a Wall can start below the Floor Datum, the way a Placed Item can (#25).
+  checkNumber(raw.baseElevation, childPath(path, 'baseElevation'), 'the Wall height above the Floor Datum', add)
+  checkPositive(raw.height, childPath(path, 'height'), 'the Wall height', add)
+  checkUnknownFields(raw, path, WALL_FIELDS, add)
+  if (id === null || floorId === null || line === null) return null
+  return { id, floorId, line }
+}
+
+/** The Wall ends a Junction holds, kept for the coincidence cross-checks. */
+interface JunctionMember {
+  wall: WallShape
+  end: 'start' | 'end'
+}
+
+/** The point of the Wall this member end holds, on the reference line. */
+const memberPoint = (member: JunctionMember): Pt => (member.end === 'start' ? member.wall.line.start : member.wall.line.end)
+
+function validateJunctionMember(
+  raw: unknown,
+  path: string,
+  walls: Map<string, WallShape>,
+  floorId: string | null,
+  taken: Map<string, string>,
+  add: Add,
+): JunctionMember | null {
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected a Wall Junction member.')
+    return null
+  }
+  const wallPath = childPath(path, 'wallId')
+  const wallId = checkText(raw.wallId, wallPath, 'the Wall this Junction joins', add)
+  const endChoice = checkOneOf(raw.end, childPath(path, 'end'), 'which end of the Wall this Junction joins', WALL_ENDS, add)
+  const end: WallEnd | null = endChoice === null ? null : (endChoice as WallEnd)
+  checkUnknownFields(raw, path, WALL_JUNCTION_END_FIELDS, add)
+  if (wallId === null || end === null) return null
+  const wall = walls.get(wallId)
+  if (wall === undefined) {
+    add(wallPath, DANGLING_REFERENCE, 'Wall Junction refers to a Wall that is not in this Project.')
+    return null
+  }
+  if (floorId !== null && wall.floorId !== floorId) {
+    add(wallPath, DANGLING_REFERENCE, 'Wall Junction joins a Wall that stands on a different Floor from the Junction.')
+  }
+  const key = `${wallId}\u0000${end}`
+  const first = taken.get(key)
+  if (first !== undefined) {
+    add(
+      path,
+      DUPLICATE_MEMBER,
+      `Expected each Wall end to be joined once — ${first} already joins ${end === 'start' ? 'the start' : 'the end'} of this Wall.`,
+    )
+    return null
+  }
+  taken.set(key, path)
+  return { wall, end }
+}
+
+function validateJunctionHost(
+  raw: unknown,
+  path: string,
+  walls: Map<string, WallShape>,
+  floorId: string | null,
+  add: Add,
+): { wall: WallShape; at: number } | null {
+  if (raw === undefined) return null
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected the Wall Junction host.')
+    return null
+  }
+  const wallPath = childPath(path, 'wallId')
+  const wallId = checkText(raw.wallId, wallPath, 'the Wall this Junction attaches to', add)
+  const at = checkNumber(raw.at, childPath(path, 'at'), 'the distance along the host Wall', add)
+  checkUnknownFields(raw, path, WALL_HOST_FIELDS, add)
+  if (wallId === null || at === null) return null
+  const wall = walls.get(wallId)
+  if (wall === undefined) {
+    add(wallPath, DANGLING_REFERENCE, 'Wall Junction attaches to a Wall that is not in this Project.')
+    return null
+  }
+  if (floorId !== null && wall.floorId !== floorId) {
+    add(wallPath, DANGLING_REFERENCE, 'Wall Junction attaches to a Wall that stands on a different Floor from the Junction.')
+  }
+  // The open interval: a host distance of 0 or of the whole length is an end, and an end
+  // joins as an ordinary Junction rather than attaching mid-Wall (#64 §2).
+  const length = refLength(wall.line)
+  if (!(at > 0 && at < length)) {
+    add(
+      childPath(path, 'at'),
+      OUT_OF_RANGE,
+      `Expected the distance along the host Wall to be between 0 and ${Math.round(length * 100) / 100} mm, not at either end.`,
+    )
+  }
+  return { wall, at }
+}
+
+function validateWallJunctions(
+  raw: unknown,
+  path: string,
+  index: IdIndex,
+  walls: Map<string, WallShape>,
+  add: Add,
+): void {
+  const junctions = checkArray(raw, path, 'the Wall Junctions', add)
+  if (junctions === null) return
+  // One Wall end, one Junction: the topology a Wall network is built on (#64 §2).
+  const taken = new Map<string, string>()
+  junctions.forEach((rawJunction, i) => {
+    const at = childPath(path, i)
+    if (!isRecord(rawJunction)) {
+      add(at, WRONG_TYPE, 'Expected a Wall Junction.')
+      return
+    }
+    const idPath = childPath(at, 'id')
+    const id = checkEntityId(rawJunction.id, idPath, 'the Wall Junction ID', add)
+    if (id !== null) claimId(id, idPath, 'the Wall Junction ID', index, add)
+
+    const floorPath = childPath(at, 'floorId')
+    const floorId = checkText(rawJunction.floorId, floorPath, 'the Floor this Junction joins Walls on', add)
+    if (floorId !== null && !index.floorIds.has(floorId)) {
+      add(floorPath, DANGLING_REFERENCE, 'Wall Junction refers to a Floor that is not in this Project.')
+    }
+
+    const endsPath = childPath(at, 'ends')
+    const ends = checkArray(rawJunction.ends, endsPath, 'the Wall Junction members', add)
+    const members: JunctionMember[] = []
+    if (ends !== null) {
+      ends.forEach((member, j) => {
+        const found = validateJunctionMember(member, childPath(endsPath, j), walls, floorId, taken, add)
+        if (found !== null) members.push(found)
+      })
+    }
+    const host = validateJunctionHost(rawJunction.host, childPath(at, 'host'), walls, floorId, add)
+    checkUnknownFields(rawJunction, at, WALL_JUNCTION_FIELDS, add)
+
+    const count = ends?.length ?? 0
+    if (host === null) {
+      if (count < 2) {
+        add(endsPath, OUT_OF_RANGE, 'Expected a Wall Junction with no host to join at least two Wall ends.')
+      } else if (members.length >= 2) {
+        // A Junction's position is derived, so its ends have to be at one point: 0.01 mm is
+        // the tolerance snapping writes coordinates to (#16), and anything looser is two
+        // Junctions pretending to be one.
+        const [first, ...rest] = members as [JunctionMember, ...JunctionMember[]]
+        const point = memberPoint(first)
+        rest.forEach((member) => {
+          if (distance(memberPoint(member), point) > TOLERANCE_MM) {
+            add(endsPath, OUT_OF_RANGE, 'Expected the Wall ends a Junction joins to meet at one point, within 0.01 mm.')
+          }
+        })
+      }
+      return
+    }
+    if (count < 1) {
+      add(endsPath, OUT_OF_RANGE, 'Expected a hosted Wall Junction to have a Wall end attached to its host.')
+      return
+    }
+    // A hosted Junction's ends sit on the host's reference line at `at`: that is where the
+    // branch's end is stored, and clean-up cuts it there (#64 §9).
+    const onHost = refPointAt(host.wall.line, host.at)
+    members.forEach((member) => {
+      if (distance(memberPoint(member), onHost) > TOLERANCE_MM) {
+        add(endsPath, OUT_OF_RANGE, 'Expected the Wall end a hosted Junction attaches to lie on the host Wall at the distance it gives.')
+      }
+    })
+  })
+}
+
 function validateExistingModel(raw: unknown, path: string, index: IdIndex, add: Add): void {
   if (raw === undefined) {
     add(path, MISSING, 'Missing the Existing Model.')
@@ -1151,7 +1452,24 @@ function validateExistingModel(raw: unknown, path: string, index: IdIndex, add: 
   if (placedItems !== null) {
     placedItems.forEach((item, i) => validatePlacedItem(item, childPath(itemsPath, i), index, add))
   }
+  // Walls are validated before their Junctions, which need the Walls' shapes to check that
+  // the ends they name exist, stand on their Floor, and actually meet (#64 §2).
+  const walls = validateWalls(raw.walls, childPath(path, 'walls'), index, add)
+  validateWallJunctions(raw.wallJunctions, childPath(path, 'wallJunctions'), index, walls, add)
   checkUnknownFields(raw, path, EXISTING_MODEL_FIELDS, add)
+}
+
+/** Every Wall in the collection that read cleanly, by ID, plus the `ref`s already used. */
+function validateWalls(raw: unknown, path: string, index: IdIndex, add: Add): Map<string, WallShape> {
+  const walls = new Map<string, WallShape>()
+  const refs = new Map<string, string>()
+  const items = checkArray(raw, path, 'the Walls', add)
+  if (items === null) return walls
+  items.forEach((wall, i) => {
+    const shape = validateWall(wall, childPath(path, i), index, refs, add)
+    if (shape !== null) walls.set(shape.id, shape)
+  })
+  return walls
 }
 
 /**

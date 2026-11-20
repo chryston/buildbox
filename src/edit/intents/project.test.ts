@@ -89,7 +89,7 @@ describe('project.setPreferences', () => {
     const project = newProject('Kitchen')
     const result = expectRoundTrip(project, intent('project.setPreferences', { displayUnit: 'cm', displayPrecision: 1 }))
 
-    expect(result.project.preferences).toEqual({ displayUnit: 'cm', displayPrecision: 1 })
+    expect(result.project.preferences).toEqual({ displayUnit: 'cm', displayPrecision: 1, defaultWallHeight: 2600 })
     expect(canonicalJson({ ...result.project, preferences: project.preferences })).toBe(canonicalJson(project))
     // Undo lands on the first Floor's Plan View, where the dialog was opened from (#55).
     expect(result.affected).toEqual({

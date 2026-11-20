@@ -91,7 +91,7 @@ export function floorPlanAsProject(
       }),
     ],
     itemDesigns: [],
-    existingModel: { placedItems: [] },
+    existingModel: { placedItems: [], walls: [], wallJunctions: [] },
   }
   return appendContent(project, content, options.floorId, options.newId)
 }
@@ -133,7 +133,11 @@ function appendContent(
   const merged: Project = {
     ...project,
     itemDesigns: [...project.itemDesigns, ...designs],
-    existingModel: { placedItems: [...project.existingModel.placedItems, ...placements] },
+    existingModel: {
+      placedItems: [...project.existingModel.placedItems, ...placements],
+      walls: project.existingModel.walls,
+      wallJunctions: project.existingModel.wallJunctions,
+    },
   }
 
   const checked = validateProject(merged)

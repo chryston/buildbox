@@ -26,11 +26,11 @@ const projectWith = (floorNames: string[], viewNames: [floorId: string, name: st
   return {
     id: 'project-1',
     meta: { name: 'Home' },
-    preferences: { displayUnit: 'mm', displayPrecision: 0 },
+    preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 },
     floors,
     views,
     itemDesigns: [],
-    existingModel: { placedItems: [] },
+    existingModel: { placedItems: [], walls: [], wallJunctions: [] },
   }
 }
 

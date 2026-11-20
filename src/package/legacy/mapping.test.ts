@@ -94,7 +94,7 @@ describe('Design → Project', () => {
     ])
     expect(project.id).toBe('proj-1')
     expect(project.meta).toEqual({ name: 'Kitchen Wall' })
-    expect(project.preferences).toEqual({ displayUnit: 'mm', displayPrecision: 0 })
+    expect(project.preferences).toEqual({ displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 })
     expect(project.floors).toEqual([{ id: 'new-1', name: 'Floor 1', planImage: null }])
     // The one Floor comes with the one Plan View that shows it (#56).
     expect(project.views).toEqual([

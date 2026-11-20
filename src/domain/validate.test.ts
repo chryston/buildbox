@@ -9,7 +9,7 @@ function baseProject(): Project {
   return {
     id: 'project-0',
     meta: { name: 'Maple Street Kitchen', address: '412 Maple Street' },
-    preferences: { displayUnit: 'cm', displayPrecision: 1 },
+    preferences: { displayUnit: 'cm', displayPrecision: 1, defaultWallHeight: 2600 },
     floors: [
       {
         id: 'floor-0',
@@ -68,6 +68,8 @@ function baseProject(): Project {
       },
     ],
     existingModel: {
+      walls: [],
+      wallJunctions: [],
       placedItems: [
         {
           id: 'place-0',
@@ -218,7 +220,7 @@ describe('validateProject — the Item Footprint (#58)', () => {
     ])
 
     const inMillimetres = bed(overlapping)
-    inMillimetres.preferences = { displayUnit: 'mm', displayPrecision: 0 }
+    inMillimetres.preferences = { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 }
     expect(problemsWithMessages(inMillimetres)).toEqual([
       {
         path: 'itemDesigns[1].footprint',
@@ -393,13 +395,13 @@ describe('validateProject — text and preferences', () => {
   })
 
   it('checks the display unit and precision', () => {
-    expectProblems({ ...baseProject(), preferences: { displayUnit: 'in', displayPrecision: 1 } }, [
+    expectProblems({ ...baseProject(), preferences: { displayUnit: 'in', displayPrecision: 1, defaultWallHeight: 2600 } }, [
       { path: 'preferences.displayUnit', code: 'not-one-of' },
     ])
-    expectProblems({ ...baseProject(), preferences: { displayUnit: 'cm', displayPrecision: 5 } }, [
+    expectProblems({ ...baseProject(), preferences: { displayUnit: 'cm', displayPrecision: 5, defaultWallHeight: 2600 } }, [
       { path: 'preferences.displayPrecision', code: 'out-of-range' },
     ])
-    expectProblems({ ...baseProject(), preferences: { displayUnit: 'cm', displayPrecision: 1.5 } }, [
+    expectProblems({ ...baseProject(), preferences: { displayUnit: 'cm', displayPrecision: 1.5, defaultWallHeight: 2600 } }, [
       { path: 'preferences.displayPrecision', code: 'out-of-range' },
     ])
   })
@@ -419,7 +421,7 @@ describe('validateProject — Floors and Plan Images', () => {
   })
 
   it('accepts a Project with no Floors and no Placed Items', () => {
-    const project = { ...baseProject(), floors: [], views: [], existingModel: { placedItems: [] } }
+    const project = { ...baseProject(), floors: [], views: [], existingModel: { placedItems: [], walls: [], wallJunctions: [] } }
     expect(validateProject(project).ok).toBe(true)
   })
 
