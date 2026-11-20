@@ -11,7 +11,16 @@
 }
 
 /*
- * The face every drawing is measured and drawn in (#60) arrives with the commit that switches
- * the canvases to it: until then the style table names the UI's own stack, and an `@font-face`
- * nothing asks for would only add a 22 kB request to every page load.
+ * The face every drawing is measured and drawn in (#60). Subset to Latin-1 by
+ * `scripts/gen-font-assets.mjs` from the full OFL-1.1 Noto Sans, so the woff2 is a 22 kB asset
+ * of its own rather than a chunk of the app shell, and the `.ttf` it was cut from never reaches
+ * a bundle. `font-display: block` is deliberate: a label drawn in the fallback face for 100 ms
+ * is a label that was measured wrong, and the short block is cheaper than the reflow.
  */
+@font-face {
+  font-family: 'Noto Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('./assets/fonts/NotoSans-Latin1.woff2') format('woff2');
+}

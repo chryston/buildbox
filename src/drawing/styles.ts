@@ -17,15 +17,14 @@ import type { ResolvedSize, SizeRole, SizeRow, SizeSpec, Sizing, Style, StyleKey
 /**
  * The one font stack, named once so every `<text>` is measured and drawn in the same face.
  *
- * Right now that is the stack Tailwind's preflight puts on `html`, which is what the canvases
- * inherited while they wrote no `font-family` of their own. Naming it here rather than leaving
- * the attribute off is what makes the stack a fact of the drawing instead of a fact of
- * whichever page hosts it — and it is the one line the next commit in this issue changes to
- * the bundled `"Noto Sans", sans-serif`, so that the screen and an export agree on the face
- * and `layoutText`'s committed metrics measure the glyphs that actually appear.
+ * `Noto Sans` ships with the app (`src/assets/fonts`, subset to Latin-1) and is declared in
+ * `src/index.css`, so the screen and an export agree on the face without either trusting the
+ * fonts a viewer happens to have. `layoutText`'s committed metrics measure these glyphs, which
+ * is what lets a label be laid out to the micrometre before anything is drawn. The generic
+ * family after it is not decoration: a face still loading, or a viewer that refused the
+ * request, must fall back to something with the same metrics-ish shape rather than nothing.
  */
-export const FONT_STACK =
-  'ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"'
+export const FONT_STACK = '"Noto Sans", sans-serif'
 
 /**
  * What each role's size is on a screen and on paper.

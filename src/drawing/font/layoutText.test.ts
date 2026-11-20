@@ -63,6 +63,16 @@ describe('layoutText', () => {
     }
   })
 
+  it('measures the reference label against the committed metrics', () => {
+    // #60 criterion 10. `Base 600` at 10 mm is the first string an export lays out, and these
+    // are the numbers the committed metrics table produces for it. A change here means the font
+    // asset or the reader changed — never that the test was wrong.
+    const layout = layoutText('Base 600', 10)
+    expect(layout.width).toBeCloseTo(42.3, 3)
+    expect(layout.ascent).toBeCloseTo(10.69, 3)
+    expect(layout.descent).toBeCloseTo(2.93, 3)
+  })
+
   it('kerns every pair the table carries', () => {
     for (const [first, second, delta] of KERNING) {
       const pair = String.fromCodePoint(first, second)
