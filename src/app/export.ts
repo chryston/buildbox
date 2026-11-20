@@ -125,22 +125,6 @@ function assetHashes(project: Project, views: readonly RecipeViewRef[]): string[
   return [...hashes]
 }
 
-/** The manifest's warnings, which is where criterion 11's unrenderable-character notice lives. */
-function manifestWarnings(result: ExportResult): string[] {
-  if (!result.ok || result.kind !== 'archive') return []
-  const parsed: unknown = JSON.parse(new TextDecoder().decode(result.manifest.bytes))
-  if (typeof parsed !== 'object' || parsed === null || !('files' in parsed)) return []
-  const files: unknown = parsed.files
-  if (!Array.isArray(files)) return []
-  const warnings: string[] = []
-  for (const file of files) {
-    if (typeof file !== 'object' || file === null || !('warnings' in file)) continue
-    const listed: unknown = file.warnings
-    if (Array.isArray(listed)) warnings.push(...listed.filter((one): one is string => typeof one === 'string'))
-  }
-  return warnings
-}
-
 export function createExportPort(deps: ExportPortDeps): ExportPort {
   const runner = createExportRunner()
   /** The main-thread rasterizer, made once. `null` where this browser has no canvas. */
@@ -283,7 +267,7 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
       return {
         kind: 'downloaded',
         files: result.kind === 'single' ? 1 : result.files.length,
-        missingGlyphs: manifestWarnings(result),
+        missingGlyphs: result.missingGlyphs,
       }
     },
   }

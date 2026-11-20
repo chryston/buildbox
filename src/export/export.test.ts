@@ -34,6 +34,9 @@ function recipeFor(viewId: string, over: Partial<Recipe> = {}): Recipe {
 
 const deps: ExportDeps = { clock: FIXED_CLOCK, buildboxVersion: '0.0.0-test' }
 
+/** The same export with the subset face attached, which is all a PDF needs beyond the drawing. */
+const withFont: ExportDeps = { ...deps, font: { bytes: latin1Font() } }
+
 describe('exportFiles', () => {
   it('writes one SVG for one Plan View', async () => {
     const project = referenceProject()
@@ -69,7 +72,6 @@ describe('exportFiles', () => {
 
   it('writes a PDF whose bytes do not move between runs', async () => {
     const project = referenceProject()
-    const withFont: ExportDeps = { ...deps, font: { bytes: latin1Font() } }
     const recipe = recipeFor(project.views[0]!.id, { format: 'pdf' })
     const first = single(await exportFiles(snapshotOf(), recipe, withFont))
     const second = single(await exportFiles(snapshotOf(), recipe, withFont))
@@ -104,6 +106,25 @@ describe('exportFiles', () => {
     expect(svg).toContain(base.meta.name)
     expect(svg).toContain('Mezzanine')
     expect(svg).toContain(NOT_TO_SCALE)
+  })
+
+  it('names the label whose character the font has no glyph for (#61 criterion 11)', async () => {
+    // The export completes and the notice says which label lost a character — for one file as much
+    // as for an archive, which is why the names ride on the result and not only on the manifest.
+    const base = basicProject()
+    const design = base.itemDesigns[0]!
+    const project: Project = {
+      ...base,
+      itemDesigns: base.itemDesigns.map((one) => (one.id === design.id ? { ...one, name: 'Island 🏠' } : one)),
+    }
+    const result = await exportFiles(
+      { project, revision: 1 },
+      recipeFor(design.id, { format: 'pdf', views: [{ kind: 'item-detail', itemDesignId: design.id }] }),
+      withFont,
+    )
+    if (!result.ok) throw new Error(JSON.stringify(result.failures))
+    expect(single(result).mediaType).toBe('application/pdf')
+    expect(result.missingGlyphs).toEqual(['Island 🏠'])
   })
 })
 

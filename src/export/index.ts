@@ -22,6 +22,7 @@
  * the same bytes, in a Worker or out of one.
  */
 
+import type { MissingGlyph } from '../drawing'
 import { sha256Hex } from '../lib'
 import { composeSheet, type ComposedDrawing } from './compose'
 import { pngSize } from './fit'
@@ -55,7 +56,12 @@ interface Pending {
 
 /** A sheet that could not be written, and why. */
 type Written =
-  | { readonly ok: true; readonly file: ExportFile; readonly warnings: readonly string[] }
+  | {
+      readonly ok: true
+      readonly file: ExportFile
+      readonly warnings: readonly string[]
+      readonly missingGlyphs: readonly string[]
+    }
   | { readonly ok: false; readonly reason: ExportFailure['reason'] }
 
 /**
@@ -89,6 +95,10 @@ export async function exportFiles(
   const names = nameAll(snapshot, pending, recipe, clock)
   const files: ExportFile[] = []
   const entries: ManifestFile[] = []
+  // Criterion 11: the labels the PDF font could not draw. The manifest carries the full sentence per
+  // file; the dialog only needs to name the label, and it needs it whether the export came back as
+  // one file or as an archive — the manifest only exists for the archive.
+  const glyphLabels: string[] = []
 
   for (const [index, item] of pending.entries()) {
     const name = names[index]!
@@ -99,6 +109,9 @@ export async function exportFiles(
       continue
     }
     files.push(written.file)
+    for (const label of written.missingGlyphs) {
+      if (!glyphLabels.includes(label)) glyphLabels.push(label)
+    }
     entries.push({
       path: name,
       kind: 'drawing',
@@ -118,7 +131,7 @@ export async function exportFiles(
   if (files.length === 0) {
     return { ok: false, failures: [{ output: snapshot.project.meta.name, reason: 'empty-drawing' }] }
   }
-  if (files.length === 1) return { ok: true, kind: 'single', file: files[0]! }
+  if (files.length === 1) return { ok: true, kind: 'single', file: files[0]!, missingGlyphs: glyphLabels }
 
   const manifestFile: ExportFile = {
     name: 'manifest.json',
@@ -143,6 +156,7 @@ export async function exportFiles(
     ok: true,
     kind: 'archive',
     files,
+    missingGlyphs: glyphLabels,
     manifest: manifestFile,
     archive: { name: archive, mediaType: 'application/zip', bytes: zipOf([...files, manifestFile]) },
   }
@@ -189,16 +203,13 @@ async function writeOne(
   composed: ComposedDrawing,
   name: string,
 ): Promise<Written> {
-  const warnings = composed.missingGlyphs.map(
-    (glyph) => `No glyph for ${glyph.chars.join(' ')} in "${glyph.text}"`,
-  )
   const ops = flatten(composed.list, SHEET_SIZING)
 
   if (recipe.format === 'svg') {
     const uris = await inlineAssets(composed.list, deps.assets)
     return {
       ok: true,
-      warnings,
+      ...glyphNotice(composed.missingGlyphs),
       file: { name, mediaType: MEDIA_TYPE.svg, bytes: writeSvg(composed.sheet, composed.list, provenance, uris) },
     }
   }
@@ -207,7 +218,7 @@ async function writeOne(
     if (deps.font === undefined) return { ok: false, reason: 'no-font' }
     const images = await pdfImages(ops, deps)
     if (images === null) return { ok: false, reason: 'image-format' }
-    const bytes = await writePdf({
+    const pdf = await writePdf({
       widthMm: composed.sheet.widthMm,
       heightMm: composed.sheet.heightMm,
       ops,
@@ -217,7 +228,14 @@ async function writeOne(
       contentHash: await contentHashOf(provenance, flatten(composed.drawing, SHEET_SIZING)),
       when: deps.clock.now(),
     })
-    return { ok: true, warnings, file: { name, mediaType: MEDIA_TYPE.pdf, bytes } }
+    // The writer is asked last and answers for the whole sheet, title block and dimension labels
+    // included: the drawing reports only its own text, and a label the frame carries would otherwise
+    // go missing in silence (#61 criterion 11).
+    return {
+      ok: true,
+      ...glyphNotice([...composed.missingGlyphs, ...pdf.missingGlyphs]),
+      file: { name, mediaType: MEDIA_TYPE.pdf, bytes: pdf.bytes },
+    }
   }
 
   if (deps.rasterizer === undefined) return { ok: false, reason: 'no-rasterizer' }
@@ -231,7 +249,25 @@ async function writeOne(
   if (!written.ok) return { ok: false, reason: written.reason === 'no-surface' ? 'no-rasterizer' : 'raster-failed' }
   const withMeta = spliceITxt(written.bytes, provenanceJson(provenance))
   if (withMeta === null) return { ok: false, reason: 'raster-failed' }
-  return { ok: true, warnings, file: { name, mediaType: MEDIA_TYPE.png, bytes: withMeta } }
+  return {
+    ok: true,
+    ...glyphNotice(composed.missingGlyphs),
+    file: { name, mediaType: MEDIA_TYPE.png, bytes: withMeta },
+  }
+}
+
+/**
+ * What a sheet lost, in the two shapes it is asked for: the manifest's sentence per character, and
+ * the plain label the dialog names (#61 criterion 11).
+ */
+function glyphNotice(glyphs: readonly MissingGlyph[]): {
+  warnings: string[]
+  missingGlyphs: string[]
+} {
+  return {
+    warnings: glyphs.map((glyph) => `No glyph for ${glyph.chars.join(' ')} in "${glyph.text}"`),
+    missingGlyphs: [...new Set(glyphs.map((glyph) => glyph.text))],
+  }
 }
 
 /**

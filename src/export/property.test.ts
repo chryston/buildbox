@@ -10,7 +10,7 @@ import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { basicProject } from '../derive/testing'
 import type { Rect } from '../derive'
-import { fitCheck, sheetOf } from './fit'
+import { fitCheck, pngSize, sheetOf } from './fit'
 import { exportFiles } from './index'
 import type { ExportDeps, Recipe } from './types'
 
@@ -168,6 +168,26 @@ describe('the fit check under generated drawings', () => {
         },
       ),
       { numRuns: 400 },
+    )
+  })
+})
+
+describe('the PNG size under generated sheets', () => {
+  it('never asks for more pixels than a PNG can hold (#61 criterion 3)', () => {
+    // Whatever the sheet's shape, the long edge is the size that was chosen and the total stays
+    // inside the ceiling a browser will still decode. A 100 m wall on A4 is not a special case.
+    fc.assert(
+      fc.property(
+        fc.double({ min: 1, max: 500_000, noNaN: true }),
+        fc.double({ min: 1, max: 500_000, noNaN: true }),
+        fc.constantFrom(2048, 4096),
+        (widthMm, heightMm, longEdge) => {
+          const size = pngSize(widthMm, heightMm, longEdge)
+          expect(Math.max(size.widthPx, size.heightPx)).toBe(longEdge)
+          expect(size.widthPx * size.heightPx).toBeLessThanOrEqual(16_777_216)
+        },
+      ),
+      { numRuns: 500 },
     )
   })
 })

@@ -90,7 +90,7 @@ export interface ExportFile {
 export type ExportFailureReason =
   /** Criterion 14: the drawing does not fit the sheet at the chosen scale. */
   | 'out-of-paper'
-  /** The drawing has nothing in it; it still exports, so this is only for a view with no bounds. */
+  /** Nothing was written at all: a recipe that named no view. An empty view still exports (#61 criterion 7). */
   | 'empty-drawing'
   /** The recipe named a view or an Item Design the Project does not have. */
   | 'unknown-view'
@@ -127,13 +127,20 @@ export interface ExportProgress {
  * result for the caller to notice and discard.
  */
 export type ExportResult =
-  | { readonly ok: true; readonly kind: 'single'; readonly file: ExportFile }
+  | {
+      readonly ok: true
+      readonly kind: 'single'
+      readonly file: ExportFile
+      /** The labels whose characters the PDF font could not draw (#61 criterion 11). */
+      readonly missingGlyphs: readonly string[]
+    }
   | {
       readonly ok: true
       readonly kind: 'archive'
       readonly files: readonly ExportFile[]
       readonly manifest: ExportFile
       readonly archive: ExportFile
+      readonly missingGlyphs: readonly string[]
     }
   | { readonly ok: false; readonly failures: readonly ExportFailure[] }
 

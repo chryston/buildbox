@@ -31,6 +31,7 @@ import {
   type PDFPage,
 } from 'pdf-lib'
 import { commandsToPath, layoutText } from '../drawing'
+import type { MissingGlyph } from '../drawing'
 import type { FlatOp } from './flatten'
 import { baselineOffset } from './flatten'
 import { PT_PER_MM } from './fit'
@@ -113,7 +114,13 @@ export function splitByGlyph(text: string, sizeMm: number): GlyphRun[] {
  * label was placed with is already on the item — measuring it again here would be a second answer
  * to a question the drawing already settled.
  */
-function drawText(page: PDFPage, font: PDFFont, op: Extract<FlatOp, { kind: 'text' }>, pageHeightMm: number): void {
+function drawText(
+  page: PDFPage,
+  font: PDFFont,
+  op: Extract<FlatOp, { kind: 'text' }>,
+  pageHeightMm: number,
+  missingGlyphs: MissingGlyph[],
+): void {
   const colour = inkOf(op.fill)
   if (colour === null || op.text.length === 0) return
   const sizePt = pt(op.size)
@@ -123,6 +130,7 @@ function drawText(page: PDFPage, font: PDFFont, op: Extract<FlatOp, { kind: 'tex
   let cursor = op.at.x - shift
   for (const run of splitByGlyph(op.text, op.size)) {
     if (run.missing) {
+      missingGlyphs.push({ ref: null, text: op.text, chars: [...run.text] })
       // A box about the width of the character it stands for, sitting on the baseline:
       // unmistakably a missing something, and about as wide as what should have been there.
       page.drawRectangle({
@@ -209,7 +217,7 @@ function drawImage(
  * Object streams are off: they save a few hundred bytes on a one-page sheet and make the file's
  * structure harder to assert on, and the golden test asserts the object count rather than the size.
  */
-export async function writePdf(input: PdfInput): Promise<Uint8Array> {
+export async function writePdf(input: PdfInput): Promise<{ bytes: Uint8Array; missingGlyphs: MissingGlyph[] }> {
   const doc = await PDFDocument.create()
   doc.registerFontkit(fontkit)
   const font = await doc.embedFont(input.fontBytes, {
@@ -229,9 +237,10 @@ export async function writePdf(input: PdfInput): Promise<Uint8Array> {
     )
   }
 
+  const missingGlyphs: MissingGlyph[] = []
   for (const op of input.ops) {
     if (op.kind === 'path') drawPath(page, op, input.heightMm)
-    else if (op.kind === 'text') drawText(page, font, op, input.heightMm)
+    else if (op.kind === 'text') drawText(page, font, op, input.heightMm, missingGlyphs)
     else if (op.kind === 'image') {
       const handle = embedded.get(op.assetHash)
       if (handle !== undefined) drawImage(page, handle, op, input.heightMm)
@@ -258,5 +267,5 @@ export async function writePdf(input: PdfInput): Promise<Uint8Array> {
   id.push(PDFHexString.of(tag))
   doc.context.trailerInfo.ID = id
 
-  return new Uint8Array(await doc.save({ useObjectStreams: false }))
+  return { bytes: new Uint8Array(await doc.save({ useObjectStreams: false })), missingGlyphs }
 }
