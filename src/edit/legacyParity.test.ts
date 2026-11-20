@@ -113,6 +113,15 @@ const EXTRA_INTENTS = [
   'wall.split',
   'wall.merge',
   'wall.delete',
+  // #65: the legacy app had no Openings at all — a door was a gap drawn by hand — so there
+  // is no store action any of these maps to.
+  'opening.create',
+  'opening.setStart',
+  'opening.setWidth',
+  'opening.flipHinge',
+  'opening.flipSwing',
+  'opening.rename',
+  'opening.delete',
 ]
 
 describe('action coverage', () => {

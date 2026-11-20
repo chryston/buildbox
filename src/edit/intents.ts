@@ -22,6 +22,10 @@ import type {
   EntityId,
   GlobalSettings,
   ItemFootprint,
+  HingeSide,
+  OpeningDependency,
+  OpeningKind,
+  OpeningSwing,
   PlanImage,
   Point2,
   Project,
@@ -79,6 +83,13 @@ export type IntentType =
   | 'wall.split'
   | 'wall.merge'
   | 'wall.delete'
+  | 'opening.create'
+  | 'opening.setStart'
+  | 'opening.setWidth'
+  | 'opening.flipHinge'
+  | 'opening.flipSwing'
+  | 'opening.rename'
+  | 'opening.delete'
   | 'design.update'
   | 'design.setFootprint'
   | 'design.setOrigin'
@@ -502,6 +513,71 @@ export interface MergeWalls {
 
 export interface DeleteWall {
   wallId: EntityId
+  /**
+   * The Openings the dependency review listed and the homeowner agreed to lose (#65 §8).
+   * Absent means the review was never answered, so a Wall that still has Openings in it is
+   * refused rather than quietly emptied; a list that no longer matches what the Wall carries
+   * is a stale answer and is refused too.
+   */
+  openings?: readonly EntityId[]
+}
+
+/**
+ * Place an Opening (#65 §5). A preset's values are resolved into this payload by the caller
+ * and never linked afterwards: editing the pack afterwards changes nothing already placed.
+ */
+export interface CreateOpening {
+  floorId: EntityId
+  /** The one Wall this Opening is an absence in. */
+  hostWallId: EntityId
+  kind: OpeningKind
+  /** `Door 1` — the next free number of its kind, unless the caller renamed it first. */
+  label: string
+  /** Millimetres along the host's reference line to the near jamb; arc length on a curve. */
+  start: number
+  /** Millimetres, measured as the chord (#65 §2). */
+  width: number
+  /** Millimetres above the Floor Datum. */
+  sill: number
+  /** Millimetres above the Floor Datum, more than `sill`. */
+  head: number
+  /** Doors only. `sliding` carries no `hingeSide` (#65 §1). */
+  swing?: OpeningSwing
+  hingeSide?: HingeSide
+}
+
+/** Move along the host: a typed distance from either end, or a drag along the face (#65 §6). */
+export interface SetOpeningStart {
+  openingId: EntityId
+  start: number
+}
+
+/** Resize the width (#65 §6). `start` comes along only when the drag is symmetric and moves
+ * both jambs; a typed width leaves the near jamb where it is. */
+export interface SetOpeningWidth {
+  openingId: EntityId
+  width: number
+  start?: number
+}
+
+/** `Flip hinge`: the leaf hangs on the other jamb. A hinged door only (#65 §6). */
+export interface FlipOpeningHinge {
+  openingId: EntityId
+}
+
+/** `Flip opening side`: the leaf opens toward the other face of the host. A hinged door only. */
+export interface FlipOpeningSwing {
+  openingId: EntityId
+}
+
+export interface RenameOpening {
+  openingId: EntityId
+  label: string
+}
+
+/** Delete one Opening. The Wall it was cut into stays. */
+export interface DeleteOpening {
+  openingId: EntityId
 }
 
 /** `type → payload`, the one place the catalogue's shape is written down. */
@@ -551,6 +627,13 @@ export interface IntentPayloads {
   'wall.split': SplitWall
   'wall.merge': MergeWalls
   'wall.delete': DeleteWall
+  'opening.create': CreateOpening
+  'opening.setStart': SetOpeningStart
+  'opening.setWidth': SetOpeningWidth
+  'opening.flipHinge': FlipOpeningHinge
+  'opening.flipSwing': FlipOpeningSwing
+  'opening.rename': RenameOpening
+  'opening.delete': DeleteOpening
   'design.update': UpdateItemDesign
   'design.setFootprint': SetItemDesignFootprint
   'design.setOrigin': SetItemDesignOrigin
@@ -601,6 +684,7 @@ export type ProjectIntent = Intent<'project.rename' | 'project.setPreferences'>
 export type CabinetIntent = Intent<Extract<IntentType, `cabinet.${string}`>>
 export type PlanIntent = Intent<Extract<IntentType, `plan.${string}`>>
 export type WallIntent = Intent<Extract<IntentType, `wall.${string}`>>
+export type OpeningIntent = Intent<Extract<IntentType, `opening.${string}`>>
 export type DesignIntent = Intent<Extract<IntentType, `design.${string}`>>
 export type FloorIntent = Intent<Extract<IntentType, `floor.${string}`>>
 export type ViewIntent = Intent<Extract<IntentType, `view.${string}`>>
@@ -655,6 +739,13 @@ export const INTENT_ID_ORDER: Record<IntentType, readonly string[]> = {
   'wall.split': ['wallId', 'junctionId'],
   'wall.merge': [],
   'wall.delete': [],
+  'opening.create': ['openingId'],
+  'opening.setStart': [],
+  'opening.setWidth': [],
+  'opening.flipHinge': [],
+  'opening.flipSwing': [],
+  'opening.rename': [],
+  'opening.delete': [],
   'design.update': [],
   'design.setFootprint': [],
   'design.setOrigin': [],
@@ -770,6 +861,31 @@ export type RejectionCode =
   | 'merge-mismatch'
   /** A split point too close to a hosted Junction, where the host's `at` would go out of range (#64 §10). */
   | 'split-blocked'
+  /** An Opening — or a Wall edit that would leave one — outside its host's usable interval (#65 §3, §7). */
+  | 'opening-blocked'
+  /** A dependency review answered against a Project that has changed since it was shown (#65 §8). */
+  | 'dependency-changed'
+  /** An Opening edit this Opening cannot represent: a window has no hinge, a sliding door no side (#65 §6). */
+  | 'invalid-opening'
+
+/**
+ * What an Intent takes with it, listed before it runs (#20 §4, #65 §8).
+ *
+ * `previewIntent` builds the report, the UI turns the answer into resolutions inside the
+ * Intent, and the handler re-checks them. One shape for every review the catalogue has, so
+ * a second dialog framework is never needed.
+ */
+export interface DependencyReview {
+  /** Which review this is, so the dialog knows how to word its buttons. */
+  readonly kind: 'delete-wall'
+  readonly wallId: EntityId
+  /** `W-3` — the Wall that is about to go. */
+  readonly wallRef: string
+  /** Every Opening that goes with it, in the order the dialog lists them. */
+  readonly openings: readonly OpeningDependency[]
+  /** `Delete W-3 and its openings?` — the question the dialog asks. */
+  readonly message: string
+}
 
 export interface Applied {
   ok: true
