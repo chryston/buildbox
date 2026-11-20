@@ -93,6 +93,13 @@ describe('the draft', () => {
     expect(undoPoint(startWallDraft(at(0, 0))).nodes).toHaveLength(0)
   })
 
+  it('counts the same point twice as one point', () => {
+    const draft = draw(at(0, 0), { at: at(2000, 0) })
+    const again = placePoint(withWallCursor(draft, at(2000, 0)))!
+    expect(again.nodes).toHaveLength(draft.nodes.length)
+    expect(draftSegments(again)).toHaveLength(1)
+  })
+
   it('takes the first click as the start of the chain', () => {
     // The tool is armed with nothing on it: the click that begins the chain must not also draw
     // a Wall from wherever the draft happened to be armed to the point under the pointer.

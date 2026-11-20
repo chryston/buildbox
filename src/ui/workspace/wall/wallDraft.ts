@@ -308,6 +308,9 @@ export const placePoint = (draft: WallDraft): WallDraft | null => {
     }
   }
   const at = draft.typedLength === null ? draft.cursor.at : along(from.at, draft.cursor.at, draft.typedLength)
+  // The same point twice is one point: a click that lands where the chain already stands would
+  // otherwise add a zero-length Wall to the chain, which is no Wall at all.
+  if (at.x === from.at.x && at.y === from.at.y) return { ...draft, typedLength: null, cursor: null }
   const node: WallDraftNode = { at, role: draft.cursor.role, target: draft.cursor.target }
   if (draft.tool === 'arcFromLast' && node.role === 'end' && lastEnd(draft) !== null && draft.nodes.length >= 2) {
     const through = tangentArcThrough(from.at, draftHeadingDeg(draft), at)

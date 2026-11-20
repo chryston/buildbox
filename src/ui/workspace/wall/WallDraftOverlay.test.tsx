@@ -99,7 +99,11 @@ const hoverAt = (at: Pt): void => {
 }
 const clickAt = (at: Pt): void => {
   hoverAt(at)
-  fireEvent.click(layer())
+  // A point is placed by a press and release on the canvas, each carrying its own position.
+  const x = at.x + PAN.x
+  const y = at.y + PAN.y
+  fireEvent.pointerDown(layer(), { clientX: x, clientY: y })
+  fireEvent.pointerUp(layer(), { clientX: x, clientY: y })
 }
 const indicator = (): HTMLElement | null => screen.queryByTestId('wall-join-indicator')
 const chip = (): string => screen.getByTestId('wall-chip').textContent ?? ''

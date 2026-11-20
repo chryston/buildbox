@@ -17,16 +17,6 @@ import { floorPlanCanvas, openPreviewApp, showFloorPlan } from '../support/previ
 
 type Pt = { x: number, y: number }
 
-/**
- * RED, and skipped so the suite stays green: drawing the L through the tool leaves no Walls on
- * the Floor. Two things have to be settled before these six scenarios can run, both in the app
- * rather than in this file — `WallDraftOverlay` is armed with its first node at `(0,0)`, so the
- * first click places a second point instead of starting the chain, and with that fixed the
- * `wall.createChain` Intent still has to be seen to apply. `Finish` is disabled in the failure
- * snapshot either way, which is what the assertions below turn on.
- */
-test.skip(true, '#64: the Wall draft does not yet place its first point; see walls.spec.ts')
-
 const START: Pt = { x: 200, y: 200 }
 const BEND: Pt = { x: 600, y: 200 }
 const TAIL: Pt = { x: 600, y: 500 }
@@ -56,9 +46,10 @@ async function scene(page: Page): Promise<Scene> {
 const px = (s: Scene, mm: Pt): Pt => ({ x: s.left + mm.x * s.zoom + s.panX, y: s.top + mm.y * s.zoom + s.panY })
 
 /**
- * Zoom to `target`, about the point that matters so it does not wander off the canvas.
- * The wheel is the only zoom a person has, and the transform is the only honest reading of
- * what zoom the app settled on.
+ * Zoom past `target`, about the point that matters so it does not wander off the canvas. The
+ * wheel is the only zoom a person has and its step is a factor of 1.25, so the view lands at or
+ * just past the round number rather than on it; the transform is the only honest reading of the
+ * zoom the app settled on, and it is the one the caller measures against.
  */
 async function setZoom(page: Page, about: Pt, target: number): Promise<Scene> {
   let s = await scene(page)
@@ -66,9 +57,8 @@ async function setZoom(page: Page, about: Pt, target: number): Promise<Scene> {
   await page.mouse.move(focus.x, focus.y)
   for (let step = 0; step < 60; step += 1) {
     s = await scene(page)
-    const ratio = target / s.zoom
-    if (Math.abs(ratio - 1) < 0.01) return s
-    await page.mouse.wheel(0, ratio > 1 ? -60 : 60)
+    if (target > 1 ? s.zoom >= target : s.zoom <= target) return s
+    await page.mouse.wheel(0, target > 1 ? -60 : 60)
   }
   throw new Error(`the Plan View would not reach ${target}× (stopped at ${s.zoom})`)
 }
@@ -90,6 +80,9 @@ async function drawTheL(page: Page): Promise<void> {
     const p = px(s, mm)
     await page.mouse.click(p.x, p.y)
   }
+  // Three clicks are two segments and nothing else: a click that placed a point twice would
+  // finish as three Walls, and the L would not be the L.
+  await expect(page.locator('[data-testid="wall-draft-layer"] path')).toHaveCount(2)
   await page.getByTestId('wall-finish').click()
   await expect(bands(page)).toHaveCount(2)
 }
@@ -107,26 +100,34 @@ test('the join a Wall offers is named after the geometry a person can see', asyn
   await drawTheL(page)
   await startWalls(page)
 
+  // The words on screen at each hover, collected as they appear: `allTextContents` answers the
+  // empty list for a join that is not offered, where `textContent` would wait for one forever.
+  const words: string[] = []
+  const scan = async (): Promise<void> => {
+    words.push(...(await hoverLabel(page).allTextContents()), ...(await joinIndicator(page).allTextContents()))
+  }
+
   // The shown end of W-2: a cap corner, named as an end.
   const s = await scene(page)
   const cap = px(s, CAP)
   await page.mouse.move(cap.x, cap.y)
   await expect(hoverLabel(page)).toHaveText('End of W-2')
   await expect(joinIndicator(page)).toHaveText('Join to end of W-2')
+  await scan()
 
   // The bend, named after both Walls rather than after either reference line.
   const outer = px(s, OUTER)
   await page.mouse.move(outer.x, outer.y)
   await expect(hoverLabel(page)).toHaveText('Corner of W-1 and W-2')
+  await scan()
 
   // Empty space promises nothing.
   const free = px(s, { x: 200, y: 600 })
   await page.mouse.move(free.x, free.y)
   await expect(joinIndicator(page)).toHaveCount(0)
+  await scan()
 
-  for (const text of [await hoverLabel(page).textContent(), await joinIndicator(page).textContent()]) {
-    expectNoShorthand(text)
-  }
+  for (const text of words) expectNoShorthand(text)
 })
 
 /**
@@ -155,8 +156,12 @@ for (const zoom of [0.5, 1, 4]) {
   test(`a Wall corner is acquired within twelve CSS pixels at ${zoom}×`, async ({ page }) => {
     await drawTheL(page)
     await startWalls(page)
-    const s = await setZoom(page, START, zoom)
-    expect(Math.abs(s.zoom - zoom)).toBeLessThan(zoom * 0.02)
+    // Zoom about the corner itself: at 4× a corner 50 mm above the anchor would be pushed off
+    // the top of the canvas, and a pointer outside the canvas is not a pointer failing to snap.
+    const s = await setZoom(page, { x: START.x, y: START.y - 50 }, zoom)
+    // One wheel step is a factor of 1.25, so the view sits between the target and one step past it.
+    expect(s.zoom).toBeGreaterThan(zoom * 0.8)
+    expect(s.zoom).toBeLessThan(zoom * 1.25)
 
     const corner = px(s, { x: START.x, y: START.y - 50 })
     await page.mouse.move(corner.x - 11, corner.y)
@@ -168,6 +173,26 @@ for (const zoom of [0.5, 1, 4]) {
     const label = (await hoverLabel(page).textContent()) ?? ''
     expect(label).not.toMatch(/W-\d/)
   })
+}
+
+/**
+ * The tidied corner the plan actually holds. The first chain was drawn on an empty Floor, so its
+ * points are wherever the pixels landed — a whole pixel in Chromium, a fraction in Firefox — and
+ * the corner the join kernel made from them is the target, not the idealised point asked for.
+ */
+async function drawnCornerNear(page: Page, near: { x: number; y: number }): Promise<{ x: number; y: number }> {
+  const numbers = ((await bands(page).first().getAttribute('d')) ?? '').match(/-?\d+(?:\.\d+)?/g) ?? []
+  let best = Infinity
+  let corner = { x: NaN, y: NaN }
+  for (let i = 0; i + 1 < numbers.length; i += 2) {
+    const point = { x: Number(numbers[i]), y: Number(numbers[i + 1]) }
+    const d2 = (point.x - near.x) ** 2 + (point.y - near.y) ** 2
+    if (d2 < best) {
+      best = d2
+      corner = point
+    }
+  }
+  return corner
 }
 
 /**
@@ -187,6 +212,12 @@ test('the outer corner of an L is the tidied corner, to the millimetre', async (
   await page.mouse.click(outer.x, outer.y)
   const away = px(s, { x: 900, y: 150 })
   await page.mouse.move(away.x, away.y)
-  // The draft's own geometry, in Floor millimetres: the canonical corner, nothing rounded.
-  await expect(rubberBand(page)).toHaveAttribute('d', /^M 650 150 L /)
+  const corner = await drawnCornerNear(page, OUTER)
+  // The draft's own geometry, in Floor millimetres: the point placed is the corner vertex, to
+  // well under a micrometre (the drawn band itself is printed to three decimal places).
+  const placed = ((await rubberBand(page).getAttribute('d')) ?? '').split(' L ')[0].replace(/^M /, '').split(' ').map(Number)
+  expect(Math.hypot(placed[0] - corner.x, placed[1] - corner.y)).toBeLessThan(0.002)
+  // And it is the corner, not the crossing of the two reference lines 70.7 mm away.
+  expect(Math.hypot(corner.x - OUTER.x, corner.y - OUTER.y)).toBeLessThan(2)
+  expect(Math.hypot(corner.x - BEND.x, corner.y - BEND.y)).toBeGreaterThan(50)
 })

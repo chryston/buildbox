@@ -152,19 +152,23 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     onViewport(fitViewport(hostSize.width, hostSize.height, contentW, contentH))
   }, [viewport, hostSize, contentW, contentH, onViewport])
 
-  // Wheel zoom needs a non-passive listener to keep the page from scrolling.
+  // Wheel zoom needs a non-passive listener to keep the page from scrolling. It goes on the
+  // canvas host rather than the `<svg>`, because an HTML overlay over the canvas — the Wall
+  // draft — is a sibling of the `<svg>` and would otherwise swallow the wheel: putting down a
+  // Wall must not cost a person the ability to zoom while they place it (#64 §12).
   useEffect(() => {
-    const el = svgRef.current
+    const el = hostRef.current ?? svgRef.current
     if (el === null) return
-    const onWheel = (event: WheelEvent): void => {
-      event.preventDefault()
+    const onWheel = (event: Event): void => {
+      const wheel = event as WheelEvent
+      wheel.preventDefault()
       if (viewport === null) return
       const rect = el.getBoundingClientRect()
-      onViewport(zoomAround(viewport, event.deltaY < 0 ? WHEEL_IN : WHEEL_OUT, event.clientX - rect.left, event.clientY - rect.top))
+      onViewport(zoomAround(viewport, wheel.deltaY < 0 ? WHEEL_IN : WHEEL_OUT, wheel.clientX - rect.left, wheel.clientY - rect.top))
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [svgRef, viewport, onViewport])
+  }, [hostRef, svgRef, viewport, onViewport])
 
   /** True while a footprint or the handle has taken the pointer for this gesture. */
   const consumedPointer = useRef(false)
@@ -393,7 +397,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
         {matrix !== undefined && (
           <>
             <DisplayListSvg
-              list={list}
+              list={withWalls}
               sizing={sizing}
               matrix={matrix}
               textSpace="screen"

@@ -11,9 +11,9 @@
  * not a thing a person sees anywhere else in the app (#64 §15) — a draft should not start a habit
  * of reading centrelines.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { resolveSnap, snapCandidates } from '../../../derive'
+import { SNAP_ACQUISITION_PX, distance, resolveSnap, snapCandidates } from '../../../derive'
 import type { FloorWalls, Pt, Segment, SnapKind } from '../../../derive'
 import type { DisplayUnit, WallClassification } from '../../../domain'
 import { formatMm } from '../displayUnits'
@@ -130,6 +130,7 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
     snapKinds, gridSpacingMm, angleIncrementDeg, unit, precision,
   } = props
   const layerRef = useRef<HTMLDivElement>(null)
+  const press = useRef<{ x: number; y: number } | null>(null)
   const [hover, setHover] = useState<{ at: Pt; label: string | null } | null>(null)
   const [typing, setTyping] = useState(false)
   const [lengthText, setLengthText] = useState('')
@@ -151,10 +152,22 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
     }
   }, [viewport])
 
+  /** The points that ARE corners of the tidied outline, including the free caps. */
+  const cornerPoints = useMemo(
+    () => floorWalls.snapSources.flatMap((source) => source.corners.map((corner) => corner.point)),
+    [floorWalls],
+  )
+
   /** The point a click would place, what it would join, and the words that say so. */
   const aim = useCallback((cursor: Pt): { at: Pt; target: WallSnapTarget; label: string | null } => {
     const segments = draftSegments(draft)
     const last = segments[segments.length - 1]
+    // A face projection is a point on a line; a corner is a point. The projection is built on
+    // the cursor, so standing on a corner it is a hair nearer than the corner itself and would
+    // win the tie inside the kind — the corner of an L would then never be the point you get.
+    // Within the same twelve pixels the corner is the answer, so the projections step aside.
+    const reach = SNAP_ACQUISITION_PX / viewport.zoom
+    const nearCorner = cornerPoints.some((point) => distance(point, cursor) <= reach)
     const candidates = snapCandidates({
       geometry: [],
       walls: floorWalls.snapSources,
@@ -165,12 +178,22 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
       angleIncrementDeg,
       enabled: snapKinds,
     })
-    const snap = resolveSnap(candidates, cursor, viewport.zoom, snapKinds)
+    const offered = nearCorner
+      ? candidates.filter((candidate) => candidate.kind !== 'wallFace'
+        || cornerPoints.some((point) => point.x === candidate.point.x && point.y === candidate.point.y))
+      : candidates
+    // The scene is drawn in Floor millimetres at `zoom` pixels per millimetre, so one pixel is
+    // 1/zoom millimetres: the resolver wants millimetres per pixel, and handing it the zoom made
+    // the reach 12 mm at 12× and 1 mm at 0.5× — the very defect criterion 5 names.
+    const snap = resolveSnap(offered, cursor, 1 / viewport.zoom, snapKinds)
     if (snap === null) return { at: cursor, target: wallTargetAt(cursor, floorWalls.snapSources), label: null }
     return { at: snap.point, target: wallTargetAt(snap.point, floorWalls.snapSources), label: snap.target.label }
-  }, [draft, floorWalls, gridSpacingMm, angleIncrementDeg, snapKinds, viewport.zoom])
+  }, [draft, floorWalls, cornerPoints, gridSpacingMm, angleIncrementDeg, snapKinds, viewport.zoom])
 
   const onPointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>): void => {
+    // The pointer over the row or the bar is not aiming at the canvas. Moving the rubber band
+    // while a hand reaches for Finish also reflows the bar under that hand.
+    if ((event.target as HTMLElement).closest('button, select, input, label') !== null) return
     const cursor = toFloor(event.clientX, event.clientY)
     if (cursor === null) return
     const aimed = aim(cursor)
@@ -178,8 +201,17 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
     onDraft(withWallCursor(draft, aimed.at, aimed.target))
   }, [toFloor, aim, draft, onDraft])
 
-  const place = (): void => {
-    const next = placePoint(draft)
+  /**
+   * The click places where it landed, aimed the same way the rubber band is. The rubber band's
+   * cursor is not trusted for this: a pointermove is a continuous event, so its state update can
+   * still be pending when the click on the very same position is already being handled, and a
+   * click that lands on a draft whose cursor has not arrived yet would place nothing at all.
+   */
+  const place = (event: React.MouseEvent<HTMLDivElement>): void => {
+    const cursor = toFloor(event.clientX, event.clientY)
+    if (cursor === null) return
+    const aimed = aim(cursor)
+    const next = placePoint(withWallCursor(draft, aimed.at, aimed.target))
     if (next !== null) onDraft(next)
   }
 
@@ -229,12 +261,26 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
       className="absolute inset-0"
       style={{ cursor: 'crosshair', outline: 'none' }}
       tabIndex={-1}
+      onPointerDown={(event) => {
+        // Where a press began decides whether releasing it places a point. A press that began on
+        // the row or the bar belongs to that control: Firefox hands the click ending it to the
+        // layer as well, and choosing Finish would otherwise add a Wall to the chain it commits.
+        const control = (event.target as HTMLElement).closest('button, select, input, label')
+        press.current = control === null ? { x: event.clientX, y: event.clientY } : null
+      }}
+      onPointerUp={(event) => {
+        const started = press.current
+        press.current = null
+        if (started === null) return
+        // A press that slid across the canvas is a gesture, not a point.
+        if (Math.abs(event.clientX - started.x) > 3 || Math.abs(event.clientY - started.y) > 3) return
+        place(event)
+      }}
       onPointerMove={onPointerMove}
       onPointerLeave={() => {
         setHover(null)
         onDraft(withWallCursor(draft, null))
       }}
-      onClick={place}
       onDoubleClick={finish}
       onKeyDown={onKeyDown}
     >
@@ -371,7 +417,9 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
             {definition.label}
           </button>
         ))}
-        <span data-testid="wall-chip" className="bb-workspace-chip">{chip ?? ''}</span>
+        <span data-testid="wall-chip" className="bb-workspace-chip tabular-nums min-w-[13ch] text-center">
+          {chip ?? ''}
+        </span>
         {typing && (
           <input
             data-testid="wall-length-field"
