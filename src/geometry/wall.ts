@@ -131,7 +131,31 @@ export const refTangentDeg = (line: WallRefLine, end: 'start' | 'end'): number =
   if (arc === null) return 0
   const form = circle(arc.center, arc.radius, arc.t0, arc.t1)
   const d = arcTangent(form, end === 'start' ? arc.t0 : arc.t1)
-  return normaliseDeg(Math.atan2(d.y, d.x) / DEG)
+  // `arcTangent` points along increasing parameter; a reference line runs from `start` to
+  // `end`, which is decreasing parameter whenever the arc sweeps the other way. Clean-up
+  // reads this to decide which side a neighbour lies on, so the sign is not cosmetic.
+  const along = arc.t1 < arc.t0 ? -1 : 1
+  return normaliseDeg(Math.atan2(d.y * along, d.x * along) / DEG)
+}
+
+/**
+ * The parametric offset from `t0` of the arc point nearest `at`, clamped to the sweep: zero
+ * at `start`, the whole sweep at `end`, and the angle itself in between. Wrapping the offset
+ * into (−π, π] rather than the angle into an absolute window is what keeps a point off the
+ * end of a negatively swept arc on the *start* side, where it belongs.
+ */
+const nearestOffset = (arc: ArcThrough, at: Pt): number => {
+  const sweep = arc.t1 - arc.t0
+  let d = Math.atan2(at.y - arc.center.y, at.x - arc.center.x) - arc.t0
+  // Take the representative of the offset nearest the sweep’s own middle. Wrapping into
+  // (−π, π] instead would read a point inside a major arc as lying on the other side of the
+  // circle, and answer with the wrong end.
+  const middle = sweep / 2
+  d -= middle
+  while (d > Math.PI) d -= Math.PI * 2
+  while (d <= -Math.PI) d += Math.PI * 2
+  d += middle
+  return sweep >= 0 ? Math.min(sweep, Math.max(0, d)) : Math.max(sweep, Math.min(0, d))
 }
 
 /** The distance from `at` to the reference line, measured to the curve itself. */
@@ -145,16 +169,8 @@ export const refDistance = (line: WallRefLine, at: Pt): number => {
   }
   const arc = arcFromThrough(line.start, line.through, line.end)
   if (arc === null) return distance(at, line.start)
-  const raw = Math.atan2(at.y - arc.center.y, at.x - arc.center.x)
-  const lo = Math.min(arc.t0, arc.t1)
-  const hi = Math.max(arc.t0, arc.t1)
-  let t = raw
-  while (t < lo) t += Math.PI * 2
-  while (t > hi) t -= Math.PI * 2
-  const clamped = Math.min(hi, Math.max(lo, t))
-  const onArc = arcPoint(circle(arc.center, arc.radius, arc.t0, arc.t1), clamped)
-  const ends = [distance(at, line.start), distance(at, line.end)]
-  return Math.min(distance(at, onArc), ...ends)
+  const onArc = arcPoint(circle(arc.center, arc.radius, arc.t0, arc.t1), arc.t0 + nearestOffset(arc, at))
+  return distance(at, onArc)
 }
 
 /**
@@ -192,16 +208,11 @@ export const refParamAt = (line: WallRefLine, at: Pt): number => {
     const squared = d.x * d.x + d.y * d.y
     if (squared === 0) return 0
     const t = ((at.x - line.start.x) * d.x + (at.y - line.start.y) * d.y) / squared
-    return Math.min(1, Math.max(0, t)) * Math.sqrt(squared)
+    // `hypot`, the same way `refLength` measures the span: a clamped parameter has to come
+    // back as exactly the length, not one float step past it.
+    return Math.min(1, Math.max(0, t)) * Math.hypot(d.x, d.y)
   }
   const arc = arcFromThrough(line.start, line.through, line.end)
   if (arc === null) return 0
-  const raw = Math.atan2(at.y - arc.center.y, at.x - arc.center.x)
-  const lo = Math.min(arc.t0, arc.t1)
-  const hi = Math.max(arc.t0, arc.t1)
-  let t = raw
-  while (t < lo) t += Math.PI * 2
-  while (t > hi) t -= Math.PI * 2
-  const clamped = Math.min(hi, Math.max(lo, t))
-  return Math.abs(clamped - arc.t0) * arc.radius
+  return Math.abs(nearestOffset(arc, at)) * arc.radius
 }

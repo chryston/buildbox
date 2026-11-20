@@ -152,11 +152,34 @@ const isRunThrough = (a: JoinWall, aEnd: 'start' | 'end', b: JoinWall, bEnd: 'st
   return false
 }
 
-/** One member end's two corner points, plus whether the end is capped. */
+/** The other side of a Wall. */
+const opposite = (side: WallSide): WallSide => (side === 'left' ? 'right' : 'left')
+
+/**
+ * Which face of a Wall lies on the away-frame `side` — the side a neighbour falls on seen
+ * from the Junction, looking down the member’s own body. At a `start` that frame is the
+ * reference line’s own; at an `end` the body lies behind the Junction and the two mirror.
+ */
+const faceSide = (end: 'start' | 'end', side: WallSide): WallSide => (end === 'start' ? side : opposite(side))
+
+/** True when `middle` stands off the line from `from` to `to` by more than a micron. */
+const turns = (from: Pt, middle: Pt, to: Pt): boolean => {
+  const d = sub(to, from)
+  const l = Math.hypot(d.x, d.y)
+  if (l === 0) return false
+  return Math.abs(d.x * (middle.y - from.y) - d.y * (middle.x - from.x)) / l > 1e-6
+}
+
+/** One member of a Junction. */
+type Member = { readonly wall: JoinWall; readonly end: 'start' | 'end' }
+
 interface EndCorners {
   left: Pt
   right: Pt
-  cap: boolean
+  /** The Junction point itself when the cap turns through it, otherwise `null`. */
+  via: Pt | null
+  /** True at a run-through end, where the faces carry on and no seam is drawn. */
+  butt: boolean
 }
 
 /** The square end: both faces cut perpendicular to the reference at this end. */
@@ -167,7 +190,7 @@ const squareEnd = (wall: JoinWall, end: 'start' | 'end'): EndCorners => {
     const offsetLine = offsetRefLine(line, offset)
     return endAt(offsetLine, end)
   }
-  return { left: at(left), right: at(right), cap: true }
+  return { left: at(left), right: at(right), via: null, butt: false }
 }
 
 /**
@@ -180,7 +203,7 @@ const squareEnd = (wall: JoinWall, end: 'start' | 'end'): EndCorners => {
 const cornersAt = (
   wall: JoinWall,
   end: 'start' | 'end',
-  members: readonly { wall: JoinWall; end: 'start' | 'end' }[],
+  members: readonly Member[],
   host: JoinWall | null,
 ): EndCorners => {
   const at = endAt(wall.line, end)
@@ -189,32 +212,60 @@ const cornersAt = (
     const near = nearFace(host, wall, end)
     const self = [faceCurve(wall, 'left'), faceCurve(wall, 'right')]
     const found = self.map((face) => crossPoint(face.locus, near.locus, at))
-    if (found[0] !== null && found[1] !== null) return { left: found[0], right: found[1], cap: true }
+    if (found[0] !== null && found[1] !== null) return { left: found[0], right: found[1], via: null, butt: false }
     return squareEnd(wall, end)
   }
   const others = members.filter((member) => member.wall.id !== wall.id)
   if (others.length === 0) return squareEnd(wall, end)
-  if (others.some((other) => isRunThrough(wall, end, other.wall, other.end))) {
-    // The faces continue into the partner: no corner, no cap.
-    const plain = squareEnd(wall, end)
-    return { left: plain.left, right: plain.right, cap: false }
+  // The member this one runs through, if any: the same line carried on the far side. Its face
+  // intersection with that partner is at infinity, so the partner never bounds a corner — but
+  // it does mean this end carries no seam.
+  const partner = others.find((other) => isRunThrough(wall, end, other.wall, other.end))
+  const rest = partner === undefined ? others : others.filter((other) => other.wall.id !== partner.wall.id)
+  const plain = squareEnd(wall, end)
+  if (rest.length === 0) {
+    // The faces continue into the partner: no corner, no seam.
+    return { left: plain.left, right: plain.right, via: null, butt: true }
   }
   const selfDeg = awayDeg(wall, end)
   const limit = 10 * Math.max(wall.thickness, ...members.map((member) => member.wall.thickness))
-  const cornerFor = (side: WallSide): Pt | null => {
-    const onSide = others
-      .filter((other) => sideOf(wall, end, other.wall, other.end) === side)
-      .sort((a, b) => angleGap(selfDeg, awayDeg(a.wall, a.end)) - angleGap(selfDeg, awayDeg(b.wall, b.end)))
-    const neighbour = onSide[0]
+  const nearest = (list: readonly Member[]): Member | undefined =>
+    [...list].sort(
+      (a, b) => angleGap(selfDeg, awayDeg(a.wall, a.end)) - angleGap(selfDeg, awayDeg(b.wall, b.end)),
+    )[0]
+  /** The corner on the face that lies on `self`’s away-frame `side`, bounded by its neighbour. */
+  const cornerFor = (side: WallSide): { point: Pt; far: boolean } | null => {
+    const onSide = rest.filter((other) => sideOf(wall, end, other.wall, other.end) === side)
+    // A pair of members mitres both its faces, so the neighbour on the other side bounds this
+    // one too. Three or more: a face with no angular neighbour on its side is the outer edge
+    // of the fan and simply ends, square, where the union’s boundary does.
+    const neighbour = nearest(onSide) ?? (rest.length === 1 ? rest[0] : undefined)
     if (neighbour === undefined) return null
-    const at2 = crossPoint(faceCurve(wall, side).locus, faceCurve(neighbour.wall, side).locus, at)
-    if (at2 === null || distance(at2, at) > limit) return null
-    return at2
+    const mine = faceCurve(wall, faceSide(end, side))
+    const theirs = faceCurve(neighbour.wall, faceSide(neighbour.end, opposite(side)))
+    const found = crossPoint(mine.locus, theirs.locus, at)
+    // Two faces that never meet — a kink whose inner faces diverge — leave that face its own
+    // end point, which is what the union’s boundary does there.
+    if (found === null) return null
+    return { point: found, far: distance(found, at) > limit }
   }
-  const plain = squareEnd(wall, end)
-  const left = cornerFor('left') ?? plain.left
-  const right = cornerFor('right') ?? plain.right
-  return { left, right, cap: true }
+  const left = cornerFor(faceSide(end, 'left'))
+  const right = cornerFor(faceSide(end, 'right'))
+  // Either face meeting its neighbour more than ten thicknesses down the line is the
+  // near-parallel case: both faces square, which is the one answer that cannot self-intersect
+  // and cannot disagree with the neighbour about where the joint is.
+  if (left?.far === true || right?.far === true) return { ...plain, butt: partner !== undefined }
+  // The cap turns through the Junction point, where the members’ reference lines meet. Two
+  // members at 90° put it on the mitre line anyway; three or more split the small polygon at
+  // the centre between them, which is what lets the tidied bands tile with no gap or overlap.
+  const leftPoint = left?.point ?? plain.left
+  const rightPoint = right?.point ?? plain.right
+  return {
+    left: leftPoint,
+    right: rightPoint,
+    via: turns(leftPoint, at, rightPoint) ? at : null,
+    butt: partner !== undefined,
+  }
 }
 
 /** The host face the branch butts: the one its own body lies against. */
@@ -256,20 +307,32 @@ const band = (
   return [build('left'), build('right')]
 }
 
-/** The outline of one tidied Wall: face, cap, face back, cap. */
-const outlineOf = (faces: readonly [JoinedFace, JoinedFace], capStart: boolean, capEnd: boolean): ClosedPath => {
+/** The outline of one tidied Wall: face, cap, face back, cap. Always closed. */
+const outlineOf = (faces: readonly [JoinedFace, JoinedFace], start: EndCorners, end: EndCorners): ClosedPath => {
   const [left, right] = faces
   const back = (face: JoinedFace): Segment =>
     face.segment.kind === 'arc'
       ? { kind: 'arc', to: face.from, center: face.segment.center, sweepDeg: -face.segment.sweepDeg }
       : { kind: 'line', to: face.from }
-  // A capped end closes the band with its cap segment; a run-through end leaves the face
-  // open, which is what lets two collinear Walls read as one continuous pair of faces.
-  const segments: Segment[] = capStart ? [{ kind: 'line', to: left.from }] : []
-  segments.push(left.segment)
-  if (capEnd) segments.push({ kind: 'line', to: right.to })
-  segments.push(back(right))
-  return { start: capStart ? right.from : left.from, segments }
+  // A cap is a straight line across the band, bent once through the Junction point where the
+  // members’ reference lines meet. A run-through end still closes its own outline — the two
+  // partners share that edge exactly, so the pair reads as one band with no seam in it.
+  const cap = (from: Pt, via: Pt | null, to: Pt): Segment[] =>
+    via === null || !turns(from, via, to)
+      ? [{ kind: 'line', to }]
+      : [
+          { kind: 'line', to: via },
+          { kind: 'line', to },
+        ]
+  return {
+    start: right.from,
+    segments: [
+      ...cap(right.from, start.via, left.from),
+      left.segment,
+      ...cap(left.to, end.via, right.to),
+      back(right),
+    ],
+  }
 }
 
 /**
@@ -315,9 +378,9 @@ export const joinWalls = (
     return {
       id: wall.id,
       faces,
-      outline: outlineOf(faces, start.cap, end.cap),
-      capStart: start.cap,
-      capEnd: end.cap,
+      outline: outlineOf(faces, start, end),
+      capStart: !start.butt,
+      capEnd: !end.butt,
     }
   })
 }
