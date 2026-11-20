@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { unzipSync } from 'fflate'
 import { expect, test } from '../support/fixtures'
+import { parseCsv } from '../../src/export/testing'
 import { FIRST_PROJECT, openPreviewApp, saveStatus, showFloorPlan, undoButton } from '../support/previewApp'
 import { previewSeed, readDownload } from '../support/libraryApp'
 import { projectRevision } from '../support/seedPreviewDb'
@@ -46,14 +47,15 @@ async function runLists(page: Page): Promise<{ name: string; buffer: Buffer }> {
 }
 
 /**
- * CSV bytes as lines: the BOM checked and gone, every line ending CRLF, the trailing empty line
- * dropped. A file that used bare newlines would fail the split below on its last line.
+ * CSV bytes read back by the contract's own strict reader (#62 criterion 3): the BOM is reported
+ * rather than eaten, a bare LF or a stray quote throws rather than parsing into something that
+ * merely looks like a row, and a UTF-8 name that survived the round trip is the name that was
+ * written.
  */
-function csvLines(buffer: Buffer): string[] {
-  const text = buffer.toString('utf8')
-  expect(text.codePointAt(0), 'no UTF-8 BOM').toBe(0xfeff)
-  expect(text.endsWith('\r\n')).toBe(true)
-  return text.slice(1).split('\r\n').filter((line) => line !== '')
+function csvRows(buffer: Buffer): readonly (readonly string[])[] {
+  const parsed = parseCsv(new Uint8Array(buffer))
+  expect(parsed.bom, 'no UTF-8 BOM').toBe(true)
+  return parsed.rows
 }
 
 interface Manifest {
@@ -86,12 +88,15 @@ test('one table downloads one CSV that carries the published header', async ({ p
   const file = await runLists(page)
   expect(file.name).toMatch(new RegExp(`^${SLUG}_items_\\d{8}\\.csv$`))
 
-  const lines = csvLines(file.buffer)
-  expect(lines[0]).toBe(ITEMS_HEADER)
+  const lines = csvRows(file.buffer)
+  expect(lines[0]).toEqual(ITEMS_HEADER.split(','))
   // Criterion 5's other half: the sentence beside the table and the file agree.
   expect(lines).toHaveLength(shown + 1)
+  for (const one of lines) expect(one).toHaveLength(ITEMS_HEADER.split(',').length)
   expect(lines[1]).toContain('Base Unit')
   expect(lines[1]).toContain('existing')
+  // The count column arrives as a number a spreadsheet can add, not a string that looks like one.
+  expect(Number(lines[1]![7])).toBeGreaterThan(0)
   // The dialog closes once the file is handed over.
   await expect(page.getByTestId('export-lists-run')).toHaveCount(0)
 })
@@ -108,8 +113,8 @@ test('two tables arrive as one archive whose manifest hashes each entry', async 
   const entries = unzipSync(new Uint8Array(file.buffer))
   // The contract's order, and nothing else in the archive: no directories, no stray files.
   expect(Object.keys(entries)).toEqual([`${SLUG}_items_${day}.csv`, `${SLUG}_cut-list_${day}.csv`, 'manifest.json'])
-  expect(csvLines(Buffer.from(entries[`${SLUG}_items_${day}.csv`]!))[0]).toBe(ITEMS_HEADER)
-  expect(csvLines(Buffer.from(entries[`${SLUG}_cut-list_${day}.csv`]!))[0]).toBe(CUT_LIST_HEADER)
+  expect(csvRows(Buffer.from(entries[`${SLUG}_items_${day}.csv`]!))[0]).toEqual(ITEMS_HEADER.split(','))
+  expect(csvRows(Buffer.from(entries[`${SLUG}_cut-list_${day}.csv`]!))[0]).toEqual(CUT_LIST_HEADER.split(','))
 
   const manifest = manifestOf(entries)
   expect(manifest.format).toBe('buildbox-export')
@@ -144,7 +149,7 @@ test('a scope with nothing in it says 0 rows and still writes both headers', asy
   const file = await readDownload(await pending)
   const entries = unzipSync(new Uint8Array(file.buffer))
   for (const one of Object.keys(entries).filter((name) => name.endsWith('.csv'))) {
-    expect(csvLines(Buffer.from(entries[one]!)), one).toHaveLength(1)
+    expect(csvRows(Buffer.from(entries[one]!)), one).toHaveLength(1)
   }
 })
 
