@@ -255,27 +255,29 @@ function FloorRow(props: ManageFloorsDialogProps & {
             value={heightText ?? shown(floor.defaultWallHeight)}
             onChange={(event) => setHeightText(event.target.value)}
           />
-          <button
-            type="button"
-            data-testid={`floor-wall-height-save-${floor.id}`}
-            className="bb-workspace-secondary-button"
-            onClick={() => {
-              const parsed = Number((heightText ?? '').trim())
-              const mm = Number.isFinite(parsed) && parsed > 0 ? Math.round(parseToMm(parsed, unit)) : null
-              onSetWallHeight(floor.id, mm !== null && mm > 0 ? mm : null)
-              setHeightText(null)
-            }}
-          >
-            Use this height
-          </button>
-          <button
-            type="button"
-            data-testid={`floor-limits-save-${floor.id}`}
-            className="bb-workspace-secondary-button"
-            onClick={commitLimits}
-          >
-            Save limits
-          </button>
+          <div className="bb-workspace-button-row">
+            <button
+              type="button"
+              data-testid={`floor-wall-height-save-${floor.id}`}
+              className="bb-workspace-secondary-button"
+              onClick={() => {
+                const parsed = Number((heightText ?? '').trim())
+                const mm = Number.isFinite(parsed) && parsed > 0 ? Math.round(parseToMm(parsed, unit)) : null
+                onSetWallHeight(floor.id, mm !== null && mm > 0 ? mm : null)
+                setHeightText(null)
+              }}
+            >
+              Use this height
+            </button>
+            <button
+              type="button"
+              data-testid={`floor-limits-save-${floor.id}`}
+              className="bb-workspace-secondary-button"
+              onClick={commitLimits}
+            >
+              Save limits
+            </button>
+          </div>
           {limitsError !== null && (
             <p className="bb-workspace-field-error" data-testid={`floor-limits-error-${floor.id}`} role="alert">
               {limitsError}
