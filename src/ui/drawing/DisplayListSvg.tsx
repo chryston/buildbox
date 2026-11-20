@@ -108,7 +108,11 @@ const TEST_IDS: Readonly<Record<string, (id: string) => string>> = {
   'rotate-handle-group': () => 'rotate-handle-group',
   'rotate-handle': () => 'rotate-handle',
   void: (id) => `void-${id}`,
-  divider: (id) => `divider-${id}`,
+  // A divider is *addressed* by its own layout id (`<section>-divider`) and *selected* by the
+  // section above it, which is the id the inspector names and the id that decides its emphasis.
+  // The `Ref` carries the second, because that is what a click has to hand back; the name the
+  // suite reaches for is the first, so it gets the suffix the layout gives it.
+  divider: (id) => `divider-${id}-divider`,
   'space-label': (id) => `space-label-${id}`,
   'dim-label-w': (id) => `dim-label-${id}-w`,
   'dim-label-h': (id) => `dim-label-${id}-h`,

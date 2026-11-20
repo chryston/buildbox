@@ -186,12 +186,44 @@ const dashArray = (style: Style, sizing: Sizing): string | undefined => {
   return `${n(resolveSize(on, sizing).mm)} ${n(resolveSize(off, sizing).mm)}`
 }
 
+/**
+ * The rectangle a closed four-corner path describes, or nothing when it is not one.
+ *
+ * SVG draws an axis-aligned `<rect>` through a fast path that lands its edges on whole device
+ * pixels; the same box written as a `<path>` goes through analytic coverage antialiasing and
+ * comes back with a lighter fringe down every side. Same shape, different picture — and the
+ * cabinet's sections are hundreds of pixels of straight edge each, so the writer picks the
+ * element the browser was built for. A rounded corner is an arc the builder baked into the
+ * commands and stays a path; so does anything that is not square to the axes.
+ */
+function rectOf(
+  segments: readonly PathCommand[],
+  closed: boolean,
+): { x: number; y: number; w: number; h: number } | null {
+  if (!closed || segments.length !== 4) return null
+  const [head, ...rest] = segments
+  if (head === undefined || head.k !== 'M' || rest.some((each) => each.k !== 'L')) return null
+  const corners = [head, ...rest].map((each) => each.to)
+  const xs = [...new Set(corners.map((p) => p.x))]
+  const ys = [...new Set(corners.map((p) => p.y))]
+  if (xs.length !== 2 || ys.length !== 2) return null
+  const [x, x2] = [Math.min(...xs), Math.max(...xs)] as [number, number]
+  const [y, y2] = [Math.min(...ys), Math.max(...ys)] as [number, number]
+  const w = x2 - x
+  const h = y2 - y
+  if (w <= 0 || h <= 0) return null
+  // Two distinct x's and two distinct y's is not yet a rectangle: a parallelogram has those
+  // too. Every corner has to sit on the box the extremes describe.
+  if (!corners.every((p) => (p.x === x || p.x === x2) && (p.y === y || p.y === y2))) return null
+  return { x, y, w, h }
+}
+
 function pathNode(item: Extract<DisplayItem, { kind: 'path' }>, o: SvgOptions, ref?: Ref): SvgNode {
   const style = STYLES[emphasised(item.style, ref, o.emphasis)]
-  const attrs: [string, string][] = [
-    ...refAttrs(item.ref, o.includeRefs),
-    ['d', pathData(item.segments, item.closed)],
-  ]
+  const rect = rectOf(item.segments, item.closed)
+  const attrs: [string, string][] = [...refAttrs(item.ref, o.includeRefs)]
+  if (rect !== null) attrs.push(['x', n(rect.x)], ['y', n(rect.y)], ['width', n(rect.w)], ['height', n(rect.h)])
+  else attrs.push(['d', pathData(item.segments, item.closed)])
   const fill = paint(style.fill, item.color, style.fillAlpha)
   if (fill !== undefined) attrs.push(['fill', fill])
   // A stroke carries no alpha: only the fill was ever the item's colour at 0x33.
@@ -206,7 +238,7 @@ function pathNode(item: Extract<DisplayItem, { kind: 'path' }>, o: SvgOptions, r
   if (style.hit === 'none') attrs.push(['pointer-events', 'none'])
   // `corner` is deliberately unread here: a rounded corner is a radius the *builder* baked
   // into the commands, because a path's shape is one thing and its paint is another.
-  return { tag: 'path', attrs }
+  return { tag: rect === null ? 'path' : 'rect', attrs }
 }
 
 function textNode(item: Extract<DisplayItem, { kind: 'text' }>, o: SvgOptions, ref?: Ref): SvgNode {

@@ -238,6 +238,10 @@ export const STYLES: Record<StyleKey, Style> = {
   'cabinet-lock-mark': {
     stroke: 'var(--color-dim-label)',
     strokeWidth: 'cabinet-outline-medium',
+    // The padlock is two outlines — a shackle that is not closed and a body that is. Without
+    // `none` the body's own `Z` would be filled with the default black, and a 7 mm padlock
+    // drawn solid black is the one thing on the canvas that was never meant to be there.
+    fill: 'none',
     opacity: 0.4,
   },
   'cabinet-unlock-mark': {

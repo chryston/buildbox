@@ -147,10 +147,10 @@ export function CabinetCanvas(props: CabinetCanvasProps) {
     },
   }
 
-  // Only the active unit's sections can be dragged: the handles belong to the app, not to the
-  // drawing, and they mark the one unit the person is editing.
-  const activeUnit = sceneLayout.units.find((u) => u.isActive)
-
+  // Every unit carries its own divider handles, not just the active one: a divider in an
+  // inactive unit is draggable the moment it is pressed, and pressing it is how a person makes
+  // that unit active. `main` drew them for all of them, and a handle that appears only after
+  // the click that was aiming at it is a control that hides itself.
   return (
     <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-surface">
       <svg
@@ -175,17 +175,17 @@ export function CabinetCanvas(props: CabinetCanvasProps) {
           resolveAsset={() => null}
           interactions={interactions}
         >
-          {activeUnit !== undefined && (
-            <g transform={`translate(${activeUnit.x},${activeUnit.y})`}>
+          {sceneLayout.units.map((each) => (
+            <g key={each.unitId} transform={`translate(${each.x},${each.y})`}>
               <DragHandles
-                dividers={activeUnit.dividers}
+                dividers={each.dividers}
                 snapGrid={snapGrid}
                 svgRef={svgRef}
                 zoom={zoom}
                 onCommitDrag={props.onCommitDrag}
               />
             </g>
-          )}
+          ))}
           <DimensionLabels
             units={sceneLayout.units}
             unit={unit}

@@ -183,13 +183,14 @@ describe('CabinetCanvas', () => {
     const onUnitClick = vi.fn()
     renderCabinet(makeSceneLayout(2), 'u1', { onUnitClick })
     const groups = document.querySelectorAll('[data-unit-id]')
-    fireEvent.click(groups[1].querySelector('path')!)
+    fireEvent.click(groups[1].querySelector('[data-ref-role="unit-hit"]')!)
     expect(onUnitClick).toHaveBeenCalledWith('u2')
   })
 
   it('draws the dashed outline around the active unit only', () => {
     renderCabinet(makeSceneLayout(2), 'u1')
-    // Every shape of the drawing is a path now, and only the active unit is outlined.
-    expect(document.querySelectorAll('path[stroke-dasharray]')).toHaveLength(1)
+    // The drawing names what each shape is, so the assertion does not have to know whether a
+    // box reached the browser as a `<rect>` or as a `<path>`.
+    expect(document.querySelectorAll('[data-ref-role="unit-active"]')).toHaveLength(1)
   })
 })

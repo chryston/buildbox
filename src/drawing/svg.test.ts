@@ -14,7 +14,7 @@ import { rectCommands } from './path'
 import { FONT_STACK } from './styles'
 import { serializeSvg, toSvgTree } from './svg'
 import type { SvgOptions } from './svg'
-import type { DisplayItem, DisplayList, Rect } from './types'
+import type { DisplayItem, DisplayList, PathCommand, Rect } from './types'
 
 /** The screen surface every test draws for: one pixel to the millimetre, refs written. */
 const screen = (over: Partial<SvgOptions> = {}): SvgOptions => ({
@@ -32,7 +32,17 @@ const listOf = (items: DisplayItem[], bounds?: Rect): DisplayList => ({
   missingGlyphs: [],
 })
 
-const box = rectCommands(0, 0, 10, 10)
+/**
+ * Four corners that are not a rectangle. A plain box would be written as a `<rect>` (see
+ * `rectOf`), and every test below is about the attributes of a `<path>`; the rectangle's own
+ * fast path has a test of its own.
+ */
+const box: PathCommand[] = [
+  { k: 'M', to: { x: 0, y: 0 } },
+  { k: 'L', to: { x: 10, y: 0 } },
+  { k: 'L', to: { x: 10, y: 10 } },
+  { k: 'L', to: { x: 0, y: 12 } },
+]
 
 const pathItem = (over: Partial<Extract<DisplayItem, { kind: 'path' }>> = {}): DisplayItem => ({
   kind: 'path',
@@ -156,10 +166,38 @@ describe('toSvgTree', () => {
     orderedAs(attrs.map(([key]) => key), PATH_ATTRS)
     expect(attr(attrs, 'data-ref')).toBe('p1')
     expect(attr(attrs, 'data-ref-role')).toBe('placement')
-    expect(attr(attrs, 'd')).toBe('M 0 0 L 10 0 L 10 10 L 0 10 Z')
+    expect(attr(attrs, 'd')).toBe('M 0 0 L 10 0 L 10 10 L 0 12 Z')
     expect(attr(attrs, 'fill')).toBe('#47556933')
     expect(attr(attrs, 'stroke')).toBe('#475569')
     expect(attr(attrs, 'stroke-width')).toBe('1')
+  })
+
+  // A box the axes are square to is what `<rect>` is for: the browser draws its edges on whole
+  // device pixels, where the same box as a `<path>` picks up a lighter fringe on every side.
+  // The cabinet's sections are hundreds of pixels of straight edge, so the difference between
+  // the two is a screenshot that differs from the renderer it replaced by nothing but fringe.
+  it('writes a plain rectangle as a <rect> and every other shape as a <path>', () => {
+    const section: DisplayItem = {
+      kind: 'path',
+      ref: { id: 'p1', role: 'placement' },
+      segments: rectCommands(2, 3, 20, 10),
+      closed: true,
+      style: 'plan-item',
+    }
+    const node = toSvgTree(listOf([section]), screen()).children?.[0]?.children?.[0]
+    expect(node?.tag).toBe('rect')
+    expect(node?.attrs.map(([key]) => key)).toEqual([
+      'data-ref', 'data-ref-role', 'x', 'y', 'width', 'height', 'fill', 'stroke', 'stroke-width',
+    ])
+    expect(serializeSvg(toSvgTree(listOf([section]), screen())))
+      .toContain('<rect data-ref="p1" data-ref-role="placement" x="2" y="3" width="20" height="10"')
+
+    // One corner out of the box and it is a path again.
+    expect(toSvgTree(listOf([pathItem()]), screen()).children?.[0]?.children?.[0]?.tag).toBe('path')
+    // So is a box that is not closed: an open path has no interior to fill.
+    expect(toSvgTree(listOf([{
+      kind: 'path', segments: rectCommands(0, 0, 10, 10), closed: false, style: 'plan-item',
+    }]), screen()).children?.[0]?.children?.[0]?.tag).toBe('path')
   })
 
   it('writes the dash and the opacity after the width', () => {
