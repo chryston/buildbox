@@ -869,6 +869,12 @@ export function FloorWorkspace(): ReactNode {
               unit={project.preferences.displayUnit}
               precision={project.preferences.displayPrecision}
               angleSnap={angleSnap}
+              walls={floorWalls}
+              selectedWallId={wallSelection}
+              onSelectWall={(id) => {
+                selectWall(id)
+                setTool('select')
+              }}
               overlay={isCalibrating ? (
                 <CalibrationOverlay
                   zoom={viewport?.zoom ?? 1}

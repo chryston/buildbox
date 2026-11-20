@@ -19,14 +19,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import { affineApply, affineInvert, resolveSnap } from '../../derive'
-import type { DerivedFloor, SnapCandidate, SnapKind } from '../../derive'
+import type { DerivedFloor, FloorWalls, SnapCandidate, SnapKind } from '../../derive'
 import type { DisplayUnit, Point2 } from '../../domain'
 import { footprintPath } from '../../domain'
 import {
+  LAYER_ORDER,
   drawPlanView,
   drawSelectionAnnotations,
+  drawWalls,
+  unionRect,
 } from '../../drawing'
-import type { DisplayList, PlanPreview, Sizing } from '../../drawing'
+import type { DisplayLayer, DisplayList, PlanPreview, Sizing } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
 import type { DisplayListInteractions } from '../drawing/DisplayListSvg'
 import { formatMm } from './displayUnits'
@@ -74,6 +77,12 @@ export interface PlanViewCanvasProps {
   unit: DisplayUnit
   precision: number
   angleSnap: AngleSnap
+  /** The Floor's tidied Walls, drawn as bands under the footprints (#64 §15). */
+  walls?: FloorWalls | null
+  /** The selected Wall: drawn with a heavier line and its end handles (#64 §15). */
+  selectedWallId?: string | null
+  /** A Wall band was clicked; the selection moves to it (#64 §15). */
+  onSelectWall?: (id: string) => void
   /** Drawn above the items while calibrating; it owns the pointer meanwhile. */
   overlay?: ReactNode
 }
@@ -90,7 +99,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     hostRef, svgRef, floor, showPlanImage, imageSrc, viewport, onViewport,
     tool, selection, onSelect, dragPreview, onDragPreview, onMoveItem, onRotateItem,
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
-    angleSnap, overlay,
+    angleSnap, overlay, walls, selectedWallId = null, onSelectWall,
   } = props
   const [hostSize, setHostSize] = useState({ width: 0, height: 0 })
   const [dragging, setDragging] = useState(false)
@@ -314,6 +323,24 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     floor.planImage !== null && floor.planImage.assetHash === hash ? imageSrc : null
 
   const list = drawPlanView(floor, { showPlanImage, preview }, { sizing })
+  // Walls and footprints are two lists built for two reasons, but they share one z-order:
+  // `LAYER_ORDER` is the only source, so the bands are interleaved by layer rather than
+  // appended, or a Wall would land on top of the Item standing in it (#60 §3, #64 §15).
+  const wallList = walls === undefined || walls === null || walls.walls.length === 0
+    ? null
+    : drawWalls(walls, { sizing, selectedWallId })
+  const withWalls: DisplayList = wallList === null
+    ? list
+    : {
+        ...list,
+        bounds: unionRect(list.bounds, wallList.bounds),
+        layers: LAYER_ORDER.flatMap((key): DisplayLayer[] => {
+          const items = [...list.layers, ...wallList.layers]
+            .filter((layer) => layer.key === key)
+            .flatMap((layer) => layer.items)
+          return items.length === 0 ? [] : [{ key, items }]
+        }),
+      }
   const annotations = overlay === undefined
     ? drawSelectionAnnotations(floor, selection, { sizing, formatLength, preview })
     : null
@@ -322,10 +349,15 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   // but they reach the screen as a single untransformed group, which is what keeps a label
   // upright and addressable by one name.
   const textOnly: DisplayList = annotations === null
-    ? list
-    : { ...annotations, layers: [...list.layers, ...annotations.layers] }
+    ? withWalls
+    : { ...annotations, layers: [...withWalls.layers, ...annotations.layers] }
 
   const interactions: DisplayListInteractions = {
+    onWallPointerDown: onSelectWall === undefined
+      ? undefined
+      : (id) => {
+          onSelectWall(id)
+        },
     onItemPointerDown: (id, event) => {
       lastClient.current = { x: event.clientX, y: event.clientY }
       lastPointer.current = toFloor(event.clientX, event.clientY)

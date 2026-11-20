@@ -57,9 +57,13 @@ export type LayerKey =
   | 'plan-image'
   /** The optional model grid #61 draws under a drawing when the recipe asks for one. */
   | 'sheet-grid'
+  /** The Wall bands themselves (#64 §15): Building Elements, drawn under the footprints. */
+  | 'walls'
   | 'placed-items'
   | 'plan-annotations'
   | 'placed-item-labels'
+  /** The `W-n` references (#64 §15), in the same untransformed text half as the item labels. */
+  | 'wall-labels'
   | 'plan-dimensions'
   | 'plan-chip'
   | 'plan-handle'
@@ -90,9 +94,11 @@ export type LayerKey =
 export const LAYER_ORDER: readonly LayerKey[] = [
   'plan-image',
   'sheet-grid',
+  'walls',
   'placed-items',
   'plan-annotations',
   'placed-item-labels',
+  'wall-labels',
   'plan-dimensions',
   'plan-chip',
   'plan-handle',
@@ -163,6 +169,11 @@ export type TextBaseline = 'alphabetic' | 'middle' | 'hanging'
 export type StyleKey =
   | 'plan-item'
   | 'plan-item:selected'
+  /** A Wall's tidied band: filled, with its own outline (#64 §15). */
+  | 'wall'
+  | 'wall:selected'
+  /** One of the band's two faces, the line every tool snaps to. */
+  | 'wall-face'
   | 'plan-label'
   | 'plan-dimension'
   | 'plan-dimension-line'
