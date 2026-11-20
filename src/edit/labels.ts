@@ -60,6 +60,7 @@ export const INTENT_LABELS = {
   'floor.rename': 'Rename floor',
   'floor.reorder': 'Reorder floors',
   'floor.setLimits': 'Set floor limits',
+  'floor.setDefaultWallHeight': 'Set default wall height',
   'floor.delete': 'Delete floor',
   'floor.duplicate': 'Duplicate floor',
   'view.create': 'Add view',

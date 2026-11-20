@@ -82,6 +82,8 @@ const EXTRA_INTENTS = [
   'design.setOrigin',
   'design.fork',
   'project.setPreferences',
+  // #64 §16: the default Wall height is set from a dialog field, never by a key.
+  'floor.setDefaultWallHeight',
   'plan.removeImage',
   'plan.copyToFloor',
   'plan.moveToFloor',

@@ -129,6 +129,7 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
   (g) => intent('project.setPreferences', {
     displayUnit: pick(g, ['mm', 'cm', 'm'] as const)!,
     displayPrecision: int(g, 0, 4),
+    defaultWallHeight: int(g, 1, 4000),
   }),
   (g) => {
     const design = pick(g, cabinets(g))
@@ -357,6 +358,12 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
     const lower = a === null || b === null ? a ?? b : Math.min(a, b)
     const upper = a === null || b === null ? null : Math.max(a, b)
     return intent('floor.setLimits', { floorId: floor.id, lowerMm: lower, upperMm: upper })
+  },
+  (g) => {
+    const floor = pick(g, g.project.floors)
+    return floor === undefined
+      ? null
+      : intent('floor.setDefaultWallHeight', { floorId: floor.id, defaultWallHeight: int(g, 1, 4000) })
   },
   (g) => {
     const floor = pick(g, g.project.floors)

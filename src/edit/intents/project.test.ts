@@ -87,9 +87,9 @@ describe('project.rename', () => {
 describe('project.setPreferences', () => {
   it('writes the display preferences and touches nothing else', () => {
     const project = newProject('Kitchen')
-    const result = expectRoundTrip(project, intent('project.setPreferences', { displayUnit: 'cm', displayPrecision: 1 }))
+    const result = expectRoundTrip(project, intent('project.setPreferences', { displayUnit: 'cm', displayPrecision: 1, defaultWallHeight: 2400 }))
 
-    expect(result.project.preferences).toEqual({ displayUnit: 'cm', displayPrecision: 1, defaultWallHeight: 2600 })
+    expect(result.project.preferences).toEqual({ displayUnit: 'cm', displayPrecision: 1, defaultWallHeight: 2400 })
     expect(canonicalJson({ ...result.project, preferences: project.preferences })).toBe(canonicalJson(project))
     // Undo lands on the first Floor's Plan View, where the dialog was opened from (#55).
     expect(result.affected).toEqual({
@@ -101,20 +101,21 @@ describe('project.setPreferences', () => {
     expect(result.patches).toEqual([
       { op: 'replace', path: ['preferences', 'displayUnit'], value: 'cm' },
       { op: 'replace', path: ['preferences', 'displayPrecision'], value: 1 },
+      { op: 'replace', path: ['preferences', 'defaultWallHeight'], value: 2400 },
     ])
   })
 
   it('refuses to record a change that changes nothing', () => {
-    expectRejection(newProject(), intent('project.setPreferences', { displayUnit: 'mm', displayPrecision: 0 }), 'no-change')
+    expectRejection(newProject(), intent('project.setPreferences', { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 }), 'no-change')
   })
 
   it('refuses a precision outside 0–4, as an invalid Project', () => {
     const project = deepFreeze(newProject())
-    expectRejection(project, intent('project.setPreferences', { displayUnit: 'mm', displayPrecision: 5 }), 'invalid-project')
+    expectRejection(project, intent('project.setPreferences', { displayUnit: 'mm', displayPrecision: 5, defaultWallHeight: 2600 }), 'invalid-project')
   })
 
   it('is deterministic', () => {
-    expectDeterministic(newProject(), intent('project.setPreferences', { displayUnit: 'm', displayPrecision: 3 }))
+    expectDeterministic(newProject(), intent('project.setPreferences', { displayUnit: 'm', displayPrecision: 3, defaultWallHeight: 2600 }))
   })
 })
 

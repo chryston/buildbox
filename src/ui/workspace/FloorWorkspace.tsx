@@ -970,8 +970,9 @@ export function FloorWorkspace(): ReactNode {
         <ProjectSettingsDialog
           unit={project.preferences.displayUnit}
           precision={project.preferences.displayPrecision}
-          onSave={(displayUnit, displayPrecision) => {
-            send('project.setPreferences', { displayUnit, displayPrecision })
+          wallHeight={project.preferences.defaultWallHeight}
+          onSave={(displayUnit, displayPrecision, defaultWallHeight) => {
+            send('project.setPreferences', { displayUnit, displayPrecision, defaultWallHeight })
             setSettingsOpen(false)
           }}
           onClose={() => setSettingsOpen(false)}
@@ -986,6 +987,9 @@ export function FloorWorkspace(): ReactNode {
           onRename={(targetId, name) => send('floor.rename', { floorId: targetId, name })}
           onReorder={(targetId, toIndex) => send('floor.reorder', { floorId: targetId, toIndex })}
           onSetLimits={(targetId, lowerMm, upperMm) => send('floor.setLimits', { floorId: targetId, lowerMm, upperMm })}
+          onSetWallHeight={(targetId, defaultWallHeight) => {
+            send('floor.setDefaultWallHeight', { floorId: targetId, defaultWallHeight })
+          }}
           onAddFloor={addFloor}
           onDuplicate={(targetId) => setDuplicateFloorId(targetId)}
           onDelete={(targetId) => setDeleteFloorId(targetId)}

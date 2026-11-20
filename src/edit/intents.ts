@@ -87,6 +87,7 @@ export type IntentType =
   | 'floor.rename'
   | 'floor.reorder'
   | 'floor.setLimits'
+  | 'floor.setDefaultWallHeight'
   | 'floor.delete'
   | 'floor.duplicate'
   | 'view.create'
@@ -101,6 +102,13 @@ export interface RenameProject {
 export interface SetProjectPreferences {
   displayUnit: DisplayUnit
   displayPrecision: number
+  /** The height a new Wall takes on a Floor that does not set its own (#64 §16). */
+  defaultWallHeight: number
+}
+/** `Default wall height` for one Floor; `null` hands the decision back to the Project. */
+export interface SetFloorDefaultWallHeight {
+  floorId: EntityId
+  defaultWallHeight: number | null
 }
 export interface UpdateCabinetSettings {
   itemDesignId: EntityId
@@ -551,6 +559,7 @@ export interface IntentPayloads {
   'floor.rename': RenameFloor
   'floor.reorder': ReorderFloor
   'floor.setLimits': SetFloorLimits
+  'floor.setDefaultWallHeight': SetFloorDefaultWallHeight
   'floor.delete': DeleteFloor
   'floor.duplicate': DuplicateFloor
   'view.create': CreatePlanView
@@ -654,6 +663,7 @@ export const INTENT_ID_ORDER: Record<IntentType, readonly string[]> = {
   'floor.rename': [],
   'floor.reorder': [],
   'floor.setLimits': [],
+  'floor.setDefaultWallHeight': [],
   'floor.delete': [],
   'floor.duplicate': ['floorId', 'viewId', 'placedItemId…'],
   'view.create': ['viewId'],

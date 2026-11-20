@@ -14,14 +14,17 @@ const UNITS: readonly DisplayUnit[] = ['mm', 'cm', 'm']
 export interface ProjectSettingsDialogProps {
   unit: DisplayUnit
   precision: number
-  onSave: (unit: DisplayUnit, precision: number) => void
+  /** The Project's `Default wall height` (#64 §16), in millimetres. */
+  wallHeight: number
+  onSave: (unit: DisplayUnit, precision: number, wallHeight: number) => void
   onClose: () => void
 }
 
 export function ProjectSettingsDialog(props: ProjectSettingsDialogProps): ReactNode {
-  const { unit, precision, onSave, onClose } = props
+  const { unit, precision, wallHeight, onSave, onClose } = props
   const [nextUnit, setNextUnit] = useState<DisplayUnit>(unit)
   const [nextPrecision, setNextPrecision] = useState(precision)
+  const [nextWallHeight, setNextWallHeight] = useState(wallHeight)
 
   return (
     <div className="bb-workspace-dialog-backdrop" data-testid="project-settings-dialog">
@@ -55,12 +58,24 @@ export function ProjectSettingsDialog(props: ProjectSettingsDialogProps): ReactN
           value={nextPrecision}
           onChange={(event) => setNextPrecision(Math.round(Number(event.target.value)))}
         />
+        {/* The height a new Wall takes where the Floor has not chosen its own (#64 §16). */}
+        <label className="bb-workspace-field-label" htmlFor="settings-wall-height">Default wall height</label>
+        <input
+          id="settings-wall-height"
+          data-testid="settings-wall-height"
+          className="bb-workspace-input"
+          type="number"
+          min={1}
+          step={100}
+          value={nextWallHeight}
+          onChange={(event) => setNextWallHeight(Math.round(Number(event.target.value)))}
+        />
         <div className="bb-workspace-dialog-actions">
           <button
             type="button"
             data-testid="settings-save"
             className="bb-workspace-primary-button"
-            onClick={() => onSave(nextUnit, Math.min(4, Math.max(0, nextPrecision)))}
+            onClick={() => onSave(nextUnit, Math.min(4, Math.max(0, nextPrecision)), Math.max(1, nextWallHeight))}
           >
             Save
           </button>

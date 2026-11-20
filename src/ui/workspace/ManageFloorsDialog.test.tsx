@@ -42,6 +42,7 @@ const open = (floors: Floor[], over: Partial<Parameters<typeof ManageFloorsDialo
     onRename: vi.fn(),
     onReorder: vi.fn(),
     onSetLimits: vi.fn(),
+    onSetWallHeight: vi.fn(),
     onAddFloor: vi.fn(),
     onDuplicate: vi.fn(),
     onDelete: vi.fn(),
