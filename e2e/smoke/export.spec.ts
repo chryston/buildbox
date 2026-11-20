@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { unzipSync } from 'fflate'
+import { PDFDocument } from 'pdf-lib'
 import { expect, test } from '../support/fixtures'
 import { readDownload } from '../support/libraryApp'
 import { FIRST_PROJECT, openPreviewApp, openProjectFromLibrary, showFloorPlan } from '../support/previewApp'
@@ -115,6 +116,9 @@ test('a PDF is one drawing per file, and the file is a PDF', async ({ page }) =>
   await showFloorPlan(page)
   await page.getByTestId('export-open').click()
   await page.getByTestId('export-format').selectOption('pdf')
+  // The paper is named, not left to the default, so the measurement below means what it says.
+  await page.getByTestId('export-page-size').selectOption('A4')
+  await page.getByTestId('export-orientation').selectOption('portrait')
   // §12: the view picker takes one view for a PDF, because a PDF sheet is one drawing.
   await expect(page.locator('[data-testid^="export-view-"][aria-checked="true"], [data-testid^="export-view-"]:checked')).toHaveCount(1)
 
@@ -125,6 +129,15 @@ test('a PDF is one drawing per file, and the file is a PDF', async ({ page }) =>
   expect(file.buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-')
   // The subset font is embedded, so the file carries its own letters and not a name to look up.
   expect(file.buffer.subarray(-1024).toString('latin1')).toContain('%%EOF')
+
+  // Criterion 2's paper, read back out of the file: one page, and that page is the A4 portrait the
+  // dialog was told to draw — 210 mm by 297 mm, which a printer measures in points.
+  const doc = await PDFDocument.load(file.buffer)
+  expect(doc.getPageCount()).toBe(1)
+  const size = doc.getPage(0).getSize()
+  const PT_PER_MM = 72 / 25.4
+  expect(size.width / PT_PER_MM).toBeCloseTo(210, 4)
+  expect(size.height / PT_PER_MM).toBeCloseTo(297, 4)
 })
 
 test('Cancel stops the run and hands over nothing', async ({ page }) => {
