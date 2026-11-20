@@ -5,6 +5,9 @@
 :root {
   --color-dim-label: #a1a1aa;
   --color-accent: #0a84ff;
+  /* The cabinet's divider drag handle: the one piece of the old canvas that is still drawn by
+     hand, because a handle is a gesture and not part of the drawing (#60). */
+  --color-cabinet-handle: #7c3aed;
 }
 
 /*

@@ -24,6 +24,9 @@ export type {
   WorkspaceServices,
 } from './WorkspaceRoot'
 export { FloorWorkspace } from './FloorWorkspace'
+export { CabinetCanvas } from './cabinet/CabinetCanvas'
+export type { CabinetCanvasProps } from './cabinet/CabinetCanvas'
+export type { CabinetDetail } from './cabinet/layout'
 export { ItemDetailView } from './ItemDetailView'
 export type { ItemDetailViewProps } from './ItemDetailView'
 export { ShapeEditor, CABINET_SHAPE_NOTE } from './shape/ShapeEditor'

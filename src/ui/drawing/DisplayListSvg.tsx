@@ -58,6 +58,8 @@ export interface DisplayListInteractions {
   onRotatePointerDown?: (id: string, event: React.PointerEvent<SVGPathElement>) => void
   /** A click anywhere on a unit's own box. */
   onUnitClick?: (id: string) => void
+  /** A section or a divider, picked where it is drawn: it becomes the selected node. */
+  onSelectNode?: (id: string) => void
   /** `Unlock section`, by keyboard or by pointer. */
   onUnlock?: (id: string) => void
   /** One of a section's two measurements, clicked where it is drawn. */
@@ -257,6 +259,16 @@ function renderNode(
         const click = interactions.onUnitClick
         props.onClick = (() => click(id)) as never
       }
+    }
+    // A section and a divider are both picked where they are drawn. The outline that says the
+    // pick worked is the emphasis on the same shape, never a second one laid over it.
+    if ((role === 'void' || role === 'divider') && interactions?.onSelectNode !== undefined) {
+      const select = interactions.onSelectNode
+      props.style = { cursor: 'pointer' }
+      props.onClick = ((event: React.MouseEvent) => {
+        event.stopPropagation()
+        select(id)
+      }) as never
     }
     // A measurement opens the inline field where it is drawn, so the words themselves are the
     // target — but only the editable ones, which is the style row that says so.

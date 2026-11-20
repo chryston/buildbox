@@ -132,12 +132,18 @@ function drawCabinet(
   const { sizing, formatLength } = options
   const missingGlyphs: MissingGlyph[] = []
   const bands = new Map<LayerKey, DisplayItem[]>()
+  // A unit is one group on the surface. The first band it contributes carries its `Ref` and the
+  // rest ride the same translate unnamed: every band carrying the same id would put that id on
+  // the page half a dozen times, and `unit-group` is how a test counts units.
+  const named = new Set<string>()
   const add = (key: LayerKey, unit: UnitLayoutResult, items: DisplayItem[]): void => {
     if (items.length === 0) return
+    const first = !named.has(unit.unitId)
+    named.add(unit.unitId)
     const band = bands.get(key) ?? []
     band.push({
       kind: 'group',
-      ref: { id: unit.unitId, role: 'unit-group' },
+      ...(first ? { ref: { id: unit.unitId, role: 'unit-group' } } : {}),
       transform: affineTranslate(unit.x, unit.y),
       items,
     })

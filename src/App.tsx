@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef } from 'react'
-import CabinetCanvas from './components/CabinetCanvas/CabinetCanvas'
 import ErrorBoundary from './components/ErrorBoundary'
 import ProjectsNav from './components/ProjectsNav/ProjectsNav'
 import Sidebar from './components/Sidebar/Sidebar'
@@ -8,7 +7,8 @@ import WarningBanner from './components/WarningBanner/WarningBanner'
 import { computeCutListForUnits, computeSceneLayout, findNode } from './cabinet'
 import type { LayoutVoid } from './cabinet'
 import type { GlobalSettings } from './domain'
-import { FloorWorkspace, ItemDetailView, STRINGS, useWorkspace } from './ui'
+import { CabinetCanvas, FloorWorkspace, ItemDetailView, STRINGS, useWorkspace } from './ui'
+import type { CabinetDetail } from './ui'
 import { downloadSVG } from './utils/exportSVG'
 import { useLegacyBindings } from './ui/legacy/bindings'
 
@@ -49,6 +49,15 @@ export default function App() {
     [units, shownDesignId]
   )
   const overConstrainedIds = sceneLayout?.units.flatMap(u => u.overConstrainedIds) ?? []
+
+  // The cabinet canvas draws the same layout the sidebar and the cut list read, wrapped in the
+  // one shape `drawing` accepts: an Item Detail of a cabinet (#60).
+  const cabinetDetail = useMemo<CabinetDetail | null>(
+    () => (sceneLayout === null || detailDesignId === null
+      ? null
+      : { kind: 'cabinet', designId: detailDesignId, layout: sceneLayout }),
+    [sceneLayout, detailDesignId],
+  )
 
   // The legacy editor writes to whichever Design it holds, so opening Item Detail moves that
   // pointer too. UI state, not a change to the Project (#26).
@@ -140,13 +149,19 @@ export default function App() {
               </div>
             )}
             <main className="flex flex-1 overflow-hidden">
-              {sceneLayout && (
+              {cabinetDetail !== null && (
                 <CabinetCanvas
-                  sceneLayout={sceneLayout}
+                  detail={cabinetDetail}
                   svgRef={svgRef}
-                  onUnlockNode={bindings.unlockNode}
-                  onUnitClick={bindings.setActiveItemDesign}
                   selectedNode={selectedNode}
+                  selectedNodeId={selectedNodeId}
+                  snapGrid={bindings.snapGrid}
+                  onUnitClick={bindings.setActiveItemDesign}
+                  onSelectNode={bindings.selectNode}
+                  onCommitSize={bindings.setNodeSize}
+                  onCommitLabel={bindings.setNodeLabel}
+                  onCommitDrag={bindings.commitDrag}
+                  onUnlockNode={bindings.unlockNode}
                 />
               )}
               <Sidebar

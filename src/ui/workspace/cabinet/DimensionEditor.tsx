@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { fromMm, toMm } from '../../domain'
-import type { Unit } from '../../domain'
+import { fromMm, toMm } from '../../../domain'
+import type { Unit } from '../../../domain'
 
 interface Anchor {
   x: number
