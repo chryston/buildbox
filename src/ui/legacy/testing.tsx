@@ -19,7 +19,7 @@ import { openProject, type ProjectSession } from '../../session'
 import { createTestDeps, flush, seedProject, testProject } from '../../session/testing'
 import { createIntentFactory } from '../../app'
 import { PLAN_IMAGE_ACCEPT, WorkspaceProvider, workspaceStore } from '../index'
-import type { WorkspaceServices } from '../index'
+import type { WorkspaceServices, ExportPort } from '../index'
 import { LegacyViewRoot } from './LegacyViewRoot'
 import { uiStore } from './uiStore'
 import type { AssetUrlSource, SessionViewServices } from './sessionBindings'
@@ -92,6 +92,24 @@ export async function openTestView(project: Project = testProject('p-1')): Promi
   }
 }
 
+/**
+ * An Export port that offers nothing (#61).
+ *
+ * The workspace tests are not export tests; they need the dialog's host present because the
+ * toolbar now carries an `Export…` button, and a workspace rendered without one would not be the
+ * workspace the app renders. A port with no views, no recipe and no run is the smallest thing
+ * that satisfies that, and it fails loudly if a test ever presses Export expecting a file.
+ */
+export const TEST_EXPORT_PORT: ExportPort = {
+  views: () => [],
+  measure: async () => ({ bounds: null }),
+  unacknowledgedWarnings: () => 0,
+  recall: async () => null,
+  remember: () => {},
+  run: () => Promise.reject(new Error('jsdom runs no export')),
+  cancel: () => {},
+}
+
 export function renderWithBindings(
   ui: ReactElement,
   view: TestView,
@@ -109,6 +127,7 @@ export function renderWithBindings(
     planImageAccept: PLAN_IMAGE_ACCEPT,
     planCatalogue: [{ key: 'sofa-2', label: 'Sofa 2-seater' }],
     viewportCache: { read: async () => undefined, write: () => {}, readActive: async () => null, writeActive: () => {} },
+    exportDrawings: TEST_EXPORT_PORT,
   }
   const result = render(
     <LegacyViewRoot

@@ -21,6 +21,14 @@ import './library/library.css'
 
 export { STRINGS } from './strings'
 export type { ActiveViewState, Viewport, ViewportCache } from './workspace'
+export { ExportDialog, UNIT_LABEL, type ExportDialogProps } from './workspace/export/ExportDialog'
+export {
+  viewKey,
+  type ExportMeasurement,
+  type ExportPort,
+  type ExportRunOutcome,
+  type ExportableView,
+} from './workspace/export/port'
 export {
   CabinetCanvas,
   FloorWorkspace,

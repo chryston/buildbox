@@ -77,6 +77,7 @@ import { LegacyViewRoot } from '../ui/legacy/LegacyViewRoot'
 import type { IntentBuilder } from '../ui/legacy/sessionBindings'
 import { PLAN_CATALOGUE } from '../edit'
 import { createViewportCache } from './viewportCache'
+import { createExportPort } from './export'
 
 /**
  * The channel one tab uses to tell the others that the Library changed (#50 §5). Named for
@@ -701,6 +702,23 @@ function FlaggedRoot({ deps, legacyPending = false }: { deps: FlaggedDeps; legac
       .filter(([key]) => key !== 'custom')
       .map(([key, entry]) => ({ key, label: entry.label })),
     viewportCache: createViewportCache(ports.prefs, session?.id ?? ''),
+    exportDrawings: createExportPort({
+      session: () => {
+        if (held.current === null) throw new Error('Export needs an open Project')
+        return held.current
+      },
+      prefs: ports.prefs,
+      readAsset: async (sha256) => {
+        const found = await ports.assets.get(sha256)
+        if (!found.ok || found.value === undefined) return null
+        return {
+          bytes: new Uint8Array(await found.value.blob.arrayBuffer()),
+          mediaType: found.value.mediaType,
+        }
+      },
+      clock: { now: () => clock.now(), localDate: () => clock.dayKey(clock.now()) },
+      buildboxVersion: __BUILDBOX_VERSION__,
+    }),
   }), [sessionServices, ports.prefs, session?.id])
 
   /**

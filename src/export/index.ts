@@ -269,7 +269,7 @@ async function rasterImages(ops: readonly FlatOp[], deps: ExportDeps): Promise<M
   return images
 }
 
-export { composeSheet } from './compose'
+export { composeSheet, modelBounds } from './compose'
 export type { ComposedDrawing, ComposedSheet } from './compose'
 export { fitCheck, suggestionsFor, downsampledSize, pngSize, PAGE_MM, MARGIN_MM, FIXED_SCALES } from './fit'
 export { EXPORT_FOOTER, NOT_TO_SCALE, scaleStatement } from './strings'
@@ -282,6 +282,7 @@ export type {
   ExportClock,
   ExportDeps,
   ExportFailure,
+  ExportFailureReason,
   ExportFile,
   ExportProgress,
   ExportResult,

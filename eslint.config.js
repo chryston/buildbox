@@ -179,7 +179,12 @@ const PLATFORM_BACKUP_ELEMENT = {
 // folder, and the exception is three files long with the reason written next to it.
 const PLATFORM_EXPORT_ELEMENT = {
   type: 'platform-export',
-  pattern: ['src/platform/rasterizer.ts', 'src/platform/export.worker.ts', 'src/platform/exportRunner.ts'],
+  pattern: [
+    'src/platform/rasterizer.ts',
+    'src/platform/export.worker.ts',
+    'src/platform/exportRunner.ts',
+    'src/platform/exportRunner.test.ts',
+  ],
   mode: 'file',
 }
 

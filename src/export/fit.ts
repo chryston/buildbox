@@ -134,12 +134,26 @@ export interface FitResult {
 }
 
 /**
+ * Would this sheet hold this drawing at this scale?
+ *
+ * The predicate both `fitCheck` and {@link suggestionsFor} need. It is separate because the two
+ * call each other in a circle otherwise: a check that does not fit asks for suggestions, and a
+ * suggestion is found by checking.
+ */
+function holds(bounds: Rect, page: PageSize, orientation: Orientation, scale: ScaleSetting): boolean {
+  // `fit` always fits — that is the whole point of it — unless the drawing has no extent at all,
+  // which is the empty view's case and still exports.
+  if (scale === 'fit') return true
+  const sheet = sheetOf(page, orientation, { titleBlock: true })
+  return bounds.w / scale <= sheet.content.w + 1e-9 && bounds.h / scale <= sheet.content.h + 1e-9
+}
+
+/**
  * Does this drawing fit, and if not, what would?
  *
- * `fit` always fits — that is the whole point of it — so it never reports otherwise unless the
- * drawing has no extent at all. A fixed scale answers honestly, and the suggestions are ordered
- * so that the first one is the smallest change: the same sheet and orientation at the largest
- * scale that fits, then `Fit to page`, then the other orientation, then the other sheet.
+ * A fixed scale answers honestly, and the suggestions are ordered so that the first one is the
+ * smallest change: the same sheet and orientation at the largest scale that fits, then
+ * `Fit to page`, then the other orientation, then the other sheet.
  */
 export function fitCheck(
   bounds: Rect,
@@ -147,11 +161,7 @@ export function fitCheck(
   orientation: Orientation,
   scale: ScaleSetting,
 ): FitResult {
-  if (scale === 'fit') return { fits: true, suggestions: [] }
-  const sheet = sheetOf(page, orientation, { titleBlock: true })
-  const fits =
-    bounds.w / scale <= sheet.content.w + 1e-9 && bounds.h / scale <= sheet.content.h + 1e-9
-  if (fits) return { fits: true, suggestions: [] }
+  if (holds(bounds, page, orientation, scale)) return { fits: true, suggestions: [] }
   return { fits: false, suggestions: suggestionsFor(bounds, page, orientation) }
 }
 
@@ -168,7 +178,7 @@ export function suggestionsFor(bounds: Rect, page: PageSize, orientation: Orient
   const found: FitSuggestion[] = []
   for (const [size, hold] of order) {
     for (const denominator of FIXED_SCALES) {
-      if (fitCheck(bounds, size, hold, denominator).fits) found.push({ page: size, orientation: hold, scale: denominator })
+      if (holds(bounds, size, hold, denominator)) found.push({ page: size, orientation: hold, scale: denominator })
     }
     if (found.length === 0 || found[found.length - 1]?.page === size) found.push({ page: size, orientation: hold, scale: 'fit' })
     if (found.length >= 6) break

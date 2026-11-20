@@ -115,8 +115,14 @@ function rawDrawing(
   return { ok: true, drawing: { list, viewName: 'Item Detail', subjectLabel: 'Item', subject: design.name } }
 }
 
-/** The box a derived view covers, in millimetres of the model. */
-function modelBounds(snapshot: ExportSnapshot, view: RecipeViewRef): Rect | null {
+/**
+ * The box a derived view covers, in millimetres of the model.
+ *
+ * Exported because the dialog has to know it before it runs: a fixed scale that will not fit the
+ * page is a blocking configuration error, and the only way to find that out in advance is to
+ * measure the thing (#61 criterion 14).
+ */
+export function modelBounds(snapshot: ExportSnapshot, view: RecipeViewRef): Rect | null {
   const { project, revision } = snapshot
   if (view.kind === 'plan') {
     const planView = project.views.find((each) => each.id === view.viewId)
