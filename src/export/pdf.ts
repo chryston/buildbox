@@ -120,7 +120,7 @@ function drawText(page: PDFPage, font: PDFFont, op: Extract<FlatOp, { kind: 'tex
   const baselineY = pt(pageHeightMm - (op.at.y + baselineOffset(op)))
   const shift = op.anchor === 'middle' ? op.width / 2 : op.anchor === 'end' ? op.width : 0
   const rotation = op.rotationDeg === 0 ? {} : { rotate: degrees(op.rotationDeg) }
-  let cursor = -shift
+  let cursor = op.at.x - shift
   for (const run of splitByGlyph(op.text, op.size)) {
     if (run.missing) {
       // A box about the width of the character it stands for, sitting on the baseline:
