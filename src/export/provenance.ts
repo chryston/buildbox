@@ -19,7 +19,7 @@ import { canonicalJson } from '../lib'
 // The export contract has one version, and `csv/tables.ts` is where it is written (#62 §5): a
 // drawing and a CSV carry the same number because they read the same constant.
 import { CSV_CONTRACT_VERSION } from './csv/tables'
-import type { ExportDeps, ExportSnapshot, Recipe } from './types'
+import type { ExportDeps, ExportSnapshot, ListsRecipe, Recipe } from './types'
 
 /**
  * The provenance of one export.
@@ -35,13 +35,14 @@ export interface Provenance {
   readonly project_id: string
   readonly project_revision: number
   readonly unsaved_changes?: true
-  readonly recipe: Recipe
+  /** Whatever the recipe was: the drawings' (#61) or the lists' (#62). */
+  readonly recipe: Recipe | ListsRecipe
 }
 
 /** The provenance for one call. Nothing in it is derived from the environment. */
 export function provenanceOf(
   snapshot: ExportSnapshot,
-  recipe: Recipe,
+  recipe: Recipe | ListsRecipe,
   deps: Pick<ExportDeps, 'clock' | 'buildboxVersion' | 'contractVersion' | 'unsavedChanges'>,
 ): Provenance {
   return {

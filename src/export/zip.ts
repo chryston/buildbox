@@ -13,7 +13,7 @@
  */
 
 import { zipEntries } from '../lib'
-import type { Recipe, ExportFile, ExportSnapshot } from './types'
+import type { Recipe, ListsRecipe, ExportFile, ExportSnapshot } from './types'
 import type { Provenance } from './provenance'
 
 /** What one file in the archive is (export contract §9). */
@@ -21,7 +21,7 @@ export interface ManifestFile {
   /** Where the file sits in the archive. */
   readonly path: string
   /** `manifest` for this file itself, so an extracted archive explains itself. */
-  readonly kind: 'drawing' | 'manifest'
+  readonly kind: 'drawing' | 'manifest' | 'list'
   readonly format: string
   readonly media_type: string
   /** The size of the file in the archive; absent for the manifest, which cannot know its own. */
@@ -56,7 +56,8 @@ export interface Manifest {
   readonly project_id: string
   readonly project_revision: number
   readonly unsaved_changes?: true
-  readonly recipe: Recipe
+  /** The recipe that produced the set: drawings (#61) or lists (#62). */
+  readonly recipe: Recipe | ListsRecipe
   readonly files: readonly ManifestFile[]
 }
 
@@ -69,7 +70,7 @@ export interface Manifest {
  */
 export async function manifestOf(
   snapshot: ExportSnapshot,
-  recipe: Recipe,
+  recipe: Recipe | ListsRecipe,
   provenance: Provenance,
   files: readonly ManifestFile[],
 ): Promise<Manifest> {

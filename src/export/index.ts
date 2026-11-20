@@ -317,8 +317,10 @@ async function rasterImages(ops: readonly FlatOp[], deps: ExportDeps): Promise<M
 export { composeSheet, modelBounds } from './compose'
 export type { ComposedDrawing, ComposedSheet } from './compose'
 export { fitCheck, suggestionsFor, downsampledSize, pngSize, PAGE_MM, MARGIN_MM, FIXED_SCALES } from './fit'
-export { EXPORT_FOOTER, NOT_TO_SCALE, scaleStatement } from './strings'
+export { EXPORT_FOOTER, NOT_TO_SCALE, scaleStatement, SCOPE } from './strings'
 export { defaultCutListStates, describeScope } from './scope'
+export { exportLists, listsSummary, CSV_MEDIA_TYPE } from './lists'
+export type { ListsSummary } from './lists'
 export { LENGTH_DP, AREA_DP, ANGLE_DP, INTEGER_DP, formatNumber, neutralise, quote } from './csv/format'
 export {
   CSV_CONTRACT_VERSION,
@@ -330,7 +332,7 @@ export {
 export type { Column, ColumnKind, TableId, TableSpec } from './csv/tables'
 export { CSV_BOM, writeCsv } from './csv/write'
 export type { Cell, CsvRow } from './csv/write'
-export { slug, drawingFileName, archiveName } from './slug'
+export { slug, drawingFileName, archiveName, listFileName, listsArchiveName } from './slug'
 export { provenanceOf, provenanceJson } from './provenance'
 export { manifestOf, manifestBytes, zipOf } from './zip'
 export type { Manifest, ManifestFile } from './zip'
@@ -344,6 +346,7 @@ export type {
   ExportProgress,
   ExportResult,
   ExportSnapshot,
+  ListsRecipe,
   Orientation,
   OrientationSetting,
   PageSize,

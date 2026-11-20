@@ -29,9 +29,8 @@ const recipe: Recipe = {
 
 const request: ExportRunRequest = {
   snapshot,
-  recipe,
   deps: { instant: '2026-03-04T09:30:00.000Z', localDay: '2026-03-04', buildboxVersion: 'test' },
-  assets: [],
+  job: { kind: 'drawings', recipe, assets: [] },
 }
 
 describe('createExportRunner', () => {

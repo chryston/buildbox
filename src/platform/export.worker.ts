@@ -16,9 +16,13 @@
  * The request and the answers are declared here rather than imported from the host, so this file
  * stays the only place the wire format is written down; the host reads these types, not the other
  * way round.
+ *
+ * Two jobs share the wire (#62): the drawings, which need the font and the Plan Images, and the
+ * lists, which need nothing but the Project and the scope. One Worker, one request shape, one
+ * answer — a CSV and a PDF are different work on the same thread.
  */
-import { exportFiles } from '../export'
-import type { ExportProgress, ExportResult, ExportSnapshot, Recipe } from '../export'
+import { exportFiles, exportLists } from '../export'
+import type { ExportProgress, ExportResult, ExportSnapshot, ListsRecipe, Recipe } from '../export'
 import { createRasterizer } from './rasterizer'
 
 /** The parts of `ExportDeps` that are plain data, and so cross the boundary as themselves. */
@@ -47,22 +51,30 @@ export interface ExportWorkerAsset {
 }
 
 /**
- * One export request.
+ * What the Worker was asked to write.
  *
- * `assets` is the whole set rather than a pull protocol: a Worker that asked the main thread for
- * each Plan Image as it came to it would serialise the Asset Store reads behind the drawing, and
- * a Project's images are a few megabytes at worst. They are copied, never transferred — the
- * caller may still need them for the main-thread fallback, and a detached buffer would arrive
- * there empty.
+ * The drawings' half carries the extras only it needs: `font` is the Noto Sans subset a PDF embeds,
+ * and `assets` is the whole set of Plan Images rather than a pull protocol — a Worker that asked
+ * the main thread for each image as it came to it would serialise the Asset Store reads behind the
+ * drawing, and a Project's images are a few megabytes at worst. They are copied, never transferred:
+ * the caller may still need them for the main-thread fallback, and a detached buffer would arrive
+ * there empty. The lists' half carries a scope and nothing else.
  */
+export type ExportWorkerJob =
+  | {
+      readonly kind: 'drawings'
+      readonly recipe: Recipe
+      readonly font?: Uint8Array
+      readonly assets: readonly ExportWorkerAsset[]
+    }
+  | { readonly kind: 'lists'; readonly recipe: ListsRecipe }
+
+/** One export request. */
 export interface ExportRequest {
   readonly id: number
   readonly snapshot: ExportSnapshot
-  readonly recipe: Recipe
   readonly deps: ExportWorkerDeps
-  /** The Noto Sans subset a PDF embeds; absent when the format does not need it. */
-  readonly font?: Uint8Array
-  readonly assets: readonly ExportWorkerAsset[]
+  readonly job: ExportWorkerJob
 }
 
 /** How one request comes back: as it goes, when it is finished, or not at all. */
@@ -79,20 +91,28 @@ interface WorkerScope {
 const scope = self as unknown as WorkerScope
 
 scope.onmessage = (event) => {
-  const { id, snapshot, recipe, deps, font, assets } = event.data
-  const byHash = new Map(assets.map((asset) => [asset.sha256, asset]))
-  const rasterizer = createRasterizer() ?? undefined
-  void exportFiles(snapshot, recipe, {
-    ...deps,
-    clock: { now: () => deps.instant, localDate: () => deps.localDay },
-    ...(font === undefined ? {} : { font: { bytes: font } }),
-    ...(rasterizer === undefined ? {} : { rasterizer }),
-    assets: async (sha256) => {
-      const asset = byHash.get(sha256)
-      return asset === undefined ? null : { bytes: asset.bytes, mediaType: asset.mediaType }
-    },
-    onProgress: (progress) => scope.postMessage({ id, kind: 'progress', progress }),
-  })
+  const { id, snapshot, deps, job } = event.data
+  const onProgress = (progress: ExportProgress): void => {
+    scope.postMessage({ id, kind: 'progress', progress })
+  }
+  const clock = { now: () => deps.instant, localDate: () => deps.localDay }
+  const run = (): Promise<ExportResult> => {
+    if (job.kind === 'lists') return exportLists(snapshot, job.recipe, { ...deps, clock, onProgress })
+    const rasterizer = createRasterizer() ?? undefined
+    const byHash = new Map(job.assets.map((asset) => [asset.sha256, asset]))
+    return exportFiles(snapshot, job.recipe, {
+      ...deps,
+      clock,
+      ...(job.font === undefined ? {} : { font: { bytes: job.font } }),
+      ...(rasterizer === undefined ? {} : { rasterizer }),
+      assets: async (sha256) => {
+        const asset = byHash.get(sha256)
+        return asset === undefined ? null : { bytes: asset.bytes, mediaType: asset.mediaType }
+      },
+      onProgress,
+    })
+  }
+  void run()
     .then((result) => scope.postMessage({ id, kind: 'done', result }))
     // A throw here is a bug in `export`, not a drawing that could not be written — `exportFiles`
     // answers every ordinary failure as data. Saying so as `failed` lets the host fall back to

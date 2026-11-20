@@ -7,8 +7,10 @@
  * same bytes out.
  */
 
+import type { QuantityScope } from '../derive'
 import type { LayerKey } from '../drawing'
 import type { DisplayUnit, Project } from '../domain'
+import type { TableId } from './csv/tables'
 
 /** The three formats #61 writes. One export writes one of them. */
 export type DrawingFormat = 'svg' | 'png' | 'pdf'
@@ -73,6 +75,19 @@ export interface Recipe {
   readonly layers?: readonly LayerKey[]
 }
 
+/**
+ * The Lists tab's recipe: which tables, and the scope they are counted over (#62 §10).
+ *
+ * `tables` is a list rather than two booleans because the ZIP writes them in the contract's order
+ * and a list is that order. `scope` is `derive`'s own scope, unchanged: the recipe is what the
+ * dialog's controls say, and the derivation is what the rows are. A recipe from an Item Detail
+ * View carries `scope.itemDesignId`, which is what makes its Cut List one item's list.
+ */
+export interface ListsRecipe {
+  readonly tables: readonly TableId[]
+  readonly scope: QuantityScope
+}
+
 /** The Project as it was when Export was pressed, and the revision those bytes are. */
 export interface ExportSnapshot {
   readonly project: Project
@@ -94,6 +109,8 @@ export type ExportFailureReason =
   | 'empty-drawing'
   /** The recipe named a view or an Item Design the Project does not have. */
   | 'unknown-view'
+  /** A lists recipe named no table, so there was nothing to write (#62). */
+  | 'empty-tables'
   /** No font bytes were handed in, so no text could be set. */
   | 'no-font'
   /** fontkit refused the font bytes. */
