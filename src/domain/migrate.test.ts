@@ -402,6 +402,33 @@ describe('migrateV3toV4 — a Project gains its Walls (#64)', () => {
     if (!migrated.ok) return
     expect(migrateV3toV4(migrated.project)).toEqual(migrated.project)
   })
+
+  it('keeps the Walls, Junctions and chosen height a record already carries', () => {
+    // A step that adds a field never overwrites the one it was meant to add. This step used
+    // to write `walls: []` unconditionally, so running it on a record that already had Walls
+    // — a v4 Project read by a build that ran the chain twice — emptied the Project.
+    const already = {
+      ...validProject(),
+      preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2800 },
+      existingModel: {
+        placedItems: [],
+        walls: [
+          {
+            id: 'wall-0',
+            ref: 'W-1',
+            floorId: 'floor-0',
+            line: { kind: 'line', start: { x: 0, y: 0 }, end: { x: 4000, y: 0 } },
+            thickness: 100,
+            justification: 'centre',
+            baseElevation: 0,
+            height: 2600,
+          },
+        ],
+        wallJunctions: [{ id: 'junction-0', floorId: 'floor-0', ends: [{ wallId: 'wall-0', end: 'start' }] }],
+      },
+    }
+    expect(migrateV3toV4(already)).toEqual(already)
+  })
 })
 
 describe('migrateV4toV5 — a Project gains its Openings (#65)', () => {

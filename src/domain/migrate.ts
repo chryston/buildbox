@@ -128,7 +128,9 @@ export const DEFAULT_WALL_HEIGHT_MM = 2600
  * `defaultWallHeight` stays absent: nobody measured a Floor in v3 that had one.
  *
  * Nothing else moves, no ID is spent, and a value that is not a Project shape is left for
- * `validateProject` to refuse.
+ * `validateProject` to refuse. The step is idempotent: a record that already carries Walls,
+ * Junctions or a chosen default height keeps them, so running it twice — or running it on a
+ * record that only needed the other half of the step — cannot empty a Project of its Walls.
  */
 export function migrateV3toV4(data: unknown): unknown {
   if (data === null || typeof data !== 'object' || Array.isArray(data)) return data
@@ -136,11 +138,19 @@ export function migrateV3toV4(data: unknown): unknown {
   const next: Record<string, unknown> = { ...record }
   if (record.preferences !== null && typeof record.preferences === 'object' && !Array.isArray(record.preferences)) {
     const preferences = record.preferences as Record<string, unknown>
-    next.preferences = { ...preferences, defaultWallHeight: DEFAULT_WALL_HEIGHT_MM }
+    // A height already stored is a height somebody chose; a step that adds a field never
+    // overwrites the one it was meant to add.
+    next.preferences = { ...preferences, defaultWallHeight: preferences.defaultWallHeight ?? DEFAULT_WALL_HEIGHT_MM }
   }
   if (record.existingModel !== null && typeof record.existingModel === 'object' && !Array.isArray(record.existingModel)) {
     const existingModel = record.existingModel as Record<string, unknown>
-    next.existingModel = { ...existingModel, walls: [], wallJunctions: [] }
+    const kept = (key: 'walls' | 'wallJunctions'): unknown[] =>
+      Array.isArray(existingModel[key]) ? (existingModel[key] as unknown[]) : []
+    next.existingModel = {
+      ...existingModel,
+      walls: kept('walls'),
+      wallJunctions: kept('wallJunctions'),
+    }
   }
   return next
 }
