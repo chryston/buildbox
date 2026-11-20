@@ -1,11 +1,12 @@
-// The Noto Sans assets (#60 §2): the committed metrics table the display list lays text out
-// with, and the Latin-1 woff2 the canvas draws with.
+// The Noto Sans assets (#60 §2, #61): the committed metrics table the display list lays text out
+// with, the Latin-1 woff2 the canvas draws with, and the Latin-1 TrueType a PDF embeds.
 //
 //   node scripts/gen-font-assets.mjs
 //
-// Both outputs are committed, so the app never needs `fontkit` or `subset-font` at build or
+// All outputs are committed, so the app never needs `fontkit` or `subset-font` at build or
 // run time — they are devDependencies for this file alone. The source `.ttf` stays beside
-// them as the provenance of both, and nothing in `src` imports it eagerly (#60 criterion 20).
+// them as the provenance of all three, and nothing in `src` imports any of them eagerly
+// (#60 criterion 20; the PDF face is loaded by the lazy export chunk only, #61 criterion 15).
 //
 // The metrics are the advance widths of U+0020–U+007E and U+00A0–U+00FF, the `.notdef` and
 // U+FFFD widths, and every non-zero kerning pair inside those two ranges. `drawing/font`
@@ -20,6 +21,7 @@ const ROOT = path.resolve(import.meta.dirname, '..')
 const SOURCE = path.join(ROOT, 'src/assets/fonts/NotoSans-Regular.ttf')
 const METRICS_OUT = path.join(ROOT, 'src/drawing/font/notoSansMetrics.ts')
 const WOFF2_OUT = path.join(ROOT, 'src/assets/fonts/NotoSans-Latin1.woff2')
+const TTF_OUT = path.join(ROOT, 'src/assets/fonts/NotoSans-Latin1.ttf')
 
 /** The two ranges the table covers: printable ASCII, and Latin-1 from NBSP up. */
 const RANGES = [
@@ -109,5 +111,14 @@ const woff2 = await subsetFont(readFileSync(SOURCE),
   { targetFormat: 'woff2' })
 writeFileSync(WOFF2_OUT, woff2)
 
+// The paper face (#61): the same coverage as a TrueType collection, because `pdf-lib` embeds a
+// subset through fontkit and fontkit subsets a TTF, not a woff2. It is the same 22 kB of glyphs
+// rather than the 569 kB source, which is what keeps the lazy export chunk inside its budget.
+const ttf = await subsetFont(readFileSync(SOURCE),
+  String.fromCharCode(...codePoints),
+  { targetFormat: 'truetype' })
+writeFileSync(TTF_OUT, ttf)
+
 console.log(`metrics: ${codePoints.length} advances, ${kerning.length} kern pairs -> ${path.relative(ROOT, METRICS_OUT)}`)
 console.log(`woff2: ${woff2.byteLength} B -> ${path.relative(ROOT, WOFF2_OUT)}`)
+console.log(`ttf: ${ttf.byteLength} B -> ${path.relative(ROOT, TTF_OUT)}`)

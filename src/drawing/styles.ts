@@ -94,6 +94,14 @@ export const SIZE_ROLES: Record<SizeRole, SizeRow> = {
   'cabinet-corner': { screen: { mm: 2 }, paper: { mm: 1 } },
   'cabinet-corner-small': { screen: { mm: 1.5 }, paper: { mm: 0.75 } },
   'plan-chip-corner': { screen: { px: 4 }, paper: { mm: 1.5 } },
+
+  // The sheet furniture. The screen column is never read — nothing on screen draws a title
+  // block — but a row without it would not type, and a number invented for a column nobody
+  // reads is cheaper than a second table.
+  'sheet-rule': { screen: { px: 1 }, paper: { mm: 0.35 } },
+  'sheet-title': { screen: { px: 14 }, paper: { mm: 4 } },
+  'sheet-label': { screen: { px: 10 }, paper: { mm: 2.5 } },
+  'sheet-footer': { screen: { px: 9 }, paper: { mm: 2 } },
 }
 
 /**
@@ -258,6 +266,23 @@ export const STYLES: Record<StyleKey, Style> = {
     strokeWidth: 'plan-line',
   },
   'item-label': { fill: 'item', size: 'plan-label', fontFamily: FONT_STACK },
+
+  // --- The sheet furniture #61 composes around a drawing.
+  //
+  // These colours are the app's custom properties like every other row's, which on paper means
+  // nothing at all: `export/palette.ts` resolves them to ink. The rows exist so that the three
+  // writers share one answer, and so that a title block drawn by the PDF writer is the same
+  // title block the SVG writer emitted.
+  'sheet-frame': { fill: 'none', stroke: 'var(--bb-text)', strokeWidth: 'sheet-rule', hit: 'none' },
+  'sheet-rule': { stroke: 'var(--bb-text)', strokeWidth: 'sheet-rule', hit: 'none' },
+  'sheet-title': { fill: 'var(--bb-text)', size: 'sheet-title', fontFamily: FONT_STACK, hit: 'none' },
+  'sheet-label': { fill: 'var(--bb-text-muted)', size: 'sheet-label', fontFamily: FONT_STACK, hit: 'none' },
+  'sheet-value': { fill: 'var(--bb-text)', size: 'sheet-label', fontFamily: FONT_STACK, hit: 'none' },
+  'sheet-footer': { fill: 'var(--bb-text-muted)', size: 'sheet-footer', fontFamily: FONT_STACK, hit: 'none' },
+  'sheet-scale': { fill: 'var(--bb-text-muted)', size: 'sheet-label', fontFamily: FONT_STACK, hit: 'none' },
+  // The optional model grid, off by default. Light enough that a pencil dimension over it is
+  // still readable, dark enough that a phone photograph of the sheet keeps it.
+  'sheet-grid': { stroke: 'var(--bb-border-card)', strokeWidth: 'sheet-rule', hit: 'none', opacity: 0.5 },
 }
 
 /** The style one key names; the table is exhaustive over `StyleKey`, so this never fails. */

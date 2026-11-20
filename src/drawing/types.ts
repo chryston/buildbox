@@ -55,6 +55,8 @@ export type Rect = {
  */
 export type LayerKey =
   | 'plan-image'
+  /** The optional model grid #61 draws under a drawing when the recipe asks for one. */
+  | 'sheet-grid'
   | 'placed-items'
   | 'plan-annotations'
   | 'placed-item-labels'
@@ -70,6 +72,8 @@ export type LayerKey =
   | 'cabinet-marks'
   | 'item-footprint'
   | 'item-labels'
+  /** The title block, footer and scale bar #61 composes around a drawing, drawn last. */
+  | 'sheet-furniture'
 
 /**
  * THE single z-order source (#60 §3): the order the `<g>` bands are emitted in, back to
@@ -85,6 +89,7 @@ export type LayerKey =
  */
 export const LAYER_ORDER: readonly LayerKey[] = [
   'plan-image',
+  'sheet-grid',
   'placed-items',
   'plan-annotations',
   'placed-item-labels',
@@ -100,6 +105,7 @@ export const LAYER_ORDER: readonly LayerKey[] = [
   'cabinet-marks',
   'item-footprint',
   'item-labels',
+  'sheet-furniture',
 ]
 
 /**
@@ -202,6 +208,18 @@ export type StyleKey =
   | 'cabinet-unlock-mark'
   | 'item-footprint'
   | 'item-label'
+  // The sheet furniture #61's export composes: the frame and rules of a title block, its text,
+  // the fixed footer, and a scale bar. These are rows and not literals for the same reason a
+  // cabinet's outline is: the writers of three formats read them, and two of them disagree about
+  // what a colour is.
+  | 'sheet-frame'
+  | 'sheet-rule'
+  | 'sheet-title'
+  | 'sheet-label'
+  | 'sheet-value'
+  | 'sheet-footer'
+  | 'sheet-scale'
+  | 'sheet-grid'
 
 /**
  * Every row of `SIZE_ROLES`.
@@ -245,6 +263,10 @@ export type SizeRole =
   | 'cabinet-corner'
   | 'cabinet-corner-small'
   | 'plan-chip-corner'
+  | 'sheet-rule'
+  | 'sheet-title'
+  | 'sheet-label'
+  | 'sheet-footer'
 
 /**
  * One column of a `SIZE_ROLES` row: `{ px }` is a device-pixel floor that a zoom defeats,
