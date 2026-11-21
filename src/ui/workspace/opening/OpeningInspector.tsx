@@ -22,6 +22,7 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { DisplayUnit, Opening, Wall } from '../../../domain'
+import { STRINGS } from '../../strings'
 import { NumberField } from '../SelectionInspector'
 import { readoutMm } from '../displayUnits'
 
@@ -96,7 +97,7 @@ export function OpeningInspector(props: OpeningInspectorProps): ReactNode {
   return (
     <section className="bb-workspace-card" data-testid="opening-inspector">
       <h3 className="bb-workspace-card-title" data-testid="opening-inspector-title">{opening.label}</h3>
-      <label className="bb-workspace-field-label" htmlFor="opening-inspector-label-field">Label</label>
+      <label className="bb-workspace-field-label" htmlFor="opening-inspector-label-field">{STRINGS.openingLabel}</label>
       <input
         id="opening-inspector-label-field"
         className="bb-workspace-input"
@@ -109,8 +110,8 @@ export function OpeningInspector(props: OpeningInspectorProps): ReactNode {
           if (event.key === 'Enter') commitLabel()
         }}
       />
-      <Row testId="opening-inspector-kind" label="Kind" value={KIND_WORDS[opening.kind]} />
-      <span className="bb-workspace-field-label">Host</span>
+      <Row testId="opening-inspector-kind" label={STRINGS.openingKind} value={KIND_WORDS[opening.kind]} />
+      <span className="bb-workspace-field-label">{STRINGS.openingHost}</span>
       <button
         type="button"
         className="bb-workspace-tool-button"
@@ -120,7 +121,7 @@ export function OpeningInspector(props: OpeningInspectorProps): ReactNode {
         {host.ref}
       </button>
       <NumberField
-        label="Width"
+        label={STRINGS.openingWidth}
         testId="opening-inspector-width"
         value={opening.width}
         kind="mm"
@@ -129,7 +130,7 @@ export function OpeningInspector(props: OpeningInspectorProps): ReactNode {
         min={1}
         onCommit={onSetWidth}
       />
-      <span className="bb-workspace-field-label">Distance from</span>
+      <span className="bb-workspace-field-label">{STRINGS.openingDistanceFrom}</span>
       <div className="flex items-center gap-2" data-testid="opening-inspector-from">
         <button
           type="button"
@@ -138,7 +139,7 @@ export function OpeningInspector(props: OpeningInspectorProps): ReactNode {
           aria-pressed={from === 'start'}
           onClick={() => setFrom('start')}
         >
-          Start
+          {STRINGS.openingFromStart}
         </button>
         <button
           type="button"
@@ -147,11 +148,11 @@ export function OpeningInspector(props: OpeningInspectorProps): ReactNode {
           aria-pressed={from === 'end'}
           onClick={() => setFrom('end')}
         >
-          End
+          {STRINGS.openingFromEnd}
         </button>
       </div>
       <NumberField
-        label={from === 'start' ? 'From the start' : 'From the end'}
+        label={from === 'start' ? STRINGS.openingFromTheStart : STRINGS.openingFromTheEnd}
         testId="opening-inspector-distance"
         value={shown}
         kind="mm"
@@ -160,8 +161,8 @@ export function OpeningInspector(props: OpeningInspectorProps): ReactNode {
         min={0}
         onCommit={commitDistance}
       />
-      <Row testId="opening-inspector-sill" label="Sill" value={`${grouped.format(opening.sill)} mm`} />
-      <Row testId="opening-inspector-head" label="Head" value={`${grouped.format(opening.head)} mm`} />
+      <Row testId="opening-inspector-sill" label={STRINGS.openingSill} value={`${grouped.format(opening.sill)} mm`} />
+      <Row testId="opening-inspector-head" label={STRINGS.openingHead} value={`${grouped.format(opening.head)} mm`} />
       {hinged && (
         <>
           <span className="bb-workspace-static-value" data-testid="opening-inspector-swing">
@@ -174,7 +175,7 @@ export function OpeningInspector(props: OpeningInspectorProps): ReactNode {
               data-testid="opening-inspector-flip-hinge"
               onClick={onFlipHinge}
             >
-              Flip hinge
+              {STRINGS.openingFlipHinge}
             </button>
             <button
               type="button"
@@ -182,7 +183,7 @@ export function OpeningInspector(props: OpeningInspectorProps): ReactNode {
               data-testid="opening-inspector-flip-swing"
               onClick={onFlipSwing}
             >
-              Flip opening side
+              {STRINGS.openingFlipSide}
             </button>
           </div>
         </>
@@ -198,7 +199,7 @@ export function OpeningInspector(props: OpeningInspectorProps): ReactNode {
         data-testid="opening-inspector-delete"
         onClick={onDelete}
       >
-        Delete
+        {STRINGS.delete}
       </button>
     </section>
   )

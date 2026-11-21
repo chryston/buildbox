@@ -519,6 +519,25 @@ export const STRINGS = {
   /** Deleting a Wall takes its Openings with it, and the button says so rather than hiding it. */
   wallDeleteWithOpenings: (openings: number): string =>
     `Delete wall and ${plural(openings, 'opening', 'openings')}`,
+  // The Door / window inspector and its draft (#65's components, #66 §17).
+  openingLabel: 'Label',
+  openingKind: 'Kind',
+  openingHost: 'Host',
+  openingWidth: 'Width',
+  openingDistanceFrom: 'Distance from',
+  openingFromStart: 'Start',
+  openingFromEnd: 'End',
+  /** The field says which end it measures from, because the two ends are not the same answer. */
+  openingFromTheStart: 'From the start',
+  openingFromTheEnd: 'From the end',
+  openingSill: 'Sill',
+  openingHead: 'Head',
+  openingFlipHinge: 'Flip hinge',
+  openingFlipSide: 'Flip opening side',
+  openingDraftTitle: 'Door / window',
+  openingDraftFixedSize: 'Fixed size',
+  openingDraftDistance: 'Distance from the highlighted end',
+  openingCancelEsc: 'Cancel (Esc)',
 } as const
 
 /**
