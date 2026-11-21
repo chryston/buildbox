@@ -680,6 +680,25 @@ export const STRINGS = {
   moreOptions: 'More options',
   shape: 'Shape',
   wallStraight: 'Straight',
+  // The Floor workspace's toolbar and its menus (#57 §3, #66 §17).
+  tools: 'Tools',
+  addItem: 'Add item',
+  inThisProject: 'In this Project',
+  nothingHereYet: 'Nothing here yet',
+  cabinet: 'Cabinet',
+  catalog: 'Catalog',
+  newItemEllipsis: 'New item…',
+  planImage: 'Plan Image',
+  uploadEllipsis: 'Upload…',
+  replaceEllipsis: 'Replace…',
+  remove: 'Remove',
+  exportGroup: 'Export',
+  viewAndSelection: 'View & selection',
+  undo: 'Undo',
+  redo: 'Redo',
+  /** Both upload refusals say what went wrong and what to do instead. */
+  imageInvalidFile: 'Please choose a valid image file.',
+  imageTooLarge: 'A Plan Image can be at most 50 MB.',
 } as const
 
 /**

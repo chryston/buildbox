@@ -721,12 +721,12 @@ export function FloorWorkspace(): ReactNode {
     if (file === undefined) return
     setUploadError(null)
     if (!file.type.startsWith('image/')) {
-      setUploadError('Please choose a valid image file.')
+      setUploadError(STRINGS.imageInvalidFile)
       input.value = ''
       return
     }
     if (file.size > MAX_PLAN_IMAGE_BYTES) {
-      setUploadError('A Plan Image can be at most 50 MB.')
+      setUploadError(STRINGS.imageTooLarge)
       input.value = ''
       return
     }
@@ -844,7 +844,7 @@ export function FloorWorkspace(): ReactNode {
     {
       id: 'tools',
       width: 196,
-      label: 'Tools',
+      label: STRINGS.tools,
       content: (
         <>
           {WORKSPACE_TOOLS.map((definition) => {
@@ -870,14 +870,14 @@ export function FloorWorkspace(): ReactNode {
     {
       id: 'add',
       width: 112,
-      label: 'Add item',
+      label: STRINGS.addItem,
       content: (
-        <ToolbarMenu label="Add item" testId="add-item-menu">
+        <ToolbarMenu label={STRINGS.addItem} testId="add-item-menu">
           {/* Three sections (#57 §3): what this Project already has, the shipped catalogue,
               and the one way to author a shape of your own. */}
-          <div className="bb-workspace-menu-heading">In this Project</div>
+          <div className="bb-workspace-menu-heading">{STRINGS.inThisProject}</div>
           {library.length === 0 && (
-            <div className="bb-workspace-library-item" data-testid="library-empty">Nothing here yet</div>
+            <div className="bb-workspace-library-item" data-testid="library-empty">{STRINGS.nothingHereYet}</div>
           )}
           {library.map((entry) => (
             <button
@@ -890,14 +890,14 @@ export function FloorWorkspace(): ReactNode {
               <span className="bb-workspace-library-swatch" style={{ background: entry.color }} />
               <span className="bb-workspace-library-name">{entry.label}</span>
               <span className="bb-workspace-library-meta">
-                {entry.isCabinet ? 'Cabinet' : `${Math.round(entry.width)} × ${Math.round(entry.depth)}`}
+                {entry.isCabinet ? STRINGS.cabinet : `${Math.round(entry.width)} × ${Math.round(entry.depth)}`}
               </span>
               <span className="bb-workspace-library-meta" data-testid={`library-count-${entry.itemDesignId}`}>
                 {entry.placementCount}
               </span>
             </button>
           ))}
-          <div className="bb-workspace-menu-heading">Catalog</div>
+          <div className="bb-workspace-menu-heading">{STRINGS.catalog}</div>
           {services.planCatalogue.map((option) => (
             <ToolbarMenuItem
               key={option.key}
@@ -906,30 +906,30 @@ export function FloorWorkspace(): ReactNode {
               onSelect={() => addObject(option.key)}
             />
           ))}
-          <ToolbarMenuItem label="New item…" testId="add-new-item" onSelect={() => setNewItemOpen(true)} />
+          <ToolbarMenuItem label={STRINGS.newItemEllipsis} testId="add-new-item" onSelect={() => setNewItemOpen(true)} />
         </ToolbarMenu>
       ),
     },
     {
       id: 'plan-image',
       width: 132,
-      label: 'Plan Image',
+      label: STRINGS.planImage,
       content: (
-        <ToolbarMenu label="Plan Image" testId="plan-image-menu">
+        <ToolbarMenu label={STRINGS.planImage} testId="plan-image-menu">
           <ToolbarMenuItem
-            label="Upload…"
+            label={STRINGS.uploadEllipsis}
             testId="upload-image"
             disabled={planImage !== null}
             onSelect={() => fileInputRef.current?.click()}
           />
           <ToolbarMenuItem
-            label="Replace…"
+            label={STRINGS.replaceEllipsis}
             testId="replace-image"
             disabled={planImage === null}
             onSelect={() => fileInputRef.current?.click()}
           />
           <ToolbarMenuItem
-            label="Remove"
+            label={STRINGS.remove}
             testId="remove-plan-image"
             disabled={planImage === null}
             onSelect={() => {
@@ -937,7 +937,7 @@ export function FloorWorkspace(): ReactNode {
             }}
           />
           <ToolbarMenuItem
-            label="Calibrate…"
+            label={STRINGS.calibrateEllipsis}
             testId="calibrate-scale"
             disabled={planImage === null}
             onSelect={() => setIsCalibrating(true)}
@@ -948,7 +948,7 @@ export function FloorWorkspace(): ReactNode {
     {
       id: 'export',
       width: 104,
-      label: 'Export',
+      label: STRINGS.exportGroup,
       content: (
         <button
           type="button"
@@ -966,7 +966,7 @@ export function FloorWorkspace(): ReactNode {
     groups.push({
       id: 'rail',
       width: 156,
-      label: 'View & selection',
+      label: STRINGS.viewAndSelection,
       content: (
         <button
           type="button"
@@ -1022,22 +1022,22 @@ export function FloorWorkspace(): ReactNode {
             <button
               type="button"
               data-testid="undo-button"
-              aria-label="Undo"
+              aria-label={STRINGS.undo}
               disabled={!history.canUndo}
               className="bb-workspace-tool-button"
               onClick={() => session.undo()}
             >
-              Undo
+              {STRINGS.undo}
             </button>
             <button
               type="button"
               data-testid="redo-button"
-              aria-label="Redo"
+              aria-label={STRINGS.redo}
               disabled={!history.canRedo}
               className="bb-workspace-tool-button"
               onClick={() => session.redo()}
             >
-              Redo
+              {STRINGS.redo}
             </button>
             <button
               type="button"
