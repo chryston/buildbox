@@ -10,13 +10,21 @@
  * refused before anything is mutated. `MIGRATIONS.md` next door is the rule for the
  * issue that adds the next one.
  */
-import type { ValidationProblem } from '../lib'
+import { FF_RENOVATION, type ValidationProblem } from '../lib'
 import type { IdAllocator } from './remapIds'
 import type { Floor, PlanView, Project } from './project'
 import { validateProject } from './validate'
 
-/** The domain schema this build writes and understands at the top of the chain. */
-export const DOMAIN_SCHEMA_VERSION = 7
+/**
+ * The domain schema this build writes and understands at the top of the chain.
+ *
+ * It is 8 in a `VITE_FF_RENOVATION` build and 7 in every other one (#69 §1, architecture §11):
+ * the renovation model ships dark, and a version bump is a change to what production writes. The
+ * consequence is deliberate — a Project saved by a preview build carries `schemaVersion: 8` and
+ * production refuses it as `newer-schema` rather than opening it and losing its Design Options
+ * silently. `#73` turns the flag on and this becomes a plain `8`.
+ */
+export const DOMAIN_SCHEMA_VERSION = FF_RENOVATION ? 8 : 7
 
 /**
  * One pure vN → vN+1 step. Its input is already a copy; it never reads the clock, and a
@@ -26,8 +34,11 @@ export type Migrator = (data: unknown, allocateId: IdAllocator) => unknown
 
 /**
  * `MIGRATORS[i]` migrates v(i+1) → v(i+2), so index 0 is v1 → v2.
+ *
+ * The v7 → v8 step is behind the renovation flag with the version above it, so a flag-off build
+ * has a seven-step chain and reads exactly the schema it always did.
  */
-export const MIGRATORS: readonly Migrator[] = [migrateV1toV2, migrateV2toV3, migrateV3toV4, migrateV4toV5, migrateV5toV6, migrateV6toV7]
+export const MIGRATORS: readonly Migrator[] = [migrateV1toV2, migrateV2toV3, migrateV3toV4, migrateV4toV5, migrateV5toV6, migrateV6toV7, ...(FF_RENOVATION ? [migrateV7toV8] : [])]
 
 /**
  * v1 → v2 (#56): the Project gains `views`, and each Floor gains the one default Plan
@@ -221,6 +232,26 @@ export function migrateV6toV7(data: unknown): unknown {
   const model = existing as Record<string, unknown>
   if (Array.isArray(model.rooms)) return data
   return { ...record, existingModel: { ...model, rooms: [] } }
+}
+
+/**
+ * v7 → v8 (#69): Design Options.
+ *
+ * `designOptions: []` is the only change, and an older file simply has none — which is also how a
+ * migrated Project behaves: no Options means the Existing Model is the whole model, exactly as it
+ * was in S7. Nothing else moves, no ID is spent and no clock is read, because a Design Option is a
+ * new container rather than a change to one, and every Existing entity keeps the fields it had.
+ *
+ * Registered only in a `VITE_FF_RENOVATION` build (#69 §1, architecture §11). The production schema
+ * version stays 7, so a Project written by a preview build is refused by production as
+ * `newer-schema` rather than opened without its Options — and `#73` turns the flag on, makes this
+ * the eighth golden step, and deletes the gate.
+ */
+export function migrateV7toV8(data: unknown): unknown {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return data
+  const record = data as Record<string, unknown>
+  if (Array.isArray(record.designOptions)) return data
+  return { ...record, designOptions: [] }
 }
 
 export type MigrateError =

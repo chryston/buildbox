@@ -11,6 +11,7 @@
 export { decodeBase64 } from './base64'
 export { BANNED_WORDS, bannedWordsIn, mentionsWord } from './bannedWords'
 export { CanonicalJsonError, canonicalJson, canonicalJsonBytes } from './canonicalJson'
+export { FF_RENOVATION } from './flags'
 export { sha256Hex } from './sha256Hex'
 export { stableHash } from './stableHash'
 export { compareCodePoints, stableSort } from './stableSort'

@@ -49,6 +49,10 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: test
         run: npm test
+      - name: test (renovation flag on)
+        # #69 ships dark, and one Vitest run carries one flag value, so the suites that exercise a
+        # Design Option are a second run rather than a second project of the first.
+        run: npm run test:renovation
       - name: build
         run: npm run build
       - uses: actions/upload-artifact@v4

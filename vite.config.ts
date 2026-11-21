@@ -80,6 +80,12 @@ const BROWSER_INCLUDE = ['src/persistence/indexeddb/**/*.browser.test.ts']
 const QUOTA_INCLUDE = ['src/persistence/indexeddb/quota.browser.test.ts']
 // The workspace layout tests (#55) measure real bounding boxes, which jsdom cannot give.
 const LAYOUT_BROWSER_INCLUDE = ['src/ui/**/*.browser.test.{ts,tsx}']
+// #69 ships dark: `VITE_FF_RENOVATION` decides at config-read time whether the renovation suites
+// exist at all. Vitest fills `import.meta.env` once, when it reads this file, so one run has one
+// flag value and a flagged suite cannot be a project of the flag-off run — `npm test` never looks
+// for files it has no flag to read, and `npm run test:renovation` is the run that does.
+const FF_RENOVATION = process.env['VITE_FF_RENOVATION'] === 'true'
+const RENOVATION_INCLUDE = ['src/**/*.renovation.test.{ts,tsx}']
 
 const SHARED_EXCLUDE = ['e2e/**', ...configDefaults.exclude]
 
@@ -120,7 +126,7 @@ export default defineConfig({
           name: 'pure',
           environment: 'node',
           include: [...PURE_INCLUDE, ...NODE_ONLY_INCLUDE],
-          exclude: [...PURE_EXCLUDE, ...SHARED_EXCLUDE],
+          exclude: [...PURE_EXCLUDE, ...RENOVATION_INCLUDE, ...SHARED_EXCLUDE],
           setupFiles: ['src/test/pure-setup.ts'],
         },
       },
@@ -130,10 +136,37 @@ export default defineConfig({
           name: 'dom',
           environment: 'jsdom',
           include: ['src/**/*.test.{ts,tsx}'],
-          exclude: [...PURE_INCLUDE, ...NODE_ONLY_INCLUDE, ...PURE_EXCLUDE, ...LAYOUT_BROWSER_INCLUDE, ...SHARED_EXCLUDE],
+          exclude: [...PURE_INCLUDE, ...NODE_ONLY_INCLUDE, ...PURE_EXCLUDE, ...RENOVATION_INCLUDE, ...LAYOUT_BROWSER_INCLUDE, ...SHARED_EXCLUDE],
           setupFiles: ['./src/test/setup.ts'],
         },
       },
+      // The renovation model's own suites (#69), under Node like `pure` and jsdom like `dom`.
+      // Present only in a run made with the flag set, so a flag-off `npm test` neither runs nor
+      // misses them.
+      ...(FF_RENOVATION
+        ? [
+            {
+              extends: true as const,
+              test: {
+                name: 'renovation',
+                environment: 'node',
+                include: RENOVATION_INCLUDE,
+                exclude: [...SHARED_EXCLUDE],
+                setupFiles: ['src/test/pure-setup.ts'],
+              },
+            },
+            {
+              extends: true as const,
+              test: {
+                name: 'renovation-dom',
+                environment: 'jsdom',
+                include: ['src/**/*.renovation.test.tsx'],
+                exclude: [...SHARED_EXCLUDE],
+                setupFiles: ['./src/test/setup.ts'],
+              },
+            },
+          ]
+        : []),
       {
         // The adapter over `fake-indexeddb` (#46): a Node host, an injected `IDBFactory`
         // per test, no DOM globals — which is why it takes no setup file at all.

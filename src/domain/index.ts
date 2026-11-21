@@ -92,6 +92,7 @@ export {
   migrateV2toV3,
   migrateV3toV4,
   migrateV4toV5,
+  migrateV7toV8,
   runMigrationChain,
   type Migrator,
   type MigrateError,
@@ -135,6 +136,7 @@ export type {
 export type {
   Acknowledgement,
   CabinetItemDesign,
+  DesignOption,
   DisplayUnit,
   EntityId,
   ExistingModel,
@@ -154,11 +156,13 @@ export type {
   PlanView,
   PlacedItem,
   Point2,
+  PredecessorIds,
   PresetItemFootprint,
   PresetRoomOutline,
   Project,
   ProjectMeta,
   ProjectPreferences,
+  ProposedModel,
   Room,
   RoomOutline,
   RoomWallFaceRef,
@@ -171,6 +175,7 @@ export type {
   WallJunctionEnd,
   WallRefLine,
 } from './project'
+export { designOptionsOf } from './project'
 export { remapIds, type IdAllocator } from './remapIds'
 export { ACKNOWLEDGEMENT_NOTE_MAX_LENGTH, warningKey } from './warnings'
 export {
