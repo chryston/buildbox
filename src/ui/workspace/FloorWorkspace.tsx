@@ -60,6 +60,7 @@ import { ShelterLayer } from './rooms/ShelterLayer'
 import { roomDraftOutline, roomOutlineShapePath, roomOverlapPreview, shelterName, shelterOutline, shelterPackName } from './rooms/roomDraft'
 import { roomMembershipSentence } from './rooms/membership'
 import { RoomFacePicker, roomEdgeRows } from './rooms/RoomFacePicker'
+import { FacePickLayer } from './rooms/FacePickLayer'
 import type { PathDraft } from './shape/draftPath'
 import { mergeableNeighbour } from './wall/wallDraft'
 import type { WallChainDraft, WallDraft } from './wall/wallDraft'
@@ -192,6 +193,8 @@ export function FloorWorkspace(): ReactNode {
   const [faceEdge, setFaceEdge] = useState<string | null>(null)
   /** The face being previewed, and the Room the preview was opened for. */
   const [facePick, setFacePick] = useState<{ roomId: string; candidate: RoomFaceCandidate } | null>(null)
+  /** `Pick on canvas` is armed: the canvas offers every parallel face, however far away. */
+  const [facePicking, setFacePicking] = useState(false)
   /**
    * The Rooms the live overlap check is asked about: this Floor's, in the shape the domain check
    * takes. A derived Room carries its own outline, but overlapping is a domain question (#67 §2).
@@ -345,12 +348,14 @@ export function FloorWorkspace(): ReactNode {
     setFaceEdge(null)
     setFacePick(null)
   }, [floorId])
-  // A preview belongs to the Room it was opened for: selecting another Room, or nothing, puts it
-  // down — the canvas must not go on painting an attach nobody is looking at.
+  // A preview belongs to the Room it was opened for: selecting another Room, or nothing, changing
+  // Floor, or putting the Select tool down puts it down — the canvas must not go on painting an
+  // attach nobody is looking at, nor offer faces for an Edge whose list is shut.
   useEffect(() => {
     setFaceEdge(null)
     setFacePick(null)
-  }, [roomSelection])
+    setFacePicking(false)
+  }, [roomSelection, floorId, tool])
   useEffect(() => {
     // Entering the tool hands it its draft. The aim needs the row being placed, so a tool that
     // waited for the picker to be touched before it knew what it was placing would draw no ghost
@@ -383,6 +388,17 @@ export function FloorWorkspace(): ReactNode {
     // Floor and zooming out less — the reach is a screen distance, never a fixed number of mm.
     return roomFaceCandidates(room, faceEdge, floorWalls, floorDomainRooms, SNAP_ACQUISITION_PX / (viewport?.zoom ?? 1))
   }, [faceEdge, roomSelection, floorWalls, floorDomainRooms, viewport?.zoom])
+  /**
+   * What `Pick on canvas` offers: every face parallel to the Edge, however far away. The reach is
+   * the list's, not the canvas's — a band twelve pixels wide is aimed at by eye, and the Flat may
+   * hold the right face on the far side of the house (#67 §10).
+   */
+  const facePickCandidates = useMemo(() => {
+    if (!facePicking || faceEdge === null || roomSelection === null || floorWalls === null) return []
+    const room = project.existingModel.rooms.find((each) => each.id === roomSelection)
+    if (room === undefined) return []
+    return roomFaceCandidates(room, faceEdge, floorWalls, floorDomainRooms, Number.POSITIVE_INFINITY)
+  }, [facePicking, faceEdge, roomSelection, floorWalls, floorDomainRooms])
 
   const hostRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -1316,6 +1332,7 @@ export function FloorWorkspace(): ReactNode {
                     setFaceEdge(segmentId)
                     setFacePick(null)
                   }}
+                  onPickOnCanvas={() => setFacePicking(true)}
                   onPreview={(candidate) => setFacePick(candidate === null
                     ? null
                     : { roomId: selectedRoom.room.id, candidate })}
@@ -1534,6 +1551,20 @@ export function FloorWorkspace(): ReactNode {
                     setShelterCentre(null)
                   }}
                   overlap={shelterOverlap}
+                  unit={project.preferences.displayUnit}
+                  precision={project.preferences.displayPrecision}
+                />
+              ) : facePicking && viewport !== null && viewport !== undefined ? (
+                <FacePickLayer
+                  viewport={viewport}
+                  candidates={facePickCandidates}
+                  previewKey={facePick === null ? null : `${facePick.candidate.wallId}|${facePick.candidate.side}`}
+                  onPick={(candidate) => {
+                    if (roomSelection === null) return
+                    setFacePick({ roomId: roomSelection, candidate })
+                    setFacePicking(false)
+                  }}
+                  onCancel={() => setFacePicking(false)}
                   unit={project.preferences.displayUnit}
                   precision={project.preferences.displayPrecision}
                 />

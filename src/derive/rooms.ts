@@ -197,6 +197,12 @@ export interface RoomFaceCandidate {
   readonly label: string
   /** Perpendicular distance from the Edge to the face, in millimetres. */
   readonly distanceMm: number
+  /**
+   * The face itself, in Floor millimetres. Only line faces are ever candidates, so the two ends
+   * describe it exactly — which is what the canvas picker needs to paint a band over it.
+   */
+  readonly from: Pt
+  readonly to: Pt
   /** `true` when the Edge already lies on the face: attaching claims it without moving it. */
   readonly onFace: boolean
   /**
@@ -280,6 +286,8 @@ export function roomFaceCandidates(
       side: face.side,
       label: roomFaceLabel(room, face, walls, rooms),
       distanceMm: relation.distance,
+      from: face.from,
+      to: face.to,
       onFace: relation.distance <= TOLERANCE_MM,
       outline: roomOutlineAfterSlide(
         room.outline,

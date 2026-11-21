@@ -337,6 +337,7 @@ exports[`the copy > is the whole vocabulary of the interface 1`] = `
   "permanentDeleteBody": "This removes the Project, its Plan Images, and local Recovery Points. This cannot be undone.",
   "permanentDeleteHeading": "Delete this Project permanently?",
   "permanentDeleteSummary": [Function],
+  "pickFace": "Pick a wall face · Esc cancels",
   "pickOnCanvas": "Pick on canvas",
   "place": "Place",
   "placedItem": "Placed Item",

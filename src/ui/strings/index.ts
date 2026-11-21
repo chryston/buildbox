@@ -830,6 +830,7 @@ export const STRINGS = {
   // The Room-side face picker (#67 §10–§11, D8). A face is named by the Room it borders, never by
   // which side of the Wall it is on: `W-5 · Kitchen's side` is read in a house, `left` in a manual.
   attachToFace: 'Attach to wall face',
+  pickFace: 'Pick a wall face · Esc cancels',
   attach: 'Attach',
   detach: 'Detach',
   attachedTo(label: string): string {

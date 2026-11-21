@@ -64,6 +64,8 @@ export interface RoomFacePickerProps {
   /** Why the preview cannot be confirmed — the overlap sentence — or `null` when it can. */
   readonly blocked: string | null
   readonly onOpen: (segmentId: EntityId | null) => void
+  /** Arm `Pick on canvas`, which offers every parallel face, however far away (#67 §10). */
+  readonly onPickOnCanvas: () => void
   readonly onPreview: (candidate: RoomFaceCandidate | null) => void
   readonly onAttach: (candidate: RoomFaceCandidate) => void
   readonly onDetach: (segmentId: EntityId) => void
@@ -72,7 +74,7 @@ export interface RoomFacePickerProps {
 }
 
 export function RoomFacePicker(props: RoomFacePickerProps): ReactNode {
-  const { edges, openEdge, candidates, previewKey, blocked, onOpen, onPreview, onAttach, onDetach, unit, precision } = props
+  const { edges, openEdge, candidates, previewKey, blocked, onOpen, onPickOnCanvas, onPreview, onAttach, onDetach, unit, precision } = props
   const read = (mm: number): string => readoutMm(mm, unit, precision)
 
   return (
@@ -118,6 +120,15 @@ export function RoomFacePicker(props: RoomFacePickerProps): ReactNode {
                   {candidates.length === 0 && (
                     <li className="bb-shape-hint" data-testid="room-face-none">{STRINGS.noFaceInReach}</li>
                   )}
+                  <li className="bb-room-face-pick" key="@canvas">
+                    <button
+                      className="bb-workspace-button"
+                      data-testid="room-face-pick-on-canvas"
+                      onClick={onPickOnCanvas}
+                    >
+                      {STRINGS.pickOnCanvas}
+                    </button>
+                  </li>
                   {candidates.map((candidate) => {
                     const key = faceKey(candidate)
                     const picked = previewKey === key
