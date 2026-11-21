@@ -74,4 +74,6 @@ export const INTENT_LABELS = {
   'view.rename': 'Rename view',
   'view.delete': 'Delete view',
   'view.setShowPlanImage': 'Show plan image',
+  'warning.acknowledge': 'Acknowledge warning',
+  'warning.editNote': 'Edit warning note',
 } as const satisfies Record<IntentType, string>

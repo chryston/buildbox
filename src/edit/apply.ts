@@ -18,6 +18,7 @@ import type { Project } from '../domain'
 import { problem } from '../lib'
 import type { Applied, DependencyReview, Intent, IntentType, Locator, Rejection, RejectionCode } from './intents'
 import { IntentRejection } from './handlers/support'
+import { pruneStaleAcknowledgements } from './handlers/warningHandlers'
 import { INTENT_HANDLERS } from './registry'
 import type { IntentHandler } from './handlers/context'
 
@@ -60,6 +61,12 @@ export function applyIntent(project: Project, intent: Intent): Applied | Rejecti
   try {
     ;[next, patches, inversePatches] = produceWithPatches(project, (draft) => {
       handler.run({ project, draft, intent })
+      // An acknowledgement outliving its subject would record a decision about a warning no
+      // producer can ever raise again (#66 §4). Part of this same producer, so deleting a
+      // Wall drops its acknowledgement in the same Edit Transaction — and one undo puts both
+      // back, note included. `previewIntent` goes through here too, so a preview that would
+      // prune says so.
+      pruneStaleAcknowledgements(draft)
     })
   } catch (error) {
     if (error instanceof IntentRejection) return { ok: false, code: error.code, problems: error.problems }

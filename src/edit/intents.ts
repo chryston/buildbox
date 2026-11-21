@@ -105,6 +105,8 @@ export type IntentType =
   | 'view.rename'
   | 'view.delete'
   | 'view.setShowPlanImage'
+  | 'warning.acknowledge'
+  | 'warning.editNote'
 
 /** The payload each Intent type carries. */
 export interface RenameProject {
@@ -580,6 +582,32 @@ export interface DeleteOpening {
   openingId: EntityId
 }
 
+/**
+ * `Acknowledge warning` (#66 §4): the user's decision about one warning, recorded with the
+ * note they gave for it.
+ *
+ * The key is deliberately not sent. An Entity ID may contain a comma (#42 §3), so a key can
+ * never be parsed back into its parts; the four inputs the key was built from travel beside
+ * it and the handler rebuilds it, which is what guarantees an acknowledgement always lands
+ * under the key the engine computes for the same warning.
+ */
+export interface AcknowledgeWarning {
+  warningType: string
+  subjectIds: EntityId[]
+  designOptionId: EntityId | null
+  /** The signature as it stood when the user decided; reopening is judged against this. */
+  signature: string
+  note: string
+}
+
+/** `Edit note`: the decision stands, only what the user wrote about it changes (#66 §4). */
+export interface EditWarningNote {
+  warningType: string
+  subjectIds: EntityId[]
+  designOptionId: EntityId | null
+  note: string
+}
+
 /** `type → payload`, the one place the catalogue's shape is written down. */
 export interface IntentPayloads {
   'project.rename': RenameProject
@@ -649,6 +677,8 @@ export interface IntentPayloads {
   'view.rename': RenamePlanView
   'view.delete': DeletePlanView
   'view.setShowPlanImage': SetPlanViewShowsPlanImage
+  'warning.acknowledge': AcknowledgeWarning
+  'warning.editNote': EditWarningNote
 }
 
 export type PayloadOf<T extends IntentType = IntentType> = IntentPayloads[T]
@@ -688,6 +718,7 @@ export type OpeningIntent = Intent<Extract<IntentType, `opening.${string}`>>
 export type DesignIntent = Intent<Extract<IntentType, `design.${string}`>>
 export type FloorIntent = Intent<Extract<IntentType, `floor.${string}`>>
 export type ViewIntent = Intent<Extract<IntentType, `view.${string}`>>
+export type WarningIntent = Intent<Extract<IntentType, `warning.${string}`>>
 
 /**
  * The IDs each Intent consumes, in order — the contract between the caller that
@@ -761,6 +792,8 @@ export const INTENT_ID_ORDER: Record<IntentType, readonly string[]> = {
   'view.rename': [],
   'view.delete': [],
   'view.setShowPlanImage': [],
+  'warning.acknowledge': ['acknowledgementId'],
+  'warning.editNote': [],
 }
 
 /**
