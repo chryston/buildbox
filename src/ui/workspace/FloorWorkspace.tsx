@@ -24,7 +24,7 @@ import type { OpeningPreview } from '../../drawing'
 import type { Point2, Project, WallClassification } from '../../domain'
 import { nextOpeningLabel, summarizeFloorDependencies } from '../../domain'
 import type { SessionAsset } from '../../session'
-import type { IntentType, PayloadOf } from '../../edit'
+import type { DependencyReview, IntentType, PayloadOf } from '../../edit'
 import {
   usePlanImageSrc,
   useSaveStatus,
@@ -47,6 +47,8 @@ import {
 import { CALIBRATION_REQUIRED_HINT, WORKSPACE_TOOLS, floorNeedsCalibration, toolIsGated, toolTitle } from './toolbarRegistry'
 import { WallDraftOverlay, emptyWallDraft } from './wall/WallDraftOverlay'
 import { OpeningDraftOverlay } from './opening/OpeningDraftOverlay'
+import { OpeningInspector } from './opening/OpeningInspector'
+import { DeleteWallReviewDialog } from './wall/DeleteWallReviewDialog'
 import { emptyOpeningDraft, openingAim } from './opening/openingDraft'
 import type { OpeningAim, OpeningDraft } from './opening/openingDraft'
 import { DEFAULT_OPENING_PRESET_ID, openingPresetRow, resolveOpeningPreset } from './opening/openingPresets'
@@ -195,6 +197,26 @@ export function FloorWorkspace(): ReactNode {
     () => usableIntervals(project.existingModel.walls, project.existingModel.wallJunctions),
     [project.existingModel.walls, project.existingModel.wallJunctions],
   )
+  /**
+   * The Opening the inspector edits, with the two numbers its distance toggle needs and cannot
+   * derive from the stored record alone: the far jamb the Plan View actually drew (an arc length
+   * on an arc Wall, where the stored `width` stays the chord) and the host's own reference-line
+   * length, which is what `Distance from end` counts back from (#65 §11).
+   */
+  const selectedOpening = useMemo(() => {
+    if (openingSelection === null) return null
+    const opening = floorOpenings.find((each) => each.id === openingSelection) ?? null
+    if (opening === null) return null
+    const host = project.existingModel.walls.find((wall) => wall.id === opening.hostWallId) ?? null
+    if (host === null) return null
+    const symbol = openingLayer.flatMap((wall) => wall.symbols).find((each) => each.id === opening.id) ?? null
+    return {
+      opening,
+      host,
+      end: symbol?.end ?? opening.start + opening.width,
+      hostLength: usableByWall.get(host.id)?.length ?? 0,
+    }
+  }, [openingSelection, floorOpenings, project.existingModel.walls, openingLayer, usableByWall])
   const angleSnap = useWorkspace((state) => state.snapSettings.angle)
   const snapSettings = useWorkspace((state) => state.snapSettings)
   /** The kinds the nine `Snaps ▾` rows switch on, recomputed only when a row changes. */
@@ -370,6 +392,33 @@ export function FloorWorkspace(): ReactNode {
   const openingPreview: OpeningPreview | null = openingAimNow === null
     ? null
     : { symbols: [openingAimNow.symbol], blocked: !openingAimNow.fits, gap: openingAimNow.violated }
+
+  /**
+   * The delete a Wall with Openings has to be answered before it runs (#65 §8). The button asks
+   * the question by asking the same kernel the Intent consults what it would take with it, and
+   * the ids the answer lists are what the confirmed Intent carries back — so an Opening added
+   * after the question was asked makes the answer stale, and the Intent is refused rather than
+   * deleting something nobody agreed to.
+   */
+  const [deleteReview, setDeleteReview] = useState<DependencyReview | null>(null)
+  const deleteWall = (wallId: string): void => {
+    const { review } = services.intent.preview(project, services.intent.build('wall.delete', { wallId }))
+    if (review !== null) {
+      setDeleteReview(review)
+      return
+    }
+    send('wall.delete', { wallId })
+    selectWall(null)
+  }
+  const confirmDeleteWall = (): void => {
+    if (deleteReview === null) return
+    send('wall.delete', {
+      wallId: deleteReview.wallId,
+      openings: deleteReview.openings.map((opening) => opening.id),
+    })
+    setDeleteReview(null)
+    selectWall(null)
+  }
 
   const selected = items.find((item) => item.id === selection) ?? null
   const selectedDesign = selected === null
@@ -887,7 +936,26 @@ export function FloorWorkspace(): ReactNode {
           />
         }
         inspector={
-          selectedWall === null
+          selectedOpening !== null
+            ? <OpeningInspector
+                opening={selectedOpening.opening}
+                host={selectedOpening.host}
+                end={selectedOpening.end}
+                hostLength={selectedOpening.hostLength}
+                unit={project.preferences.displayUnit}
+                precision={project.preferences.displayPrecision}
+                onRename={(label) => send('opening.rename', { openingId: selectedOpening.opening.id, label })}
+                onSetWidth={(width) => send('opening.setWidth', { openingId: selectedOpening.opening.id, width })}
+                onSetStart={(start) => send('opening.setStart', { openingId: selectedOpening.opening.id, start })}
+                onFlipHinge={() => send('opening.flipHinge', { openingId: selectedOpening.opening.id })}
+                onFlipSwing={() => send('opening.flipSwing', { openingId: selectedOpening.opening.id })}
+                onSelectHost={() => selectWall(selectedOpening.opening.hostWallId)}
+                onDelete={() => {
+                  send('opening.delete', { openingId: selectedOpening.opening.id })
+                  selectOpening(null)
+                }}
+              />
+            : selectedWall === null
             ? <SelectionInspector
             item={selected}
             bounds={selection === null || derivedFloor === null
@@ -931,10 +999,7 @@ export function FloorWorkspace(): ReactNode {
                 onOffset={(distance, side) => send('wall.offset', { wallId: selectedWall.wall.id, distance, side })}
                 onSplit={() => send('wall.split', { wallId: selectedWall.wall.id, at: selectedWall.derived.length / 2 })}
                 onMerge={(otherId) => send('wall.merge', { wallIds: [selectedWall.wall.id, otherId] as const })}
-                onDelete={() => {
-                  send('wall.delete', { wallId: selectedWall.wall.id })
-                  selectWall(null)
-                }}
+                onDelete={() => deleteWall(selectedWall.wall.id)}
               />
         }
         canvas={
@@ -1061,6 +1126,13 @@ export function FloorWorkspace(): ReactNode {
           </span>
         ) : null}
       />
+      {deleteReview !== null && (
+        <DeleteWallReviewDialog
+          review={deleteReview}
+          onConfirm={confirmDeleteWall}
+          onCancel={() => setDeleteReview(null)}
+        />
+      )}
       {pendingDistancePx !== null && floorId !== null && (
         <ScaleCalibrationModal
           distancePx={pendingDistancePx}

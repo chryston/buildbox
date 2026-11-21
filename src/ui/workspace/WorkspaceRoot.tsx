@@ -21,7 +21,7 @@ import {
 } from 'react'
 import type { ReactNode } from 'react'
 import type { Project } from '../../domain'
-import type { Intent, IntentType, PayloadOf } from '../../edit'
+import type { DependencyReview, Intent, IntentType, PayloadOf } from '../../edit'
 import type { ProjectSession, SaveState, SessionAsset } from '../../session'
 import type { PlanImageMediaType } from '../../domain'
 import { workspaceStore } from './workspaceStore'
@@ -31,6 +31,12 @@ import type { ExportPort } from './export/port'
 /** An Intent, fully formed; `app` builds it from `edit`'s label table and id order. */
 export interface WorkspaceIntentBuilder {
   build<T extends IntentType>(type: T, payload: PayloadOf<T>): Intent
+  /**
+   * What an Intent would take with it, without applying it (#65 §8). The workspace asks before
+   * a delete that has to be answered first; `previewIntent` itself is an `edit` value, and the
+   * workspace reaches `edit` only through what `app` hands it.
+   */
+  preview(project: Project, intent: Intent): { review: DependencyReview | null }
 }
 
 /** The object-URL cache behind a Plan Image: `urlFor` is `null` until the bytes arrive. */

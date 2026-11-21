@@ -19,8 +19,8 @@
  * (`src/ui/workspace`), which builds its own Intents against the same session.
  */
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
-import type { CabinetMaterialId, DrawerConfig, ElementType, GlobalSettings } from '../../domain'
-import type { Intent, IntentType, PayloadOf } from '../../edit'
+import type { CabinetMaterialId, DrawerConfig, ElementType, GlobalSettings, Project } from '../../domain'
+import type { DependencyReview, Intent, IntentType, PayloadOf } from '../../edit'
 import type { ProjectSession, SaveState, SessionAsset } from '../../session'
 import { useProject, useProjectSelector, useSession } from './useProject'
 import { useUi } from './uiStore'
@@ -33,6 +33,13 @@ import { projectUnits } from './projectView'
  */
 export interface IntentBuilder {
   build<T extends IntentType>(type: T, payload: PayloadOf<T>): Intent
+  /**
+   * What an Intent would take with it, without applying it (#65 §8). The delete of a Wall with
+   * Openings has to be answered before it runs, and the answer is the same report the Intent
+   * itself consults — so the question is asked of `app`, which is the only place `edit`'s values
+   * may be read.
+   */
+  preview(project: Project, intent: Intent): { review: DependencyReview | null }
 }
 
 /** The object-URL cache behind a Plan Image: `urlFor` is `null` until the bytes have been read. */
