@@ -699,6 +699,35 @@ export const STRINGS = {
   /** Both upload refusals say what went wrong and what to do instead. */
   imageInvalidFile: 'Please choose a valid image file.',
   imageTooLarge: 'A Plan Image can be at most 50 MB.',
+  // The Shape editor's tabs and the Opening picker (#46, #47, #66 §17).
+  tabEdges: 'Edges',
+  tabMeasurements: 'Measurements',
+  cabinetShapeNote: 'Size comes from the cabinet construction',
+  shapes: 'Shapes',
+  itemFootprint: 'Item Footprint',
+  presetGroupDoors: 'Doors',
+  presetGroupWindows: 'Windows',
+  presetGroupOther: 'Other',
+  /** The picker's `<optgroup>` label. The group value is an identifier; this is its copy. */
+  presetGroupLabel(group: string): string {
+    return group === 'Windows' ? STRINGS.presetGroupWindows : group === 'Other' ? STRINGS.presetGroupOther : STRINGS.presetGroupDoors
+  },
+  householdShelterDoor: 'Household shelter door',
+  removedWallSection: 'Removed wall section',
+  /** The path-drawing hints: the tool's name, then what the next click does. */
+  draftFirstPoint(label: string): string {
+    return `${label} · click to set the first point · Esc cancels`
+  },
+  draftBulge(label: string): string {
+    return `${label} · click the bulge point · Esc cancels`
+  },
+  draftPlace(label: string): string {
+    return `${label} · click to place · click start to close · Esc cancels`
+  },
+  /** The preset-placement hint carries the size a click will produce, in the display unit. */
+  placingPreset(name: string, width: string, depth: string, unit: string): string {
+    return `Placing ${name} — drag a box, or click for ${width} × ${depth} ${unit}`
+  },
 } as const
 
 /**

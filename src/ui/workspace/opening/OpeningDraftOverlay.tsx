@@ -61,7 +61,7 @@ function PresetPicker({ draft, onDraft, unit, precision }: {
           onChange={(event) => onDraft(withPreset(draft, event.target.value))}
         >
           {OPENING_PRESET_GROUPS.map((section) => (
-            <optgroup key={section.group} label={section.group}>
+            <optgroup key={section.group} label={STRINGS.presetGroupLabel(section.group)}>
               {section.rows.map((entry) => (
                 <option key={entry.id} value={entry.id}>{openingPresetLabel(entry, num, unit)}</option>
               ))}

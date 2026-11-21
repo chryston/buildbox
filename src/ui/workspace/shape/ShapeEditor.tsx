@@ -16,6 +16,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { designFootprintSize, footprintAsPath, PRESET_NAMES, rectangleFootprint } from '../../../domain'
+import { STRINGS } from '../../strings'
 import type { ItemDesign, ItemFootprint } from '../../../domain'
 import type { PresetKind, Pt, Segment } from '../../../derive'
 import {
@@ -110,13 +111,13 @@ export interface ShapeEditorProps {
 }
 
 const TABS: readonly { id: ShapeTabName; label: string }[] = [
-  { id: 'shape', label: 'Shape' },
-  { id: 'edges', label: 'Edges' },
-  { id: 'measurements', label: 'Measurements' },
+  { id: 'shape', label: STRINGS.shape },
+  { id: 'edges', label: STRINGS.tabEdges },
+  { id: 'measurements', label: STRINGS.tabMeasurements },
 ]
 
 /** What Item Detail says about a cabinet's size, in the one place both readings of it live. */
-export const CABINET_SHAPE_NOTE = 'Size comes from the cabinet construction'
+export const CABINET_SHAPE_NOTE = STRINGS.cabinetShapeNote
 
 const IDLE = (footprint: ItemFootprint): ShapeDraft => ({ proposal: { state: 'idle' }, lastValid: footprint })
 
@@ -453,12 +454,12 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
    * One line, always the same height, because the bar must never resize the canvas.
    */
   const draftHint = (): string => {
-    const label = DRAW_TOOLS.find((each) => each.id === (pathDraft?.tool ?? drawTool))?.label ?? 'Line'
-    if (pathDraft === null) return `${label} · click to set the first point · Esc cancels`
+    const label = DRAW_TOOLS.find((each) => each.id === (pathDraft?.tool ?? drawTool))?.label ?? STRINGS.line
+    if (pathDraft === null) return STRINGS.draftFirstPoint(label)
     const last = pathDraft.placed[pathDraft.placed.length - 1]
     if (pathDraft.pendingClose || (last !== undefined && last.kind !== 'line' && pathDraft.bulge === null))
-      return `${label} · click the bulge point · Esc cancels`
-    return `${label} · click to place · click start to close · Esc cancels`
+      return STRINGS.draftBulge(label)
+    return STRINGS.draftPlace(label)
   }
 
   const defaults = placementDefaults(design.kind === 'generic' ? design.footprint : null)
@@ -536,7 +537,7 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
       {!inspector && (
         <div className="bb-shape-toolbar" data-testid="shape-toolbar">
           <div className="bb-workspace-toolbar-group">
-            <ToolbarMenu label="Shapes" testId="shapes-menu" disabled={isCabinet}>
+            <ToolbarMenu label={STRINGS.shapes} testId="shapes-menu" disabled={isCabinet}>
               <ShapesGallery
                 current={shown.kind === 'preset' ? shown.preset.kind : null}
                 currentPath={shown.kind === 'path'}
@@ -550,7 +551,7 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
           </div>
           {placing !== null && (
             <p className="bb-shape-placing" data-testid="shape-placing">
-              {`Placing ${PRESET_NAMES[placing]} — drag a box, or click for ${num(defaults.size.width)} × ${num(defaults.size.depth)} ${format.unit}`}
+              {STRINGS.placingPreset(PRESET_NAMES[placing], num(defaults.size.width), num(defaults.size.depth), format.unit)}
               <button
                 type="button"
                 data-testid="shape-placing-cancel"
@@ -601,7 +602,7 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
           {isCabinet && (
             <p className="bb-shape-rail-note" data-testid="shape-editor-note">{CABINET_SHAPE_NOTE}</p>
           )}
-          <div className="bb-shape-tabs" role="tablist" aria-label="Item Footprint">
+          <div className="bb-shape-tabs" role="tablist" aria-label={STRINGS.itemFootprint}>
             {TABS.map((each) => (
               <button
                 key={each.id}

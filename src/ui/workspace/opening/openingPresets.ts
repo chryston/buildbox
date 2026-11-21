@@ -12,6 +12,7 @@
  * *new* door starts with and nothing that is already in a Wall (#63 §3).
  */
 import { getPresetEntry } from '../../../domain'
+import { STRINGS } from '../../strings'
 import type { OpeningKind, OpeningSwing } from '../../../domain'
 
 /** The one built-in pack (#63). */
@@ -86,7 +87,7 @@ function shelterDoorRow(): OpeningPresetRow {
   return {
     id: 'shelter.household.door',
     group: 'Doors',
-    name: 'Household shelter door',
+    name: STRINGS.householdShelterDoor,
     kind: 'door',
     swing: 'left',
     width: entry.values.doorWidth,
@@ -104,7 +105,7 @@ function shelterDoorRow(): OpeningPresetRow {
 const REMOVED_ROW: OpeningPresetRow = {
   id: 'other.removed-section',
   group: 'Other',
-  name: 'Removed wall section',
+  name: STRINGS.removedWallSection,
   kind: 'removed_section',
   swing: undefined,
   width: 900,
