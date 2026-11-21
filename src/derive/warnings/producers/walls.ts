@@ -24,7 +24,6 @@
  * clicking once, not a warning.
  */
 import {
-  classifyPoint,
   intersectSegments,
   nearestOnSegment,
   overlap,
@@ -34,7 +33,7 @@ import {
   segmentStart,
   spanOf,
 } from '../../../geometry'
-import type { ClosedPath, WallRefLine } from '../../../geometry'
+import type { ClosedPath, Pt, WallRefLine } from '../../../geometry'
 import { compareCodePoints } from '../../../lib'
 import type { WarningCandidate, WarningFloor, WarningProducer, WarningWall } from '../types'
 
@@ -46,10 +45,11 @@ import type { WarningCandidate, WarningFloor, WarningProducer, WarningWall } fro
  */
 const MIN_OVERLAP_AREA_MM2 = 0.01
 
-/** One pair of Walls whose tidied footprints overlap. */
+/** One pair of Walls whose tidied footprints overlap, and the region they overlap in. */
 interface WallPair {
   readonly first: WarningWall
   readonly second: WarningWall
+  readonly region: readonly ClosedPath[]
 }
 
 /**
@@ -64,7 +64,9 @@ const overlappingPairs = (floor: WarningFloor): WallPair[] => {
   for (let i = 0; i < walls.length; i += 1) {
     for (let j = i + 1; j < walls.length; j += 1) {
       const shared = overlap(walls[i].outline, walls[j].outline)
-      if (shared.kind === 'positive' && shared.area > MIN_OVERLAP_AREA_MM2) pairs.push({ first: walls[i], second: walls[j] })
+      if (shared.kind === 'positive' && shared.area > MIN_OVERLAP_AREA_MM2) {
+        pairs.push({ first: walls[i], second: walls[j], region: shared.region })
+      }
     }
   }
   return pairs
@@ -85,42 +87,43 @@ const refLinesMeetAtAPoint = (a: WallRefLine, b: WallRefLine): boolean => {
 }
 
 /**
- * How much of a reference line lies inside a footprint, in millimetres (#66 §8, §9).
+ * How far the two footprints run together, measured along the primary's reference line (#66 §8, §9).
  *
- * The same number answers both producers: for a crossing it is the depth of the intrusion, for
- * a collinear overlap it is the length they run together. The line is cut at every place it
- * meets the footprint's outline and each piece is classified at its midpoint, so an arc is
- * measured along its own length and a line that passes through, out, and back in again is
- * counted for both stretches.
+ * The overlap region is projected onto the primary's reference line and its extent there is the
+ * answer. For a crossing that is the depth of the intrusion — the same number as the length of
+ * the primary's reference line inside the other footprint, which is how §8 words it — and for a
+ * collinear or parallel run it is the length they share, which is how §9 words it. The two
+ * wordings part company only for a parallel pair whose reference lines never enter one another's
+ * band, where the §8 reading would print `0 mm`; the projection prints the run, which is the
+ * number the sentence is about.
  *
- * A piece lying exactly *on* the outline counts. A Wall whose reference line coincides with the
- * edge of another Wall's band — the same justification, the same thickness — is the case that
- * makes that necessary, and it cannot be a false positive here: the pair only reaches this
- * function once their footprints overlap with positive area.
+ * The region is sampled at three points an edge rather than taken vertex to vertex, so an arc's
+ * bulge is measured along its own curve, and each sample is snapped to the nearest point of the
+ * reference line, so an arc primary is measured along its own sweep rather than along its chord.
  */
-const refLengthInside = (line: WallRefLine, region: ClosedPath): number => {
+const overlapExtentAlongRef = (line: WallRefLine, region: readonly ClosedPath[]): number => {
   const { segment, from } = refSegment(line)
   const span = spanOf(segment, from)
-  // Reference parameters are not lengths: an arc's parameter runs over its sweep in radians, so
-  // a piece is measured as its share of the whole reference length.
-  const perUnit = span.hi === span.lo ? 0 : refLength(line) / (span.hi - span.lo)
-  const marks: number[] = [span.lo, span.hi]
-  region.segments.forEach((edge, index) => {
-    const meeting = intersectSegments(segment, from, edge, segmentStart(region, index))
-    meeting.crossings.forEach((cross) => marks.push(nearestOnSegment(cross.at, segment, from).t))
-    // `a` is the stretch in the first segment's own parameter — the reference line's here —
-    // so a reference line running along an edge of the footprint is cut at both its ends.
-    meeting.overlaps.forEach((stretch) => marks.push(stretch.a[0], stretch.a[1]))
-  })
-  const cuts = marks.filter((t) => t >= span.lo && t <= span.hi).sort((low, high) => low - high)
-  let inside = 0
-  for (let i = 1; i < cuts.length; i += 1) {
-    const width = cuts[i] - cuts[i - 1]
-    if (width <= 1e-9) continue
-    const middle = classifyPoint(pointOn(segment, from, (cuts[i] + cuts[i - 1]) / 2), region)
-    if (middle !== 'outside') inside += width * perUnit
+  if (span.hi === span.lo) return 0
+  // Reference parameters are not lengths: an arc's parameter runs over its sweep in radians.
+  const perUnit = refLength(line) / (span.hi - span.lo)
+  let lo = Number.POSITIVE_INFINITY
+  let hi = Number.NEGATIVE_INFINITY
+  const sample = (point: Pt): void => {
+    const near = nearestOnSegment(point, segment, from)
+    if (near.t < lo) lo = near.t
+    if (near.t > hi) hi = near.t
   }
-  return inside
+  region.forEach((loop) => {
+    loop.segments.forEach((edge, index) => {
+      const edgeFrom = segmentStart(loop, index)
+      const edgeSpan = spanOf(edge, edgeFrom)
+      sample(pointOn(edge, edgeFrom, edgeSpan.lo))
+      sample(pointOn(edge, edgeFrom, (edgeSpan.lo + edgeSpan.hi) / 2))
+      sample(pointOn(edge, edgeFrom, edgeSpan.hi))
+    })
+  })
+  return hi > lo ? (hi - lo) * perUnit : 0
 }
 
 /**
@@ -167,7 +170,7 @@ const candidateOf = (type: string, pair: WallPair, floor: WarningFloor): Warning
     compareCodePoints(pair.first.ref, pair.second.ref) <= 0 ? [pair.first, pair.second] : [pair.second, pair.first]
   // A tenth of a millimetre: the resolution a builder reads off a tape. The engine reports a
   // measurement, not a sentence — the strip and the CSV each format it for their own reader.
-  const mm = Math.round(refLengthInside(primary.line, other.outline) * 10) / 10
+  const mm = Math.round(overlapExtentAlongRef(primary.line, pair.region) * 10) / 10
   return {
     subjects: [
       { type: 'wall', id: primary.id },
