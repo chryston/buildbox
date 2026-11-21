@@ -267,6 +267,31 @@ export function effectiveFloor(
 }
 
 /**
+ * What the user calls each Placed Item of one Floor (#67 §16).
+ *
+ * `Base 600 #2`: a Placed Item owns no name, so two of the same Design on one Floor are told apart
+ * by the order they were placed. A Design with one item on this Floor gets no ordinal, because
+ * there is nothing to tell apart. The warnings strip, the inspector and the Placed Items table
+ * (#68) all read an item by this one label, so they cannot disagree about which `Base 600` a row
+ * or a warning means.
+ */
+export const placementLabels = (placements: readonly DerivedPlacement[]): Map<EntityId, string> => {
+  const perDesign = new Map<EntityId, number>()
+  for (const placement of placements) perDesign.set(placement.designId, (perDesign.get(placement.designId) ?? 0) + 1)
+  const seen = new Map<EntityId, number>()
+  const labels = new Map<EntityId, string>()
+  for (const placement of placements) {
+    const ordinal = (seen.get(placement.designId) ?? 0) + 1
+    seen.set(placement.designId, ordinal)
+    labels.set(
+      placement.id,
+      (perDesign.get(placement.designId) ?? 1) > 1 ? `${placement.label} #${String(ordinal)}` : placement.label,
+    )
+  }
+  return labels
+}
+
+/**
  * The cabinet's `SceneLayout`: the whole Floor's scene, through `cabinet`'s own engine.
  *
  * The Item Detail's cabinet canvas has always drawn every cabinet on its Floor and marked

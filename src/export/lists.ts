@@ -16,13 +16,14 @@
  * before using the file. The dialog says so before the download (export contract §9), and two
  * tables in one ZIP is what buys the manifest.
  */
-import { effectiveFloor, quantities } from '../derive'
+import { effectiveFloor, quantities, tables as deriveTables } from '../derive'
 import type { QuantityScope } from '../derive'
 
 import { sha256Hex } from '../lib'
 import { TABLES } from './csv/tables'
 import type { TableId } from './csv/tables'
 import { writeCsv } from './csv/write'
+import type { CsvRow } from './csv/write'
 import { fileDate } from './format'
 import { provenanceOf } from './provenance'
 import { describeScope } from './scope'
@@ -39,8 +40,7 @@ export interface ListsSummary {
   /** The plain-words scope statement, updated live. */
   readonly statement: string
   /** Rows each table would hold for this scope; `0` is what the dialog calls `0 rows`. */
-  readonly items: number
-  readonly cutList: number
+  readonly rows: Readonly<Record<TableId, number>>
   /** Whether a design with a cut list is in scope at all, which decides the Cut List checkbox. */
   readonly cutListCapable: boolean
 }
@@ -66,10 +66,20 @@ function cutListCapable(project: ExportSnapshot['project'], revision: number, sc
 /** The scope as the dialog reads it, with the row counts beside each table. */
 export function listsSummary(snapshot: ExportSnapshot, scope: QuantityScope): ListsSummary {
   const counted = quantities(snapshot.project, snapshot.revision, scope)
+  // The five #68 tables are derived here for their row counts alone: a count never depends on the
+  // sentence a Warnings row carries, so no copy is rendered and no `ui` module is reached.
+  const at = deriveTables(snapshot.project, scope, { warningMessages: null })
   return {
     statement: describeScope(scope, snapshot.project),
-    items: counted.items.length,
-    cutList: counted.cuts.length,
+    rows: {
+      items: counted.items.length,
+      'cut-list': counted.cuts.length,
+      rooms: at.rooms.length,
+      walls: at.walls.length,
+      openings: at.openings.length,
+      'placed-items': at.placedItems.length,
+      warnings: at.warnings.length,
+    },
     cutListCapable: cutListCapable(snapshot.project, snapshot.revision, scope),
   }
 }
@@ -90,7 +100,10 @@ function orderedTables(tables: readonly TableId[]): TableId[] {
 export async function exportLists(
   snapshot: ExportSnapshot,
   recipe: ListsRecipe,
-  deps: Pick<ExportDeps, 'clock' | 'buildboxVersion' | 'contractVersion' | 'unsavedChanges' | 'onProgress'>,
+  deps: Pick<
+    ExportDeps,
+    'clock' | 'buildboxVersion' | 'contractVersion' | 'unsavedChanges' | 'onProgress' | 'warningMessages'
+  >,
 ): Promise<ExportResult> {
   const provenance = provenanceOf(snapshot, recipe, deps)
   const date = fileDate(deps.clock.localDate())
@@ -99,11 +112,29 @@ export async function exportLists(
   if (tables.length === 0) {
     return { ok: false, failures: [{ output: name, reason: 'empty-tables' }] }
   }
+  if (tables.includes('warnings') && deps.warningMessages === undefined) {
+    // An empty `message` column would be a Warnings List that says nothing is wrong.
+    throw new TypeError('exportLists needs deps.warningMessages to write the Warnings List')
+  }
 
   const counted = quantities(snapshot.project, snapshot.revision, recipe.scope)
+  // The tables this function can write, by name. A `TableId` added to the contract before its rows
+  // are wired up here fails by name: the `id === 'items' ? items : cuts` this replaces would have
+  // written Cut List rows into a `rooms.csv` the moment a third table appeared (#68).
+  const rowsOf: Partial<Record<TableId, readonly CsvRow[]>> = { items: counted.items, 'cut-list': counted.cuts }
+  if (tables.some((id) => id !== 'items' && id !== 'cut-list')) {
+    const at = deriveTables(snapshot.project, recipe.scope, { warningMessages: deps.warningMessages ?? null })
+    rowsOf.rooms = at.rooms
+    rowsOf.walls = at.walls
+    rowsOf.openings = at.openings
+    rowsOf['placed-items'] = at.placedItems
+    rowsOf.warnings = at.warnings
+  }
   const files: ExportFile[] = []
   const entries: ManifestFile[] = []
   for (const [index, id] of tables.entries()) {
+    const rows = rowsOf[id]
+    if (rows === undefined) throw new TypeError(`exportLists has no rows for the "${id}" table`)
     const fileName = listFileName(name, id, date)
     deps.onProgress?.({
       stage: 'file',
@@ -111,7 +142,7 @@ export async function exportLists(
       total: tables.length,
       label: fileName,
     })
-    const bytes = writeCsv(TABLES[id], id === 'items' ? counted.items : counted.cuts)
+    const bytes = writeCsv(TABLES[id], rows)
     files.push({ name: fileName, mediaType: CSV_MEDIA_TYPE, bytes })
     entries.push({
       path: fileName,

@@ -9,10 +9,11 @@
 import { describe, expect, test } from 'vitest'
 import { sha256Hex, unzipEntries } from '../lib'
 import type { ZipLimits } from '../lib'
-import { basicProject } from '../derive/testing'
+import { warningMessages } from '../derive'
 import type { QuantityScope } from '../derive'
-import type { Project } from '../domain'
-import { CUT_LIST_TABLE, ITEMS_TABLE, headerLine } from './csv/tables'
+import { basicProject } from '../derive/testing'
+import type { Project, Wall } from '../domain'
+import { CUT_LIST_TABLE, ITEMS_TABLE, TABLES, headerLine } from './csv/tables'
 import { exportLists, listsSummary } from './lists'
 import { parseCsv } from './testing'
 import type { ListsRecipe } from './types'
@@ -50,6 +51,35 @@ function scopeFor(over: Partial<QuantityScope> = {}): QuantityScope {
 const recipeOf = (tables: ListsRecipe['tables'], over: Partial<QuantityScope> = {}): ListsRecipe => ({
   tables,
   scope: scopeFor(over),
+})
+
+const wall = (id: string, ref: string, x1: number, y1: number, x2: number, y2: number): Wall => ({
+  id,
+  ref,
+  floorId: 'floor-main',
+  line: { kind: 'line', start: { x: x1, y: y1 }, end: { x: x2, y: y2 } },
+  thickness: 100,
+  justification: 'centre',
+  baseElevation: 0,
+  height: 2600,
+})
+
+/** The basic Project with two Walls crossing each other: Walls rows and one warning to write. */
+const crossing: Project = {
+  ...project,
+  existingModel: {
+    ...project.existingModel,
+    walls: [wall('wall-a', 'W-A', 0, 0, 4000, 0), wall('wall-b', 'W-B', 2000, -500, 2000, 500)],
+  },
+}
+
+/** Sentences a reader could not mistake for the app's: each names the key it was built from. */
+const sentences = (at: Project, scope: QuantityScope): Record<string, string> =>
+  warningMessages(at, scope, (messageKey) => `sentence:${messageKey}`)
+
+const depsAt = (at: Project, scope: QuantityScope) => ({
+  ...deps(),
+  warningMessages: sentences(at, scope),
 })
 
 /** The archive as a reader opens it: name → bytes. */
@@ -179,14 +209,118 @@ describe('exportLists', () => {
   })
 })
 
+/**
+ * The five tables of #68 through the packaging #62 built: the name on each file, the ZIP that holds
+ * them together, the header a narrowed scope still writes, and the fact that none of it is written
+ * into the Project. What the rows themselves say is `src/test/tablesGolden.test.ts`'s business.
+ */
+describe('the five tables of #68', () => {
+  const NEW = ['rooms', 'walls', 'openings', 'placed-items', 'warnings'] as const
+
+  test('each table alone is a CSV named after its own contract id (#68 criterion 7)', async () => {
+    for (const id of NEW) {
+      const recipe = recipeOf([id])
+      const result = await exportLists({ project: crossing, revision: 3 }, recipe, depsAt(crossing, recipe.scope))
+      if (!result.ok || result.kind !== 'single') throw new Error(`"${id}" alone should give one file`)
+      expect(result.file.name).toBe(`Maple-Street-Kitchen_${id}_20261120.csv`)
+      expect(result.file.mediaType).toBe('text/csv')
+      const parsed = parseCsv(result.file.bytes)
+      expect(parsed.bom).toBe(true)
+      expect(parsed.rows[0]).toEqual(headerLine(TABLES[id]).split(','))
+    }
+  })
+
+  test('the Warnings List writes the sentence it was given, never its own English (#68 criterion 5)', async () => {
+    const recipe = recipeOf(['warnings'])
+    const result = await exportLists({ project: crossing, revision: 3 }, recipe, depsAt(crossing, recipe.scope))
+    if (!result.ok || result.kind !== 'single') throw new Error('one table should give one file')
+    const [, ...rows] = parseCsv(result.file.bytes).rows
+    expect(rows).toHaveLength(1)
+    // `wall_crossing` is the warning two Walls crossing each other raise, and the column holds the
+    // caller's sentence for it — the strip's copy, which `export` may not read and may not rewrite.
+    expect(rows[0]?.[5]).toBe('wall_crossing')
+    expect(rows[0]?.[11]).toBe('sentence:wall_crossing')
+    expect(rows[0]?.[10]).toBe('100')
+  })
+
+  test('a Warnings List nobody gave sentences to is refused, not written with an empty column', async () => {
+    await expect(exportLists({ project: crossing, revision: 3 }, recipeOf(['warnings']), deps())).rejects.toThrow(
+      /warningMessages/,
+    )
+  })
+
+  test('every table checked is one ZIP of seven CSVs and the manifest, in the contract order', async () => {
+    const recipe = recipeOf(['warnings', 'items', 'rooms', 'cut-list', 'walls', 'openings', 'placed-items'])
+    const result = await exportLists({ project: crossing, revision: 3 }, recipe, depsAt(crossing, recipe.scope))
+    if (!result.ok || result.kind !== 'archive') throw new Error('seven tables should give an archive')
+    expect(result.archive.name).toBe('Maple-Street-Kitchen_lists_20261120.zip')
+    const entries = entriesOf(result.archive.bytes)
+    // The recipe's order is the dialog's; the ZIP's is the contract's, whatever was clicked first.
+    expect([...entries.keys()]).toEqual([
+      'Maple-Street-Kitchen_items_20261120.csv',
+      'Maple-Street-Kitchen_cut-list_20261120.csv',
+      'Maple-Street-Kitchen_rooms_20261120.csv',
+      'Maple-Street-Kitchen_walls_20261120.csv',
+      'Maple-Street-Kitchen_openings_20261120.csv',
+      'Maple-Street-Kitchen_placed-items_20261120.csv',
+      'Maple-Street-Kitchen_warnings_20261120.csv',
+      'manifest.json',
+    ])
+    const manifest = manifestOf(result.archive.bytes)
+    expect(manifest.files.map((file) => [file.path, file.kind])).toEqual([
+      ...[...entries.keys()].filter((name) => name !== 'manifest.json').map((name) => [name, 'list']),
+      ['manifest.json', 'manifest'],
+    ])
+    expect(manifest.recipe).toEqual(recipe)
+  })
+
+  test('a scope with nothing in it writes a header and nothing else, beside every table checked', async () => {
+    // #68 criterion 7: an empty table is an answer, not a failure, so the file exists and says so.
+    // The Project has no warning to ignore the narrowed scope with — the Warnings List is scoped by
+    // Floor and Design Option only, so no emptying of States or Layers would ever empty it.
+    const scope = scopeFor({ renovationStates: [] })
+    const recipe: ListsRecipe = { tables: [...NEW], scope }
+    const result = await exportLists({ project, revision: 3 }, recipe, depsAt(project, scope))
+    if (!result.ok || result.kind !== 'archive') throw new Error('five tables should give an archive')
+    const entries = entriesOf(result.archive.bytes)
+    for (const id of NEW) {
+      const bytes = entries.get(`Maple-Street-Kitchen_${id}_20261120.csv`)
+      if (bytes === undefined) throw new Error(`"${id}" was left out of the archive`)
+      // `ignoreBOM` so the byte order mark is part of what is compared: it is the first thing a
+      // spreadsheet reads and the reason Excel opens the file as UTF-8 at all.
+      expect(new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes)).toBe(`\uFEFF${headerLine(TABLES[id])}\r\n`)
+    }
+  })
+
+  test('exporting the five tables changes nothing about the Project or its revision (#68 criterion 10)', async () => {
+    // Frozen all the way down: a writer that tried to normalise a Wall, sort an array in place or
+    // stamp a revision would throw here rather than leave a Project the session never intended.
+    const frozen = JSON.parse(JSON.stringify(crossing)) as Project
+    const deepFreeze = (value: unknown): unknown => {
+      if (value !== null && typeof value === 'object') {
+        for (const child of Object.values(value)) deepFreeze(child)
+        return Object.freeze(value)
+      }
+      return value
+    }
+    deepFreeze(frozen)
+    const recipe = recipeOf(['items', 'cut-list', ...NEW])
+    const result = await exportLists({ project: frozen, revision: 12 }, recipe, depsAt(frozen, recipe.scope))
+    expect(result.ok).toBe(true)
+    expect(frozen).toEqual(crossing)
+    // The snapshot is what the session handed over, unchanged: no revision bump, no new history.
+    expect(recipe.scope).toEqual(scopeFor())
+  })
+})
+
 describe('listsSummary', () => {
   test('names the scope and counts the rows each table would hold', () => {
     const summary = listsSummary({ project, revision: 3 }, scopeFor())
     expect(summary.statement).toBe(
       'All Floors · Existing only · Existing, Demolition, Proposed · all layers incl. Unlayered',
     )
-    expect(summary.items).toBe(3)
-    expect(summary.cutList).toBeGreaterThan(0)
+    expect(summary.rows.items).toBe(3)
+    expect(summary.rows['cut-list']).toBeGreaterThan(0)
     expect(summary.cutListCapable).toBe(true)
   })
 
@@ -197,7 +331,26 @@ describe('listsSummary', () => {
     }
     const summary = listsSummary({ project: empty, revision: 1 }, scopeFor())
     expect(summary.cutListCapable).toBe(false)
-    expect(summary.items).toBe(0)
-    expect(summary.cutList).toBe(0)
+    expect(summary.rows.items).toBe(0)
+    expect(summary.rows['cut-list']).toBe(0)
+  })
+
+  test('counts the five tables of #68 beside the two that were here first', () => {
+    const summary = listsSummary({ project: crossing, revision: 1 }, scopeFor())
+    expect({ ...summary.rows, 'cut-list': 0 }).toEqual({
+      items: 3,
+      // Every placement is counted, cabinet or not — which is why this is not the Items table.
+      'placed-items': 4,
+      'cut-list': 0,
+      rooms: 0,
+      walls: 2,
+      openings: 0,
+      warnings: 1,
+    })
+    expect(summary.rows['cut-list']).toBeGreaterThan(0)
+    // Counting needs no copy: the sentences are rendered for a file, never for a number.
+    expect(listsSummary({ project: crossing, revision: 1 }, scopeFor({ floorIds: ['floor-mezz'] })).rows.walls).toBe(
+      0,
+    )
   })
 })

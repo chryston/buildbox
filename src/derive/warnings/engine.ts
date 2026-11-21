@@ -25,7 +25,7 @@
  */
 import { warningKey, type Acknowledgement, type EntityId, type Project } from '../../domain'
 import { canonicalJson, compareCodePoints, stableHash, stableSort } from '../../lib'
-import { effectiveFloor } from '../effective'
+import { effectiveFloor, placementLabels } from '../effective'
 import { roomOutlinePath } from '../../domain'
 import { deriveWalls } from '../walls'
 import { ROOM_PRODUCERS } from './producers/rooms'
@@ -152,21 +152,14 @@ export const warningFloorOf = (project: Project, floorId: EntityId): WarningFloo
     }))
   const placements = effectiveFloor(project, 0, floorId, null).placements
   const designs = new Map(project.itemDesigns.map((design) => [design.id, design]))
-  // `Base 600 #2`: a Placed Item owns no name, so two of the same Design on one Floor are told
-  // apart by the order they were placed. A Design with one item on this Floor gets no ordinal,
-  // because there is nothing to tell apart (#67 §16).
-  const perDesign = new Map<EntityId, number>()
-  for (const placement of placements) perDesign.set(placement.designId, (perDesign.get(placement.designId) ?? 0) + 1)
-  const seen = new Map<EntityId, number>()
+  // `Base 600 #2` — the one label rule the Placed Items table shares with this strip (#67 §16).
+  const labels = placementLabels(placements)
   const warningPlacements: WarningPlacement[] = placements.map((placement) => {
-    const count = perDesign.get(placement.designId) ?? 1
-    const ordinal = (seen.get(placement.designId) ?? 0) + 1
-    seen.set(placement.designId, ordinal)
     const design = designs.get(placement.designId)
     return {
       id: placement.id,
       itemDesignId: placement.designId,
-      label: count > 1 ? `${placement.label} #${ordinal}` : placement.label,
+      label: labels.get(placement.id) ?? placement.label,
       worldPath: placement.worldPath,
       translation: placement.translation,
       rotationDeg: placement.rotationDeg,

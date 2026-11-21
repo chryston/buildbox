@@ -108,7 +108,11 @@ export const TEST_EXPORT_PORT: ExportPort = {
   remember: () => {},
   run: () => Promise.reject(new Error('jsdom runs no export')),
   listsOptions: () => ({ floors: [], designOptions: [] }),
-  summariseLists: async () => ({ statement: '', items: 0, cutList: 0, cutListCapable: false }),
+  summariseLists: async () => ({
+    statement: '',
+    rows: { items: 0, 'cut-list': 0, rooms: 0, walls: 0, openings: 0, 'placed-items': 0, warnings: 0 },
+    cutListCapable: false,
+  }),
   recallLists: async () => null,
   rememberLists: () => {},
   runLists: () => Promise.reject(new Error('jsdom runs no export')),

@@ -1,0 +1,4 @@
+﻿stable_id,floor_id,floor,design_option_id,design_option,renovation_state,drawing_layer_id,drawing_layer,kind,label,host_wall_id,start_mm,end_mm,width_mm,sill_mm,head_mm,height_mm,hinge_side,swing,predecessor_ids
+seed-tbl-003,seed-001,Floor 1,,,existing,,Unlayered,door,Door 1,seed-tbl-001,400,1307.772,900,0,2100,2100,start,left,
+seed-tbl-004,seed-001,Floor 1,,,existing,,Unlayered,window,Window 1,seed-tbl-002,600,1800,1200,900,2400,1500,,,
+seed-tbl-005,seed-001,Floor 1,,,existing,,Unlayered,door,Kitchen door,seed-wall-010,300,2100,1800,0,2400,2400,,sliding,

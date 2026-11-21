@@ -437,6 +437,14 @@ export const STRINGS = {
   exportListsGroupScope: 'Scope',
   exportListItems: 'Item List',
   exportListCutList: 'Cut List',
+  /** The five element tables of #68, in the contract's own names — never reused as headers. */
+  exportListRooms: 'Rooms',
+  exportListWalls: 'Walls',
+  exportListOpenings: 'Openings',
+  exportListPlacedItems: 'Placed Items',
+  exportListWarnings: 'Warnings List',
+  /** Why the State and Layer controls go grey: that table is scoped by Floor and option only. */
+  exportListsWarningsIgnoreScope: 'Warnings ignore layers and states.',
   /** The Cut List checkbox is absent rather disabled when nothing in scope has parts to cut. */
   exportListsNoCabinets: 'No cabinet designs in this scope',
   exportListsFloors: 'Floors',
