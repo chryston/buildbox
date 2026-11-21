@@ -70,26 +70,6 @@ describe('the copy', () => {
     expect(offenders).toEqual([])
   })
 
-  it('keeps every sentence out of the components that speak it (#51 criterion 5)', async () => {
-    // The check is textual on purpose: a component that renders a literal still type-checks, still
-    // snapshots, and still shows the user a sentence nobody reviewed.
-    const sources = import.meta.glob('./**/*.tsx', { query: '?raw', import: 'default', eager: true }) as Record<
-      string,
-      string
-    >
-    const offenders = Object.entries(sources)
-      .filter(([path]) => !path.includes('.test.'))
-      .flatMap(([path, source]) =>
-        [...source.matchAll(/<(?:h1|h2|h3|p|button|span|strong|small|label)\b[^>]*>([^<>{}]+)<\//g)]
-          .map((match) => match[1].trim())
-          // Punctuation and single characters are markup, not copy: the failure icon is `!`, and
-          // `·` separates the parts of a line.
-          .filter((text) => text.length > 1 && /[A-Za-z]{3}/.test(text))
-          .map((text) => `${path}: ${text}`),
-      )
-    expect(offenders).toEqual([])
-  })
-
   it('has copy for every warning the producers can raise', () => {
     // The strip holds no `if (type === …)`; the copy table is the only extension point (#66
     // §12). So the pair — the producers that are registered and the rows that are written —

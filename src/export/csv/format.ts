@@ -39,7 +39,7 @@ export const INTEGER_DP = 0
  */
 export function formatNumber(value: number, dp: number): string {
   if (!Number.isFinite(value)) throw new TypeError(`not a finite number: ${String(value)}`)
-  if (!Number.isInteger(dp) || dp < 0) throw new RangeError(`decimals must be a non-negative integer: ${String(dp)}`)
+  if (!Number.isInteger(dp) || dp < 0) throw new RangeError(`decimals takes a non-negative integer: ${String(dp)}`)
   // `-0 < 0` is false, which is the answer wanted: a zero is written without a sign.
   const sign = value < 0 ? '-' : ''
   const { whole, fraction } = decimalDigits(Math.abs(value).toString())

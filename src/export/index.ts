@@ -318,6 +318,9 @@ export { composeSheet, modelBounds } from './compose'
 export type { ComposedDrawing, ComposedSheet } from './compose'
 export { fitCheck, suggestionsFor, downsampledSize, pngSize, PAGE_MM, MARGIN_MM, FIXED_SCALES } from './fit'
 export { EXPORT_FOOTER, NOT_TO_SCALE, scaleStatement, SCOPE } from './strings'
+// The whole table as one namespace, for the CI scan over shipped strings (#66 criterion 8),
+// which has to see every word the writers can put in a file rather than the four the dialog asks for.
+export * as EXPORT_WORDS from './strings'
 export { defaultCutListStates, describeScope } from './scope'
 export { exportLists, listsSummary, CSV_MEDIA_TYPE } from './lists'
 export type { ListsSummary } from './lists'
