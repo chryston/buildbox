@@ -720,3 +720,82 @@ describe('renovation.restore: putting back what stood here', () => {
     expect(nothing.code).toBe('no-change')
   })
 })
+
+// --- Merging walls: Scope 11 -------------------------------------------------
+
+/** Two Walls this option drew, end to end, joined to each other and nothing else. */
+const drawPair = (taken: string[]) =>
+  intent(
+    'wall.createChain',
+    {
+      floorId: FLOOR,
+      walls: [
+        {
+          line: { kind: 'line', start: { x: 9600, y: 4000 }, end: { x: 10600, y: 4000 } },
+          thickness: 100,
+          justification: 'centre',
+          baseElevation: 0,
+          height: 2600,
+        },
+        {
+          line: { kind: 'line', start: { x: 10600, y: 4000 }, end: { x: 11600, y: 4000 } },
+          thickness: 100,
+          justification: 'centre',
+          baseElevation: 0,
+          height: 2600,
+        },
+      ],
+      starts: [{ kind: 'free' }, { kind: 'segment', index: 0, end: 'end' }],
+      ends: [{ kind: 'segment', index: 1, end: 'start' }, { kind: 'free' }],
+      target: { designOptionId: A },
+    },
+    taken,
+  )
+
+describe('merging walls (#69 §11)', () => {
+  it('merges two Walls this option drew, and leaves the survey alone', () => {
+    const before = project()
+    const drawn = unwrap(applyIntent(before, drawPair(['wall-w7', 'wall-w8', 'junction-w7'])))
+    expect(optionOf(drawn.project, A).proposed.walls.map((wall) => wall.ref)).toEqual(['W-7', 'W-8'])
+    const merged = unwrap(
+      applyIntent(drawn.project, intent('wall.merge', { wallIds: ['wall-w7', 'wall-w8'], target: { designOptionId: A } })),
+    )
+    const optionA = optionOf(merged.project, A)
+    // The Wall that came first in the pair survives, its line the two pieces end to end; the join
+    // that held them together is no one's join any more, and the survey never moved.
+    expect(optionA.proposed.walls).toHaveLength(1)
+    expect(optionA.proposed.walls[0]!.line).toEqual({ kind: 'line', start: { x: 9600, y: 4000 }, end: { x: 11600, y: 4000 } })
+    expect(optionA.proposed.wallJunctions).toEqual([])
+    expect(canonicalJson(merged.project.existingModel)).toBe(canonicalJson(before.existingModel))
+    expect(validateProject(merged.project).ok).toBe(true)
+    expect(canonicalJson(applyPatches(merged.project, merged.inversePatches))).toBe(canonicalJson(drawn.project))
+  })
+
+  it('refuses to merge two Walls of the survey while the Project carries an option', () => {
+    const refused = applyIntent(project(), intent('wall.merge', { wallIds: [W1, W4] }))
+    expect(refused.ok).toBe(false)
+    if (refused.ok) return
+    expect(refused.code).toBe('baseline-correction-required')
+    expect(refused.problems[0]!.message).toContain('correct the existing model')
+  })
+
+  it('refuses to merge a Wall of the survey from inside an option', () => {
+    const refused = applyIntent(project(), intent('wall.merge', { wallIds: [W1, W4], target: { designOptionId: A } }))
+    expect(refused.ok).toBe(false)
+    if (refused.ok) return
+    expect(refused.code).toBe('merge-mismatch')
+    expect(refused.problems[0]!.message).toBe('An option merges the walls it drew, not the walls the survey recorded.')
+  })
+
+  it('leaves the S7 rule standing when the Project carries no option', () => {
+    const source = structuredClone(project())
+    source.designOptions = []
+    // The same two Walls at the same corner: with no option in the Project there is no baseline to
+    // protect, and the answer is the #64 one — these two are not one straight run.
+    const refused = applyIntent(source, intent('wall.merge', { wallIds: [W1, W4] }))
+    expect(refused.ok).toBe(false)
+    if (refused.ok) return
+    expect(refused.code).toBe('merge-mismatch')
+    expect(refused.problems[0]!.message).toBe('These walls are not one straight run.')
+  })
+})

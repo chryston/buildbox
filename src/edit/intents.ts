@@ -1176,6 +1176,9 @@ export type RejectionCode =
   | 'room-blocked'
   /** A Design Option the Project cannot hold: a name another Option already answers to (#69 §2). */
   | 'option-blocked'
+  /** Two Walls of the Existing Model, which no renovation merges: the baseline is the record every
+   * option is drawn against, so this is a correction of it (#69 §11). */
+  | 'baseline-correction-required'
 
 /**
  * What an Intent takes with it, listed before it runs (#20 §4, #65 §8).

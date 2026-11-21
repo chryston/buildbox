@@ -12,7 +12,7 @@
  * short of another creates nothing. Nothing here infers a join from proximity.
  */
 import type { EntityId, Project, Wall, WallEnd, WallJunction, WallJunctionEnd, WallRefLine } from '../../domain'
-import { openingDependencies } from '../../domain'
+import { designOptionsOf, openingDependencies } from '../../domain'
 import {
   DEG,
   TOLERANCE_MM,
@@ -28,7 +28,8 @@ import {
   refTangentDeg,
 } from '../../geometry'
 import { chainJunctionCount, wallEndKey } from '../intents'
-import type { CreateWallChain, DependencyReview, IntentTarget, Locator, WallEndTarget, WallIntent } from '../intents'
+import type { CreateWallChain, DependencyReview, IntentTarget, Locator, MergeWalls, WallEndTarget, WallIntent } from '../intents'
+import { FF_RENOVATION } from '../../lib'
 import type { Handler, IntentHandler } from './context'
 import { containerOf, effectiveView, isInOption, proposedProvenance, refuse, spendIds } from './support'
 import { faceRefsOn, followWallFaces, refuseReferencedWall } from './roomSupport'
@@ -568,14 +569,34 @@ const mergedLine = (first: Wall, second: Wall): WallRefLine | null => {
  */
 const mergeWalls: Handler<'wall.merge'> = (ctx) => {
   const [firstId, secondId] = ctx.intent.payload.wallIds
-  const first = requireWall(ctx.project, firstId)
-  const second = requireWall(ctx.project, secondId)
+  const target = (ctx.intent.payload as MergeWalls & IntentTarget).target
+  // #69 §11: two Walls this option drew are its own work, and merge where they stand. Two Walls of
+  // the survey are not its work to merge — while the Project carries a Design Option, the baseline
+  // is the record every option is drawn against, and changing it is a correction, not a renovation.
+  const container = containerOf(ctx.draft, target?.designOptionId)
+  const inOption = isInOption(container, ctx.draft)
+  if (FF_RENOVATION && !inOption && designOptionsOf(ctx.project).length > 0) {
+    refuse(
+      'baseline-correction-required',
+      wallPath(secondId),
+      'These are the survey’s walls, and every option is drawn against them. Merge walls this option drew, or correct the existing model.',
+    )
+  }
+  const view = effectiveView(ctx.project, null, target?.designOptionId)
+  if (FF_RENOVATION && inOption) {
+    for (const id of [firstId, secondId]) {
+      if (container.walls.some((wall) => wall.id === id)) continue
+      refuse('merge-mismatch', wallPath(id), 'An option merges the walls it drew, not the walls the survey recorded.')
+    }
+  }
+  const first = requireWall(view, firstId)
+  const second = requireWall(view, secondId)
   // Merging takes one of the two out of the drawing, so a Room standing on either of them has
   // to be moved off first (#67 §12).
   for (const wall of [first, second]) {
-    if (faceRefsOn(ctx.project, wall.id).length > 0) refuseReferencedWall(ctx.project, wall)
+    if (faceRefsOn(view, wall.id).length > 0) refuseReferencedWall(view, wall)
   }
-  const shared = ctx.project.existingModel.wallJunctions.find(
+  const shared = view.existingModel.wallJunctions.find(
     (junction) =>
       junction.host === undefined &&
       junction.ends.length === 2 &&
@@ -593,9 +614,9 @@ const mergeWalls: Handler<'wall.merge'> = (ctx) => {
   const joinedFirst = shared.ends.find((member) => member.wallId === firstId)!.end
   const joinedSecond = shared.ends.find((member) => member.wallId === secondId)!.end
   const farFirst: WallEnd = joinedFirst === 'start' ? 'end' : 'start'
-  const kept = ctx.draft.existingModel.walls.find((candidate) => candidate.id === firstId)!
+  const kept = container.walls.find((candidate) => candidate.id === firstId)!
   kept.line = line
-  for (const junction of ctx.draft.existingModel.wallJunctions) {
+  for (const junction of container.wallJunctions) {
     if (junction.id === shared.id) continue
     if (junction.host !== undefined && junction.host.wallId === secondId) {
       junction.host = { wallId: firstId, at: refParamAt(line, refPointAt(second.line, junction.host.at)) }
@@ -608,10 +629,13 @@ const mergeWalls: Handler<'wall.merge'> = (ctx) => {
   // Both pieces' Openings move to the Wall that survives. Both are moved, not just the
   // second: the merged line starts at whichever piece reaches further back, so the survivor's
   // own Openings shift by the same amount the other's do.
-  rehostOpenings(ctx.draft.existingModel.openings, first, firstId, line)
-  rehostOpenings(ctx.draft.existingModel.openings, second, firstId, line)
-  ctx.draft.existingModel.wallJunctions = ctx.draft.existingModel.wallJunctions.filter((junction) => junction.id !== shared.id)
-  ctx.draft.existingModel.walls = ctx.draft.existingModel.walls.filter((wall) => wall.id !== secondId)
+  rehostOpenings(container.openings, first, firstId, line)
+  rehostOpenings(container.openings, second, firstId, line)
+  container.wallJunctions = container.wallJunctions.filter((junction) => junction.id !== shared.id)
+  container.walls = container.walls.filter((wall) => wall.id !== secondId)
+  // The merged Wall is longer than either piece and both pieces' Openings moved onto it: the fit
+  // check the wrapper runs against the Existing Model, run against what this option stands on.
+  if (inOption) requireOpeningsFit(effectiveView(ctx.draft, first.floorId, target?.designOptionId))
 }
 
 /** Both pieces' Openings, read at the same point of the longer line (#65 §7). */
@@ -708,7 +732,12 @@ const planLocator = (floorId: EntityId | null): Locator => ({
 })
 
 const wallFloor = (project: Project, wallId: EntityId): EntityId | null =>
-  project.existingModel.walls.find((wall) => wall.id === wallId)?.floorId ?? null
+  project.existingModel.walls.find((wall) => wall.id === wallId)?.floorId ??
+  // A Wall this option drew is on a Floor too, and undo has to be able to find its way back to it.
+  designOptionsOf(project)
+    .flatMap((option) => option.proposed.walls)
+    .find((wall) => wall.id === wallId)?.floorId ??
+  null
 
 const junctionFloor = (project: Project, junctionId: EntityId): EntityId | null =>
   project.existingModel.wallJunctions.find((junction) => junction.id === junctionId)?.floorId ?? null
