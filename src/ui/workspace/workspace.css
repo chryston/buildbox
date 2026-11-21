@@ -457,6 +457,15 @@
   cursor: pointer;
 }
 
+/* A button that cannot be pressed has to look like one. The Room draft bar's `Close` is disabled
+   for as long as the proposal is invalid, and a full-strength blue button that refuses to act
+   reads as a button that can. */
+.bb-workspace-primary-button:disabled,
+.bb-workspace-secondary-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 /* ------------------------------------------------------- narrow viewports */
 
 /* Below 1024 px the rail is a drawer over the canvas, opened by `View & selection`. */

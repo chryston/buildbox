@@ -691,3 +691,105 @@
 .bb-edge-round-all {
   grid-template-columns: 96px 1fr auto;
 }
+
+/* ------------------------------------------------------------------ Rooms (#67) */
+
+/* The Edges of a Room in one column: what the Edge is, how long it is, the Wall face holding it,
+   and the one action that Edge has. The face is a chip rather than a sentence because a Room with
+   six Edges has to stay scannable, and because the chip is the mark that says *this Edge stands
+   on a Wall* — the thing to find without reading the row. */
+.bb-room-edges {
+  margin-top: 12px;
+}
+
+.bb-room-edge-list,
+.bb-room-face-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bb-room-edge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  border-top: 1px solid var(--bb-border-inset);
+  padding: 5px 0;
+  font-size: 12px;
+  color: var(--bb-text-body);
+}
+
+/* The Edge names itself on one line and the length sits at the far end of it; the chip and the
+   one action fall to a second line when the rail is narrow, which is what keeps a long face name
+   like `W-1 · Kitchen's side` from being cut off at the panel edge. */
+.bb-room-edge-name {
+  flex: 1 1 auto;
+  color: var(--bb-text-muted);
+  white-space: nowrap;
+}
+
+.bb-room-edge-length {
+  color: var(--bb-text);
+}
+
+.bb-room-edge-anchor {
+  border-radius: var(--bb-radius-badge);
+  background: var(--bb-bg-choice);
+  color: var(--bb-text-choice);
+  padding: 2px 7px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* The candidates for an Edge belong under that Edge: indented, and answering only the row above
+   them. */
+.bb-room-face-list {
+  flex: 0 0 100%;
+  gap: 3px;
+  margin: 2px 0 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--bb-border-inset);
+}
+
+/* An action inside a list row is smaller than a toolbar button, so it reads as belonging to the
+   row it acts on rather than to the panel. */
+.bb-workspace-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: var(--bb-radius-small-button);
+  border: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-button);
+  color: var(--bb-text-button);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bb-workspace-button:hover:not(:disabled) {
+  background: var(--bb-bg-choice);
+}
+
+.bb-workspace-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.bb-room-face,
+.bb-room-face-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.bb-room-face-move {
+  font-size: 11px;
+  color: var(--bb-text-subtle);
+}
