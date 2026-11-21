@@ -199,4 +199,54 @@ describe('attaching a Room edge to a wall face', () => {
     const still = detached?.outline.kind === 'path' ? detached.outline.path.segments[0] : null
     expect(still !== null && 'to' in still ? Math.abs(still.to.y - 75) : 99).toBeLessThan(0.01)
   })
+
+  it('keeps Delete out of reach while a Room Edge stands on the Wall, and hands it back on Detach', async () => {
+    const user = userEvent.setup()
+    await renderWorkspace()
+    await armShapesMenu(user, 'draw-line')
+    clickFloor('room-draft-layer', 200, 80)
+    clickFloor('room-draft-layer', 3000, 80)
+    clickFloor('room-draft-layer', 3000, 2080)
+    clickFloor('room-draft-layer', 200, 2080)
+    await user.click(screen.getByTestId('room-draft-close'))
+    await user.click(screen.getAllByTestId(/^room-edge-attach-/)[0] as HTMLElement)
+    await user.click(screen.getByTestId(/^room-face-pick-(?!on-canvas)/))
+    await user.click(screen.getByTestId(/^room-face-attach-/))
+
+    // Select the Wall by the band the Plan View paints for it — the hit shape the pointer
+    // actually answers to (a bare canvas click at its reference line hits nothing).
+    const select = (element: HTMLElement): void => {
+      fireEvent.pointerDown(element, { clientX: 2000, clientY: 0 })
+      fireEvent.pointerUp(element, { clientX: 2000, clientY: 0 })
+      fireEvent.click(element, { clientX: 2000, clientY: 0 })
+    }
+    const selectWall = (): void => select(screen.getByTestId(/wall-band-/))
+    const selectRoom = (): void => {
+      // The Room is painted twice — its fill and its hit shape share the id — and the hit shape
+      // is the one that answers to the pointer.
+      const shapes = screen.getAllByTestId(`room-${view.project().existingModel.rooms[0]?.id ?? ''}`)
+      select(shapes[shapes.length - 1] as HTMLElement)
+    }
+    await user.click(screen.getByTestId('tool-select'))
+    selectWall()
+    const sentence = 'W-1 is referenced by Room 1 edge 1. Detach, reattach, or remove the Room delta first.'
+    expect(screen.getByTestId('wall-delete-blocked').textContent).toBe(sentence)
+    const del = screen.getByTestId('wall-delete')
+    expect(del.getAttribute('disabled')).not.toBeNull()
+    expect(del.getAttribute('title')).toBe(sentence)
+    // Pressing it anyway is not a half-delete: the Wall and the claim both stand.
+    fireEvent.click(del)
+    expect(walls()).toBe(1)
+    expect(view.project().existingModel.rooms[0]?.wallFaceRefs).toHaveLength(1)
+
+    // Detach is the way out the sentence names: the same Delete then works, in one step.
+    selectRoom()
+    await user.click(screen.getByTestId(/^room-edge-detach-/))
+    selectWall()
+    expect(screen.queryByTestId('wall-delete-blocked')).toBeNull()
+    expect(screen.getByTestId('wall-delete').getAttribute('disabled')).toBeNull()
+    await user.click(screen.getByTestId('wall-delete'))
+    expect(walls()).toBe(0)
+    expect(view.project().existingModel.rooms[0]?.wallFaceRefs).toHaveLength(0)
+  })
 })

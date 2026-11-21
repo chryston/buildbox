@@ -32,6 +32,7 @@ export type { SnapGeometry, SnapSettingKinds, SnapSourceInput, WallFaceSource } 
 export { deriveWalls } from './walls'
 export type { DerivedCorner, DerivedFace, DerivedWall, FloorWalls } from './walls'
 export { deriveRooms, roomFaceCandidates, roomFaceLabel, roomMembershipOf } from './rooms'
+export { roomDeleteBlock, roomDeleteBlockFor, roomEdgeName, roomFaceRefList } from './rooms'
 export { faceRoomNames } from './rooms'
 export type { DerivedRoom, FloorRooms, MeasurableRoom, RoomFaceCandidate, RoomMembership } from './rooms'
 export { WARNING_PRODUCERS, compareWarnings, countUnacknowledged, deriveWarnings, warningFloorOf, warningSignature } from './warnings/engine'

@@ -25,6 +25,7 @@ import {
   roomOverlapWith,
   roomSegmentOf,
 } from '../../domain'
+import { roomDeleteBlock, roomEdgeName, roomFaceRefList } from '../../derive'
 import type {
   DisplayFormat,
   EntityId,
@@ -62,10 +63,7 @@ export const requireWall = (project: Project, wallId: EntityId): Wall => {
 }
 
 /** `Kitchen edge 2` — the pair every block message names (#67 §12). */
-export const edgeName = (room: Room, segmentId: EntityId): string => {
-  const position = room.outline.segmentIds.indexOf(segmentId)
-  return `${room.name} edge ${position + 1 > 0 ? position + 1 : 1}`
-}
+export const edgeName = roomEdgeName
 
 /** Every Room Edge that references `wallId`, in the order the Project lists Rooms. */
 export const faceRefsOn = (project: Project, wallId: EntityId): { room: Room; ref: RoomWallFaceRef }[] =>
@@ -74,19 +72,15 @@ export const faceRefsOn = (project: Project, wallId: EntityId): { room: Room; re
   )
 
 /** `Kitchen edge 2 and Hall edge 4` — the list the delete block reads out (#67 §12). */
-export const faceRefList = (project: Project, wallId: EntityId): string =>
-  faceRefsOn(project, wallId).map(({ room, ref }) => edgeName(room, ref.segmentId)).join(' and ')
+export const faceRefList = roomFaceRefList
 
 /**
  * A Wall a Room is standing on cannot be deleted or merged away (#67 §12). The wording is the
- * prototype's, kept because it names every claim at once and says what to do about them.
+ * prototype's, kept because it names every claim at once and says what to do about them; it lives
+ * in `derive` because the Wall inspector shows the same sentence with Delete put out of reach.
  */
 export const refuseReferencedWall = (project: Project, wall: Wall): never =>
-  refuse(
-    'room-blocked',
-    wallPathOf(wall.id),
-    `${wall.ref} is referenced by ${faceRefList(project, wall.id)}. Detach, reattach, or remove the Room delta first.`,
-  )
+  refuse('room-blocked', wallPathOf(wall.id), roomDeleteBlock(wall.ref, faceRefList(project, wall.id)))
 
 // --- The proposal check -------------------------------------------------------
 

@@ -17,7 +17,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomFaceCandidates, SNAP_ACQUISITION_PX } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX } from '../../derive'
 import type { Pt, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings } from '../../drawing'
 import type { BadgeSubject, OpeningPreview, RoomProposal } from '../../drawing'
@@ -1422,6 +1422,7 @@ export function FloorWorkspace(): ReactNode {
                 onSplit={() => send('wall.split', { wallId: selectedWall.wall.id, at: selectedWall.derived.length / 2 })}
                 onMerge={(otherId) => send('wall.merge', { wallIds: [selectedWall.wall.id, otherId] as const })}
                 onDelete={() => deleteWall(selectedWall.wall.id)}
+                deleteBlocked={roomDeleteBlockFor(project, selectedWall.wall)}
               />
         }
         canvas={

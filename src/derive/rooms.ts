@@ -20,7 +20,7 @@
  */
 import { area, containment, nearestOnSegment, overlap, TOLERANCE_MM, edgeToFace, ontoFaceVector } from '../geometry'
 import type { ClosedPath, LineSegment, Pt, WallSide } from '../geometry'
-import type { EntityId, Project, Room, RoomOutline, RoomSegment } from '../domain'
+import type { EntityId, Project, Room, RoomOutline, RoomSegment, Wall } from '../domain'
 import { roomArea, roomBounds, roomLabelAnchor, roomOutlineAfterSlide, roomOutlinePath, roomPerimeter, roomSegments } from '../domain'
 import { effectiveFloor } from './effective'
 import type { Rect } from './effective'
@@ -337,4 +337,34 @@ export function roomFaceCandidates(
     })
   }
   return candidates.sort((a, b) => a.distanceMm - b.distanceMm || (a.wallId < b.wallId ? -1 : 1))
+}
+
+// --- The claim a Room Edge holds on a Wall face (#67 §12) ------------------------------------
+//
+// These read the Project only, so both the handlers that refuse the edit and the Wall inspector
+// that puts Delete out of reach answer from one place — the homeowner reads the reason before the
+// Intent is refused, in the words the refusal itself uses.
+
+/** `Kitchen edge 2` — the pair every block message names. */
+export const roomEdgeName = (room: Room, segmentId: EntityId): string => {
+  const position = room.outline.segmentIds.indexOf(segmentId)
+  return `${room.name} edge ${String(position + 1 > 0 ? position + 1 : 1)}`
+}
+
+/** `Kitchen edge 2 and Hall edge 4` — the list the delete block reads out. */
+export const roomFaceRefList = (project: Project, wallId: EntityId): string =>
+  project.existingModel.rooms
+    .flatMap((room) =>
+      room.wallFaceRefs.filter((reference) => reference.wallId === wallId).map((reference) => roomEdgeName(room, reference.segmentId)),
+    )
+    .join(' and ')
+
+/** The sentence that blocks a Wall a Room is standing on, in the prototype's words. */
+export const roomDeleteBlock = (wallRef: string, refs: string): string =>
+  `${wallRef} is referenced by ${refs}. Detach, reattach, or remove the Room delta first.`
+
+/** Why this Wall cannot be deleted on its own, in the homeowner's words; nothing when it can. */
+export const roomDeleteBlockFor = (project: Project, wall: Wall): string | null => {
+  const refs = project.existingModel.rooms.filter((room) => room.wallFaceRefs.some((reference) => reference.wallId === wall.id))
+  return refs.length === 0 ? null : roomDeleteBlock(wall.ref, roomFaceRefList(project, wall.id))
 }
