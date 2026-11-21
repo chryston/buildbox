@@ -411,11 +411,17 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     onWallPointerDown: onSelectWall === undefined
       ? undefined
       : (id) => {
+          // The click that selected this Wall must not be answered again as a click on the
+          // background, which would deselect it in the same gesture (#64 §15). While the Door /
+          // window tool is in hand the pointerdown is not a selection, and the background click
+          // still owns it: that click is what places the Opening.
+          if (tool !== 'opening') consumedPointer.current = true
           onSelectWall(id)
         },
     onOpeningPointerDown: onSelectOpening === undefined
       ? undefined
       : (id) => {
+          if (tool !== 'opening') consumedPointer.current = true
           onSelectOpening(id)
         },
     onItemPointerDown: (id, event) => {
