@@ -11,6 +11,7 @@
  */
 import { fireEvent, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { act } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import { PLAN_IMAGE_ACCEPT, WorkspaceProvider, planViewKey, workspaceStore } from '../ui'
@@ -72,6 +73,21 @@ const rooms = (): number => view.project().existingModel.rooms.length
 const walls = (): number => view.project().existingModel.walls.length
 const openings = (): number => view.project().existingModel.openings.length
 
+/**
+ * Let a commit's write settle while React is still wrapped.
+ *
+ * A dispatch tells the session's listeners twice: once when the Transaction lands, and once when
+ * the write settles in the writer's `finally` (`src/session/projectSession.ts`). The second visit
+ * arrives a microtask after the last click's act scope has closed, and this suite turns React's
+ * act warning into an error. `close` waits for the write in flight, so awaiting it inside `act`
+ * is the honest way to say *and then the document was quiet*.
+ */
+async function settled(): Promise<void> {
+  await act(async () => {
+    await view.session.close()
+  })
+}
+
 async function armShapesMenu(user: ReturnType<typeof userEvent.setup>, testId: string): Promise<void> {
   await user.click(screen.getByTestId('shapes-menu'))
   await user.click(screen.getByTestId(testId))
@@ -99,6 +115,7 @@ describe('drawing a Room through the Plan View', () => {
     // Three clicks are three Edges, and the closing one is the Outline's own, not a drawn line.
     expect(model.rooms[0]?.outline.kind === 'path' ? model.rooms[0].outline.path.segments : []).toHaveLength(3)
     expect(screen.getByTestId('room-inspector')).toBeInTheDocument()
+    await settled()
   })
 
   it('refuses an Outline that would take floor from the Room it overlaps', async () => {
@@ -126,6 +143,7 @@ describe('drawing a Room through the Plan View', () => {
     fireEvent.keyDown(screen.getByTestId('room-draft-layer'), { key: 'Escape' })
     await user.click(screen.getByTestId('tool-select'))
     expect(rooms()).toBe(1)
+    await settled()
   })
 })
 
@@ -136,6 +154,7 @@ describe('placing the household shelter', () => {
     const before = { rooms: rooms(), walls: walls(), openings: openings() }
     await armShapesMenu(user, 'place-household-shelter')
     clickFloor('shelter-layer', 20000, 20000)
+    await settled()
 
     const model = view.project().existingModel
     expect(model.rooms.length - before.rooms).toBe(1)
@@ -198,6 +217,7 @@ describe('attaching a Room edge to a wall face', () => {
     // Detach is a statement about the reference: the geometry stays where the attach put it.
     const still = detached?.outline.kind === 'path' ? detached.outline.path.segments[0] : null
     expect(still !== null && 'to' in still ? Math.abs(still.to.y - 75) : 99).toBeLessThan(0.01)
+    await settled()
   })
 
   it('keeps Delete out of reach while a Room Edge stands on the Wall, and hands it back on Detach', async () => {
@@ -248,5 +268,6 @@ describe('attaching a Room edge to a wall face', () => {
     await user.click(screen.getByTestId('wall-delete'))
     expect(walls()).toBe(0)
     expect(view.project().existingModel.rooms[0]?.wallFaceRefs).toHaveLength(0)
+    await settled()
   })
 })
