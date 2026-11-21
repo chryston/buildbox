@@ -45,9 +45,10 @@ import type { Handler, IntentHandler } from './context'
 import { requireDoorFields, requireFit, requireOpeningsFit } from './openingSupport'
 import { checkRoomProposal, edgeName, faceCanCarry, slideOntoFace } from './roomSupport'
 import { effectiveView, refuse, spendIds } from './support'
+import type { CorrectionIntentType } from './correctionHandlers'
 
-/** The edit-table Intent types, written once. */
-type EditIntentType = Extract<RenovationIntentType, `renovation.${string}`>
+/** The edit-table Intent types, written once: the renovation set less the two corrections. */
+type EditIntentType = Exclude<Extract<RenovationIntentType, `renovation.${string}`>, CorrectionIntentType>
 
 /** The Option an edit belongs to; without it there is nothing to write into. */
 function requireOption(draft: Project, optionId: EntityId): DesignOption {

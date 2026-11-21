@@ -10,6 +10,7 @@ import type { IntentType, RenovationIntentType, S7IntentType } from './intents'
 import { FF_RENOVATION } from '../lib'
 import type { IntentHandler } from './handlers/context'
 import { CABINET_HANDLERS } from './handlers/cabinetHandlers'
+import { CORRECTION_HANDLERS } from './handlers/correctionHandlers'
 import { DESIGN_HANDLERS } from './handlers/designHandlers'
 import { FLOOR_HANDLERS, PLAN_FLOOR_HANDLERS, VIEW_HANDLERS } from './handlers/floorHandlers'
 import { OPENING_HANDLERS } from './handlers/openingHandlers'
@@ -20,6 +21,7 @@ import { RENOVATION_HANDLERS } from './handlers/renovationHandlers'
 import { ROOM_HANDLERS } from './handlers/roomHandlers'
 import { WALL_HANDLERS } from './handlers/wallHandlers'
 import { WARNING_HANDLERS } from './handlers/warningHandlers'
+import { installCatalogue } from './handlers/support'
 
 /**
  * The catalogue. The S7 half is complete — add an `IntentType` without a handler here and the
@@ -42,12 +44,18 @@ export const INTENT_HANDLERS: { [T in S7IntentType]: IntentHandler<T> } & {
   ...FLOOR_HANDLERS,
   ...VIEW_HANDLERS,
   ...WARNING_HANDLERS,
-  // The one way into `./handlers/renovationHandlers` and `./handlers/renovationEdits`: with the
-  // flag off these fold to nothing, the imports go unused, and both modules — marker string and
-  // all — are gone from the bundle.
+  // The one way into `./handlers/renovationHandlers`, `./handlers/renovationEdits` and
+  // `./handlers/correctionHandlers`: with the flag off these fold to nothing, the imports go
+  // unused, and all three modules — marker string and all — are gone from the bundle.
   ...(FF_RENOVATION ? RENOVATION_HANDLERS : {}),
   ...(FF_RENOVATION ? RENOVATION_EDIT_HANDLERS : {}),
+  ...(FF_RENOVATION ? CORRECTION_HANDLERS : {}),
 }
 
 /** Every Intent type the catalogue answers — the list #48's undo menu and #66 read. */
 export const INTENT_TYPES = Object.keys(INTENT_HANDLERS) as IntentType[]
+
+// The one handler that runs another Intent whole — a correction replaying the edit it wraps
+// (#69 §12) — reads the catalogue through `./handlers/support`, which keeps the module graph
+// one-way.
+installCatalogue(INTENT_HANDLERS as Partial<Record<IntentType, IntentHandler<IntentType>>>)

@@ -15,7 +15,8 @@ import { applyPatches as applyImmerPatches, enablePatches, produceWithPatches, s
 import type { Patch } from 'immer'
 import { validateProject } from '../domain'
 import type { Project } from '../domain'
-import { problem } from '../lib'
+import { designOptionsOf } from '../domain'
+import { FF_RENOVATION, problem } from '../lib'
 import type { Applied, DependencyReview, Intent, IntentType, Locator, Rejection, RejectionCode } from './intents'
 import { IntentRejection } from './handlers/support'
 import { pruneStaleAcknowledgements } from './handlers/warningHandlers'
@@ -71,6 +72,24 @@ export function applyIntent(project: Project, intent: Intent): Applied | Rejecti
   } catch (error) {
     if (error instanceof IntentRejection) return { ok: false, code: error.code, problems: error.problems }
     throw error
+  }
+
+  // Once a Project carries a Design Option, the Existing Model is the baseline every alternative is
+  // drawn against, so changing it is a command of its own: `renovation.correctExistingModel`, which
+  // previews the edit against every Option and commits it or nothing (#69 §12). The question is
+  // where the edits landed, not which Intent was sent, so nothing the catalogue gains later can
+  // slip past this.
+  if (
+    FF_RENOVATION &&
+    designOptionsOf(project).length > 0 &&
+    intent.type !== 'renovation.correctExistingModel' &&
+    patches.some((patch) => patch.path[0] === 'existingModel')
+  ) {
+    return rejected(
+      'baseline-correction-required',
+      'existingModel',
+      'Design Options are drawn against this baseline, so this edit changes the record they all share. Correct the existing model to make it.',
+    )
   }
 
   const result = validateProject(next)

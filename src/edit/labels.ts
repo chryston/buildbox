@@ -6,6 +6,7 @@
 import { FF_RENOVATION } from '../lib'
 import type { IntentType, S7IntentType } from './intents'
 import { RENOVATION_EDIT_INTENT_LABELS } from './handlers/renovationEdits'
+import { CORRECTION_INTENT_LABELS } from './handlers/correctionHandlers'
 import { RENOVATION_INTENT_LABELS } from './handlers/renovationHandlers'
 
 /** The default label per S7 Intent type, verbatim from the #47 catalogue. */
@@ -97,7 +98,7 @@ export const INTENT_LABELS = {
  * registered can be, so the answer is never shown.
  */
 const RENOVATION_LABELS: Partial<Record<IntentType, string>> = FF_RENOVATION
-  ? { ...RENOVATION_INTENT_LABELS, ...RENOVATION_EDIT_INTENT_LABELS }
+  ? { ...RENOVATION_INTENT_LABELS, ...RENOVATION_EDIT_INTENT_LABELS, ...CORRECTION_INTENT_LABELS }
   : {}
 
 export function intentLabel(type: IntentType): string {

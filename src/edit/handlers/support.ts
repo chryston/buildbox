@@ -13,6 +13,8 @@ import type { CabinetItemDesign, CabinetNode, EntityId, Floor, GenericItemDesign
 import { FF_RENOVATION, problem } from '../../lib'
 import type { ValidationProblem } from '../../lib'
 import type { RejectionCode } from '../intents'
+import type { IntentType } from '../intents'
+import type { IntentHandler } from './context'
 
 /**
  * Thrown by a handler to refuse an Intent. It never escapes `applyIntent`, which catches
@@ -33,6 +35,25 @@ export class IntentRejection extends Error {
 /** Refuse the whole Intent; `path` locates the entity that made it impossible. */
 export function refuse(code: RejectionCode, path: string, message: string): never {
   throw new IntentRejection(code, path, message)
+}
+
+/**
+ * The catalogue, for the one handler that has to run another Intent whole: a correction replays the
+ * edit it wraps, in the baseline and again inside an Option (#69 §12). `registry` installs it as it
+ * is built, which keeps the dependency one-way — a handler reaching for the registry itself would
+ * close a cycle through `intents`.
+ */
+let catalogue: Partial<Record<IntentType, IntentHandler<IntentType>>> | null = null
+
+export function installCatalogue(handlers: Partial<Record<IntentType, IntentHandler<IntentType>>>): void {
+  catalogue = handlers
+}
+
+/** The handler behind one Intent type, or the rejection an unknown type always gets. */
+export function requireHandler(type: IntentType): IntentHandler<IntentType> {
+  const handler = catalogue?.[type]
+  if (handler === undefined) refuse('unknown-target', 'type', `No Intent type ${type} is in the catalogue.`)
+  return handler
 }
 
 /**

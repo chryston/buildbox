@@ -45,6 +45,7 @@ import type { KeepFixed, Pt } from '../geometry'
 import { FF_RENOVATION } from '../lib'
 import type { ValidationProblem } from '../lib'
 import { RENOVATION_EDIT_INTENT_ID_ORDER } from './handlers/renovationEdits'
+import { CORRECTION_INTENT_ID_ORDER } from './handlers/correctionHandlers'
 import { RENOVATION_INTENT_ID_ORDER } from './handlers/renovationHandlers'
 
 /**
@@ -142,6 +143,8 @@ export type RenovationIntentType =
   | 'renovation.demolish'
   | 'renovation.replace'
   | 'renovation.restore'
+  | 'renovation.correctExistingModel'
+  | 'renovation.moveToDesignOption'
 
 /** Every Intent type the catalogue can answer: the S7 set, plus the renovation set in a flagged build. */
 export type IntentType = S7IntentType | RenovationIntentType
@@ -822,6 +825,28 @@ export interface RestoreInOption {
   target: { designOptionId: EntityId }
 }
 
+/**
+ * Correct the Existing Model (#69 §12): the baseline edit the user asked for, wrapped so it is
+ * previewed against every Design Option and committed as one Edit Transaction.
+ *
+ * The wrapper carries no field of its own beyond the inner Intent — which is any Existing Model edit
+ * the catalogue knows — because the correction is defined by what it wraps, not by a second list of
+ * every editable thing.
+ */
+export interface CorrectExistingModel {
+  inner: Intent
+}
+
+/**
+ * Move to a Design Option (#69 §13): baseline data that was surveyed by mistake becomes the target
+ * Option's own work. The IDs are kept, so nothing that refers to these entities has to be rewritten;
+ * no demolition record is written anywhere, because nothing comes down.
+ */
+export interface MoveToDesignOption {
+  entityIds: EntityId[]
+  targetOptionId: EntityId
+}
+
 /** `type → payload`, the one place the catalogue's shape is written down. */
 export interface IntentPayloads {
   'project.rename': RenameProject
@@ -907,6 +932,8 @@ export interface IntentPayloads {
   'renovation.demolish': DemolishInOption
   'renovation.replace': ReplaceInOption
   'renovation.restore': RestoreInOption
+  'renovation.correctExistingModel': CorrectExistingModel
+  'renovation.moveToDesignOption': MoveToDesignOption
 }
 
 export type PayloadOf<T extends IntentType = IntentType> = IntentPayloads[T]
@@ -1040,7 +1067,7 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
  * import of the renovation module becomes dead, so a released bundle carries neither table.
  */
 const ID_ORDER_BY_TYPE: Partial<Record<IntentType, readonly string[]>> = FF_RENOVATION
-  ? { ...INTENT_ID_ORDER, ...RENOVATION_INTENT_ID_ORDER, ...RENOVATION_EDIT_INTENT_ID_ORDER }
+  ? { ...INTENT_ID_ORDER, ...RENOVATION_INTENT_ID_ORDER, ...RENOVATION_EDIT_INTENT_ID_ORDER, ...CORRECTION_INTENT_ID_ORDER }
   : INTENT_ID_ORDER
 
 /**
@@ -1117,6 +1144,12 @@ export function intentIdCount(type: IntentType, payload?: PayloadOf): number {
       return SHELTER_ID_COUNT
     case 'renovation.replace':
       return fixed + REPLACE_CARRY_ID_COUNT
+    case 'renovation.correctExistingModel': {
+      // A correction spends exactly what the edit it wraps spends: it creates nothing of its own,
+      // and an Option's aligned successor is re-run with no IDs at all (#69 §12).
+      const inner = (payload as CorrectExistingModel).inner
+      return intentIdCount(inner.type, inner.payload)
+    }
     default:
       return fixed + VARIADIC_ID_COUNT
   }
@@ -1265,8 +1298,72 @@ export interface RestoreReview {
   readonly message: string
 }
 
+/**
+ * What one Design Option would do with a correction (#69 §12). The four answers are the whole of
+ * the rule: an Option that keeps the entity, an Option that takes it down, and the two kinds of
+ * successor — one still standing where the survey put it, which follows the correction, and one the
+ * user has given geometry of its own, which does not.
+ */
+export type CorrectionEffect = 'retains' | 'demolishes' | 'demolishes; successor stays aligned' | 'demolishes; successor keeps its own geometry'
+
+/** One Option's line of a correction preview. */
+export interface CorrectionOptionReview {
+  readonly optionId: EntityId
+  readonly optionName: string
+  readonly effect: CorrectionEffect
+  /** The Option's own work that moves with the correction: successors, joins, Openings, Room edges. */
+  readonly dependants: readonly DemolitionDependency[]
+  /** One sentence each, naming this Option: why the correction is refused outright. */
+  readonly blockers: readonly string[]
+}
+
+/**
+ * `Correct Existing Model: W-2` (#69 §12): one line per Option, in option order, so the dialog can
+ * show what every alternative does before the baseline moves.
+ */
+export interface CorrectionReview {
+  readonly kind: 'correct-existing-model'
+  readonly entityId: EntityId
+  /** `W-2` — the entity the correction is about. */
+  readonly entityRef: string
+  readonly options: readonly CorrectionOptionReview[]
+  /** `Correct Existing Model: W-2` — the label of the Edit Transaction this writes. */
+  readonly message: string
+}
+
+/** One Option's line of a move preview (#69 §13). */
+export interface MoveOptionReview {
+  readonly optionId: EntityId
+  readonly optionName: string
+  /** The demolition records this Option drops, because the entity is no longer Existing work. */
+  readonly removesDemolitions: readonly DemolitionDependency[]
+  /** The Rooms of this Option whose Edge referenced a Wall that is moving. */
+  readonly detaches: readonly string[]
+  readonly blockers: readonly string[]
+}
+
+/**
+ * `Move 2 items to Option A?` (#69 §13): what leaves the Existing Model, and what each Option
+ * notices when it does.
+ */
+export interface MoveToOptionReview {
+  readonly kind: 'move-to-design-option'
+  readonly targetOptionId: EntityId
+  readonly targetOptionName: string
+  /** Every entity that becomes Proposed, with the entities taken along with it. */
+  readonly moves: readonly DemolitionDependency[]
+  readonly options: readonly MoveOptionReview[]
+  readonly message: string
+}
+
 /** What an Intent would take with it, per review family. */
-export type DependencyReview = DeleteWallReview | DeleteDesignOptionReview | DemolitionReview | RestoreReview
+export type DependencyReview =
+  | DeleteWallReview
+  | DeleteDesignOptionReview
+  | DemolitionReview
+  | RestoreReview
+  | CorrectionReview
+  | MoveToOptionReview
 
 export interface Applied {
   ok: true
