@@ -82,6 +82,19 @@ file on disk, so this one is what proves a stored acknowledgement survives the s
 the canonical writer and a round trip through `migrateProject` at the current schema — and that
 the day the signature algorithm moves, an old decision is read unchanged instead of dropped.
 
+## `v8/` — domain schema v8 (#69, dark)
+
+`v8/renovation.json` is the Project `scripts/make-renovation-36-seed.ts` draws — the same Project
+`fixtures/e2e/preview-seed/renovation-36.json` carries, byte for byte — wrapped in the envelope the
+other files use. The step adds one Project field, `designOptions`, and this is the file that
+carries a non-empty pair of them: `Option A` and `Option B`, each proposing nothing, beside six
+Walls, three Openings, two Rooms and one Placed Item.
+
+v8 is dark. `DOMAIN_SCHEMA_VERSION` is 8 only in a `VITE_FF_RENOVATION=true` build, so
+`src/domain/fixtures.test.ts` reads this folder only when the flag is on and stops at v7 otherwise.
+The file stays on disk either way — the golden of a schema on its way in is not deleted because a
+flag is off — and when `#73` turns the flag on it becomes the version's golden unchanged.
+
 ## How it was produced
 
 Hand-authored as a plain object, then written with `lib.canonicalJson` — keys sorted, no
