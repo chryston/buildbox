@@ -130,6 +130,7 @@ export function fixtureProject(): Project {
       walls: [],
       wallJunctions: [],
       openings: [],
+      rooms: [],
       placedItems: [
         {
           id: 'place-0',
@@ -254,6 +255,61 @@ export function acknowledgementsFixtureProject(): Project {
         acknowledgedAt: FIXTURE_EXPORTED_AT,
       },
     ],
+  }
+}
+
+/**
+ * The same Project as the v7 golden file (#67): two Rooms on the Floor the Walls stand on,
+ * one drawn as a Rectangle and one as a Custom Path, each with one Edge referenced to the
+ * face of `W-1` it lies on.
+ *
+ * The two outlines share no area — they meet the two faces of the same Wall from opposite
+ * sides — which is the pair a fixture has to hold: a reference that is true, and the rule
+ * that a Room may touch another Room without overlapping it.
+ */
+export function roomsFixtureProject(): Project {
+  const project = acknowledgementsFixtureProject()
+  return {
+    ...project,
+    existingModel: {
+      ...project.existingModel,
+      rooms: [
+        {
+          id: 'room-1',
+          floorId: 'floor-0',
+          name: 'Living',
+          outline: {
+            kind: 'preset',
+            preset: { kind: 'rectangle', width: 4000, depth: 2000 },
+            centre: { x: 2000, y: -1050 },
+            orientationDeg: 0,
+            segmentIds: ['edge-living-1', 'edge-living-2', 'edge-living-3', 'edge-living-4'],
+          },
+          // Edge 3 is the side along y = −50, which is W-1's left face.
+          wallFaceRefs: [{ segmentId: 'edge-living-3', wallId: 'wall-1', side: 'left' }],
+        },
+        {
+          id: 'room-2',
+          floorId: 'floor-0',
+          name: 'Study',
+          outline: {
+            kind: 'path',
+            path: {
+              start: { x: 100, y: 50 },
+              segments: [
+                { kind: 'line', to: { x: 1900, y: 50 } },
+                { kind: 'line', to: { x: 1900, y: 550 } },
+                { kind: 'line', to: { x: 100, y: 550 } },
+                { kind: 'line', to: { x: 100, y: 50 } },
+              ],
+            },
+            segmentIds: ['edge-study-1', 'edge-study-2', 'edge-study-3', 'edge-study-4'],
+          },
+          // Edge 1 is the side along y = +50, which is W-1's right face.
+          wallFaceRefs: [{ segmentId: 'edge-study-1', wallId: 'wall-1', side: 'right' }],
+        },
+      ],
+    },
   }
 }
 

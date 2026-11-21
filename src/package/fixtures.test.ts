@@ -1,12 +1,12 @@
 /**
- * The golden fixtures (#44, #56, #58, #64, #65, #66): `fixtures/package/v1/` through `v6/`
+ * The golden fixtures (#44, #56, #58, #64, #65, #66, #67): `fixtures/package/v1/` through `v7/`
  * are committed, never deleted and never edited. Whatever each says a Backup is, this
  * BuildBox has to keep reading — and keep writing byte for byte, for the version it writes.
  *
  * v1 is the compatibility evidence #44 left behind; #56 made it evidence of a different kind,
- * because a v1 Backup has no Plan Views and staging one has to invent them. v6 is the version
- * this build writes: a Project gained its warning acknowledgements (#66), which is what makes
- * v1 through v5 compatibility evidence rather than something to re-issue.
+ * because a v1 Backup has no Plan Views and staging one has to invent them. v7 is the version
+ * this build writes: a Project gained its Room collection (#67), which is what makes v1 through
+ * v6 compatibility evidence rather than something to re-issue.
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -24,11 +24,12 @@ import {
   fixtureProject,
   legacyFixtureRecord,
   openingsFixtureProject,
+  roomsFixtureProject,
 } from './testing'
 
 const ASSET_ENTRY = `assets/${FIXTURE_PLAN_IMAGE_HASH}.png`
 
-type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6'
+type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6' | 'v7'
 
 const fixtureDir = (version: FixtureVersion): URL => new URL(`../../fixtures/package/${version}/`, import.meta.url)
 const readFrom = (version: FixtureVersion) => (relative: string): Uint8Array =>
@@ -40,6 +41,7 @@ const readV3 = readFrom('v3')
 const readV4 = readFrom('v4')
 const readV5 = readFrom('v5')
 const readV6 = readFrom('v6')
+const readV7 = readFrom('v7')
 
 const ARCHIVE_V1 = readV1('reference.buildbox')
 const ARCHIVE_V2 = readV2('reference.buildbox')
@@ -51,6 +53,9 @@ const ARCHIVE_V5 = readV5('openings.buildbox')
 // The v6 file is named for what the step added, as v5's was: it is the first Backup whose
 // Project carries a warning acknowledgement (#66).
 const ARCHIVE_V6 = readV6('acknowledgements.buildbox')
+// The v7 file is named for what the step added, as v5's and v6's were: it is the first Backup
+// whose Project carries a Room (#67).
+const ARCHIVE_V7 = readV7('rooms.buildbox')
 const ASSET_BYTES = readV2(ASSET_ENTRY)
 
 /** The one Plan Image every fixture carries, served the way the export serves it. */
@@ -111,7 +116,8 @@ function v3FixtureRecord(): unknown {
   const project = fixtureProject()
   const preferences: Record<string, unknown> = { ...project.preferences }
   delete preferences.defaultWallHeight
-  const record: Record<string, unknown> = { ...project, preferences, existingModel: { placedItems: project.existingModel.placedItems } }
+  const existingModel: Record<string, unknown> = { placedItems: project.existingModel.placedItems }
+  const record: Record<string, unknown> = { ...project, preferences, existingModel }
   delete record.warningAcknowledgements
   return record
 }
@@ -121,6 +127,7 @@ function v4FixtureRecord(): Project {
   const project = fixtureProject()
   const existingModel: Record<string, unknown> = { ...project.existingModel }
   delete existingModel.openings
+  delete existingModel.rooms
   const record: Record<string, unknown> = { ...project, existingModel }
   delete record.warningAcknowledgements
   return record as unknown as Project
@@ -128,9 +135,20 @@ function v4FixtureRecord(): Project {
 
 /** The record the v5 file was written from: the current Project without the v6 addition. */
 function v5FixtureRecord(): Project {
-  const record: Record<string, unknown> = { ...openingsFixtureProject() }
+  const project = openingsFixtureProject()
+  const existingModel: Record<string, unknown> = { ...project.existingModel }
+  delete existingModel.rooms
+  const record: Record<string, unknown> = { ...project, existingModel }
   delete record.warningAcknowledgements
   return record as unknown as Project
+}
+
+/** The record the v6 file was written from: the current Project without the v7 addition. */
+function v6FixtureRecord(): Project {
+  const project = acknowledgementsFixtureProject()
+  const existingModel: Record<string, unknown> = { ...project.existingModel }
+  delete existingModel.rooms
+  return { ...project, existingModel } as unknown as Project
 }
 
 describe('the committed v1 Backup', () => {
@@ -285,21 +303,18 @@ describe('the committed v5 Backup (#65)', () => {
 })
 
 describe('the committed v6 Backup (#66)', () => {
-  it('stages into the Project it was written from, unmigrated', async () => {
+  it('stages into the current Project, gaining the empty Room collection (#67)', async () => {
     const result = await stageImport(ARCHIVE_V6, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
     expect(result.staged.project).toEqual(acknowledgementsFixtureProject())
-    expect(result.staged.migratedFrom).toBeNull()
-  })
-
-  it('is re-encoded byte for byte by this build', async () => {
-    expect(await encodeProject(acknowledgementsFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V6)
-    const canonical = canonicalOf(acknowledgementsFixtureProject())
-    expect(new TextDecoder().decode(readV6('project.json'))).toBe(`${canonical}\n`)
+    // v6 is no longer the current schema: staging it runs the one step #67 added.
+    expect(result.staged.migratedFrom).toBe(6)
   })
 
   it('holds the canonical Project record, and nothing else', async () => {
-    const canonical = canonicalOf(acknowledgementsFixtureProject())
+    const canonical = canonicalOf(v6FixtureRecord())
+    expect(new TextDecoder().decode(readV6('project.json'))).toBe(`${canonical}\n`)
+
     const staged = await stageImport(ARCHIVE_V6, { acceptPreview: false, allocateId: allocateIds() })
     if (!staged.ok) throw new Error('the fixture must stage')
     expect(staged.staged.manifest).toEqual(await manifestOf(canonical, 6))
@@ -326,5 +341,40 @@ describe('the committed v6 Backup (#66)', () => {
     // that is the point — the day the signature algorithm moves, this fixture is what proves
     // an old decision is still read unchanged, and shown as reopened rather than lost.
     expect(v5FixtureRecord()).not.toHaveProperty('warningAcknowledgements')
+  })
+})
+
+describe('the committed v7 Backup (#67)', () => {
+  it('stages into the Project it was written from, unmigrated', async () => {
+    const result = await stageImport(ARCHIVE_V7, { acceptPreview: false, allocateId: allocateIds() })
+    if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
+    expect(result.staged.project).toEqual(roomsFixtureProject())
+    expect(result.staged.migratedFrom).toBeNull()
+  })
+
+  it('is re-encoded byte for byte by this build', async () => {
+    expect(await encodeProject(roomsFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V7)
+    const canonical = canonicalOf(roomsFixtureProject())
+    expect(new TextDecoder().decode(readV7('project.json'))).toBe(`${canonical}\n`)
+  })
+
+  it('holds the canonical Project record, and nothing else', async () => {
+    const canonical = canonicalOf(roomsFixtureProject())
+    const staged = await stageImport(ARCHIVE_V7, { acceptPreview: false, allocateId: allocateIds() })
+    if (!staged.ok) throw new Error('the fixture must stage')
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonical, 7))
+  })
+
+  it('carries the same asset, byte for byte', () => {
+    expect(readV7(ASSET_ENTRY)).toEqual(ASSET_BYTES)
+  })
+
+  it('carries two Rooms referenced to opposite faces of one Wall, which is what the step was for', () => {
+    const record = roomsFixtureProject()
+    expect(record.existingModel.rooms.map((room) => room.name)).toEqual(['Living', 'Study'])
+    expect(record.existingModel.rooms[0]?.wallFaceRefs).toEqual([{ segmentId: 'edge-living-3', wallId: 'wall-1', side: 'left' }])
+    expect(record.existingModel.rooms[1]?.wallFaceRefs).toEqual([{ segmentId: 'edge-study-1', wallId: 'wall-1', side: 'right' }])
+    // The v6 record beside it has no Room collection at all — the step in one comparison.
+    expect(v6FixtureRecord().existingModel).not.toHaveProperty('rooms')
   })
 })

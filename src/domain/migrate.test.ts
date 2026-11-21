@@ -46,6 +46,7 @@ function validProject(): Project {
       walls: [],
       wallJunctions: [],
       openings: [],
+      rooms: [],
       placedItems: [
         {
           id: 'place-0',
@@ -69,8 +70,8 @@ function v1Project(): Record<string, unknown> {
 }
 
 describe('DOMAIN_SCHEMA_VERSION', () => {
-  it('is 6, one step above the version #65 shipped', () => {
-    expect(DOMAIN_SCHEMA_VERSION).toBe(6)
+  it('is 7, one step above the version #66 shipped', () => {
+    expect(DOMAIN_SCHEMA_VERSION).toBe(7)
   })
 })
 
@@ -494,5 +495,78 @@ describe('migrateV4toV5 — a Project gains its Openings (#65)', () => {
       },
     }
     expect(migrateV4toV5(carried)).toEqual(carried)
+  })
+})
+
+describe('migrateV6toV7 — a Project gains its Rooms (#67)', () => {
+  /** The same Project as its v6 twin: Openings named, Rooms not yet thought of. */
+  function v6Record(): Record<string, unknown> {
+    const project = validProject()
+    const existingModel: Record<string, unknown> = { ...project.existingModel }
+    delete existingModel.rooms
+    return { ...project, existingModel }
+  }
+
+  it('adds the empty Room collection, and spends no IDs', () => {
+    const asked: number[] = []
+    const result = migrateProject(v6Record(), 6, (count) => {
+      asked.push(count)
+      return allocator()(count)
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(asked).toEqual([])
+    expect(result.project.existingModel.rooms).toEqual([])
+    // The Openings it already had are the same objects' values: the step adds a collection and
+    // touches nothing else, so a v6 Project's doors come through untouched.
+    expect(result.project.existingModel.openings).toEqual(validProject().existingModel.openings)
+
+    const prior = v6Record() as Record<string, unknown>
+    expect({ ...result.project, ...prior }).toEqual(prior)
+  })
+
+  it('leaves a v7 Project exactly as it found it', () => {
+    const migrated = migrateProject(v6Record(), 6, allocator())
+    expect(migrated.ok).toBe(true)
+    if (!migrated.ok) return
+    expect(migrateProject(migrated.project, 6, allocator()).ok).toBe(true)
+    const again = migrateProject(migrated.project, 6, allocator())
+    expect(again.ok && again.project).toEqual(migrated.project)
+  })
+
+  it('keeps the Rooms a record already carries', () => {
+    // A migrator that overwrote the collection it was only meant to add would silently delete
+    // somebody's Rooms here.
+    const carried: Project = {
+      ...validProject(),
+      existingModel: {
+        ...validProject().existingModel,
+        rooms: [
+          {
+            id: 'room-1',
+            floorId: 'floor-0',
+            name: 'Bedroom',
+            outline: {
+              kind: 'preset',
+              preset: { kind: 'rectangle', width: 3000, depth: 4000 },
+              centre: { x: 1500, y: -2000 },
+              orientationDeg: 0,
+              segmentIds: ['edge-1', 'edge-2', 'edge-3', 'edge-4'],
+            },
+            wallFaceRefs: [],
+          },
+        ],
+      },
+    }
+    const result = migrateProject(carried, 6, allocator())
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.project).toEqual(carried)
+  })
+
+  it('adds Rooms to a record whose Existing Model is not a record at all, without crashing', () => {
+    // Migrators run before the validator, so they see whatever a damaged file held.
+    expect(migrateProject({ existingModel: null }, 6, allocator()).ok).toBe(false)
+    expect(migrateProject({}, 6, allocator()).ok).toBe(false)
   })
 })

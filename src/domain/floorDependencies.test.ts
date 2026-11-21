@@ -47,6 +47,7 @@ function project(): Project {
       walls: [],
       wallJunctions: [],
       openings: [],
+      rooms: [],
       placedItems: [placed('placed-1', 'floor-kitchen'), placed('placed-2', 'floor-kitchen'), placed('placed-3', 'floor-kitchen')],
     },
     warningAcknowledgements: [],

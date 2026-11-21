@@ -16,7 +16,7 @@ import type { Floor, PlanView, Project } from './project'
 import { validateProject } from './validate'
 
 /** The domain schema this build writes and understands at the top of the chain. */
-export const DOMAIN_SCHEMA_VERSION = 6
+export const DOMAIN_SCHEMA_VERSION = 7
 
 /**
  * One pure vN → vN+1 step. Its input is already a copy; it never reads the clock, and a
@@ -27,7 +27,7 @@ export type Migrator = (data: unknown, allocateId: IdAllocator) => unknown
 /**
  * `MIGRATORS[i]` migrates v(i+1) → v(i+2), so index 0 is v1 → v2.
  */
-export const MIGRATORS: readonly Migrator[] = [migrateV1toV2, migrateV2toV3, migrateV3toV4, migrateV4toV5, migrateV5toV6]
+export const MIGRATORS: readonly Migrator[] = [migrateV1toV2, migrateV2toV3, migrateV3toV4, migrateV4toV5, migrateV5toV6, migrateV6toV7]
 
 /**
  * v1 → v2 (#56): the Project gains `views`, and each Floor gains the one default Plan
@@ -201,6 +201,26 @@ export function migrateV5toV6(data: unknown): unknown {
     ...record,
     warningAcknowledgements: Array.isArray(record.warningAcknowledgements) ? record.warningAcknowledgements : [],
   }
+}
+
+/**
+ * v6 → v7 (#67): Rooms.
+ *
+ * `existingModel.rooms` is the only change, and an older file simply has none. Nothing else
+ * moves: a Room is a new kind of element rather than a change to one, so no Wall, Opening or
+ * Placement is rewritten and no ID is spent.
+ *
+ * A v6 file cannot already carry the field — the strict validator rejected unknown fields on
+ * every write — so an array found here came from a newer build, and is left exactly as it is.
+ */
+export function migrateV6toV7(data: unknown): unknown {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return data
+  const record = data as Record<string, unknown>
+  const existing = record.existingModel
+  if (existing === null || typeof existing !== 'object' || Array.isArray(existing)) return data
+  const model = existing as Record<string, unknown>
+  if (Array.isArray(model.rooms)) return data
+  return { ...record, existingModel: { ...model, rooms: [] } }
 }
 
 export type MigrateError =

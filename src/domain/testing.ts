@@ -566,7 +566,7 @@ export function arbProject(): fc.Arbitrary<Project> {
         floors,
         views,
         itemDesigns: designs,
-        existingModel: { placedItems, walls, wallJunctions, openings },
+        existingModel: { placedItems, walls, wallJunctions, openings, rooms: [] },
         warningAcknowledgements: [],
       }
     })

@@ -35,6 +35,7 @@ const project = (): Project => ({
     walls: [],
     wallJunctions: [],
     openings: [],
+    rooms: [],
     placedItems: [
       { id: 'p1', itemDesignId: 'd-sofa', floorId: 'floor-1', translation: { x: 0, y: 0 }, rotationDeg: 0, baseElevation: 0 },
       { id: 'p2', itemDesignId: 'd-sofa', floorId: 'floor-1', translation: { x: 100, y: 0 }, rotationDeg: 0, baseElevation: 0 },

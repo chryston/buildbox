@@ -34,7 +34,7 @@ const project = (over: Partial<Project> = {}): Project => ({
   floors: [kitchen, loft],
   views: [defaultView, furnitureView],
   itemDesigns: [],
-  existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [] },
+  existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [] },
   warningAcknowledgements: [],
   ...over,
 })
