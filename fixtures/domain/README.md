@@ -70,6 +70,18 @@ straight ones meeting in an L and one arc — joined by two Junctions, one per m
 It is the file that proves a Project carrying Walls round-trips through the strict validator
 and the canonical writer.
 
+## `v6/` — domain schema v6 (#66)
+
+`v6/acknowledgements.json` is `fixtures/package/v6/project.json` wrapped in the same envelope
+the other files use. The step adds one Project field, `warningAcknowledgements`, and this is
+the file that carries a non-empty one: a crossing of two Walls on `floor-0` with the decision
+the user made about it, its note, and the signature the decision was made against.
+
+The signature is written down rather than recomputed. `src/domain/fixtures.test.ts` reads every
+file on disk, so this one is what proves a stored acknowledgement survives the strict validator,
+the canonical writer and a round trip through `migrateProject` at the current schema — and that
+the day the signature algorithm moves, an old decision is read unchanged instead of dropped.
+
 ## How it was produced
 
 Hand-authored as a plain object, then written with `lib.canonicalJson` — keys sorted, no
