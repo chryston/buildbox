@@ -82,4 +82,18 @@ describe('the copy', () => {
     }
     expect(WARNING_PRODUCERS.length).toBeGreaterThan(0)
   })
+
+  it('says each warning sentence the way its issue writes it', () => {
+    // The producers measure and the table words, so the exact sentences belong here — `derive`
+    // may not import `ui` (#20 §2) and cannot assert what it only hands over as numbers.
+    expect(WARNING_COPY.wall_crossing?.({ a: 'W-2', b: 'W-5', mm: 100 })).toBe(
+      'W-2 crosses W-5 without a join: 100 mm overlap.',
+    )
+    expect(WARNING_COPY.wall_overlap?.({ a: 'W-2', b: 'W-5', mm: 450 })).toBe(
+      'W-2 runs along W-5 for 450 mm without a join.',
+    )
+    expect(WARNING_COPY.item_crosses_room?.({ a: 'Base 600 #2', b: 'Bedroom', m2: 0.05, pct: 20.833_333 })).toBe(
+      'Base 600 #2 crosses Bedroom: 0.05 m² (21%) of its footprint is outside.',
+    )
+  })
 })

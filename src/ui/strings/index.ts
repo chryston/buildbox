@@ -892,6 +892,8 @@ export const WARNING_COPY: Readonly<Record<string, (params: WarningParams) => st
     `${String(params.a)} crosses ${String(params.b)} without a join: ${mmWords(Number(params.mm))} mm overlap.`,
   wall_overlap: (params) =>
     `${String(params.a)} runs along ${String(params.b)} for ${mmWords(Number(params.mm))} mm without a join.`,
+  item_crosses_room: (params) =>
+    `${String(params.a)} crosses ${String(params.b)}: ${Number(params.m2).toFixed(2)} m² (${Math.round(Number(params.pct))}%) of its footprint is outside.`,
 }
 
 /** The sentence one warning says. */

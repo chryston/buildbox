@@ -13,11 +13,18 @@
  * warning there is or will be, and a producer that got one of them wrong would be a warning
  * that silently never reopens.
  */
-import type { Acknowledgement, EntityId, WallJustification, WallRefLine } from '../../domain'
-import type { ClosedPath } from '../../geometry'
+import type {
+  Acknowledgement,
+  EntityId,
+  ItemFootprint,
+  RoomOutline,
+  WallJustification,
+  WallRefLine,
+} from '../../domain'
+import type { ClosedPath, Pt } from '../../geometry'
 
-/** What kind of entity a warning is about. Later issues extend this list (#67, #76–#79). */
-export type WarningSubjectKind = 'wall' | 'opening' | 'placedItem'
+/** What kind of entity a warning is about. Later issues extend this list (#76–#79). */
+export type WarningSubjectKind = 'wall' | 'opening' | 'placedItem' | 'room'
 
 /** One entity a warning involves. The primary subject is always first (#66 §1). */
 export interface WarningSubject {
@@ -93,6 +100,47 @@ export interface WarningJunction {
 }
 
 /**
+ * One Room as a producer may read it (#67 §16).
+ *
+ * `source` is the stored Outline and `outline` the same thing evaluated, in Floor coordinates.
+ * A producer measures on the second and signs the first, which is the same split the Walls
+ * above use between `line` and `outline`.
+ */
+export interface WarningRoom {
+  readonly id: EntityId
+  readonly floorId: EntityId
+  readonly name: string
+  readonly source: RoomOutline
+  readonly outline: ClosedPath
+}
+
+/**
+ * One Placed Item as a producer may read it (#67 §16).
+ *
+ * The four fields the crossing warning's signature is built from are here in the form the
+ * model holds them — `translation`, `rotationDeg`, `footprint`, `origin` — and never as a
+ * derived path, so rotating an item moves the signature while a new sentence for the same
+ * rotation does not.
+ */
+export interface WarningPlacement {
+  readonly id: EntityId
+  readonly itemDesignId: EntityId
+  /**
+   * What the user calls it: the Item Design's name, with ` #N` when that Design has more than
+   * one Placed Item on this Floor — `Base 600 #2`. A Placed Item owns no name of its own, so
+   * the ordinal is the only thing that tells two of them apart (#67 §16).
+   */
+  readonly label: string
+  /** The Item Footprint through the placement, arcs still arcs. */
+  readonly worldPath: ClosedPath
+  readonly translation: Pt
+  readonly rotationDeg: number
+  /** The Design's Item Footprint, or `null` for a cabinet, whose outline is a scene layout. */
+  readonly footprint: ItemFootprint | null
+  readonly origin: Pt
+}
+
+/**
  * Everything a producer is given: one Floor's model, and nothing else (#66 §1, criterion 2).
  *
  * This type is the guarantee that a view change cannot reopen a warning. Producers are not
@@ -104,6 +152,8 @@ export interface WarningFloor {
   readonly floorId: EntityId
   readonly walls: readonly WarningWall[]
   readonly junctions: readonly WarningJunction[]
+  readonly rooms: readonly WarningRoom[]
+  readonly placements: readonly WarningPlacement[]
 }
 
 /**

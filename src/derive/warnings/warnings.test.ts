@@ -145,8 +145,14 @@ describe('status transitions (#66 §3)', () => {
 })
 
 describe('view state cannot reach a producer (criterion 2)', () => {
-  it('exposes nothing but the Floor, its Walls and their Junctions', () => {
-    expect(Object.keys(warningFloorOf(crossingProject(), FLOOR)).sort()).toEqual(['floorId', 'junctions', 'walls'])
+  it('exposes nothing but the Floor, its Walls, their Junctions, its Rooms and its Placed Items', () => {
+    expect(Object.keys(warningFloorOf(crossingProject(), FLOOR)).sort()).toEqual([
+      'floorId',
+      'junctions',
+      'placements',
+      'rooms',
+      'walls',
+    ])
   })
 
   it('has no field to read a view, a Layer, a Range, a viewport or a pane layout', () => {
@@ -163,7 +169,7 @@ describe('view state cannot reach a producer (criterion 2)', () => {
     void floor.panes
     // @ts-expect-error a WarningFloor has no revision
     void floor.revision
-    expect(Object.keys(floor).sort()).toEqual(['floorId', 'junctions', 'walls'])
+    expect(Object.keys(floor).sort()).toEqual(['floorId', 'junctions', 'placements', 'rooms', 'walls'])
   })
 
   it('leaves an acknowledgement acknowledged across every view-only change of the Project', () => {
