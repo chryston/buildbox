@@ -42,15 +42,15 @@ const grouped = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0 })
 
 /** The justification in the words a plan reader has, never the data's own names. */
 const JUSTIFICATION_WORDS: Record<Wall['justification'], string> = {
-  centre: 'Centre',
-  left: 'Face on this side',
-  right: 'Face on the other side',
+  centre: STRINGS.originCentre,
+  left: STRINGS.justificationThisSide,
+  right: STRINGS.justificationOtherSide,
 }
 
 const CLASSIFICATION_WORDS: Record<NonNullable<Wall['classification']>, string> = {
-  external: 'External',
-  internal: 'Internal',
-  partition: 'Partition',
+  external: STRINGS.classificationExternal,
+  internal: STRINGS.classificationInternal,
+  partition: STRINGS.classificationPartition,
 }
 
 function Row(props: { testId: string; label: string; value: string }): ReactNode {
@@ -89,7 +89,7 @@ export function WallInspector(props: WallInspectorProps): ReactNode {
       />
       {isArc && radius !== null && (
         <NumberField
-          label="Radius"
+          label={STRINGS.radius}
           testId="wall-radius"
           value={radius}
           kind="mm"

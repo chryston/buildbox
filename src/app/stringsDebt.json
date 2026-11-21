@@ -1,20 +1,4 @@
 {
-  "ui/workspace/wall/WallInspector.tsx": [
-    "Centre",
-    "Face on this side",
-    "Face on the other side",
-    "External",
-    "Internal",
-    "Partition",
-    "Radius"
-  ],
-  "ui/workspace/opening/OpeningInspector.tsx": [
-    "Door",
-    "Window",
-    "Removed section",
-    "Opens toward this side of ",
-    "Opens toward 's other side"
-  ],
   "ui/legacy/sessionBindings.ts": [
     "Saving…",
     "Save failed",

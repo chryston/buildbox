@@ -744,6 +744,17 @@ export const STRINGS = {
   toolWall: 'Wall',
   toolOpening: 'Door / window',
   toolEllipticalArc: 'Elliptical arc',
+  // The Wall and Opening inspectors' read-only words (#64, #65, #66 §17).
+  kindDoor: 'Door',
+  kindWindow: 'Window',
+  kindRemovedSection: 'Removed section',
+  /** The swing is described from the plan reader's side, never as `L` or `R` (D6). */
+  opensThisSide(hostRef: string): string {
+    return `Opens toward this side of ${hostRef}`
+  },
+  opensOtherSide(hostRef: string): string {
+    return `Opens toward ${hostRef}'s other side`
+  },
 } as const
 
 /**

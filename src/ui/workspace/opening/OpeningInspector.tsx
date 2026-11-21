@@ -30,14 +30,14 @@ import { readoutMm } from '../displayUnits'
 const grouped = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0 })
 
 const KIND_WORDS: Record<Opening['kind'], string> = {
-  door: 'Door',
-  window: 'Window',
-  removed_section: 'Removed section',
+  door: STRINGS.kindDoor,
+  window: STRINGS.kindWindow,
+  removed_section: STRINGS.kindRemovedSection,
 }
 
 /** Which face the leaf swings toward, in the words a plan reader has. */
 export const swingSentence = (swing: 'left' | 'right', hostRef: string): string =>
-  swing === 'left' ? `Opens toward this side of ${hostRef}` : `Opens toward ${hostRef}'s other side`
+  swing === 'left' ? STRINGS.opensThisSide(hostRef) : STRINGS.opensOtherSide(hostRef)
 
 export interface OpeningInspectorProps {
   opening: Opening
