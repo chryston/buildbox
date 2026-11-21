@@ -1,5 +1,5 @@
 /**
- * The six golden drawings of the display list (#60 criterion 7).
+ * The seven golden drawings of the display list (#60 criterion 7).
  *
  * A golden is the whole point of this module: the same Project, run twice, must produce the
  * same bytes. That is a stronger claim than "the pixels look the same" — it is what lets
@@ -23,16 +23,19 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   cabinetSceneUnits,
+  deriveWalls,
   effectiveFloor,
   effectiveItemDetail,
 } from '../derive'
 import type { Floor, GenericItemDesign, ItemDesign, ItemFootprint, PlanView, PlacedItem, PresetItemFootprint, Project } from '../domain'
 import { computeSceneLayout } from '../cabinet'
 import { drawItemDetail } from './itemDetail'
+import { wallOpenings } from './openings'
 import { measureRect } from './font/layoutText'
 import { drawPlanView } from './planView'
 import { drawSelectionAnnotations } from './annotations'
 import { serializeSvg, toSvgTree } from './svg'
+import { drawWalls } from './walls'
 import { FONT_STACK } from './styles'
 import type { DisplayList, Sizing } from './types'
 import { basicProject } from '../derive/testing'
@@ -169,6 +172,63 @@ const CURVES = projectOf(
   ],
 )
 
+/**
+ * Two Walls of an L, each carrying a different kind of Opening (#65 §12).
+ *
+ * One scene holds the whole vocabulary on purpose — a hinged door's leaf and swing, a sliding
+ * pair, a window's three lines, a removed section's dashes — and the band is cut at every jamb,
+ * so a gap that stopped being a gap would show up here as bytes.
+ */
+const OPENINGS: Project = {
+  ...projectOf([], []),
+  existingModel: {
+    placedItems: [],
+    walls: [
+      {
+        id: 'wall-a',
+        ref: 'W-1',
+        floorId: 'floor-1',
+        line: { kind: 'line', start: { x: 0, y: 0 }, end: { x: 6000, y: 0 } },
+        thickness: 200,
+        justification: 'centre',
+        baseElevation: 0,
+        height: 2600,
+      },
+      {
+        id: 'wall-b',
+        ref: 'W-2',
+        floorId: 'floor-1',
+        line: { kind: 'line', start: { x: 6000, y: 0 }, end: { x: 6000, y: 4000 } },
+        thickness: 200,
+        justification: 'centre',
+        baseElevation: 0,
+        height: 2600,
+      },
+    ],
+    wallJunctions: [
+      { id: 'j-1', floorId: 'floor-1', ends: [{ wallId: 'wall-a', end: 'end' }, { wallId: 'wall-b', end: 'start' }] },
+    ],
+    openings: [
+      {
+        id: 'open-door', floorId: 'floor-1', hostWallId: 'wall-a', kind: 'door', label: 'Door 1',
+        start: 800, width: 900, sill: 0, head: 2100, swing: 'left', hingeSide: 'start',
+      },
+      {
+        id: 'open-window', floorId: 'floor-1', hostWallId: 'wall-a', kind: 'window', label: 'Window 1',
+        start: 3000, width: 1500, sill: 900, head: 2400,
+      },
+      {
+        id: 'open-slide', floorId: 'floor-1', hostWallId: 'wall-b', kind: 'door', label: 'Door 2',
+        start: 600, width: 1800, sill: 0, head: 2100, swing: 'sliding',
+      },
+      {
+        id: 'open-removed', floorId: 'floor-1', hostWallId: 'wall-b', kind: 'removed_section',
+        label: 'Removed section 1', start: 2600, width: 1200, sill: 0, head: 2600,
+      },
+    ],
+  },
+}
+
 /** A Floor with a Plan Image and a cabinet and two generics on it, from a committed fixture. */
 const BASIC = basicProject()
 const BASIC_FLOOR = BASIC.floors.find((f) => f.planImage !== null) ?? BASIC.floors[0]!
@@ -176,7 +236,7 @@ const BASIC_VIEW: PlanView = BASIC.views.find((v) => v.floorId === BASIC_FLOOR.i
 const BASIC_CABINET = BASIC.itemDesigns.find((d) => d.kind === 'cabinet')!
 const BASIC_GENERIC = BASIC.itemDesigns.find((d) => d.kind === 'generic')!
 
-// --- The six scenes -------------------------------------------------------------
+// --- The seven scenes -----------------------------------------------------------
 
 describe('golden: the display list', () => {
   goldenBoth('plan-empty', (sizing) => drawPlanView(
@@ -203,6 +263,14 @@ describe('golden: the display list', () => {
     { sizing, formatLength: wholeMm },
   ))
 
+  goldenBoth('plan-openings', (sizing) => drawWalls(
+    deriveWalls(OPENINGS, 'floor-1'),
+    {
+      sizing,
+      openings: wallOpenings(OPENINGS.existingModel.walls, OPENINGS.existingModel.wallJunctions, OPENINGS.existingModel.openings),
+    },
+  ))
+
   goldenBoth('cabinet-detail', (sizing) => drawItemDetail(
     {
       kind: 'cabinet',
@@ -222,10 +290,10 @@ describe('golden: the display list', () => {
 
 // --- What every golden must, and must not, contain -------------------------------
 
-/** The twelve files, by the name the pair is written under. */
+/** The fourteen files, by the name the pair is written under. */
 const SCENES = [
   'plan-empty', 'plan-image-items', 'plan-curves',
-  'plan-selected-annotations', 'cabinet-detail', 'item-detail-generic',
+  'plan-selected-annotations', 'plan-openings', 'cabinet-detail', 'item-detail-generic',
 ] as const
 
 const bytesOf = (name: string, sizing: 'screen' | 'paper'): string =>

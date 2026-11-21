@@ -12,6 +12,8 @@
  */
 import type { DerivedWall, FloorWalls } from '../derive'
 import type { Pt } from '../geometry'
+import { faceCurveCommands, openingItems, pieceCommands } from './openings'
+import type { WallOpenings } from './openings'
 import { layoutText } from './font/layoutText'
 import { lineCommands, pathToCommands, rectCommands } from './path'
 import { resolveSize } from './styles'
@@ -22,12 +24,21 @@ import type {
   PathCommand,
   Rect,
   Sizing,
+  StyleKey,
 } from './types'
 
 export interface WallDrawOptions {
   sizing: Sizing
   /** The selected Wall, drawn with its end handles and a heavier line. */
   selectedWallId?: string | null
+  /**
+   * Every Wall's Openings, already resolved against their host (#65 §12). A Wall with one is
+   * drawn as the band the gaps leave — pieces between jambs — and never as one whole outline,
+   * because a gap painted over is a gap that reads on paper as Wall.
+   */
+  openings?: readonly WallOpenings[]
+  /** The selected Opening, drawn heavier than its neighbours. */
+  selectedOpeningId?: string | null
 }
 
 const mid = (a: Pt, b: Pt): Pt => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 })
@@ -75,8 +86,9 @@ function bandCentre(wall: DerivedWall): { at: Pt; across: Pt } {
  * end handles as squares on the tidied end caps.
  */
 export function drawWalls(walls: FloorWalls, options: WallDrawOptions): DisplayList {
-  const { sizing, selectedWallId = null } = options
+  const { sizing, selectedWallId = null, openings = [], selectedOpeningId = null } = options
   const shapes: DisplayItem[] = []
+  const symbols: DisplayItem[] = []
   const labels: DisplayItem[] = []
   const handles: DisplayItem[] = []
   const taken: Rect[] = []
@@ -90,21 +102,47 @@ export function drawWalls(walls: FloorWalls, options: WallDrawOptions): DisplayL
       w: Math.max(box.x + box.w, bounds.x + bounds.w) - Math.min(box.x, bounds.x),
       h: Math.max(box.y + box.h, bounds.y + bounds.h) - Math.min(box.y, bounds.y),
     }
-    shapes.push({
-      kind: 'path',
-      ref: { id: wall.id, role: 'wall' },
-      segments: pathToCommands(wall.outline),
-      closed: true,
-      style: wall.id === selectedWallId ? 'wall:selected' : 'wall',
-    })
-    for (const index of [0, 1] as const) {
+    const style: StyleKey = wall.id === selectedWallId ? 'wall:selected' : 'wall'
+    const hosted = openings.find((entry) => entry.wallId === wall.id)
+    if (hosted === undefined) {
       shapes.push({
         kind: 'path',
-        ref: { id: wall.id, role: 'wall-face' },
-        segments: faceCommands(wall, index),
-        closed: false,
-        style: 'wall-face',
+        ref: { id: wall.id, role: 'wall' },
+        segments: pathToCommands(wall.outline),
+        closed: true,
+        style,
       })
+      for (const index of [0, 1] as const) {
+        shapes.push({
+          kind: 'path',
+          ref: { id: wall.id, role: 'wall-face' },
+          segments: faceCommands(wall, index),
+          closed: false,
+          style: 'wall-face',
+        })
+      }
+    } else {
+      // The band as the pieces its Openings leave, each with the stretch of face it carries.
+      const { line, offsets } = hosted.symbols[0]
+      for (const piece of hosted.pieces) {
+        shapes.push({
+          kind: 'path',
+          ref: { id: wall.id, role: 'wall' },
+          segments: pieceCommands(piece),
+          closed: true,
+          style,
+        })
+        for (const index of [0, 1] as const) {
+          shapes.push({
+            kind: 'path',
+            ref: { id: wall.id, role: 'wall-face' },
+            segments: faceCurveCommands(line, offsets[index], piece.from, piece.to),
+            closed: false,
+            style: 'wall-face',
+          })
+        }
+      }
+      for (const symbol of hosted.symbols) symbols.push(...openingItems(symbol, symbol.id === selectedOpeningId))
     }
 
     const size = resolveSize('plan-label', sizing)
@@ -160,6 +198,7 @@ export function drawWalls(walls: FloorWalls, options: WallDrawOptions): DisplayL
 
   const layers: DisplayLayer[] = []
   if (shapes.length > 0) layers.push({ key: 'walls', items: shapes })
+  if (symbols.length > 0) layers.push({ key: 'wall-openings', items: symbols })
   if (labels.length > 0) layers.push({ key: 'wall-labels', items: labels })
   if (handles.length > 0) layers.push({ key: 'plan-handle', items: handles })
   return { space: 'floor', bounds: box ?? { x: 0, y: 0, w: 0, h: 0 }, layers, missingGlyphs: [] }
