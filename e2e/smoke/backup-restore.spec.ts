@@ -60,14 +60,15 @@ test('a Backup restored into an empty profile is the same Project', async ({ pag
 
     // #56: a Backup is written at the domain version the app writes, so a record from before
     // Floors comes back migrated — the same step opening the Project takes. #58 moved that
-    // version to 3, where an Item Footprint is a shape rather than a pair of numbers, and #64
-    // to 4, where a Project carries Walls, Wall Junctions and a default Wall height.
+    // version to 3, where an Item Footprint is a shape rather than a pair of numbers, #64
+    // to 4, where a Project carries Walls, Wall Junctions and a default Wall height, and #65
+    // to 5, where it carries Openings too.
     // Everything the migration cannot invent is still compared byte for byte; the Plan View ids
     // it mints are compared as a shape, because opening an unmigrated record mints fresh ones
     // every time.
     const restoredRecord = await storedRecord(restored, 'proj-kitchen-wall')
     if (restoredRecord === null) throw new Error('the restore wrote no record')
-    expect(restoredRecord.schemaVersion).toBe(4)
+    expect(restoredRecord.schemaVersion).toBe(5)
     expect(canonical(withoutMintedViewIds(restoredRecord.data)))
       .toBe(canonical(migratedForComparison(record.data, record.schemaVersion)))
     expect(await storedAssetHashes(restored)).toEqual(originalAssets)
