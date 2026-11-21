@@ -58,6 +58,7 @@ import { RoomInspector } from './rooms/RoomInspector'
 import { RoomDraftOverlay } from './rooms/RoomDraftOverlay'
 import { ShelterLayer } from './rooms/ShelterLayer'
 import { roomDraftOutline, roomOutlineShapePath, roomOverlapPreview, shelterName, shelterOutline, shelterPackName } from './rooms/roomDraft'
+import { roomMembershipSentence } from './rooms/membership'
 import type { PathDraft } from './shape/draftPath'
 import { mergeableNeighbour } from './wall/wallDraft'
 import type { WallChainDraft, WallDraft } from './wall/wallDraft'
@@ -1295,6 +1296,9 @@ export function FloorWorkspace(): ReactNode {
             canTransfer={selected !== null && project.floors.length > 1}
             preview={designPreview}
             pickingOrigin={pickingOrigin}
+            membership={floorRooms === null || floorRooms.rooms.length === 0 || selection === null
+              ? undefined
+              : roomMembershipSentence(floorRooms.membership.get(selection))}
             onSetPosition={setPosition}
             onSetRotation={setRotation}
             onEditDesign={editDesign}
