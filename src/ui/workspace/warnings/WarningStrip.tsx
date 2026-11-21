@@ -126,7 +126,9 @@ export function WarningStrip(props: WarningStripProps): ReactNode {
               </span>
               {warning.status === 'reopened' && (
                 <span className="bb-warnings-status" data-testid={`warning-status-${warning.key}`}>
-                  {STRINGS.warningReopened}
+                  {warning.acknowledgement?.note
+                    ? STRINGS.warningReopenedNote(warning.acknowledgement.note)
+                    : STRINGS.warningReopened}
                 </span>
               )}
               {warning.status === 'acknowledged' && drafting?.key !== warning.key && (

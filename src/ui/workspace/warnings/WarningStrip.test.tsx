@@ -113,7 +113,9 @@ describe('the rows', () => {
 
   it('marks the reopened one and keeps the note written before it reopened', () => {
     const { warnings } = shown()
-    expect(screen.getByTestId(`warning-status-${warnings[1]!.key}`).textContent).toBe('Reopened after change')
+    expect(screen.getByTestId(`warning-status-${warnings[1]!.key}`).textContent).toBe(
+      'Reopened after change · Waiting on the survey',
+    )
     expect(screen.getByTestId(`warning-status-${warnings[2]!.key}`).textContent).toBe(
       'Seen ✓ · Service run, agreed with the engineer',
     )

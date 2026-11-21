@@ -501,6 +501,7 @@ exports[`the copy > is the whole vocabulary of the interface 1`] = `
   "warningNote": "Note",
   "warningNoteOptional": "Note (optional)",
   "warningReopened": "Reopened after change",
+  "warningReopenedNote": [Function],
   "warningSave": "Save",
   "warningSeen": "Seen ✓",
   "warningSeenNote": [Function],

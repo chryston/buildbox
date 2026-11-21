@@ -494,6 +494,8 @@ export const STRINGS = {
   /** The note stays visible after a reopen: a note that vanishes was never read. */
   warningSeenNote: (note: string): string => `Seen ✓ · ${note}`,
   warningReopened: 'Reopened after change',
+  /** A reopened row keeps the note written before it reopened, beside the label (#66 §3). */
+  warningReopenedNote: (note: string): string => `Reopened after change · ${note}`,
   /** Only reachable when a producer registers a `messageKey` this table has no row for. */
   warningCopyMissing: 'This warning has no wording yet.',
   // The sentences that came out of the components and into this table (#66 §17). Each one is
