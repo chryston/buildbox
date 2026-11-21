@@ -17,9 +17,11 @@ import { describe, expect, it } from 'vitest'
 import { area, distanceToOutline, pt } from '../geometry'
 import type { ClosedPath, Pt } from '../geometry'
 import type { Project, Room } from '../domain'
+import { roomSegments } from '../domain'
 import { createDeriveCache } from './cache'
-import { deriveRooms, roomMembershipOf } from './rooms'
+import { deriveRooms, roomFaceCandidates, roomFaceLabel, roomMembershipOf } from './rooms'
 import type { MeasurableRoom, RoomMembership } from './rooms'
+import { deriveWalls } from './walls'
 import { domainFixture } from './testing'
 
 const FLOOR = 'floor-main'
@@ -237,5 +239,67 @@ describe('the Rooms cache entry (#67 §3)', () => {
     const mezz = cache.rooms(project, 1, 'floor-mezz')
     expect(cache.rooms(project, 1, FLOOR).floorId).toBe(FLOOR)
     expect(cache.rooms(project, 1, 'floor-mezz')).toBe(mezz)
+  })
+})
+
+describe('the faces a Room edge may claim (#67 §10)', () => {
+  // The Walls fixture: W-1 runs (0,0) → (4000,0) 150 mm thick, so its faces lie at y = ±75; W-2
+  // runs (4000,0) → (4000,2700) 100 mm thick, so its faces lie at x = 3950 and x = 4050.
+  const wallsFixture = deriveWalls(domainFixture('v4/walls.json'), FLOOR)
+  // A Kitchen standing on W-1's upper face, 2000 mm deep and 50 mm short of W-2, so each of its
+  // sides lies within the extent of the face it faces.
+  const kitchen = room('room-kitchen', 'Kitchen', rect(0, 75, 3900, 2075))
+  const edges = roomSegments(kitchen.outline)
+  const top = edges[0]!
+  const right = edges[1]!
+
+  const offered = (segmentId: string, reach: number, rooms: readonly Room[] = [kitchen]) =>
+    roomFaceCandidates(kitchen, segmentId, wallsFixture, rooms, reach)
+
+  it('lists the parallel faces within reach, nearest first, each named for what it borders', () => {
+    const list = offered(top.id, 500)
+    expect(list.map((each) => [each.wallRef, each.side, Math.round(each.distanceMm)])).toEqual([
+      ['W-1', 'right', 0],
+      ['W-1', 'left', 150],
+    ])
+    expect(list[0]?.onFace).toBe(true)
+    expect(list[1]?.onFace).toBe(false)
+    // The face the Kitchen stands on is its own side; the one behind the Wall borders nothing.
+    expect(list[0]?.label).toBe("W-1 · Kitchen's side")
+    expect(list[1]?.label).toBe('W-1 · far side')
+  })
+
+  it('keeps a face out of the list when it is further away than the reach', () => {
+    expect(offered(top.id, 20).map((each) => each.side)).toEqual(['right'])
+  })
+
+  it('never offers a face the edge is skew to, however close it is', () => {
+    // W-2's faces stand 50 mm off this Edge but run across it: claiming one would need a move the
+    // Intent must refuse, so they are not offered at all.
+    expect(offered(top.id, 500).some((each) => each.wallRef === 'W-2')).toBe(false)
+    // The same Wall's face is offered to the Edge that runs beside it.
+    const side = offered(right.id, 500)
+    expect(side[0]?.wallRef).toBe('W-2')
+    expect(Math.round(side[0]?.distanceMm ?? 0)).toBe(50)
+    expect(side[0]?.label).toBe("W-2 · Kitchen's side")
+  })
+
+  it('carries the Outline the attach would produce: the edge on the face, the Room still closed', () => {
+    const far = offered(top.id, 500)[1]
+    expect(far?.outline).not.toBeNull()
+    const moved = far?.outline === null || far?.outline === undefined ? [] : roomSegments(far.outline)
+    expect(moved).toHaveLength(4)
+    expect(moved[0]?.from.y).toBe(-75)
+    expect(moved[0]?.segment.kind === 'line' ? moved[0].segment.to.y : 99).toBe(-75)
+    // The neighbours followed along their own lines: the Room is 2000 mm deep still.
+    expect(moved[2]?.from.y).toBe(2075)
+  })
+
+  it('names the far face for the Room that borders it', () => {
+    const balcony = room('room-balcony', 'Balcony', rect(0, -3075, 3900, -75))
+    const face = wallsFixture.faces.find((each) => each.wallId === 'wall-1' && each.side === 'left')!
+    expect(roomFaceLabel(kitchen, face, wallsFixture, [kitchen, balcony])).toBe('W-1 · Balcony side')
+    // With nothing on the other side, the truth is that it faces away from every Room.
+    expect(roomFaceLabel(kitchen, face, wallsFixture, [kitchen])).toBe('W-1 · far side')
   })
 })
