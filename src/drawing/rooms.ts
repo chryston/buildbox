@@ -192,6 +192,24 @@ export function drawRooms(rooms: FloorRooms, options: RoomDrawOptions): DisplayL
       style: 'room-hit',
     })
 
+    // An Edge that claims a Wall face says so on the drawing: a badge at its middle, the same size
+    // whatever the zoom, so a Floor full of Rooms reads as which sides are shared (#67 §12).
+    for (const anchor of room.anchors) {
+      const r = resolveSize('room-anchor', sizing).mm / 2
+      marks.push({
+        kind: 'path',
+        ref: { id: `${room.id}#${anchor.segmentId}`, role: 'room-anchor' },
+        segments: [
+          { k: 'M', to: { x: anchor.at.x, y: anchor.at.y - r } },
+          { k: 'L', to: { x: anchor.at.x + r, y: anchor.at.y } },
+          { k: 'L', to: { x: anchor.at.x, y: anchor.at.y + r } },
+          { k: 'L', to: { x: anchor.at.x - r, y: anchor.at.y } },
+        ],
+        closed: true,
+        style: 'room-anchor',
+      })
+    }
+
     const full = resolveSize('plan-label', sizing)
     const small = resolveSize('room-label-min', sizing)
     const text = formatLabel(room.name, room.areaMm2)

@@ -193,3 +193,34 @@ describe('placeRoomLabel', () => {
     expect(classifyPoint(placed.at, L_SHAPE)).not.toBe('outside')
   })
 })
+
+describe('the anchor badge', () => {
+  const anchored = (over: Partial<Room> = {}): Room => ({
+    ...room('room-kitchen', 'Kitchen', rect(0, 0, 4000, 3000)),
+    wallFaceRefs: [{ segmentId: 'edge-room-kitchen-1', wallId: 'wall-a', side: 'left' }],
+    ...over,
+  })
+
+  it('marks the Edge that claims a face, and only that Edge', () => {
+    const list = drawn(deriveRooms(model([anchored(), room('room-bath', 'Bathroom', rect(5000, 0, 7000, 2000))]), FLOOR))
+    expect(withRole(list, 'room-anchor').map((item) => item.ref?.id)).toEqual(['room-kitchen#edge-room-kitchen-1'])
+  })
+
+  it('sits at the middle of the Edge it marks, at a size that does not change with the drawing', () => {
+    const list = drawn(deriveRooms(model([anchored()]), FLOOR))
+    const [badge] = withRole(list, 'room-anchor')
+    // Edge 1 runs (0,0) → (4000,0); the badge is a diamond of the screen-constant 7 mm about it.
+    expect(badge?.kind === 'path' ? badge.segments.map((s) => ('to' in s ? s.to : null)) : null).toEqual([
+      pt(2000, -3.5),
+      pt(2003.5, 0),
+      pt(2000, 3.5),
+      pt(1996.5, 0),
+    ])
+    expect(badge?.kind === 'path' ? badge.closed : false).toBe(true)
+  })
+
+  it('says nothing when no Edge claims a face', () => {
+    const list = drawn(deriveRooms(model([KITCHEN, BEDROOM]), FLOOR))
+    expect(withRole(list, 'room-anchor')).toEqual([])
+  })
+})

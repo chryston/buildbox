@@ -40,6 +40,9 @@ export const SIZE_ROLES: Record<SizeRole, SizeRow> = {
   // The one step a Room label is allowed to shrink by before it starts moving instead: still
   // readable on a screen at any zoom, and still a legible 1.8 mm of ink on a sheet.
   'room-label-min': { screen: { px: 9 }, paper: { mm: 1.8 } },
+  // The badge on an Edge that claims a Wall face: big enough to see at a glance, small enough to
+  // sit on a one-pixel outline without hiding it.
+  'room-anchor': { screen: { px: 7 }, paper: { mm: 1.4 } },
   'plan-dimension': { screen: { px: 11 }, paper: { mm: 2 } },
   'plan-chip': { screen: { px: 11 }, paper: { mm: 2 } },
   // The distances a Plan View lays its dimensions and its chip out by. These are sizes for the
@@ -174,6 +177,8 @@ export const STYLES: Record<StyleKey, Style> = {
   // one-pixel line is a hard thing to aim at — and a stroke-only path is a thing Firefox will
   // not deliver a `pointerdown` for at all (#65 §11).
   'room-hit': { fill: 'transparent', stroke: 'none' },
+  // The badge is ink, not a target: the Edge under it is what a pointer is aimed at.
+  'room-anchor': { fill: 'var(--bb-accent)', stroke: 'none', hit: 'none' },
   'room-label': { fill: 'var(--bb-text)', size: 'plan-label', fontFamily: FONT_STACK, hit: 'none' },
   'room-label:min': { fill: 'var(--bb-text)', size: 'room-label-min', fontFamily: FONT_STACK, hit: 'none' },
   'room-label-leader': { stroke: 'var(--bb-text)', strokeWidth: 'hairline', hit: 'none' },

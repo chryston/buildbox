@@ -49,6 +49,7 @@ const derived: DerivedRoom = {
   perimeterMm: 14_000,
   labelAnchor: { x: 2000, y: 1500 },
   bounds: { x: 0, y: 0, w: 4000, h: 3000 },
+  anchors: [],
 }
 
 describe('the Room inspector', () => {

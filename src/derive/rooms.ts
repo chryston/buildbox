@@ -48,6 +48,17 @@ export interface DerivedRoom {
   readonly labelAnchor: Pt
   /** The Outline's own box; the Floor's box is separate. */
   readonly bounds: Rect
+  /**
+   * The middle of every Edge that claims a Wall face, in Floor coordinates: where the badge that
+   * says "this Edge follows that face" goes (#67 §12).
+   */
+  readonly anchors: readonly RoomEdgeAnchor[]
+}
+
+/** One Edge that claims a Wall face, and the point on it the badge marks. */
+export interface RoomEdgeAnchor {
+  readonly segmentId: EntityId
+  readonly at: Pt
 }
 
 /** The least a membership answer needs to know about a Room. */
@@ -106,6 +117,12 @@ const derivedRoomsOf = (rooms: readonly Room[]): DerivedRoom[] =>
       perimeterMm: roomPerimeter(room.outline),
       labelAnchor: roomLabelAnchor(room.outline),
       bounds: rectOf(roomBounds(room.outline)),
+      anchors: roomSegments(room.outline)
+        .filter((edge) => room.wallFaceRefs.some((reference) => reference.segmentId === edge.id))
+        .map((edge) => ({
+          segmentId: edge.id,
+          at: { x: (edge.from.x + edge.segment.to.x) / 2, y: (edge.from.y + edge.segment.to.y) / 2 },
+        })),
     }
   })
 

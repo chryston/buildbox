@@ -207,6 +207,9 @@ export type StyleKey =
   /** The Room's own area again, filled with nothing the eye can see and everything a pointer
       needs: the outline is a hairline, and a hairline is a hard thing to click (#65 §11). */
   | 'room-hit'
+  /** The badge on an Edge that claims a Wall face: a filled diamond, the same size at any zoom,
+      because it marks a place on the drawing and not a place in the Flat (#67 §12). */
+  | 'room-anchor'
   /** `Kitchen · 13.08 m²`, and the one smaller size it is allowed to shrink to. */
   | 'room-label'
   | 'room-label:min'
@@ -303,6 +306,8 @@ export type SizeRole =
   | 'plan-label'
   /** The smallest a Room label is allowed to get before it moves instead (#67 behaviour 35). */
   | 'room-label-min'
+  /** The badge marking an Edge that claims a Wall face (#67 §12). */
+  | 'room-anchor'
   | 'plan-dimension'
   | 'plan-chip'
   | 'plan-dim-offset'
