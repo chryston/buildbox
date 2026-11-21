@@ -253,6 +253,13 @@ export interface ExportDeps {
   readonly contractVersion?: string
   /** True only while the Project has changes Save could not write (#14). */
   readonly unsavedChanges?: boolean
+  /**
+   * The Warnings List's sentences, keyed by `Warning.key`: the copy `ui/strings` owns, rendered for
+   * the recipe's scope by `app` with `derive`'s `warningMessages`. `export` may not import the copy
+   * table and a Worker cannot be sent a function, so the strings cross instead (#68 criterion 5).
+   * A recipe that names the Warnings List without it fails rather than writing an empty column.
+   */
+  readonly warningMessages?: Readonly<Record<string, string>>
   /** The bundled Noto Sans subset, as TrueType: a PDF embeds it, a raster labels with it. */
   readonly font?: { readonly bytes: Uint8Array }
   readonly rasterizer?: Rasterizer

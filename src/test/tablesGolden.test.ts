@@ -26,7 +26,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import * as fc from 'fast-check'
 import type { Project } from '../domain'
-import { RENOVATION_STATES, deriveWarnings, tables as deriveTables } from '../derive'
+import { RENOVATION_STATES, deriveWarnings, tables as deriveTables, warningMessages } from '../derive'
 import type { QuantityScope, Tables } from '../derive'
 import { TABLES, neutralise, quote, writeCsv } from '../export'
 import type { CsvRow, TableId } from '../export'
@@ -57,8 +57,6 @@ function scopeOf(over: Partial<QuantityScope> = {}): QuantityScope {
   }
 }
 
-const deps = { warningMessage: warningSentence }
-
 /** The row list of one table out of a whole {@link Tables}. */
 function rowsOf(at: Tables, id: TableId): readonly CsvRow[] {
   if (id === 'rooms') return at.rooms
@@ -70,7 +68,9 @@ function rowsOf(at: Tables, id: TableId): readonly CsvRow[] {
 
 /** The CSV of one table of one Project, as the writer would put it in the ZIP. */
 function bytesOf(source: Project, id: TableId, scope: QuantityScope = scopeOf()): Uint8Array {
-  return writeCsv(TABLES[id], rowsOf(deriveTables(source, scope, deps), id))
+  // The same seam `app` uses: the strip's sentences, rendered for this scope.
+  const at = deriveTables(source, scope, { warningMessages: warningMessages(source, scope, warningSentence) })
+  return writeCsv(TABLES[id], rowsOf(at, id))
 }
 
 /** One CSV's text, BOM and CRLFs and all. */

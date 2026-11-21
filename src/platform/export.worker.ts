@@ -41,6 +41,14 @@ export interface ExportWorkerDeps {
   readonly buildboxVersion: string
   readonly contractVersion?: string
   readonly unsavedChanges?: boolean
+  /**
+   * The Warnings List's sentences, keyed by `Warning.key` (#68 criterion 5).
+   *
+   * The copy table is `ui/strings`, which this Worker may not import and cannot be sent — so the
+   * main thread renders the sentences with it and sends the finished strings, exactly as it sends
+   * the one reading of a clock it will not let the Worker take.
+   */
+  readonly warningMessages?: Readonly<Record<string, string>>
 }
 
 /** One asset as it crosses into the Worker: its hash, its bytes, and what it claims to be. */

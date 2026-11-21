@@ -35,7 +35,8 @@ import type {
   RecipeViewRef,
 } from '../export'
 import type { QuantityScope } from '../derive'
-import { countUnacknowledged } from '../derive'
+import { countUnacknowledged, warningMessages } from '../derive'
+import { warningSentence } from '../ui'
 import type {
   ExportMeasurement,
   ExportPort,
@@ -377,13 +378,20 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
     async runLists(recipe: ListsRecipe, onProgress: (progress: ExportProgress) => void): Promise<ExportRunOutcome> {
       cancelled = false
       const unsavedChanges = deps.session().getSnapshot().save.kind !== 'saved'
+      const snapshot = snapshotOf()
+      // The Warnings List's sentences are the strip's own copy, which `export` may not read and a
+      // Worker may not be sent — so they are rendered here, for this scope, and the strings go over
+      // as data. Both paths take them from this one call, so the Worker's CSV and the main thread's
+      // say the same thing (#68 criterion 5).
+      const sentences = warningMessages(snapshot.project, recipe.scope, warningSentence)
       const request: ExportRunRequest = {
-        snapshot: snapshotOf(),
+        snapshot,
         deps: {
           instant: deps.clock.now(),
           localDay: deps.clock.localDate(),
           buildboxVersion: deps.buildboxVersion,
           unsavedChanges,
+          warningMessages: sentences,
         },
         job: { kind: 'lists', recipe },
       }

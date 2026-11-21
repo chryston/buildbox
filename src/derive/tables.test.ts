@@ -11,7 +11,8 @@ import { describe, expect, it } from 'vitest'
 import type { Acknowledgement, Project, Wall, WallJunction } from '../domain'
 import { RENOVATION_STATES } from './quantities/scope'
 import type { QuantityScope } from './quantities/scope'
-import { tables } from './tables'
+import { tables, warningMessages } from './tables'
+import type { TableDeps } from './tables'
 import { domainFixture } from './testing'
 import { deriveWarnings } from './warnings/engine'
 import type { WarningParams } from './warnings/types'
@@ -65,9 +66,12 @@ const scopeOf = (over: Partial<QuantityScope> = {}): QuantityScope => ({
 
 /** A sentence builder that could not be mistaken for the app's: it names its key and its subject. */
 const message = (messageKey: string, params: WarningParams): string => `${messageKey}/${String(params.a)}`
-const deps = { warningMessage: message }
+const depsFor = (project: Project, scope: QuantityScope): TableDeps => ({
+  warningMessages: warningMessages(project, scope, message),
+})
 
-const warningsOf = (project: Project, scope: QuantityScope = scopeOf()) => tables(project, scope, deps).warnings
+const warningsOf = (project: Project, scope: QuantityScope = scopeOf()) =>
+  tables(project, scope, depsFor(project, scope)).warnings
 
 describe('the Warnings rows of a Wall warning (#68 criterion 5)', () => {
   it('carries both Walls and the millimetres the intrusion measured', () => {
@@ -151,7 +155,7 @@ describe('the Warnings rows of a Wall warning (#68 criterion 5)', () => {
       drawingLayers: { layerIds: [], includeUnlayered: false },
     })
     expect(warningsOf(CROSSING, nothing)).toHaveLength(1)
-    expect(tables(CROSSING, nothing, deps).walls).toEqual([])
+    expect(tables(CROSSING, nothing, depsFor(CROSSING, nothing)).walls).toEqual([])
   })
 
   it('lists nothing for a Floor with nothing wrong on it', () => {
@@ -160,7 +164,7 @@ describe('the Warnings rows of a Wall warning (#68 criterion 5)', () => {
 })
 
 describe('the element rows of a hand-built Floor (#68 criteria 1, 3)', () => {
-  const rows = tables(CROSSING, scopeOf(), deps)
+  const rows = tables(CROSSING, scopeOf(), depsFor(CROSSING, scopeOf()))
 
   it('writes one Walls row per Wall, in stable_id order, and nothing elsewhere', () => {
     expect(rows.walls.map((row) => row.stableId)).toEqual(['wall-2', 'wall-5'])
@@ -196,8 +200,11 @@ describe('the element rows of a hand-built Floor (#68 criteria 1, 3)', () => {
       wall('wall-2', 'W-2', FLOOR, 0, 0, 4000, 0),
       wall('wall-9', 'W-9', OTHER_FLOOR, 0, 0, 1000, 0),
     ])
-    expect(tables(twoFloors, scopeOf(), deps).walls.map((row) => row.stableId)).toEqual(['wall-2'])
-    const both = tables(twoFloors, scopeOf({ floorIds: [FLOOR, OTHER_FLOOR] }), deps).walls
+    expect(tables(twoFloors, scopeOf(), depsFor(twoFloors, scopeOf())).walls.map((row) => row.stableId)).toEqual([
+      'wall-2',
+    ])
+    const bothScope = scopeOf({ floorIds: [FLOOR, OTHER_FLOOR] })
+    const both = tables(twoFloors, bothScope, depsFor(twoFloors, bothScope)).walls
     expect(both.map((row) => `${row.floor}/${row.stableId}`)).toEqual(['Floor 1/wall-2', 'Mezzanine/wall-9'])
   })
 

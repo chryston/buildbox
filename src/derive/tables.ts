@@ -31,9 +31,9 @@
  * building has, not what the screen currently shows.
  *
  * **The one sentence this module cannot build.** `message` is "exactly the in-app copy" (#68
- * Scope 3), and that copy lives in `ui/strings`, which `derive` may not import. So the caller
- * injects it: {@link TableDeps.warningMessage} is the function that turns a `messageKey` and its
- * params into the sentence, and `app` passes the very `warningSentence` the strip calls. A row
+ * Scope 3), and that copy lives in `ui/strings`, which `derive` may not import. So the caller hands
+ * over the sentences it has already rendered: {@link warningMessages} turns a scope's warnings into
+ * a map with the builder `app` supplies, and {@link TableDeps.warningMessages} is that map. A row
  * that built its own English here would be a second copy of that sentence, and the strip and the
  * CSV would drift the first time one of them was reworded.
  */
@@ -198,12 +198,15 @@ export interface Tables {
 /**
  * The copy this module is not allowed to own.
  *
- * `warningMessage` is `ui/strings`' `warningSentence`, passed in by `app` and by the tests: the
- * Warnings List's `message` column is the strip's sentence byte for byte (#68 criterion 5), and
- * the sentence lives in `ui/strings`, three layers away from here.
+ * The Warnings List's `message` column is the strip's sentence byte for byte (#68 criterion 5), and
+ * the sentence lives in `ui/strings`, three layers away from here. It arrives as a finished map —
+ * `warningMessages` builds it from `ui/strings`' `warningSentence` — rather than as the function
+ * itself, because the rows are written in a Worker that the copy table cannot be posted to: a
+ * record of strings crosses `postMessage`, a closure does not. `null` asks for no sentences at all,
+ * which is all a row count needs; a key missing from a map that *was* given is a bug, and says so.
  */
 export interface TableDeps {
-  readonly warningMessage: (messageKey: string, params: WarningParams) => string
+  readonly warningMessages: Readonly<Record<string, string>> | null
 }
 
 /**
@@ -402,7 +405,7 @@ function warningsForFloor(
         otherType: other === undefined ? '' : subjectCode(other.type),
         otherId: other?.id ?? '',
         measuredMm: warning.measured.mm ?? null,
-        message: deps.warningMessage(warning.messageKey, warning.params),
+        message: sentence(deps.warningMessages, warning.key),
         // #66 §3: a reopened warning keeps its note visible beside `Reopened after change`, so the
         // row carries it too — the note belongs to the decision, not to the status.
         acknowledgementNote: warning.acknowledgement?.note ?? '',
@@ -427,11 +430,8 @@ function warningsForFloor(
  * every time it is written (#68 criterion 9) whatever order the entities were drawn in.
  */
 export function tables(project: Project, scope: QuantityScope, deps: TableDeps): Tables {
-  const optionIds: readonly (EntityId | null)[] =
-    scope.designOptionIds === 'existing-only' ? [null] : scope.designOptionIds
-  // A scope that named the same Floor twice would write it twice; a scope is data from a dialog or
-  // a recipe file, so it is a set of Floors rather than a list to iterate.
-  const floorIds = [...new Set(scope.floorIds)]
+  const optionIds = scopeOptionIds(scope)
+  const floorIds = scopeFloorIds(project, scope)
   const floorNames = new Map<EntityId, string>(project.floors.map((floor) => [floor.id, floor.name]))
   const floorOrder = new Map<EntityId, number>(project.floors.map((floor, index) => [floor.id, index]))
   const optionOrder = new Map<string, number>(optionIds.map((id, index) => [id ?? '', index]))
@@ -492,4 +492,55 @@ export function tables(project: Project, scope: QuantityScope, deps: TableDeps):
     placedItems: byElement(placedItems),
     warnings: sortedWarnings,
   }
+}
+
+/**
+ * The sentences {@link tables} writes, keyed the way it reads them.
+ *
+ * `app` calls this with `ui/strings`' `warningSentence` and puts the result in the export request,
+ * so the Worker writes the strip's sentences without importing the copy table (#68 criterion 5).
+ * It walks the same warnings `tables` walks — the same Floors, the same Design Options, the same
+ * engine — which is what lets a missing key be treated as a bug rather than as an empty cell.
+ */
+export function warningMessages(
+  project: Project,
+  scope: QuantityScope,
+  build: (messageKey: string, params: WarningParams) => string,
+): Record<string, string> {
+  const sentences: Record<string, string> = {}
+  for (const optionId of scopeOptionIds(scope)) {
+    for (const floorId of scopeFloorIds(project, scope)) {
+      for (const warning of deriveWarnings(project, floorId, optionId).warnings) {
+        sentences[warning.key] = build(warning.messageKey, warning.params)
+      }
+    }
+  }
+  return sentences
+}
+
+/** The Design Options a scope covers; `existing-only` is the Existing Model alone. */
+function scopeOptionIds(scope: QuantityScope): readonly (EntityId | null)[] {
+  return scope.designOptionIds === 'existing-only' ? [null] : scope.designOptionIds
+}
+
+/** The Floors a scope covers, in the Project's display order; a Floor the Project lacks is not. */
+function scopeFloorIds(project: Project, scope: QuantityScope): EntityId[] {
+  // A scope that named the same Floor twice would write it twice; a scope is data from a dialog or
+  // a recipe file, so it is a set of Floors rather than a list to iterate.
+  const wanted = new Set(scope.floorIds)
+  return project.floors.filter((floor) => wanted.has(floor.id)).map((floor) => floor.id)
+}
+
+/**
+ * One warning's sentence.
+ *
+ * A map that was given and does not hold this warning means the map and the rows did not come from
+ * the same Project at the same revision; writing an empty `message` would be a Warnings List that
+ * quietly stopped saying what is wrong, so it fails instead.
+ */
+function sentence(messages: Readonly<Record<string, string>> | null, key: string): string {
+  if (messages === null) return ''
+  const found = messages[key]
+  if (found === undefined) throw new TypeError(`No warning sentence was supplied for "${key}"`)
+  return found
 }

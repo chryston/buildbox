@@ -174,10 +174,10 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
               <span>{STRINGS.exportListItems}</span>
               {summary !== null && (
                 <span
-                  className={summary.items === 0 ? 'helper bb-export-rows-empty' : 'helper'}
+                  className={summary.rows.items === 0 ? 'helper bb-export-rows-empty' : 'helper'}
                   data-testid="export-lists-rows-items"
                 >
-                  {STRINGS.exportListsRows(summary.items)}
+                  {STRINGS.exportListsRows(summary.rows.items)}
                 </span>
               )}
             </label>
@@ -196,10 +196,10 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
                 <span>{STRINGS.exportListCutList}</span>
                 {summary !== null && (
                   <span
-                    className={summary.cutList === 0 ? 'helper bb-export-rows-empty' : 'helper'}
+                    className={summary.rows['cut-list'] === 0 ? 'helper bb-export-rows-empty' : 'helper'}
                     data-testid="export-lists-rows-cut-list"
                   >
-                    {STRINGS.exportListsRows(summary.cutList)}
+                    {STRINGS.exportListsRows(summary.rows['cut-list'])}
                   </span>
                 )}
               </label>

@@ -52,8 +52,7 @@ const LISTS_FLOORS: ListsOptions = {
 
 const ITEM_SUMMARY: ListsSummary = {
   statement: 'Floor plan · All Floors · Existing only · Existing, Demolition, Proposed · all layers incl. Unlayered',
-  items: 3,
-  cutList: 0,
+  rows: { items: 3, 'cut-list': 0, rooms: 0, walls: 0, openings: 0, 'placed-items': 0, warnings: 0 },
   cutListCapable: false,
 }
 
@@ -405,7 +404,7 @@ describe('the Lists tab', () => {
     expect(screen.getByTestId('export-lists-rows-items')).toHaveTextContent('3 rows')
     expect(screen.getByTestId('export-lists-no-cabinets')).toBeInTheDocument()
 
-    fake.setListsSummary({ ...ITEM_SUMMARY, items: 0 })
+    fake.setListsSummary({ ...ITEM_SUMMARY, rows: { ...ITEM_SUMMARY.rows, items: 0 } })
     fireEvent.click(screen.getByTestId('export-lists-floor-floor-1'))
     await waitFor(() => expect(screen.getByTestId('export-lists-rows-items')).toHaveTextContent('0 rows'))
 

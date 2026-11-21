@@ -77,7 +77,7 @@ export { itemListRowsForFloor } from './quantities/itemList'
 export type { ItemListRow } from './quantities/itemList'
 export { quantities, quantitiesForFloor } from './quantities/quantities'
 export type { FloorQuantities, Quantities } from './quantities/quantities'
-export { UNLAYERED_LAYER, tables } from './tables'
+export { UNLAYERED_LAYER, tables, warningMessages } from './tables'
 export type {
   ElementColumns,
   OpeningsRow,
