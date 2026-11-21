@@ -11,9 +11,9 @@
  * colliding.
  */
 import type { DerivedWall, FloorWalls } from '../derive'
-import type { Pt } from '../geometry'
-import { faceCurveCommands, openingItems, pieceCommands } from './openings'
-import type { WallOpenings } from './openings'
+import type { Pt, UsableGap } from '../geometry'
+import { faceCurveCommands, gapMarkItems, openingItems, pieceCommands } from './openings'
+import type { OpeningSymbol, WallOpenings } from './openings'
 import { layoutText } from './font/layoutText'
 import { lineCommands, pathToCommands, rectCommands } from './path'
 import { resolveSize } from './styles'
@@ -39,6 +39,25 @@ export interface WallDrawOptions {
   openings?: readonly WallOpenings[]
   /** The selected Opening, drawn heavier than its neighbours. */
   selectedOpeningId?: string | null
+  /**
+   * The Opening being placed right now (#65 §10): a ghost of the symbol at the position the
+   * pointer is aiming at, in the accent when it fits and in the danger colour when it does not,
+   * with the stretch it would violate marked between its ends.
+   *
+   * A ghost rather than a cut: the band is only broken once the Opening exists, so the preview
+   * shows what the click would do without doing it.
+   */
+  preview?: OpeningPreview | null
+}
+
+/** The ghost of an Opening that has not been placed yet. */
+export interface OpeningPreview {
+  /** The symbol at the position being aimed at, host geometry already resolved. */
+  symbols: readonly OpeningSymbol[]
+  /** Whether it fits where it stands. */
+  blocked: boolean
+  /** The stretch that would be violated, in millimetres along the host. */
+  gap: UsableGap | null
 }
 
 const mid = (a: Pt, b: Pt): Pt => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 })
@@ -86,7 +105,7 @@ function bandCentre(wall: DerivedWall): { at: Pt; across: Pt } {
  * end handles as squares on the tidied end caps.
  */
 export function drawWalls(walls: FloorWalls, options: WallDrawOptions): DisplayList {
-  const { sizing, selectedWallId = null, openings = [], selectedOpeningId = null } = options
+  const { sizing, selectedWallId = null, openings = [], selectedOpeningId = null, preview = null } = options
   const shapes: DisplayItem[] = []
   const symbols: DisplayItem[] = []
   const labels: DisplayItem[] = []
@@ -142,7 +161,9 @@ export function drawWalls(walls: FloorWalls, options: WallDrawOptions): DisplayL
           })
         }
       }
-      for (const symbol of hosted.symbols) symbols.push(...openingItems(symbol, symbol.id === selectedOpeningId))
+      for (const symbol of hosted.symbols) {
+        symbols.push(...openingItems(symbol, symbol.id === selectedOpeningId ? 'opening:selected' : 'opening'))
+      }
     }
 
     const size = resolveSize('plan-label', sizing)
@@ -198,6 +219,14 @@ export function drawWalls(walls: FloorWalls, options: WallDrawOptions): DisplayL
 
   const layers: DisplayLayer[] = []
   if (shapes.length > 0) layers.push({ key: 'walls', items: shapes })
+  if (preview !== null) {
+    const style = preview.blocked ? 'opening:preview-blocked' : 'opening:preview'
+    for (const symbol of preview.symbols) symbols.push(...openingItems(symbol, style))
+    if (preview.blocked && preview.gap !== null) {
+      const [first] = preview.symbols
+      if (first !== undefined) symbols.push(...gapMarkItems(first, preview.gap.from, preview.gap.to))
+    }
+  }
   if (symbols.length > 0) layers.push({ key: 'wall-openings', items: symbols })
   if (labels.length > 0) layers.push({ key: 'wall-labels', items: labels })
   if (handles.length > 0) layers.push({ key: 'plan-handle', items: handles })

@@ -56,6 +56,12 @@ export interface DisplayListInteractions {
   onItemPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
   /** A Wall band, clicked where it is drawn: it becomes the selected Wall (#64 §15). */
   onWallPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
+  /**
+   * An Opening's symbol, clicked where it is drawn: it becomes the selected Opening (#65 §11).
+   * Every part of the symbol — leaf, swing, glass lines — answers, because a person clicks the
+   * middle of a door, not the one millimetre of its leaf.
+   */
+  onOpeningPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
   /** The rotate grip: it starts a turn. */
   onRotatePointerDown?: (id: string, event: React.PointerEvent<SVGPathElement>) => void
   /** A click anywhere on a unit's own box. */
@@ -253,6 +259,14 @@ function renderNode(
     }
     if (role === 'wall' && interactions?.onWallPointerDown !== undefined) {
       const pick = interactions.onWallPointerDown
+      props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => {
+        event.stopPropagation()
+        pick(id, event)
+      }) as never
+      props.style = { cursor: 'pointer' }
+    }
+    if (role.startsWith('opening-') && role !== 'opening-gap' && interactions?.onOpeningPointerDown !== undefined) {
+      const pick = interactions.onOpeningPointerDown
       props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => {
         event.stopPropagation()
         pick(id, event)

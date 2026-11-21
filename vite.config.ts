@@ -46,6 +46,8 @@ const NODE_ONLY_INCLUDE = [
   'src/ui/workspace/shape/**/*.test.ts',
   // The Wall draft machine (#64 §12) is the same kind of thing: UI state, no React, no DOM.
   'src/ui/workspace/wall/**/*.test.ts',
+  // So is the Door / window tool's aim (#65 §10): a function of the pointer, no React, no DOM.
+  'src/ui/workspace/opening/**/*.test.ts',
   // #58 criterion 10's property test drives the controller against `edit`, which only the
   // `src/integration` element may import. It is a Node test all the same.
   'src/integration/**/*.property.test.ts',

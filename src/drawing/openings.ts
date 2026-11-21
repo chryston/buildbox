@@ -24,7 +24,7 @@ import {
   usableIntervals,
   wallPieces,
 } from '../geometry'
-import { pathToCommands } from './path'
+import { lineCommands, pathToCommands } from './path'
 import type { DisplayItem, PathCommand, StyleKey } from './types'
 
 /** One Opening resolved against its host, ready to draw. */
@@ -213,13 +213,41 @@ function faceLines(symbol: OpeningSymbol, style: StyleKey, role: string, withRef
   }))
 }
 
+/**
+ * Which of the four Opening marks a symbol is drawn as.
+ *
+ * The plain one is the committed Opening; the selected one is heavier; the two previews are the
+ * ghost under the pointer, in the accent while it fits and in the danger colour while it does
+ * not (#65 §10). A window or a removed section takes the emphasis too — a selected window that
+ * looks exactly like the other six is a window nobody can find.
+ */
+export type OpeningStyle = 'opening' | 'opening:selected' | 'opening:preview' | 'opening:preview-blocked'
+
 /** The items of one Opening, in the order the layer draws them. */
-export function openingItems(symbol: OpeningSymbol, selected: boolean): DisplayItem[] {
-  const style: StyleKey = selected ? 'opening:selected' : 'opening'
-  if (symbol.kind === 'window') return faceLines(symbol, 'opening-window-line', 'opening-window', true)
-  if (symbol.kind === 'removed_section') return faceLines(symbol, 'opening-removed', 'opening-removed', false)
+export function openingItems(symbol: OpeningSymbol, style: OpeningStyle): DisplayItem[] {
+  if (symbol.kind === 'window') return faceLines(symbol, style === 'opening' ? 'opening-window-line' : style, 'opening-window', true)
+  if (symbol.kind === 'removed_section') return faceLines(symbol, style === 'opening' ? 'opening-removed' : style, 'opening-removed', false)
   if (symbol.swing === 'sliding') return slidingDoor(symbol, style)
   return hingedDoor(symbol, style)
+}
+
+/**
+ * The two jamb lines that mark the stretch an Opening would violate (#65 §10).
+ *
+ * The message says which end or which join; the mark says where, and a person who has never
+ * read the word "junction" can still see the square they are being stopped by.
+ */
+export function gapMarkItems(symbol: OpeningSymbol, from: number, to: number): DisplayItem[] {
+  return [from, to].map((at) => ({
+    kind: 'path' as const,
+    ref: { id: symbol.id, role: 'opening-gap' },
+    segments: lineCommands(
+      facePointAt(symbol.line, symbol.offsets[0], at),
+      facePointAt(symbol.line, symbol.offsets[1], at),
+    ),
+    closed: false,
+    style: 'opening-gap-mark' as const,
+  }))
 }
 
 /** The cut edge of one band piece, in the Wall's own millimetres. */

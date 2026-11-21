@@ -143,6 +143,16 @@ export const STYLES: Record<StyleKey, Style> = {
   // than as something standing in it. Only these take a pointer: the swing is a hint.
   'opening': { stroke: 'var(--bb-text)', strokeWidth: 'plan-line' },
   'opening:selected': { stroke: 'var(--bb-accent)', strokeWidth: 'plan-line-selected' },
+  // The ghost of an Opening being placed (#65 §10): the accent while it fits, the danger colour
+  // the moment it does not, so the preview answers before the click rather than after it.
+  'opening:preview': { stroke: 'var(--bb-accent)', strokeWidth: 'plan-line', hit: 'none' },
+  'opening:preview-blocked': { stroke: 'var(--bb-danger-dot)', strokeWidth: 'plan-line', hit: 'none' },
+  'opening-gap-mark': {
+    stroke: 'var(--bb-danger-dot)',
+    strokeWidth: 'hairline',
+    dash: ['opening-dash', 'opening-gap'],
+    hit: 'none',
+  },
   'opening-swing': { stroke: 'var(--bb-text)', strokeWidth: 'hairline', hit: 'none' },
   'opening-window-line': { stroke: 'var(--bb-text)', strokeWidth: 'hairline' },
   'opening-removed': {

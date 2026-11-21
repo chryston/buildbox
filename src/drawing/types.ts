@@ -180,6 +180,9 @@ export type StyleKey =
   /** The leaf, panels or window mullion of an Opening — the part a click selects (#65 §12). */
   | 'opening'
   | 'opening:selected'
+  | 'opening:preview'
+  | 'opening:preview-blocked'
+  | 'opening-gap-mark'
   /** The quarter-circle a hinged door swings through: a hint of floor area, never a click. */
   | 'opening-swing'
   /** A window's three lines, drawn thinner than the Wall they sit in. */

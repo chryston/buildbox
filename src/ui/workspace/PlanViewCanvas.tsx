@@ -29,7 +29,7 @@ import {
   drawWalls,
   unionRect,
 } from '../../drawing'
-import type { DisplayLayer, DisplayList, PlanPreview, Sizing } from '../../drawing'
+import type { DisplayLayer, DisplayList, OpeningPreview, PlanPreview, Sizing, WallOpenings } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
 import type { DisplayListInteractions } from '../drawing/DisplayListSvg'
 import { formatMm } from './displayUnits'
@@ -83,6 +83,18 @@ export interface PlanViewCanvasProps {
   selectedWallId?: string | null
   /** A Wall band was clicked; the selection moves to it (#64 §15). */
   onSelectWall?: (id: string) => void
+  /**
+   * The Floor's Openings, resolved against their hosts by `wallOpenings` (#65 §12). The caller
+   * resolves them because the same answer feeds the hit-testing and the drawing, and because a
+   * canvas that derived them itself would rebuild the Wall clean-up on every pointer move.
+   */
+  openings?: readonly WallOpenings[]
+  /** The selected Opening: its symbol drawn heavier than its neighbours (#65 §11). */
+  selectedOpeningId?: string | null
+  /** The Opening being placed right now, as a ghost (#65 §10). */
+  openingPreview?: OpeningPreview | null
+  /** An Opening's symbol was clicked; the selection moves to it (#65 §11). */
+  onSelectOpening?: (id: string) => void
   /** Drawn above the items while calibrating; it owns the pointer meanwhile. SVG: it lives in
    * the scene's own `<g>`, so it must be drawn in the Floor's millimetres. */
   overlay?: ReactNode
@@ -108,6 +120,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     tool, selection, onSelect, dragPreview, onDragPreview, onMoveItem, onRotateItem,
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
     angleSnap, overlay, htmlOverlay, walls, selectedWallId = null, onSelectWall,
+    openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
   } = props
   const [hostSize, setHostSize] = useState({ width: 0, height: 0 })
   const [dragging, setDragging] = useState(false)
@@ -340,7 +353,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   // appended, or a Wall would land on top of the Item standing in it (#60 §3, #64 §15).
   const wallList = walls === undefined || walls === null || walls.walls.length === 0
     ? null
-    : drawWalls(walls, { sizing, selectedWallId })
+    : drawWalls(walls, { sizing, selectedWallId, openings, selectedOpeningId, preview: openingPreview })
   const withWalls: DisplayList = wallList === null
     ? list
     : {
@@ -369,6 +382,11 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       ? undefined
       : (id) => {
           onSelectWall(id)
+        },
+    onOpeningPointerDown: onSelectOpening === undefined
+      ? undefined
+      : (id) => {
+          onSelectOpening(id)
         },
     onItemPointerDown: (id, event) => {
       lastClient.current = { x: event.clientX, y: event.clientY }
