@@ -586,12 +586,12 @@ export const STRINGS = {
   transferToFloor: 'Copy or Move to Floor…',
   forkDesign: 'Fork design…',
   designSharedBy: (name: string, count: number): string =>
-    `Item Design · ${name} — shared by ${count} ${plural(count, 'placement', 'placements')}`,
+    `Item Design · ${name} — shared by ${plural(count, 'placement', 'placements')}`,
   colour: 'Colour',
   colourSwatch: (colour: string): string => `Colour ${colour}`,
   itemOrigin: 'Item Origin',
   pickOnCanvas: 'Pick on canvas',
-  affectsPlacements: (count: number): string => `Affects ${count} ${plural(count, 'placement', 'placements')}`,
+  affectsPlacements: (count: number): string => `Affects ${plural(count, 'placement', 'placements')}`,
   apply: 'Apply',
   // The New item and Fork design dialogs (#38, #66 §17).
   newItem: 'New item',
