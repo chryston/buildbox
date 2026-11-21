@@ -1,0 +1,115 @@
+{
+  "ui/workspace/wall/WallInspector.tsx": [
+    "Centre",
+    "Face on this side",
+    "Face on the other side",
+    "External",
+    "Internal",
+    "Partition",
+    "Radius"
+  ],
+  "ui/workspace/opening/OpeningInspector.tsx": [
+    "Door",
+    "Window",
+    "Removed section",
+    "Opens toward this side of ",
+    "Opens toward 's other side"
+  ],
+  "ui/legacy/sessionBindings.ts": [
+    "Saving…",
+    "Save failed",
+    "Saved locally ",
+    "BuildBox refused \"\": "
+  ],
+  "ui/workspace/ProjectSettingsDialog.tsx": [
+    "Project settings",
+    "Display unit",
+    "Decimal places",
+    "Default wall height"
+  ],
+  "ui/workspace/WorkspaceRoot.tsx": [
+    "BuildBox refused \"\": ",
+    "Saving…",
+    "Save failed",
+    "Saved locally "
+  ],
+  "export/compose.ts": [
+    "Floor",
+    "Item Detail",
+    "Item"
+  ],
+  "ui/workspace/cabinet/ZoomControls.tsx": [
+    "Zoom out",
+    "Zoom in",
+    "Fit to screen"
+  ],
+  "ui/workspace/opening/openingPresets.ts": [
+    "Doors",
+    "Windows",
+    "Other"
+  ],
+  "export/pdf.ts": [
+    "BuildBox",
+    "Metadata"
+  ],
+  "ui/workspace/ItemDetailView.tsx": [
+    "Placements",
+    "Not placed in this Project."
+  ],
+  "ui/workspace/shape/FootprintCanvas.tsx": [
+    "Item Footprint",
+    "Length"
+  ],
+  "ui/workspace/shape/MeasurementsTab.tsx": [
+    "Area",
+    "Perimeter"
+  ],
+  "ui/workspace/shape/ShapeEditor.tsx": [
+    "Radii  ×   ·  ",
+    "Bounds"
+  ],
+  "ui/workspace/shape/ShapesGallery.tsx": [
+    "Shapes",
+    "Custom Path"
+  ],
+  "ui/workspace/wall/wallDraft.ts": [
+    "Join to end of ",
+    "Attach to "
+  ],
+  "export/index.ts": [
+    "No glyph for  in \"\""
+  ],
+  "export/provenance.ts": [
+    "BuildBox"
+  ],
+  "export/zip.ts": [
+    "BuildBox"
+  ],
+  "ui/drawing/DisplayListSvg.tsx": [
+    "Unlock section"
+  ],
+  "ui/legacy/useProject.ts": [
+    "The Project session"
+  ],
+  "ui/library/RestoreProblemDialog.tsx": [
+    "Plan Image"
+  ],
+  "ui/workspace/FloorWorkspace.tsx": [
+    "This file couldn't be read as an image"
+  ],
+  "ui/workspace/ScaleCalibrationModal.tsx": [
+    "Calibrate Scale"
+  ],
+  "ui/workspace/shape/ConvertDialog.tsx": [
+    "Convert to Custom Path"
+  ],
+  "ui/workspace/shape/EdgesTab.tsx": [
+    "Edge  · "
+  ],
+  "ui/workspace/toolbarRegistry.ts": [
+    "Calibrate this Floor's Plan Image to draw measured shapes"
+  ],
+  "ui/workspace/WorkspaceToolbar.tsx": [
+    "More"
+  ]
+}

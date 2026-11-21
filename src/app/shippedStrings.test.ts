@@ -137,6 +137,107 @@ const backstop = (): string[] =>
     saidBy(path).filter((text) => bannedWordsIn(text).length > 0).map((text) => `${path}: ${text}`),
   )
 
+// ------------------------------------------------------------------- who owns a sentence
+/**
+ * A Capitalised multi-letter literal is a sentence until proved otherwise (#66 criterion 16).
+ *
+ * The banned-word backstop asks whether a shipped sentence says something forbidden. This asks an
+ * earlier question: whether the sentence lives in `ui/strings` at all. A component that renders
+ * `Zoom out` type-checks, snapshots, and passes the word list — and it is invisible to every one
+ * of those checks, because there is nothing wrong with the words. The only thing that catches it
+ * is a rule about where words are allowed to be written.
+ *
+ * Capital-then-lowercase is the whole discriminator, and it is enough because of what else a
+ * literal can be: `zoom-out` is a CSS name, `ZOOM_MAX` is a constant, `zoomOut` is a function,
+ * `'door'` is a union member. What is left — `Zoom out`, `Fit to screen`, `Not placed in this
+ * Project.` — is what a person reads.
+ */
+const COPY_SHAPED = /^[A-Z][a-z]/
+
+/**
+ * Values that read like copy and never are.
+ *
+ * Key names a keyboard handler compares `event.key` against, and two type parameters that appear
+ * between the angle brackets a JSX-text scan reads. Neither is a word the interface says; both
+ * would otherwise sit in the exemption list forever, which is the thing a list is for least.
+ */
+const NEVER_COPY: Record<string, true> = {
+  Enter: true, Escape: true, Backspace: true, Tab: true, Delete: true, Shift: true, Control: true,
+  Alt: true, Meta: true, Space: true, ArrowUp: true, ArrowDown: true, ArrowLeft: true,
+  ArrowRight: true, Promise: true, PayloadOf: true,
+}
+
+/** Code punctuation: prose does not use it, and a generic or an expression does. */
+const NOT_PROSE = /[();{}[\]=]|Math\./
+
+/** A module of fixtures is not a shipped module, whatever directory it sits in. */
+const NOT_A_MODULE = /\.test\.|\.bench\.|\.property\.|\.browser\.|(^|\/)testing\.tsx?$/
+
+/** The source with the things that are not copy taken out of it, whatever they are written as. */
+function withoutNonCopy(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1')
+    .replace(/\b(?:class|className)=(?:"[^"]*"|'[^']*'|\{[^}]*\})/g, ' ')
+    .replace(/\bnew\s+\w*Error\s*\(\s*(?:'[^']*'|"[^"]*"|`[^`]*`)/g, ' ')
+}
+
+/**
+ * Every literal one file could put on screen, wherever it was written.
+ *
+ * JSX text, an attribute, a template literal, and — the case the earlier scans missed — an object
+ * property's value, which is how a label table is written and therefore how a whole vocabulary can
+ * sit in a component while every existing check stays green.
+ */
+function copySaidBy(source: string): string[] {
+  const stripped = withoutNonCopy(source)
+  const found: string[] = []
+  for (const match of stripped.matchAll(/'([^'\n]*)'|"([^"\n]*)"|`([^`\n]*)`/g)) {
+    found.push((match[1] ?? match[2] ?? match[3] ?? '').replace(/\$\{[^}]*\}/g, ''))
+  }
+  for (const match of stripped.matchAll(/>([^<>{}\n]+)</g)) found.push(match[1]!.trim())
+  return found
+}
+
+const copyIn = (path: string): string[] => copySaidBy(readFileSync(`${srcRoot}/${path}`, 'utf8'))
+
+/** The modules the rule reads: everything shipped, minus the tables it is asking for. */
+function copySources(): string[] {
+  return BACKSTOP_DIRS.flatMap((dir) =>
+    readdirSync(`${srcRoot}/${dir}`, { recursive: true })
+      .map(String)
+      .filter((entry) => /\.tsx?$/.test(entry) && !NOT_A_MODULE.test(entry))
+      .filter((entry) => !TABLES_SHIPPED.includes(`${dir}/${entry}`))
+      .map((entry) => `${dir}/${entry}`),
+  )
+}
+
+/** Every (file, sentence) the rule finds, sorted, so a failure reads as a list of work. */
+const copyDebtFound = (): string[] =>
+  [...new Set(copySources().flatMap((path) =>
+    copyIn(path)
+      .filter((text) => COPY_SHAPED.test(text) && !NOT_PROSE.test(text) && NEVER_COPY[text] !== true)
+      .map((text) => `${path}\u0000${text}`),
+  ))].sort()
+
+/**
+ * The debt, written down.
+ *
+ * Every pair here is a sentence still sitting in a component instead of the table. The list is
+ * read, never written, by the check below: it may only shrink, and a pair that has been migrated
+ * but left in the file fails the same way a new one does. It goes away when the last entry does.
+ */
+const EXEMPT_FILE = 'app/stringsDebt.json'
+const exempt = (): string[] => {
+  const listed = JSON.parse(readFileSync(`${srcRoot}/${EXEMPT_FILE}`, 'utf8')) as Record<string, string[]>
+  return Object.entries(listed).flatMap(([path, texts]) => texts.map((text) => `${path}\u0000${text}`))
+}
+
+const pair = (entry: string): string => {
+  const [path, text] = entry.split('\u0000')
+  return `${path}: ${text}`
+}
+
 // ---------------------------------------------------------------------------- the checks
 describe('the words BuildBox ships saying', () => {
   it('carries strings at every level, so the scan below is not empty', () => {
@@ -183,6 +284,16 @@ describe('the words BuildBox ships saying', () => {
     expect(backstop()).toEqual([])
   })
 
+  it('leaves no sentence outside the copy table (#66 criterion 16)', () => {
+    const exempted = new Set(exempt())
+    expect(copyDebtFound().filter((entry) => !exempted.has(entry)).map(pair)).toEqual([])
+  })
+
+  it('keeps the exemption list honest: no entry is already paid off', () => {
+    const found = new Set(copyDebtFound())
+    expect(exempt().filter((entry) => !found.has(entry)).map(pair)).toEqual([])
+  })
+
   it('scans no text the user typed', () => {
     // A layer named `Structure` is data, and criterion 8 leaves it alone. The guarantee is
     // structural: every path the scans read is a module the product ships.
@@ -227,5 +338,25 @@ describe('the scans fail when they should', () => {
   it('leaves a word alone when it is only part of another word', () => {
     expect(mentionsWord('Enclosed storage', 'code')).toBe(false)
     expect(mentionsWord('A safe place for the hoover', 'safe')).toBe(true)
+  })
+
+  it('catches a label table written as object properties, not only words between tags', () => {
+    // The shape the earlier scans let through: nothing here is JSX, so a scan that reads text
+    // between tags sees an empty file while a person reads three labels off the screen.
+    const registry = `
+      export const KINDS = [
+        { value: 'external', label: 'External' },
+        { value: 'internal', label: 'Internal' },
+      ]
+      const hint = \`Placing a Wall\`
+      const key = 'Escape'
+      const cls = 'load-bearing-wall'
+      const path = 'M2 6 H18'`
+    const said = copySaidBy(registry)
+    expect(said).toContain('External')
+    expect(said).toContain('Internal')
+    expect(said).toContain('Placing a Wall')
+    const flagged = said.filter((text) => COPY_SHAPED.test(text) && !NOT_PROSE.test(text) && NEVER_COPY[text] !== true)
+    expect(flagged).toEqual(['External', 'Internal', 'Placing a Wall'])
   })
 })
