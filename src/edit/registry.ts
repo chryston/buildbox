@@ -14,6 +14,7 @@ import { FLOOR_HANDLERS, PLAN_FLOOR_HANDLERS, VIEW_HANDLERS } from './handlers/f
 import { OPENING_HANDLERS } from './handlers/openingHandlers'
 import { PLAN_HANDLERS } from './handlers/planHandlers'
 import { PROJECT_HANDLERS } from './handlers/projectHandlers'
+import { ROOM_HANDLERS } from './handlers/roomHandlers'
 import { WALL_HANDLERS } from './handlers/wallHandlers'
 import { WARNING_HANDLERS } from './handlers/warningHandlers'
 
@@ -22,6 +23,7 @@ export const INTENT_HANDLERS: { [T in IntentType]: IntentHandler<T> } = {
   ...CABINET_HANDLERS,
   ...PLAN_HANDLERS,
   ...WALL_HANDLERS,
+  ...ROOM_HANDLERS,
   ...OPENING_HANDLERS,
   ...DESIGN_HANDLERS,
   ...PLAN_FLOOR_HANDLERS,

@@ -63,13 +63,39 @@ const tangentThrough = (before: Curve, after: Curve): boolean => {
 }
 
 /**
+ * A straight curve stretched out along its own line by `reach` at both ends.
+ *
+ * A neighbour that has to take up the slack usually has to grow past where it stops today, and
+ * a finite segment does not reach there: the Room whose referenced side follows a Wall moving
+ * away gets bigger, not smaller. A curve is left as it is — an arc has no line to extend, and
+ * inventing one would put a wrong number on the drawing.
+ */
+const stretched = (curve: Curve, reach: number): Curve => {
+  if (curve.segment.kind !== 'line') return curve
+  const dx = curve.to.x - curve.from.x
+  const dy = curve.to.y - curve.from.y
+  const length = Math.hypot(dx, dy)
+  if (length === 0) return curve
+  const ux = (dx / length) * reach
+  const uy = (dy / length) * reach
+  return {
+    ...curve,
+    from: pt(curve.from.x - ux, curve.from.y - uy),
+    to: pt(curve.to.x + ux, curve.to.y + uy),
+    segment: { kind: 'line', to: pt(curve.to.x + ux, curve.to.y + uy) },
+  }
+}
+
+/**
  * Where `moving` meets `own`'s curve again, nearest `near`, or `null` when the two do not
  * cross at a point. A run together (`overlaps`) is deliberately `null`: a neighbour that lies
  * along the Edge it is supposed to trim to has no length to set, and inventing one would put
  * a wrong number on the drawing.
  */
-const meet = (moving: Curve, own: Curve, near: Pt): Pt | null => {
-  const found = intersectSegments(moving.segment, moving.from, own.segment, own.from)
+const meet = (moving: Curve, own: Curve, near: Pt, reach: number): Pt | null => {
+  const a = stretched(moving, reach)
+  const b = stretched(own, reach)
+  const found = intersectSegments(a.segment, a.from, b.segment, b.from)
   if (found.overlaps.length > 0) return null
   const points = [...found.crossings, ...found.touches].map((meeting) => meeting.at)
   if (points.length === 0) return null
@@ -96,7 +122,20 @@ export const slideLineEdge = (
   if (edge === undefined || edge.kind !== 'line') return null
   if (delta.x === 0 && delta.y === 0) return { start: path.start, segments: path.segments.map((s) => ({ ...s })) }
   const curves = startsOf(path)
-  curves[i] = { segment: edge, from: add(curves[i].from, delta), to: add(curves[i].to, delta) }
+  // How far a neighbour's line is followed looking for the slid Edge: four times the drawing
+  // plus the slide itself is far enough to grow the loop to any size the slide asks for, and
+  // near enough that two edges that merely lean together cannot meet a thousand kilometres off
+  // the page.
+  const corners = [path.start, ...path.segments.map((segment) => segment.to)]
+  const diagonal = Math.hypot(
+    Math.max(...corners.map((at) => at.x)) - Math.min(...corners.map((at) => at.x)),
+    Math.max(...corners.map((at) => at.y)) - Math.min(...corners.map((at) => at.y)),
+  )
+  const reach = 4 * (diagonal + Math.hypot(delta.x, delta.y) + 1)
+  // The slid Edge carries the slide in its own geometry, not only in the endpoints the walk
+  // will settle: `meet` intersects the segment itself, and an unshifted segment would have the
+  // neighbours trim to where the Edge used to be.
+  curves[i] = { segment: shiftSegment(edge, delta), from: add(curves[i].from, delta), to: add(curves[i].to, delta) }
 
   /** Walk out from the slid Edge in one direction, translating the smooth run and trimming at the corner. */
   const walk = (direction: 1 | -1): Pt | null => {
@@ -108,7 +147,7 @@ export const slideLineEdge = (
       if (!tangentThrough(before, after)) {
         // The neighbour keeps its own curve; the shared vertex goes where the two meet.
         const shared = direction === 1 ? curves[k].from : curves[k].to
-        const point = meet(curves[anchor], curves[k], shared)
+        const point = meet(curves[anchor], curves[k], shared, reach)
         if (point === null) return null
         if (direction === 1) curves[k] = { ...curves[k], from: point }
         else curves[k] = { ...curves[k], to: point }
@@ -128,7 +167,7 @@ export const slideLineEdge = (
   // The slid Edge is trimmed at both ends: its own line is fixed by the slide, its endpoints
   // by what it meets. `walk` already moved the neighbour's shared vertex; this is the other
   // half of the same point.
-  curves[i] = { segment: edge, from: back, to: forward }
+  curves[i] = { ...curves[i], from: back, to: forward }
   const previous = (i - 1 + n) % n
   curves[previous] = { ...curves[previous], to: back }
   const next = (i + 1) % n

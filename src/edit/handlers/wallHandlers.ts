@@ -31,6 +31,7 @@ import { chainJunctionCount, wallEndKey } from '../intents'
 import type { CreateWallChain, DependencyReview, Locator, WallEndTarget, WallIntent } from '../intents'
 import type { Handler, IntentHandler } from './context'
 import { refuse, spendIds } from './support'
+import { faceRefsOn, followWallFaces, refuseReferencedWall } from './roomSupport'
 import { requireOpeningsFit } from './openingSupport'
 
 const wallPath = (wallId: EntityId): string => `existingModel.walls[${wallId}]`
@@ -562,6 +563,11 @@ const mergeWalls: Handler<'wall.merge'> = (ctx) => {
   const [firstId, secondId] = ctx.intent.payload.wallIds
   const first = requireWall(ctx.project, firstId)
   const second = requireWall(ctx.project, secondId)
+  // Merging takes one of the two out of the drawing, so a Room standing on either of them has
+  // to be moved off first (#67 §12).
+  for (const wall of [first, second]) {
+    if (faceRefsOn(ctx.project, wall.id).length > 0) refuseReferencedWall(ctx.project, wall)
+  }
   const shared = ctx.project.existingModel.wallJunctions.find(
     (junction) =>
       junction.host === undefined &&
@@ -629,6 +635,9 @@ const rehostOpenings = (
 const deleteWall: Handler<'wall.delete'> = (ctx) => {
   const { wallId, openings: agreed } = ctx.intent.payload
   const host = requireWall(ctx.project, wallId)
+  // A Room standing on this Wall comes first (#67 §12): detaching a Room is the homeowner's
+  // decision, and it is asked before the question of what the delete costs in Openings.
+  if (faceRefsOn(ctx.project, wallId).length > 0) refuseReferencedWall(ctx.project, host)
   const hosted = ctx.project.existingModel.openings.filter((opening) => opening.hostWallId === wallId)
   if (hosted.length > 0) {
     if (agreed === undefined) {
@@ -708,9 +717,14 @@ type WallHandlers = { [T in WallIntent['type']]: IntentHandler<T> }
  *
  * `wall.createChain` is not wrapped: a Wall drawn this instant has nothing cut into it yet.
  * `wall.delete` is not wrapped either, because its Openings are a review, not a fit failure.
+ *
+ * Between the two sits #67 §12: a Room Edge referenced to one of the Walls this edit moved
+ * follows the face it was riding, and the edit is refused when the face turned into something
+ * the Edge cannot lie on or when following it would push a Room into another.
  */
 const withOpeningsChecked = <T extends WallIntent['type']>(run: Handler<T>): Handler<T> => (ctx) => {
   run(ctx)
+  followWallFaces(ctx.project, ctx.draft)
   requireOpeningsFit(ctx.draft)
 }
 
