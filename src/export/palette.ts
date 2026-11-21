@@ -20,6 +20,10 @@ const PRINT_VARS: Readonly<Record<string, string>> = {
   '--bb-text': '#111114',
   '--bb-text-muted': '#55555e',
   '--bb-accent': '#1a4f8a',
+  // The colour a Plan View uses to say something is wrong — a blocked Opening's jamb marks, its
+  // ghost. A sheet does carry those: an export of a Floor with a violation in it should not print
+  // the warning as ink. Dark enough to survive a photocopy, like the measurement blue.
+  '--bb-danger-dot': '#8a1a1a',
   '--bb-bg-card': '#ffffff',
   '--bb-border-card': '#8e8e96',
   '--color-accent': '#1a4f8a',
