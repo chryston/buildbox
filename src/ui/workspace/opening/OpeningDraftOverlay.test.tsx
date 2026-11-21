@@ -1,14 +1,20 @@
 /**
- * The Door / window tool on screen (#65 §9, §10, criterion 5's DOM half).
+ * The Door / window tool's controls on screen (#65 §9, §10, criterion 5's DOM half).
  *
- * The picker's rows, the chip's two numbers, the one sentence a blocked preview says, and the
- * click that either places an Opening or does nothing — all of it is asserted through the real
- * aim machine rather than a stub, because the promise the bar makes and the promise the ghost
- * makes have to be the same promise.
+ * The picker's rows, the chip's two numbers and the one sentence a blocked preview says are all
+ * asserted through the real aim machine rather than a stub, because the promise the bar makes and
+ * the promise the ghost makes have to be the same promise.
+ *
+ * The pointer is not here. The canvas reports it (`PlanViewCanvas`'s `onCursorChange`) and the
+ * Floor workspace aims with it, so this harness is handed the cursor as a prop — a layer above the
+ * canvas cannot see the moves that land on the canvas, which is the defect that made the ghost
+ * unplaceable in a browser. What a click does with the aim is the workspace's business; the rule
+ * it applies — place where the aim fits, nothing where it does not — is asserted below through the
+ * same `aimAt`, and the click itself is proven in `e2e/smoke/openings.spec.ts`.
  */
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import type { Pt } from '../../../derive'
 import type { Wall, WallJunction } from '../../../domain'
@@ -19,16 +25,7 @@ import { emptyOpeningDraft, openingAim } from './openingDraft'
 import type { OpeningAim, OpeningDraft } from './openingDraft'
 import { DEFAULT_OPENING_PRESET_ID, openingPresetRow } from './openingPresets'
 
-const PAN = { x: 100, y: 100 }
-const viewport = { zoom: 1, panX: PAN.x, panY: PAN.y }
 const FLOOR = 'floor-main'
-
-beforeAll(() => {
-  // jsdom's `PointerEvent` carries no coordinates, and the tool is all coordinates.
-  if (!globalThis.PointerEvent || !('clientX' in new globalThis.PointerEvent('pointermove'))) {
-    globalThis.PointerEvent = MouseEvent as typeof PointerEvent
-  }
-})
 
 const wall = (id: string, ref: string, x1: number, y1: number, x2: number, y2: number): Wall => ({
   id,
@@ -59,22 +56,19 @@ const aimAt = (draft: OpeningDraft) => (cursor: Pt | null): OpeningAim | null =>
     format: (mm) => readoutMm(mm, 'mm', 0),
   })
 
-function Harness({ onPlace = (): void => undefined, onCancel = (): void => undefined }: {
-  onPlace?: (aim: OpeningAim) => void
+/** The aim of the row the tool opens on, which is what a click on the Floor is answered with. */
+const aimOf = (cursor: Pt | null): OpeningAim | null => aimAt(emptyOpeningDraft(DEFAULT_OPENING_PRESET_ID))(cursor)
+
+function Harness({ cursor = null, onCancel = (): void => undefined }: {
+  cursor?: Pt | null
   onCancel?: () => void
 }): ReactNode {
   const [draft, setDraft] = useState<OpeningDraft>(() => emptyOpeningDraft(DEFAULT_OPENING_PRESET_ID))
-  const [cursor, setCursor] = useState<Pt | null>(null)
-  const aim = aimAt(draft)
   return (
     <OpeningDraftOverlay
-      viewport={viewport}
       draft={draft}
       onDraft={setDraft}
-      onCursor={setCursor}
-      aim={aim(cursor)}
-      aimAt={aim}
-      onPlace={onPlace}
+      aim={aimAt(draft)(cursor)}
       onCancel={onCancel}
       unit="mm"
       precision={0}
@@ -84,15 +78,6 @@ function Harness({ onPlace = (): void => undefined, onCancel = (): void => undef
 
 const layer = (): HTMLElement => screen.getByTestId('opening-draft-layer')
 const picker = (): HTMLSelectElement => screen.getByTestId('opening-preset-picker') as HTMLSelectElement
-const hoverAt = (at: Pt): void => {
-  fireEvent.pointerMove(layer(), { clientX: at.x + PAN.x, clientY: at.y + PAN.y })
-}
-const clickAt = (at: Pt): void => {
-  const x = at.x + PAN.x
-  const y = at.y + PAN.y
-  fireEvent.pointerDown(layer(), { clientX: x, clientY: y })
-  fireEvent.pointerUp(layer(), { clientX: x, clientY: y })
-}
 const message = (): string | null => screen.queryByTestId('opening-fit-message')?.textContent ?? null
 const chipStart = (): string => screen.getByTestId('opening-distance-start').textContent ?? ''
 const chipEnd = (): string => screen.getByTestId('opening-distance-end').textContent ?? ''
@@ -128,49 +113,36 @@ describe('OpeningDraftOverlay', () => {
   })
 
   it('measures the room to both usable ends of the Wall the pointer is over', () => {
-    render(<Harness />)
+    const { rerender } = render(<Harness />)
     expect(chipStart()).toBe('—')
     expect(chipEnd()).toBe('—')
-    hoverAt({ x: 1500, y: 0 })
+    rerender(<Harness cursor={pt(1500, 0)} />)
     expect(chipStart()).toBe('1,050 mm')
     // The corner with W-2 takes the last 50 mm of W-1, which is what the second number counts to.
     expect(chipEnd()).toBe('1,000 mm')
   })
 
   it('says nothing while the Opening fits, and exactly one sentence when it does not', () => {
-    render(<Harness />)
-    hoverAt({ x: 1500, y: 0 })
+    const { rerender } = render(<Harness cursor={pt(1500, 0)} />)
     expect(message()).toBeNull()
     // Past the corner: the join with W-2 takes the last of W-1, and the sentence says so once.
-    hoverAt({ x: 2960, y: 0 })
+    rerender(<Harness cursor={pt(2960, 0)} />)
     expect(message()).toBe("Bedroom door doesn't fit here: it would run past the end of W-1.")
     expect(screen.queryAllByTestId('opening-fit-message')).toHaveLength(1)
   })
 
-  it('places nothing where it does not fit, and the Opening where it does', () => {
-    const onPlace = vi.fn()
-    render(<Harness onPlace={onPlace} />)
-    hoverAt({ x: 2960, y: 0 })
-    clickAt({ x: 2960, y: 0 })
-    expect(onPlace).not.toHaveBeenCalled()
-    hoverAt({ x: 1500, y: 0 })
-    clickAt({ x: 1500, y: 0 })
-    expect(onPlace).toHaveBeenCalledTimes(1)
-    expect(onPlace.mock.calls[0]![0]).toMatchObject({ hostWallId: 'w1', start: 1050, width: 900, fits: true })
-  })
-
-  it('does nothing when the pointer is over the room rather than a Wall', () => {
-    const onPlace = vi.fn()
-    render(<Harness onPlace={onPlace} />)
-    hoverAt({ x: 1500, y: 1200 })
-    expect(chipStart()).toBe('—')
-    clickAt({ x: 1500, y: 1200 })
-    expect(onPlace).not.toHaveBeenCalled()
+  it('answers a click with an Opening only where the aim fits', () => {
+    // The rule the Floor workspace applies to a click on the canvas, stated where the aim that
+    // feeds it is built: a fitting aim is placed, a blocked one and no aim at all are not.
+    const fits = aimOf(pt(1500, 0))
+    expect(fits).toMatchObject({ hostWallId: 'w1', start: 1050, width: 900, fits: true })
+    expect(aimOf(pt(2960, 0))?.fits).toBe(false)
+    // Over the room rather than a Wall: nothing to place, and nothing to say.
+    expect(aimOf(pt(1500, 1200))).toBeNull()
   })
 
   it('measures a typed distance from the end the chip has highlighted', () => {
-    render(<Harness />)
-    hoverAt({ x: 1500, y: 0 })
+    render(<Harness cursor={pt(1500, 0)} />)
     fireEvent.change(screen.getByTestId('opening-distance-field'), { target: { value: '500' } })
     expect(chipStart()).toBe('500 mm')
     expect(chipEnd()).toBe('1,550 mm')
@@ -182,21 +154,20 @@ describe('OpeningDraftOverlay', () => {
     expect(chipEnd()).toBe('500 mm')
   })
 
-  it('leaves the tool on Escape and on Cancel', () => {
+  it('leaves the tool on Cancel', () => {
     const onCancel = vi.fn()
     render(<Harness onCancel={onCancel} />)
-    fireEvent.keyDown(layer(), { key: 'Escape' })
-    expect(onCancel).toHaveBeenCalledTimes(1)
     fireEvent.click(screen.getByTestId('opening-cancel'))
-    expect(onCancel).toHaveBeenCalledTimes(2)
+    expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
-  it('never puts a control’s click on the canvas', () => {
-    const onPlace = vi.fn()
-    render(<Harness onPlace={onPlace} />)
-    hoverAt({ x: 1500, y: 0 })
-    fireEvent.click(screen.getByTestId('opening-distance-start'))
-    fireEvent.click(screen.getByTestId('opening-cancel'))
-    expect(onPlace).not.toHaveBeenCalled()
+  it('lets the pointer through to the canvas except where its own controls are', () => {
+    render(<Harness cursor={pt(1500, 0)} />)
+    // The layer covers the canvas, so it must not answer for it: the ghost and the placement both
+    // come from moves and clicks the canvas never sees if this layer keeps them.
+    expect(layer().className).toContain('pointer-events-none')
+    for (const testId of ['opening-tool-options', 'opening-draft-bar']) {
+      expect(screen.getByTestId(testId).className).toContain('pointer-events-auto')
+    }
   })
 })

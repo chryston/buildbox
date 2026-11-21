@@ -229,13 +229,12 @@ export function FloorWorkspace(): ReactNode {
     setWallDraft(null)
   }, [floorId])
   useEffect(() => {
-    if (tool !== 'opening') setOpeningDraft(null)
+    // Entering the tool hands it its draft. The aim needs the row being placed, so a tool that
+    // waited for the picker to be touched before it knew what it was placing would draw no ghost
+    // and place nothing at all. Leaving it, or the Floor under it, takes the draft back.
+    setOpeningDraft(tool === 'opening' ? emptyOpeningDraft(DEFAULT_OPENING_PRESET_ID) : null)
     setOpeningCursor(null)
-  }, [tool])
-  useEffect(() => {
-    setOpeningDraft(null)
-    setOpeningCursor(null)
-  }, [floorId])
+  }, [tool, floorId])
   /** What the next Wall gets: the tool options plus the Floor's or Project's default height (#64 §16). */
   const wallDefaults = {
     ...wallOptions,
@@ -385,6 +384,19 @@ export function FloorWorkspace(): ReactNode {
       head: preset.head,
       ...(preset.swing === undefined ? {} : { swing: preset.swing, hingeSide: 'start' }),
     })
+  }
+
+  /**
+   * A click on the Floor while the Door / window tool is in hand: place where the ghost stands,
+   * and where it does not fit do nothing at all — the bar has already said why in the sentence
+   * that names the Opening and the Wall (#65 criterion 1). The aim is recomputed for the point
+   * clicked rather than trusted from the last pointer move, because a click can be handled before
+   * the move that preceded it has been rendered.
+   */
+  const clickOnCanvas = (at: Pt): void => {
+    if (tool !== 'opening') return
+    const aimed = aimAtOpening(at)
+    if (aimed !== null && aimed.fits) placeOpening(aimed)
   }
 
   /** The ghost for where the pointer stands now, in the shape the Wall list takes (#65 §10). */
@@ -539,6 +551,15 @@ export function FloorWorkspace(): ReactNode {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
+        // The Door / window tool backs out first: its controls float over the canvas and hold no
+        // focus of their own to take the key (#65 §9).
+        if (tool === 'opening') {
+          event.preventDefault()
+          setOpeningDraft(null)
+          setOpeningCursor(null)
+          setTool('select')
+          return
+        }
         if (designPreview === null && !pickingOrigin) return
         event.preventDefault()
         setDesignPreview(null)
@@ -547,13 +568,20 @@ export function FloorWorkspace(): ReactNode {
       }
       const target = event.target as HTMLElement | null
       if (target !== null && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+      // Enter places the Opening the ghost is standing on, exactly as a click there would.
+      if (tool === 'opening') {
+        if (event.key !== 'Enter') return
+        event.preventDefault()
+        if (openingAimNow !== null && openingAimNow.fits) placeOpening(openingAimNow)
+        return
+      }
       if (selected === null) return
       if (event.key === '[') send('plan.rotatePlacement', { placedItemId: selected.id, rotationDeg: quarterTurn(selected.rotationDeg, -1) })
       if (event.key === ']') send('plan.rotatePlacement', { placedItemId: selected.id, rotationDeg: quarterTurn(selected.rotationDeg, 1) })
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [selected, designPreview, pickingOrigin, setDesignPreview, setPickingOrigin, send])
+  }, [selected, designPreview, pickingOrigin, setDesignPreview, setPickingOrigin, send, tool, openingAimNow, placeOpening, setTool])
 
   const commitImage = (prepared: PreparedPlanImage): void => {
     const asset = prepared.asset
@@ -1016,6 +1044,8 @@ export function FloorWorkspace(): ReactNode {
               tool={tool}
               selection={selection}
               onSelect={select}
+              onCursorChange={setOpeningCursor}
+              onCanvasClick={clickOnCanvas}
               dragPreview={dragPreview}
               onDragPreview={setDragPreview}
               onMoveItem={(id, x, y) => send('plan.movePlacement', { placedItemId: id, translation: { x, y } })}
@@ -1033,11 +1063,16 @@ export function FloorWorkspace(): ReactNode {
               openings={openingLayer}
               selectedOpeningId={openingSelection}
               onSelectOpening={(id) => {
+                // While the Door / window tool is in hand a click on the plan is a click *on* the
+                // Wall under it: the marks there are the host being aimed at, not a selection, and
+                // selecting one would drop the tool the person is using (#65 criterion 1).
+                if (tool === 'opening') return
                 selectOpening(id)
                 setTool('select')
               }}
               openingPreview={openingPreview}
               onSelectWall={(id) => {
+                if (tool === 'opening') return
                 selectWall(id)
                 setTool('select')
               }}
@@ -1080,15 +1115,11 @@ export function FloorWorkspace(): ReactNode {
                   unit={project.preferences.displayUnit}
                   precision={project.preferences.displayPrecision}
                 />
-              ) : tool === 'opening' && viewport !== null && viewport !== undefined ? (
+              ) : tool === 'opening' ? (
                 <OpeningDraftOverlay
-                  viewport={viewport}
                   draft={openingDraft ?? emptyOpeningDraft(DEFAULT_OPENING_PRESET_ID)}
                   onDraft={setOpeningDraft}
-                  onCursor={setOpeningCursor}
                   aim={openingAimNow}
-                  aimAt={aimAtOpening}
-                  onPlace={placeOpening}
                   onCancel={() => {
                     setOpeningDraft(null)
                     setOpeningCursor(null)

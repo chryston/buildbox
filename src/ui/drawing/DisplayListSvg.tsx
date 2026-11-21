@@ -114,6 +114,15 @@ const TEST_IDS: Readonly<Record<string, (id: string) => string>> = {
   'dimension-depth': () => 'dimension-depth',
   'floor-bounds-chip': () => 'floor-bounds-chip',
   'wall': (id) => `wall-band-${id}`,
+  // Every mark of an Opening *is* the Opening: the leaf, a panel, an arrow, a window line or a
+  // removed section's dash all select the same one (#65 §11). The role is part of the name because
+  // one Opening draws several of them under one id, and a suite that clicked `opening-x` could not
+  // say which mark it had hit — or whether it had hit the ghost rather than the thing.
+  'opening-leaf': (id) => `opening-leaf-${id}`,
+  'opening-panel': (id) => `opening-panel-${id}`,
+  'opening-arrow': (id) => `opening-arrow-${id}`,
+  'opening-window': (id) => `opening-window-${id}`,
+  'opening-removed': (id) => `opening-removed-${id}`,
   'rotate-handle-group': () => 'rotate-handle-group',
   'rotate-handle': () => 'rotate-handle',
   void: (id) => `void-${id}`,
