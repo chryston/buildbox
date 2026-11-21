@@ -120,27 +120,6 @@ async function chipMm(page: Page, testId: string): Promise<number> {
   return Number((await page.getByTestId(testId).textContent() ?? '').replace(/[^0-9.-]/g, ''))
 }
 
-/** The middle of the leaf, in Floor millimetres, read off the path the plan drew. */
-async function leafPoint(page: Page): Promise<Pt> {
-  const d = await leaves(page).first().getAttribute('d')
-  const line = /M\s*([-\d.]+)\s+([-\d.]+)\s*L\s*([-\d.]+)\s+([-\d.]+)/.exec(d ?? '')
-  if (line === null) throw new Error(`the leaf is not a line I can aim at (${String(d)})`)
-  return { x: (Number(line[1]) + Number(line[3])) / 2, y: (Number(line[2]) + Number(line[4])) / 2 }
-}
-
-/** Which mark of the plan the pointer meets at a point on the Floor. */
-async function roleUnder(page: Page, at: Pt): Promise<string | null> {
-  const s = await scene(page)
-  const box = await page.getByTestId('floor-plan-canvas').boundingBox()
-  if (box === null) throw new Error('the Plan View drew no box')
-  const px = box.x + at.x * s.zoom + s.panX
-  const py = box.y + at.y * s.zoom + s.panY
-  return page.evaluate(
-    ([x, y]) => document.elementFromPoint(x, y)?.getAttribute('data-ref-role') ?? null,
-    [px, py],
-  )
-}
-
 test('the ghost says where the Opening would go, and what would stop it', async ({ page }) => {
   await openThePlan(page)
   await startOpenings(page)
@@ -250,16 +229,10 @@ test('clicking an Opening selects it and nothing else', async ({ page }) => {
   await click(page, MIDDLE)
   await page.getByTestId('tool-select').click()
   await expect(inspector(page)).toHaveCount(0)
-  // The leaf is a hairline with no area of its own. Where the pointer meets it is asserted here —
-  // the mark is the thing under the point — and the click is then delivered to that mark, because
-  // Firefox does not carry a `pointerdown` on a stroke-only path to the app's handler while still
-  // hit-testing it. The gap is the app's to close with a hit area of its own; it is noted, not
-  // hidden: on Chromium the same gesture is a plain mouse click.
-  const at = await leafPoint(page)
-  expect(await roleUnder(page, at)).toBe('opening-leaf')
-  await leaves(page).first().evaluate((node) => {
-    node.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }))
-  })
+  // The Opening's footprint — the gap the door took, from face to face — is what the pointer
+  // lands on. The marks above it are hairlines, which is a hard thing to aim at and, on Firefox,
+  // a thing whose `pointerdown` never reaches the app at all.
+  await click(page, MIDDLE)
   await expect(inspector(page)).toBeVisible()
   await expect(page.getByTestId('opening-inspector-kind')).toHaveText('Door')
   await expect(page.getByTestId('opening-inspector-host')).toHaveText('W-1')

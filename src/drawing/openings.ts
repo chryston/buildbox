@@ -225,10 +225,44 @@ export type OpeningStyle = 'opening' | 'opening:selected' | 'opening:preview' | 
 
 /** The items of one Opening, in the order the layer draws them. */
 export function openingItems(symbol: OpeningSymbol, style: OpeningStyle): DisplayItem[] {
-  if (symbol.kind === 'window') return faceLines(symbol, style === 'opening' ? 'opening-window-line' : style, 'opening-window', true)
-  if (symbol.kind === 'removed_section') return faceLines(symbol, style === 'opening' ? 'opening-removed' : style, 'opening-removed', false)
-  if (symbol.swing === 'sliding') return slidingDoor(symbol, style)
-  return hingedDoor(symbol, style)
+  const marks = symbol.kind === 'window'
+    ? faceLines(symbol, style === 'opening' ? 'opening-window-line' : style, 'opening-window', true)
+    : symbol.kind === 'removed_section'
+      ? faceLines(symbol, style === 'opening' ? 'opening-removed' : style, 'opening-removed', false)
+      : symbol.swing === 'sliding'
+        ? slidingDoor(symbol, style)
+        : hingedDoor(symbol, style)
+  // Only a committed Opening answers to the pointer. The ghost under the pointer has nothing to
+  // select, and its marks already refuse the pointer (#65 §10).
+  return style === 'opening' ? [footprint(symbol), ...marks] : marks
+}
+
+/**
+ * The stretch of Wall the Opening took, from face to face, as one closed ring.
+ *
+ * Every mark an Opening draws is a hairline, and a hairline is a hard thing to aim at: on
+ * Firefox a `pointerdown` on one does not even reach the app. The footprint is the space the
+ * Opening *is*, it is exactly where a person aims, and it is invisible — a transparent fill is a
+ * painted region to the pointer and nothing to the eye (#65 §11). It lies under the marks and
+ * covers only the gap the Opening cut, so a click on the Wall beside it still finds the Wall.
+ */
+function footprint(symbol: OpeningSymbol): DisplayItem {
+  const [near, far] = symbol.offsets
+  const back = faceCurveCommands(symbol.line, near, symbol.end, symbol.start)
+  return {
+    kind: 'path',
+    ref: { id: symbol.id, role: 'opening-hit' },
+    segments: [
+      ...faceCurveCommands(symbol.line, far, symbol.start, symbol.end),
+      // The way back along the other face: its first point kept as a line — dropping the `M`
+      // alone would jump the ring across the gap and leave a triangle — and its own commands
+      // after it, so an arc Wall gets a ring with two curved sides.
+      { k: 'L' as const, to: back[0]!.to },
+      ...back.slice(1),
+    ],
+    closed: true,
+    style: 'opening-hit',
+  }
 }
 
 /**

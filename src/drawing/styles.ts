@@ -153,6 +153,10 @@ export const STYLES: Record<StyleKey, Style> = {
     dash: ['opening-dash', 'opening-gap'],
     hit: 'none',
   },
+  // The stretch of Wall the Opening took, from face to face. `transparent` is a colour, not
+  // `none`, so the region stays painted for the pointer and invisible to the eye — the marks
+  // above it are what a person sees, this is what a person hits (#65 §11).
+  'opening-hit': { fill: 'transparent', stroke: 'none' },
   'opening-swing': { stroke: 'var(--bb-text)', strokeWidth: 'hairline', hit: 'none' },
   'opening-window-line': { stroke: 'var(--bb-text)', strokeWidth: 'hairline' },
   'opening-removed': {

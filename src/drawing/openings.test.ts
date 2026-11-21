@@ -9,7 +9,8 @@ import { deriveWalls } from '../derive'
 import { domainFixture } from '../derive/testing'
 import type { Opening, Project, Wall, WallJunction } from '../domain'
 import { drawWalls } from './walls'
-import { wallOpenings } from './openings'
+import { STYLES } from './styles'
+import { openingItems, wallOpenings } from './openings'
 import type { OpeningSymbol } from './openings'
 import type { DisplayItem, PathCommand } from './types'
 
@@ -80,8 +81,15 @@ const opening = (
 const itemsOf = (items: readonly DisplayItem[], role: string): readonly DisplayItem[] =>
   items.filter((item) => item.ref?.role === role)
 
+/**
+ * The marks an Opening is drawn with, in the order they are drawn.
+ *
+ * The invisible footprint each committed Opening carries is not a mark and has none of the
+ * geometry these tests are about — its corners are the Wall's own faces — so it is left out here
+ * and asserted on its own below.
+ */
 const paths = (items: readonly DisplayItem[]): readonly { role: string; style: string; segments: readonly PathCommand[] }[] =>
-  items.flatMap((item) => item.kind === 'path'
+  items.flatMap((item) => item.kind === 'path' && item.ref?.role !== 'opening-hit'
     ? [{ role: item.ref?.role ?? '', style: item.style, segments: item.segments }]
     : [])
 
@@ -189,6 +197,39 @@ describe('the door symbol', () => {
   })
 })
 
+describe('the footprint an Opening is clicked by', () => {
+  it('covers the gap the Opening cut, from face to face, under the marks', () => {
+    const items = drawn([wall('a', 200, { x: 4000, y: 0 })], [opening('o1', 'a', 'door', 1000, 900)]).symbols
+    const ring = items[0]
+    expect(ring.ref).toEqual({ id: 'o1', role: 'opening-hit' })
+    expect(ring.kind === 'path' && ring.closed && ring.style === 'opening-hit').toBe(true)
+    // One closed ring: the far face from jamb to jamb, then back along the near face. It is the
+    // gap itself, so a click anywhere in the space the door took answers, and a click on the Wall
+    // beside it still finds the Wall.
+    expect(ring.kind === 'path'
+      ? ring.segments.map((command) => command.to)
+      : []).toEqual([
+      { x: 1000, y: 100 }, { x: 1900, y: 100 }, { x: 1900, y: -100 }, { x: 1000, y: -100 },
+    ])
+  })
+
+  it('is painted with a colour, not with nothing, so the pointer lands on it', () => {
+    // Browsers hit-test a shape whose fill is a colour, however see-through, and refuse one whose
+    // fill is `none`. `transparent` is the first of those, which is the whole reason this item
+    // exists: the marks are hairlines, and Firefox does not carry a click on one to the app.
+    expect(STYLES['opening-hit'].fill).toBe('transparent')
+    expect(STYLES['opening-hit'].hit).toBeUndefined()
+  })
+
+  it('leaves the ghost unclickable, footprint and marks alike', () => {
+    // The preview under the pointer has nothing to select, so every style it draws in refuses the
+    // pointer, and only a committed Opening gets a footprint at all (#65 §10).
+    expect(STYLES['opening:preview'].hit).toBe('none')
+    expect(STYLES['opening:preview-blocked'].hit).toBe('none')
+    expect(drawn([wall('a', 200, { x: 4000, y: 0 })], []).symbols).toHaveLength(0)
+  })
+})
+
 describe('the window and the removed section', () => {
   it('draws a window as three lines across the gap, one on the reference line', () => {
     const items = paths(drawn([wall('a', 200, { x: 4000, y: 0 })], [opening('o1', 'a', 'window', 1000, 1200)]).symbols)
@@ -211,6 +252,13 @@ describe('the window and the removed section', () => {
 describe('an Opening on an arc Wall', () => {
   const symbol = (start: number, width: number): OpeningSymbol =>
     wallOpenings([arcWall('a')], [], [opening('o1', 'a', 'door', start, width)])[0].symbols[0]
+
+  it('gives the footprint two curved sides', () => {
+    // The ring follows both faces of the arc, so a click anywhere in a curved Wall's gap finds the
+    // door in it — a straight quad across an arc would miss the middle of the gap.
+    const ring = openingItems(symbol(1000, 1000), 'opening')[0]
+    expect(ring.kind === 'path' ? ring.segments.map((command) => command.k) : []).toEqual(['M', 'A', 'L', 'A'])
+  })
 
   it('measures the gap along the arc and draws the leaf on the chord', () => {
     const found = symbol(1000, 1000)

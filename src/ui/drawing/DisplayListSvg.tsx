@@ -119,6 +119,7 @@ const TEST_IDS: Readonly<Record<string, (id: string) => string>> = {
   // one Opening draws several of them under one id, and a suite that clicked `opening-x` could not
   // say which mark it had hit — or whether it had hit the ghost rather than the thing.
   'opening-leaf': (id) => `opening-leaf-${id}`,
+  'opening-hit': (id) => `opening-hit-${id}`,
   'opening-panel': (id) => `opening-panel-${id}`,
   'opening-arrow': (id) => `opening-arrow-${id}`,
   'opening-window': (id) => `opening-window-${id}`,

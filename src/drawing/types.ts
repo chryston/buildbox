@@ -183,6 +183,11 @@ export type StyleKey =
   | 'opening:preview'
   | 'opening:preview-blocked'
   | 'opening-gap-mark'
+  /**
+   * The Opening's own footprint, filled with nothing the eye can see and everything a pointer
+   * needs: the marks are hairlines, and a hairline is a hard thing to click (#65 §11).
+   */
+  | 'opening-hit'
   /** The quarter-circle a hinged door swings through: a hint of floor area, never a click. */
   | 'opening-swing'
   /** A window's three lines, drawn thinner than the Wall they sit in. */
