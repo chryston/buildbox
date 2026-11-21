@@ -18,7 +18,7 @@ import { drawPlanView, drawWarningBadges } from '../drawing'
 import type { DisplayItem, Sizing } from '../drawing'
 import { composeSheet, exportFiles } from '../export'
 import type { DrawingFormat, ExportClock, ExportDeps, ExportFile, Rasterizer, Recipe } from '../export'
-import { warningSentence } from '../ui/strings'
+import { warningSentence } from '../ui'
 
 const CLOCK: ExportClock = {
   now: () => '2026-11-20T09:00:00.000Z',
