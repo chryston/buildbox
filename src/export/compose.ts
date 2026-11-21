@@ -28,7 +28,7 @@ import type { FitSuggestion, Sheet } from './fit'
 import { formatLength } from './format'
 import { scaleDerivedFloor, scaleDerivedItemDetail } from './scaleInput'
 import { SHEET_SIZING, footerItems, frameItems, furnitureLayer, gridItems, scaleBarItems, titleBlockItems } from './sheet'
-import { NOT_TO_SCALE, scaleStatement, unitStatement } from './strings'
+import { NOT_TO_SCALE, TITLE_BLOCK, scaleStatement, unitStatement } from './strings'
 import { keepLayers, translateList } from './transform'
 import type { ExportSnapshot, Recipe, RecipeViewRef } from './types'
 
@@ -99,7 +99,7 @@ function rawDrawing(
       drawing: {
         list,
         viewName: planView.name,
-        subjectLabel: 'Floor',
+        subjectLabel: TITLE_BLOCK.floor,
         subject: project.floors.find((each) => each.id === planView.floorId)?.name ?? '',
       },
     }
@@ -114,7 +114,15 @@ function rawDrawing(
     // 1:50 sheet would be the one mistake a reader cannot catch with a tape.
     formatLength: (paperMm: number) => formatLength(paperMm * denominator, recipe.unit, recipe.precision),
   })
-  return { ok: true, drawing: { list, viewName: 'Item Detail', subjectLabel: 'Item', subject: design.name } }
+  return {
+    ok: true,
+    drawing: {
+      list,
+      viewName: TITLE_BLOCK.itemDetail,
+      subjectLabel: TITLE_BLOCK.itemDesign,
+      subject: design.name,
+    },
+  }
 }
 
 /**

@@ -1,9 +1,4 @@
 {
-  "export/compose.ts": [
-    "Floor",
-    "Item Detail",
-    "Item"
-  ],
   "ui/workspace/opening/openingPresets.ts": [
     "Doors",
     "Windows",

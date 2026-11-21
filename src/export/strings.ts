@@ -41,6 +41,8 @@ export const TITLE_BLOCK = {
   itemDesign: 'Item',
   designOption: 'Design option',
   view: 'View',
+  /** The view name a scaled-up Item sheet carries, where a Floor sheet carries the Floor's name. */
+  itemDetail: 'Item Detail',
   scale: 'Scale',
   date: 'Date',
   version: 'BuildBox',
