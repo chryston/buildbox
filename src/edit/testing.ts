@@ -14,7 +14,7 @@ import type { Project } from '../domain'
 import { canonicalJson } from '../lib'
 import { applyIntent, applyPatches } from './apply'
 import { createProject } from './create'
-import { INTENT_LABELS } from './labels'
+import { intentLabel } from './labels'
 import type { Applied, Intent, IntentType, PayloadOf, Rejection, RejectionCode } from './intents'
 
 /** The clock every test Intent carries. Nothing here reads a real one. */
@@ -28,7 +28,7 @@ export function idSource(prefix: string): (count?: number) => string[] {
 
 /** One Intent, labelled as the catalogue labels it, carrying the IDs it will spend. */
 export function intent<T extends IntentType>(type: T, payload: PayloadOf<T>, taken: string[] = []): Intent<T> {
-  return { type, label: INTENT_LABELS[type], payload, ids: taken, now: NOW }
+  return { type, label: intentLabel(type), payload, ids: taken, now: NOW }
 }
 
 /** `fixtures/domain/v1/project-basic.json`: two Floors, a cabinet placed twice, a template. */

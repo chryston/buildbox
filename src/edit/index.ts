@@ -34,6 +34,8 @@ export {
   type DeleteOpening,
   type DeleteWall,
   type DetachRoomFace,
+  type DeleteDesignOptionReview,
+  type DeleteWallReview,
   type DependencyReview,
   type DesignIntent,
   type DistributeEvenly,
@@ -99,6 +101,6 @@ export {
   type WallEndTarget,
   type WallIntent,
 } from './intents'
-export { INTENT_LABELS } from './labels'
+export { INTENT_LABELS, intentLabel } from './labels'
 export { CUSTOM_PLAN_ENTRY, PLAN_CATALOGUE, type PlanCatalogueEntry } from './planCatalogue'
 export { INTENT_TYPES } from './registry'

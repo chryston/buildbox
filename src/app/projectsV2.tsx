@@ -10,7 +10,7 @@ import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import type { ReactNode } from 'react'
 import type { Root } from 'react-dom/client'
 import App from '../App'
-import { INTENT_LABELS, intentIdCount, previewIntent } from '../edit'
+import { intentIdCount, intentLabel, previewIntent } from '../edit'
 import type { Intent, IntentType, PayloadOf } from '../edit'
 import { collectLiveHashes, createMemoryAdapter } from '../persistence'
 import type { Ports } from '../persistence'
@@ -173,7 +173,7 @@ export function createIntentFactory(clock: ClockPort, ids: IdSource): IntentBuil
       return {
         type,
         payload,
-        label: INTENT_LABELS[type],
+        label: intentLabel(type),
         ids: ids(intentIdCount(type, payload)),
         now: clock.now(),
       } as Intent

@@ -24,7 +24,7 @@ import type { BadgeSubject, OpeningPreview, RoomProposal } from '../../drawing'
 import type { Point2, Project, WallClassification } from '../../domain'
 import { nextOpeningLabel, summarizeFloorDependencies } from '../../domain'
 import type { SessionAsset } from '../../session'
-import type { DependencyReview, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
+import type { DeleteWallReview, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
   usePlanImageSrc,
   useSaveStatus,
@@ -717,10 +717,12 @@ export function FloorWorkspace(): ReactNode {
    * after the question was asked makes the answer stale, and the Intent is refused rather than
    * deleting something nobody agreed to.
    */
-  const [deleteReview, setDeleteReview] = useState<DependencyReview | null>(null)
+  const [deleteReview, setDeleteReview] = useState<DeleteWallReview | null>(null)
   const deleteWall = (wallId: string): void => {
     const { review } = services.intent.preview(project, services.intent.build('wall.delete', { wallId }))
-    if (review !== null) {
+    // `wall.delete` answers with the Wall review or nothing; the Option review of #69 is another
+    // dialog's business and never arrives here.
+    if (review?.kind === 'delete-wall') {
       setDeleteReview(review)
       return
     }
