@@ -69,6 +69,8 @@ export type {
   DerivedPlanImage,
   Rect,
 } from './effective'
+export { designOptionName, effectiveModel } from './effectiveModel'
+export type { EffectiveEntity, EffectiveModel } from './effectiveModel'
 export { DERIVE_CACHE_MAX_ENTRIES, createDeriveCache } from './cache'
 export type { DeriveCache } from './cache'
 export { isCutListCapable, cutListParts } from './quantities/cutList'

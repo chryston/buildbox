@@ -34,6 +34,7 @@ import type { Bounds, ClosedPath, Pt, Transform } from '../geometry'
 import { affineMultiply, affineRotateDeg, affineScale, affineTranslate } from './affine'
 import type { Affine } from './affine'
 import { cabinetSceneUnits } from './cabinetSceneUnits'
+import { effectiveModel } from './effectiveModel'
 import { designOutline, normaliseRotation, placementTransform } from './placement'
 
 /**
@@ -106,7 +107,7 @@ export interface DerivedPlacement {
 export interface DerivedFloor {
   readonly revision: number
   readonly floorId: EntityId
-  /** Always `null` until #69; in the shape and in the cache key now so that issue changes behaviour, not signature. */
+  /** The Design Option whose delta was read, or `null` for the Existing Model alone (#69 §5). */
   readonly optionId: EntityId | null
   readonly planImage: DerivedPlanImage | null
   /** Existing-Model order, so a re-derive never reorders what is on screen. */
@@ -240,8 +241,7 @@ export function effectiveFloor(
   for (const design of project.itemDesigns) designs.set(design.id, design)
 
   const placements: DerivedPlacement[] = []
-  for (const placed of project.existingModel.placedItems) {
-    if (placed.floorId !== floorId) continue
+  for (const placed of effectiveModel(project, floorId, optionId).standingPlacedItems) {
     const design = designs.get(placed.itemDesignId)
     if (design === undefined) continue
     placements.push(derivePlacement(design, placed))
