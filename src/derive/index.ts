@@ -31,8 +31,8 @@ export { SNAP_ROW_KINDS, enabledSnapKinds, snapCandidates } from './snapCandidat
 export type { SnapGeometry, SnapSettingKinds, SnapSourceInput, WallFaceSource } from './snapCandidates'
 export { deriveWalls } from './walls'
 export type { DerivedCorner, DerivedFace, DerivedWall, FloorWalls } from './walls'
-export { deriveRooms, roomMembershipOf } from './rooms'
-export type { DerivedRoom, FloorRooms, MeasurableRoom, RoomMembership } from './rooms'
+export { deriveRooms, roomFaceCandidates, roomFaceLabel, roomMembershipOf } from './rooms'
+export type { DerivedRoom, FloorRooms, MeasurableRoom, RoomFaceCandidate, RoomMembership } from './rooms'
 export { WARNING_PRODUCERS, compareWarnings, countUnacknowledged, deriveWarnings, warningFloorOf, warningSignature } from './warnings/engine'
 export type {
   FloorWarnings,

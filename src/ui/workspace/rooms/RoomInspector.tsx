@@ -32,10 +32,12 @@ export interface RoomInspectorProps {
   readonly onRename: (name: string) => void
   /** Take the keyboard with the text selected: this Room has just been committed (#67 §4). */
   readonly focusName?: boolean
+  /** The Edges section, which is a different question from the name and the area (#67 §10). */
+  readonly children?: ReactNode
 }
 
 export function RoomInspector(props: RoomInspectorProps): ReactNode {
-  const { room, derived, unit, precision, onRename, focusName = false } = props
+  const { room, derived, unit, precision, onRename, focusName = false, children } = props
   const [text, setText] = useState(room.name)
   const nameRef = useRef<HTMLInputElement>(null)
   /** The last name handed to the Project, so Enter followed by blur is one write, not two. */
@@ -101,6 +103,7 @@ export function RoomInspector(props: RoomInspectorProps): ReactNode {
         <dt data-testid="room-measurements-bounds-label">{STRINGS.floorBounds}</dt>
         <dd data-testid="room-measurements-bounds">{`${read(width)} × ${read(depth)}`}</dd>
       </dl>
+      {children}
     </section>
   )
 }

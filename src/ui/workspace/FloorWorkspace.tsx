@@ -17,8 +17,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings } from '../../derive'
-import type { Pt, Warning } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomFaceCandidates, SNAP_ACQUISITION_PX } from '../../derive'
+import type { Pt, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings } from '../../drawing'
 import type { BadgeSubject, OpeningPreview, RoomProposal } from '../../drawing'
 import type { Point2, Project, WallClassification } from '../../domain'
@@ -59,6 +59,7 @@ import { RoomDraftOverlay } from './rooms/RoomDraftOverlay'
 import { ShelterLayer } from './rooms/ShelterLayer'
 import { roomDraftOutline, roomOutlineShapePath, roomOverlapPreview, shelterName, shelterOutline, shelterPackName } from './rooms/roomDraft'
 import { roomMembershipSentence } from './rooms/membership'
+import { RoomFacePicker, roomEdgeRows } from './rooms/RoomFacePicker'
 import type { PathDraft } from './shape/draftPath'
 import { mergeableNeighbour } from './wall/wallDraft'
 import type { WallChainDraft, WallDraft } from './wall/wallDraft'
@@ -184,6 +185,14 @@ export function FloorWorkspace(): ReactNode {
   /** A Room that has just been created gets its name field focused, with the text selected. */
   const [roomNameFocus, setRoomNameFocus] = useState(false)
   /**
+   * The Edge whose list of Wall faces is open, and the face being previewed (#67 §10–§11). Local
+   * like the draft: a preview is not a proposal the Project holds, and it belongs to the Room it
+   * was opened for.
+   */
+  const [faceEdge, setFaceEdge] = useState<string | null>(null)
+  /** The face being previewed, and the Room the preview was opened for. */
+  const [facePick, setFacePick] = useState<{ roomId: string; candidate: RoomFaceCandidate } | null>(null)
+  /**
    * The Rooms the live overlap check is asked about: this Floor's, in the shape the domain check
    * takes. A derived Room carries its own outline, but overlapping is a domain question (#67 §2).
    */
@@ -195,6 +204,12 @@ export function FloorWorkspace(): ReactNode {
   const draftOverlap = roomOverlapPreview(roomDraftTarget, draftOutline, floorDomainRooms)
   const shelterProposal = shelterArmed && shelterCentre !== null ? shelterOutline(shelterCentre, 0) : null
   const shelterOverlap = roomOverlapPreview(null, shelterProposal, floorDomainRooms)
+  /**
+   * The attach preview: the Outline the Edge would take on the face it is pointing at, checked
+   * like every other proposal so the picker and the canvas cannot disagree (#67 §11).
+   */
+  const facePreview = facePick?.candidate.outline ?? null
+  const faceOverlap = roomOverlapPreview(facePick?.roomId ?? null, facePreview, floorDomainRooms)
   /** The one proposal the Plan View paints: the outline being drawn, or the shelter being aimed. */
   const roomProposal: RoomProposal | null = draftOutline !== null
     ? {
@@ -203,7 +218,14 @@ export function FloorWorkspace(): ReactNode {
       blocked: draftOverlap.blocked,
       overlaps: draftOverlap.regions,
     }
-    : shelterProposal === null
+    : facePreview !== null
+      ? {
+        id: ROOM_PROPOSAL,
+        path: roomOutlineShapePath(facePreview),
+        blocked: faceOverlap.blocked,
+        overlaps: faceOverlap.regions,
+      }
+      : shelterProposal === null
       ? null
       : {
         id: ROOM_PROPOSAL,
@@ -310,6 +332,8 @@ export function FloorWorkspace(): ReactNode {
     if (tool !== 'select') {
       setShelterArmed(false)
       setShelterCentre(null)
+      setFaceEdge(null)
+      setFacePick(null)
     }
   }, [tool])
   useEffect(() => {
@@ -318,7 +342,15 @@ export function FloorWorkspace(): ReactNode {
     setRoomDraftTarget(null)
     setShelterArmed(false)
     setShelterCentre(null)
+    setFaceEdge(null)
+    setFacePick(null)
   }, [floorId])
+  // A preview belongs to the Room it was opened for: selecting another Room, or nothing, puts it
+  // down — the canvas must not go on painting an attach nobody is looking at.
+  useEffect(() => {
+    setFaceEdge(null)
+    setFacePick(null)
+  }, [roomSelection])
   useEffect(() => {
     // Entering the tool hands it its draft. The aim needs the row being placed, so a tool that
     // waited for the picker to be touched before it knew what it was placing would draw no ghost
@@ -342,6 +374,15 @@ export function FloorWorkspace(): ReactNode {
   const hydrated = useWorkspace((state) => (viewKey === null ? true : state.hydrated[viewKey] === true))
   const railOpen = useWorkspace((state) => state.railOpen)
   const setRailOpen = useWorkspace((state) => state.setRailOpen)
+  /** The faces the open Edge may claim, nearest first, within twelve CSS pixels of reach (#67 §10). */
+  const faceCandidates = useMemo(() => {
+    if (faceEdge === null || roomSelection === null || floorWalls === null) return []
+    const room = project.existingModel.rooms.find((each) => each.id === roomSelection)
+    if (room === undefined) return []
+    // The canvas reports its own millimetres per pixel, so zooming in reaches further across the
+    // Floor and zooming out less — the reach is a screen distance, never a fixed number of mm.
+    return roomFaceCandidates(room, faceEdge, floorWalls, floorDomainRooms, SNAP_ACQUISITION_PX / (viewport?.zoom ?? 1))
+  }, [faceEdge, roomSelection, floorWalls, floorDomainRooms, viewport?.zoom])
 
   const hostRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -1264,7 +1305,39 @@ export function FloorWorkspace(): ReactNode {
                 precision={project.preferences.displayPrecision}
                 onRename={(name) => send('room.rename', { roomId: selectedRoom.room.id, name })}
                 focusName={roomNameFocus}
-              />
+              >
+                <RoomFacePicker
+                  edges={roomEdgeRows(selectedRoom.room, floorWalls, floorDomainRooms)}
+                  openEdge={faceEdge}
+                  candidates={faceCandidates}
+                  previewKey={facePick === null ? null : `${facePick.candidate.wallId}|${facePick.candidate.side}`}
+                  blocked={faceOverlap.blocked ? faceOverlap.message : null}
+                  onOpen={(segmentId) => {
+                    setFaceEdge(segmentId)
+                    setFacePick(null)
+                  }}
+                  onPreview={(candidate) => setFacePick(candidate === null
+                    ? null
+                    : { roomId: selectedRoom.room.id, candidate })}
+                  onAttach={(candidate) => {
+                    if (faceEdge === null) return
+                    send('room.attachFace', {
+                      roomId: selectedRoom.room.id,
+                      segmentId: faceEdge,
+                      wallId: candidate.wallId,
+                      side: candidate.side,
+                    })
+                    setFacePick(null)
+                    setFaceEdge(null)
+                  }}
+                  onDetach={(segmentId) => {
+                    send('room.detachFace', { roomId: selectedRoom.room.id, segmentId })
+                    setFacePick(null)
+                  }}
+                  unit={project.preferences.displayUnit}
+                  precision={project.preferences.displayPrecision}
+                />
+              </RoomInspector>
             : selectedOpening !== null
             ? <OpeningInspector
                 opening={selectedOpening.opening}

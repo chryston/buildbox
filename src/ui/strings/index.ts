@@ -827,6 +827,24 @@ export const STRINGS = {
   attachTo(ref: string): string {
     return `Attach to ${ref}`
   },
+  // The Room-side face picker (#67 §10–§11, D8). A face is named by the Room it borders, never by
+  // which side of the Wall it is on: `W-5 · Kitchen's side` is read in a house, `left` in a manual.
+  attachToFace: 'Attach to wall face',
+  attach: 'Attach',
+  detach: 'Detach',
+  attachedTo(label: string): string {
+    return `Attached to ${label}`
+  },
+  /** The distance the attach will move the Edge, already carrying its unit. */
+  movesEdge(distance: string): string {
+    return `Moves edge ${distance}`
+  },
+  /** An Edge already lying on the face it is being attached to. */
+  noMove: 'No move',
+  /** Nothing parallel and near: the picker says so rather than showing an empty list. */
+  noFaceInReach: 'No wall face is parallel to this edge within reach.',
+  /** The reason a preset Edge cannot follow a face at all (#67 §11). */
+  convertToAttach: 'Convert to Custom Path to attach this edge',
   // The last of the interface's own words (#66 criterion 16).
   unlockSection: 'Unlock section',
   notAnImage: "This file couldn't be read as an image",

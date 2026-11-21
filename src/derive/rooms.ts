@@ -18,12 +18,13 @@
  * Membership is derived and never stored: moving a Placed Item changes no Room and moving a
  * Room changes no Placed Item, and the two are only ever asked about together.
  */
-import { area, containment, overlap } from '../geometry'
-import type { ClosedPath, Pt } from '../geometry'
-import type { EntityId, Project, Room, RoomOutline } from '../domain'
-import { roomArea, roomBounds, roomLabelAnchor, roomOutlinePath, roomPerimeter } from '../domain'
+import { area, containment, nearestOnSegment, overlap, TOLERANCE_MM, edgeToFace, ontoFaceVector } from '../geometry'
+import type { ClosedPath, LineSegment, Pt, WallSide } from '../geometry'
+import type { EntityId, Project, Room, RoomOutline, RoomSegment } from '../domain'
+import { roomArea, roomBounds, roomLabelAnchor, roomOutlineAfterSlide, roomOutlinePath, roomPerimeter, roomSegments } from '../domain'
 import { effectiveFloor } from './effective'
 import type { Rect } from './effective'
+import type { DerivedFace, FloorWalls } from './walls'
 
 /** The overlap area below which a footprint and a Room count as not overlapping at all (#67 §16). */
 const MIN_ROOM_OVERLAP_MM2 = 0.01
@@ -177,4 +178,115 @@ export function deriveRooms(project: Project, floorId: EntityId): FloorRooms {
   }
 
   return { floorId, rooms, roomBounds: box, floorBounds: derived.bounds, membership }
+}
+
+// --- The face picker ----------------------------------------------------------
+
+/**
+ * One Wall face an Edge could be attached to (#67 §10).
+ *
+ * The list is the picker's whole answer: only parallel faces within the acquisition range are
+ * candidates, each carries the Outline `Attach` produces, and each wears the name of the Room it
+ * borders — because `W-5 · left` means nothing to a person standing in the Kitchen (D8).
+ */
+export interface RoomFaceCandidate {
+  readonly wallId: EntityId
+  readonly wallRef: string
+  readonly side: WallSide
+  /** `W-5 · Kitchen's side`, `W-5 · Balcony side` or `W-5 · far side`. */
+  readonly label: string
+  /** Perpendicular distance from the Edge to the face, in millimetres. */
+  readonly distanceMm: number
+  /** `true` when the Edge already lies on the face: attaching claims it without moving it. */
+  readonly onFace: boolean
+  /**
+   * The Outline the attach produces — the Edge on the face, its neighbours extended or trimmed —
+   * or `null` when the Room's representation cannot take the slide. A preset that would have to
+   * change kind is still listed, because the picker has to say why it cannot be attached.
+   */
+  readonly outline: RoomOutline | null
+}
+
+/** How an Edge sits to a face, or `null` when the two are not comparable as lines. */
+const edgeFaceRelation = (edge: RoomSegment, face: DerivedFace): { distance: number; skew: number } | null => {
+  if (edge.segment.kind !== 'line' || face.segment.kind !== 'line') return null
+  const relation = edgeToFace(edge.segment as LineSegment, edge.from, { from: face.from, segment: face.segment })
+  return { distance: relation.distance, skew: relation.skew }
+}
+
+/** `true` when the Edge lies on the face: parallel, and no further off than the tolerance. */
+const liesOnFace = (edge: RoomSegment, face: DerivedFace): boolean => {
+  const relation = edgeFaceRelation(edge, face)
+  return relation !== null && relation.skew <= TOLERANCE_MM && relation.distance <= TOLERANCE_MM
+}
+
+/** The name of another Room bordering this face, by claim or by shape. */
+const borderingRoom = (face: DerivedFace, edited: Room, rooms: readonly Room[]): string | null => {
+  for (const other of rooms) {
+    if (other.floorId !== edited.floorId || other.id === edited.id) continue
+    if (other.wallFaceRefs.some((ref) => ref.wallId === face.wallId && ref.side === face.side)) return other.name
+    for (const edge of roomSegments(other.outline)) {
+      if (liesOnFace(edge, face)) return other.name
+    }
+  }
+  return null
+}
+
+/**
+ * The name a face wears for this Room (#67 §9, D8): the side the Room stands on is its own, the
+ * other side belongs to whichever Room borders it, and a face bordering no Room is the far side.
+ * `left` and `right` never appear — a person reads a face as the side of the Kitchen, not the side
+ * of the Wall.
+ */
+export function roomFaceLabel(room: Room, face: DerivedFace, walls: FloorWalls, rooms: readonly Room[]): string {
+  const wall = walls.byId.get(face.wallId)
+  const ref = wall?.ref ?? face.wallId
+  const interior = roomLabelAnchor(room.outline)
+  const twin = walls.faces.find((other) => other.wallId === face.wallId && other.side !== face.side)
+  const here = nearestOnSegment(interior, face.segment, face.from).distance
+  const there = twin === undefined ? Number.POSITIVE_INFINITY : nearestOnSegment(interior, twin.segment, twin.from).distance
+  if (here <= there) return `${ref} · ${room.name}'s side`
+  const other = borderingRoom(face, room, rooms)
+  return other === null ? `${ref} · far side` : `${ref} · ${other} side`
+}
+
+/**
+ * The faces one Edge of a Room may be attached to, nearest first (#67 §10).
+ *
+ * Parallelism is the issue's own test — the far end of the Edge may depart from the face by no more
+ * than 0.01 mm over the Edge's length — and the range is a screen distance the caller has already
+ * converted from CSS pixels, so zooming in reaches further across the Floor and zooming out less.
+ * A face that is not parallel is not listed at all, however close it is: an Edge cannot lie on a
+ * face it is skew to, and offering one would promise a move that the Intent must refuse.
+ */
+export function roomFaceCandidates(
+  room: Room,
+  segmentId: EntityId,
+  walls: FloorWalls,
+  rooms: readonly Room[],
+  reachMm: number,
+): RoomFaceCandidate[] {
+  const edge = roomSegments(room.outline).find((each) => each.id === segmentId)
+  if (edge === undefined) return []
+  const candidates: RoomFaceCandidate[] = []
+  for (const face of walls.faces) {
+    const relation = edgeFaceRelation(edge, face)
+    if (relation === null || relation.skew > TOLERANCE_MM || relation.distance > reachMm) continue
+    const wall = walls.byId.get(face.wallId)
+    if (wall === undefined) continue
+    candidates.push({
+      wallId: face.wallId,
+      wallRef: wall.ref,
+      side: face.side,
+      label: roomFaceLabel(room, face, walls, rooms),
+      distanceMm: relation.distance,
+      onFace: relation.distance <= TOLERANCE_MM,
+      outline: roomOutlineAfterSlide(
+        room.outline,
+        edge.index + 1,
+        ontoFaceVector(edge.segment as LineSegment, edge.from, { from: face.from, segment: face.segment }),
+      ),
+    })
+  }
+  return candidates.sort((a, b) => a.distanceMm - b.distanceMm || (a.wallId < b.wallId ? -1 : 1))
 }
