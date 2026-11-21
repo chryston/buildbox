@@ -86,6 +86,9 @@ const LAYOUT_BROWSER_INCLUDE = ['src/ui/**/*.browser.test.{ts,tsx}']
 // for files it has no flag to read, and `npm run test:renovation` is the run that does.
 const FF_RENOVATION = process.env['VITE_FF_RENOVATION'] === 'true'
 const RENOVATION_INCLUDE = ['src/**/*.renovation.test.{ts,tsx}']
+// The #69 benches measure a model a flag-off build does not carry, so the flag-off `npm run bench`
+// never looks for them; `npm run bench:renovation` is the run that does.
+const RENOVATION_BENCH_EXCLUDE = FF_RENOVATION ? [] : ['src/**/*.renovation.bench.ts']
 
 const SHARED_EXCLUDE = ['e2e/**', ...configDefaults.exclude]
 
@@ -126,7 +129,7 @@ export default defineConfig({
           name: 'pure',
           environment: 'node',
           include: [...PURE_INCLUDE, ...NODE_ONLY_INCLUDE],
-          exclude: [...PURE_EXCLUDE, ...RENOVATION_INCLUDE, ...SHARED_EXCLUDE],
+          exclude: [...PURE_EXCLUDE, ...RENOVATION_INCLUDE, ...RENOVATION_BENCH_EXCLUDE, ...SHARED_EXCLUDE],
           setupFiles: ['src/test/pure-setup.ts'],
         },
       },
