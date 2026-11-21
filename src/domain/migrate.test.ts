@@ -16,6 +16,7 @@ import {
   type Migrator,
   type Project,
 } from './index'
+import { FF_RENOVATION } from '../lib'
 
 /** Sequential IDs, so a test can say which entity the migrator named with which. */
 function allocator(prefix = 'view'): IdAllocator {
@@ -70,8 +71,22 @@ function v1Project(): Record<string, unknown> {
 }
 
 describe('DOMAIN_SCHEMA_VERSION', () => {
-  it('is 7, one step above the version #66 shipped', () => {
-    expect(DOMAIN_SCHEMA_VERSION).toBe(7)
+  it('is the version this build writes', () => {
+    // #69: v8 exists only where the renovation flag is on, so the flag decides the number, and the
+    // two values together are the whole migration story — a preview-written Project arrives in a
+    // production build as "saved by a newer BuildBox" rather than opening without its Options.
+    expect(DOMAIN_SCHEMA_VERSION).toBe(FF_RENOVATION ? 8 : 7)
+  })
+
+  it('refuses a v8 Project in a build that has no renovation', () => {
+    if (FF_RENOVATION) return
+    const result = migrateProject(validProject(), 8, allocator())
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error.kind).toBe('newer-schema')
+    if (result.error.kind !== 'newer-schema') return
+    expect(result.error.supported).toBe(7)
+    expect(result.error.message).toContain('saved by a newer BuildBox')
   })
 })
 

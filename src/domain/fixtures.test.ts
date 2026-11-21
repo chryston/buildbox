@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 import { describe, expect, it } from 'vitest'
-import { canonicalJson } from '../lib'
+import { canonicalJson, FF_RENOVATION } from '../lib'
 import { DOMAIN_SCHEMA_VERSION, migrateProject, type PlanView } from './index'
 import readmeText from '../../fixtures/domain/README.md?raw'
 
@@ -8,9 +8,15 @@ import readmeText from '../../fixtures/domain/README.md?raw'
 // is permanent compatibility evidence: the day `DOMAIN_SCHEMA_VERSION` moves again, this
 // test is what proves the new chain still reads the old data — which is exactly what it
 // did for #56, when the v1 files below became the evidence that v1 → v2 works.
+//
+// The v8 fixtures are the evidence for #69, and a flag-off build has no v8: the chain stops at
+// v7 there, so those files are read only when the flag is on. They stay on disk either way —
+// the golden files of a released schema are never deleted because a flag is off.
 const fixtures = Object.entries(
   import.meta.glob<string>('/fixtures/domain/**/*.json', { eager: true, query: '?raw', import: 'default' }),
-).map(([path, text]) => ({ path, text }))
+)
+  .filter(([path]) => FF_RENOVATION || !path.includes('/v8/'))
+  .map(([path, text]) => ({ path, text }))
 
 function envelopeOf(text: string): Record<string, unknown> {
   return JSON.parse(text) as Record<string, unknown>
