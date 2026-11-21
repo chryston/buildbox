@@ -1,21 +1,9 @@
 {
-  "ui/legacy/sessionBindings.ts": [
-    "Saving…",
-    "Save failed",
-    "Saved locally ",
-    "BuildBox refused \"\": "
-  ],
   "ui/workspace/ProjectSettingsDialog.tsx": [
     "Project settings",
     "Display unit",
     "Decimal places",
     "Default wall height"
-  ],
-  "ui/workspace/WorkspaceRoot.tsx": [
-    "BuildBox refused \"\": ",
-    "Saving…",
-    "Save failed",
-    "Saved locally "
   ],
   "export/compose.ts": [
     "Floor",

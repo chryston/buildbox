@@ -755,6 +755,10 @@ export const STRINGS = {
   opensOtherSide(hostRef: string): string {
     return `Opens toward ${hostRef}'s other side`
   },
+  // The save status under the undo button (#14, #49 deviation 3, #66 §17). The Library's fuller
+  // `Save failed · changes not stored` is a different sentence in a different place; this is the
+  // one-word-of-state label beside the undo button.
+  saveStatusFailed: 'Save failed',
 } as const
 
 /**

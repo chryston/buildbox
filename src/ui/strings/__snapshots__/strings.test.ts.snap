@@ -387,6 +387,7 @@ exports[`the copy > is the whole vocabulary of the interface 1`] = `
     "serialization": "This Project couldn't be prepared for saving",
     "unavailable": "Browser storage isn't available",
   },
+  "saveStatusFailed": "Save failed",
   "savedLocally": [Function],
   "saving": "Saving…",
   "semiAxisA": "Semi-axis A",

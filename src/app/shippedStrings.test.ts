@@ -173,13 +173,21 @@ const NOT_PROSE = /[();{}[\]=]|Math\./
 /** A module of fixtures is not a shipped module, whatever directory it sits in. */
 const NOT_A_MODULE = /\.test\.|\.bench\.|\.property\.|\.browser\.|(^|\/)testing\.tsx?$/
 
-/** The source with the things that are not copy taken out of it, whatever they are written as. */
+/**
+ * The source with the things that are not copy taken out of it, whatever they are written as.
+ *
+ * A class list names a box. The argument of `new Error(…)` and of `console.warn(…)` is a message
+ * to a developer reading a console or a stack, not a sentence a person is shown, and it is where
+ * the invariant notes live — `BuildBox refused "…"` is a refusal explained to whoever debugs the
+ * edit, and no interface renders it.
+ */
 function withoutNonCopy(source: string): string {
   return source
     .replace(/\/\*[\s\S]*?\*\//g, ' ')
     .replace(/(^|[^:])\/\/.*$/gm, '$1')
     .replace(/\b(?:class|className)=(?:"[^"]*"|'[^']*'|\{[^}]*\})/g, ' ')
     .replace(/\bnew\s+\w*Error\s*\(\s*(?:'[^']*'|"[^"]*"|`[^`]*`)/g, ' ')
+    .replace(/\bconsole\.\w+\(\s*(?:'[^']*'|"[^"]*"|`[^`]*`)/g, ' ')
 }
 
 /**
