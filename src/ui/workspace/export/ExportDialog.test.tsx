@@ -64,6 +64,8 @@ function fakePort(options?: {
   listsOptions?: ListsOptions
   listsSummary?: ListsSummary
   rememberedLists?: ListsRecipe | null
+  /** What the scope's warning count is, as `derive` would have answered it. */
+  warnings?: number
 }): Fake {
   const runs: Recipe[] = []
   const remembered: Recipe[] = []
@@ -101,7 +103,7 @@ function fakePort(options?: {
         { ref: OTHER, label: 'Second plan', group: 'Ground floor' },
       ],
       measure: () => Promise.resolve({ bounds: options?.bounds === undefined ? BOUNDS : options.bounds }),
-      unacknowledgedWarnings: () => 0,
+      unacknowledgedWarnings: () => options?.warnings ?? 0,
       recall: () => Promise.resolve(options?.remembered ?? null),
       remember: (_key, recipe) => {
         remembered.push(recipe)
@@ -199,6 +201,20 @@ describe('the Export dialog', () => {
       '0 unacknowledged warnings in this scope',
     )
     expect(screen.getByTestId('export-backup-link')).toHaveTextContent('Download Backup in the Project Library')
+  })
+
+  /**
+   * Criterion 6, the dialog's half: three open warnings is a sentence, not a stop. The count is the
+   * same `derive` number the strip and the Warnings List are built from, and Export still runs.
+   */
+  it('counts three unacknowledged warnings and exports anyway', async () => {
+    const fake = fakePort({ warnings: 3 })
+    await open(fake.port)
+    expect(screen.getByTestId('export-notice-warnings')).toHaveTextContent('3 unacknowledged warnings in this scope')
+    expect(screen.getByTestId('export-run')).toBeEnabled()
+
+    fireEvent.click(screen.getByTestId('export-run'))
+    await waitFor(() => expect(fake.runs).toHaveLength(1))
   })
 
   it('warns about unsaved changes only when there are some', async () => {
