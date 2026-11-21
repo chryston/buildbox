@@ -173,7 +173,7 @@ const faceUnmoved = (was: Wall, now: Wall): boolean =>
   (was.line.kind !== 'arc' || now.line.kind !== 'arc' || distance(was.line.through, now.line.through) <= 1e-9)
 
 /** The Edge's slide onto the face it is referenced to, and the outline that follows. */
-function slideOntoFace(room: Room, outline: RoomOutline, ref: RoomWallFaceRef, host: Wall): RoomOutline {
+export function slideOntoFace(room: Room, outline: RoomOutline, ref: RoomWallFaceRef, host: Wall): RoomOutline {
   const segment = roomSegmentOf(outline, ref.segmentId)
   if (segment === null || segment.segment.kind !== 'line') {
     refuse(

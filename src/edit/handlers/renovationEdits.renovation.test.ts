@@ -19,8 +19,8 @@ import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import type { DesignOption, Project, WallJunction } from '../../domain'
-import { designOptionsOf, validateProject } from '../../domain'
+import type { DesignOption, Project, RoomOutline, WallJunction } from '../../domain'
+import { designOptionsOf, roomBounds, validateProject } from '../../domain'
 import { canonicalJson } from '../../lib'
 import { effectiveModel } from '../../derive'
 import { applyIntent, applyPatches, previewIntent, type DemolitionReview, type ReplaceEdit, type RestoreReview } from '../index'
@@ -410,12 +410,138 @@ describe('renovation.replace: a successor carrying the edit', () => {
     expect(validateProject(applied.project).ok).toBe(true)
   })
 
-  it('refuses to replace a Wall a Room edge refers to', () => {
-    const refused = applyIntent(project(), replaceIn(W5, { thickness: 150 }))
+  it('follows Kitchen onto the successor Wall when W-5 moves, and takes the Room with it', () => {
+    const before = project()
+    const kitchen = before.existingModel.rooms.find((room) => room.name === 'Kitchen')!
+    const applied = unwrap(
+      applyIntent(before, replaceIn(W5, { line: { kind: 'line', start: { x: 4200, y: 600 }, end: { x: 4200, y: 6600 } } })),
+    )
+    const optionA = optionOf(applied.project, A)
+    // The Room that stood on the face is replaced with it: the Wall and the Room both come down in
+    // this option, and both come back as the option's own work (#69 §7).
+    expect(optionA.demolishedIds).toEqual([kitchen.id, W5])
+    const successor = optionA.proposed.walls.find((entry) => entry.predecessorIds?.includes(W5))!
+    expect(successor.ref).toBe('W-5′')
+    expect(optionA.proposed.rooms).toHaveLength(1)
+    const followed = optionA.proposed.rooms[0]!
+    expect(followed.name).toBe('Kitchen′')
+    expect(followed.predecessorIds).toEqual([kitchen.id])
+    expect(followed.wallFaceRefs).toEqual([{ segmentId: 'seed-room-019', wallId: successor.id, side: 'right' }])
+    // The edge slid onto the face it is referenced to, and the rest of the outline followed.
+    const was = roomBounds(kitchen.outline)
+    const now = roomBounds(followed.outline)
+    expect(now.maxX - was.maxX).toBeCloseTo(200, 6)
+    expect(now.minX).toBeCloseTo(was.minX, 6)
+    expect(validateProject(applied.project).ok).toBe(true)
+    const rooms = effectiveModel(applied.project, FLOOR, A).rooms
+    expect(rooms.filter((entry) => entry.renovationState !== 'demolition').map((entry) => entry.entity.name)).toEqual([
+      'Bedroom',
+      'Kitchen′',
+    ])
+  })
+
+  it('refuses a replace whose Room successor would land on a neighbour, naming the Room and the edge', () => {
+    const before = structuredClone(project())
+    // A neighbour standing just past the face W-5 is referenced by: Kitchen's edge can slide onto
+    // the successor's face, and lands on this Room.
+    const bedroom = before.existingModel.rooms.find((room) => room.name === 'Bedroom')!
+    bedroom.outline = {
+      kind: 'preset',
+      preset: { kind: 'rectangle', width: 500, depth: 2400 },
+      centre: { x: 4250, y: 2000 },
+      orientationDeg: 0,
+      segmentIds: bedroom.outline.segmentIds,
+    }
+    expect(validateProject(before).ok).toBe(true)
+    const refused = applyIntent(before, replaceIn(W5, { line: { kind: 'line', start: { x: 4200, y: 600 }, end: { x: 4200, y: 6600 } } }))
     expect(refused.ok).toBe(false)
     if (refused.ok) return
-    expect(refused.code).toBe('has-dependants')
-    expect(refused.problems[0]!.message).toMatch(/^Kitchen edge \d+ refers to W-5\. Detach, reattach, or remove the Room delta first\.$/)
+    expect(refused.code).toBe('room-blocked')
+    expect(refused.problems[0]!.message).toBe("Kitchen edge 2 can't follow this change: it would overlap Bedroom.")
+  })
+
+  it("refuses a replace whose Room successor would stop being a shape, and one the Wall can't carry", () => {
+    // A face that turns is not a face the edge can follow: the #67 compatible-edit rules say so.
+    const refused = applyIntent(
+      project(),
+      replaceIn(W5, { line: { kind: 'line', start: { x: 4000, y: 600 }, end: { x: 4600, y: 6600 } } }),
+    )
+    expect(refused.ok).toBe(false)
+    if (refused.ok) return
+    expect(refused.code).toBe('room-blocked')
+    expect(refused.problems[0]!.message).toBe('W-5 is referenced by Kitchen edge 2.')
+  })
+
+  it('replaces a Room with a successor of its own, name and edges carried', () => {
+    const before = project()
+    const kitchen = before.existingModel.rooms.find((room) => room.name === 'Kitchen')!
+    const applied = unwrap(applyIntent(before, replaceIn(kitchen.id, {}, ['room-kitchen-prime'])))
+    const optionA = optionOf(applied.project, A)
+    expect(optionA.demolishedIds).toEqual([kitchen.id])
+    expect(optionA.proposed.rooms).toHaveLength(1)
+    const successor = optionA.proposed.rooms[0]!
+    expect(successor.id).toBe('room-kitchen-prime')
+    // The successor is named after the Room it replaces, and stands where it stood, referenced to
+    // the same Wall — the edit was empty, so nothing about the Room changed but its identity.
+    expect(successor.name).toBe('Kitchen′')
+    expect(successor.predecessorIds).toEqual([kitchen.id])
+    expect(successor.outline).toEqual(kitchen.outline)
+    expect(successor.wallFaceRefs).toEqual(kitchen.wallFaceRefs)
+    expect(validateProject(applied.project).ok).toBe(true)
+    const renamed = unwrap(applyIntent(before, replaceIn(kitchen.id, { name: 'Study' }, ['room-study-prime'])))
+    expect(optionOf(renamed.project, A).proposed.rooms[0]!.name).toBe('Study′')
+  })
+
+  it('refuses a Room replace that would overlap a neighbour', () => {
+    const before = structuredClone(project())
+    const kitchen = before.existingModel.rooms.find((room) => room.name === 'Kitchen')!
+    const bedroom = before.existingModel.rooms.find((room) => room.name === 'Bedroom')!
+    bedroom.outline = {
+      kind: 'preset',
+      preset: { kind: 'rectangle', width: 500, depth: 2400 },
+      centre: { x: 4250, y: 2000 },
+      orientationDeg: 0,
+      segmentIds: bedroom.outline.segmentIds,
+    }
+    expect(validateProject(before).ok).toBe(true)
+    // The same Room, drawn a metre further along the Wall: onto Bedroom.
+    const outline: RoomOutline = {
+      kind: 'path',
+      path: {
+        start: { x: 4100, y: 700 },
+        segments: [
+          { kind: 'line', to: { x: 4400, y: 700 } },
+          { kind: 'line', to: { x: 4400, y: 5400 } },
+          { kind: 'line', to: { x: 4100, y: 5400 } },
+          { kind: 'line', to: { x: 4100, y: 700 } },
+        ],
+      },
+      segmentIds: ['seg-prime-1', 'seg-prime-2', 'seg-prime-3', 'seg-prime-4'],
+    }
+    const refused = applyIntent(before, replaceIn(kitchen.id, { outline }, ['room-kitchen-prime']))
+    expect(refused.ok).toBe(false)
+    if (refused.ok) return
+    expect(refused.code).toBe('room-blocked')
+    expect(refused.problems[0]!.message).toMatch(/^Overlaps Bedroom by \d+\.\d\d m²\.$/)
+  })
+
+  it('blocks up a Room, and brings it back', () => {
+    const before = project()
+    const kitchen = before.existingModel.rooms.find((room) => room.name === 'Kitchen')!
+    const demolished = unwrap(applyIntent(before, demolish(kitchen.id)))
+    expect(optionOf(demolished.project, A).demolishedIds).toEqual([kitchen.id])
+    expect(
+      effectiveModel(demolished.project, FLOOR, A)
+        .rooms.filter((entry) => entry.renovationState !== 'demolition')
+        .map((entry) => entry.entity.name),
+    ).toEqual(['Bedroom'])
+    const restored = unwrap(applyIntent(demolished.project, intent('renovation.restore', { entityId: kitchen.id, target: { designOptionId: A } })))
+    expect(optionOf(restored.project, A).demolishedIds).toEqual([])
+    expect(
+      effectiveModel(restored.project, FLOOR, A)
+        .rooms.filter((entry) => entry.renovationState !== 'demolition')
+        .map((entry) => entry.entity.name),
+    ).toEqual(['Kitchen', 'Bedroom'])
   })
 
   it("refuses to replace the Option's own work, which is edited where it stands", () => {
@@ -425,15 +551,6 @@ describe('renovation.replace: a successor carrying the edit', () => {
     if (refused.ok) return
     expect(refused.code).toBe('unknown-target')
     expect(refused.problems[0]!.message).toBe("W-3′ is this option's own work: change it instead of replacing it.")
-  })
-
-  it('refuses to replace a Room, which is altered instead', () => {
-    const kitchen = project().existingModel.rooms.find((room) => room.name === 'Kitchen')!.id
-    const refused = applyIntent(project(), replaceIn(kitchen, {}))
-    expect(refused.ok).toBe(false)
-    if (refused.ok) return
-    expect(refused.code).toBe('room-blocked')
-    expect(refused.problems[0]!.message).toBe('Kitchen is a Room: a Room is altered, not replaced.')
   })
 
   it('replaces an Opening with a successor in the same place, and a Placement with the same placement', () => {

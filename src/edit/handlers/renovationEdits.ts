@@ -33,6 +33,8 @@ import type {
   OpeningKind,
   PlacedItem,
   Project,
+  Room,
+  RoomOutline,
   Wall,
   WallJunction,
 } from '../../domain'
@@ -41,6 +43,7 @@ import { refLength, refParamAt, refPointAt } from '../../geometry'
 import type { DemolitionDependency, DemolitionReview, Locator, RenovationIntentType, RestoreReview } from '../intents'
 import type { Handler, IntentHandler } from './context'
 import { requireDoorFields, requireFit, requireOpeningsFit } from './openingSupport'
+import { checkRoomProposal, edgeName, faceCanCarry, slideOntoFace } from './roomSupport'
 import { effectiveView, refuse, spendIds } from './support'
 
 /** The edit-table Intent types, written once. */
@@ -215,6 +218,34 @@ function referencingRooms(project: Project, option: DesignOption, floorId: Entit
     }
   }
   return found
+}
+
+/**
+ * The Rooms standing in this Option with an Edge referenced to `wallId`. A demolition of the Wall
+ * stops at them; a replace carries them onto the successor (#69 §7).
+ */
+function followingRooms(project: Project, option: DesignOption, floorId: EntityId, wallId: EntityId): Room[] {
+  return effectiveModel(project, floorId, option.id)
+    .rooms.filter(
+      ({ entity: room, renovationState }) =>
+        renovationState !== 'demolition' && room.wallFaceRefs.some((ref) => ref.wallId === wallId),
+    )
+    .map(({ entity: room }) => room)
+}
+
+/**
+ * Why a Room that followed a Wall's successor may not stand where it landed. The edge that dragged
+ * is named, because the homeowner was moving a Wall and not drawing a Room (#67 §12, #69 §7).
+ */
+function checkRoomsFit(project: Project, wallId: EntityId, followers: { room: Room; outline: RoomOutline }[]): void {
+  for (const entry of followers) {
+    const ref = entry.room.wallFaceRefs.find((candidate) => candidate.wallId === wallId)
+    checkRoomProposal(
+      project,
+      { ...entry.room, outline: entry.outline },
+      ref === undefined ? null : edgeName(entry.room, ref.segmentId),
+    )
+  }
 }
 
 /**
@@ -393,19 +424,14 @@ const replace: Handler<'renovation.replace'> = (ctx) => {
   const wallOf = (id: EntityId): Wall | undefined => model.walls.find((found) => found.id === id)
   const wall = wallOf(entityId)
   const opening = wall === undefined ? model.openings.find((found) => found.id === entityId) : undefined
+  const room =
+    wall === undefined && opening === undefined ? model.rooms.find((found) => found.id === entityId) : undefined
   const placed =
-    wall === undefined && opening === undefined
+    wall === undefined && opening === undefined && room === undefined
       ? model.placedItems.find((found) => found.id === entityId)
       : undefined
-  if (wall === undefined && opening === undefined && placed === undefined) {
-    if (model.rooms.some((room) => room.id === entityId))
-      refuse(
-        'room-blocked',
-        'designOptions',
-        `${nameOf(ctx.project, base, entityId)} is a Room: a Room is altered, not replaced.`,
-      )
+  if (wall === undefined && opening === undefined && room === undefined && placed === undefined)
     refuse('unknown-target', 'designOptions', `Nothing in this Project answers to ${entityId}.`)
-  }
   // Only Existing work is replaced. The Option's own work is edited where it stands — which is what
   // the S7 Intents do with a `target` — and a successor of a successor is provenance the model
   // refuses to record (#69 §3).
@@ -415,14 +441,6 @@ const replace: Handler<'renovation.replace'> = (ctx) => {
       'designOptions',
       `${nameOf(ctx.project, base, entityId)} is this option's own work: change it instead of replacing it.`,
     )
-  if (wall !== undefined) {
-    for (const room of referencingRooms(ctx.project, base, subject.floorId, entityId))
-      refuse(
-        'has-dependants',
-        'designOptions',
-        `${room.name} edge ${room.edge} refers to ${wall.ref}. Detach, reattach, or remove the Room delta first.`,
-      )
-  }
   const wallEdit = edit as Partial<Omit<Wall, 'id' | 'floorId'>>
   const line: WallLine = wall === undefined ? ({} as WallLine) : wallEdit.line ?? wall.line
   // What the successor takes over. Whether a join survives is decided by the successor's geometry,
@@ -430,6 +448,28 @@ const replace: Handler<'renovation.replace'> = (ctx) => {
   // own ID in them.
   const hosted = wall === undefined ? [] : model.openings.filter((found) => found.hostWallId === entityId)
   const copies = hosted.filter((found) => found.predecessorIds === undefined)
+  // A Room standing on the Wall's faces follows the successor under the #67 compatible-edit rules:
+  // the Edge slides onto the face it is referenced to and the outline follows. A Room that cannot
+  // follow — a face that turned, an outline that would stop being a shape, a neighbour it would
+  // land on — refuses the whole replace, naming the Room and the edge (#69 §7).
+  const followers =
+    wall === undefined
+      ? []
+      : followingRooms(ctx.project, base, subject.floorId, entityId).map((follower) => {
+          const now: Wall = { ...wall, ...wallEdit, id: entityId, floorId: wall.floorId }
+          let outline = follower.outline
+          for (const ref of follower.wallFaceRefs) {
+            if (ref.wallId !== entityId) continue
+            if (!faceCanCarry(wall, now))
+              refuse(
+                'room-blocked',
+                'designOptions',
+                `${wall.ref} is referenced by ${edgeName(follower, ref.segmentId)}.`,
+              )
+            outline = slideOntoFace(follower, outline, ref, now)
+          }
+          return { room: follower, outline }
+        })
   const survivors =
     wall === undefined
       ? []
@@ -442,11 +482,15 @@ const replace: Handler<'renovation.replace'> = (ctx) => {
             const carry = carriedJunction(junction, entityId, '', line, wallOf)
             return carry === null ? [] : [{ junction, carry }]
           })
-  const spent = spendIds(ctx.intent.ids, 1 + copies.length + survivors.length, 'renovation.replace')
+  const spent = spendIds(
+    ctx.intent.ids,
+    1 + copies.length + survivors.length + followers.length,
+    'renovation.replace',
+  )
   const container = option.proposed
-  // What was there comes down: one demolition record for the Wall and for every Existing Opening
-  // cut into it that the successor takes over (#69 §4).
-  demolishRecords(option, [entityId, ...copies.map((found) => found.id)])
+  // What was there comes down: one demolition record for the Wall, for every Existing Opening cut
+  // into it that the successor takes over, and for every Room whose edge follows the face (#69 §4).
+  demolishRecords(option, [entityId, ...copies.map((found) => found.id), ...followers.map((entry) => entry.room.id)])
   if (wall !== undefined) {
     const successor: Wall = {
       ...wall,
@@ -457,6 +501,25 @@ const replace: Handler<'renovation.replace'> = (ctx) => {
       predecessorIds: [entityId],
     }
     container.walls.push(successor)
+    // Every Room that followed has to be a shape and stand clear of its neighbours in this option,
+    // checked against the model the replace leaves behind: this successor standing, the Rooms that
+    // followed it already slid onto it (#69 §7).
+    const leaving = effectiveView(ctx.project, subject.floorId, target.designOptionId)
+    checkRoomsFit(
+      {
+        ...leaving,
+        existingModel: {
+          ...leaving.existingModel,
+          walls: [...leaving.existingModel.walls.filter((entry) => entry.id !== entityId), successor],
+          rooms: leaving.existingModel.rooms.map((entry) => {
+            const slid = followers.find((candidate) => candidate.room.id === entry.id)
+            return slid === undefined ? entry : { ...entry, outline: slid.outline }
+          }),
+        },
+      },
+      entityId,
+      followers,
+    )
     copies.forEach((found, at) => {
       container.openings.push({
         ...found,
@@ -492,6 +555,48 @@ const replace: Handler<'renovation.replace'> = (ctx) => {
         predecessorIds: [],
       })
     })
+    // The Rooms that followed are this Option's work from here: successors of the Rooms that stood
+    // here, named after them, their edges now referenced to the Wall that replaced the one they
+    // were drawn against (#69 §7).
+    followers.forEach((entry, at) => {
+      container.rooms.push({
+        ...entry.room,
+        id: spent[1 + copies.length + survivors.length + at] as string,
+        name: primed(entry.room.name),
+        outline: entry.outline,
+        wallFaceRefs: entry.room.wallFaceRefs.map((ref) =>
+          ref.wallId === entityId ? { ...ref, wallId: successor.id } : ref,
+        ),
+        predecessorIds: [entry.room.id],
+      })
+    })
+  } else if (room !== undefined) {
+    // A Room is altered by replacing it: the outline, the name and the edges it is referenced by
+    // are the Room's own, so the edit is the Room's fields and the successor carries them (#69 §7).
+    const changed = { ...room, ...(edit as Partial<Omit<Room, 'id' | 'floorId'>>) }
+    const successor: Room = {
+      ...changed,
+      id: spent[0] as string,
+      name: primed(changed.name),
+      predecessorIds: [entityId],
+    }
+    // The successor is checked where it will stand: this option's model, with the Room it replaces
+    // gone and everything else as it is.
+    const view = effectiveView(ctx.project, subject.floorId, target.designOptionId)
+    checkRoomProposal(
+      {
+        ...view,
+        existingModel: {
+          ...view.existingModel,
+          rooms: view.existingModel.rooms.map((entry) =>
+            entry.id === entityId ? { ...successor, id: entityId } : entry,
+          ),
+        },
+      },
+      { ...successor, id: entityId },
+      null,
+    )
+    container.rooms.push(successor)
   } else if (opening !== undefined) {
     container.openings.push({
       ...opening,

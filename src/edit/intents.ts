@@ -33,6 +33,7 @@ import type {
   PlacedItem,
   PresetRoomOutline,
   Project,
+  Room,
   Wall,
   WallClassification,
   WallFaceSide,
@@ -796,6 +797,7 @@ export interface DemolishInOption {
 export type ReplaceEdit =
   | Partial<Omit<Wall, 'id' | 'ref' | 'floorId' | 'predecessorIds'>>
   | Partial<Omit<Opening, 'id' | 'floorId' | 'hostWallId' | 'predecessorIds'>>
+  | Partial<Omit<Room, 'id' | 'floorId' | 'predecessorIds'>>
   | Partial<Omit<PlacedItem, 'id' | 'floorId' | 'predecessorIds'>>
 
 /**
@@ -1085,11 +1087,11 @@ export function roomSegmentCount(outline: RoomOutlineShape): number {
 export const SHELTER_ID_COUNT = 14
 
 /**
- * How many carries a `renovation.replace` is given IDs for. How many Openings and Junctions a
- * replace carries belongs to the Project rather than to the payload, so the caller is handed a
+ * How many carries a `renovation.replace` is given IDs for. How many Openings, Junctions and Rooms
+ * a replace carries belongs to the Project rather than to the payload, so the caller is handed a
  * generous number and a replace that needs more is refused with `missing-ids`.
  */
-export const REPLACE_CARRY_ID_COUNT = 16
+export const REPLACE_CARRY_ID_COUNT = 20
 
 export function intentIdCount(type: IntentType, payload?: PayloadOf): number {
   const order = ID_ORDER_BY_TYPE[type] ?? []
