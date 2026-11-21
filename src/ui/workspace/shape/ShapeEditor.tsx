@@ -353,7 +353,7 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
   const chipLabel = (chip: DraftChip): string => {
     if (chip.kind === 'line') return `${num(chip.lengthMm)} ${format.unit} · ${Math.round(chip.directionDeg)}°`
     if (chip.kind === 'arc') return `R ${num(chip.radiusMm ?? 0)} ${format.unit} · ${num(chip.arcLengthMm ?? 0)} ${format.unit}`
-    return `Radii ${num(chip.rx ?? 0)} × ${num(chip.ry ?? 0)} ${format.unit} · ${num(chip.arcLengthMm ?? 0)} ${format.unit}`
+    return STRINGS.radii(num(chip.rx ?? 0), num(chip.ry ?? 0), format.unit, num(chip.arcLengthMm ?? 0), format.unit)
   }
 
   /**
@@ -649,7 +649,7 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
               />
             )}
             {tab === 'measurements' && (
-              <MeasurementsTab footprint={shown} format={format} boundsLabel="Bounds" />
+              <MeasurementsTab footprint={shown} format={format} boundsLabel={STRINGS.bounds} />
             )}
           </div>
         </div>

@@ -97,11 +97,11 @@ export function ItemDetailView({ itemDesignId, children }: ItemDetailViewProps) 
       <div className="bb-item-detail-body">
         <nav
           className="bb-item-detail-placements"
-          aria-label="Placements"
+          aria-label={STRINGS.placements}
           data-testid="item-detail-placements"
         >
-          <h2>Placements</h2>
-          {groups.length === 0 && <p className="bb-item-detail-empty">Not placed in this Project.</p>}
+          <h2>{STRINGS.placements}</h2>
+          {groups.length === 0 && <p className="bb-item-detail-empty">{STRINGS.notPlaced}</p>}
           {groups.map((group) => {
             const viewId = planViewsForFloor(project, group.floorId)[0]?.id ?? null
             return (

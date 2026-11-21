@@ -19,6 +19,7 @@ import type { PresetKind, Pt } from '../../../derive'
 import { commandsToPath, pathToCommands } from '../../../drawing'
 import { footprintPath } from '../../../domain'
 import type { ItemFootprint, Point2 } from '../../../domain'
+import { STRINGS } from '../../strings'
 import { chipsFor, clientToLocal, dragBox, isClick, localToHost } from './placement'
 import type { DragBox, PlacementGesture } from './placement'
 
@@ -254,7 +255,7 @@ export function FootprintCanvas(props: FootprintCanvasProps): ReactNode {
       viewBox={`${box.minX} ${box.minY} ${box.maxX - box.minX} ${box.maxY - box.minY}`}
       preserveAspectRatio="xMidYMid meet"
       role="img"
-      aria-label="Item Footprint"
+      aria-label={STRINGS.itemFootprint}
       onPointerDown={start}
       onPointerMove={move}
       onPointerUp={end}
@@ -409,7 +410,7 @@ export function FootprintCanvas(props: FootprintCanvasProps): ReactNode {
           style={{ left: `${field.x}px`, top: `${field.y}px` }}
           value={lengthField.value}
           inputMode="decimal"
-          aria-label="Length"
+          aria-label={STRINGS.length}
           autoFocus
           onChange={(event) => lengthField.onChange(event.target.value)}
           onKeyDown={(event) => {

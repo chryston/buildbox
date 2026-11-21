@@ -4,42 +4,8 @@
     "Windows",
     "Other"
   ],
-  "export/pdf.ts": [
-    "BuildBox",
-    "Metadata"
-  ],
-  "ui/workspace/ItemDetailView.tsx": [
-    "Placements",
-    "Not placed in this Project."
-  ],
-  "ui/workspace/shape/FootprintCanvas.tsx": [
-    "Item Footprint",
-    "Length"
-  ],
-  "ui/workspace/shape/MeasurementsTab.tsx": [
-    "Area",
-    "Perimeter"
-  ],
-  "ui/workspace/shape/ShapeEditor.tsx": [
-    "Radii  ×   ·  ",
-    "Bounds"
-  ],
-  "ui/workspace/shape/ShapesGallery.tsx": [
-    "Shapes",
-    "Custom Path"
-  ],
-  "ui/workspace/wall/wallDraft.ts": [
-    "Join to end of ",
-    "Attach to "
-  ],
   "export/index.ts": [
     "No glyph for  in \"\""
-  ],
-  "export/provenance.ts": [
-    "BuildBox"
-  ],
-  "export/zip.ts": [
-    "BuildBox"
   ],
   "ui/drawing/DisplayListSvg.tsx": [
     "Unlock section"

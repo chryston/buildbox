@@ -18,6 +18,16 @@ import type { Orientation, PageSize } from './types'
 export const EXPORT_FOOTER =
   'Prepared with BuildBox for planning and discussion. Check all measurements on site before building or buying.'
 
+/**
+ * What the file says prepared it: the PDF's Producer and Creator, the ZIP's `generator`, the
+ * provenance document's `generator`, and the title block's version row.
+ *
+ * One constant because a file that names two different products is a bug, and because the
+ * literal *type* in `Provenance.generator` and `Manifest.generator` is written as
+ * `typeof PRODUCT_NAME` — the schema and the value cannot then disagree about the name.
+ */
+export const PRODUCT_NAME = 'BuildBox'
+
 /** What a sheet says when its scale carries no promise: fit-to-page, SVG, PNG. */
 export const NOT_TO_SCALE = 'Not to scale'
 

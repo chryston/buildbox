@@ -13,6 +13,7 @@
  */
 
 import { zipEntries } from '../lib'
+import { PRODUCT_NAME } from './strings'
 import type { Recipe, ListsRecipe, ExportFile, ExportSnapshot } from './types'
 import type { Provenance } from './provenance'
 
@@ -50,7 +51,7 @@ export interface Manifest {
   readonly format: typeof MANIFEST_FORMAT
   readonly manifest_version: number
   readonly contract_version: string
-  readonly generator: 'BuildBox'
+  readonly generator: typeof PRODUCT_NAME
   readonly buildbox_version: string
   readonly exported_at: string
   readonly project_id: string

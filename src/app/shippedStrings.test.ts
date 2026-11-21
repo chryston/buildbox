@@ -160,11 +160,15 @@ const COPY_SHAPED = /^[A-Z][a-z]/
  * Key names a keyboard handler compares `event.key` against, and two type parameters that appear
  * between the angle brackets a JSX-text scan reads. Neither is a word the interface says; both
  * would otherwise sit in the exemption list forever, which is the thing a list is for least.
+ *
+ * `Metadata` is a PDF dictionary key, spelled by ISO 32000-1 §14.3.2 and not by BuildBox — the
+ * same kind of thing as a key name: a word a specification owns, that a reader of the file looks
+ * up rather than reads.
  */
 const NEVER_COPY: Record<string, true> = {
   Enter: true, Escape: true, Backspace: true, Tab: true, Delete: true, Shift: true, Control: true,
   Alt: true, Meta: true, Space: true, ArrowUp: true, ArrowDown: true, ArrowLeft: true,
-  ArrowRight: true, Promise: true, PayloadOf: true,
+  ArrowRight: true, Promise: true, PayloadOf: true, Metadata: true,
 }
 
 /** Code punctuation: prose does not use it, and a generic or an expression does. */

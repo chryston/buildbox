@@ -767,6 +767,24 @@ export const STRINGS = {
   zoomOut: 'Zoom out',
   zoomIn: 'Zoom in',
   fitToScreen: 'Fit to screen',
+  // The Item detail page and the shape editor (#58, #59, #66 §17). `Shapes`, `Custom Path`,
+  // `Item Footprint` and `Length` are the keys the gallery and the footprint canvas already use.
+  placements: 'Placements',
+  notPlaced: 'Not placed in this Project.',
+  area: 'Area',
+  perimeter: 'Perimeter',
+  bounds: 'Bounds',
+  /** An elliptical arc's two radii and its length, as the chip under the shape reads them. */
+  radii(rx: string, ry: string, unit: string, arcLength: string, unit2: string): string {
+    return `Radii ${rx} × ${ry} ${unit} · ${arcLength} ${unit2}`
+  },
+  /** What a snap will do to the point being drawn, in the acceptance text's own words (#64). */
+  joinToEndOf(ref: string): string {
+    return `Join to end of ${ref}`
+  },
+  attachTo(ref: string): string {
+    return `Attach to ${ref}`
+  },
 } as const
 
 /**

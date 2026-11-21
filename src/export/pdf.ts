@@ -35,6 +35,7 @@ import type { MissingGlyph } from '../drawing'
 import type { FlatOp } from './flatten'
 import { baselineOffset } from './flatten'
 import { PT_PER_MM } from './fit'
+import { PRODUCT_NAME } from './strings'
 import { xmpPacket, type Provenance } from './provenance'
 
 /** One stored image, already downsampled to the size the sheet prints it at. */
@@ -248,8 +249,8 @@ export async function writePdf(input: PdfInput): Promise<{ bytes: Uint8Array; mi
   }
 
   const when = new Date(input.when)
-  doc.setProducer('BuildBox')
-  doc.setCreator('BuildBox')
+  doc.setProducer(PRODUCT_NAME)
+  doc.setCreator(PRODUCT_NAME)
   doc.setCreationDate(when)
   doc.setModificationDate(when)
 

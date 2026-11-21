@@ -14,6 +14,7 @@ import type { FloorWalls, Pt, WallFaceSource } from '../../../derive'
 import { distance, normaliseDeg, pt } from '../../../derive'
 import type { WallEndTarget } from '../../../edit'
 import type { EntityId, Wall, WallClassification } from '../../../domain'
+import { STRINGS } from '../../strings'
 
 /** How close a resolved snap point has to be to a face's end for that end to be the target. */
 const SNAP_MATCH_MM = 0.5
@@ -116,8 +117,8 @@ export const FREE_TARGET: WallSnapTarget = { kind: 'free' }
 
 /** The indicator over the pointer, or `null` when nothing would be joined. */
 export const joinLabel = (target: WallSnapTarget): string | null => {
-  if (target.kind === 'end') return `Join to end of ${target.ref}`
-  if (target.kind === 'face') return `Attach to ${target.ref}`
+  if (target.kind === 'end') return STRINGS.joinToEndOf(target.ref)
+  if (target.kind === 'face') return STRINGS.attachTo(target.ref)
   return null
 }
 
