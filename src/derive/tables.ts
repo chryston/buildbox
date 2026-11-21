@@ -56,11 +56,19 @@ import type { WarningParams, WarningSubjectKind } from './warnings/types'
  */
 export const UNLAYERED_LAYER = 'Unlayered'
 
-/** The eight columns every element table opens with and the one it closes with (#68 Scope 1). */
-export type ElementColumns = OptionColumns & {
+/**
+ * The eight columns every element table opens with and the one it closes with (#68 Scope 1).
+ *
+ * A row type is one flat object literal rather than an intersection of two, because `writeCsv`
+ * takes a `CsvRow` and TypeScript grants an implicit index signature only to a type spelled as a
+ * single literal — the same reason `ItemListRow` is written out in full.
+ */
+export type ElementColumns = {
   readonly stableId: string
   readonly floorId: string
   readonly floor: string
+  readonly designOptionId: string
+  readonly designOption: string
   readonly renovationState: RenovationState
   readonly drawingLayerId: string
   readonly drawingLayer: string
@@ -68,14 +76,32 @@ export type ElementColumns = OptionColumns & {
 }
 
 /** One Rooms row (export contract §7). */
-export type RoomsRow = ElementColumns & {
+export type RoomsRow = {
+  readonly stableId: string
+  readonly floorId: string
+  readonly floor: string
+  readonly designOptionId: string
+  readonly designOption: string
+  readonly renovationState: RenovationState
+  readonly drawingLayerId: string
+  readonly drawingLayer: string
+  readonly predecessorIds: readonly string[]
   readonly name: string
   readonly areaM2: number
   readonly perimeterMm: number
 }
 
 /** One Walls row. `radiusMm` is `null` — an empty cell — for every straight Wall. */
-export type WallsRow = ElementColumns & {
+export type WallsRow = {
+  readonly stableId: string
+  readonly floorId: string
+  readonly floor: string
+  readonly designOptionId: string
+  readonly designOption: string
+  readonly renovationState: RenovationState
+  readonly drawingLayerId: string
+  readonly drawingLayer: string
+  readonly predecessorIds: readonly string[]
   readonly classification: WallClassification | ''
   readonly constructionLabel: string
   readonly shape: 'straight' | 'arc'
@@ -89,7 +115,16 @@ export type WallsRow = ElementColumns & {
 }
 
 /** One Openings row. `hingeSide` is empty for a Window, a removed section and a sliding door. */
-export type OpeningsRow = ElementColumns & {
+export type OpeningsRow = {
+  readonly stableId: string
+  readonly floorId: string
+  readonly floor: string
+  readonly designOptionId: string
+  readonly designOption: string
+  readonly renovationState: RenovationState
+  readonly drawingLayerId: string
+  readonly drawingLayer: string
+  readonly predecessorIds: readonly string[]
   readonly kind: 'door' | 'window' | 'removed_section'
   readonly label: string
   readonly hostWallId: string
@@ -107,7 +142,16 @@ export type OpeningsRow = ElementColumns & {
 export type RoomRelation = RoomMembership['relation']
 
 /** One Placed Items row. `roomId` and `room` are filled only when `roomRelation` is `inside`. */
-export type PlacedItemsRow = ElementColumns & {
+export type PlacedItemsRow = {
+  readonly stableId: string
+  readonly floorId: string
+  readonly floor: string
+  readonly designOptionId: string
+  readonly designOption: string
+  readonly renovationState: RenovationState
+  readonly drawingLayerId: string
+  readonly drawingLayer: string
+  readonly predecessorIds: readonly string[]
   readonly label: string
   readonly itemDesignId: string
   readonly itemDesign: string
@@ -123,10 +167,12 @@ export type PlacedItemsRow = ElementColumns & {
 export type WarningSubjectCode = 'wall' | 'opening' | 'room' | 'placed_item'
 
 /** One Warnings List row (export contract §5). */
-export type WarningsRow = OptionColumns & {
+export type WarningsRow = {
   readonly status: 'unacknowledged' | 'acknowledged'
   readonly floorId: string
   readonly floor: string
+  readonly designOptionId: string
+  readonly designOption: string
   readonly warningType: string
   readonly subjectType: WarningSubjectCode
   readonly subjectId: string
