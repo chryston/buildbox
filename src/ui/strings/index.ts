@@ -619,6 +619,20 @@ export const STRINGS = {
   positionAtTop: 'At the top',
   positionBetween: (before: string, after: string): string => `Between ${before} and ${after}`,
   positionAtEnd: 'At the end',
+  // The Transfer and Delete Floor dialogs (#64 §17).
+  transferNote: "Floors don't share coordinates; check the position on the destination Floor",
+  destinationFloor: 'Destination Floor',
+  axisX: 'X',
+  axisY: 'Y',
+  baseElevation: 'Base elevation',
+  copyToFloor: 'Copy to Floor',
+  moveToFloor: 'Move to Floor',
+  deleteFloor: 'Delete Floor',
+  deleteFloorAria: (name: string): string => `Delete Floor ${name}`,
+  /** The dialog says what it will not do — delete nothing for you — before it says what it will. */
+  deleteFloorBlocked: 'Delete what is on this Floor first. Nothing is deleted or moved for you.',
+  deleteFloorEmpty: 'Nothing is left on this Floor. Deleting it also deletes its default Plan View.',
+  show: 'Show',
 } as const
 
 /**

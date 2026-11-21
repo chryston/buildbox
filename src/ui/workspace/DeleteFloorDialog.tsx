@@ -14,6 +14,7 @@
  */
 import type { ReactNode } from 'react'
 import type { Floor, FloorDependency } from '../../domain'
+import { STRINGS } from '../strings'
 
 export interface DeleteFloorDialogProps {
   floor: Floor
@@ -33,12 +34,10 @@ export function DeleteFloorDialog(props: DeleteFloorDialogProps): ReactNode {
 
   return (
     <div className="bb-workspace-dialog-backdrop" data-testid="delete-floor-dialog">
-      <div role="dialog" aria-modal="true" aria-label={`Delete Floor ${floor.name}`} className="bb-workspace-dialog">
-        <h2>Delete Floor</h2>
+      <div role="dialog" aria-modal="true" aria-label={STRINGS.deleteFloorAria(floor.name)} className="bb-workspace-dialog">
+        <h2>{STRINGS.deleteFloor}</h2>
         <p className="bb-workspace-dialog-note">
-          {blocked
-            ? 'Delete what is on this Floor first. Nothing is deleted or moved for you.'
-            : 'Nothing is left on this Floor. Deleting it also deletes its default Plan View.'}
+          {blocked ? STRINGS.deleteFloorBlocked : STRINGS.deleteFloorEmpty}
         </p>
         <ul className="bb-workspace-dependency-list" data-testid="floor-dependencies">
           {rows.map((row) => (
@@ -51,7 +50,7 @@ export function DeleteFloorDialog(props: DeleteFloorDialogProps): ReactNode {
                 disabled={row.count === 0}
                 onClick={() => onShow(row.kind.id)}
               >
-                Show
+                {STRINGS.show}
               </button>
             </li>
           ))}
@@ -64,7 +63,7 @@ export function DeleteFloorDialog(props: DeleteFloorDialogProps): ReactNode {
             disabled={blocked}
             onClick={onDelete}
           >
-            Delete Floor
+            {STRINGS.deleteFloor}
           </button>
           <button
             type="button"
@@ -72,7 +71,7 @@ export function DeleteFloorDialog(props: DeleteFloorDialogProps): ReactNode {
             className="bb-workspace-secondary-button"
             onClick={onClose}
           >
-            Cancel
+            {STRINGS.cancel}
           </button>
         </div>
       </div>
