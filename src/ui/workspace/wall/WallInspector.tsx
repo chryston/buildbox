@@ -15,6 +15,7 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { DerivedWall } from '../../../derive'
 import type { DisplayUnit, EntityId, Wall } from '../../../domain'
+import { STRINGS } from '../../strings'
 import { NumberField } from '../SelectionInspector'
 import { ToolbarMenu } from '../WorkspaceToolbar'
 import { circleThrough } from './wallDraft'
@@ -99,7 +100,7 @@ export function WallInspector(props: WallInspectorProps): ReactNode {
         />
       )}
       <NumberField
-        label="Thickness"
+        label={STRINGS.wallThickness}
         testId="wall-thickness"
         value={wall.thickness}
         kind="mm"
@@ -108,22 +109,22 @@ export function WallInspector(props: WallInspectorProps): ReactNode {
         min={1}
         onCommit={onSetThickness}
       />
-      <Row testId="wall-height" label="Height" value={`${grouped.format(wall.height)} mm`} />
+      <Row testId="wall-height" label={STRINGS.wallHeight} value={`${grouped.format(wall.height)} mm`} />
       <ToolbarMenu label="More options" testId="wall-inspector-more">
-        <Row testId="wall-justification" label="Justification" value={JUSTIFICATION_WORDS[wall.justification]} />
+        <Row testId="wall-justification" label={STRINGS.wallJustification} value={JUSTIFICATION_WORDS[wall.justification]} />
         <Row
           testId="wall-classification"
-          label="Classification"
-          value={wall.classification === undefined ? 'None' : CLASSIFICATION_WORDS[wall.classification]}
+          label={STRINGS.wallClassification}
+          value={wall.classification === undefined ? STRINGS.wallClassificationNone : CLASSIFICATION_WORDS[wall.classification]}
         />
         <Row
           testId="wall-construction-label"
-          label="Construction label"
-          value={wall.constructionLabel ?? 'None'}
+          label={STRINGS.wallConstructionLabel}
+          value={wall.constructionLabel ?? STRINGS.wallClassificationNone}
         />
         <div data-testid="wall-offset">
           <label className="bb-workspace-field-label" htmlFor="wall-offset-field">
-            Offset wall by <span className="bb-workspace-unit-suffix">(mm)</span>
+            {STRINGS.wallOffsetBy} <span className="bb-workspace-unit-suffix">(mm)</span>
           </label>
           <input
             id="wall-offset-field"
@@ -134,12 +135,12 @@ export function WallInspector(props: WallInspectorProps): ReactNode {
           />
           <select
             data-testid="wall-offset-side"
-            aria-label="Which side to offset toward"
+            aria-label={STRINGS.wallOffsetSide}
             value={offsetSide}
             onChange={(event) => setOffsetSide(event.target.value as 'left' | 'right')}
           >
-            <option value="left">Toward this side</option>
-            <option value="right">Toward the other side</option>
+            <option value="left">{STRINGS.wallOffsetToward}</option>
+            <option value="right">{STRINGS.wallOffsetAway}</option>
           </select>
           <button
             type="button"
@@ -151,28 +152,28 @@ export function WallInspector(props: WallInspectorProps): ReactNode {
               setOffsetText('')
             }}
           >
-            Offset
+            {STRINGS.wallOffset}
           </button>
         </div>
       </ToolbarMenu>
       <div className="flex items-center gap-2">
         <button type="button" data-testid="wall-split" className="bb-workspace-tool-button" onClick={onSplit}>
-          Split
+          {STRINGS.wallSplit}
         </button>
         <button
           type="button"
           data-testid="wall-merge"
           className="bb-workspace-tool-button"
           disabled={mergeableWith === null}
-          title={mergeableWith === null ? 'No Wall to merge with here' : undefined}
+          title={mergeableWith === null ? STRINGS.wallMergeNoTarget : undefined}
           onClick={() => {
             if (mergeableWith !== null) onMerge(mergeableWith.id)
           }}
         >
-          {mergeableWith === null ? 'Merge with…' : `Merge with ${mergeableWith.ref}`}
+          {mergeableWith === null ? STRINGS.wallMerge : STRINGS.wallMergeWith(mergeableWith.ref)}
         </button>
         <button type="button" data-testid="wall-delete" className="bb-workspace-tool-button" onClick={onDelete}>
-          Delete
+          {STRINGS.delete}
         </button>
       </div>
     </section>

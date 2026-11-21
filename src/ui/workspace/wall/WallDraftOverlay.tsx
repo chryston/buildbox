@@ -16,6 +16,7 @@ import type { ReactNode } from 'react'
 import { SNAP_ACQUISITION_PX, distance, resolveSnap, snapCandidates } from '../../../derive'
 import type { FloorWalls, Pt, Segment, SnapKind } from '../../../derive'
 import type { DisplayUnit, WallClassification } from '../../../domain'
+import { STRINGS } from '../../strings'
 import { formatMm } from '../displayUnits'
 import { ToolbarMenu } from '../WorkspaceToolbar'
 import type { Viewport } from '../viewport'
@@ -310,7 +311,7 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
         }}
       >
         <label className="flex items-center gap-1">
-          Thickness
+          {STRINGS.wallThickness}
           <select
             data-testid="wall-thickness-picker"
             value={WALL_THICKNESS_PRESETS.some((entry) => entry.thickness === defaults.thickness)
@@ -326,13 +327,13 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
                 {`${entry.label} · ${entry.thickness} mm`}
               </option>
             ))}
-            <option value="custom">Custom…</option>
+            <option value="custom">{STRINGS.wallCustom}</option>
           </select>
         </label>
         <input
           data-testid="wall-thickness-field"
           type="number"
-          aria-label="Thickness in millimetres"
+          aria-label={STRINGS.wallThicknessField}
           value={defaults.thickness}
           min={1}
           onChange={(event) => {
@@ -342,7 +343,7 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
         />
         <ToolbarMenu label="More options" testId="wall-more-options">
           <label className="flex items-center gap-1">
-            Justification
+            {STRINGS.wallJustification}
             <select
               data-testid="wall-justification"
               value={defaults.justification}
@@ -354,7 +355,7 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
             </select>
           </label>
           <label className="flex items-center gap-1">
-            Classification
+            {STRINGS.wallClassification}
             <select
               data-testid="wall-classification"
               value={defaults.classification ?? ''}
@@ -363,14 +364,14 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
                 classification: event.target.value === '' ? null : event.target.value as WallClassification,
               })}
             >
-              <option value="">None</option>
+              <option value="">{STRINGS.wallClassificationNone}</option>
               {WALL_CLASSIFICATIONS.map((entry) => (
                 <option key={entry.value} value={entry.value}>{entry.label}</option>
               ))}
             </select>
           </label>
           <label className="flex items-center gap-1">
-            Construction label
+            {STRINGS.wallConstructionLabel}
             <input
               data-testid="wall-construction-label"
               value={defaults.constructionLabel}
@@ -443,13 +444,13 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
           />
         )}
         <button type="button" data-testid="wall-undo" className="bb-workspace-tool-button" onClick={() => onDraft(undoPoint(draft))}>
-          Undo point
+          {STRINGS.wallUndoPoint}
         </button>
         <button type="button" data-testid="wall-finish" className="bb-workspace-tool-button" disabled={!canFinish(draft)} onClick={finish}>
-          Finish
+          {STRINGS.wallFinish}
         </button>
         <button type="button" data-testid="wall-cancel" className="bb-workspace-tool-button" onClick={onCancel}>
-          Cancel (Esc)
+          {STRINGS.wallCancelEsc}
         </button>
       </div>
     </div>

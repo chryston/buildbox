@@ -141,7 +141,7 @@ export function WorkspaceProvider(props: {
 
 export function useWorkspaceRoot(): WorkspaceRootValue {
   const value = useContext(WorkspaceContext)
-  if (value === null) throw new Error('FloorWorkspace must render inside WorkspaceProvider')
+  if (value === null) throw new Error('FloorWorkspace renders inside WorkspaceProvider')
   return value
 }
 

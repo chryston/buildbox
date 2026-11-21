@@ -33,10 +33,12 @@ const TABLES_SHIPPED = ['ui/strings/index.ts', 'export/strings.ts', 'export/csv/
 /**
  * The source the backstop reads.
  *
- * `export` first: it is already clean. `ui` joins it once its components hold no literal of
- * their own, because a backstop that skips the largest directory is a backstop nobody trusts.
+ * Both directories are in it: `export` because it was already clean, `ui` because a backstop that
+ * skips the largest directory is a backstop nobody trusts. What it does not skip is what matters —
+ * it reads every shipped module, so a sentence written into a component fails here the same way a
+ * sentence written into the copy table does.
  */
-const BACKSTOP_DIRS = ['export']
+const BACKSTOP_DIRS = ['export', 'ui']
 
 /** A test that names a banned word is not a shipped string; neither is a benchmark. */
 const NOT_SHIPPED = /\.test\.|\.bench\.|\.property\.|\.browser\./
@@ -54,6 +56,17 @@ function stringsOf(value: unknown, path: string): Array<[string, string]> {
 }
 
 /**
+ * A shipped sentence is never an all-lowercase identifier.
+ *
+ * `flow` is a banned word and also the first half of every `flow-*` class name, and `code` is a
+ * banned word and the tail of a hundred CSS custom properties. Matching those would mean renaming
+ * the stylesheet to please a spell-checker, so the scan reads what a person could read: a literal
+ * with a space in it, a capital in it, or punctuation that prose uses.
+ */
+const identifier = (text: string): boolean =>
+  text.startsWith('--') || /^[a-z][a-z0-9_-]*$/.test(text) || /^[A-Z][A-Z0-9_]*$/.test(text)
+
+/**
  * The words a copy function can put on screen.
  *
  * A function's own text is the only place its literals live, and the interpolated parts are
@@ -63,7 +76,7 @@ function stringsOf(value: unknown, path: string): Array<[string, string]> {
 function literalsOf(source: string, path: string): Array<[string, string]> {
   return [...source.matchAll(/'([^'\n]*)'|"([^"\n]*)"|`([^`]*)`/g)]
     .map((match) => (match[1] ?? match[2] ?? match[3] ?? '').replace(/\$\{[^}]*\}/g, ''))
-    .filter((text) => /[A-Za-z]{3}/.test(text))
+    .filter((text) => /[A-Za-z]{3}/.test(text) && !identifier(text))
     .map((text) => [path, text] as [string, string])
 }
 
@@ -97,9 +110,19 @@ function withoutComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/.*$/gm, '$1')
 }
 
+/**
+ * A class list is a stylesheet's name for a box, not a sentence.
+ *
+ * It is the one attribute whose value is never copy even when it reads like prose —
+ * `className="flow-page migration-review"` names two boxes, and `flow` is on the banned list as a
+ * topic, not as a piece of CSS.
+ */
+const withoutClassNames = (source: string): string =>
+  source.replace(/\b(?:class|className)=(?:"[^"]*"|'[^']*'|\{[^}]*\})/g, ' ')
+
 /** What one file says out loud: its string literals and the text between its tags. */
 const saidByText = (source: string): string[] => {
-  const stripped = withoutComments(source)
+  const stripped = withoutClassNames(withoutComments(source))
   const literals = literalsOf(stripped, '').map(([, text]) => text)
   const jsxText = [...stripped.matchAll(/>([^<>{}]+)</g)]
     .map((match) => match[1]!.trim())
@@ -164,7 +187,7 @@ describe('the words BuildBox ships saying', () => {
     // A layer named `Structure` is data, and criterion 8 leaves it alone. The guarantee is
     // structural: every path the scans read is a module the product ships.
     expect(shipped.every(([path]) => /^(ui\/strings|export\/|domain\/)/.test(path))).toBe(true)
-    expect(BACKSTOP_DIRS.map((dir) => `${dir}/`)).toEqual(['export/'])
+    expect(BACKSTOP_DIRS).toEqual(['export', 'ui'])
     // And the word that would have caught it is `structural`, which is a claim, not a name.
     expect(bannedWordsIn('Structure')).toEqual([])
     expect(bannedWordsIn('Structural wall')).toContain('structural')

@@ -489,6 +489,36 @@ export const STRINGS = {
   warningReopened: 'Reopened after change',
   /** Only reachable when a producer registers a `messageKey` this table has no row for. */
   warningCopyMissing: 'This warning has no wording yet.',
+  // The sentences that came out of the components and into this table (#66 §17). Each one is
+  // here because a component was saying it alone, where nobody reading the vocabulary would
+  // notice and no scan would catch a word the export contract bans.
+  floorLimitsOrder: 'The lower limit has to sit below the upper limit',
+  /** The Wall draft's option row, which is a form and so reads as one. */
+  wallThickness: 'Thickness',
+  wallThicknessField: 'Thickness in millimetres',
+  wallCustom: 'Custom…',
+  wallJustification: 'Justification',
+  wallClassification: 'Classification',
+  wallClassificationNone: 'None',
+  wallConstructionLabel: 'Construction label',
+  wallUndoPoint: 'Undo point',
+  wallFinish: 'Finish',
+  wallCancelEsc: 'Cancel (Esc)',
+  wallHeight: 'Height',
+  /** The Wall inspector's three actions, and the sentence that explains the first. */
+  wallOffsetBy: 'Offset wall by',
+  wallOffsetSide: 'Which side to offset toward',
+  wallOffsetToward: 'Toward this side',
+  wallOffsetAway: 'Toward the other side',
+  wallOffset: 'Offset',
+  wallSplit: 'Split',
+  /** The merge button says which Wall it would join, because that is the whole decision. */
+  wallMergeNoTarget: 'No Wall to merge with here',
+  wallMerge: 'Merge with…',
+  wallMergeWith: (ref: string): string => `Merge with ${ref}`,
+  /** Deleting a Wall takes its Openings with it, and the button says so rather than hiding it. */
+  wallDeleteWithOpenings: (openings: number): string =>
+    `Delete wall and ${plural(openings, 'opening', 'openings')}`,
 } as const
 
 /**

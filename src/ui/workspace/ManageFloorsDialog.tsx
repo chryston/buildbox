@@ -16,6 +16,7 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { DisplayUnit, Floor, Project } from '../../domain'
 import { floorNameTaken } from '../../domain'
+import { STRINGS } from '../strings'
 import { formatMm, parseToMm } from './displayUnits'
 
 export interface ManageFloorsDialogProps {
@@ -140,7 +141,7 @@ function FloorRow(props: ManageFloorsDialogProps & {
     const lower = readLimit(lowerText ?? shown(limits.lowerMm))
     const upper = readLimit(upperText ?? shown(limits.upperMm))
     if (lower !== null && upper !== null && lower >= upper) {
-      setLimitsError('The lower limit must be below the upper limit')
+      setLimitsError(STRINGS.floorLimitsOrder)
       return
     }
     setLimitsError(null)
