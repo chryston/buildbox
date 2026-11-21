@@ -82,5 +82,9 @@ test('a Room selected and an Outline refused', async ({ page }) => {
 
   await waitForFonts(page)
   await waitForStablePaint(page.getByTestId('room-draft-blocked'))
-  await expect(page).toHaveScreenshot('rooms-refused-outline-with-anchor-badge.png')
+  // The draft chip reads the live pointer (length · angle from the last corner); where the pointer
+  // rests after the last click is not part of the Room state under test and differs per runner.
+  await expect(page).toHaveScreenshot('rooms-refused-outline-with-anchor-badge.png', {
+    mask: [page.getByTestId('room-draft-chip')],
+  })
 })
