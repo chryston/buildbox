@@ -17,6 +17,7 @@ import type { ReactNode } from 'react'
 import { designOutline, pathOrigin } from '../../derive'
 import type { DisplayUnit, ItemDesign, Point2 } from '../../domain'
 import type { Rect } from '../../drawing'
+import { STRINGS } from '../strings'
 import { PLAN_SWATCHES } from './planColors'
 import { formatMm, parseToMm } from './displayUnits'
 import type { PlanItemView } from './planModel'
@@ -163,12 +164,12 @@ function originChoices(design: ItemDesign): readonly { label: string; point: Poi
   const minY = Math.min(...ys)
   const maxY = Math.max(...ys)
   return [
-    { label: 'Centre', point: pathOrigin(path) },
+    { label: STRINGS.originCentre, point: pathOrigin(path) },
     // Named as they appear at 0°, with +Y down: `Bottom-left` is local (minX, maxY).
-    { label: 'Top-left', point: { x: minX, y: minY } },
-    { label: 'Top-right', point: { x: maxX, y: minY } },
-    { label: 'Bottom-right', point: { x: maxX, y: maxY } },
-    { label: 'Bottom-left', point: { x: minX, y: maxY } },
+    { label: STRINGS.originTopLeft, point: { x: minX, y: minY } },
+    { label: STRINGS.originTopRight, point: { x: maxX, y: minY } },
+    { label: STRINGS.originBottomRight, point: { x: maxX, y: maxY } },
+    { label: STRINGS.originBottomLeft, point: { x: minX, y: maxY } },
   ]
 }
 
@@ -185,13 +186,13 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
 
   return (
     <section className="bb-workspace-card" data-testid="selection-inspector">
-      <h3 className="bb-workspace-card-title">Placed Item</h3>
-      <ReadOnlyRow testId="inspector-name" label="Name" value={item.label} />
+      <h3 className="bb-workspace-card-title">{STRINGS.placedItem}</h3>
+      <ReadOnlyRow testId="inspector-name" label={STRINGS.name} value={item.label} />
       <span className="bb-workspace-field-label" data-testid="inspector-design-label">
-        Item Design: {item.label}
+        {STRINGS.itemDesignOf(item.label)}
       </span>
       <NumberField
-        label="Position X"
+        label={STRINGS.positionX}
         testId="inspector-position-x"
         kind="mm"
         value={item.translation.x}
@@ -200,7 +201,7 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
         onCommit={(x) => onSetPosition(x, item.translation.y)}
       />
       <NumberField
-        label="Position Y"
+        label={STRINGS.positionY}
         testId="inspector-position-y"
         kind="mm"
         value={item.translation.y}
@@ -209,7 +210,7 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
         onCommit={(y) => onSetPosition(item.translation.x, y)}
       />
       <NumberField
-        label="Rotation"
+        label={STRINGS.rotation}
         testId="inspector-rotation"
         kind="deg"
         value={item.rotationDeg}
@@ -238,19 +239,19 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
       {/* The Item Footprint's own numbers: they never swap when the item turns. */}
       <ReadOnlyRow
         testId="placed-width"
-        label="Width"
+        label={STRINGS.width}
         value={size(item.width)}
-        hint="Set in the Item Design below"
+        hint={STRINGS.setInItemDesign}
       />
       <ReadOnlyRow
         testId="placed-depth"
-        label="Depth"
+        label={STRINGS.depth}
         value={size(item.depth)}
-        hint="Set in the Item Design below"
+        hint={STRINGS.setInItemDesign}
       />
       <ReadOnlyRow
         testId="floor-bounds"
-        label="Floor bounds"
+        label={STRINGS.floorBounds}
         value={bounds === null ? '—' : `${size(bounds.w)} × ${size(bounds.h)}`}
       />
       <div style={{ marginTop: 12 }}>
@@ -261,7 +262,7 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
           disabled={!canTransfer}
           onClick={onTransfer}
         >
-          Copy or Move to Floor…
+          {STRINGS.transferToFloor}
         </button>
       </div>
       <div style={{ marginTop: 12 }}>
@@ -271,7 +272,7 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
           className="bb-workspace-tool-button"
           onClick={onFork}
         >
-          Fork design…
+          {STRINGS.forkDesign}
         </button>
       </div>
       <div style={{ marginTop: 12 }}>
@@ -281,16 +282,16 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
           className="bb-workspace-danger-button"
           onClick={onDelete}
         >
-          Delete
+          {STRINGS.delete}
         </button>
       </div>
 
       {design !== null && (
         <div className="bb-workspace-design-section" data-testid="item-design-section">
           <h4 className="bb-workspace-card-title" data-testid="item-design-title">
-            {`Item Design · ${design.name} — shared by ${count} ${count === 1 ? 'placement' : 'placements'}`}
+            {STRINGS.designSharedBy(design.name, count)}
           </h4>
-          <label className="bb-workspace-field-label" htmlFor="design-name-input">Name</label>
+          <label className="bb-workspace-field-label" htmlFor="design-name-input">{STRINGS.name}</label>
           <input
             id="design-name-input"
             data-testid="design-name"
@@ -323,14 +324,14 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
               rows that would edit them are not offered — Item Detail edits the cabinet. */}
           {!isCabinet && (
             <>
-              <label className="bb-workspace-field-label">Colour</label>
+              <label className="bb-workspace-field-label">{STRINGS.colour}</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {PLAN_SWATCHES.map((color) => (
                   <button
                     key={color}
                     type="button"
                     data-testid={`swatch-${color}`}
-                    aria-label={`Colour ${color}`}
+                    aria-label={STRINGS.colourSwatch(color)}
                     aria-pressed={(pending?.color ?? design.color) === color ? 'true' : 'false'}
                     className="bb-workspace-swatch"
                     style={{ background: color }}
@@ -338,7 +339,7 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
                   />
                 ))}
               </div>
-              <label className="bb-workspace-field-label">Item Origin</label>
+              <label className="bb-workspace-field-label">{STRINGS.itemOrigin}</label>
               <div className="bb-workspace-button-row" data-testid="origin-choices">
                 {originChoices(design).map((choice) => (
                   <button
@@ -365,14 +366,14 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
                   aria-pressed={pickingOrigin ? 'true' : 'false'}
                   onClick={onTogglePick}
                 >
-                  Pick on canvas
+                  {STRINGS.pickOnCanvas}
                 </button>
               </div>
             </>
           )}
           {pending && (
             <div className="bb-workspace-preview" data-testid="design-preview">
-              <span data-testid="affects-count">{`Affects ${count} ${count === 1 ? 'placement' : 'placements'}`}</span>
+              <span data-testid="affects-count">{STRINGS.affectsPlacements(count)}</span>
               <div className="bb-workspace-button-row">
                 <button
                   type="button"
@@ -380,7 +381,7 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
                   className="bb-workspace-tool-button"
                   onClick={onApplyPreview}
                 >
-                  Apply
+                  {STRINGS.apply}
                 </button>
                 <button
                   type="button"
@@ -388,7 +389,7 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
                   className="bb-workspace-tool-button"
                   onClick={onCancelPreview}
                 >
-                  Cancel
+                  {STRINGS.cancel}
                 </button>
               </div>
             </div>
