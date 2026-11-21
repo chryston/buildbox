@@ -7,6 +7,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { DisplayUnit } from '../../domain'
+import { STRINGS } from '../strings'
 import { DEFAULT_PRECISION } from './displayUnits'
 
 const UNITS: readonly DisplayUnit[] = ['mm', 'cm', 'm']
@@ -28,9 +29,9 @@ export function ProjectSettingsDialog(props: ProjectSettingsDialogProps): ReactN
 
   return (
     <div className="bb-workspace-dialog-backdrop" data-testid="project-settings-dialog">
-      <div role="dialog" aria-modal="true" aria-label="Project settings" className="bb-workspace-dialog">
-        <h2>Project settings</h2>
-        <label className="bb-workspace-field-label" htmlFor="settings-unit">Display unit</label>
+      <div role="dialog" aria-modal="true" aria-label={STRINGS.projectSettings} className="bb-workspace-dialog">
+        <h2>{STRINGS.projectSettings}</h2>
+        <label className="bb-workspace-field-label" htmlFor="settings-unit">{STRINGS.displayUnit}</label>
         <select
           id="settings-unit"
           data-testid="settings-unit"
@@ -46,7 +47,7 @@ export function ProjectSettingsDialog(props: ProjectSettingsDialogProps): ReactN
             <option key={option} value={option}>{option}</option>
           ))}
         </select>
-        <label className="bb-workspace-field-label" htmlFor="settings-precision">Decimal places</label>
+        <label className="bb-workspace-field-label" htmlFor="settings-precision">{STRINGS.decimalPlaces}</label>
         <input
           id="settings-precision"
           data-testid="settings-precision"
@@ -59,7 +60,7 @@ export function ProjectSettingsDialog(props: ProjectSettingsDialogProps): ReactN
           onChange={(event) => setNextPrecision(Math.round(Number(event.target.value)))}
         />
         {/* The height a new Wall takes where the Floor has not chosen its own (#64 §16). */}
-        <label className="bb-workspace-field-label" htmlFor="settings-wall-height">Default wall height</label>
+        <label className="bb-workspace-field-label" htmlFor="settings-wall-height">{STRINGS.defaultWallHeight}</label>
         <input
           id="settings-wall-height"
           data-testid="settings-wall-height"

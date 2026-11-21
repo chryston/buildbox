@@ -1,19 +1,8 @@
 {
-  "ui/workspace/ProjectSettingsDialog.tsx": [
-    "Project settings",
-    "Display unit",
-    "Decimal places",
-    "Default wall height"
-  ],
   "export/compose.ts": [
     "Floor",
     "Item Detail",
     "Item"
-  ],
-  "ui/workspace/cabinet/ZoomControls.tsx": [
-    "Zoom out",
-    "Zoom in",
-    "Fit to screen"
   ],
   "ui/workspace/opening/openingPresets.ts": [
     "Doors",

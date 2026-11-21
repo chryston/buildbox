@@ -759,6 +759,14 @@ export const STRINGS = {
   // `Save failed · changes not stored` is a different sentence in a different place; this is the
   // one-word-of-state label beside the undo button.
   saveStatusFailed: 'Save failed',
+  // The Project settings dialog and the canvas zoom controls (#55, #49, #66 §17).
+  projectSettings: 'Project settings',
+  displayUnit: 'Display unit',
+  decimalPlaces: 'Decimal places',
+  defaultWallHeight: 'Default wall height',
+  zoomOut: 'Zoom out',
+  zoomIn: 'Zoom in',
+  fitToScreen: 'Fit to screen',
 } as const
 
 /**
