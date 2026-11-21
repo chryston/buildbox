@@ -40,6 +40,7 @@ import { roomOutlinePath } from '../domain'
 import type { KeepFixed, Pt } from '../geometry'
 import { FF_RENOVATION } from '../lib'
 import type { ValidationProblem } from '../lib'
+import { RENOVATION_EDIT_INTENT_ID_ORDER } from './handlers/renovationEdits'
 import { RENOVATION_INTENT_ID_ORDER } from './handlers/renovationHandlers'
 
 /**
@@ -128,7 +129,13 @@ export type S7IntentType =
   | 'warning.editNote'
 
 /** The Intents #69 registers only while `VITE_FF_RENOVATION` is on. */
-export type RenovationIntentType = 'designOption.create' | 'designOption.rename' | 'designOption.delete'
+export type RenovationIntentType =
+  | 'designOption.create'
+  | 'designOption.rename'
+  | 'designOption.delete'
+  | 'renovation.placeOpening'
+  | 'renovation.knockThrough'
+  | 'renovation.demolish'
 
 /** Every Intent type the catalogue can answer: the S7 set, plus the renovation set in a flagged build. */
 export type IntentType = S7IntentType | RenovationIntentType
@@ -731,6 +738,52 @@ export interface DeleteDesignOption {
   optionId: EntityId
 }
 
+/**
+ * Cut a new door or window into a Wall **from inside an Option** (#69 §7 row 1). The same fields
+ * `opening.create` takes, plus the Option the proposed Opening belongs to: the host is read from
+ * what stands in that Option and is never replaced by this Intent.
+ */
+export interface PlaceOpeningInOption {
+  floorId: EntityId
+  hostWallId: EntityId
+  kind: OpeningKind
+  label: string
+  start: number
+  width: number
+  sill: number
+  head: number
+  swing?: OpeningSwing
+  hingeSide?: HingeSide
+  /** Always an Option: this Intent has no Existing-Model form, which is `opening.create`. */
+  target: { designOptionId: EntityId }
+}
+
+/**
+ * Knock through part of a wall (#69 §7 row 2): a proposed `removed_section` with sill 0 and head
+ * at the host's height, so the gap is the whole of the Wall's Vertical Extent.
+ */
+export interface KnockThroughInOption {
+  floorId: EntityId
+  hostWallId: EntityId
+  label: string
+  start: number
+  width: number
+  target: { designOptionId: EntityId }
+}
+
+/**
+ * Mark demolition (#69 §7 rows 3–4): one demolition record per entity, in one Edit Transaction.
+ *
+ * A Wall takes the Openings its dependency review listed back with it — the answer the user
+ * confirmed — and an answer that no longer matches what the Project now says is refused.
+ */
+export interface DemolishInOption {
+  entityId: EntityId
+  /** The dependants the review listed, in the order it listed them. */
+  dependants?: EntityId[]
+  target: { designOptionId: EntityId }
+}
+
 /** `type → payload`, the one place the catalogue's shape is written down. */
 export interface IntentPayloads {
   'project.rename': RenameProject
@@ -811,6 +864,9 @@ export interface IntentPayloads {
   'designOption.create': CreateDesignOption
   'designOption.rename': RenameDesignOption
   'designOption.delete': DeleteDesignOption
+  'renovation.placeOpening': PlaceOpeningInOption
+  'renovation.knockThrough': KnockThroughInOption
+  'renovation.demolish': DemolishInOption
 }
 
 export type PayloadOf<T extends IntentType = IntentType> = IntentPayloads[T]
@@ -944,7 +1000,7 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
  * import of the renovation module becomes dead, so a released bundle carries neither table.
  */
 const ID_ORDER_BY_TYPE: Partial<Record<IntentType, readonly string[]>> = FF_RENOVATION
-  ? { ...INTENT_ID_ORDER, ...RENOVATION_INTENT_ID_ORDER }
+  ? { ...INTENT_ID_ORDER, ...RENOVATION_INTENT_ID_ORDER, ...RENOVATION_EDIT_INTENT_ID_ORDER }
   : INTENT_ID_ORDER
 
 /**
@@ -1115,8 +1171,33 @@ export interface DeleteDesignOptionReview {
   readonly message: string
 }
 
+/** One thing a demolition takes with it, named the way the dialog names it. */
+export interface DemolitionDependency {
+  readonly id: EntityId
+  /** `Door 1`. */
+  readonly label: string
+}
+
+/**
+ * `Demolish W-3?` (#69 §8): what goes with the Wall, and what stands in the way. `blockers` empty
+ * is what lets the dialog's confirm action answer at all; `applyIntent` re-runs the same question
+ * and refuses an answer the Project has moved on from with `dependency-changed`.
+ */
+export interface DemolitionReview {
+  readonly kind: 'demolish'
+  readonly entityId: EntityId
+  /** `W-3` — the subject of the question. */
+  readonly entityRef: string
+  /** Every Existing Opening that goes with the Wall, in the order the dialog lists them. */
+  readonly willDemolish: readonly DemolitionDependency[]
+  /** One sentence each: why the confirm action is disabled. */
+  readonly blockers: readonly string[]
+  /** `Demolish W-3?` */
+  readonly message: string
+}
+
 /** What an Intent would take with it, per review family. */
-export type DependencyReview = DeleteWallReview | DeleteDesignOptionReview
+export type DependencyReview = DeleteWallReview | DeleteDesignOptionReview | DemolitionReview
 
 export interface Applied {
   ok: true

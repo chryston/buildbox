@@ -15,6 +15,7 @@ import { FLOOR_HANDLERS, PLAN_FLOOR_HANDLERS, VIEW_HANDLERS } from './handlers/f
 import { OPENING_HANDLERS } from './handlers/openingHandlers'
 import { PLAN_HANDLERS } from './handlers/planHandlers'
 import { PROJECT_HANDLERS } from './handlers/projectHandlers'
+import { RENOVATION_EDIT_HANDLERS } from './handlers/renovationEdits'
 import { RENOVATION_HANDLERS } from './handlers/renovationHandlers'
 import { ROOM_HANDLERS } from './handlers/roomHandlers'
 import { WALL_HANDLERS } from './handlers/wallHandlers'
@@ -41,9 +42,11 @@ export const INTENT_HANDLERS: { [T in S7IntentType]: IntentHandler<T> } & {
   ...FLOOR_HANDLERS,
   ...VIEW_HANDLERS,
   ...WARNING_HANDLERS,
-  // The one way into `./handlers/renovationHandlers`: with the flag off this folds to nothing,
-  // the import goes unused, and the module — marker string and all — is gone from the bundle.
+  // The one way into `./handlers/renovationHandlers` and `./handlers/renovationEdits`: with the
+  // flag off these fold to nothing, the imports go unused, and both modules — marker string and
+  // all — are gone from the bundle.
   ...(FF_RENOVATION ? RENOVATION_HANDLERS : {}),
+  ...(FF_RENOVATION ? RENOVATION_EDIT_HANDLERS : {}),
 }
 
 /** Every Intent type the catalogue answers — the list #48's undo menu and #66 read. */

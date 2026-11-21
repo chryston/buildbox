@@ -27,15 +27,18 @@ import { refuse, spendIds } from './support'
  */
 export const RENOVATION_MARKER = '__renovation_intents__'
 
+/** The Option half of the renovation set; the edit table lives in `./renovationEdits`. */
+type OptionIntentType = Extract<RenovationIntentType, `designOption.${string}`>
+
 /** The IDs each renovation Intent spends, in order — the same contract `INTENT_ID_ORDER` states. */
-export const RENOVATION_INTENT_ID_ORDER: { [T in RenovationIntentType]: readonly string[] } = {
+export const RENOVATION_INTENT_ID_ORDER: { [T in OptionIntentType]: readonly string[] } = {
   'designOption.create': ['optionId'],
   'designOption.rename': [],
   'designOption.delete': [],
 }
 
 /** The default label per renovation Intent, kept out of `../labels` for the same reason. */
-export const RENOVATION_INTENT_LABELS: { [T in RenovationIntentType]: string } = {
+export const RENOVATION_INTENT_LABELS: { [T in OptionIntentType]: string } = {
   'designOption.create': 'New Design Option',
   'designOption.rename': 'Rename Design Option',
   'designOption.delete': 'Delete Design Option',
@@ -117,7 +120,7 @@ const deleteOption: Handler<'designOption.delete'> = (ctx) => {
 }
 
 /** The renovation half of the catalogue, as one gated spread. */
-export const RENOVATION_HANDLERS: { [T in RenovationIntentType]: IntentHandler<T> } = {
+export const RENOVATION_HANDLERS: { [T in OptionIntentType]: IntentHandler<T> } = {
   'designOption.create': { run: createOption, locate: optionLocator },
   'designOption.rename': { run: renameOption, locate: optionLocator },
   'designOption.delete': {

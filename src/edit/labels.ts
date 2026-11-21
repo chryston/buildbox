@@ -4,7 +4,8 @@
  * tooltip, where "Undo Change cabinet size" has to read as one sentence.
  */
 import { FF_RENOVATION } from '../lib'
-import type { IntentType, RenovationIntentType, S7IntentType } from './intents'
+import type { IntentType, S7IntentType } from './intents'
+import { RENOVATION_EDIT_INTENT_LABELS } from './handlers/renovationEdits'
 import { RENOVATION_INTENT_LABELS } from './handlers/renovationHandlers'
 
 /** The default label per S7 Intent type, verbatim from the #47 catalogue. */
@@ -95,10 +96,13 @@ export const INTENT_LABELS = {
  * a renovation type in a flag-off build answers with the type itself — an Intent nothing
  * registered can be, so the answer is never shown.
  */
+const RENOVATION_LABELS: Partial<Record<IntentType, string>> = FF_RENOVATION
+  ? { ...RENOVATION_INTENT_LABELS, ...RENOVATION_EDIT_INTENT_LABELS }
+  : {}
+
 export function intentLabel(type: IntentType): string {
   const known = INTENT_LABELS as Partial<Record<IntentType, string>>
   const s7 = known[type]
   if (s7 !== undefined) return s7
-  if (!FF_RENOVATION) return type
-  return RENOVATION_INTENT_LABELS[type as RenovationIntentType]
+  return RENOVATION_LABELS[type] ?? type
 }

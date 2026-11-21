@@ -35,6 +35,8 @@ export {
   type DeleteWall,
   type DetachRoomFace,
   type DeleteDesignOptionReview,
+  type DemolitionDependency,
+  type DemolitionReview,
   type DeleteWallReview,
   type DependencyReview,
   type DesignIntent,
