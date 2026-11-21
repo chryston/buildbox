@@ -76,9 +76,9 @@ export function WallInspector(props: WallInspectorProps): ReactNode {
   return (
     <section className="bb-workspace-card" data-testid="wall-inspector">
       <h3 className="bb-workspace-card-title" data-testid="wall-inspector-ref">{wall.ref}</h3>
-      <Row testId="wall-shape" label="Shape" value={isArc ? 'Arc' : 'Straight'} />
+      <Row testId="wall-shape" label={STRINGS.shape} value={isArc ? STRINGS.arc : STRINGS.wallStraight} />
       <NumberField
-        label="Length"
+        label={STRINGS.length}
         testId="wall-length"
         value={derived.length}
         kind="mm"
@@ -110,7 +110,7 @@ export function WallInspector(props: WallInspectorProps): ReactNode {
         onCommit={onSetThickness}
       />
       <Row testId="wall-height" label={STRINGS.wallHeight} value={`${grouped.format(wall.height)} mm`} />
-      <ToolbarMenu label="More options" testId="wall-inspector-more">
+      <ToolbarMenu label={STRINGS.moreOptions} testId="wall-inspector-more">
         <Row testId="wall-justification" label={STRINGS.wallJustification} value={JUSTIFICATION_WORDS[wall.justification]} />
         <Row
           testId="wall-classification"

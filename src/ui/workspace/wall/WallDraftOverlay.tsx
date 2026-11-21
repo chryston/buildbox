@@ -48,9 +48,9 @@ export interface WallToolDefaults {
 
 /** The closed classification vocabulary, in the words the inspector uses (#64 §13). */
 export const WALL_CLASSIFICATIONS: readonly { value: WallClassification; label: string }[] = [
-  { value: 'external', label: 'External' },
-  { value: 'internal', label: 'Internal' },
-  { value: 'partition', label: 'Partition' },
+  { value: 'external', label: STRINGS.classificationExternal },
+  { value: 'internal', label: STRINGS.classificationInternal },
+  { value: 'partition', label: STRINGS.classificationPartition },
 ]
 
 /**
@@ -58,17 +58,17 @@ export const WALL_CLASSIFICATIONS: readonly { value: WallClassification; label: 
  * are the four the issue names, by the same plain names, with a custom number beside them.
  */
 export const WALL_THICKNESS_PRESETS: readonly { label: string; thickness: number }[] = [
-  { label: 'Inside wall', thickness: 100 },
-  { label: 'Kitchen wall', thickness: 120 },
-  { label: 'Outside wall', thickness: 150 },
-  { label: 'End wall of the block', thickness: 175 },
+  { label: STRINGS.thicknessInsideWall, thickness: 100 },
+  { label: STRINGS.thicknessKitchenWall, thickness: 120 },
+  { label: STRINGS.thicknessOutsideWall, thickness: 150 },
+  { label: STRINGS.thicknessEndWall, thickness: 175 },
 ]
 
 /** The three justifications, in the words the issue prescribes — never `L` or `R` (D6). */
 export const WALL_JUSTIFICATIONS: readonly { value: 'centre' | 'left' | 'right'; label: string }[] = [
-  { value: 'centre', label: 'Centre' },
-  { value: 'left', label: 'Face on this side' },
-  { value: 'right', label: 'Face on the other side' },
+  { value: 'centre', label: STRINGS.originCentre },
+  { value: 'left', label: STRINGS.justificationThisSide },
+  { value: 'right', label: STRINGS.justificationOtherSide },
 ]
 
 export interface WallDraftOverlayProps {
@@ -94,9 +94,9 @@ export interface WallDraftOverlayProps {
 
 /** The three segment modes, in the order the bar shows them (#64 §12). */
 const SEGMENT_TOOLS: readonly { id: WallSegmentTool; label: string; testId: string }[] = [
-  { id: 'line', label: 'Line', testId: 'wall-tool-line' },
-  { id: 'arc', label: 'Arc', testId: 'wall-tool-arc' },
-  { id: 'arcFromLast', label: 'Arc from last', testId: 'wall-tool-arc-from-last' },
+  { id: 'line', label: STRINGS.line, testId: 'wall-tool-line' },
+  { id: 'arc', label: STRINGS.arc, testId: 'wall-tool-arc' },
+  { id: 'arcFromLast', label: STRINGS.arcFromLast, testId: 'wall-tool-arc-from-last' },
 ]
 
 /** The chip's number: grouped thousands in the Project's display unit. */
@@ -341,7 +341,7 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
             if (Number.isFinite(value) && value > 0) onOptions({ ...defaults, thickness: value })
           }}
         />
-        <ToolbarMenu label="More options" testId="wall-more-options">
+        <ToolbarMenu label={STRINGS.moreOptions} testId="wall-more-options">
           <label className="flex items-center gap-1">
             {STRINGS.wallJustification}
             <select
@@ -427,7 +427,7 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
             autoFocus
             type="number"
             value={lengthText}
-            aria-label="Length"
+            aria-label={STRINGS.length}
             onChange={(event) => setLengthText(event.target.value)}
             onBlur={commitLength}
             onKeyDown={(event) => {

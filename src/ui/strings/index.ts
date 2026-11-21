@@ -665,6 +665,21 @@ export const STRINGS = {
   semiAxisB: 'Semi-axis B',
   axisRotation: 'Axis rotation',
   roundAllCorners: 'Round all corners',
+  // The Wall tool's vocabularies (#64 §12, §13, #66 §17).
+  classificationExternal: 'External',
+  classificationInternal: 'Internal',
+  classificationPartition: 'Partition',
+  /** The thickness picker names Walls, not millimetres, because that is how people ask for one. */
+  thicknessInsideWall: 'Inside wall',
+  thicknessKitchenWall: 'Kitchen wall',
+  thicknessOutsideWall: 'Outside wall',
+  thicknessEndWall: 'End wall of the block',
+  justificationThisSide: 'Face on this side',
+  justificationOtherSide: 'Face on the other side',
+  arcFromLast: 'Arc from last',
+  moreOptions: 'More options',
+  shape: 'Shape',
+  wallStraight: 'Straight',
 } as const
 
 /**
