@@ -48,7 +48,7 @@ const WALLS: readonly Wall[] = [
 const floorWalls: FloorWalls = deriveWalls(
   // `deriveWalls` reads the model's Walls and Junctions and nothing else, so the test hands it
   // exactly those: a jsdom module cannot read the fixture files off disk.
-  { existingModel: { walls: [...WALLS], wallJunctions: [] } } as unknown as Project,
+  { existingModel: { walls: [...WALLS], wallJunctions: [], rooms: [] } } as unknown as Project,
   'floor-main',
 )
 

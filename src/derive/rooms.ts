@@ -243,6 +243,29 @@ const liesOnFace = (edge: RoomSegment, face: DerivedFace): boolean => {
   return relation !== null && relation.skew <= TOLERANCE_MM && relation.distance <= TOLERANCE_MM
 }
 
+/**
+ * Which Room borders each Wall face of a Floor, keyed `wallId|side`, by claim or by shape
+ * (#67 §9). A face bordering no Room is absent: the snap indicator then says `W-5 · face`, which is
+ * the truth, rather than inventing a Room nobody drew.
+ */
+export function faceRoomNames(faces: readonly DerivedFace[], rooms: readonly Room[]): Map<string, string> {
+  const names = new Map<string, string>()
+  for (const face of faces) {
+    const key = `${face.wallId}|${face.side}`
+    if (names.has(key)) continue
+    const claimed = rooms.find((room) => room.wallFaceRefs.some(
+      (reference) => reference.wallId === face.wallId && reference.side === face.side,
+    ))
+    if (claimed !== undefined) {
+      names.set(key, claimed.name)
+      continue
+    }
+    const shaped = rooms.find((room) => roomSegments(room.outline).some((edge) => liesOnFace(edge, face)))
+    if (shaped !== undefined) names.set(key, shaped.name)
+  }
+  return names
+}
+
 /** The name of another Room bordering this face, by claim or by shape. */
 const borderingRoom = (face: DerivedFace, edited: Room, rooms: readonly Room[]): string | null => {
   for (const other of rooms) {

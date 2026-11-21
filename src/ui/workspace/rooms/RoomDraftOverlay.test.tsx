@@ -37,7 +37,7 @@ const VIEWPORT = { zoom: 1, panX: 0, panY: 0 }
 const floorWalls: FloorWalls = deriveWalls(
   // A Floor with no Walls: the resolver still answers, and the layer needs the face sources it
   // would snap to. A jsdom module cannot read the fixture files off disk.
-  { existingModel: { walls: [], wallJunctions: [] } } as unknown as Project,
+  { existingModel: { walls: [], wallJunctions: [], rooms: [] } } as unknown as Project,
   'floor-main',
 )
 

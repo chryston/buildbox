@@ -4,7 +4,7 @@
  * same geometry with no reference-line point anywhere in it.
  */
 import { describe, expect, it } from 'vitest'
-import type { Project, Wall, WallJunction } from '../domain'
+import type { Project, Room, Wall, WallJunction } from '../domain'
 import type { SnapCandidate, SnapKind } from '../geometry'
 import { pt, refLength } from '../geometry'
 import { createDeriveCache } from './cache'
@@ -146,6 +146,45 @@ describe('deriveWalls', () => {
         expect(derived.corners.some((c) => c.label === corner.label && c.point.x === corner.point.x)).toBe(true)
       }
     }
+  })
+
+  it('names a face for the Room that borders it, and leaves the rest plain (#67 §9)', () => {
+    // W-1 runs (0,0) → (4000,0), 150 mm thick and centre-justified: its faces lie at y = ±75, and
+    // the mitre at the far end pulls the right-hand face back to x = 3950.
+    const kitchen: Room = {
+      id: 'room-kitchen',
+      floorId: 'floor-main',
+      name: 'Kitchen',
+      outline: {
+        kind: 'path',
+        path: {
+          start: { x: 0, y: 75 },
+          segments: [
+            { kind: 'line', to: { x: 3900, y: 75 } },
+            { kind: 'line', to: { x: 3900, y: 3075 } },
+            { kind: 'line', to: { x: 0, y: 3075 } },
+            { kind: 'line', to: { x: 0, y: 75 } },
+          ],
+        },
+        segmentIds: ['edge-1', 'edge-2', 'edge-3', 'edge-4'],
+      },
+      wallFaceRefs: [],
+    }
+    const base = wallsProject()
+    const derived = deriveWalls(
+      { ...base, existingModel: { ...base.existingModel, rooms: [kitchen] } },
+      'floor-main',
+    )
+    const first = derived.snapSources.find((source) => source.id === 'wall-1')
+    const named = (first?.faces ?? []).filter((face) => face.label !== undefined)
+    expect(named).toHaveLength(1)
+    expect(named[0]?.label).toBe('W-1 · Kitchen side face')
+    // The name goes on the face the Kitchen stands against, not on its twin behind the Wall.
+    expect(named[0]?.from.y).toBe(75)
+    // The Wall's own wording is unchanged, so a source with no Room beside it reads as before.
+    expect(first?.label).toBe('W-1 · face')
+    expect(derived.snapSources.filter((s) => s.id !== 'wall-1')
+      .every((source) => source.faces.every((face) => face.label === undefined))).toBe(true)
   })
 
   it('derives nothing for a Floor with no Walls', () => {

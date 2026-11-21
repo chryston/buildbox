@@ -261,7 +261,7 @@ export function RoomDraftOverlay(props: RoomDraftOverlayProps): ReactNode {
             <path
               data-testid="room-draft-path"
               d={path}
-              stroke={overlap.blocked ? '#dc2626' : '#2563eb'}
+              stroke={overlap.blocked ? 'var(--bb-danger-dot)' : 'var(--bb-accent)'}
               strokeWidth={2 / viewport.zoom}
               fill="none"
               strokeDasharray={`${6 / viewport.zoom} ${4 / viewport.zoom}`}
@@ -276,7 +276,7 @@ export function RoomDraftOverlay(props: RoomDraftOverlayProps): ReactNode {
               cx={vertex.x}
               cy={vertex.y}
               r={4 / viewport.zoom}
-              fill={overlap.blocked ? '#dc2626' : '#2563eb'}
+              fill={overlap.blocked ? 'var(--bb-danger-dot)' : 'var(--bb-accent)'}
             />
           ))}
         </g>

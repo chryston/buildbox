@@ -80,9 +80,10 @@ export function FacePickLayer(props: FacePickLayerProps): ReactNode {
               height: `${HALF_PX * 2}px`,
               transformOrigin: `0 ${HALF_PX}px`,
               transform: `rotate(${deg}deg)`,
-              background: live ? 'rgba(37, 99, 235, 0.22)' : 'rgba(37, 99, 235, 0.08)',
-              borderBottom: '1px solid rgba(37, 99, 235, 0.55)',
-              borderTop: '1px solid rgba(37, 99, 235, 0.55)',
+              background: 'var(--bb-accent)',
+              opacity: live ? 0.3 : 0.12,
+              borderBottom: '1px solid var(--bb-accent)',
+              borderTop: '1px solid var(--bb-accent)',
               pointerEvents: 'all',
               cursor: 'pointer',
             }}
