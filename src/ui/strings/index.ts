@@ -584,6 +584,41 @@ export const STRINGS = {
   pickOnCanvas: 'Pick on canvas',
   affectsPlacements: (count: number): string => `Affects ${count} ${plural(count, 'placement', 'placements')}`,
   apply: 'Apply',
+  // The New item and Fork design dialogs (#38, #66 §17).
+  newItem: 'New item',
+  widthMm: 'Width (mm)',
+  depthMm: 'Depth (mm)',
+  place: 'Place',
+  forkDesignTitle: 'Fork design',
+  /** The dialog says what a fork does before the person asks the model what a fork does. */
+  forkDesignNote: 'Only this placement will use the new design.',
+  fork: 'Fork',
+  // The Plan View card (#44, #66 §17).
+  planImageUncalibrated: 'Plan Image not calibrated',
+  planImageScale: (perPx: string, unit: string): string => `Plan Image scale: 1 px = ${perPx} ${unit}`,
+  planViewNameRequired: 'Give this Plan View a name',
+  planViewNameTaken: (name: string): string =>
+    `Another Plan View on this Floor is already called ${name}`,
+  planView: 'Plan View',
+  floor: 'Floor',
+  manageFloorsEllipsis: 'Manage Floors…',
+  planViewNameField: 'Plan View name',
+  addPlanView: 'Add Plan View',
+  showPlanImage: 'Show Plan Image',
+  calibrateEllipsis: 'Calibrate…',
+  fit: 'Fit',
+  // The Duplicate Floor dialog (#64 §17).
+  duplicateItemFallback: 'Item',
+  floorCopyName: (name: string): string => `${name} copy`,
+  duplicateFloor: 'Duplicate Floor',
+  duplicateFloorAria: (name: string): string => `Duplicate Floor ${name}`,
+  position: 'Position',
+  placedItems: 'Placed Items',
+  includePlanImage: 'Include Plan Image',
+  /** The position a new Floor can take, named by the two Floors it would sit between. */
+  positionAtTop: 'At the top',
+  positionBetween: (before: string, after: string): string => `Between ${before} and ${after}`,
+  positionAtEnd: 'At the end',
 } as const
 
 /**

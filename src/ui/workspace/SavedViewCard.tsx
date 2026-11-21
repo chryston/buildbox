@@ -16,6 +16,7 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { DisplayUnit, Floor, PlanImage, PlanView, Project } from '../../domain'
 import { planViewNameTaken } from '../../domain'
+import { STRINGS } from '../strings'
 import { formatMm } from './displayUnits'
 import { CALIBRATION_REQUIRED_HINT, floorNeedsCalibration } from './toolbarRegistry'
 
@@ -48,16 +49,16 @@ export function planImageScaleText(
   precision: number,
 ): string {
   if (planImage === null) return ''
-  if (planImage.pixelsPerMm === null) return 'Plan Image not calibrated'
-  return `Plan Image scale: 1 px = ${formatMm(1 / planImage.pixelsPerMm, unit, Math.max(2, precision))} ${unit}`
+  if (planImage.pixelsPerMm === null) return STRINGS.planImageUncalibrated
+  return STRINGS.planImageScale(formatMm(1 / planImage.pixelsPerMm, unit, Math.max(2, precision)), unit)
 }
 
 /** The words for a Plan View name this Floor cannot hold. */
 export function planViewNameProblem(project: Project, floorId: string, name: string): string | null {
   const trimmed = name.trim()
-  if (trimmed === '') return 'Give this Plan View a name'
+  if (trimmed === '') return STRINGS.planViewNameRequired
   if (planViewNameTaken(project, floorId, trimmed)) {
-    return `Another Plan View on this Floor is already called ${trimmed}`
+    return STRINGS.planViewNameTaken(trimmed)
   }
   return null
 }
@@ -72,7 +73,7 @@ export function SavedViewCard(props: SavedViewCardProps): ReactNode {
   const [nameError, setNameError] = useState<string | null>(null)
 
   const suggest = (): string => {
-    const base = floor === null ? 'Plan View' : floor.name
+    const base = floor === null ? STRINGS.planView : floor.name
     let name = `${base} 2`
     let n = 2
     while (planViewNameTaken(project, floor?.id ?? '', name)) {
@@ -100,7 +101,7 @@ export function SavedViewCard(props: SavedViewCardProps): ReactNode {
 
   return (
     <>
-      <label className="bb-workspace-field-label" htmlFor="floor-select">Floor</label>
+      <label className="bb-workspace-field-label" htmlFor="floor-select">{STRINGS.floor}</label>
       <select
         id="floor-select"
         data-testid="floor-select"
@@ -112,7 +113,7 @@ export function SavedViewCard(props: SavedViewCardProps): ReactNode {
           <option key={each.id} value={each.id}>{each.name}</option>
         ))}
       </select>
-      <label className="bb-workspace-field-label" htmlFor="view-picker">Plan View</label>
+      <label className="bb-workspace-field-label" htmlFor="view-picker">{STRINGS.planView}</label>
       <select
         id="view-picker"
         data-testid="view-picker"
@@ -143,12 +144,12 @@ export function SavedViewCard(props: SavedViewCardProps): ReactNode {
           className="bb-workspace-tool-button"
           onClick={onManageFloors}
         >
-          Manage Floors…
+          {STRINGS.manageFloorsEllipsis}
         </button>
       </div>
       {adding && (
         <div className="bb-workspace-add-view" data-testid="add-view-form">
-          <label className="bb-workspace-field-label" htmlFor="add-view-name">Plan View name</label>
+          <label className="bb-workspace-field-label" htmlFor="add-view-name">{STRINGS.planViewNameField}</label>
           <input
             id="add-view-name"
             className="bb-workspace-input"
@@ -168,7 +169,7 @@ export function SavedViewCard(props: SavedViewCardProps): ReactNode {
               className="bb-workspace-primary-button"
               onClick={commitAdd}
             >
-              Add Plan View
+              {STRINGS.addPlanView}
             </button>
             <button
               type="button"
@@ -179,7 +180,7 @@ export function SavedViewCard(props: SavedViewCardProps): ReactNode {
                 setNameError(null)
               }}
             >
-              Cancel
+              {STRINGS.cancel}
             </button>
           </div>
           {nameError !== null && (
@@ -199,7 +200,7 @@ export function SavedViewCard(props: SavedViewCardProps): ReactNode {
             disabled={planImage === null}
             onChange={(event) => onShowPlanImage(event.target.checked)}
           />
-          Show Plan Image
+          {STRINGS.showPlanImage}
         </label>
       )}
       {planImage !== null && (
@@ -211,7 +212,7 @@ export function SavedViewCard(props: SavedViewCardProps): ReactNode {
             title={uncalibrated ? CALIBRATION_REQUIRED_HINT : undefined}
             onClick={onCalibrate}
           >
-            Calibrate…
+            {STRINGS.calibrateEllipsis}
           </button>
         </div>
       )}
@@ -222,7 +223,7 @@ export function SavedViewCard(props: SavedViewCardProps): ReactNode {
           className="bb-workspace-tool-button"
           onClick={onFit}
         >
-          Fit
+          {STRINGS.fit}
         </button>
       </div>
     </>
