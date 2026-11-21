@@ -196,7 +196,7 @@ export const STYLES: Record<StyleKey, Style> = {
 
   'plan-warning-badge': { fill: 'var(--bb-danger-dot)' },
   'plan-warning-badge-text': {
-    fill: 'var(--bb-bg-modal)',
+    fill: 'var(--bb-text)',
     size: 'plan-warning-badge-text',
     fontFamily: FONT_STACK,
     hit: 'none',
