@@ -20,7 +20,7 @@ import type { ReactNode } from 'react'
 import { originSnapCandidates, usableIntervals, deriveWarnings } from '../../derive'
 import type { Pt, Warning } from '../../derive'
 import { wallOpenings } from '../../drawing'
-import type { OpeningPreview } from '../../drawing'
+import type { BadgeSubject, OpeningPreview } from '../../drawing'
 import type { Point2, Project, WallClassification } from '../../domain'
 import { nextOpeningLabel, summarizeFloorDependencies } from '../../domain'
 import type { SessionAsset } from '../../session'
@@ -59,7 +59,8 @@ import type { WallChainDraft, WallDraft } from './wall/wallDraft'
 import { fitRect, fitViewport } from './viewport'
 import type { Viewport } from './viewport'
 import { WarningStrip } from './warnings/WarningStrip'
-import { warningBox } from './warnings/locateWarning'
+import { subjectBoxes, warningBox } from './warnings/locateWarning'
+import type { Box } from './warnings/locateWarning'
 import { enabledKindsOf, useWorkspace, workspaceStore } from './workspaceStore'
 import { WorkspaceShell } from './WorkspaceShell'
 import { ToolbarMenu, ToolbarMenuItem, WorkspaceToolbar } from './WorkspaceToolbar'
@@ -377,6 +378,46 @@ export function FloorWorkspace(): ReactNode {
     if (box === null) return
     setViewport(fitRect(width, height, box))
   }
+
+  /**
+   * One badge per entity the open warnings name (#66 §14). Acknowledged warnings contribute
+   * nothing — criterion 7's "acknowledged warnings show none" is this one filter — and an entity
+   * named by three warnings still gets exactly one, because the map is keyed by the entity.
+   */
+  const warningSubjects = useMemo<readonly BadgeSubject[]>(() => {
+    const boxes = new Map<string, Box>()
+    for (const warning of floorWarnings) {
+      if (warning.status === 'acknowledged') continue
+      const boxesOf = subjectBoxes(warning, project, derivedFloor?.placements ?? [])
+      for (let index = 0; index < warning.subjects.length; index += 1) {
+        const id = warning.subjects[index]!.id
+        const box = boxesOf[index]
+        if (box !== undefined && !boxes.has(id)) boxes.set(id, box)
+      }
+    }
+    return [...boxes].map(([id, bounds]) => ({ id, bounds }))
+  }, [floorWarnings, project, derivedFloor])
+
+  /**
+   * Which row the strip must show, and how many times it has been asked (#66 §14).
+   *
+   * The counter is not decoration: clicking the same badge twice has to scroll there twice, and
+   * a prop that compared equal would do nothing the second time.
+   */
+  const [warningFocus, setWarningFocus] = useState<{ key: string; nonce: number } | null>(null)
+
+  /**
+   * A badge was clicked: open the strip and put that entity's first row in view.
+   *
+   * The key is the warning's, not the entity's, so the strip scrolls to the *first* row of the
+   * entity it was asked about rather than to whichever row the engine happened to list first.
+   */
+  const selectWarningBadge = useCallback((id: string): void => {
+    const first = floorWarnings.find((warning) => warning.status !== 'acknowledged'
+      && warning.subjects.some((subject) => subject.id === id))
+    if (first === undefined) return
+    setWarningFocus((previous) => ({ key: first.key, nonce: (previous?.nonce ?? 0) + 1 }))
+  }, [floorWarnings])
 
   const send = <T extends IntentType>(type: T, payload: PayloadOf<T>): void => {
     dispatch(services.intent.build(type, payload))
@@ -1112,6 +1153,8 @@ export function FloorWorkspace(): ReactNode {
               onSelect={select}
               onCursorChange={setOpeningCursor}
               onCanvasClick={clickOnCanvas}
+              warningSubjects={warningSubjects}
+              onSelectWarningBadge={selectWarningBadge}
               dragPreview={dragPreview}
               onDragPreview={setDragPreview}
               onMoveItem={(id, x, y) => send('plan.movePlacement', { placedItemId: id, translation: { x, y } })}
@@ -1232,6 +1275,7 @@ export function FloorWorkspace(): ReactNode {
                   onLocate={locateWarning}
                   onAcknowledge={acknowledgeWarning}
                   onEditNote={editWarningNote}
+                  focus={warningFocus}
                 />
               )}
             </>

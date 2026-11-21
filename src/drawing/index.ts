@@ -52,5 +52,7 @@ export { faceCurveCommands, gapMarkItems, openingItems, pieceCommands, wallOpeni
 export type { OpeningStyle, OpeningSymbol, WallOpenings } from './openings'
 export { drawSelectionAnnotations } from './annotations'
 export type { AnnotationOptions } from './annotations'
+export { badgeRadius, displayRects, drawWarningBadges } from './badges'
+export type { BadgeOptions, BadgeSubject } from './badges'
 export { drawItemDetail } from './itemDetail'
 export type { ItemDetailOptions, ItemDetailView } from './itemDetail'

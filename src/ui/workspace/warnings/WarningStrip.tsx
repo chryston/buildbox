@@ -19,7 +19,7 @@
  * Nothing here knows what a Wall is. The sentence comes from `warningSentence`, which reads the
  * engine's `messageKey`, so a later producer adds a row to that table and no line to this file.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Warning } from '../../../derive'
 import { ACKNOWLEDGEMENT_NOTE_MAX_LENGTH } from '../../../domain'
@@ -34,6 +34,14 @@ export interface WarningStripProps {
   onAcknowledge(warning: Warning, note: string): void
   /** One Edit Transaction: change the note and nothing else, least of all the signature. */
   onEditNote(warning: Warning, note: string): void
+  /**
+   * A badge on the canvas was clicked: open the strip and bring this row into view (#66 §14).
+   *
+   * The nonce is what makes it work twice. Clicking the same badge again has to scroll there
+   * again, and a prop that compared equal to the last one would leave the effect asleep — which
+   * is the same reason a "scroll to comment" link in every other app carries a counter.
+   */
+  focus?: { key: string; nonce: number } | null
 }
 
 /** Open and reopened rows come first; within each group the engine's order stands (#66 §11). */
@@ -47,8 +55,18 @@ const subjectLabel = (warning: Warning): string =>
   String(warning.params.a ?? warning.subjects[0]?.id ?? '')
 
 export function WarningStrip(props: WarningStripProps): ReactNode {
-  const { warnings, onLocate, onAcknowledge, onEditNote } = props
+  const { warnings, onLocate, onAcknowledge, onEditNote, focus = null } = props
   const [expanded, setExpanded] = useState(false)
+  // A badge opened the strip; the row is not in the document until it has, so the scroll waits
+  // for the render the open causes rather than reaching for an element that is not there yet.
+  useEffect(() => {
+    if (focus === null) return
+    setExpanded(true)
+  }, [focus])
+  useEffect(() => {
+    if (focus === null || !expanded) return
+    document.getElementById(`warning-row-${focus.key}`)?.scrollIntoView({ block: 'nearest' })
+  }, [focus, expanded])
   // The row whose note field is open and what that field is for. One at a time: two open
   // fields would be two half-written decisions about the same warning. The mode matters
   // because a reopened warning already holds a record and still needs the *acknowledging*
@@ -97,6 +115,7 @@ export function WarningStrip(props: WarningStripProps): ReactNode {
               key={warning.key}
               className="bb-warnings-row"
               data-status={warning.status}
+              id={`warning-row-${warning.key}`}
               data-testid={`warning-row-${warning.key}`}
               onClick={() => {
                 onLocate(warning)

@@ -64,6 +64,11 @@ export interface DisplayListInteractions {
   onOpeningPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
   /** The rotate grip: it starts a turn. */
   onRotatePointerDown?: (id: string, event: React.PointerEvent<SVGPathElement>) => void
+  /**
+   * A warning's `!` badge, clicked where it is drawn (#66 §14). It opens the Warning strip and
+   * scrolls to that entity's first row; the id is the entity's, which is how the row is found.
+   */
+  onWarningBadgePointerDown?: (id: string) => void
   /** A click anywhere on a unit's own box. */
   onUnitClick?: (id: string) => void
   /** A section or a divider, picked where it is drawn: it becomes the selected node. */
@@ -106,6 +111,7 @@ const TEST_IDS: Readonly<Record<string, (id: string) => string>> = {
   'placed-item': (id) => `placed-object-${id}`,
   'item-label': (id) => `item-label-${id}`,
   'origin-marker': (id) => `origin-marker-${id}`,
+  'warning-badge': (id) => `warning-badge-${id}`,
   'origin-preview': (id) => `origin-preview-${id}`,
   'dimension-lines': () => 'dimension-lines',
   'dimension-width-line': () => 'dimension-width-line',
@@ -291,6 +297,17 @@ function renderNode(
       }) as never
       props.onClick = ((event: React.MouseEvent) => event.stopPropagation()) as never
       props.style = { cursor: 'grab' }
+    }
+    if (role === 'warning-badge' && interactions?.onWarningBadgePointerDown !== undefined) {
+      const pick = interactions.onWarningBadgePointerDown
+      props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => {
+        // The badge owns the gesture: the Wall under it is not what was clicked, and the
+        // background click that would deselect it must not happen either (#66 §14).
+        event.stopPropagation()
+        pick(id)
+      }) as never
+      props.onClick = ((event: React.MouseEvent) => event.stopPropagation()) as never
+      props.style = { cursor: 'pointer' }
     }
     if (role === 'unit-hit') {
       props.style = { cursor: 'pointer' }

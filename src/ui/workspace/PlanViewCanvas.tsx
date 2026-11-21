@@ -24,12 +24,14 @@ import type { DisplayUnit, Point2 } from '../../domain'
 import { footprintPath } from '../../domain'
 import {
   LAYER_ORDER,
+  displayRects,
   drawPlanView,
   drawSelectionAnnotations,
+  drawWarningBadges,
   drawWalls,
   unionRect,
 } from '../../drawing'
-import type { DisplayLayer, DisplayList, OpeningPreview, PlanPreview, Sizing, WallOpenings } from '../../drawing'
+import type { BadgeSubject, DisplayLayer, DisplayList, OpeningPreview, PlanPreview, Sizing, WallOpenings } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
 import type { DisplayListInteractions } from '../drawing/DisplayListSvg'
 import { formatMm } from './displayUnits'
@@ -119,6 +121,19 @@ export interface PlanViewCanvasProps {
    * `x`. It owns the pointer meanwhile.
    */
   htmlOverlay?: ReactNode
+  /**
+   * The entities carrying an open or reopened warning, with the box each one takes (#66 §14).
+   * The canvas places the `!` badges itself, because it is the canvas that knows what is already
+   * drawn: a badge must not cover a label, a handle or another badge, and only the lists about
+   * to be painted say what those are.
+   *
+   * The badges are built here and never in the Floor's own list, which is what keeps them off
+   * the export — the sheets are composed from `drawPlanView` and `drawWalls` alone, and warnings
+   * never appear on drawings.
+   */
+  warningSubjects?: readonly BadgeSubject[]
+  /** A badge was clicked: open the Warning strip at that entity's first row. */
+  onSelectWarningBadge?: (id: string) => void
 }
 
 /**
@@ -135,6 +150,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
     angleSnap, overlay, htmlOverlay, walls, selectedWallId = null, onSelectWall,
     openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
+    warningSubjects = [], onSelectWarningBadge,
   } = props
   const [hostSize, setHostSize] = useState({ width: 0, height: 0 })
   const [dragging, setDragging] = useState(false)
@@ -406,6 +422,17 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   const textOnly: DisplayList = annotations === null
     ? withWalls
     : { ...annotations, layers: [...withWalls.layers, ...annotations.layers] }
+  // The badges are placed against what this canvas is about to paint, and nothing else: the
+  // labels, the dimensions, the chip and the selection's handles are the boxes a `!` must not
+  // cover, and they only exist here (#66 §14).
+  const warningBadges: DisplayList | null = warningSubjects.length === 0
+    ? null
+    : drawWarningBadges(warningSubjects, {
+        sizing,
+        obstacles: annotations === null
+          ? displayRects(withWalls)
+          : [...displayRects(withWalls), ...displayRects(annotations)],
+      })
 
   const interactions: DisplayListInteractions = {
     onWallPointerDown: onSelectWall === undefined
@@ -434,6 +461,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       lastClient.current = { x: event.clientX, y: event.clientY }
       startRotateDrag(id)
     },
+    onWarningBadgePointerDown: onSelectWarningBadge,
   }
 
   return (
@@ -497,6 +525,21 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
                   />
                 </>
               )}
+            {/* Then the warnings, last of all and above every word: a badge is the one mark on
+                this canvas that must never be hidden, and it is keyed by what the engine
+                answered rather than by the revision, so it is its own list and never a layer of
+                the Floor's — which is what keeps it off the export (#66 §14). */}
+            {warningBadges !== null && (
+              <DisplayListSvg
+                list={warningBadges}
+                sizing={sizing}
+                matrix={matrix}
+                textSpace="screen"
+                screen={{ pxPerUnit: zoom, panX, panY }}
+                resolveAsset={resolveAsset}
+                interactions={interactions}
+              />
+            )}
           </>
         )}
       </svg>

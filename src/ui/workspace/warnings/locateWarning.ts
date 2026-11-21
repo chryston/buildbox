@@ -51,17 +51,18 @@ const union = (a: Box, b: Box): Box => {
 }
 
 /**
- * The box that holds every subject of `warning`, or `null` when the Project has none of them —
- * which is the state the pruning post-step makes unreachable, and is still worth answering
- * with "stay where you are" rather than with a jump to the origin.
+ * Where each subject of `warning` is, in the order the warning names them.
+ *
+ * Locate wants the union; the badges want each one, because a badge belongs to an entity and not
+ * to a warning. One function answers both rather than a second copy of the three cases.
  */
-export function warningBox(
+export function subjectBoxes(
   warning: Warning,
   project: Project,
   placements: readonly { id: string; worldBounds: Box | null }[],
-): Box | null {
+): Box[] {
   const { walls, openings, placedItems } = project.existingModel
-  let box: Box | null = null
+  const out: Box[] = []
   for (const subject of warning.subjects) {
     let next: Box | null = null
     if (subject.type === 'wall') {
@@ -80,7 +81,24 @@ export function warningBox(
       if (derived !== null) next = derived
       else if (stored !== null) next = { x: stored.translation.x, y: stored.translation.y, w: 0, h: 0 }
     }
-    if (next !== null) box = box === null ? next : union(box, next)
+    if (next !== null) out.push(next)
+  }
+  return out
+}
+
+/**
+ * The box that holds every subject of `warning`, or `null` when the Project has none of them —
+ * which is the state the pruning post-step makes unreachable, and is still worth answering
+ * with "stay where you are" rather than with a jump to the origin.
+ */
+export function warningBox(
+  warning: Warning,
+  project: Project,
+  placements: readonly { id: string; worldBounds: Box | null }[],
+): Box | null {
+  let box: Box | null = null
+  for (const next of subjectBoxes(warning, project, placements)) {
+    box = box === null ? next : union(box, next)
   }
   return box
 }

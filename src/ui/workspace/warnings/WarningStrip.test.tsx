@@ -205,3 +205,36 @@ describe('acknowledging', () => {
     expect(onAcknowledge).not.toHaveBeenCalled()
   })
 })
+
+describe('a badge clicked on the canvas', () => {
+  /** The strip, collapsed, with `scrollIntoView` spied — jsdom defines no such method. */
+  function closed() {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    const warnings = [warning(), reopened, acknowledged]
+    const props = { warnings, onLocate: vi.fn(), onAcknowledge: vi.fn(), onEditNote: vi.fn() }
+    const first = render(<WarningStrip {...props} />)
+    return { warnings, scrollIntoView, props, rerender: first.rerender }
+  }
+
+  it('opens the strip and brings that row into view', () => {
+    const { warnings, scrollIntoView, props, rerender } = closed()
+    expect(screen.queryByTestId(`warning-row-${warnings[1]!.key}`)).toBeNull()
+    rerender(<WarningStrip {...props} focus={{ key: warnings[1]!.key, nonce: 1 }} />)
+    expect(screen.getByTestId(`warning-row-${warnings[1]!.key}`)).toBeDefined()
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+  })
+
+  it('scrolls again when the same badge is clicked twice', () => {
+    const { warnings, scrollIntoView, props, rerender } = closed()
+    rerender(<WarningStrip {...props} focus={{ key: warnings[1]!.key, nonce: 1 }} />)
+    rerender(<WarningStrip {...props} focus={{ key: warnings[1]!.key, nonce: 2 }} />)
+    expect(scrollIntoView).toHaveBeenCalledTimes(2)
+  })
+
+  it('leaves a collapsed strip collapsed when nothing was asked of it', () => {
+    const { warnings, scrollIntoView } = closed()
+    expect(screen.queryByTestId(`warning-row-${warnings[0]!.key}`)).toBeNull()
+    expect(scrollIntoView).not.toHaveBeenCalled()
+  })
+})
