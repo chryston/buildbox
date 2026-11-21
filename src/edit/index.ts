@@ -70,6 +70,8 @@ export {
   type RemovePlanObject,
   type RemovePlanTemplate,
   type RemoveUnit,
+  type ReplaceEdit,
+  type ReplaceInOption,
   type RenameProject,
   type RenameOpening,
   type RenameUnit,

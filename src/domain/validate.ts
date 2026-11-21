@@ -1496,6 +1496,24 @@ function missingWallMessage(wallId: string, index: IdIndex, scope: ModelScope, f
   return fallback
 }
 
+/** The key one Wall end is claimed under: one end, one Junction (#64 §2). */
+function endKey(wallId: string, end: WallEnd): string {
+  return `${wallId}\u0000${end}`
+}
+
+/**
+ * The Wall ends a set of Junctions already claims, in the shape `validateWallJunctions` takes.
+ * A Design Option's Junctions are validated against the **effective** model, so the pass over one
+ * starts from the ends the standing Existing Junctions have taken (#69 §4).
+ */
+function joinedEndsOf(junctions: readonly JunctionShape[]): Map<string, string> {
+  const joined = new Map<string, string>()
+  for (const junction of junctions)
+    for (const end of junction.ends)
+      joined.set(endKey(end.wallId, end.end), `existingModel.wallJunctions[${junction.id}]`)
+  return joined
+}
+
 function validateJunctionMember(
   raw: unknown,
   path: string,
@@ -1528,7 +1546,7 @@ function validateJunctionMember(
   if (floorId !== null && wall.floorId !== floorId) {
     add(wallPath, DANGLING_REFERENCE, 'Wall Junction joins a Wall that stands on a different Floor from the Junction.')
   }
-  const key = `${wallId}\u0000${end}`
+  const key = endKey(wallId, end)
   const first = taken.get(key)
   if (first !== undefined) {
     add(
@@ -1593,12 +1611,17 @@ function validateWallJunctions(
   scope: ModelScope,
   walls: Map<string, WallShape>,
   add: Add,
+  // The Wall ends already joined. One Wall end takes one Junction across the **effective** model,
+  // so the pass over a Design Option starts from the ends the Existing Model has taken — otherwise
+  // an Option's Junction could join an end that is joined already, and the two Junctions would
+  // disagree about where that end is.
+  joined = new Map<string, string>(),
 ): JunctionShape[] {
   const junctions = checkArray(raw, path, 'the Wall Junctions', add)
   const shapes: JunctionShape[] = []
   if (junctions === null) return shapes
   // One Wall end, one Junction: the topology a Wall network is built on (#64 §2).
-  const taken = new Map<string, string>()
+  const taken = joined
   junctions.forEach((rawJunction, i) => {
     const at = childPath(path, i)
     if (!isRecord(rawJunction)) {
@@ -1630,8 +1653,12 @@ function validateWallJunctions(
     // A Junction of a Design Option exists to hold that Option's own work in place (#69 §4). One
     // joining only Existing Walls records a join the Existing Model already makes; one joining a
     // Wall the Option demolishes is the state the demolition review blocks on, and is caught by
-    // the member and host checks above.
-    if (scope.optionId !== null && members.length > 0 && !members.some((member) => scope.proposedWallIds.has(member.wall.id))) {
+    // the member and host checks above. A Wall the Option proposes hosting another Wall's end is
+    // the Option's own work held in place too, so the host counts as a member here.
+    const joinsProposed =
+      members.some((member) => scope.proposedWallIds.has(member.wall.id)) ||
+      (host !== null && scope.proposedWallIds.has(host.wall.id))
+    if (scope.optionId !== null && members.length > 0 && !joinsProposed) {
       add(endsPath, DANGLING_REFERENCE, 'Expected a Design Option Wall Junction to join at least one Wall this Option proposes.')
     }
     // The shape `joinWalls` takes, kept for the Opening fit rule: an Opening's usable
@@ -1851,7 +1878,15 @@ function validateDesignOptions(
     )
     const junctions = [
       ...standing,
-      ...validateWallJunctions(proposed.wallJunctions, childPath(proposedPath, 'wallJunctions'), index, scope, walls, add),
+      ...validateWallJunctions(
+        proposed.wallJunctions,
+        childPath(proposedPath, 'wallJunctions'),
+        index,
+        scope,
+        walls,
+        add,
+        joinedEndsOf(standing),
+      ),
     ]
     validateOpenings(proposed.openings, childPath(proposedPath, 'openings'), index, scope, walls, junctions, add)
     const optionRooms = validateRooms(proposed.rooms, childPath(proposedPath, 'rooms'), index, scope, walls, format, add)

@@ -19,11 +19,11 @@ import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import type { DesignOption, Project } from '../../domain'
+import type { DesignOption, Project, WallJunction } from '../../domain'
 import { designOptionsOf, validateProject } from '../../domain'
 import { canonicalJson } from '../../lib'
 import { effectiveModel } from '../../derive'
-import { applyIntent, applyPatches, previewIntent, type DemolitionReview } from '../index'
+import { applyIntent, applyPatches, previewIntent, type DemolitionReview, type ReplaceEdit } from '../index'
 import { intent } from '../testing'
 
 const fixturesRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../fixtures')
@@ -323,5 +323,182 @@ describe('the Wall demolition dependency review (#69 acceptance 3)', () => {
     expect(refused.ok).toBe(false)
     if (refused.ok) return
     expect(refused.code).toBe('unknown-target')
+  })
+})
+
+// --- Replace: the last row of acceptance 1, and the joins of acceptance 2 ----
+
+/** Six IDs: the successor, two carried Openings and the three joins W-3 makes. */
+const REPLACE_IDS = ['wall-w3-prime', 'opening-door-1-prime', 'opening-window-2-prime', 'junction-1', 'junction-2', 'junction-3']
+
+const replaceIn = (entityId: string, edit: ReplaceEdit, taken: string[] = REPLACE_IDS) =>
+  intent('renovation.replace', { entityId, edit, target: { designOptionId: A } }, taken)
+
+/** W-7 drawn from the middle of Existing W-2 out into the empty space east of it. */
+const drawW7 = (taken: string[]) =>
+  intent(
+    'wall.createChain',
+    {
+      floorId: FLOOR,
+      walls: [
+        {
+          line: { kind: 'line', start: { x: 9600, y: 4000 }, end: { x: 10600, y: 4000 } },
+          thickness: 100,
+          justification: 'centre',
+          baseElevation: 0,
+          height: 2600,
+        },
+      ],
+      starts: [{ kind: 'host', wallId: W2 }],
+      ends: [{ kind: 'free' }],
+      target: { designOptionId: A },
+    },
+    taken,
+  )
+
+describe('renovation.replace: a successor carrying the edit', () => {
+  it('demolishes W-3 and its openings, and adds W-3′ and Door 1′ with the joins carried', () => {
+    const before = project()
+    const beforeJson = canonicalJson(before)
+    const applied = unwrap(applyIntent(before, replaceIn(W3, { thickness: 150 })))
+    const next = applied.project
+    const optionA = optionOf(next, A)
+    const w3 = before.existingModel.walls.find((wall) => wall.id === W3)!
+
+    expect([...optionA.demolishedIds].sort()).toEqual([DOOR_1, W3, WINDOW_2].sort())
+    expect(optionA.proposed.walls).toEqual([
+      { ...w3, id: 'wall-w3-prime', ref: 'W-3′', thickness: 150, predecessorIds: [W3] },
+    ])
+    // The Openings come back in the successor carrying the same place and size, primed (#69 §3).
+    expect(optionA.proposed.openings.map((opening) => opening.label)).toEqual(['Door 1′', 'Window 2′'])
+    for (const [at, original] of [DOOR_1, WINDOW_2].entries()) {
+      const copy = optionA.proposed.openings[at]!
+      const source = before.existingModel.openings.find((entry) => entry.id === original)!
+      expect(copy.hostWallId).toBe('wall-w3-prime')
+      expect(copy.start).toBe(source.start)
+      expect(copy.width).toBe(source.width)
+      expect(copy.predecessorIds).toEqual([original])
+    }
+    // The three joins W-3 made are the Option's now, holding the successor in place.
+    const endsOf = (junction: WallJunction) => junction.ends.map((end) => `${end.wallId}:${end.end}`).sort().join('+')
+    expect(optionA.proposed.wallJunctions.map(endsOf).sort()).toEqual(
+      [`${W2}:end+wall-w3-prime:start`, `${W4}:start+wall-w3-prime:end`, `${W5}:end`].sort(),
+    )
+    const hosted = optionA.proposed.wallJunctions.find((junction) => junction.host !== undefined)!
+    expect(hosted.host).toEqual({ wallId: 'wall-w3-prime', at: 5600 })
+    expect(optionA.proposed.wallJunctions.every((junction) => junction.predecessorIds?.length === 0)).toBe(true)
+    // What stands in Option A is the successor and not the Wall it came from; Kitchen, which
+    // refers to W-5 and not to W-3, is untouched, as are the Existing Model and Option B.
+    const standing = effectiveModel(next, FLOOR, A).standingWalls.map((wall) => wall.ref)
+    expect(standing).toContain('W-3′')
+    expect(standing).not.toContain('W-3')
+    expect(next.existingModel.rooms.find((room) => room.name === 'Kitchen')).toEqual(
+      before.existingModel.rooms.find((room) => room.name === 'Kitchen'),
+    )
+    expect(canonicalJson(next.existingModel)).toBe(canonicalJson(before.existingModel))
+    expect(canonicalJson(optionOf(next, B))).toBe(canonicalJson(optionOf(before, B)))
+    expect(validateProject(next).ok).toBe(true)
+    // One row of the table is one Edit Transaction: one undo removes all six records at once.
+    expect(canonicalJson(applyPatches(next, applied.inversePatches))).toBe(beforeJson)
+  })
+
+  it('leaves a join behind when the successor no longer makes it', () => {
+    // W-3 moved 200 mm along its own length still touches W-2 and W-4 at its ends; moved off them,
+    // it joins nothing, and BuildBox invents no join to replace the one the drawing lost.
+    const applied = unwrap(applyIntent(project(), replaceIn(W3, { line: { kind: 'line', start: { x: 9600, y: 6800 }, end: { x: 600, y: 6800 } } })))
+    expect(optionOf(applied.project, A).proposed.wallJunctions).toEqual([])
+    expect(validateProject(applied.project).ok).toBe(true)
+  })
+
+  it('refuses to replace a Wall a Room edge refers to', () => {
+    const refused = applyIntent(project(), replaceIn(W5, { thickness: 150 }))
+    expect(refused.ok).toBe(false)
+    if (refused.ok) return
+    expect(refused.code).toBe('has-dependants')
+    expect(refused.problems[0]!.message).toMatch(/^Kitchen edge \d+ refers to W-5\. Detach, reattach, or remove the Room delta first\.$/)
+  })
+
+  it("refuses to replace the Option's own work, which is edited where it stands", () => {
+    const applied = unwrap(applyIntent(project(), replaceIn(W3, { thickness: 150 })))
+    const refused = applyIntent(applied.project, replaceIn('wall-w3-prime', { thickness: 200 }))
+    expect(refused.ok).toBe(false)
+    if (refused.ok) return
+    expect(refused.code).toBe('unknown-target')
+    expect(refused.problems[0]!.message).toBe("W-3′ is this option's own work: change it instead of replacing it.")
+  })
+
+  it('refuses to replace a Room, which is altered instead', () => {
+    const kitchen = project().existingModel.rooms.find((room) => room.name === 'Kitchen')!.id
+    const refused = applyIntent(project(), replaceIn(kitchen, {}))
+    expect(refused.ok).toBe(false)
+    if (refused.ok) return
+    expect(refused.code).toBe('room-blocked')
+    expect(refused.problems[0]!.message).toBe('Kitchen is a Room: a Room is altered, not replaced.')
+  })
+
+  it('replaces an Opening with a successor in the same place, and a Placement with the same placement', () => {
+    const before = project()
+    const window = before.existingModel.openings.find((entry) => entry.id === WINDOW_2)!
+    const applied = unwrap(
+      applyIntent(before, replaceIn(WINDOW_2, { kind: 'door', swing: 'left', hingeSide: 'start' }, ['opening-window-2-prime'])),
+    )
+    const optionA = optionOf(applied.project, A)
+    expect(optionA.demolishedIds).toEqual([WINDOW_2])
+    expect(optionA.proposed.openings).toEqual([
+      {
+        ...window,
+        id: 'opening-window-2-prime',
+        label: 'Window 2′',
+        kind: 'door',
+        swing: 'left',
+        hingeSide: 'start',
+        predecessorIds: [WINDOW_2],
+      },
+    ])
+    expect(validateProject(applied.project).ok).toBe(true)
+
+    const placed = before.existingModel.placedItems[0]!
+    const moved = unwrap(
+      applyIntent(before, replaceIn(placed.id, { translation: { x: placed.translation.x + 200, y: placed.translation.y } }, ['placed-prime'])),
+    )
+    const optionB = optionOf(moved.project, A)
+    expect(optionB.proposed.placedItems[0]).toEqual({
+      ...placed,
+      id: 'placed-prime',
+      translation: { x: placed.translation.x + 200, y: placed.translation.y },
+      predecessorIds: [placed.id],
+    })
+    expect(validateProject(moved.project).ok).toBe(true)
+  })
+})
+
+describe('option-owned junctions (#69 acceptance 2)', () => {
+  it('attaches a proposed W-7 to Existing W-2, which is neither altered nor replaced', () => {
+    const before = project()
+    const applied = unwrap(applyIntent(before, drawW7(['wall-w7', 'junction-w7'])))
+    const optionA = optionOf(applied.project, A)
+    expect(optionA.proposed.walls.map((wall) => wall.ref)).toEqual(['W-7'])
+    expect(optionA.proposed.walls[0]!.predecessorIds).toEqual([])
+    expect(optionA.demolishedIds).toEqual([])
+    expect(optionA.proposed.wallJunctions).toHaveLength(1)
+    expect(optionA.proposed.wallJunctions[0]!.ends).toEqual([{ wallId: 'wall-w7', end: 'start' }])
+    expect(optionA.proposed.wallJunctions[0]!.host).toEqual({ wallId: W2, at: 3400 })
+    expect(optionA.proposed.wallJunctions[0]!.predecessorIds).toEqual([])
+    // W-2 stands as the survey recorded it, with its own junctions; Option B sees none of this.
+    expect(canonicalJson(applied.project.existingModel)).toBe(canonicalJson(before.existingModel))
+    expect(canonicalJson(optionOf(applied.project, B))).toBe(canonicalJson(optionOf(before, B)))
+    expect(validateProject(applied.project).ok).toBe(true)
+  })
+
+  it("blocks demolishing W-2 while the Option's own W-7 is joined to it", () => {
+    const applied = unwrap(applyIntent(project(), drawW7(['wall-w7', 'junction-w7'])))
+    const review = previewIntent(applied.project, demolish(W2)).review as DemolitionReview | null
+    expect(review?.blockers).toEqual([
+      'W-7 is joined to W-2, which this option demolishes. Detach or re-host W-7 first.',
+    ])
+    const refused = applyIntent(applied.project, demolish(W2))
+    expect(refused.ok).toBe(false)
+    if (refused.ok) return
+    expect(refused.code).toBe('has-dependants')
   })
 })

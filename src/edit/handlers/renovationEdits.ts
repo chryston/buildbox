@@ -21,35 +21,25 @@
  */
 import { effectiveModel } from '../../derive'
 import { designOptionsOf, roomSegments } from '../../domain'
-import type { DesignOption, EntityId, Opening, OpeningKind, Project } from '../../domain'
+import type {
+  DesignOption,
+  EntityId,
+  Opening,
+  OpeningKind,
+  PlacedItem,
+  Project,
+  Wall,
+  WallJunction,
+} from '../../domain'
 import { compareCodePoints } from '../../lib'
+import { refLength, refParamAt, refPointAt } from '../../geometry'
 import type { DemolitionReview, Locator, RenovationIntentType } from '../intents'
 import type { Handler, IntentHandler } from './context'
-import { requireDoorFields, requireFit } from './openingSupport'
-import { refuse, spendIds } from './support'
+import { requireDoorFields, requireFit, requireOpeningsFit } from './openingSupport'
+import { effectiveView, refuse, spendIds } from './support'
 
 /** The edit-table Intent types, written once. */
 type EditIntentType = Extract<RenovationIntentType, `renovation.${string}`>
-
-/**
- * The Project as one Option sees it: its effective collections standing in for the Existing
- * Model's, so every existing check — usable intervals, fit, joins — reads what the user is looking
- * at. Built for one Floor, and only ever for a renovation Intent.
- */
-function effectiveView(project: Project, floorId: EntityId, optionId: EntityId): Project {
-  const model = effectiveModel(project, floorId, optionId)
-  return {
-    ...project,
-    existingModel: {
-      ...project.existingModel,
-      walls: [...model.standingWalls],
-      wallJunctions: [...model.standingWallJunctions],
-      openings: [...model.standingOpenings],
-      rooms: [...model.standingRooms],
-      placedItems: [...model.standingPlacedItems],
-    },
-  }
-}
 
 /** The Option an edit belongs to; without it there is nothing to write into. */
 function requireOption(draft: Project, optionId: EntityId): DesignOption {
@@ -309,6 +299,217 @@ const demolish: Handler<'renovation.demolish'> = (ctx) => {
   else demolishRecords(option, [entityId, ...listed])
 }
 
+// --- Replace -----------------------------------------------------------------
+
+/** Two points this close are one place: a join is carried where the new geometry still makes it. */
+const TOLERANCE_MM = 0.01
+
+type WallLine = Wall['line']
+type JunctionHost = WallJunction['host']
+type JunctionEnd = WallJunction['ends'][number]
+
+const endPoint = (line: WallLine, end: JunctionEnd['end']): { x: number; y: number } =>
+  end === 'start' ? line.start : line.end
+
+const coincides = (a: { x: number; y: number }, b: { x: number; y: number }): boolean =>
+  Math.hypot(a.x - b.x, a.y - b.y) <= TOLERANCE_MM
+
+/** A successor is named after what it replaced, with a prime on the end (#69 §3). */
+const primed = (name: string): string => `${name}′`
+
+/**
+ * The Junction a replaced Wall took part in, re-anchored on the successor — or `null` when the new
+ * geometry no longer makes that join. A join that has moved is left behind rather than stretched:
+ * the gap that opens is what lengthens the neighbour's usable interval, and inventing a join the
+ * drawing does not show is the one thing a carry may not do (#69 §4).
+ */
+function carriedJunction(
+  junction: WallJunction,
+  predecessorId: EntityId,
+  successorId: EntityId,
+  successorLine: WallLine,
+  wallOf: (id: EntityId) => Wall | undefined,
+): { ends: JunctionEnd[]; host?: JunctionHost } | null {
+  const mine = junction.ends.find((entry) => entry.wallId === predecessorId)
+  const ends = junction.ends.map((entry) =>
+    entry.wallId === predecessorId ? { wallId: successorId, end: entry.end } : { ...entry },
+  )
+  if (junction.host !== undefined && junction.host.wallId === predecessorId) {
+    // The predecessor carried another Wall's end along its middle; the successor has to still be
+    // there, and the member is stored at the point on the successor's line it comes to. The
+    // predecessor names itself nowhere in `ends`: it is the host.
+    const member = junction.ends.find((entry) => entry.wallId !== predecessorId)
+    if (member === undefined) return null
+    const memberWall = wallOf(member.wallId)
+    if (memberWall === undefined) return null
+    const memberPoint = endPoint(memberWall.line, member.end)
+    const param = refParamAt(successorLine, memberPoint)
+    if (param <= 0 || param >= refLength(successorLine)) return null
+    return coincides(refPointAt(successorLine, param), memberPoint)
+      ? { ends, host: { wallId: successorId, at: param } }
+      : null
+  }
+  if (mine === undefined) return null
+  const at = endPoint(successorLine, mine.end)
+  if (junction.host === undefined) {
+    for (const other of junction.ends) {
+      if (other.wallId === predecessorId) continue
+      const wall = wallOf(other.wallId)
+      if (wall === undefined || !coincides(at, endPoint(wall.line, other.end))) return null
+    }
+    return { ends }
+  }
+  // The predecessor's end rode another Wall's middle.
+  const host = wallOf(junction.host.wallId)
+  if (host === undefined) return null
+  return coincides(at, refPointAt(host.line, junction.host.at)) ? { ends, host: { ...junction.host } } : null
+}
+
+/**
+ * Replace (dimensions) and Replace (identity) (#69 §7): what stands here comes down, and a successor
+ * takes its place carrying the edit. The Openings cut into a replaced Wall come along — Existing ones
+ * are cut again in the successor carrying the same place and size, the Option's own simply follow the
+ * Wall they were cut into — and so do the joins that still land. One transaction, one undo.
+ *
+ * A Room whose edge refers to the Wall's faces blocks the replace exactly as it blocks a demolition:
+ * the Room delta that follows a moved Wall is #69 §9's work. An edit naming a field the subject does
+ * not have is left to the strict validator, which says which field on which entity it objected to.
+ */
+const replace: Handler<'renovation.replace'> = (ctx) => {
+  const { entityId, edit, target } = ctx.intent.payload
+  const option = requireOption(ctx.draft, target.designOptionId)
+  const base = optionOf(ctx.project, target.designOptionId)
+  if (base === undefined)
+    refuse('unknown-target', 'designOptions', `There is no Design Option ${target.designOptionId} to replace work in.`)
+  const subject = locateSubject(ctx.project, base, entityId)
+  if (subject === null) refuse('unknown-target', 'designOptions', `Nothing in this Project answers to ${entityId}.`)
+  const view = effectiveView(ctx.project, subject.floorId, target.designOptionId)
+  const model = view.existingModel
+  const wallOf = (id: EntityId): Wall | undefined => model.walls.find((found) => found.id === id)
+  const wall = wallOf(entityId)
+  const opening = wall === undefined ? model.openings.find((found) => found.id === entityId) : undefined
+  const placed =
+    wall === undefined && opening === undefined
+      ? model.placedItems.find((found) => found.id === entityId)
+      : undefined
+  if (wall === undefined && opening === undefined && placed === undefined) {
+    if (model.rooms.some((room) => room.id === entityId))
+      refuse(
+        'room-blocked',
+        'designOptions',
+        `${nameOf(ctx.project, base, entityId)} is a Room: a Room is altered, not replaced.`,
+      )
+    refuse('unknown-target', 'designOptions', `Nothing in this Project answers to ${entityId}.`)
+  }
+  // Only Existing work is replaced. The Option's own work is edited where it stands — which is what
+  // the S7 Intents do with a `target` — and a successor of a successor is provenance the model
+  // refuses to record (#69 §3).
+  if (subject.proposed)
+    refuse(
+      'unknown-target',
+      'designOptions',
+      `${nameOf(ctx.project, base, entityId)} is this option's own work: change it instead of replacing it.`,
+    )
+  if (wall !== undefined) {
+    for (const room of referencingRooms(ctx.project, base, subject.floorId, entityId))
+      refuse(
+        'has-dependants',
+        'designOptions',
+        `${room.name} edge ${room.edge} refers to ${wall.ref}. Detach, reattach, or remove the Room delta first.`,
+      )
+  }
+  const wallEdit = edit as Partial<Omit<Wall, 'id' | 'floorId'>>
+  const line: WallLine = wall === undefined ? ({} as WallLine) : wallEdit.line ?? wall.line
+  // What the successor takes over. Whether a join survives is decided by the successor's geometry,
+  // so the survivors are worked out before the IDs are spent and rebuilt once with the successor's
+  // own ID in them.
+  const hosted = wall === undefined ? [] : model.openings.filter((found) => found.hostWallId === entityId)
+  const copies = hosted.filter((found) => found.predecessorIds === undefined)
+  const survivors =
+    wall === undefined
+      ? []
+      : model.wallJunctions
+          .filter(
+            (junction) =>
+              junction.ends.some((end) => end.wallId === entityId) || junction.host?.wallId === entityId,
+          )
+          .flatMap((junction) => {
+            const carry = carriedJunction(junction, entityId, '', line, wallOf)
+            return carry === null ? [] : [{ junction, carry }]
+          })
+  const spent = spendIds(ctx.intent.ids, 1 + copies.length + survivors.length, 'renovation.replace')
+  const container = option.proposed
+  // What was there comes down: one demolition record for the Wall and for every Existing Opening
+  // cut into it that the successor takes over (#69 §4).
+  demolishRecords(option, [entityId, ...copies.map((found) => found.id)])
+  if (wall !== undefined) {
+    const successor: Wall = {
+      ...wall,
+      ...wallEdit,
+      id: spent[0] as string,
+      ref: primed(wall.ref),
+      floorId: wall.floorId,
+      predecessorIds: [entityId],
+    }
+    container.walls.push(successor)
+    copies.forEach((found, at) => {
+      container.openings.push({
+        ...found,
+        id: spent[1 + at] as string,
+        label: primed(found.label),
+        hostWallId: successor.id,
+        predecessorIds: [found.id],
+      })
+    })
+    for (const found of hosted) {
+      // The Option's own Opening follows the Wall it was cut into: the same record, a new host.
+      if (found.predecessorIds === undefined) continue
+      const live = container.openings.find((candidate) => candidate.id === found.id)
+      if (live !== undefined) live.hostWallId = successor.id
+    }
+    // The joins this Wall made belong to the Option from now on: its own Junctions that leaned on
+    // the Wall are dropped, and every join the successor still makes is written down afresh (#69 §4).
+    container.wallJunctions = container.wallJunctions.filter(
+      (junction) =>
+        !junction.ends.some((end) => end.wallId === entityId) &&
+        !(junction.host !== undefined && junction.host.wallId === entityId),
+    )
+    survivors.forEach((survivor, at) => {
+      const rebuilt = carriedJunction(survivor.junction, entityId, successor.id, line, wallOf)
+      if (rebuilt === null) return
+      container.wallJunctions.push({
+        id: spent[1 + copies.length + at] as string,
+        floorId: subject.floorId,
+        ends: rebuilt.ends,
+        ...(rebuilt.host === undefined ? {} : { host: rebuilt.host }),
+        // The join is this Option's now: it holds the successor in place, and the Existing Junction
+        // it came from stands in no Option a successor may point back to.
+        predecessorIds: [],
+      })
+    })
+  } else if (opening !== undefined) {
+    container.openings.push({
+      ...opening,
+      ...(edit as Partial<Omit<Opening, 'id' | 'floorId' | 'hostWallId'>>),
+      id: spent[0] as string,
+      label: primed(opening.label),
+      hostWallId: opening.hostWallId,
+      predecessorIds: [entityId],
+    })
+  } else if (placed !== undefined) {
+    container.placedItems.push({
+      ...placed,
+      ...(edit as Partial<Omit<PlacedItem, 'id' | 'floorId'>>),
+      id: spent[0] as string,
+      floorId: placed.floorId,
+      predecessorIds: [entityId],
+    })
+  }
+  // A thicker Wall leaves less room along it, so the openings that survived are measured again
+  // against what now stands in this Option (#65 §3).
+  requireOpeningsFit(effectiveView(ctx.draft, subject.floorId, target.designOptionId))
+}
+
 /** The edit-table half of the renovation catalogue. */
 export const RENOVATION_EDIT_HANDLERS: { [T in EditIntentType]: IntentHandler<T> } = {
   'renovation.placeOpening': {
@@ -333,6 +534,14 @@ export const RENOVATION_EDIT_HANDLERS: { [T in EditIntentType]: IntentHandler<T>
       return option === undefined ? null : reviewDemolition(project, option, intent.payload.entityId)
     },
   },
+  'renovation.replace': {
+    run: replace,
+    locate: (project, intent) => {
+      const option = optionOf(project, intent.payload.target.designOptionId)
+      const subject = option === undefined ? null : locateSubject(project, option, intent.payload.entityId)
+      return locatorOn(subject?.floorId ?? null)
+    },
+  },
 }
 
 /** The IDs the edit table spends: one proposed Opening per cut; a demolition spends none. */
@@ -340,6 +549,7 @@ export const RENOVATION_EDIT_INTENT_ID_ORDER: { [T in EditIntentType]: readonly 
   'renovation.placeOpening': ['openingId'],
   'renovation.knockThrough': ['openingId'],
   'renovation.demolish': [],
+  'renovation.replace': ['successorId', 'carryId…'],
 }
 
 /** The default label per edit-table Intent, dark with everything else here. */
@@ -347,4 +557,5 @@ export const RENOVATION_EDIT_INTENT_LABELS: { [T in EditIntentType]: string } = 
   'renovation.placeOpening': 'Add opening',
   'renovation.knockThrough': 'Knock through',
   'renovation.demolish': 'Mark demolition',
+  'renovation.replace': 'Replace',
 }

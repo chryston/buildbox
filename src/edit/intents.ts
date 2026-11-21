@@ -23,14 +23,17 @@ import type {
   GlobalSettings,
   ItemFootprint,
   HingeSide,
+  Opening,
   OpeningDependency,
   OpeningKind,
   OpeningSwing,
   PlanImage,
   Point2,
   PathRoomOutline,
+  PlacedItem,
   PresetRoomOutline,
   Project,
+  Wall,
   WallClassification,
   WallFaceSide,
   WallJustification,
@@ -136,6 +139,7 @@ export type RenovationIntentType =
   | 'renovation.placeOpening'
   | 'renovation.knockThrough'
   | 'renovation.demolish'
+  | 'renovation.replace'
 
 /** Every Intent type the catalogue can answer: the S7 set, plus the renovation set in a flagged build. */
 export type IntentType = S7IntentType | RenovationIntentType
@@ -784,6 +788,27 @@ export interface DemolishInOption {
   target: { designOptionId: EntityId }
 }
 
+/**
+ * The fields a successor carries instead of its predecessor's. Everything the edit leaves out is
+ * copied, so a replace changes the dimensions the user typed rather than the whole record (#69 §7).
+ */
+export type ReplaceEdit =
+  | Partial<Omit<Wall, 'id' | 'ref' | 'floorId' | 'predecessorIds'>>
+  | Partial<Omit<Opening, 'id' | 'floorId' | 'hostWallId' | 'predecessorIds'>>
+  | Partial<Omit<PlacedItem, 'id' | 'floorId' | 'predecessorIds'>>
+
+/**
+ * Replace (dimensions) and Replace (identity): the entity comes down and a successor takes its
+ * place carrying the edit, named after its predecessor with a prime on the end (#69 §3, §7). The
+ * Openings cut into a replaced Wall are carried onto the successor the same way, and the joins that
+ * still land on the new geometry are carried as this Option's own Junctions.
+ */
+export interface ReplaceInOption {
+  entityId: EntityId
+  edit: ReplaceEdit
+  target: { designOptionId: EntityId }
+}
+
 /** `type → payload`, the one place the catalogue's shape is written down. */
 export interface IntentPayloads {
   'project.rename': RenameProject
@@ -867,6 +892,7 @@ export interface IntentPayloads {
   'renovation.placeOpening': PlaceOpeningInOption
   'renovation.knockThrough': KnockThroughInOption
   'renovation.demolish': DemolishInOption
+  'renovation.replace': ReplaceInOption
 }
 
 export type PayloadOf<T extends IntentType = IntentType> = IntentPayloads[T]
@@ -1046,6 +1072,13 @@ export function roomSegmentCount(outline: RoomOutlineShape): number {
 /** The IDs `room.placeShelter` spends: Room, door, 4 Walls, 4 junctions, 4 Edges (#67 §17). */
 export const SHELTER_ID_COUNT = 14
 
+/**
+ * How many carries a `renovation.replace` is given IDs for. How many Openings and Junctions a
+ * replace carries belongs to the Project rather than to the payload, so the caller is handed a
+ * generous number and a replace that needs more is refused with `missing-ids`.
+ */
+export const REPLACE_CARRY_ID_COUNT = 16
+
 export function intentIdCount(type: IntentType, payload?: PayloadOf): number {
   const order = ID_ORDER_BY_TYPE[type] ?? []
   if (order[order.length - 1]?.endsWith('…') !== true) return order.length
@@ -1068,6 +1101,8 @@ export function intentIdCount(type: IntentType, payload?: PayloadOf): number {
       // One Room, one door, four Walls, four junctions and the four Edges of the shelter's
       // Rectangle outline — fixed numbers, because the pack entry is fixed.
       return SHELTER_ID_COUNT
+    case 'renovation.replace':
+      return fixed + REPLACE_CARRY_ID_COUNT
     default:
       return fixed + VARIADIC_ID_COUNT
   }

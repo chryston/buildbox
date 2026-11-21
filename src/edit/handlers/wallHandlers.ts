@@ -28,9 +28,9 @@ import {
   refTangentDeg,
 } from '../../geometry'
 import { chainJunctionCount, wallEndKey } from '../intents'
-import type { CreateWallChain, DependencyReview, Locator, WallEndTarget, WallIntent } from '../intents'
+import type { CreateWallChain, DependencyReview, IntentTarget, Locator, WallEndTarget, WallIntent } from '../intents'
 import type { Handler, IntentHandler } from './context'
-import { refuse, spendIds } from './support'
+import { containerOf, effectiveView, isInOption, proposedProvenance, refuse, spendIds } from './support'
 import { faceRefsOn, followWallFaces, refuseReferencedWall } from './roomSupport'
 import { requireOpeningsFit } from './openingSupport'
 
@@ -151,7 +151,7 @@ const addMember = (group: Group, member: WallJunctionEnd): void => {
  * both its faces: it is never split.
  */
 const createChain: Handler<'wall.createChain'> = (ctx) => {
-  const payload = ctx.intent.payload as CreateWallChain
+  const payload = ctx.intent.payload as CreateWallChain & IntentTarget
   const { floorId, walls, starts, ends } = payload
   if (walls.length === 0 || starts.length !== walls.length || ends.length !== walls.length) {
     refuse('invalid-wall', 'existingModel.walls', 'A chained draw carries one target for each end of every segment.')
@@ -161,12 +161,17 @@ const createChain: Handler<'wall.createChain'> = (ctx) => {
   }
   const spent = spendIds(ctx.intent.ids, walls.length + chainJunctionCount(payload), 'wall.createChain')
   const wallIds = spent.slice(0, walls.length)
+  // A Wall drawn inside a Design Option is proposed work: the same checks, the same writes, into
+  // that Option's container, read against what stands in that Option (#69 §7).
+  const container = containerOf(ctx.draft, payload.target?.designOptionId)
+  const inOption = isInOption(container, ctx.draft)
+  const view = effectiveView(ctx.project, floorId, payload.target?.designOptionId)
 
   const groups = new Map<string, Group>()
   let firstRef = 0
   {
     let highest = 0
-    for (const wall of ctx.project.existingModel.walls) {
+    for (const wall of view.existingModel.walls) {
       const digits = /\d+/.exec(wall.ref)
       if (digits !== null) highest = Math.max(highest, Number(digits[0]))
     }
@@ -203,11 +208,11 @@ const createChain: Handler<'wall.createChain'> = (ctx) => {
         }
         addMember(group, { wallId: wallIds[target.index] as string, end: target.end })
       } else if (target.kind === 'wall') {
-        requireWall(ctx.project, target.wallId)
+        requireWall(view, target.wallId)
         addMember(group, { wallId: target.wallId, end: target.end })
         // Joining an end that is already joined adds this Wall to that Junction rather than
         // making a second one at the same point.
-        const joined = junctionOf(ctx.project, target.wallId, target.end)
+        const joined = junctionOf(view, target.wallId, target.end)
         if (joined !== undefined) {
           groups.delete(key)
           const carried = groups.get(joined.id) ?? group
@@ -215,7 +220,7 @@ const createChain: Handler<'wall.createChain'> = (ctx) => {
           groups.set(joined.id, carried)
         }
       } else if (target.kind === 'host') {
-        const host = requireWall(ctx.project, target.wallId)
+        const host = requireWall(view, target.wallId)
         const source = drawn[index] as Wall
         const at = refParamAt(host.line, endOf(source.line, end))
         if (at <= 0 || at >= refLength(host.line)) {
@@ -243,13 +248,14 @@ const createChain: Handler<'wall.createChain'> = (ctx) => {
     ...(wall.constructionLabel === undefined ? {} : { constructionLabel: wall.constructionLabel }),
     baseElevation: wall.baseElevation,
     height: wall.height,
+    ...proposedProvenance(inOption),
   }))
-  ctx.draft.existingModel.walls.push(...created)
+  container.walls.push(...created)
 
   const junctionIds = spent.slice(walls.length)
   let next = 0
   for (const [key, group] of groups) {
-    const existing = ctx.draft.existingModel.wallJunctions.find((junction) => junction.id === key)
+    const existing = container.wallJunctions.find((junction) => junction.id === key)
     if (existing !== undefined) {
       for (const member of group.members) {
         if (!existing.ends.some((other) => other.wallId === member.wallId && other.end === member.end)) {
@@ -264,11 +270,12 @@ const createChain: Handler<'wall.createChain'> = (ctx) => {
     if (group.members.length < 2 && group.host === undefined) {
       refuse('invalid-wall', 'existingModel.walls', 'A junction has to join two ends, or attach to a wall.')
     }
-    ctx.draft.existingModel.wallJunctions.push({
+    container.wallJunctions.push({
       id,
       floorId,
       ends: group.members,
       ...(group.host === undefined ? {} : { host: { ...group.host } }),
+      ...proposedProvenance(inOption),
     })
   }
 }

@@ -7,8 +7,10 @@
  * only the draft: it never generates an ID and never reads the clock (#42 §3).
  */
 import { findNode } from '../../cabinet'
-import type { CabinetItemDesign, CabinetNode, EntityId, Floor, GenericItemDesign, ItemDesign, PlacedItem, Project } from '../../domain'
-import { problem } from '../../lib'
+import { effectiveModel } from '../../derive'
+import { designOptionsOf } from '../../domain'
+import type { CabinetItemDesign, CabinetNode, EntityId, Floor, GenericItemDesign, ItemDesign, PlacedItem, ProposedModel, Project } from '../../domain'
+import { FF_RENOVATION, problem } from '../../lib'
 import type { ValidationProblem } from '../../lib'
 import type { RejectionCode } from '../intents'
 
@@ -273,3 +275,55 @@ export function assignChanged(draftValue: object, nextValue: object): void {
     if (!(key in nextFields)) delete draftFields[key]
   }
 }
+
+// --- Which container an edit writes into -------------------------------------
+
+/**
+ * The container an edit writes into: the Existing Model, or one Design Option's proposed model
+ * when the Intent carries a `target` (#69 §7). This is the whole of what a renovation edit adds to
+ * an S7 Intent — the checks, the messages and the writes are the same code, and no handler is
+ * forked into an “existing” and a “proposed” copy.
+ *
+ * With the flag off the guard folds to the Existing Model alone, so the Option half is dead code
+ * in a released bundle.
+ */
+export function containerOf(draft: Project, designOptionId: EntityId | null | undefined): ProposedModel {
+  if (!FF_RENOVATION || designOptionId === null || designOptionId === undefined) return draft.existingModel
+  const option = designOptionsOf(draft).find((entry) => entry.id === designOptionId)
+  if (option === undefined)
+    refuse('unknown-target', 'designOptions', `There is no Design Option ${designOptionId} to hold this edit.`)
+  return option.proposed
+}
+
+/**
+ * The Project as one Design Option sees it: that Option's effective collections standing in for
+ * the Existing Model's, so an existing check — a usable interval, a join, the next free reference
+ * — reads what the user is looking at rather than the survey. With no target, or with the flag
+ * off, this is the Project itself.
+ */
+export function effectiveView(project: Project, floorId: EntityId | null, designOptionId: EntityId | null | undefined): Project {
+  if (!FF_RENOVATION || designOptionId === null || designOptionId === undefined) return project
+  const model = effectiveModel(project, floorId, designOptionId)
+  return {
+    ...project,
+    existingModel: {
+      ...project.existingModel,
+      walls: [...model.standingWalls],
+      wallJunctions: [...model.standingWallJunctions],
+      openings: [...model.standingOpenings],
+      rooms: [...model.standingRooms],
+      placedItems: [...model.standingPlacedItems],
+    },
+  }
+}
+
+/** Whether a container is a Design Option's rather than the Existing Model's. */
+export const isInOption = (container: ProposedModel, draft: Project): boolean => container !== draft.existingModel
+
+/**
+ * The provenance a record written into a Design Option carries: work invented from nothing has an
+ * empty list, which is not the same as the field being absent — that stands for Existing work
+ * (#69 §3).
+ */
+export const proposedProvenance = (inOption: boolean): { predecessorIds?: EntityId[] } =>
+  inOption ? { predecessorIds: [] } : {}
