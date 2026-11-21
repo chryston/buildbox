@@ -427,3 +427,62 @@ describe('acknowledgements per Design Option (#69 §4)', () => {
     expectProblems(value, [{ path: 'warningAcknowledgements[1]', code: 'duplicate-id' }])
   })
 })
+
+// --- One Wall end, one Junction, across the effective model (#69 §4) ---------
+
+/** A Wall this Option drew from (4000, 0) straight down, so its start is at the fixture's corner. */
+function wallDown(id: string): Rec {
+  return wallOf(id, { line: { kind: 'line', start: { x: 4000, y: 0 }, end: { x: 4000, y: -3000 } } })
+}
+
+/**
+ * The survey's own corner: W-2's start moved onto W-1's end at (4000, 0) and a Junction joining the
+ * two. The v7 rooms fixture carries no Junction at all, and the rule under test only says anything
+ * about a Project that already has one.
+ */
+function withCorner(value: Rec): Rec {
+  const wall2 = collection(value, 'walls').find((wall) => wall.id === 'wall-2')!
+  wall2.line = { kind: 'line', start: { x: 4000, y: 0 }, end: { x: 4000, y: 3000 } }
+  collection(value, 'wallJunctions').push({
+    id: 'junction-1',
+    floorId: 'floor-0',
+    ends: [
+      { wallId: 'wall-1', end: 'end' },
+      { wallId: 'wall-2', end: 'start' },
+    ],
+  })
+  return value
+}
+
+/** A Junction of the Option at that same end of W-1, holding W-1 and the Wall this Option drew. */
+function cornerAgain(): Rec {
+  return junctionOf('junction-2', [
+    { wallId: 'wall-1', end: 'end' },
+    { wallId: 'wall-3', end: 'start' },
+  ])
+}
+
+describe('one Wall end, one Junction — read across the effective model (#69 §4)', () => {
+  it('refuses an Option Junction re-joining an end the Existing Model has joined', () => {
+    const value = withOptions(
+      withCorner(base()),
+      optionOf({ proposed: proposed({ walls: [wallDown('wall-3')], wallJunctions: [cornerAgain()] }) }),
+    )
+    // Two Junctions would disagree about where that end is, and the tidy faces are derived from
+    // whichever one the reader reached first.
+    expectProblems(value, [{ path: 'designOptions[0].proposed.wallJunctions[0].ends[0]', code: 'duplicate-member' }])
+  })
+
+  it('allows it once the Option demolishes the Wall the other Junction held', () => {
+    const value = withOptions(
+      withCorner(base()),
+      optionOf({
+        demolishedIds: ['wall-2'],
+        proposed: proposed({ walls: [wallDown('wall-3')], wallJunctions: [cornerAgain()] }),
+      }),
+    )
+    // W-2 is down, its Junction went with it, and the end of W-1 it held is free again: this is the
+    // knock-through that takes a wall out of a corner and joins the stub to something new.
+    expect(problemsOf(value)).toEqual([])
+  })
+})
