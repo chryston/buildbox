@@ -23,7 +23,7 @@ import type { DesignOption, Project, WallJunction } from '../../domain'
 import { designOptionsOf, validateProject } from '../../domain'
 import { canonicalJson } from '../../lib'
 import { effectiveModel } from '../../derive'
-import { applyIntent, applyPatches, previewIntent, type DemolitionReview, type ReplaceEdit } from '../index'
+import { applyIntent, applyPatches, previewIntent, type DemolitionReview, type ReplaceEdit, type RestoreReview } from '../index'
 import { intent } from '../testing'
 
 const fixturesRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../fixtures')
@@ -500,5 +500,106 @@ describe('option-owned junctions (#69 acceptance 2)', () => {
     expect(refused.ok).toBe(false)
     if (refused.ok) return
     expect(refused.code).toBe('has-dependants')
+  })
+})
+
+// --- Restore: acceptance 5 ---------------------------------------------------
+
+const restoreW3 = () => intent('renovation.restore', { entityId: W3, target: { designOptionId: A } })
+
+describe('renovation.restore: putting back what stood here', () => {
+  it('returns the effective model to what it was before the replace, in one undo', () => {
+    const before = project()
+    const beforeEffective = canonicalJson(effectiveModel(before, FLOOR, A))
+    const replaced = unwrap(applyIntent(before, replaceIn(W3, { thickness: 150 })))
+    const review = previewIntent(replaced.project, restoreW3()).review as RestoreReview | null
+    expect(review?.message).toBe('Restore W-3?')
+    expect(review?.deletes).toEqual([
+      { id: 'wall-w3-prime', label: 'W-3′' },
+      { id: 'opening-door-1-prime', label: 'Door 1′' },
+      { id: 'opening-window-2-prime', label: 'Window 2′' },
+    ])
+    expect(review?.keeps).toEqual([])
+    const restored = unwrap(applyIntent(replaced.project, restoreW3()))
+    const optionA = optionOf(restored.project, A)
+    // The successor, its copies and the joins that held it are all this Option's records, so all of
+    // them go; the demolition records — W-3's and the two Openings it took along — go with them.
+    expect(optionA.demolishedIds).toEqual([])
+    expect(optionA.proposed).toEqual({ walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [] })
+    expect(canonicalJson(effectiveModel(restored.project, FLOOR, A))).toBe(beforeEffective)
+    expect(canonicalJson(restored.project.existingModel)).toBe(canonicalJson(before.existingModel))
+    expect(canonicalJson(optionOf(restored.project, B))).toBe(canonicalJson(optionOf(before, B)))
+    expect(validateProject(restored.project).ok).toBe(true)
+    // One undo of the Restore is the Replace again, whole.
+    expect(canonicalJson(applyPatches(restored.project, restored.inversePatches))).toBe(canonicalJson(replaced.project))
+  })
+
+  it("takes the Option's own cut into the successor down with the successor", () => {
+    const replaced = unwrap(applyIntent(project(), replaceIn(W3, { thickness: 150 })))
+    const cut = unwrap(
+      applyIntent(
+        replaced.project,
+        intent(
+          'renovation.placeOpening',
+          {
+            floorId: FLOOR,
+            hostWallId: 'wall-w3-prime',
+            kind: 'door',
+            label: 'Door 4',
+            start: 1000,
+            width: 900,
+            sill: 0,
+            head: 2100,
+            swing: 'left',
+            hingeSide: 'start',
+            target: { designOptionId: A },
+          },
+          ['opening-door-4'],
+        ),
+      ),
+    )
+    const review = previewIntent(cut.project, restoreW3()).review as RestoreReview | null
+    expect(review?.deletes.map((entry) => entry.label)).toEqual(['W-3′', 'Door 1′', 'Window 2′', 'Door 4'])
+    const restored = unwrap(applyIntent(cut.project, restoreW3()))
+    expect(optionOf(restored.project, A).proposed).toEqual({ walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [] })
+    expect(validateProject(restored.project).ok).toBe(true)
+  })
+
+  it('brings a blocked-up Opening back', () => {
+    const blocked = unwrap(applyIntent(project(), demolish(DOOR_1)))
+    const restored = unwrap(applyIntent(blocked.project, intent('renovation.restore', { entityId: DOOR_1, target: { designOptionId: A } })))
+    expect(optionOf(restored.project, A).demolishedIds).toEqual([])
+    expect(effectiveModel(restored.project, FLOOR, A).standingOpenings.map((entry) => entry.label)).toContain('Door 1')
+  })
+
+  it('leaves the other predecessor of a merge demolished, and says so', () => {
+    // A merge successor is #69 §11's work to write; the state is legal today, so Restore's other
+    // rule is built by hand here: restoring one of its predecessors must not un-demolish the rest.
+    const source = project()
+    const optionA = designOptionsOf(source).find((entry) => entry.id === A)!
+    const w3 = source.existingModel.walls.find((wall) => wall.id === W3)!
+    optionA.demolishedIds = [W3, W6].sort()
+    optionA.proposed.walls.push({ ...w3, id: 'wall-merged', ref: 'W-3′', predecessorIds: [W3, W6] })
+    expect(validateProject(source).ok).toBe(true)
+    const review = previewIntent(source, restoreW3()).review as RestoreReview | null
+    expect(review?.deletes).toEqual([{ id: 'wall-merged', label: 'W-3′' }])
+    expect(review?.keeps).toEqual([{ id: W6, label: 'W-6' }])
+    const restored = unwrap(applyIntent(source, restoreW3()))
+    expect(optionOf(restored.project, A).demolishedIds).toEqual([W6])
+    expect(optionOf(restored.project, A).proposed.walls).toEqual([])
+    expect(validateProject(restored.project).ok).toBe(true)
+  })
+
+  it("refuses to restore the Option's own work, and a restore that would change nothing", () => {
+    const replaced = unwrap(applyIntent(project(), replaceIn(W3, { thickness: 150 })))
+    const own = applyIntent(replaced.project, intent('renovation.restore', { entityId: 'wall-w3-prime', target: { designOptionId: A } }))
+    expect(own.ok).toBe(false)
+    if (own.ok) return
+    expect(own.code).toBe('unknown-target')
+    expect(own.problems[0]!.message).toBe("W-3′ is this option's own work: delete it instead of restoring it.")
+    const nothing = applyIntent(project(), restoreW3())
+    expect(nothing.ok).toBe(false)
+    if (nothing.ok) return
+    expect(nothing.code).toBe('no-change')
   })
 })

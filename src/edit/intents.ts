@@ -140,6 +140,7 @@ export type RenovationIntentType =
   | 'renovation.knockThrough'
   | 'renovation.demolish'
   | 'renovation.replace'
+  | 'renovation.restore'
 
 /** Every Intent type the catalogue can answer: the S7 set, plus the renovation set in a flagged build. */
 export type IntentType = S7IntentType | RenovationIntentType
@@ -809,6 +810,16 @@ export interface ReplaceInOption {
   target: { designOptionId: EntityId }
 }
 
+/**
+ * Restore: put back what stands here (#69 §9). The demolition record goes, and so does everything
+ * this Option built out of the entity — its successors, the copies carried onto them, the Junctions
+ * and Rooms that followed — which is why the preview lists what is deleted before it is agreed to.
+ */
+export interface RestoreInOption {
+  entityId: EntityId
+  target: { designOptionId: EntityId }
+}
+
 /** `type → payload`, the one place the catalogue's shape is written down. */
 export interface IntentPayloads {
   'project.rename': RenameProject
@@ -893,6 +904,7 @@ export interface IntentPayloads {
   'renovation.knockThrough': KnockThroughInOption
   'renovation.demolish': DemolishInOption
   'renovation.replace': ReplaceInOption
+  'renovation.restore': RestoreInOption
 }
 
 export type PayloadOf<T extends IntentType = IntentType> = IntentPayloads[T]
@@ -1231,8 +1243,25 @@ export interface DemolitionReview {
   readonly message: string
 }
 
+/**
+ * `Restore W-3?` (#69 §9): the successors that come down with the restoration, and the demolition
+ * records that stay because a merge successor named another entity too.
+ */
+export interface RestoreReview {
+  readonly kind: 'restore'
+  readonly entityId: EntityId
+  /** `W-3` — the entity that stands again. */
+  readonly entityRef: string
+  /** Every proposed record this Option loses, in the order the warning lists them. */
+  readonly deletes: readonly DemolitionDependency[]
+  /** Existing entities that stay demolished, because a merge successor named them as well. */
+  readonly keeps: readonly DemolitionDependency[]
+  /** `Restore W-3?` */
+  readonly message: string
+}
+
 /** What an Intent would take with it, per review family. */
-export type DependencyReview = DeleteWallReview | DeleteDesignOptionReview | DemolitionReview
+export type DependencyReview = DeleteWallReview | DeleteDesignOptionReview | DemolitionReview | RestoreReview
 
 export interface Applied {
   ok: true

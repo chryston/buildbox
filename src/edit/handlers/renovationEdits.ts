@@ -3,7 +3,7 @@
  * reachable only through the flag-gated spread in `../registry` (see `./renovationHandlers` for
  * why that matters).
  *
- * Three Intents, each one Edit Transaction with one undo:
+ * Five Intents, each one Edit Transaction with one undo:
  *
  * - `renovation.placeOpening` and `renovation.knockThrough` cut a proposed Opening into a Wall
  *   that stands in the Option, leaving that Wall retained — no demolition, no successor. They
@@ -13,6 +13,11 @@
  * - `renovation.demolish` records that Existing work comes down, or deletes the Option's own
  *   proposed record. A Wall is never demolished quietly: its Openings go with it in the same
  *   transaction, and the review that listed them has to be the answer that comes back.
+ * - `renovation.replace` puts a successor where the survey had an entity, carrying the edit, the
+ *   Openings cut into it and the joins the successor's geometry still makes.
+ * - `renovation.restore` takes all of that back: the demolition record, the successors built out of
+ *   the entity and everything carried onto them, so the effective model is what it was before the
+ *   first replace.
  *
  * Nothing here forks a Wall, Opening, Room or Placed Item handler: editing proposed work is
  * `wall.setThickness` with a `target`, and #69 §7 says so. What is new is only which container a
@@ -33,7 +38,7 @@ import type {
 } from '../../domain'
 import { compareCodePoints } from '../../lib'
 import { refLength, refParamAt, refPointAt } from '../../geometry'
-import type { DemolitionReview, Locator, RenovationIntentType } from '../intents'
+import type { DemolitionDependency, DemolitionReview, Locator, RenovationIntentType, RestoreReview } from '../intents'
 import type { Handler, IntentHandler } from './context'
 import { requireDoorFields, requireFit, requireOpeningsFit } from './openingSupport'
 import { effectiveView, refuse, spendIds } from './support'
@@ -510,6 +515,106 @@ const replace: Handler<'renovation.replace'> = (ctx) => {
   requireOpeningsFit(effectiveView(ctx.draft, subject.floorId, target.designOptionId))
 }
 
+// --- Restore -----------------------------------------------------------------
+
+/** A proposed record, whichever of the Option's collections it stands in. */
+interface ProposedRecord {
+  readonly id: EntityId
+  readonly predecessorIds?: EntityId[]
+}
+
+/**
+ * Everything this Option built out of `seed`, in the order the Restore warning lists it (#69 §9):
+ * the successors that name it, whatever was carried onto them — the Openings cut into a successor
+ * Wall, the Rooms whose edges follow its faces — and whatever was built out of those in turn, which
+ * is how a successor of a successor comes down with the entity it all came from.
+ */
+function successorsOf(option: DesignOption, seed: EntityId): ProposedRecord[] {
+  const proposed = option.proposed
+  const all: ProposedRecord[] = [
+    ...proposed.walls,
+    ...proposed.openings,
+    ...proposed.rooms,
+    ...proposed.placedItems,
+  ]
+  const doomed = new Set<EntityId>()
+  for (;;) {
+    const before = doomed.size
+    for (const record of all) {
+      if (doomed.has(record.id)) continue
+      if ((record.predecessorIds ?? []).some((id) => id === seed || doomed.has(id))) doomed.add(record.id)
+    }
+    for (const opening of proposed.openings)
+      if (!doomed.has(opening.id) && doomed.has(opening.hostWallId)) doomed.add(opening.id)
+    for (const room of proposed.rooms)
+      if (!doomed.has(room.id) && room.wallFaceRefs.some((ref) => doomed.has(ref.wallId))) doomed.add(room.id)
+    if (doomed.size === before) return all.filter((record) => doomed.has(record.id))
+  }
+}
+
+/**
+ * What Restore writes (#69 §9): the records it deletes, the demolition records that go with the
+ * copies they were made from, and the ones that stay — a merge successor names more than one
+ * predecessor, and the entities it was merged *with* are not the one being restored.
+ */
+function restorePlan(project: Project, option: DesignOption, entityId: EntityId) {
+  const deletes: DemolitionDependency[] = []
+  const keeps: DemolitionDependency[] = []
+  const removes = new Set<EntityId>([entityId])
+  for (const record of successorsOf(option, entityId)) {
+    deletes.push({ id: record.id, label: nameOf(project, option, record.id) })
+    const predecessors = record.predecessorIds ?? []
+    for (const other of predecessors) {
+      if (other === entityId) continue
+      // A copy comes back with the thing it was copied from; a merge leaves the other Walls down,
+      // and says so in the warning rather than quietly un-demolishing a Wall nobody restored.
+      if (predecessors.length > 1) keeps.push({ id: other, label: nameOf(project, option, other) })
+      else removes.add(other)
+    }
+  }
+  return { deletes, keeps, removes }
+}
+
+/** `Restore W-3?` (#69 §9): the successors that come down for the entity to stand again. */
+function reviewRestore(project: Project, option: DesignOption, entityId: EntityId): RestoreReview | null {
+  const subject = locateSubject(project, option, entityId)
+  if (subject === null) return null
+  const entityRef = nameOf(project, option, entityId)
+  const plan = restorePlan(project, option, entityId)
+  return { kind: 'restore', entityId, entityRef, deletes: plan.deletes, keeps: plan.keeps, message: `Restore ${entityRef}?` }
+}
+
+const restore: Handler<'renovation.restore'> = (ctx) => {
+  const { entityId, target } = ctx.intent.payload
+  const option = requireOption(ctx.draft, target.designOptionId)
+  const base = optionOf(ctx.project, target.designOptionId)
+  if (base === undefined)
+    refuse('unknown-target', 'designOptions', `There is no Design Option ${target.designOptionId} to restore work in.`)
+  const subject = locateSubject(ctx.project, base, entityId)
+  if (subject === null) refuse('unknown-target', 'designOptions', `Nothing in this Project answers to ${entityId}.`)
+  // Only Existing work is restored: the Option's own record is deleted, which is what a demolition
+  // of it already does (#69 §7).
+  if (subject.proposed)
+    refuse(
+      'unknown-target',
+      'designOptions',
+      `${nameOf(ctx.project, base, entityId)} is this option's own work: delete it instead of restoring it.`,
+    )
+  const plan = restorePlan(ctx.project, base, entityId)
+  if (plan.deletes.length === 0 && !base.demolishedIds.includes(entityId))
+    refuse(
+      'no-change',
+      'designOptions',
+      `${nameOf(ctx.project, base, entityId)} stands in this option already: there is nothing to restore.`,
+    )
+  option.demolishedIds = option.demolishedIds.filter((id) => !plan.removes.has(id))
+  // Each record goes the way `renovation.demolish` sends the Option's own work: the Openings cut
+  // into it and the Junctions that held it follow it in the same transaction.
+  plan.deletes.forEach((entry) => deleteProposed(option, entry.id))
+  // What comes back is the survey's own work, but the Option may have cut more into it since.
+  requireOpeningsFit(effectiveView(ctx.draft, subject.floorId, target.designOptionId))
+}
+
 /** The edit-table half of the renovation catalogue. */
 export const RENOVATION_EDIT_HANDLERS: { [T in EditIntentType]: IntentHandler<T> } = {
   'renovation.placeOpening': {
@@ -542,6 +647,18 @@ export const RENOVATION_EDIT_HANDLERS: { [T in EditIntentType]: IntentHandler<T>
       return locatorOn(subject?.floorId ?? null)
     },
   },
+  'renovation.restore': {
+    run: restore,
+    locate: (project, intent) => {
+      const option = optionOf(project, intent.payload.target.designOptionId)
+      const subject = option === undefined ? null : locateSubject(project, option, intent.payload.entityId)
+      return locatorOn(subject?.floorId ?? null)
+    },
+    review: (project, intent) => {
+      const option = optionOf(project, intent.payload.target.designOptionId)
+      return option === undefined ? null : reviewRestore(project, option, intent.payload.entityId)
+    },
+  },
 }
 
 /** The IDs the edit table spends: one proposed Opening per cut; a demolition spends none. */
@@ -550,6 +667,7 @@ export const RENOVATION_EDIT_INTENT_ID_ORDER: { [T in EditIntentType]: readonly 
   'renovation.knockThrough': ['openingId'],
   'renovation.demolish': [],
   'renovation.replace': ['successorId', 'carryId…'],
+  'renovation.restore': [],
 }
 
 /** The default label per edit-table Intent, dark with everything else here. */
@@ -558,4 +676,5 @@ export const RENOVATION_EDIT_INTENT_LABELS: { [T in EditIntentType]: string } = 
   'renovation.knockThrough': 'Knock through',
   'renovation.demolish': 'Mark demolition',
   'renovation.replace': 'Replace',
+  'renovation.restore': 'Restore',
 }

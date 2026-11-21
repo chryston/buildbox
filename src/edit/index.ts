@@ -72,6 +72,8 @@ export {
   type RemoveUnit,
   type ReplaceEdit,
   type ReplaceInOption,
+  type RestoreInOption,
+  type RestoreReview,
   type RenameProject,
   type RenameOpening,
   type RenameUnit,
