@@ -633,6 +633,38 @@ export const STRINGS = {
   deleteFloorBlocked: 'Delete what is on this Floor first. Nothing is deleted or moved for you.',
   deleteFloorEmpty: 'Nothing is left on this Floor. Deleting it also deletes its default Plan View.',
   show: 'Show',
+  // The Shape tab's footprint fields (#46, #66 §17).
+  customPath: 'Custom Path',
+  orientation: 'Orientation',
+  side: 'Side',
+  diameter: 'Diameter',
+  length: 'Length',
+  endRadius: 'End radius',
+  baseWidth: 'Base width',
+  apexOffset: 'Apex offset',
+  sides: 'Sides',
+  sideLength: 'Side length',
+  /** The two spans a regular polygon can be measured across, both read-only. */
+  acrossCorners: 'Across corners',
+  acrossFlats: 'Across flats',
+  cornerRadius: 'Corner radius',
+  perCornerRadii: 'Different radius per corner',
+  // The Edges tab (#46, #66 §17).
+  line: 'Line',
+  arc: 'Arc',
+  ellipticalArc: 'Elliptical arc',
+  kind: 'Kind',
+  radius: 'Radius',
+  direction: 'Direction',
+  /** The table's caption is the instruction, and it changes when the shape cannot be edited. */
+  edgesCaptionEditable: 'Select an Edge to edit it, or a vertex to round its corner.',
+  edgesCaptionReadOnly: 'Edges are read-only on a preset Item Footprint.',
+  keepFixed: 'Keep fixed',
+  sweep: 'Sweep',
+  semiAxisA: 'Semi-axis A',
+  semiAxisB: 'Semi-axis B',
+  axisRotation: 'Axis rotation',
+  roundAllCorners: 'Round all corners',
 } as const
 
 /**

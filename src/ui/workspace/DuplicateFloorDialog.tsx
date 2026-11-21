@@ -168,7 +168,7 @@ export function DuplicateFloorDialog(props: DuplicateFloorDialogProps): ReactNod
 /** `At the top`, one `Between … and …` per join, then `At the end`. */
 function positionLabels(project: Project): readonly string[] {
   const floors = project.floors
-  const labels = [STRINGS.positionAtTop]
+  const labels: string[] = [STRINGS.positionAtTop]
   for (let index = 1; index < floors.length; index += 1) {
     labels.push(STRINGS.positionBetween(floors[index - 1]?.name ?? '', floors[index]?.name ?? ''))
   }
