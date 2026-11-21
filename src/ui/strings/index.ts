@@ -30,6 +30,13 @@ import type { WarningParams } from '../../derive'
 export const plural = (count: number, one: string, many: string): string =>
   count === 1 ? `${count} ${one}` : `${count} ${many}`
 
+/** The picker's three headings, keyed by the identifier the rows carry. */
+const PRESET_GROUP_LABEL: Record<string, string> = {
+  doors: 'Doors',
+  windows: 'Windows',
+  other: 'Other',
+}
+
 export const STRINGS = {
   brand: 'BuildBox',
   brandSuffix: 'Project Library',
@@ -705,12 +712,15 @@ export const STRINGS = {
   cabinetShapeNote: 'Size comes from the cabinet construction',
   shapes: 'Shapes',
   itemFootprint: 'Item Footprint',
-  presetGroupDoors: 'Doors',
-  presetGroupWindows: 'Windows',
-  presetGroupOther: 'Other',
-  /** The picker's `<optgroup>` label. The group value is an identifier; this is its copy. */
+  /**
+   * The picker's `<optgroup>` label.
+   *
+   * The group is an identifier — `doors`, not `Doors` — because a value that is also a sentence
+   * gets compared as a sentence, and then renaming the copy renames a case label. The words live
+   * here and nowhere else.
+   */
   presetGroupLabel(group: string): string {
-    return group === 'Windows' ? STRINGS.presetGroupWindows : group === 'Other' ? STRINGS.presetGroupOther : STRINGS.presetGroupDoors
+    return PRESET_GROUP_LABEL[group] ?? group
   },
   householdShelterDoor: 'Household shelter door',
   removedWallSection: 'Removed wall section',

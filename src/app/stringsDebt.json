@@ -1,9 +1,4 @@
 {
-  "ui/workspace/opening/openingPresets.ts": [
-    "Doors",
-    "Windows",
-    "Other"
-  ],
   "export/index.ts": [
     "No glyph for  in \"\""
   ],
