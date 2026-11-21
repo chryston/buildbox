@@ -29,6 +29,17 @@ export function parseToMm(value: number, unit: DisplayUnit): number {
 }
 
 /**
+ * An area, always in square metres to two decimals (#58 §4).
+ *
+ * The one measurement on screen that does not follow the Project's display unit: a Project
+ * measured in millimetres still has a worktop measured in square metres, and a second unit choice
+ * would be a second thing to remember.
+ */
+export function formatSquareMetres(squareMillimetres: number): string {
+  return `${(squareMillimetres / 1_000_000).toFixed(2)} m²`
+}
+
+/**
  * A number being read rather than typed: grouped, with the unit after it.
  *
  * An input wants `5027` — group separators are characters a caret cannot sit between, and a

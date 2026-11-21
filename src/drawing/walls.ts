@@ -15,6 +15,7 @@ import type { Pt, UsableGap } from '../geometry'
 import { faceCurveCommands, gapMarkItems, openingItems, pieceCommands } from './openings'
 import type { OpeningSymbol, WallOpenings } from './openings'
 import { layoutText } from './font/layoutText'
+import type { TextLayout } from './font/layoutText'
 import { lineCommands, pathToCommands, rectCommands } from './path'
 import { resolveSize } from './styles'
 import type {
@@ -101,6 +102,52 @@ function bandCentre(wall: DerivedWall): { at: Pt; across: Pt } {
 }
 
 /**
+ * Where one Wall's `W-n` reference goes: inside the band when the band is thick enough to hold
+ * it, otherwise beside the nearer face unless a label already sits there.
+ *
+ * `taken` is the caller's running list, in the order the Walls were walked: the answer depends on
+ * what has already been placed, which is why it is a parameter rather than a local.
+ */
+function placeWallLabel(wall: DerivedWall, sizing: Sizing, taken: Rect[]): { box: Rect; layout: TextLayout } {
+  const size = resolveSize('plan-label', sizing)
+  const layout = layoutText(wall.ref, size.mm)
+  const { at, across } = bandCentre(wall)
+  const gap = resolveSize('plan-dim-gap', sizing).mm
+  const inside = size.mm <= thickness(wall) && layout.width <= wall.length
+  const offset = inside ? 0 : thickness(wall) / 2 + gap + size.mm / 2
+  let box: Rect = {
+    x: at.x + across.x * offset - layout.width / 2,
+    y: at.y + across.y * offset - size.mm / 2,
+    w: layout.width,
+    h: size.mm,
+  }
+  if (!inside && taken.some((other) => overlaps(box, other))) {
+    // The other side of the band, rather than on top of the label already there.
+    box = {
+      x: at.x - across.x * offset - layout.width / 2,
+      y: at.y - across.y * offset - size.mm / 2,
+      w: layout.width,
+      h: size.mm,
+    }
+  }
+  taken.push(box)
+  return { box, layout }
+}
+
+/**
+ * The boxes the `W-n` references take on this Floor (#67 behaviour 35).
+ *
+ * A Room label may not sit on one, and the only way to know where they are without drawing them
+ * twice is to run the same placement — which is why it lives here, next to the drawing that uses
+ * it, rather than being guessed at by the caller.
+ */
+export function wallLabelBoxes(walls: FloorWalls, sizing: Sizing): Rect[] {
+  const taken: Rect[] = []
+  for (const wall of walls.walls) placeWallLabel(wall, sizing, taken)
+  return taken
+}
+
+/**
  * The Walls of one Floor: filled outlines, face lines, `W-n` labels, and the selected Wall's
  * end handles as squares on the tidied end caps.
  */
@@ -166,33 +213,12 @@ export function drawWalls(walls: FloorWalls, options: WallDrawOptions): DisplayL
       }
     }
 
-    const size = resolveSize('plan-label', sizing)
-    const layout = layoutText(wall.ref, size.mm)
-    const { at, across } = bandCentre(wall)
-    const gap = resolveSize('plan-dim-gap', sizing).mm
-    const inside = size.mm <= thickness(wall) && layout.width <= wall.length
-    const offset = inside ? 0 : thickness(wall) / 2 + gap + size.mm / 2
-    let candidate: Rect = {
-      x: at.x + across.x * offset - layout.width / 2,
-      y: at.y + across.y * offset - size.mm / 2,
-      w: layout.width,
-      h: size.mm,
-    }
-    if (!inside && taken.some((other) => overlaps(candidate, other))) {
-      // The other side of the band, rather than on top of the label already there.
-      candidate = {
-        x: at.x - across.x * offset - layout.width / 2,
-        y: at.y - across.y * offset - size.mm / 2,
-        w: layout.width,
-        h: size.mm,
-      }
-    }
-    taken.push(candidate)
+    const { box: labelBox, layout } = placeWallLabel(wall, sizing, taken)
     labels.push({
       kind: 'text',
       ref: { id: wall.id, role: 'wall-label' },
       text: wall.ref,
-      at: { x: candidate.x + candidate.w / 2, y: candidate.y + candidate.h / 2 },
+      at: { x: labelBox.x + labelBox.w / 2, y: labelBox.y + labelBox.h / 2 },
       anchor: 'middle',
       baseline: 'middle',
       rotationDeg: 0,

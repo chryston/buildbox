@@ -37,6 +37,9 @@ export const FONT_STACK = '"Noto Sans", sans-serif'
 export const SIZE_ROLES: Record<SizeRole, SizeRow> = {
   // Text. On screen these are the pixel sizes #57's Plan View set on its `font-size`.
   'plan-label': { screen: { px: 12 }, paper: { mm: 2.5 } },
+  // The one step a Room label is allowed to shrink by before it starts moving instead: still
+  // readable on a screen at any zoom, and still a legible 1.8 mm of ink on a sheet.
+  'room-label-min': { screen: { px: 9 }, paper: { mm: 1.8 } },
   'plan-dimension': { screen: { px: 11 }, paper: { mm: 2 } },
   'plan-chip': { screen: { px: 11 }, paper: { mm: 2 } },
   // The distances a Plan View lays its dimensions and its chip out by. These are sizes for the
@@ -143,6 +146,37 @@ export const STYLES: Record<StyleKey, Style> = {
     strokeWidth: 'plan-line-selected',
   },
   'wall-face': { stroke: 'var(--bb-text)', strokeWidth: 'plan-line', hit: 'none' },
+  // A Room is named Floor rather than a thing on it, so its fill is a quarter of the strength
+  // a Wall band is drawn at: the two have to stay tellable apart where they meet.
+  'room': { fill: 'var(--bb-accent)', fillAlpha: 0x14 / 0xff, stroke: 'var(--bb-text)', strokeWidth: 'plan-line' },
+  'room:selected': {
+    fill: 'var(--bb-accent)',
+    fillAlpha: 0x1f / 0xff,
+    stroke: 'var(--bb-accent)',
+    strokeWidth: 'plan-line-selected',
+  },
+  // The Room being drawn or edited: the accent while it fits, the danger colour the moment it
+  // does not. Both are stroke-only — the proposal is a shape on the Floor, not a second fill
+  // over the one already there.
+  'room:proposal': { stroke: 'var(--bb-accent)', strokeWidth: 'plan-line-selected', hit: 'none' },
+  'room:proposal-blocked': { stroke: 'var(--bb-danger-dot)', strokeWidth: 'plan-line-selected', hit: 'none' },
+  // The part two Rooms cannot both have: painted red and dashed round the edge, so the region
+  // is findable without reading the block message (#67 behaviour 20).
+  'room-overlap': {
+    fill: 'var(--bb-danger-dot)',
+    fillAlpha: 0x4d / 0xff,
+    stroke: 'var(--bb-danger-dot)',
+    strokeWidth: 'hairline',
+    dash: ['opening-dash', 'opening-gap'],
+    hit: 'none',
+  },
+  // The Room's own area again, invisible and clickable: the outline is one device pixel, and a
+  // one-pixel line is a hard thing to aim at — and a stroke-only path is a thing Firefox will
+  // not deliver a `pointerdown` for at all (#65 §11).
+  'room-hit': { fill: 'transparent', stroke: 'none' },
+  'room-label': { fill: 'var(--bb-text)', size: 'plan-label', fontFamily: FONT_STACK, hit: 'none' },
+  'room-label:min': { fill: 'var(--bb-text)', size: 'room-label-min', fontFamily: FONT_STACK, hit: 'none' },
+  'room-label-leader': { stroke: 'var(--bb-text)', strokeWidth: 'hairline', hit: 'none' },
   // An Opening's own lines are the Wall's weight, so a gap reads as part of the Wall rather
   // than as something standing in it. Only these take a pointer: the swing is a hint.
   'opening': { stroke: 'var(--bb-text)', strokeWidth: 'plan-line' },

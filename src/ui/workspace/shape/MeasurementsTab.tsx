@@ -8,7 +8,7 @@
  */
 import type { ReactNode } from 'react'
 import { footprintArea, footprintPerimeter, footprintSize } from '../../../domain'
-import { readoutMm } from '../displayUnits'
+import { readoutMm, formatSquareMetres } from '../displayUnits'
 import { STRINGS } from '../../strings'
 import type { DisplayFormat, ItemFootprint } from '../../../domain'
 
@@ -19,11 +19,6 @@ export interface MeasurementsTabProps {
   readonly boundsLabel: string
 }
 
-/** Square metres, two decimals, always: the one measurement that does not follow the unit. */
-function squareMetres(squareMillimetres: number): string {
-  return `${(squareMillimetres / 1_000_000).toFixed(2)} m²`
-}
-
 export function MeasurementsTab(props: MeasurementsTabProps): ReactNode {
   const { footprint, format, boundsLabel } = props
   const size = footprintSize(footprint)
@@ -31,7 +26,7 @@ export function MeasurementsTab(props: MeasurementsTabProps): ReactNode {
   return (
     <dl className="bb-measurements" data-testid="measurements-tab">
       <dt data-testid="measurements-area-label">{STRINGS.area}</dt>
-      <dd data-testid="measurements-area">{squareMetres(footprintArea(footprint))}</dd>
+      <dd data-testid="measurements-area">{formatSquareMetres(footprintArea(footprint))}</dd>
       <dt data-testid="measurements-perimeter-label">{STRINGS.perimeter}</dt>
       <dd data-testid="measurements-perimeter">{read(footprintPerimeter(footprint))}</dd>
       <dt data-testid="measurements-bounds-label">{boundsLabel}</dt>

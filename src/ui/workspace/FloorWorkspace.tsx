@@ -54,6 +54,7 @@ import type { OpeningAim, OpeningDraft } from './opening/openingDraft'
 import { DEFAULT_OPENING_PRESET_ID, openingPresetRow, resolveOpeningPreset } from './opening/openingPresets'
 import { readoutMm } from './displayUnits'
 import { WallInspector } from './wall/WallInspector'
+import { RoomInspector } from './rooms/RoomInspector'
 import { mergeableNeighbour } from './wall/wallDraft'
 import type { WallChainDraft, WallDraft } from './wall/wallDraft'
 import { fitRect, fitViewport } from './viewport'
@@ -136,6 +137,12 @@ export function FloorWorkspace(): ReactNode {
   const derivedFloor = floorId === null ? null : session.deriveFloor(floorId)
   /** The tidied Walls, faces and corners the Wall tool snaps to, from the same cache (#64 §6). */
   const floorWalls = floorId === null ? null : session.deriveWalls(floorId)
+  /**
+   * The Floor's Rooms: their areas, label anchors and Placed Item membership, from the same cache
+   * (#67 §3). Rooms are Existing-only until Design Options own them (#69), so there is no option
+   * to derive them against.
+   */
+  const floorRooms = floorId === null ? null : session.deriveRooms(floorId)
   /**
    * The chain being drawn, or `null` (#64 §12). Local like the shape draft: a half-drawn chain is
    * not a proposal and must not survive a reload, a Floor change or the tool being put down.
@@ -220,6 +227,16 @@ export function FloorWorkspace(): ReactNode {
       hostLength: usableByWall.get(host.id)?.length ?? 0,
     }
   }, [openingSelection, floorOpenings, project.existingModel.walls, openingLayer, usableByWall])
+  /** The Room the inspector edits, or `null` (#67 behaviour 3). One thing is inspected at a time. */
+  const roomSelection = useWorkspace((state) => state.roomSelection)
+  const selectRoom = useWorkspace((state) => state.selectRoom)
+  /** The Room and its measurements together: the record names it, the derive measures it. */
+  const selectedRoom = useMemo(() => {
+    if (roomSelection === null || floorRooms === null) return null
+    const room = project.existingModel.rooms.find((each) => each.id === roomSelection) ?? null
+    const derived = floorRooms.rooms.find((each) => each.id === roomSelection) ?? null
+    return room === null || derived === null ? null : { room, derived }
+  }, [roomSelection, floorRooms, project.existingModel.rooms])
   const angleSnap = useWorkspace((state) => state.snapSettings.angle)
   const snapSettings = useWorkspace((state) => state.snapSettings)
   /** The kinds the nine `Snaps ▾` rows switch on, recomputed only when a row changes. */
@@ -1071,7 +1088,15 @@ export function FloorWorkspace(): ReactNode {
           />
         }
         inspector={
-          selectedOpening !== null
+          selectedRoom !== null
+            ? <RoomInspector
+                room={selectedRoom.room}
+                derived={selectedRoom.derived}
+                unit={project.preferences.displayUnit}
+                precision={project.preferences.displayPrecision}
+                onRename={(name) => send('room.rename', { roomId: selectedRoom.room.id, name })}
+              />
+            : selectedOpening !== null
             ? <OpeningInspector
                 opening={selectedOpening.opening}
                 host={selectedOpening.host}
@@ -1169,6 +1194,12 @@ export function FloorWorkspace(): ReactNode {
               angleSnap={angleSnap}
               walls={floorWalls}
               selectedWallId={wallSelection}
+              rooms={floorRooms}
+              selectedRoomId={roomSelection}
+              onSelectRoom={(id) => {
+                selectRoom(id)
+                setTool('select')
+              }}
               openings={openingLayer}
               selectedOpeningId={openingSelection}
               onSelectOpening={(id) => {

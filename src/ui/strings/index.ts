@@ -786,6 +786,12 @@ export const STRINGS = {
   area: 'Area',
   perimeter: 'Perimeter',
   bounds: 'Bounds',
+  // Rooms (#67). The name is what the inspector calls the field's subject; the label is the one
+  // sentence the Plan View draws, and it is drawn from the Room's own name and its analytic area.
+  room: 'Room',
+  roomLabel(name: string, area: string): string {
+    return `${name} · ${area}`
+  },
   /** An elliptical arc's two radii and its length, as the chip under the shape reads them. */
   radii(rx: string, ry: string, unit: string, arcLength: string, unit2: string): string {
     return `Radii ${rx} × ${ry} ${unit} · ${arcLength} ${unit2}`

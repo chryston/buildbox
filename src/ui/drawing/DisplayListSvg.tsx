@@ -63,6 +63,12 @@ export interface DisplayListInteractions {
    * middle of a door, not the one millimetre of its leaf.
    */
   onOpeningPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
+  /**
+   * A Room's area, clicked where it is drawn: it becomes the selected Room (#67 behaviour 3).
+   * Both the painted area and its invisible hit shape answer, because Firefox delivers no
+   * `pointerdown` at all on a stroke-only path.
+   */
+  onRoomPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
   /** The rotate grip: it starts a turn. */
   onRotatePointerDown?: (id: string, event: React.PointerEvent<SVGPathElement>) => void
   /**
@@ -121,6 +127,11 @@ const TEST_IDS: Readonly<Record<string, (id: string) => string>> = {
   'dimension-depth': () => 'dimension-depth',
   'floor-bounds-chip': () => 'floor-bounds-chip',
   'wall': (id) => `wall-band-${id}`,
+  // The painted area and the invisible shape over it are one Room, and a suite that clicked
+  // either means the same thing: select it. The label is not addressable by pointer — it lives in
+  // the text layer, which takes none — so it is found by its own text, not by a test id.
+  'room': (id) => `room-${id}`,
+  'room-hit': (id) => `room-${id}`,
   // Every mark of an Opening *is* the Opening: the leaf, a panel, an arrow, a window line or a
   // removed section's dash all select the same one (#65 §11). The role is part of the name because
   // one Opening draws several of them under one id, and a suite that clicked `opening-x` could not
@@ -276,6 +287,18 @@ function renderNode(
     }
     if (role === 'wall' && interactions?.onWallPointerDown !== undefined) {
       const pick = interactions.onWallPointerDown
+      props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => {
+        event.stopPropagation()
+        pick(id, event)
+      }) as never
+      props.style = { cursor: 'pointer' }
+    }
+    if ((role === 'room' || role === 'room-hit') && interactions?.onRoomPointerDown !== undefined) {
+      // The area and its invisible hit shape are the same Room: a person aiming at a Room aims at
+      // the middle of it, not at the one device pixel of its outline (#67 behaviour 3). The label
+      // is not one of them — it is drawn in the text layer, which takes no pointer at all, so a
+      // name lying over a footprint must not swallow the click meant for that footprint.
+      const pick = interactions.onRoomPointerDown
       props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => {
         event.stopPropagation()
         pick(id, event)

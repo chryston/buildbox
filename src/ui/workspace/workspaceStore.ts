@@ -172,6 +172,12 @@ export interface WorkspaceState {
    * a union would make every reader ask which kind it holds.
    */
   openingSelection: string | null
+  /**
+   * The selected Room (#67 behaviour 3), or `null`. Its own slot again: a Room is inspected by
+   * the shape inspector plus a name field, which is neither what a Wall nor what an Opening is
+   * inspected by, and a union would make every reader ask which kind it holds.
+   */
+  roomSelection: string | null
   dragPreview: ItemDragPreview | null
   /** The nine `Snaps ▾` rows (#59 §5); `angle` is the same state the rotate handle reads (#57). */
   snapSettings: SnapSettings
@@ -217,6 +223,8 @@ export interface WorkspaceActions {
   selectWall(id: string | null): void
   /** Select an Opening (#65 §11); one thing is inspected at a time, so the other two go. */
   selectOpening(id: string | null): void
+  /** Select a Room (#67 behaviour 3); the other three go with it. */
+  selectRoom(id: string | null): void
   setDragPreview(preview: ItemDragPreview | null): void
   setAngleSnap(enabled: boolean, incrementDeg?: number): void
   /** One `Snaps ▾` checkbox (#59 §5). UI-session state, never undoable (#26). */
@@ -257,6 +265,7 @@ const INITIAL: WorkspaceState = {
   selection: null,
   wallSelection: null,
   openingSelection: null,
+  roomSelection: null,
   dragPreview: null,
   snapSettings: {
     // All nine are on by default (#59 §5). `wallFaces` is on but silent until #64 gives it
@@ -297,13 +306,34 @@ function movedAway(
   state: WorkspaceSnapshot,
   floorId: string | null,
   viewsByFloor: Record<string, string>,
-): { selection: null; wallSelection: null; openingSelection: null; shapeDraft: null; shapeSelection: null } | Record<string, never> {
+): {
+  selection: null
+  wallSelection: null
+  openingSelection: null
+  roomSelection: null
+  shapeDraft: null
+  shapeSelection: null
+} | Record<string, never> {
   if (floorId === null || floorId !== state.activeFloorId) {
-    return { selection: null, wallSelection: null, openingSelection: null, shapeDraft: null, shapeSelection: null }
+    return {
+      selection: null,
+      wallSelection: null,
+      openingSelection: null,
+      roomSelection: null,
+      shapeDraft: null,
+      shapeSelection: null,
+    }
   }
   return viewsByFloor[floorId] === state.activeViewByFloor[floorId]
     ? {}
-    : { selection: null, wallSelection: null, openingSelection: null, shapeDraft: null, shapeSelection: null }
+    : {
+      selection: null,
+      wallSelection: null,
+      openingSelection: null,
+      roomSelection: null,
+      shapeDraft: null,
+      shapeSelection: null,
+    }
 }
 
 export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
@@ -312,12 +342,15 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
   // A proposal is about the thing selected, so a new selection ends it (#58 criterion 9). It is
   // discarded rather than kept out of sight: coming back to the design must show the shape it
   // has, not a half-typed one that a later Apply could write.
-  select: (selection) => set({ selection, wallSelection: null, openingSelection: null, shapeDraft: null, shapeSelection: null }),
-  selectWall: (wallSelection) => set({ wallSelection, selection: null, openingSelection: null, shapeDraft: null, shapeSelection: null }),
+  select: (selection) => set({ selection, wallSelection: null, openingSelection: null, roomSelection: null, shapeDraft: null, shapeSelection: null }),
+  selectWall: (wallSelection) => set({ wallSelection, selection: null, openingSelection: null, roomSelection: null, shapeDraft: null, shapeSelection: null }),
   // An Opening is selected by clicking its symbol on the Plan View; the Wall it is cut into is
   // not selected with it, because the inspector shows one thing at a time and the Wall's own
   // row is one click away in the Opening's inspector.
-  selectOpening: (openingSelection) => set({ openingSelection, selection: null, wallSelection: null, shapeDraft: null, shapeSelection: null }),
+  selectOpening: (openingSelection) => set({ openingSelection, selection: null, wallSelection: null, roomSelection: null, shapeDraft: null, shapeSelection: null }),
+  // A Room is selected by clicking its area on the Plan View. Its own shape proposal goes with
+  // the previous selection, exactly as an Item's does: the proposal is about the thing selected.
+  selectRoom: (roomSelection) => set({ roomSelection, selection: null, wallSelection: null, openingSelection: null, shapeDraft: null, shapeSelection: null }),
   setDragPreview: (dragPreview) => set({ dragPreview }),
   setAngleSnap: (enabled, incrementDeg) =>
     set((state) => ({
