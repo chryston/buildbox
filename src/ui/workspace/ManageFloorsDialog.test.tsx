@@ -31,6 +31,7 @@ const project = (floors: Floor[]): Project => ({
   })),
   itemDesigns: [],
   existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [] },
+  warningAcknowledgements: [],
 })
 
 const open = (floors: Floor[], over: Partial<Parameters<typeof ManageFloorsDialog>[0]> = {}) => {
@@ -129,7 +130,7 @@ describe('the Floor limits', () => {
     fireEvent.change(screen.getByTestId('floor-upper-floor-1'), { target: { value: '2400' } })
     fireEvent.click(screen.getByTestId('floor-limits-save-floor-1'))
     expect(screen.getByTestId('floor-limits-error-floor-1')).toHaveTextContent(
-      'The lower limit must be below the upper limit',
+      'The lower limit has to sit below the upper limit',
     )
     expect(props.onSetLimits).not.toHaveBeenCalled()
   })

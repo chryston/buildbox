@@ -55,6 +55,9 @@ const NODE_ONLY_INCLUDE = [
   // a Project from `derive/testing`, which reads `fixtures/` off disk — so `import.meta.url` has to
   // be a file URL. jsdom gives it as an http URL, which `fileURLToPath` refuses.
   'src/app/export.test.ts',
+  // The shipped-wording scan reads the source of every module off disk, which needs
+  // `import.meta.url` to be a file URL — jsdom hands it over as an http URL.
+  'src/app/shippedStrings.test.ts',
 ]
 
 // The adapter's own suites: `fake-indexeddb` under Node, and `*.browser.test.ts` against

@@ -15,6 +15,7 @@ import { OPENING_HANDLERS } from './handlers/openingHandlers'
 import { PLAN_HANDLERS } from './handlers/planHandlers'
 import { PROJECT_HANDLERS } from './handlers/projectHandlers'
 import { WALL_HANDLERS } from './handlers/wallHandlers'
+import { WARNING_HANDLERS } from './handlers/warningHandlers'
 
 export const INTENT_HANDLERS: { [T in IntentType]: IntentHandler<T> } = {
   ...PROJECT_HANDLERS,
@@ -26,6 +27,7 @@ export const INTENT_HANDLERS: { [T in IntentType]: IntentHandler<T> } = {
   ...PLAN_FLOOR_HANDLERS,
   ...FLOOR_HANDLERS,
   ...VIEW_HANDLERS,
+  ...WARNING_HANDLERS,
 }
 
 /** Every Intent type the catalogue answers — the list #48's undo menu and #66 read. */

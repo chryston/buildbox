@@ -13,6 +13,7 @@
 import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { convertWarningFor } from '../../../domain'
+import { STRINGS } from '../../strings'
 import type { Preset } from '../../../derive'
 
 export interface ConvertDialogProps {
@@ -36,7 +37,7 @@ export function ConvertDialog(props: ConvertDialogProps): ReactNode {
         aria-labelledby="convert-modal-heading"
         className="bb-workspace-dialog bb-shape-convert-dialog"
       >
-        <p className="bb-shape-dialog-eyebrow">Convert to Custom Path</p>
+        <p className="bb-shape-dialog-eyebrow">{STRINGS.convertToCustomPath}</p>
         <h2 id="convert-modal-heading" data-testid="convert-modal-heading">{props.designName}</h2>
         <p className="bb-shape-dialog-body" data-testid="convert-modal-warning">{convertWarningFor(props.preset)}</p>
         <div className="bb-workspace-dialog-actions">

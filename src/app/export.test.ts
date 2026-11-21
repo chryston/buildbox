@@ -7,7 +7,9 @@
  * preference store that is a Map, and against a session that is never written to.
  */
 import { describe, expect, it } from 'vitest'
-import { referenceProject } from '../derive/testing'
+import { deriveWarnings } from '../derive'
+import { domainFixture, referenceProject } from '../derive/testing'
+import type { Project, Wall } from '../domain'
 import type { Recipe } from '../export'
 import { createExportPort } from './export'
 import type { ProjectSession } from '../session'
@@ -78,6 +80,47 @@ function portFor(seed: Record<string, unknown> = {}) {
     writtenTwice: () => gate.after(2),
     unchanged: () => JSON.stringify(project) === before,
   }
+}
+
+/** The same port over a Project the caller chose, for the cases `referenceProject` cannot show. */
+function portWithProject(project: Project) {
+  const gate = writeGate()
+  const { prefs } = memoryPrefs(gate)
+  const session = { getSnapshot: () => ({ project, revision: 3 }) } as unknown as ProjectSession
+  return createExportPort({
+    session: () => session,
+    prefs,
+    readAsset: async () => null,
+    clock: { now: () => '2026-03-04T09:30:00.000Z', localDate: () => '2026-03-04' },
+    buildboxVersion: '0.0.0-test',
+  })
+}
+
+const FLOOR = 'floor-main'
+
+const wall = (id: string, ref: string, start: { x: number; y: number }, end: { x: number; y: number }): Wall => ({
+  id,
+  ref,
+  floorId: FLOOR,
+  line: { kind: 'line', start, end },
+  thickness: 100,
+  justification: 'centre',
+  baseElevation: 0,
+  height: 2600,
+})
+
+/** W-2 west to east with W-5 square across it at x = 2000 and nothing joining them (#66 §1). */
+const CROSSING: Project = {
+  ...domainFixture('v4/project-basic.json'),
+  existingModel: {
+    ...domainFixture('v4/project-basic.json').existingModel,
+    walls: [
+      wall('w-a', 'W-2', { x: 0, y: 0 }, { x: 4000, y: 0 }),
+      wall('w-b', 'W-5', { x: 2000, y: -500 }, { x: 2000, y: 500 }),
+    ],
+    wallJunctions: [],
+  },
+  warningAcknowledgements: [],
 }
 
 const RECIPE: Recipe = {
@@ -167,7 +210,31 @@ describe('the view list', () => {
     }
   })
 
-  it('says there are no unacknowledged warnings while the warnings engine is #66', () => {
+  it('counts the warnings nobody has acknowledged, and none once they all have', () => {
+    // The reference Project is a joined-up kitchen: nothing in it is worth warning about, so
+    // the line reads 0 because there is nothing to count rather than because nothing is wired.
     expect(portFor().port.unacknowledgedWarnings()).toBe(0)
+
+    const open = deriveWarnings(CROSSING, FLOOR, null).warnings
+    expect(portWithProject(CROSSING).unacknowledgedWarnings()).toBe(1)
+
+    // Acknowledging is the only thing that takes a warning off the count: the model has not
+    // changed, the warning has not gone away, and the dialog must not say "nothing to look at".
+    expect(
+      portWithProject({
+        ...CROSSING,
+        warningAcknowledgements: [
+          {
+            id: 'ack-1',
+            warningType: open[0]?.type ?? '',
+            subjectIds: (open[0]?.subjects ?? []).map((subject) => subject.id).sort(),
+            designOptionId: null,
+            signature: open[0]?.signature ?? '',
+            note: '',
+            acknowledgedAt: '2026-03-04T09:30:00.000Z',
+          },
+        ],
+      }).unacknowledgedWarnings(),
+    ).toBe(0)
   })
 })

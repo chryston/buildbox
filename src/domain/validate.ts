@@ -29,13 +29,14 @@ import {
   usableIntervals,
 } from '../geometry'
 import type { ClosedPath, CornerRadii, JoinJunction, JoinWall, Preset, Pt, Segment, UsableInterval } from '../geometry'
-import { ROOT_PATH, childPath, problem, type ValidationProblem } from '../lib'
+import { ROOT_PATH, childPath, compareCodePoints, problem, type ValidationProblem } from '../lib'
 import { MAX_TREE_DEPTH } from './cabinetPayload'
 import { formatGeometryProblem, type DisplayFormat } from './formatGeometryProblem'
 import { footprintProblems } from './footprint'
 import { nameKey } from './floorNames'
 import { fitProblem, openingNoun } from './openings'
 import type { DisplayUnit, ItemFootprint, OpeningKind, Project, WallEnd, WallJustification, WallRefLine } from './project'
+import { ACKNOWLEDGEMENT_NOTE_MAX_LENGTH, warningKey } from './warnings'
 
 export type ValidateProjectResult =
   | { ok: true; project: Project }
@@ -90,7 +91,7 @@ const ACCESSORY_TYPES = ['door', 'drawer-front', 'pull', 'hinge'] as const
 
 // The field lists of §2, one per object level. `unknown-field` is reported against
 // anything else the input carries at that level.
-const PROJECT_FIELDS = ['id', 'meta', 'preferences', 'floors', 'views', 'itemDesigns', 'existingModel']
+const PROJECT_FIELDS = ['id', 'meta', 'preferences', 'floors', 'views', 'itemDesigns', 'existingModel', 'warningAcknowledgements']
 const META_FIELDS = ['name', 'address']
 const PREFERENCES_FIELDS = ['displayUnit', 'displayPrecision', 'defaultWallHeight']
 const FLOOR_FIELDS = ['id', 'name', 'planImage', 'limits', 'defaultWallHeight']
@@ -162,6 +163,17 @@ const WALL_JUNCTION_FIELDS = ['id', 'floorId', 'ends', 'host']
 const WALL_JUNCTION_END_FIELDS = ['wallId', 'end']
 const WALL_HOST_FIELDS = ['wallId', 'at']
 const PLACED_ITEM_FIELDS = ['id', 'itemDesignId', 'floorId', 'translation', 'rotationDeg', 'baseElevation']
+const ACKNOWLEDGEMENT_FIELDS = [
+  'id',
+  'warningType',
+  'subjectIds',
+  'designOptionId',
+  'signature',
+  'note',
+  'acknowledgedAt',
+]
+/** A producer's stable code (#66 §1): `wall_crossing`, `wall_overlap`, … never `Wall Crossing`. */
+const WARNING_TYPE = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/
 const CONSTRUCTION_FIELDS = ['settings', 'root']
 const SETTINGS_FIELDS = [
   'unit', 'height', 'width', 'depth', 'thickness', 'backThickness', 'toeKick', 'material',
@@ -451,6 +463,14 @@ function indexIds(root: Rec): IdIndex {
         if (isRecord(opening)) claim(opening.id, childPath(childPath(openings, i), 'id'))
       })
     }
+  }
+
+  if (Array.isArray(root.warningAcknowledgements)) {
+    root.warningAcknowledgements.forEach((acknowledgement, i) => {
+      if (isRecord(acknowledgement)) {
+        claim(acknowledgement.id, childPath(childPath('warningAcknowledgements', i), 'id'))
+      }
+    })
   }
 
   return { first, designIds, floorIds }
@@ -1668,6 +1688,113 @@ function validateWalls(raw: unknown, path: string, index: IdIndex, add: Add): Ma
 }
 
 /**
+ * Every acknowledgement of a warning (#66 §5).
+ *
+ * Three things are refused here, and each is a way a Project could hold two answers to one
+ * question:
+ *
+ *  - **Duplicate keys.** Two records for the same `(type, subjects, option)` would mean two
+ *    notes and two signatures for one warning, and the strip shows one row.
+ *  - **Unknown subject IDs.** An acknowledgement whose subject has gone is a record of a
+ *    decision about a thing that does not exist. `edit` prunes those inside the same Edit
+ *    Transaction as the deletion (#66 §7), so one that arrives in a file was written by
+ *    something else.
+ *  - **A `designOptionId` that is not `null`.** Design Options do not exist yet (#83), so
+ *    there is nothing such an ID could name. Refusing it now is what lets the stored records
+ *    of every Project written before Options ship stay valid when they arrive.
+ *
+ * The key itself is `domain`'s `warningKey`, the same function the engine calls: two spellings
+ * of one key is a warning that reads `Seen ✓` in one place and open in another.
+ */
+function validateAcknowledgements(raw: unknown, path: string, index: IdIndex, add: Add): void {
+  const items = checkArray(raw, path, 'the warning acknowledgements', add)
+  if (items === null) return
+  const keys = new Map<string, string>()
+  items.forEach((item, i) => {
+    const here = childPath(path, i)
+    if (!isRecord(item)) {
+      add(here, WRONG_TYPE, 'Expected a warning acknowledgement.')
+      return
+    }
+    const idPath = childPath(here, 'id')
+    const id = checkEntityId(item.id, idPath, 'the acknowledgement ID', add)
+    if (id !== null) claimId(id, idPath, 'the acknowledgement ID', index, add)
+
+    const typePath = childPath(here, 'warningType')
+    const warningType = checkFilledText(item.warningType, typePath, 'the warning type', add)
+    if (warningType !== null && !WARNING_TYPE.test(warningType)) {
+      add(typePath, BAD_FORMAT, `Expected the warning type as a lower_snake_case code — "${warningType}" is not one.`)
+    }
+
+    const subjectsPath = childPath(here, 'subjectIds')
+    const subjects = checkArray(item.subjectIds, subjectsPath, 'the warning subjects', add)
+    const ids: string[] = []
+    if (subjects !== null) {
+      if (subjects.length === 0) {
+        add(subjectsPath, OUT_OF_RANGE, 'Expected a warning acknowledgement to name at least one subject.')
+      }
+      subjects.forEach((subject, j) => {
+        const subjectPath = childPath(subjectsPath, j)
+        const subjectId = checkEntityId(subject, subjectPath, 'a warning subject ID', add)
+        if (subjectId === null) return
+        if (!index.first.has(subjectId)) {
+          add(subjectPath, DANGLING_REFERENCE, 'Expected a warning subject to be an entity in this Project.')
+        }
+        if (ids.includes(subjectId)) {
+          add(subjectPath, DUPLICATE_ID, 'Expected each warning subject once in one acknowledgement.')
+        }
+        ids.push(subjectId)
+      })
+      const sorted = [...ids].sort(compareCodePoints)
+      if (ids.some((subjectId, j) => subjectId !== sorted[j])) {
+        add(subjectsPath, BAD_FORMAT, 'Expected the warning subject IDs sorted, the way the engine stores them.')
+      }
+    }
+
+    // `null` is the Existing Option and the only value until #83 gives a Project Design
+    // Options; a text ID here names something this schema has no collection for.
+    if (item.designOptionId !== null) {
+      add(
+        childPath(here, 'designOptionId'),
+        item.designOptionId === undefined ? MISSING : DANGLING_REFERENCE,
+        'Expected the Design Option of an acknowledgement to be null until Design Options exist.',
+      )
+    }
+
+    const signature = checkFilledText(item.signature, childPath(here, 'signature'), 'the measurement signature', add)
+    if (signature !== null && !/^[0-9a-f]{16}$/.test(signature)) {
+      add(
+        childPath(here, 'signature'),
+        BAD_FORMAT,
+        'Expected the measurement signature as the sixteen hex characters `stableHash` writes.',
+      )
+    }
+
+    const note = checkText(item.note, childPath(here, 'note'), 'the acknowledgement note', add)
+    if (note !== null && note.length > ACKNOWLEDGEMENT_NOTE_MAX_LENGTH) {
+      add(
+        childPath(here, 'note'),
+        OUT_OF_RANGE,
+        `Expected the acknowledgement note to be at most ${ACKNOWLEDGEMENT_NOTE_MAX_LENGTH} characters.`,
+      )
+    }
+
+    checkFilledText(item.acknowledgedAt, childPath(here, 'acknowledgedAt'), 'the acknowledgement time', add)
+    checkUnknownFields(item, here, ACKNOWLEDGEMENT_FIELDS, add)
+
+    if (warningType !== null && subjects !== null) {
+      const key = warningKey(warningType, ids, null)
+      const first = keys.get(key)
+      if (first !== undefined) {
+        add(here, DUPLICATE_ID, `Expected one acknowledgement per warning — ${first} already acknowledges this one.`)
+      } else {
+        keys.set(key, here)
+      }
+    }
+  })
+}
+
+/**
  * The Project's own display settings, for the words around a geometry problem.
  *
  * Validity never depends on this — only the numbers in the message do — so a Project whose
@@ -1721,6 +1848,7 @@ export function validateProject(value: unknown): ValidateProjectResult {
   validateViews(value.views, childPath(ROOT_PATH, 'views'), index, add)
   validateItemDesigns(value.itemDesigns, childPath(ROOT_PATH, 'itemDesigns'), index, displayFormatOf(value), add)
   validateExistingModel(value.existingModel, childPath(ROOT_PATH, 'existingModel'), index, add)
+  validateAcknowledgements(value.warningAcknowledgements, childPath(ROOT_PATH, 'warningAcknowledgements'), index, add)
   checkUnknownFields(value, ROOT_PATH, PROJECT_FIELDS, add)
 
   return problems.length === 0 ? { ok: true, project: source as Project } : { ok: false, problems }

@@ -23,6 +23,7 @@ import type { CabinetMaterialId, DrawerConfig, ElementType, GlobalSettings, Proj
 import type { DependencyReview, Intent, IntentType, PayloadOf } from '../../edit'
 import type { ProjectSession, SaveState, SessionAsset } from '../../session'
 import { useProject, useProjectSelector, useSession } from './useProject'
+import { STRINGS } from '..'
 import { useUi } from './uiStore'
 import type { LegacyBindings } from './bindings'
 import { projectUnits } from './projectView'
@@ -70,9 +71,9 @@ export interface SessionHost {
 /** The words under the undo button (#14, #49 deviation 3). */
 function saveStatusOf(save: SaveState | null): LegacyBindings['saveStatus'] {
   if (save === null) return null
-  if (save.kind === 'saving') return { text: 'Saving…', failed: false }
-  if (save.kind === 'failed') return { text: 'Save failed', failed: true }
-  return { text: `Saved locally ${new Date(save.at).toLocaleTimeString()}`, failed: false }
+  if (save.kind === 'saving') return { text: STRINGS.saving, failed: false }
+  if (save.kind === 'failed') return { text: STRINGS.saveStatusFailed, failed: true }
+  return { text: STRINGS.savedLocally(new Date(save.at).toLocaleTimeString()), failed: false }
 }
 
 export function useSessionBindings(services: SessionViewServices, host: SessionHost): LegacyBindings {

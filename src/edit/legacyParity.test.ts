@@ -122,6 +122,10 @@ const EXTRA_INTENTS = [
   'opening.flipSwing',
   'opening.rename',
   'opening.delete',
+  // #66: the legacy app had no warnings at all — an overlap was something the drafter found
+  // by eye on the printed plan — so there is no store action either of these maps to.
+  'warning.acknowledge',
+  'warning.editNote',
 ]
 
 describe('action coverage', () => {

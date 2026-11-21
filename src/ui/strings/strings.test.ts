@@ -12,7 +12,8 @@
  * deserves.
  */
 import { describe, expect, it } from 'vitest'
-import { STRINGS } from './index'
+import { STRINGS, WARNING_COPY } from './index'
+import { WARNING_PRODUCERS } from '../../derive'
 
 /**
  * The words #19 §12 keeps out of user-facing copy, carried forward by #24, #27 and ADR-0008.
@@ -69,23 +70,16 @@ describe('the copy', () => {
     expect(offenders).toEqual([])
   })
 
-  it('keeps every sentence out of the components that speak it (#51 criterion 5)', async () => {
-    // The check is textual on purpose: a component that renders a literal still type-checks, still
-    // snapshots, and still shows the user a sentence nobody reviewed.
-    const sources = import.meta.glob('./**/*.tsx', { query: '?raw', import: 'default', eager: true }) as Record<
-      string,
-      string
-    >
-    const offenders = Object.entries(sources)
-      .filter(([path]) => !path.includes('.test.'))
-      .flatMap(([path, source]) =>
-        [...source.matchAll(/<(?:h1|h2|h3|p|button|span|strong|small|label)\b[^>]*>([^<>{}]+)<\//g)]
-          .map((match) => match[1].trim())
-          // Punctuation and single characters are markup, not copy: the failure icon is `!`, and
-          // `·` separates the parts of a line.
-          .filter((text) => text.length > 1 && /[A-Za-z]{3}/.test(text))
-          .map((text) => `${path}: ${text}`),
-      )
-    expect(offenders).toEqual([])
+  it('has copy for every warning the producers can raise', () => {
+    // The strip holds no `if (type === …)`; the copy table is the only extension point (#66
+    // §12). So the pair — the producers that are registered and the rows that are written —
+    // has to be checked against each other here, where both are visible. A producer's
+    // `messageKey` is its `type` by construction, so the registered types are exactly the keys
+    // the strip will be asked to say. A producer added by #67 or #76–#79 without a row fails
+    // this test rather than meeting the user with a sentence that says it has no wording.
+    for (const producer of WARNING_PRODUCERS) {
+      expect(WARNING_COPY[producer.type], `${producer.type} has no copy`).toBeTypeOf('function')
+    }
+    expect(WARNING_PRODUCERS.length).toBeGreaterThan(0)
   })
 })

@@ -20,6 +20,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useWorkspace } from './workspaceStore'
+import { STRINGS } from '../strings'
 import type { SnapToggle } from './workspaceStore'
 
 /** The grid spacings the row offers, in millimetres. */
@@ -39,15 +40,15 @@ const ANGLE_INCREMENTS = [5, 10, 15, 30, 45, 90]
  * its setting by whichever key of `SnapSettings` it writes.
  */
 const ROWS: readonly { toggle: SnapToggle | 'angle'; label: string; testId: string }[] = [
-  { toggle: 'grid', label: 'Grid', testId: 'snap-grid' },
-  { toggle: 'endpoints', label: 'Endpoints and midpoints', testId: 'snap-endpoints' },
-  { toggle: 'centres', label: 'Centres', testId: 'snap-centres' },
-  { toggle: 'intersections', label: 'Intersections', testId: 'snap-intersections' },
-  { toggle: 'wallFaces', label: 'Wall faces', testId: 'snap-wall-faces' },
-  { toggle: 'axis', label: 'Horizontal and vertical', testId: 'snap-axis' },
-  { toggle: 'angle', label: 'Angle', testId: 'snap-angle' },
-  { toggle: 'perpendicular', label: 'Perpendicular', testId: 'snap-perpendicular' },
-  { toggle: 'tangent', label: 'Tangent', testId: 'snap-tangent' },
+  { toggle: 'grid', label: STRINGS.snapGrid, testId: 'snap-grid' },
+  { toggle: 'endpoints', label: STRINGS.snapEndpoints, testId: 'snap-endpoints' },
+  { toggle: 'centres', label: STRINGS.snapCentres, testId: 'snap-centres' },
+  { toggle: 'intersections', label: STRINGS.snapIntersections, testId: 'snap-intersections' },
+  { toggle: 'wallFaces', label: STRINGS.snapWallFaces, testId: 'snap-wall-faces' },
+  { toggle: 'axis', label: STRINGS.snapAxis, testId: 'snap-axis' },
+  { toggle: 'angle', label: STRINGS.snapAngle, testId: 'snap-angle' },
+  { toggle: 'perpendicular', label: STRINGS.snapPerpendicular, testId: 'snap-perpendicular' },
+  { toggle: 'tangent', label: STRINGS.snapTangent, testId: 'snap-tangent' },
 ]
 
 /**
@@ -115,10 +116,10 @@ export function SnapsMenu(): ReactNode {
         className="bb-workspace-tool-button"
         onClick={() => setOpen((current) => !current)}
       >
-        Snaps <span aria-hidden="true">▾</span>
+        {STRINGS.snaps} <span aria-hidden="true">▾</span>
       </button>
       {open && (
-        <div className="bb-workspace-menu bb-snaps-menu" data-testid="snaps-panel" aria-label="Snaps">
+        <div className="bb-workspace-menu bb-snaps-menu" data-testid="snaps-panel" aria-label={STRINGS.snaps}>
           {ROWS.map((row) => (
             <SnapRow
               key={row.toggle}

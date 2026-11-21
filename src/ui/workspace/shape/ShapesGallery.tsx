@@ -17,6 +17,7 @@
  */
 import type { ReactNode } from 'react'
 import { PRESET_NAMES } from '../../../domain'
+import { STRINGS } from '../../strings'
 import type { PresetKind } from '../../../derive'
 import { GALLERY_ORDER, PresetGlyph } from './presetIcons'
 
@@ -33,7 +34,7 @@ export interface ShapesGalleryProps {
 export function ShapesGallery(props: ShapesGalleryProps): ReactNode {
   const { current, currentPath, onPick, onPickPath } = props
   return (
-    <div className="bb-shapes-gallery" role="group" aria-label="Shapes" data-testid="shapes-gallery">
+    <div className="bb-shapes-gallery" role="group" aria-label={STRINGS.shapes} data-testid="shapes-gallery">
       {GALLERY_ORDER.map((kind) => (
         <button
           key={kind}
@@ -59,7 +60,7 @@ export function ShapesGallery(props: ShapesGalleryProps): ReactNode {
         onClick={onPickPath}
       >
         <CustomPathGlyph />
-        <span>Custom Path</span>
+        <span>{STRINGS.customPath}</span>
       </button>
     </div>
   )

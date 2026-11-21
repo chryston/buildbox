@@ -14,6 +14,7 @@
  * draw because a Floor has no underlay would be refusing to work.
  */
 import type { PlanImage } from '../../domain'
+import { STRINGS } from '../strings'
 import type { DrawTool } from './shape/draftPath'
 import type { WorkspaceTool } from './workspaceStore'
 
@@ -43,7 +44,7 @@ export interface DrawToolDefinition extends WorkspaceToolDefinition {
 }
 
 /** The explanation a gated tool gives. One sentence, wherever it is read. */
-export const CALIBRATION_REQUIRED_HINT = "Calibrate this Floor's Plan Image to draw measured shapes"
+export const CALIBRATION_REQUIRED_HINT = STRINGS.calibrationRequiredHint
 
 /**
  * Whether a Floor's Plan Image is in the state that gates measured tools: present, and
@@ -73,18 +74,18 @@ export function toolTitle(tool: WorkspaceToolDefinition, planImage: PlanImage | 
  * calibrated Plan Image (#64 criterion 11), which is the one rule this registry owns.
  */
 export const WORKSPACE_TOOLS: readonly WorkspaceToolDefinition[] = [
-  { id: 'select', label: 'Select', testId: 'tool-select', requiresCalibratedFloor: false },
-  { id: 'pan', label: 'Pan', testId: 'tool-pan', requiresCalibratedFloor: false },
+  { id: 'select', label: STRINGS.toolSelect, testId: 'tool-select', requiresCalibratedFloor: false },
+  { id: 'pan', label: STRINGS.toolPan, testId: 'tool-pan', requiresCalibratedFloor: false },
   {
     id: 'wall',
-    label: 'Wall',
+    label: STRINGS.toolWall,
     testId: 'tool-wall',
     requiresCalibratedFloor: true,
     icon: 'M2 6 H18 M2 14 H18 M6 6 V14',
   },
   {
     id: 'opening',
-    label: 'Door / window',
+    label: STRINGS.toolOpening,
     testId: 'tool-opening',
     // An Opening is placed in millimetres along a Wall, so it waits for a calibrated Plan Image
     // on the same rule the Wall tool follows (#64 criterion 11, #65 §9).
@@ -108,21 +109,21 @@ export const WORKSPACE_TOOLS: readonly WorkspaceToolDefinition[] = [
 export const DRAW_TOOLS: readonly DrawToolDefinition[] = [
   {
     id: 'line',
-    label: 'Line',
+    label: STRINGS.line,
     testId: 'draw-line',
     requiresCalibratedFloor: true,
     icon: 'M3 17 L17 3',
   },
   {
     id: 'arc',
-    label: 'Arc',
+    label: STRINGS.arc,
     testId: 'draw-arc',
     requiresCalibratedFloor: true,
     icon: 'M3 17 A 14 14 0 0 1 17 3',
   },
   {
     id: 'ellipticalArc',
-    label: 'Elliptical arc',
+    label: STRINGS.toolEllipticalArc,
     testId: 'draw-elliptical-arc',
     requiresCalibratedFloor: true,
     icon: 'M2 15 A 8 6 0 0 1 18 15',

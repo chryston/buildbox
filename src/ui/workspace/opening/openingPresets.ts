@@ -12,13 +12,20 @@
  * *new* door starts with and nothing that is already in a Wall (#63 §3).
  */
 import { getPresetEntry } from '../../../domain'
+import { STRINGS } from '../../strings'
 import type { OpeningKind, OpeningSwing } from '../../../domain'
 
 /** The one built-in pack (#63). */
 const PACK = 'hdb-bto-typical'
 
-/** The three headings the picker lists its rows under, in the order it lists them. */
-export type OpeningPresetGroup = 'Doors' | 'Windows' | 'Other'
+/**
+ * The three headings the picker lists its rows under, in the order it lists them.
+ *
+ * Lowercase identifiers, not the headings themselves: a value that is also a sentence gets
+ * compared as one, and then `group === 'Doors'` is a piece of copy that a rename of the words
+ * would silently break. `STRINGS.presetGroupLabel` is the only place the headings are written.
+ */
+export type OpeningPresetGroup = 'doors' | 'windows' | 'other'
 
 /** One row of the picker: a plain name, the size it stands for, and how sure it is. */
 export interface OpeningPresetRow {
@@ -46,7 +53,7 @@ function doorRow(entryId: string, swing: OpeningSwing | undefined, name?: string
   if (entry.kind !== 'door') throw new Error(`${entryId} is not a door entry`)
   return {
     id: entry.id,
-    group: 'Doors',
+    group: 'doors',
     name: name ?? entry.name,
     kind: 'door',
     swing,
@@ -64,7 +71,7 @@ function windowRow(entryId: string): OpeningPresetRow {
   if (entry.kind !== 'window') throw new Error(`${entryId} is not a window entry`)
   return {
     id: entry.id,
-    group: 'Windows',
+    group: 'windows',
     name: entry.name,
     kind: 'window',
     swing: undefined,
@@ -85,8 +92,8 @@ function shelterDoorRow(): OpeningPresetRow {
   if (entry.kind !== 'shelter') throw new Error('shelter.household is not a shelter entry')
   return {
     id: 'shelter.household.door',
-    group: 'Doors',
-    name: 'Household shelter door',
+    group: 'doors',
+    name: STRINGS.householdShelterDoor,
     kind: 'door',
     swing: 'left',
     width: entry.values.doorWidth,
@@ -103,8 +110,8 @@ function shelterDoorRow(): OpeningPresetRow {
  */
 const REMOVED_ROW: OpeningPresetRow = {
   id: 'other.removed-section',
-  group: 'Other',
-  name: 'Removed wall section',
+  group: 'other',
+  name: STRINGS.removedWallSection,
   kind: 'removed_section',
   swing: undefined,
   width: 900,
@@ -120,7 +127,7 @@ const REMOVED_ROW: OpeningPresetRow = {
  */
 export const OPENING_PRESET_GROUPS: readonly { group: OpeningPresetGroup; rows: readonly OpeningPresetRow[] }[] = [
   {
-    group: 'Doors',
+    group: 'doors',
     rows: [
       doorRow('door.bedroom', 'left'),
       doorRow('door.main', 'left'),
@@ -130,10 +137,10 @@ export const OPENING_PRESET_GROUPS: readonly { group: OpeningPresetGroup; rows: 
     ],
   },
   {
-    group: 'Windows',
+    group: 'windows',
     rows: [windowRow('window.standard'), windowRow('window.full-height'), windowRow('window.three-quarter')],
   },
-  { group: 'Other', rows: [REMOVED_ROW] },
+  { group: 'other', rows: [REMOVED_ROW] },
 ]
 
 /** The row the tool opens on: the door most people are placing. */

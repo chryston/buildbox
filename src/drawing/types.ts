@@ -69,6 +69,9 @@ export type LayerKey =
   | 'plan-dimensions'
   | 'plan-chip'
   | 'plan-handle'
+  /** The `!` badges of open warnings (#66 §14): the last band, because a warning is the one
+      thing on the canvas that must never be hidden behind a footprint or a label. */
+  | 'plan-warning-badges'
   | 'cabinet-units'
   | 'cabinet-panels'
   | 'cabinet-voids'
@@ -115,6 +118,7 @@ export const LAYER_ORDER: readonly LayerKey[] = [
   'item-footprint',
   'item-labels',
   'sheet-furniture',
+  'plan-warning-badges',
 ]
 
 /**
@@ -153,7 +157,7 @@ export type PathCommand =
 export type Paint = string
 
 /** What a piece of text is for, which is how a renderer styles a whole class at once. */
-export type TextRole = 'label' | 'dimension' | 'chip' | 'space-label'
+export type TextRole = 'label' | 'dimension' | 'chip' | 'space-label' | 'badge'
 
 /** Where text sits against its `x`: its left edge, its centre, or its right edge. */
 export type TextAnchor = 'start' | 'middle' | 'end'
@@ -205,6 +209,9 @@ export type StyleKey =
   | 'plan-origin-dot:preview'
   | 'plan-rotate-stem'
   | 'plan-handle'
+  | 'plan-warning-badge'
+  | 'plan-warning-badge-text'
+  | 'plan-warning-badge-leader'
   | 'plan-placeholder'
   | 'cabinet-panel-oak'
   | 'cabinet-panel-walnut'
@@ -276,6 +283,8 @@ export type SizeRole =
   | 'plan-handle-reach'
   | 'plan-handle-r'
   | 'plan-handle-stroke'
+  | 'plan-warning-badge'
+  | 'plan-warning-badge-text'
   | 'cabinet-dimension'
   | 'cabinet-space-label'
   | 'cabinet-lock-icon'

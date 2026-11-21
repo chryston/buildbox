@@ -18,6 +18,16 @@ import type { Orientation, PageSize } from './types'
 export const EXPORT_FOOTER =
   'Prepared with BuildBox for planning and discussion. Check all measurements on site before building or buying.'
 
+/**
+ * What the file says prepared it: the PDF's Producer and Creator, the ZIP's `generator`, the
+ * provenance document's `generator`, and the title block's version row.
+ *
+ * One constant because a file that names two different products is a bug, and because the
+ * literal *type* in `Provenance.generator` and `Manifest.generator` is written as
+ * `typeof PRODUCT_NAME` — the schema and the value cannot then disagree about the name.
+ */
+export const PRODUCT_NAME = 'BuildBox'
+
 /** What a sheet says when its scale carries no promise: fit-to-page, SVG, PNG. */
 export const NOT_TO_SCALE = 'Not to scale'
 
@@ -41,11 +51,23 @@ export const TITLE_BLOCK = {
   itemDesign: 'Item',
   designOption: 'Design option',
   view: 'View',
+  /** The view name a scaled-up Item sheet carries, where a Floor sheet carries the Floor's name. */
+  itemDetail: 'Item Detail',
   scale: 'Scale',
   date: 'Date',
   version: 'BuildBox',
   page: 'Page',
 } as const
+
+/**
+ * The warning for a character the embedded font has no glyph for.
+ *
+ * A warning, not an error: the sheet still writes, with the missing characters left out of the
+ * text. It names the character and the string it appeared in, because the person choosing a font
+ * needs to know which of their labels the font cannot draw.
+ */
+export const noGlyphFor = (chars: string, text: string): string =>
+  `No glyph for ${chars} in "${text}"`
 
 /** `Dimensions in mm`, `Dimensions in cm`, `Dimensions in m`. */
 export const UNIT_STATEMENT: Readonly<Record<string, string>> = {

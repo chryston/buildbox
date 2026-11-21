@@ -90,7 +90,7 @@ describe('Design → Project', () => {
     const project = await onlyProject(storeFile([design()]))
 
     expect(Object.keys(project).sort()).toEqual([
-      'existingModel', 'floors', 'id', 'itemDesigns', 'meta', 'preferences', 'views',
+      'existingModel', 'floors', 'id', 'itemDesigns', 'meta', 'preferences', 'views', 'warningAcknowledgements',
     ])
     expect(project.id).toBe('proj-1')
     expect(project.meta).toEqual({ name: 'Kitchen Wall' })

@@ -35,6 +35,8 @@ import { quantitiesForFloor } from './quantities/quantities'
 import type { FloorQuantities } from './quantities/quantities'
 import { deriveWalls } from './walls'
 import type { FloorWalls } from './walls'
+import { deriveWarnings } from './warnings/engine'
+import type { FloorWarnings } from './warnings/types'
 
 /** How many entries a cache holds before the least-recently-used one goes. */
 export const DERIVE_CACHE_MAX_ENTRIES = 8
@@ -59,6 +61,13 @@ export interface DeriveCache {
    * revision.
    */
   walls(project: Project, revision: number, floorId: EntityId, optionId: EntityId | null): FloorWalls
+  /**
+   * The warnings of one Floor under one Design Option (#66 §4).
+   *
+   * The strip asks on every render, and the answer costs a whole Floor's tidied outlines plus
+   * every pair of Walls in it — the same slot discipline as the Walls it reads through.
+   */
+  warnings(project: Project, revision: number, floorId: EntityId, optionId: EntityId | null): FloorWarnings
 }
 
 interface Entry {
@@ -104,7 +113,7 @@ export function createDeriveCache(opts: { maxEntries?: number } = {}): DeriveCac
    * revision replaces, which is why an old revision is never answered from a new one.
    */
   const remember = <T>(
-    kind: 'floor' | 'item' | 'quantities' | 'walls',
+    kind: 'floor' | 'item' | 'quantities' | 'walls' | 'warnings',
     projectToken: number,
     revision: number,
     id: EntityId,
@@ -141,5 +150,7 @@ export function createDeriveCache(opts: { maxEntries?: number } = {}): DeriveCac
       remember('quantities', tokenOf(project), revision, floorId, optionId, () => quantitiesForFloor(project, floorId, optionId)),
     walls: (project, revision, floorId, optionId) =>
       remember('walls', tokenOf(project), revision, floorId, optionId, () => deriveWalls(project, floorId)),
+    warnings: (project, revision, floorId, optionId) =>
+      remember('warnings', tokenOf(project), revision, floorId, optionId, () => deriveWarnings(project, floorId, optionId)),
   }
 }

@@ -16,7 +16,7 @@ import type { Floor, PlanView, Project } from './project'
 import { validateProject } from './validate'
 
 /** The domain schema this build writes and understands at the top of the chain. */
-export const DOMAIN_SCHEMA_VERSION = 5
+export const DOMAIN_SCHEMA_VERSION = 6
 
 /**
  * One pure vN → vN+1 step. Its input is already a copy; it never reads the clock, and a
@@ -27,7 +27,7 @@ export type Migrator = (data: unknown, allocateId: IdAllocator) => unknown
 /**
  * `MIGRATORS[i]` migrates v(i+1) → v(i+2), so index 0 is v1 → v2.
  */
-export const MIGRATORS: readonly Migrator[] = [migrateV1toV2, migrateV2toV3, migrateV3toV4, migrateV4toV5]
+export const MIGRATORS: readonly Migrator[] = [migrateV1toV2, migrateV2toV3, migrateV3toV4, migrateV4toV5, migrateV5toV6]
 
 /**
  * v1 → v2 (#56): the Project gains `views`, and each Floor gains the one default Plan
@@ -179,6 +179,27 @@ export function migrateV4toV5(data: unknown): unknown {
       ...existingModel,
       openings: Array.isArray(existingModel.openings) ? existingModel.openings : [],
     },
+  }
+}
+
+/**
+ * v5 → v6 (#66): the Project gains the warning acknowledgement collection.
+ *
+ * `warningAcknowledgements` starts empty — no v5 data records that a user saw a warning, and
+ * inventing one would be inventing a decision nobody made. Nothing else moves: an
+ * acknowledgement refers to entities by ID and to a Design Option that does not exist yet, so
+ * there is no older shape to carry forward. No ID is spent, and a value that is not a Project
+ * shape is left for `validateProject` to refuse.
+ *
+ * The step is idempotent: a record that already carries the collection keeps it, so running it
+ * twice cannot empty a Project of the acknowledgements it was given.
+ */
+export function migrateV5toV6(data: unknown): unknown {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return data
+  const record = data as Record<string, unknown>
+  return {
+    ...record,
+    warningAcknowledgements: Array.isArray(record.warningAcknowledgements) ? record.warningAcknowledgements : [],
   }
 }
 

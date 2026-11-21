@@ -664,6 +664,42 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
     const opening = pick(g, openingList(g))
     return opening === undefined ? null : intent('opening.delete', { openingId: opening.id })
   },
+  // #66: a subject that exists, because an acknowledgement of a warning about something that
+  // is not there is pruned by the same step that recorded it, and would never be seen. Any
+  // entity will do — the handler addresses a warning by its key, not by what the key names.
+  (g) => {
+    const subjects = [
+      ...g.project.floors.map((floor) => floor.id),
+      ...g.project.itemDesigns.map((design) => design.id),
+      ...g.project.existingModel.placedItems.map((placement) => placement.id),
+      ...g.project.existingModel.walls.map((wall) => wall.id),
+    ]
+    const subject = pick(g, subjects)
+    return subject === undefined
+      ? null
+      : intent(
+          'warning.acknowledge',
+          {
+            warningType: pick(g, ['wall_crossing', 'wall_overlap'] as const)!,
+            subjectIds: [subject],
+            designOptionId: null,
+            signature: `000000000000000${int(g, 0, 15).toString(16)}`,
+            note: `Overlapping on purpose ${int(g, 1, 99)}`,
+          },
+          g.ids(1),
+        )
+  },
+  (g) => {
+    const record = pick(g, g.project.warningAcknowledgements)
+    return record === undefined
+      ? null
+      : intent('warning.editNote', {
+          warningType: record.warningType,
+          subjectIds: [...record.subjectIds],
+          designOptionId: record.designOptionId,
+          note: `Note edited ${int(g, 1, 99)}`,
+        })
+  },
 ]
 
 /**

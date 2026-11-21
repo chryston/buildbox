@@ -17,10 +17,10 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals } from '../../derive'
-import type { Pt } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings } from '../../derive'
+import type { Pt, Warning } from '../../derive'
 import { wallOpenings } from '../../drawing'
-import type { OpeningPreview } from '../../drawing'
+import type { BadgeSubject, OpeningPreview } from '../../drawing'
 import type { Point2, Project, WallClassification } from '../../domain'
 import { nextOpeningLabel, summarizeFloorDependencies } from '../../domain'
 import type { SessionAsset } from '../../session'
@@ -56,8 +56,11 @@ import { readoutMm } from './displayUnits'
 import { WallInspector } from './wall/WallInspector'
 import { mergeableNeighbour } from './wall/wallDraft'
 import type { WallChainDraft, WallDraft } from './wall/wallDraft'
-import { fitViewport } from './viewport'
+import { fitRect, fitViewport } from './viewport'
 import type { Viewport } from './viewport'
+import { WarningStrip } from './warnings/WarningStrip'
+import { subjectBoxes, warningBox } from './warnings/locateWarning'
+import type { Box } from './warnings/locateWarning'
 import { enabledKindsOf, useWorkspace, workspaceStore } from './workspaceStore'
 import { WorkspaceShell } from './WorkspaceShell'
 import { ToolbarMenu, ToolbarMenuItem, WorkspaceToolbar } from './WorkspaceToolbar'
@@ -338,8 +341,112 @@ export function FloorWorkspace(): ReactNode {
     setViewport(fitViewport(width, height, image?.widthMm ?? 800, image?.heightMm ?? 600))
   }
 
+  /**
+   * The active Floor's warnings, under the Existing-only option (#66 §11).
+   *
+   * The engine memoises on `(revision, floorId, optionId)` itself, so this is a pointer at the
+   * cached answer rather than a recompute; and because a warning is a function of the model
+   * alone, nothing the reader does to the view — pan, zoom, another saved view, the strip
+   * itself — can move a status (#66 criterion 2).
+   */
+  const floorWarnings = useMemo<readonly Warning[]>(
+    () => (floorId === null ? [] : deriveWarnings(project, floorId, null).warnings),
+    [project, floorId],
+  )
+
+  /**
+   * Select what a warning is about and put all of it on screen (#66 §13).
+   *
+   * Navigation, never an Edit Transaction: no Intent, so no history entry and no revision
+   * change, which is what lets a person walk the whole list with an Undo stack that never
+   * grows. A warning standing on another Floor opens that Floor first, because a selection
+   * the reader cannot see is not a locate.
+   */
+  const locateWarning = (warning: Warning): void => {
+    if (warning.floorId !== floorId) workspaceStore.getState().setActiveFloor(warning.floorId, null)
+    const primary = warning.subjects[0]
+    if (primary !== undefined) {
+      if (primary.type === 'wall') selectWall(primary.id)
+      else if (primary.type === 'opening') selectOpening(primary.id)
+      else select(primary.id)
+    }
+    const el = hostRef.current
+    if (el === null) return
+    const { width, height } = el.getBoundingClientRect()
+    if (width <= 0 || height <= 0) return
+    const box = warningBox(warning, project, derivedFloor?.placements ?? [])
+    if (box === null) return
+    setViewport(fitRect(width, height, box))
+  }
+
+  /**
+   * One badge per entity the open warnings name (#66 §14). Acknowledged warnings contribute
+   * nothing — criterion 7's "acknowledged warnings show none" is this one filter — and an entity
+   * named by three warnings still gets exactly one, because the map is keyed by the entity.
+   */
+  const warningSubjects = useMemo<readonly BadgeSubject[]>(() => {
+    const boxes = new Map<string, Box>()
+    for (const warning of floorWarnings) {
+      if (warning.status === 'acknowledged') continue
+      const boxesOf = subjectBoxes(warning, project, derivedFloor?.placements ?? [])
+      for (let index = 0; index < warning.subjects.length; index += 1) {
+        const id = warning.subjects[index]!.id
+        const box = boxesOf[index]
+        if (box !== undefined && !boxes.has(id)) boxes.set(id, box)
+      }
+    }
+    return [...boxes].map(([id, bounds]) => ({ id, bounds }))
+  }, [floorWarnings, project, derivedFloor])
+
+  /**
+   * Which row the strip must show, and how many times it has been asked (#66 §14).
+   *
+   * The counter is not decoration: clicking the same badge twice has to scroll there twice, and
+   * a prop that compared equal would do nothing the second time.
+   */
+  const [warningFocus, setWarningFocus] = useState<{ key: string; nonce: number } | null>(null)
+
+  /**
+   * A badge was clicked: open the strip and put that entity's first row in view.
+   *
+   * The key is the warning's, not the entity's, so the strip scrolls to the *first* row of the
+   * entity it was asked about rather than to whichever row the engine happened to list first.
+   */
+  const selectWarningBadge = useCallback((id: string): void => {
+    const first = floorWarnings.find((warning) => warning.status !== 'acknowledged'
+      && warning.subjects.some((subject) => subject.id === id))
+    if (first === undefined) return
+    setWarningFocus((previous) => ({ key: first.key, nonce: (previous?.nonce ?? 0) + 1 }))
+  }, [floorWarnings])
+
   const send = <T extends IntentType>(type: T, payload: PayloadOf<T>): void => {
     dispatch(services.intent.build(type, payload))
+  }
+
+  /**
+   * One Edit Transaction per decision (#66 §6).
+   *
+   * The subjects go in sorted, not in the engine's primary-first order: the key sorts them, and
+   * a record stored in display order would be a second key for the same warning the moment two
+   * Walls changed refs.
+   */
+  const acknowledgeWarning = (warning: Warning, note: string): void => {
+    send('warning.acknowledge', {
+      warningType: warning.type,
+      subjectIds: warning.subjects.map((subject) => subject.id).sort(),
+      designOptionId: warning.optionId,
+      signature: warning.signature,
+      note,
+    })
+  }
+
+  const editWarningNote = (warning: Warning, note: string): void => {
+    send('warning.editNote', {
+      warningType: warning.type,
+      subjectIds: warning.subjects.map((subject) => subject.id).sort(),
+      designOptionId: warning.optionId,
+      note,
+    })
   }
 
   /**
@@ -614,19 +721,19 @@ export function FloorWorkspace(): ReactNode {
     if (file === undefined) return
     setUploadError(null)
     if (!file.type.startsWith('image/')) {
-      setUploadError('Please choose a valid image file.')
+      setUploadError(STRINGS.imageInvalidFile)
       input.value = ''
       return
     }
     if (file.size > MAX_PLAN_IMAGE_BYTES) {
-      setUploadError('A Plan Image can be at most 50 MB.')
+      setUploadError(STRINGS.imageTooLarge)
       input.value = ''
       return
     }
     const read = await services.readPlanImage(file)
     input.value = ''
     if ('message' in read) {
-      setUploadError("This file couldn't be read as an image")
+      setUploadError(STRINGS.notAnImage)
       return
     }
     // A new picture never clears the objects drawn over it (#56): the upload is the upload.
@@ -737,7 +844,7 @@ export function FloorWorkspace(): ReactNode {
     {
       id: 'tools',
       width: 196,
-      label: 'Tools',
+      label: STRINGS.tools,
       content: (
         <>
           {WORKSPACE_TOOLS.map((definition) => {
@@ -763,14 +870,14 @@ export function FloorWorkspace(): ReactNode {
     {
       id: 'add',
       width: 112,
-      label: 'Add item',
+      label: STRINGS.addItem,
       content: (
-        <ToolbarMenu label="Add item" testId="add-item-menu">
+        <ToolbarMenu label={STRINGS.addItem} testId="add-item-menu">
           {/* Three sections (#57 §3): what this Project already has, the shipped catalogue,
               and the one way to author a shape of your own. */}
-          <div className="bb-workspace-menu-heading">In this Project</div>
+          <div className="bb-workspace-menu-heading">{STRINGS.inThisProject}</div>
           {library.length === 0 && (
-            <div className="bb-workspace-library-item" data-testid="library-empty">Nothing here yet</div>
+            <div className="bb-workspace-library-item" data-testid="library-empty">{STRINGS.nothingHereYet}</div>
           )}
           {library.map((entry) => (
             <button
@@ -783,14 +890,14 @@ export function FloorWorkspace(): ReactNode {
               <span className="bb-workspace-library-swatch" style={{ background: entry.color }} />
               <span className="bb-workspace-library-name">{entry.label}</span>
               <span className="bb-workspace-library-meta">
-                {entry.isCabinet ? 'Cabinet' : `${Math.round(entry.width)} × ${Math.round(entry.depth)}`}
+                {entry.isCabinet ? STRINGS.cabinet : `${Math.round(entry.width)} × ${Math.round(entry.depth)}`}
               </span>
               <span className="bb-workspace-library-meta" data-testid={`library-count-${entry.itemDesignId}`}>
                 {entry.placementCount}
               </span>
             </button>
           ))}
-          <div className="bb-workspace-menu-heading">Catalog</div>
+          <div className="bb-workspace-menu-heading">{STRINGS.catalog}</div>
           {services.planCatalogue.map((option) => (
             <ToolbarMenuItem
               key={option.key}
@@ -799,30 +906,30 @@ export function FloorWorkspace(): ReactNode {
               onSelect={() => addObject(option.key)}
             />
           ))}
-          <ToolbarMenuItem label="New item…" testId="add-new-item" onSelect={() => setNewItemOpen(true)} />
+          <ToolbarMenuItem label={STRINGS.newItemEllipsis} testId="add-new-item" onSelect={() => setNewItemOpen(true)} />
         </ToolbarMenu>
       ),
     },
     {
       id: 'plan-image',
       width: 132,
-      label: 'Plan Image',
+      label: STRINGS.planImage,
       content: (
-        <ToolbarMenu label="Plan Image" testId="plan-image-menu">
+        <ToolbarMenu label={STRINGS.planImage} testId="plan-image-menu">
           <ToolbarMenuItem
-            label="Upload…"
+            label={STRINGS.uploadEllipsis}
             testId="upload-image"
             disabled={planImage !== null}
             onSelect={() => fileInputRef.current?.click()}
           />
           <ToolbarMenuItem
-            label="Replace…"
+            label={STRINGS.replaceEllipsis}
             testId="replace-image"
             disabled={planImage === null}
             onSelect={() => fileInputRef.current?.click()}
           />
           <ToolbarMenuItem
-            label="Remove"
+            label={STRINGS.remove}
             testId="remove-plan-image"
             disabled={planImage === null}
             onSelect={() => {
@@ -830,7 +937,7 @@ export function FloorWorkspace(): ReactNode {
             }}
           />
           <ToolbarMenuItem
-            label="Calibrate…"
+            label={STRINGS.calibrateEllipsis}
             testId="calibrate-scale"
             disabled={planImage === null}
             onSelect={() => setIsCalibrating(true)}
@@ -841,7 +948,7 @@ export function FloorWorkspace(): ReactNode {
     {
       id: 'export',
       width: 104,
-      label: 'Export',
+      label: STRINGS.exportGroup,
       content: (
         <button
           type="button"
@@ -859,7 +966,7 @@ export function FloorWorkspace(): ReactNode {
     groups.push({
       id: 'rail',
       width: 156,
-      label: 'View & selection',
+      label: STRINGS.viewAndSelection,
       content: (
         <button
           type="button"
@@ -915,22 +1022,22 @@ export function FloorWorkspace(): ReactNode {
             <button
               type="button"
               data-testid="undo-button"
-              aria-label="Undo"
+              aria-label={STRINGS.undo}
               disabled={!history.canUndo}
               className="bb-workspace-tool-button"
               onClick={() => session.undo()}
             >
-              Undo
+              {STRINGS.undo}
             </button>
             <button
               type="button"
               data-testid="redo-button"
-              aria-label="Redo"
+              aria-label={STRINGS.redo}
               disabled={!history.canRedo}
               className="bb-workspace-tool-button"
               onClick={() => session.redo()}
             >
-              Redo
+              {STRINGS.redo}
             </button>
             <button
               type="button"
@@ -1046,6 +1153,8 @@ export function FloorWorkspace(): ReactNode {
               onSelect={select}
               onCursorChange={setOpeningCursor}
               onCanvasClick={clickOnCanvas}
+              warningSubjects={warningSubjects}
+              onSelectWarningBadge={selectWarningBadge}
               dragPreview={dragPreview}
               onDragPreview={setDragPreview}
               onMoveItem={(id, x, y) => send('plan.movePlacement', { placedItemId: id, translation: { x, y } })}
@@ -1141,21 +1250,37 @@ export function FloorWorkspace(): ReactNode {
             />
           </>
         }
-        warningStrip={uploadError !== null ? (
-          <span data-testid="upload-error" data-tone="error">{uploadError}</span>
-        ) : uncalibrated ? (
-          <span data-testid="uncalibrated-hint">
-            {CALIBRATION_REQUIRED_HINT}
-            <button
-              type="button"
-              data-testid="calibrate-now"
-              className="bb-workspace-tool-button"
-              onClick={() => setIsCalibrating(true)}
-            >
-              Calibrate now
-            </button>
-          </span>
-        ) : null}
+        warningStrip={
+          floorWarnings.length === 0 && uploadError === null && !uncalibrated ? null : (
+            <>
+              {uploadError !== null && (
+                <span data-testid="upload-error" data-tone="error">{uploadError}</span>
+              )}
+              {uploadError === null && uncalibrated && (
+                <span data-testid="uncalibrated-hint">
+                  {CALIBRATION_REQUIRED_HINT}
+                  <button
+                    type="button"
+                    data-testid="calibrate-now"
+                    className="bb-workspace-tool-button"
+                    onClick={() => setIsCalibrating(true)}
+                  >
+                    Calibrate now
+                  </button>
+                </span>
+              )}
+              {floorWarnings.length > 0 && (
+                <WarningStrip
+                  warnings={floorWarnings}
+                  onLocate={locateWarning}
+                  onAcknowledge={acknowledgeWarning}
+                  onEditNote={editWarningNote}
+                  focus={warningFocus}
+                />
+              )}
+            </>
+          )
+        }
       />
       {deleteReview !== null && (
         <DeleteWallReviewDialog

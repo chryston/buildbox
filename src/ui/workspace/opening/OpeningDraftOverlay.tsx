@@ -19,6 +19,7 @@ import { withEnd, withPreset, withTypedDistance } from './openingDraft'
 import type { OpeningAim, OpeningDraft } from './openingDraft'
 import { OPENING_PRESET_GROUPS, openingPresetLabel, openingPresetRow } from './openingPresets'
 import type { DisplayUnit } from '../../../domain'
+import { STRINGS } from '../../strings'
 
 export interface OpeningDraftOverlayProps {
   /** The row picked and the number typed, held by the Floor workspace so a re-render keeps it. */
@@ -53,14 +54,14 @@ function PresetPicker({ draft, onDraft, unit, precision }: {
       }}
     >
       <label className="flex items-center gap-1">
-        Door / window
+        {STRINGS.openingDraftTitle}
         <select
           data-testid="opening-preset-picker"
           value={draft.presetId}
           onChange={(event) => onDraft(withPreset(draft, event.target.value))}
         >
           {OPENING_PRESET_GROUPS.map((section) => (
-            <optgroup key={section.group} label={section.group}>
+            <optgroup key={section.group} label={STRINGS.presetGroupLabel(section.group)}>
               {section.rows.map((entry) => (
                 <option key={entry.id} value={entry.id}>{openingPresetLabel(entry, num, unit)}</option>
               ))}
@@ -70,7 +71,7 @@ function PresetPicker({ draft, onDraft, unit, precision }: {
       </label>
       {row.fixed && (
         <span data-testid="opening-preset-fixed" className="bb-workspace-chip">
-          Fixed size
+          {STRINGS.openingDraftFixedSize}
         </span>
       )}
       {row.hint !== null && (
@@ -113,7 +114,7 @@ export function OpeningDraftOverlay({
           event.stopPropagation()
         }}
       >
-        <span>Distance from</span>
+        <span>{STRINGS.openingDistanceFrom}</span>
         <button
           type="button"
           data-testid="opening-distance-start"
@@ -137,7 +138,7 @@ export function OpeningDraftOverlay({
           data-testid="opening-distance-field"
           type="number"
           min={0}
-          aria-label="Distance from the highlighted end"
+          aria-label={STRINGS.openingDraftDistance}
           value={draft.typed === null ? '' : formatMm(draft.typed, unit, precision)}
           onChange={(event) => commitDistance(event.target.value)}
         />
@@ -147,7 +148,7 @@ export function OpeningDraftOverlay({
           </span>
         )}
         <button type="button" data-testid="opening-cancel" className="bb-workspace-tool-button" onClick={onCancel}>
-          Cancel (Esc)
+          {STRINGS.openingCancelEsc}
         </button>
       </div>
     </div>

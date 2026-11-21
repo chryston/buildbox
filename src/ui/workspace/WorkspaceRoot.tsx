@@ -25,6 +25,7 @@ import type { DependencyReview, Intent, IntentType, PayloadOf } from '../../edit
 import type { ProjectSession, SaveState, SessionAsset } from '../../session'
 import type { PlanImageMediaType } from '../../domain'
 import { workspaceStore } from './workspaceStore'
+import { STRINGS } from '../strings'
 import type { ViewportCache } from './viewport'
 import type { ExportPort } from './export/port'
 
@@ -141,7 +142,7 @@ export function WorkspaceProvider(props: {
 
 export function useWorkspaceRoot(): WorkspaceRootValue {
   const value = useContext(WorkspaceContext)
-  if (value === null) throw new Error('FloorWorkspace must render inside WorkspaceProvider')
+  if (value === null) throw new Error('FloorWorkspace renders inside WorkspaceProvider')
   return value
 }
 
@@ -191,9 +192,9 @@ export interface SaveStatusText {
 
 function saveStatusOf(save: SaveState | null): SaveStatusText | null {
   if (save === null) return null
-  if (save.kind === 'saving') return { text: 'Saving…', failed: false }
-  if (save.kind === 'failed') return { text: 'Save failed', failed: true }
-  return { text: `Saved locally ${new Date(save.at).toLocaleTimeString()}`, failed: false }
+  if (save.kind === 'saving') return { text: STRINGS.saving, failed: false }
+  if (save.kind === 'failed') return { text: STRINGS.saveStatusFailed, failed: true }
+  return { text: STRINGS.savedLocally(new Date(save.at).toLocaleTimeString()), failed: false }
 }
 
 export function useSaveStatus(session: ProjectSession): SaveStatusText | null {

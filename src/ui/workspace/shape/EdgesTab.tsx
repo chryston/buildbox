@@ -33,6 +33,7 @@ import {
 } from '../../../derive'
 import type { ClosedPath, KeepFixed, Segment } from '../../../derive'
 import type { ItemFootprint } from '../../../domain'
+import { STRINGS } from '../../strings'
 import type { DisplayFormat } from '../../../domain'
 import { parseToMm, readoutMm } from '../displayUnits'
 import type { ShapeFieldId } from './parameters'
@@ -40,9 +41,9 @@ import type { ShapeSelection } from '../workspaceStore'
 
 /** What one edge is called in the table, in the words the issue uses. */
 const EDGE_KIND_NAMES: Record<Segment['kind'], string> = {
-  line: 'Line',
-  arc: 'Arc',
-  ellipticalArc: 'Elliptical arc',
+  line: STRINGS.line,
+  arc: STRINGS.arc,
+  ellipticalArc: STRINGS.ellipticalArc,
 }
 
 export interface EdgesTabProps {
@@ -117,7 +118,7 @@ export function EdgesTab(props: EdgesTabProps): ReactNode {
     <div className="bb-edges-tab" data-testid="edges-tab">
       {corner !== null && editable && (
         <NumberField
-          label="Corner radius"
+          label={STRINGS.cornerRadius}
           testId="edge-corner-radius"
           format={format}
           initial={corner.prefill}
@@ -139,14 +140,14 @@ export function EdgesTab(props: EdgesTabProps): ReactNode {
       )}
       <table className="bb-edges-table">
         <caption className="bb-edges-caption">
-          {editable ? 'Select an Edge to edit it, or a vertex to round its corner.' : 'Edges are read-only on a preset Item Footprint.'}
+          {editable ? STRINGS.edgesCaptionEditable : STRINGS.edgesCaptionReadOnly}
         </caption>
         <thead>
           <tr>
             <th scope="col">#</th>
-            <th scope="col">Kind</th>
-            <th scope="col">Length</th>
-            <th scope="col">{path.segments.some(isCurved) ? 'Radius' : 'Direction'}</th>
+            <th scope="col">{STRINGS.kind}</th>
+            <th scope="col">{STRINGS.length}</th>
+            <th scope="col">{path.segments.some(isCurved) ? STRINGS.radius : STRINGS.direction}</th>
           </tr>
         </thead>
         <tbody>
@@ -187,7 +188,7 @@ export function EdgesTab(props: EdgesTabProps): ReactNode {
       {selectedEdge !== null && segment !== null && filletEdge === null && (
         <div className="bb-edge-editor" data-testid={`edge-editor-${selectedEdge}`}>
           <p className="bb-edge-editor-heading">
-            {`Edge ${selectedEdge} · ${EDGE_KIND_NAMES[segment.kind]}`}
+            {STRINGS.edgeOfKind(selectedEdge, EDGE_KIND_NAMES[segment.kind])}
           </p>
           {segment.kind === 'line' && (
             <LineEditor
@@ -383,8 +384,8 @@ function KeepFixedControl(props: {
   readonly onChange: (value: KeepFixed) => void
 }): ReactNode {
   return (
-    <div className="bb-edge-segmented" role="group" aria-label="Keep fixed" data-testid="edge-keep-fixed">
-      <span className="bb-edge-field-label" aria-hidden="true">Keep fixed</span>
+    <div className="bb-edge-segmented" role="group" aria-label={STRINGS.keepFixed} data-testid="edge-keep-fixed">
+      <span className="bb-edge-field-label" aria-hidden="true">{STRINGS.keepFixed}</span>
       {(['start', 'end'] as const).map((choice) => (
         <button
           key={choice}
@@ -445,7 +446,7 @@ function LineEditor(props: EditorProps & {
   return (
     <>
       <NumberField
-        label="Length"
+        label={STRINGS.length}
         testId="edge-length-field"
         format={format}
         initial={lengthOf(segment, from)}
@@ -456,7 +457,7 @@ function LineEditor(props: EditorProps & {
         onDiscard={onDiscard}
       />
       <AngleField
-        label="Direction"
+        label={STRINGS.direction}
         testId="edge-direction-field"
         initial={directionDeg(segment, from)}
         invalid={invalidField === 'edgeDirection'}
@@ -480,7 +481,7 @@ function ArcEditor(props: EditorProps): ReactNode {
   return (
     <>
       <NumberField
-        label="Radius"
+        label={STRINGS.radius}
         testId="edge-radius-field"
         format={format}
         initial={distance(segment.center, segment.to)}
@@ -491,7 +492,7 @@ function ArcEditor(props: EditorProps): ReactNode {
         onDiscard={onDiscard}
       />
       <AngleField
-        label="Sweep"
+        label={STRINGS.sweep}
         testId="edge-sweep-field"
         initial={segment.sweepDeg}
         invalid={invalidField === 'arcSweep'}
@@ -515,7 +516,7 @@ function EllipticalEditor(props: EditorProps): ReactNode {
   return (
     <>
       <NumberField
-        label="Semi-axis A"
+        label={STRINGS.semiAxisA}
         testId="edge-semi-axis-a"
         format={format}
         initial={segment.rx}
@@ -526,7 +527,7 @@ function EllipticalEditor(props: EditorProps): ReactNode {
         onDiscard={onDiscard}
       />
       <NumberField
-        label="Semi-axis B"
+        label={STRINGS.semiAxisB}
         testId="edge-semi-axis-b"
         format={format}
         initial={segment.ry}
@@ -537,7 +538,7 @@ function EllipticalEditor(props: EditorProps): ReactNode {
         onDiscard={onDiscard}
       />
       <AngleField
-        label="Axis rotation"
+        label={STRINGS.axisRotation}
         testId="edge-axis-rotation"
         initial={segment.rotationDeg}
         invalid={invalidField === 'axisRotation'}
@@ -547,7 +548,7 @@ function EllipticalEditor(props: EditorProps): ReactNode {
         onDiscard={onDiscard}
       />
       <AngleField
-        label="Sweep"
+        label={STRINGS.sweep}
         testId="edge-sweep-field"
         initial={segment.sweepDeg}
         invalid={invalidField === 'arcSweep'}
@@ -584,7 +585,7 @@ function RoundAllCorners(props: {
   }
   return (
     <div className="bb-edge-field bb-edge-round-all" data-testid="edge-round-all-row">
-      <label className="bb-edge-field-label" htmlFor="edge-round-all">Round all corners</label>
+      <label className="bb-edge-field-label" htmlFor="edge-round-all">{STRINGS.roundAllCorners}</label>
       <input
         id="edge-round-all"
         className="bb-edge-field-input"

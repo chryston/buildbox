@@ -57,6 +57,7 @@ function validProject(): Project {
         },
       ],
     },
+    warningAcknowledgements: [],
   }
 }
 
@@ -68,8 +69,8 @@ function v1Project(): Record<string, unknown> {
 }
 
 describe('DOMAIN_SCHEMA_VERSION', () => {
-  it('is 5, one step above the version #64 shipped', () => {
-    expect(DOMAIN_SCHEMA_VERSION).toBe(5)
+  it('is 6, one step above the version #65 shipped', () => {
+    expect(DOMAIN_SCHEMA_VERSION).toBe(6)
   })
 })
 
@@ -116,12 +117,15 @@ describe('migrateV1toV2 — one default Plan View per Floor (#56)', () => {
 
 describe('migrateProject — the envelope version (#14)', () => {
   it('refuses a newer schema before touching the data', () => {
-    const result = migrateProject(validProject(), 6, allocator())
+    // One above whatever this build writes, so the step that bumps the schema does not have
+    // to remember to bump this test too.
+    const newer = DOMAIN_SCHEMA_VERSION + 1
+    const result = migrateProject(validProject(), newer, allocator())
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.error.kind).toBe('newer-schema')
     if (result.error.kind !== 'newer-schema') return
-    expect(result.error.found).toBe(6)
+    expect(result.error.found).toBe(newer)
     expect(result.error.supported).toBe(DOMAIN_SCHEMA_VERSION)
     expect(result.error.message).toContain('saved by a newer BuildBox')
   })

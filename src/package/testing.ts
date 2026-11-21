@@ -165,6 +165,7 @@ export function fixtureProject(): Project {
         },
       ],
     },
+    warningAcknowledgements: [],
   }
 }
 
@@ -214,6 +215,49 @@ export function openingsFixtureProject(): Project {
 }
 
 /**
+ * The same Project as the v6 golden file (#66): a second Wall crossing the first, and one
+ * acknowledgement of the warning they make together.
+ *
+ * The signature is the one this BuildBox computes for that crossing, written down rather
+ * than recomputed. A golden file whose contents are derived from the live engine on every run
+ * would certify anything the engine started to produce; a literal is what makes the day the
+ * signature algorithm changes show up as a reopened warning rather than as silence.
+ */
+export function acknowledgementsFixtureProject(): Project {
+  const project = openingsFixtureProject()
+  return {
+    ...project,
+    existingModel: {
+      ...project.existingModel,
+      walls: [
+        ...project.existingModel.walls,
+        {
+          id: 'wall-2',
+          ref: 'W-2',
+          floorId: 'floor-0',
+          line: { kind: 'line', start: { x: 2000, y: -500 }, end: { x: 2000, y: 500 } },
+          thickness: 100,
+          justification: 'centre',
+          baseElevation: 0,
+          height: 2600,
+        },
+      ],
+    },
+    warningAcknowledgements: [
+      {
+        id: 'acknowledgement-1',
+        warningType: 'wall_crossing',
+        subjectIds: ['wall-1', 'wall-2'],
+        designOptionId: null,
+        signature: '8db57272e5b2adb2',
+        note: 'A flue passes through here; the crossing is intended.',
+        acknowledgedAt: FIXTURE_EXPORTED_AT,
+      },
+    ],
+  }
+}
+
+/**
  * The same fixture as the v1 and v2 golden files store it: an Item Footprint was a kind, a
  * width and a depth until v3 restated it as a preset (#58).
  *
@@ -226,7 +270,7 @@ export function legacyFixtureRecord(): unknown {
   const project = fixtureProject()
   const preferences: Record<string, unknown> = { ...project.preferences }
   delete preferences.defaultWallHeight
-  return {
+  const record: Record<string, unknown> = {
     ...project,
     // Both files predate Walls (#64): neither the default height nor the two collections is
     // in the bytes they were written from, so the record stops at the Placed Items.
@@ -238,6 +282,10 @@ export function legacyFixtureRecord(): unknown {
         : design,
     ),
   }
+  // Warning Acknowledgements (#66) postdate both files, so the record carries none — not even
+  // an empty list, which a v2 BuildBox had no word for.
+  delete record.warningAcknowledgements
+  return record
 }
 
 /** An Item Footprint as the pre-v3 files wrote it. */

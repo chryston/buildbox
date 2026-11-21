@@ -16,6 +16,7 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { DisplayUnit, Floor, Project } from '../../domain'
 import { floorNameTaken } from '../../domain'
+import { STRINGS } from '../strings'
 import { formatMm, parseToMm } from './displayUnits'
 
 export interface ManageFloorsDialogProps {
@@ -37,8 +38,8 @@ export interface ManageFloorsDialogProps {
 /** The plain words for a name the Project cannot hold. */
 export function floorNameProblem(project: Project, floorId: string, name: string): string | null {
   const trimmed = name.trim()
-  if (trimmed === '') return 'Give this Floor a name'
-  if (floorNameTaken(project, trimmed, floorId)) return `Another Floor is already called ${trimmed}`
+  if (trimmed === '') return STRINGS.floorNameRequired
+  if (floorNameTaken(project, trimmed, floorId)) return STRINGS.floorNameTaken(trimmed)
   return null
 }
 
@@ -49,8 +50,8 @@ export function ManageFloorsDialog(props: ManageFloorsDialogProps): ReactNode {
 
   return (
     <div className="bb-workspace-dialog-backdrop" data-testid="manage-floors-dialog">
-      <div role="dialog" aria-modal="true" aria-label="Manage Floors" className="bb-workspace-dialog">
-        <h2>Manage Floors</h2>
+      <div role="dialog" aria-modal="true" aria-label={STRINGS.manageFloors} className="bb-workspace-dialog">
+        <h2>{STRINGS.manageFloors}</h2>
         <ul className="bb-workspace-floor-list">
           {floors.map((floor, index) => (
             <li
@@ -84,7 +85,7 @@ export function ManageFloorsDialog(props: ManageFloorsDialogProps): ReactNode {
             className="bb-workspace-primary-button"
             onClick={onAddFloor}
           >
-            + Add Floor
+            {STRINGS.floorAdd}
           </button>
           <button
             type="button"
@@ -92,7 +93,7 @@ export function ManageFloorsDialog(props: ManageFloorsDialogProps): ReactNode {
             className="bb-workspace-secondary-button"
             onClick={onClose}
           >
-            Close
+            {STRINGS.close}
           </button>
         </div>
       </div>
@@ -140,7 +141,7 @@ function FloorRow(props: ManageFloorsDialogProps & {
     const lower = readLimit(lowerText ?? shown(limits.lowerMm))
     const upper = readLimit(upperText ?? shown(limits.upperMm))
     if (lower !== null && upper !== null && lower >= upper) {
-      setLimitsError('The lower limit must be below the upper limit')
+      setLimitsError(STRINGS.floorLimitsOrder)
       return
     }
     setLimitsError(null)
@@ -153,7 +154,7 @@ function FloorRow(props: ManageFloorsDialogProps & {
       <input
         className="bb-workspace-input"
         data-testid={`floor-name-${floor.id}`}
-        aria-label="Floor name"
+        aria-label={STRINGS.floorName}
         type="text"
         value={name ?? floor.name}
         onChange={(event) => setName(event.target.value)}
@@ -166,7 +167,7 @@ function FloorRow(props: ManageFloorsDialogProps & {
       <button
         type="button"
         data-testid={`floor-up-${floor.id}`}
-        aria-label="Move up"
+        aria-label={STRINGS.floorMoveUp}
         className="bb-workspace-tool-button"
         disabled={index === 0}
         onClick={() => onReorder(floor.id, index - 1)}
@@ -176,7 +177,7 @@ function FloorRow(props: ManageFloorsDialogProps & {
       <button
         type="button"
         data-testid={`floor-down-${floor.id}`}
-        aria-label="Move down"
+        aria-label={STRINGS.floorMoveDown}
         className="bb-workspace-tool-button"
         disabled={index === count - 1}
         onClick={() => onReorder(floor.id, index + 1)}
@@ -190,7 +191,7 @@ function FloorRow(props: ManageFloorsDialogProps & {
         className="bb-workspace-tool-button"
         onClick={() => setSettingsOpen(!settingsOpen)}
       >
-        Floor settings
+        {STRINGS.floorSettings}
       </button>
       <button
         type="button"
@@ -198,7 +199,7 @@ function FloorRow(props: ManageFloorsDialogProps & {
         className="bb-workspace-tool-button"
         onClick={() => onDuplicate(floor.id)}
       >
-        Duplicate…
+        {STRINGS.floorDuplicateEllipsis}
       </button>
       <button
         type="button"
@@ -206,7 +207,7 @@ function FloorRow(props: ManageFloorsDialogProps & {
         className="bb-workspace-danger-button"
         onClick={() => onDelete(floor.id)}
       >
-        Delete…
+        {STRINGS.floorDeleteEllipsis}
       </button>
       {nameError !== null && (
         <p className="bb-workspace-field-error" data-testid={`floor-name-error-${floor.id}`} role="alert">
@@ -216,7 +217,7 @@ function FloorRow(props: ManageFloorsDialogProps & {
       {settingsOpen && (
         <div className="bb-workspace-floor-limits" data-testid={`floor-limits-${floor.id}`}>
           <label className="bb-workspace-field-label" htmlFor={`floor-lower-${floor.id}`}>
-            Lower limit <span className="bb-workspace-unit-suffix">({unit})</span>
+            {STRINGS.floorLowerLimit} <span className="bb-workspace-unit-suffix">({unit})</span>
           </label>
           <input
             id={`floor-lower-${floor.id}`}
@@ -224,12 +225,12 @@ function FloorRow(props: ManageFloorsDialogProps & {
             data-testid={`floor-lower-${floor.id}`}
             type="number"
             step="any"
-            placeholder="none"
+            placeholder={STRINGS.floorNoLimit}
             value={lowerText ?? shown(limits.lowerMm)}
             onChange={(event) => setLowerText(event.target.value)}
           />
           <label className="bb-workspace-field-label" htmlFor={`floor-upper-${floor.id}`}>
-            Upper limit <span className="bb-workspace-unit-suffix">({unit})</span>
+            {STRINGS.floorUpperLimit} <span className="bb-workspace-unit-suffix">({unit})</span>
           </label>
           <input
             id={`floor-upper-${floor.id}`}
@@ -237,13 +238,13 @@ function FloorRow(props: ManageFloorsDialogProps & {
             data-testid={`floor-upper-${floor.id}`}
             type="number"
             step="any"
-            placeholder="none"
+            placeholder={STRINGS.floorNoLimit}
             value={upperText ?? shown(limits.upperMm)}
             onChange={(event) => setUpperText(event.target.value)}
           />
           {/* A Floor's own Wall height, or blank to take the Project's (#64 §16). */}
           <label className="bb-workspace-field-label" htmlFor={`floor-wall-height-${floor.id}`}>
-            Default wall height <span className="bb-workspace-unit-suffix">({unit})</span>
+            {STRINGS.floorDefaultWallHeight} <span className="bb-workspace-unit-suffix">({unit})</span>
           </label>
           <input
             id={`floor-wall-height-${floor.id}`}
@@ -251,7 +252,7 @@ function FloorRow(props: ManageFloorsDialogProps & {
             data-testid={`floor-wall-height-${floor.id}`}
             type="number"
             step="any"
-            placeholder={`project default`}
+            placeholder={STRINGS.floorProjectDefault}
             value={heightText ?? shown(floor.defaultWallHeight)}
             onChange={(event) => setHeightText(event.target.value)}
           />
@@ -267,7 +268,7 @@ function FloorRow(props: ManageFloorsDialogProps & {
                 setHeightText(null)
               }}
             >
-              Use this height
+              {STRINGS.floorUseThisHeight}
             </button>
             <button
               type="button"
@@ -275,7 +276,7 @@ function FloorRow(props: ManageFloorsDialogProps & {
               className="bb-workspace-secondary-button"
               onClick={commitLimits}
             >
-              Save limits
+              {STRINGS.floorSaveLimits}
             </button>
           </div>
           {limitsError !== null && (

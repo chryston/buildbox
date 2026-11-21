@@ -56,6 +56,25 @@ export function fitViewport(hostW: number, hostH: number, contentW: number, cont
 }
 
 /**
+ * The viewport that centres a box of the Floor rather than the whole of it (#66 §13).
+ *
+ * `pan` is where the Floor's origin lands, so centring a box means putting its own centre at
+ * the host's centre: the same arithmetic as `fitViewport`, shifted by the box's corner. The
+ * margin is smaller than `Fit`'s because a locate is meant to fill the pane with the thing the
+ * reader asked to see.
+ */
+export function fitRect(hostW: number, hostH: number, box: { x: number; y: number; w: number; h: number }, margin = 48): Viewport {
+  const w = Math.max(box.w, 1)
+  const h = Math.max(box.h, 1)
+  const zoom = clampZoom(Math.min((hostW - 2 * margin) / w, (hostH - 2 * margin) / h))
+  return {
+    zoom,
+    panX: (hostW - w * zoom) / 2 - box.x * zoom,
+    panY: (hostH - h * zoom) / 2 - box.y * zoom,
+  }
+}
+
+/**
  * Wheel or pinch zoom around the cursor: the Floor point under the pointer stays under it.
  * `mx`/`my` are host-pixel coordinates inside the canvas host.
  */

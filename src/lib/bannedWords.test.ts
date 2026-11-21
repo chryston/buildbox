@@ -10,11 +10,14 @@ import { describe, expect, it } from 'vitest'
 import { BANNED_WORDS, bannedWordsIn, mentionsWord } from './index'
 
 describe('the banned-word list', () => {
-  it('holds the eighteen entries #19 §12 gives, each once', () => {
-    expect(BANNED_WORDS).toHaveLength(18)
+  it('holds the twenty-eight entries #19 §12 and #27 §12 give, each once', () => {
+    expect(BANNED_WORDS).toHaveLength(28)
     expect(new Set(BANNED_WORDS).size).toBe(BANNED_WORDS.length)
     expect(BANNED_WORDS).toContain('load-bearing')
     expect(BANNED_WORDS).toContain('code')
+    // The two families: the compliance claim, and the topic the interface must not open.
+    expect(BANNED_WORDS).toContain('gas-safety')
+    expect(BANNED_WORDS).toContain('not connected')
   })
 
   it('holds only text the matcher can drop into a pattern as it stands', () => {

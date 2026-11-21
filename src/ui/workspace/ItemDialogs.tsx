@@ -8,6 +8,7 @@
  */
 import { useState } from 'react'
 import type { ReactNode } from 'react'
+import { STRINGS } from '../strings'
 import { PLAN_SWATCHES } from './planColors'
 
 /**
@@ -49,8 +50,8 @@ export function NewItemDialog(props: {
     && Number.isFinite(depthMm) && depthMm >= 50
 
   return (
-    <DialogShell testId="new-item-dialog" title="New item">
-      <label className="bb-workspace-field-label" htmlFor="new-item-name">Name</label>
+    <DialogShell testId="new-item-dialog" title={STRINGS.newItem}>
+      <label className="bb-workspace-field-label" htmlFor="new-item-name">{STRINGS.name}</label>
       <input
         id="new-item-name"
         data-testid="new-item-name"
@@ -58,7 +59,7 @@ export function NewItemDialog(props: {
         value={label}
         onChange={(event) => setLabel(event.target.value)}
       />
-      <label className="bb-workspace-field-label" htmlFor="new-item-width">Width (mm)</label>
+      <label className="bb-workspace-field-label" htmlFor="new-item-width">{STRINGS.widthMm}</label>
       <input
         id="new-item-width"
         data-testid="new-item-width"
@@ -67,7 +68,7 @@ export function NewItemDialog(props: {
         value={width}
         onChange={(event) => setWidth(event.target.value)}
       />
-      <label className="bb-workspace-field-label" htmlFor="new-item-depth">Depth (mm)</label>
+      <label className="bb-workspace-field-label" htmlFor="new-item-depth">{STRINGS.depthMm}</label>
       <input
         id="new-item-depth"
         data-testid="new-item-depth"
@@ -76,14 +77,14 @@ export function NewItemDialog(props: {
         value={depth}
         onChange={(event) => setDepth(event.target.value)}
       />
-      <label className="bb-workspace-field-label">Colour</label>
+      <label className="bb-workspace-field-label">{STRINGS.colour}</label>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {PLAN_SWATCHES.map((swatch) => (
           <button
             key={swatch}
             type="button"
             data-testid={`new-item-swatch-${swatch}`}
-            aria-label={`Colour ${swatch}`}
+            aria-label={STRINGS.colourSwatch(swatch)}
             aria-pressed={color === swatch ? 'true' : 'false'}
             className="bb-workspace-swatch"
             style={{ background: swatch }}
@@ -99,7 +100,7 @@ export function NewItemDialog(props: {
           disabled={!valid}
           onClick={() => props.onConfirm(label.trim(), widthMm, depthMm, color)}
         >
-          Place
+          {STRINGS.place}
         </button>
         <button
           type="button"
@@ -107,7 +108,7 @@ export function NewItemDialog(props: {
           className="bb-workspace-secondary-button"
           onClick={props.onClose}
         >
-          Cancel
+          {STRINGS.cancel}
         </button>
       </div>
     </DialogShell>
@@ -125,11 +126,11 @@ export function ForkDesignDialog(props: {
   const valid = name.trim().length > 0
 
   return (
-    <DialogShell testId="fork-design-dialog" title="Fork design">
+    <DialogShell testId="fork-design-dialog" title={STRINGS.forkDesignTitle}>
       <p className="bb-workspace-dialog-note" data-testid="fork-design-note">
-        Only this placement will use the new design.
+        {STRINGS.forkDesignNote}
       </p>
-      <label className="bb-workspace-field-label" htmlFor="fork-design-name">Name</label>
+      <label className="bb-workspace-field-label" htmlFor="fork-design-name">{STRINGS.name}</label>
       <input
         id="fork-design-name"
         data-testid="fork-design-name"
@@ -145,7 +146,7 @@ export function ForkDesignDialog(props: {
           disabled={!valid}
           onClick={() => props.onConfirm(name.trim())}
         >
-          Fork
+          {STRINGS.fork}
         </button>
         <button
           type="button"
@@ -153,7 +154,7 @@ export function ForkDesignDialog(props: {
           className="bb-workspace-secondary-button"
           onClick={props.onClose}
         >
-          Cancel
+          {STRINGS.cancel}
         </button>
       </div>
     </DialogShell>

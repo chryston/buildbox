@@ -58,6 +58,10 @@ export const SIZE_ROLES: Record<SizeRole, SizeRow> = {
   'plan-handle-reach': { screen: { px: 24 }, paper: { mm: 12 } },
   'plan-handle-r': { screen: { px: 6 }, paper: { mm: 3 } },
   'plan-handle-stroke': { screen: { px: 1.5 }, paper: { mm: 0.3 } },
+  // The warning badge: a disc 14 CSS px across whatever the zoom, and the `!` inside it. Paper
+  // sizes exist so the role is total, but no export ever draws this band (#66 §14).
+  'plan-warning-badge': { screen: { px: 7 }, paper: { mm: 3 } },
+  'plan-warning-badge-text': { screen: { px: 10 }, paper: { mm: 4 } },
   // The cabinet canvas's two `Math.max(n / zoom, m)` sizes.
   'cabinet-dimension': { screen: { px: 12, mm: 8 }, paper: { mm: 2 } },
   'cabinet-space-label': { screen: { px: 10, mm: 6 }, paper: { mm: 2 } },
@@ -189,6 +193,15 @@ export const STYLES: Record<StyleKey, Style> = {
     stroke: 'var(--bb-accent)',
     strokeWidth: 'plan-handle-stroke',
   },
+
+  'plan-warning-badge': { fill: 'var(--bb-danger-dot)' },
+  'plan-warning-badge-text': {
+    fill: 'var(--bb-text)',
+    size: 'plan-warning-badge-text',
+    fontFamily: FONT_STACK,
+    hit: 'none',
+  },
+  'plan-warning-badge-leader': { stroke: 'var(--bb-danger-dot)', strokeWidth: 'hairline', hit: 'none' },
 
   'plan-placeholder': {
     fill: 'var(--bb-bg-card)',

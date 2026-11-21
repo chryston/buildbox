@@ -14,6 +14,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { DisplayUnit, EntityId, Floor } from '../../domain'
+import { STRINGS } from '../strings'
 import { formatMm, parseToMm } from './displayUnits'
 
 export interface TransferTarget {
@@ -59,12 +60,12 @@ export function TransferToFloorDialog(props: TransferToFloorDialogProps): ReactN
 
   return (
     <div className="bb-workspace-dialog-backdrop" data-testid="transfer-dialog">
-      <div role="dialog" aria-modal="true" aria-label="Copy or Move to Floor" className="bb-workspace-dialog">
-        <h2>Copy or Move to Floor</h2>
+      <div role="dialog" aria-modal="true" aria-label={STRINGS.transferToFloor} className="bb-workspace-dialog">
+        <h2>{STRINGS.transferToFloor}</h2>
         <p className="bb-workspace-dialog-note" data-testid="transfer-note">
-          Floors don&apos;t share coordinates; check the position on the destination Floor
+          {STRINGS.transferNote}
         </p>
-        <label className="bb-workspace-field-label" htmlFor="transfer-floor">Destination Floor</label>
+        <label className="bb-workspace-field-label" htmlFor="transfer-floor">{STRINGS.destinationFloor}</label>
         <select
           id="transfer-floor"
           className="bb-workspace-select"
@@ -77,9 +78,9 @@ export function TransferToFloorDialog(props: TransferToFloorDialogProps): ReactN
           ))}
         </select>
         {([
-          ['X', 'transfer-x', x, setX],
-          ['Y', 'transfer-y', y, setY],
-          ['Base elevation', 'transfer-elevation', elevation, setElevation],
+          [STRINGS.axisX, 'transfer-x', x, setX],
+          [STRINGS.axisY, 'transfer-y', y, setY],
+          [STRINGS.baseElevation, 'transfer-elevation', elevation, setElevation],
         ] as const).map(([label, testId, value, set]) => (
           <span key={testId}>
             <label className="bb-workspace-field-label" htmlFor={testId}>
@@ -104,7 +105,7 @@ export function TransferToFloorDialog(props: TransferToFloorDialogProps): ReactN
             disabled={floorId === ''}
             onClick={() => onCopy(target())}
           >
-            Copy to Floor
+            {STRINGS.copyToFloor}
           </button>
           <button
             type="button"
@@ -113,7 +114,7 @@ export function TransferToFloorDialog(props: TransferToFloorDialogProps): ReactN
             disabled={floorId === ''}
             onClick={() => onMove(target())}
           >
-            Move to Floor
+            {STRINGS.moveToFloor}
           </button>
           <button
             type="button"
@@ -121,7 +122,7 @@ export function TransferToFloorDialog(props: TransferToFloorDialogProps): ReactN
             className="bb-workspace-secondary-button"
             onClick={onClose}
           >
-            Cancel
+            {STRINGS.cancel}
           </button>
         </div>
       </div>

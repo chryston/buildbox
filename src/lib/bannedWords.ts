@@ -5,10 +5,11 @@
  * product writes — a sheet, a dialog, a preset name — because BuildBox has measured
  * nothing about the reader's flat and has no authority to promise anything about it. The
  * list lives here, in the innermost module, so that every check reads the same words: the
- * scan of the preset pack in `domain/presets`, and the CI scan over shipped strings that #66
- * adds. One list, imported rather than copied — a second copy is a second list, and the two
- * drift the first time one is widened. (`ui/strings` still carries its own eight of these,
- * because #20 §2 keeps `lib` out of `ui`; #66's scan covers that copy with this list.)
+ * scan of the preset pack in `domain/presets`, and the CI scan over shipped strings in
+ * `app/shippedStrings.test.ts`, which reads the copy table and the components too. One list,
+ * imported rather than copied — a second copy is a second list, and the two drift the first
+ * time one is widened. (`ui/strings` still carries its own eight of these, because #20 §2 keeps
+ * `lib` out of `ui`; the scan in `app` covers that copy with this list.)
  *
  * Two of these are ordinary English in a developer's sentence and a promise in a user's.
  * `must` and `required` state an obligation BuildBox cannot impose; `code` and `structural`
@@ -16,6 +17,12 @@
  * list exists to keep out. `sized for`, `rated`, `certified` and `engineered` are the same
  * claim in softer words, and `cannot span`, `requires propping` and `accept risk` are the
  * conclusions a professional draws and BuildBox must not.
+ *
+ * The last ten are the second family, the topics #27 §12 closed: the words a homeowner types
+ * when they are asking about a system BuildBox has no sensor in. None of them is a claim on
+ * its own — `flow`, `capacity`, `gradient` are ordinary words for a slope and a cupboard — and
+ * that is exactly why they belong in a list of words not to *author*: the interface is not the
+ * place a sentence about gas or water or a fall pipe gets started.
  */
 
 /** Every banned word or phrase, as #19 §12 lists them. */
@@ -38,6 +45,16 @@ export const BANNED_WORDS: readonly string[] = [
   'requires propping',
   'accept risk',
   'load-bearing',
+  'flow',
+  'pressure',
+  'falls',
+  'gradient',
+  'electrical load',
+  'conduit fill',
+  'refrigerant',
+  'capacity',
+  'gas-safety',
+  'not connected',
 ]
 
 /**

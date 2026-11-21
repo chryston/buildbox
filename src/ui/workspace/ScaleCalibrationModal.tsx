@@ -10,6 +10,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { DisplayUnit } from '../../domain'
+import { STRINGS } from '../strings'
 import { formatMm, parseToMm } from './displayUnits'
 
 export interface ScaleCalibrationModalProps {
@@ -38,8 +39,8 @@ export function ScaleCalibrationModal(props: ScaleCalibrationModalProps): ReactN
 
   return (
     <div className="bb-workspace-dialog-backdrop" data-testid="calibration-modal">
-      <div role="dialog" aria-modal="true" aria-label="Calibrate Scale" className="bb-workspace-dialog">
-        <h2>Calibrate Scale</h2>
+      <div role="dialog" aria-modal="true" aria-label={STRINGS.calibrateScale} className="bb-workspace-dialog">
+        <h2>{STRINGS.calibrateScale}</h2>
         <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--bb-text-muted)' }}>
           You drew a line of <strong style={{ color: 'var(--bb-text)' }}>{Math.round(distancePx)}px</strong>.<br />
           What is the real-world length of this line?

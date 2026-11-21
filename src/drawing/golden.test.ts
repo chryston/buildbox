@@ -127,6 +127,7 @@ const projectOf = (designs: ItemDesign[], placements: PlacedItem[]): Project => 
   views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Floor 1', isDefault: true, showPlanImage: true }],
   itemDesigns: designs,
   existingModel: { placedItems: placements, walls: [], wallJunctions: [], openings: [] },
+  warningAcknowledgements: [],
 })
 
 /**

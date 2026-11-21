@@ -14,7 +14,7 @@
 import { useEffect } from 'react'
 import type { ReactNode } from 'react'
 import type { DependencyReview } from '../../../edit'
-import { plural } from '../../strings'
+import { STRINGS } from '../../strings'
 
 export interface DeleteWallReviewDialogProps {
   review: DependencyReview
@@ -58,7 +58,7 @@ export function DeleteWallReviewDialog(props: DeleteWallReviewDialogProps): Reac
             className="bb-workspace-primary-button"
             onClick={onConfirm}
           >
-            {`Delete wall and ${plural(review.openings.length, 'opening', 'openings')}`}
+            {STRINGS.wallDeleteWithOpenings(review.openings.length)}
           </button>
           <button
             type="button"
@@ -66,7 +66,7 @@ export function DeleteWallReviewDialog(props: DeleteWallReviewDialogProps): Reac
             className="bb-workspace-secondary-button"
             onClick={onCancel}
           >
-            Cancel
+            {STRINGS.cancel}
           </button>
         </div>
       </div>

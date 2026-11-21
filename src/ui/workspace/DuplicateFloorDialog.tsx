@@ -18,6 +18,7 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { EntityId, Project } from '../../domain'
 import { floorNameTaken } from '../../domain'
+import { STRINGS } from '../strings'
 
 /** One Item Design's worth of Placed Items on the Floor being copied. */
 export interface DuplicateGroup {
@@ -38,7 +39,7 @@ export function duplicateGroups(project: Project, floorId: EntityId): readonly D
   }
   return [...groups.entries()].map(([itemDesignId, placedItemIds]) => ({
     itemDesignId,
-    label: labels.get(itemDesignId) ?? 'Item',
+    label: labels.get(itemDesignId) ?? STRINGS.duplicateItemFallback,
     placedItemIds,
   }))
 }
@@ -62,7 +63,7 @@ export function DuplicateFloorDialog(props: DuplicateFloorDialogProps): ReactNod
   const source = project.floors.find((floor) => floor.id === sourceFloorId)
   const groups = duplicateGroups(project, sourceFloorId)
   const sourceIndex = project.floors.findIndex((floor) => floor.id === sourceFloorId)
-  const [name, setName] = useState(`${source?.name ?? 'Floor'} copy`)
+  const [name, setName] = useState(STRINGS.floorCopyName(source?.name ?? STRINGS.floor))
   const [toIndex, setToIndex] = useState(sourceIndex + 1)
   const [unchecked, setUnchecked] = useState<ReadonlySet<EntityId>>(new Set())
   const [includePlanImage, setIncludePlanImage] = useState(false)
@@ -70,7 +71,7 @@ export function DuplicateFloorDialog(props: DuplicateFloorDialogProps): ReactNod
   if (source === undefined) return null
   const trimmed = name.trim()
   const nameTaken = trimmed !== '' && floorNameTaken(project, trimmed, source.id)
-  const nameError = trimmed === '' ? 'Give this Floor a name' : nameTaken ? `Another Floor is already called ${trimmed}` : null
+  const nameError = trimmed === '' ? STRINGS.floorNameRequired : nameTaken ? STRINGS.floorNameTaken(trimmed) : null
 
   const chosen = groups
     .filter((group) => !unchecked.has(group.itemDesignId))
@@ -78,9 +79,9 @@ export function DuplicateFloorDialog(props: DuplicateFloorDialogProps): ReactNod
 
   return (
     <div className="bb-workspace-dialog-backdrop" data-testid="duplicate-floor-dialog">
-      <div role="dialog" aria-modal="true" aria-label={`Duplicate Floor ${source.name}`} className="bb-workspace-dialog">
-        <h2>Duplicate Floor</h2>
-        <label className="bb-workspace-field-label" htmlFor="duplicate-name">Name</label>
+      <div role="dialog" aria-modal="true" aria-label={STRINGS.duplicateFloorAria(source.name)} className="bb-workspace-dialog">
+        <h2>{STRINGS.duplicateFloor}</h2>
+        <label className="bb-workspace-field-label" htmlFor="duplicate-name">{STRINGS.name}</label>
         <input
           id="duplicate-name"
           className="bb-workspace-input"
@@ -92,7 +93,7 @@ export function DuplicateFloorDialog(props: DuplicateFloorDialogProps): ReactNod
         {nameError !== null && (
           <p className="bb-workspace-field-error" data-testid="duplicate-name-error" role="alert">{nameError}</p>
         )}
-        <label className="bb-workspace-field-label" htmlFor="duplicate-position">Position</label>
+        <label className="bb-workspace-field-label" htmlFor="duplicate-position">{STRINGS.position}</label>
         <select
           id="duplicate-position"
           className="bb-workspace-select"
@@ -106,7 +107,7 @@ export function DuplicateFloorDialog(props: DuplicateFloorDialogProps): ReactNod
         </select>
         {groups.length > 0 && (
           <>
-            <p className="bb-workspace-field-label">Placed Items</p>
+            <p className="bb-workspace-field-label">{STRINGS.placedItems}</p>
             <ul className="bb-workspace-checklist" data-testid="duplicate-checklist">
               {groups.map((group) => (
                 <li key={group.itemDesignId}>
@@ -137,7 +138,7 @@ export function DuplicateFloorDialog(props: DuplicateFloorDialogProps): ReactNod
               checked={includePlanImage}
               onChange={(event) => setIncludePlanImage(event.target.checked)}
             />
-            Include Plan Image
+            {STRINGS.includePlanImage}
           </label>
         )}
         <div className="bb-workspace-dialog-actions">
@@ -148,7 +149,7 @@ export function DuplicateFloorDialog(props: DuplicateFloorDialogProps): ReactNod
             disabled={nameError !== null}
             onClick={() => onConfirm({ name: trimmed, toIndex, placedItemIds: chosen, includePlanImage })}
           >
-            Duplicate
+            {STRINGS.duplicate}
           </button>
           <button
             type="button"
@@ -156,7 +157,7 @@ export function DuplicateFloorDialog(props: DuplicateFloorDialogProps): ReactNod
             className="bb-workspace-secondary-button"
             onClick={onClose}
           >
-            Cancel
+            {STRINGS.cancel}
           </button>
         </div>
       </div>
@@ -167,10 +168,10 @@ export function DuplicateFloorDialog(props: DuplicateFloorDialogProps): ReactNod
 /** `At the top`, one `Between … and …` per join, then `At the end`. */
 function positionLabels(project: Project): readonly string[] {
   const floors = project.floors
-  const labels = ['At the top']
+  const labels: string[] = [STRINGS.positionAtTop]
   for (let index = 1; index < floors.length; index += 1) {
-    labels.push(`Between ${floors[index - 1]?.name ?? ''} and ${floors[index]?.name ?? ''}`)
+    labels.push(STRINGS.positionBetween(floors[index - 1]?.name ?? '', floors[index]?.name ?? ''))
   }
-  labels.push('At the end')
+  labels.push(STRINGS.positionAtEnd)
   return labels
 }

@@ -31,6 +31,7 @@ import { flatten } from './flatten'
 import { fileDate } from './format'
 import { MEDIA_TYPE, drawingFileName, uniqueSegments, archiveName } from './slug'
 import { SHEET_SIZING } from './sheet'
+import { noGlyphFor } from './strings'
 import { inlineAssets, writeSvg } from './svg'
 import { writePng } from './png'
 import { spliceITxt } from './pngMeta'
@@ -265,7 +266,7 @@ function glyphNotice(glyphs: readonly MissingGlyph[]): {
   missingGlyphs: string[]
 } {
   return {
-    warnings: glyphs.map((glyph) => `No glyph for ${glyph.chars.join(' ')} in "${glyph.text}"`),
+    warnings: glyphs.map((glyph) => noGlyphFor(glyph.chars.join(' '), glyph.text)),
     missingGlyphs: [...new Set(glyphs.map((glyph) => glyph.text))],
   }
 }
@@ -318,6 +319,9 @@ export { composeSheet, modelBounds } from './compose'
 export type { ComposedDrawing, ComposedSheet } from './compose'
 export { fitCheck, suggestionsFor, downsampledSize, pngSize, PAGE_MM, MARGIN_MM, FIXED_SCALES } from './fit'
 export { EXPORT_FOOTER, NOT_TO_SCALE, scaleStatement, SCOPE } from './strings'
+// The whole table as one namespace, for the CI scan over shipped strings (#66 criterion 8),
+// which has to see every word the writers can put in a file rather than the four the dialog asks for.
+export * as EXPORT_WORDS from './strings'
 export { defaultCutListStates, describeScope } from './scope'
 export { exportLists, listsSummary, CSV_MEDIA_TYPE } from './lists'
 export type { ListsSummary } from './lists'

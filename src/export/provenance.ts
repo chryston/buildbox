@@ -19,6 +19,7 @@ import { canonicalJson } from '../lib'
 // The export contract has one version, and `csv/tables.ts` is where it is written (#62 §5): a
 // drawing and a CSV carry the same number because they read the same constant.
 import { CSV_CONTRACT_VERSION } from './csv/tables'
+import { PRODUCT_NAME } from './strings'
 import type { ExportDeps, ExportSnapshot, ListsRecipe, Recipe } from './types'
 
 /**
@@ -28,7 +29,7 @@ import type { ExportDeps, ExportSnapshot, ListsRecipe, Recipe } from './types'
  * question on it should say what scale it was drawn at and which views were in the set.
  */
 export interface Provenance {
-  readonly generator: 'BuildBox'
+  readonly generator: typeof PRODUCT_NAME
   readonly buildbox_version: string
   readonly contract_version: string
   readonly exported_at: string
@@ -46,7 +47,7 @@ export function provenanceOf(
   deps: Pick<ExportDeps, 'clock' | 'buildboxVersion' | 'contractVersion' | 'unsavedChanges'>,
 ): Provenance {
   return {
-    generator: 'BuildBox',
+    generator: PRODUCT_NAME,
     buildbox_version: deps.buildboxVersion,
     contract_version: deps.contractVersion ?? CSV_CONTRACT_VERSION,
     exported_at: deps.clock.now(),

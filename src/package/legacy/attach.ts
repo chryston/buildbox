@@ -92,6 +92,7 @@ export function floorPlanAsProject(
     ],
     itemDesigns: [],
     existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [] },
+    warningAcknowledgements: [],
   }
   return appendContent(project, content, options.floorId, options.newId)
 }

@@ -1,3 +1,5 @@
+import { STRINGS } from '../../strings'
+
 export const ZOOM_MIN = 0.05
 export const ZOOM_MAX = 10
 
@@ -13,7 +15,7 @@ export default function ZoomControls({ zoom, onZoomIn, onZoomOut, onFitAll }: Pr
     <div className="absolute top-4 left-4 z-10 flex gap-1">
       <button
         type="button"
-        aria-label="Zoom out"
+        aria-label={STRINGS.zoomOut}
         disabled={zoom <= ZOOM_MIN}
         onClick={onZoomOut}
         className="flex h-8 w-8 items-center justify-center rounded border border-divider bg-panel text-text-primary shadow-sm hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-40"
@@ -22,7 +24,7 @@ export default function ZoomControls({ zoom, onZoomIn, onZoomOut, onFitAll }: Pr
       </button>
       <button
         type="button"
-        aria-label="Zoom in"
+        aria-label={STRINGS.zoomIn}
         disabled={zoom >= ZOOM_MAX}
         onClick={onZoomIn}
         className="flex h-8 w-8 items-center justify-center rounded border border-divider bg-panel text-text-primary shadow-sm hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-40"
@@ -31,7 +33,7 @@ export default function ZoomControls({ zoom, onZoomIn, onZoomOut, onFitAll }: Pr
       </button>
       <button
         type="button"
-        aria-label="Fit to screen"
+        aria-label={STRINGS.fitToScreen}
         onClick={onFitAll}
         className="flex h-8 w-8 items-center justify-center rounded border border-divider bg-panel text-text-primary shadow-sm hover:bg-surface-raised"
       >

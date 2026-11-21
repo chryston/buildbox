@@ -16,6 +16,7 @@ import type { ReactNode } from 'react'
 import { SNAP_ACQUISITION_PX, distance, resolveSnap, snapCandidates } from '../../../derive'
 import type { FloorWalls, Pt, Segment, SnapKind } from '../../../derive'
 import type { DisplayUnit, WallClassification } from '../../../domain'
+import { STRINGS } from '../../strings'
 import { formatMm } from '../displayUnits'
 import { ToolbarMenu } from '../WorkspaceToolbar'
 import type { Viewport } from '../viewport'
@@ -47,9 +48,9 @@ export interface WallToolDefaults {
 
 /** The closed classification vocabulary, in the words the inspector uses (#64 §13). */
 export const WALL_CLASSIFICATIONS: readonly { value: WallClassification; label: string }[] = [
-  { value: 'external', label: 'External' },
-  { value: 'internal', label: 'Internal' },
-  { value: 'partition', label: 'Partition' },
+  { value: 'external', label: STRINGS.classificationExternal },
+  { value: 'internal', label: STRINGS.classificationInternal },
+  { value: 'partition', label: STRINGS.classificationPartition },
 ]
 
 /**
@@ -57,17 +58,17 @@ export const WALL_CLASSIFICATIONS: readonly { value: WallClassification; label: 
  * are the four the issue names, by the same plain names, with a custom number beside them.
  */
 export const WALL_THICKNESS_PRESETS: readonly { label: string; thickness: number }[] = [
-  { label: 'Inside wall', thickness: 100 },
-  { label: 'Kitchen wall', thickness: 120 },
-  { label: 'Outside wall', thickness: 150 },
-  { label: 'End wall of the block', thickness: 175 },
+  { label: STRINGS.thicknessInsideWall, thickness: 100 },
+  { label: STRINGS.thicknessKitchenWall, thickness: 120 },
+  { label: STRINGS.thicknessOutsideWall, thickness: 150 },
+  { label: STRINGS.thicknessEndWall, thickness: 175 },
 ]
 
 /** The three justifications, in the words the issue prescribes — never `L` or `R` (D6). */
 export const WALL_JUSTIFICATIONS: readonly { value: 'centre' | 'left' | 'right'; label: string }[] = [
-  { value: 'centre', label: 'Centre' },
-  { value: 'left', label: 'Face on this side' },
-  { value: 'right', label: 'Face on the other side' },
+  { value: 'centre', label: STRINGS.originCentre },
+  { value: 'left', label: STRINGS.justificationThisSide },
+  { value: 'right', label: STRINGS.justificationOtherSide },
 ]
 
 export interface WallDraftOverlayProps {
@@ -93,9 +94,9 @@ export interface WallDraftOverlayProps {
 
 /** The three segment modes, in the order the bar shows them (#64 §12). */
 const SEGMENT_TOOLS: readonly { id: WallSegmentTool; label: string; testId: string }[] = [
-  { id: 'line', label: 'Line', testId: 'wall-tool-line' },
-  { id: 'arc', label: 'Arc', testId: 'wall-tool-arc' },
-  { id: 'arcFromLast', label: 'Arc from last', testId: 'wall-tool-arc-from-last' },
+  { id: 'line', label: STRINGS.line, testId: 'wall-tool-line' },
+  { id: 'arc', label: STRINGS.arc, testId: 'wall-tool-arc' },
+  { id: 'arcFromLast', label: STRINGS.arcFromLast, testId: 'wall-tool-arc-from-last' },
 ]
 
 /** The chip's number: grouped thousands in the Project's display unit. */
@@ -310,7 +311,7 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
         }}
       >
         <label className="flex items-center gap-1">
-          Thickness
+          {STRINGS.wallThickness}
           <select
             data-testid="wall-thickness-picker"
             value={WALL_THICKNESS_PRESETS.some((entry) => entry.thickness === defaults.thickness)
@@ -326,13 +327,13 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
                 {`${entry.label} · ${entry.thickness} mm`}
               </option>
             ))}
-            <option value="custom">Custom…</option>
+            <option value="custom">{STRINGS.wallCustom}</option>
           </select>
         </label>
         <input
           data-testid="wall-thickness-field"
           type="number"
-          aria-label="Thickness in millimetres"
+          aria-label={STRINGS.wallThicknessField}
           value={defaults.thickness}
           min={1}
           onChange={(event) => {
@@ -340,9 +341,9 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
             if (Number.isFinite(value) && value > 0) onOptions({ ...defaults, thickness: value })
           }}
         />
-        <ToolbarMenu label="More options" testId="wall-more-options">
+        <ToolbarMenu label={STRINGS.moreOptions} testId="wall-more-options">
           <label className="flex items-center gap-1">
-            Justification
+            {STRINGS.wallJustification}
             <select
               data-testid="wall-justification"
               value={defaults.justification}
@@ -354,7 +355,7 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
             </select>
           </label>
           <label className="flex items-center gap-1">
-            Classification
+            {STRINGS.wallClassification}
             <select
               data-testid="wall-classification"
               value={defaults.classification ?? ''}
@@ -363,14 +364,14 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
                 classification: event.target.value === '' ? null : event.target.value as WallClassification,
               })}
             >
-              <option value="">None</option>
+              <option value="">{STRINGS.wallClassificationNone}</option>
               {WALL_CLASSIFICATIONS.map((entry) => (
                 <option key={entry.value} value={entry.value}>{entry.label}</option>
               ))}
             </select>
           </label>
           <label className="flex items-center gap-1">
-            Construction label
+            {STRINGS.wallConstructionLabel}
             <input
               data-testid="wall-construction-label"
               value={defaults.constructionLabel}
@@ -426,7 +427,7 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
             autoFocus
             type="number"
             value={lengthText}
-            aria-label="Length"
+            aria-label={STRINGS.length}
             onChange={(event) => setLengthText(event.target.value)}
             onBlur={commitLength}
             onKeyDown={(event) => {
@@ -443,13 +444,13 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
           />
         )}
         <button type="button" data-testid="wall-undo" className="bb-workspace-tool-button" onClick={() => onDraft(undoPoint(draft))}>
-          Undo point
+          {STRINGS.wallUndoPoint}
         </button>
         <button type="button" data-testid="wall-finish" className="bb-workspace-tool-button" disabled={!canFinish(draft)} onClick={finish}>
-          Finish
+          {STRINGS.wallFinish}
         </button>
         <button type="button" data-testid="wall-cancel" className="bb-workspace-tool-button" onClick={onCancel}>
-          Cancel (Esc)
+          {STRINGS.wallCancelEsc}
         </button>
       </div>
     </div>

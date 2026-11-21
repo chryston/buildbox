@@ -74,6 +74,7 @@ function projectWithFourPlacements(): Project {
         placed('place-3', 'design-1', 5000, 3000, 45),
       ],
     },
+    warningAcknowledgements: [],
   }
 }
 

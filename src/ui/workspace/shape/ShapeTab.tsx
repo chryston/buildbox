@@ -15,6 +15,7 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { PRESET_NAMES, footprintCentre } from '../../../domain'
+import { STRINGS } from '../../strings'
 import { formatMm, parseToMm } from '../displayUnits'
 import type { DisplayFormat, ItemFootprint } from '../../../domain'
 import { regularPolygonMetrics } from '../../../derive'
@@ -65,7 +66,7 @@ export function ShapeTab(props: ShapeTabProps): ReactNode {
   return (
     <div className="bb-shape-tab" data-testid="shape-tab">
       <p className="bb-shape-kind" data-testid="shape-kind">
-        {preset === null ? 'Custom Path' : PRESET_NAMES[preset.kind]}
+        {preset === null ? STRINGS.customPath : PRESET_NAMES[preset.kind]}
       </p>
 
       {/* A read-only Shape tab reports the shape, not where it is. Position belongs to the Placed
@@ -73,16 +74,16 @@ export function ShapeTab(props: ShapeTabProps): ReactNode {
           Floor inspector, a cabinet's Item Detail — already say both elsewhere. */}
       {!readOnly && (
         <>
-          <ShapeField label="Position X" testId="shape-position-x" kind="mm" value={centre.x}
+          <ShapeField label={STRINGS.positionX} testId="shape-position-x" kind="mm" value={centre.x}
             format={format} invalid={invalidField === 'positionX'} readOnly={readOnly} problem={problem('positionX')}
             onPropose={(value, final) => propose('positionX', value, final)} onDiscard={props.onDiscard} />
-          <ShapeField label="Position Y" testId="shape-position-y" kind="mm" value={centre.y}
+          <ShapeField label={STRINGS.positionY} testId="shape-position-y" kind="mm" value={centre.y}
             format={format} invalid={invalidField === 'positionY'} readOnly={readOnly} problem={problem('positionY')}
             onPropose={(value, final) => propose('positionY', value, final)} onDiscard={props.onDiscard} />
         </>
       )}
       {preset !== null && !readOnly && (
-        <ShapeField label="Orientation" testId="shape-orientation" kind="deg" value={orientationDeg}
+        <ShapeField label={STRINGS.orientation} testId="shape-orientation" kind="deg" value={orientationDeg}
           format={format} invalid={invalidField === 'orientation'} readOnly={readOnly} problem={problem('orientation')}
           onPropose={(value, final) => propose('orientation', value, final)} onDiscard={props.onDiscard} />
       )}
@@ -149,49 +150,49 @@ function PresetFields(props: {
 
   switch (preset.kind) {
     case 'square':
-      return field('Side', 'side', preset.side)
+      return field(STRINGS.side, 'side', preset.side)
     case 'rectangle':
       return (
         <>
-          {field('Width', 'width', preset.width)}
-          {field('Depth', 'depth', preset.depth)}
+          {field(STRINGS.width, 'width', preset.width)}
+          {field(STRINGS.depth, 'depth', preset.depth)}
         </>
       )
     case 'roundedRectangle':
       return <RoundedRectangleFields preset={preset} field={field} onToggle={onToggleRadii} />
     case 'circle':
-      return field('Diameter', 'diameter', preset.diameter)
+      return field(STRINGS.diameter, 'diameter', preset.diameter)
     case 'ellipse':
       return (
         <>
-          {field('Width', 'width', preset.width)}
-          {field('Depth', 'depth', preset.depth)}
+          {field(STRINGS.width, 'width', preset.width)}
+          {field(STRINGS.depth, 'depth', preset.depth)}
         </>
       )
     case 'capsule':
       return (
         <>
-          {field('Length', 'length', preset.length)}
-          {field('Width', 'width', preset.width)}
-          <ReadOnlyField label="End radius" testId="shape-end-radius" value={endRadiusOf(preset)} format={format} />
+          {field(STRINGS.length, 'length', preset.length)}
+          {field(STRINGS.width, 'width', preset.width)}
+          <ReadOnlyField label={STRINGS.endRadius} testId="shape-end-radius" value={endRadiusOf(preset)} format={format} />
         </>
       )
     case 'triangle':
       return (
         <>
-          {field('Base width', 'baseWidth', preset.baseWidth)}
-          {field('Depth', 'depth', preset.depth)}
-          {field('Apex offset', 'apexOffset', apexOffsetOf(preset))}
+          {field(STRINGS.baseWidth, 'baseWidth', preset.baseWidth)}
+          {field(STRINGS.depth, 'depth', preset.depth)}
+          {field(STRINGS.apexOffset, 'apexOffset', apexOffsetOf(preset))}
         </>
       )
     case 'regularPolygon': {
       const spread = regularPolygonMetrics(preset.sideCount, preset.sideLength)
       return (
         <>
-          {field('Sides', 'sides', preset.sideCount, 'count')}
-          {field('Side length', 'sideLength', preset.sideLength)}
-          <ReadOnlyField label="Across corners" testId="shape-across-corners" value={spread.acrossCorners} format={format} />
-          <ReadOnlyField label="Across flats" testId="shape-across-flats" value={spread.acrossFlats} format={format} />
+          {field(STRINGS.sides, 'sides', preset.sideCount, 'count')}
+          {field(STRINGS.sideLength, 'sideLength', preset.sideLength)}
+          <ReadOnlyField label={STRINGS.acrossCorners} testId="shape-across-corners" value={spread.acrossCorners} format={format} />
+          <ReadOnlyField label={STRINGS.acrossFlats} testId="shape-across-flats" value={spread.acrossFlats} format={format} />
         </>
       )
     }
@@ -217,17 +218,17 @@ function RoundedRectangleFields(props: {
   const perCorner = preset.radii !== undefined
   return (
     <>
-      {field('Width', 'width', preset.width)}
-      {field('Depth', 'depth', preset.depth)}
+      {field(STRINGS.width, 'width', preset.width)}
+      {field(STRINGS.depth, 'depth', preset.depth)}
       {perCorner ? (
         <>
-          {field('Top-left', 'topLeft', radii.topLeft)}
-          {field('Top-right', 'topRight', radii.topRight)}
-          {field('Bottom-right', 'bottomRight', radii.bottomRight)}
-          {field('Bottom-left', 'bottomLeft', radii.bottomLeft)}
+          {field(STRINGS.originTopLeft, 'topLeft', radii.topLeft)}
+          {field(STRINGS.originTopRight, 'topRight', radii.topRight)}
+          {field(STRINGS.originBottomRight, 'bottomRight', radii.bottomRight)}
+          {field(STRINGS.originBottomLeft, 'bottomLeft', radii.bottomLeft)}
         </>
       ) : (
-        field('Corner radius', 'radius', preset.radius ?? 0)
+        field(STRINGS.cornerRadius, 'radius', preset.radius ?? 0)
       )}
       <label className="bb-shape-toggle" htmlFor="shape-per-corner-radii">
         <input
@@ -237,7 +238,7 @@ function RoundedRectangleFields(props: {
           checked={perCorner}
           onChange={(event) => onToggle(event.target.checked)}
         />
-        <span>Different radius per corner</span>
+        <span>{STRINGS.perCornerRadii}</span>
       </label>
     </>
   )

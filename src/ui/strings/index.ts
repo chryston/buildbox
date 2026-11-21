@@ -24,10 +24,18 @@ import type { MigrationStage, PersistenceError, RecoveryPointKind, SaveFailureRe
 import type { ExportFailureReason } from '../../export'
 import { openingNoun } from '../../domain'
 import type { FitFailure, OpeningKind } from '../../domain'
+import type { WarningParams } from '../../derive'
 
 /** `1 Floor` / `2 Floors` and the same for every countable noun the Library shows. */
 export const plural = (count: number, one: string, many: string): string =>
   count === 1 ? `${count} ${one}` : `${count} ${many}`
+
+/** The picker's three headings, keyed by the identifier the rows carry. */
+const PRESET_GROUP_LABEL: Record<string, string> = {
+  doors: 'Doors',
+  windows: 'Windows',
+  other: 'Other',
+}
 
 export const STRINGS = {
   brand: 'BuildBox',
@@ -471,6 +479,335 @@ export const STRINGS = {
       'image-format': 'A Plan Image is in a format that cannot be placed.',
     })[reason],
   exportFailedRetry: 'Untick that view and try again.',
+  // The Warning strip (#66 §11–§12). `Seen ✓` is a status, never a button: the action that
+  // produces it is `Acknowledge`, and the note that goes with it is always offered.
+  warningShow: 'Show',
+  warningHide: 'Hide',
+  /** `2 open · 1 seen`; the count of what the strip is holding, collapsed. */
+  warningCount: (open: number, seen: number): string => `${open} open · ${seen} seen`,
+  warningLocate: 'Locate',
+  warningAcknowledge: 'Acknowledge',
+  warningNoteOptional: 'Note (optional)',
+  warningNote: 'Note',
+  warningSave: 'Save',
+  warningSeen: 'Seen ✓',
+  /** The note stays visible after a reopen: a note that vanishes was never read. */
+  warningSeenNote: (note: string): string => `Seen ✓ · ${note}`,
+  warningReopened: 'Reopened after change',
+  /** A reopened row keeps the note written before it reopened, beside the label (#66 §3). */
+  warningReopenedNote: (note: string): string => `Reopened after change · ${note}`,
+  /** Only reachable when a producer registers a `messageKey` this table has no row for. */
+  warningCopyMissing: 'This warning has no wording yet.',
+  // The sentences that came out of the components and into this table (#66 §17). Each one is
+  // here because a component was saying it alone, where nobody reading the vocabulary would
+  // notice and no scan would catch a word the export contract bans.
+  floorLimitsOrder: 'The lower limit has to sit below the upper limit',
+  /** The Wall draft's option row, which is a form and so reads as one. */
+  wallThickness: 'Thickness',
+  wallThicknessField: 'Thickness in millimetres',
+  wallCustom: 'Custom…',
+  wallJustification: 'Justification',
+  wallClassification: 'Classification',
+  wallClassificationNone: 'None',
+  wallConstructionLabel: 'Construction label',
+  wallUndoPoint: 'Undo point',
+  wallFinish: 'Finish',
+  wallCancelEsc: 'Cancel (Esc)',
+  wallHeight: 'Height',
+  /** The Wall inspector's three actions, and the sentence that explains the first. */
+  wallOffsetBy: 'Offset wall by',
+  wallOffsetSide: 'Which side to offset toward',
+  wallOffsetToward: 'Toward this side',
+  wallOffsetAway: 'Toward the other side',
+  wallOffset: 'Offset',
+  wallSplit: 'Split',
+  /** The merge button says which Wall it would join, because that is the whole decision. */
+  wallMergeNoTarget: 'No Wall to merge with here',
+  wallMerge: 'Merge with…',
+  wallMergeWith: (ref: string): string => `Merge with ${ref}`,
+  /** Deleting a Wall takes its Openings with it, and the button says so rather than hiding it. */
+  wallDeleteWithOpenings: (openings: number): string =>
+    `Delete wall and ${plural(openings, 'opening', 'openings')}`,
+  // The Door / window inspector and its draft (#65's components, #66 §17).
+  openingLabel: 'Label',
+  openingKind: 'Kind',
+  openingHost: 'Host',
+  openingWidth: 'Width',
+  openingDistanceFrom: 'Distance from',
+  openingFromStart: 'Start',
+  openingFromEnd: 'End',
+  /** The field says which end it measures from, because the two ends are not the same answer. */
+  openingFromTheStart: 'From the start',
+  openingFromTheEnd: 'From the end',
+  openingSill: 'Sill',
+  openingHead: 'Head',
+  openingFlipHinge: 'Flip hinge',
+  openingFlipSide: 'Flip opening side',
+  openingDraftTitle: 'Door / window',
+  openingDraftFixedSize: 'Fixed size',
+  openingDraftDistance: 'Distance from the highlighted end',
+  openingCancelEsc: 'Cancel (Esc)',
+  // The Floors dialog (#64 §16, §17).
+  floorNameRequired: 'Give this Floor a name',
+  floorNameTaken: (name: string): string => `Another Floor is already called ${name}`,
+  manageFloors: 'Manage Floors',
+  floorName: 'Floor name',
+  floorMoveUp: 'Move up',
+  floorMoveDown: 'Move down',
+  floorSettings: 'Floor settings',
+  floorDuplicateEllipsis: 'Duplicate…',
+  floorDeleteEllipsis: 'Delete…',
+  floorLowerLimit: 'Lower limit',
+  floorUpperLimit: 'Upper limit',
+  /** A limit field left blank means "no limit", and the placeholder says so in the field. */
+  floorNoLimit: 'none',
+  floorDefaultWallHeight: 'Default wall height',
+  floorProjectDefault: 'project default',
+  floorUseThisHeight: 'Use this height',
+  floorSaveLimits: 'Save limits',
+  floorAdd: '+ Add Floor',
+  // The Placed Item inspector (#38, #66 §17).
+  originCentre: 'Centre',
+  originTopLeft: 'Top-left',
+  originTopRight: 'Top-right',
+  originBottomRight: 'Bottom-right',
+  originBottomLeft: 'Bottom-left',
+  placedItem: 'Placed Item',
+  name: 'Name',
+  positionX: 'Position X',
+  positionY: 'Position Y',
+  rotation: 'Rotation',
+  width: 'Width',
+  depth: 'Depth',
+  floorBounds: 'Floor bounds',
+  /** The two Footprint rows are read-only, and the hint says where the number is really set. */
+  setInItemDesign: 'Set in the Item Design below',
+  itemDesignOf: (label: string): string => `Item Design: ${label}`,
+  transferToFloor: 'Copy or Move to Floor…',
+  forkDesign: 'Fork design…',
+  designSharedBy: (name: string, count: number): string =>
+    `Item Design · ${name} — shared by ${plural(count, 'placement', 'placements')}`,
+  colour: 'Colour',
+  colourSwatch: (colour: string): string => `Colour ${colour}`,
+  itemOrigin: 'Item Origin',
+  pickOnCanvas: 'Pick on canvas',
+  affectsPlacements: (count: number): string => `Affects ${plural(count, 'placement', 'placements')}`,
+  apply: 'Apply',
+  // The New item and Fork design dialogs (#38, #66 §17).
+  newItem: 'New item',
+  widthMm: 'Width (mm)',
+  depthMm: 'Depth (mm)',
+  place: 'Place',
+  forkDesignTitle: 'Fork design',
+  /** The dialog says what a fork does before the person asks the model what a fork does. */
+  forkDesignNote: 'Only this placement will use the new design.',
+  fork: 'Fork',
+  // The Plan View card (#44, #66 §17).
+  planImageUncalibrated: 'Plan Image not calibrated',
+  planImageScale: (perPx: string, unit: string): string => `Plan Image scale: 1 px = ${perPx} ${unit}`,
+  planViewNameRequired: 'Give this Plan View a name',
+  planViewNameTaken: (name: string): string =>
+    `Another Plan View on this Floor is already called ${name}`,
+  planView: 'Plan View',
+  floor: 'Floor',
+  manageFloorsEllipsis: 'Manage Floors…',
+  planViewNameField: 'Plan View name',
+  addPlanView: 'Add Plan View',
+  showPlanImage: 'Show Plan Image',
+  calibrateEllipsis: 'Calibrate…',
+  fit: 'Fit',
+  // The Duplicate Floor dialog (#64 §17).
+  duplicateItemFallback: 'Item',
+  floorCopyName: (name: string): string => `${name} copy`,
+  duplicateFloor: 'Duplicate Floor',
+  duplicateFloorAria: (name: string): string => `Duplicate Floor ${name}`,
+  position: 'Position',
+  placedItems: 'Placed Items',
+  includePlanImage: 'Include Plan Image',
+  /** The position a new Floor can take, named by the two Floors it would sit between. */
+  positionAtTop: 'At the top',
+  positionBetween: (before: string, after: string): string => `Between ${before} and ${after}`,
+  positionAtEnd: 'At the end',
+  // The Transfer and Delete Floor dialogs (#64 §17).
+  transferNote: "Floors don't share coordinates; check the position on the destination Floor",
+  destinationFloor: 'Destination Floor',
+  axisX: 'X',
+  axisY: 'Y',
+  baseElevation: 'Base elevation',
+  copyToFloor: 'Copy to Floor',
+  moveToFloor: 'Move to Floor',
+  deleteFloor: 'Delete Floor',
+  deleteFloorAria: (name: string): string => `Delete Floor ${name}`,
+  /** The dialog says what it will not do — delete nothing for you — before it says what it will. */
+  deleteFloorBlocked: 'Delete what is on this Floor first. Nothing is deleted or moved for you.',
+  deleteFloorEmpty: 'Nothing is left on this Floor. Deleting it also deletes its default Plan View.',
+  show: 'Show',
+  // The Shape tab's footprint fields (#46, #66 §17).
+  customPath: 'Custom Path',
+  orientation: 'Orientation',
+  side: 'Side',
+  diameter: 'Diameter',
+  length: 'Length',
+  endRadius: 'End radius',
+  baseWidth: 'Base width',
+  apexOffset: 'Apex offset',
+  sides: 'Sides',
+  sideLength: 'Side length',
+  /** The two spans a regular polygon can be measured across, both read-only. */
+  acrossCorners: 'Across corners',
+  acrossFlats: 'Across flats',
+  cornerRadius: 'Corner radius',
+  perCornerRadii: 'Different radius per corner',
+  // The Edges tab (#46, #66 §17).
+  line: 'Line',
+  arc: 'Arc',
+  ellipticalArc: 'Elliptical arc',
+  kind: 'Kind',
+  radius: 'Radius',
+  direction: 'Direction',
+  /** The table's caption is the instruction, and it changes when the shape cannot be edited. */
+  edgesCaptionEditable: 'Select an Edge to edit it, or a vertex to round its corner.',
+  edgesCaptionReadOnly: 'Edges are read-only on a preset Item Footprint.',
+  keepFixed: 'Keep fixed',
+  sweep: 'Sweep',
+  semiAxisA: 'Semi-axis A',
+  semiAxisB: 'Semi-axis B',
+  axisRotation: 'Axis rotation',
+  roundAllCorners: 'Round all corners',
+  // The Wall tool's vocabularies (#64 §12, §13, #66 §17).
+  classificationExternal: 'External',
+  classificationInternal: 'Internal',
+  classificationPartition: 'Partition',
+  /** The thickness picker names Walls, not millimetres, because that is how people ask for one. */
+  thicknessInsideWall: 'Inside wall',
+  thicknessKitchenWall: 'Kitchen wall',
+  thicknessOutsideWall: 'Outside wall',
+  thicknessEndWall: 'End wall of the block',
+  justificationThisSide: 'Face on this side',
+  justificationOtherSide: 'Face on the other side',
+  arcFromLast: 'Arc from last',
+  moreOptions: 'More options',
+  shape: 'Shape',
+  wallStraight: 'Straight',
+  // The Floor workspace's toolbar and its menus (#57 §3, #66 §17).
+  tools: 'Tools',
+  addItem: 'Add item',
+  inThisProject: 'In this Project',
+  nothingHereYet: 'Nothing here yet',
+  cabinet: 'Cabinet',
+  catalog: 'Catalog',
+  newItemEllipsis: 'New item…',
+  planImage: 'Plan Image',
+  uploadEllipsis: 'Upload…',
+  replaceEllipsis: 'Replace…',
+  remove: 'Remove',
+  exportGroup: 'Export',
+  viewAndSelection: 'View & selection',
+  undo: 'Undo',
+  redo: 'Redo',
+  /** Both upload refusals say what went wrong and what to do instead. */
+  imageInvalidFile: 'Please choose a valid image file.',
+  imageTooLarge: 'A Plan Image can be at most 50 MB.',
+  // The Shape editor's tabs and the Opening picker (#46, #47, #66 §17).
+  tabEdges: 'Edges',
+  tabMeasurements: 'Measurements',
+  cabinetShapeNote: 'Size comes from the cabinet construction',
+  shapes: 'Shapes',
+  itemFootprint: 'Item Footprint',
+  /**
+   * The picker's `<optgroup>` label.
+   *
+   * The group is an identifier — `doors`, not `Doors` — because a value that is also a sentence
+   * gets compared as a sentence, and then renaming the copy renames a case label. The words live
+   * here and nowhere else.
+   */
+  presetGroupLabel(group: string): string {
+    return PRESET_GROUP_LABEL[group] ?? group
+  },
+  householdShelterDoor: 'Household shelter door',
+  removedWallSection: 'Removed wall section',
+  /** The path-drawing hints: the tool's name, then what the next click does. */
+  draftFirstPoint(label: string): string {
+    return `${label} · click to set the first point · Esc cancels`
+  },
+  draftBulge(label: string): string {
+    return `${label} · click the bulge point · Esc cancels`
+  },
+  draftPlace(label: string): string {
+    return `${label} · click to place · click start to close · Esc cancels`
+  },
+  /** The preset-placement hint carries the size a click will produce, in the display unit. */
+  placingPreset(name: string, width: string, depth: string, unit: string): string {
+    return `Placing ${name} — drag a box, or click for ${width} × ${depth} ${unit}`
+  },
+  // The Snaps menu and the tool registry (#57 §4, #66 §17).
+  snapGrid: 'Grid',
+  snapEndpoints: 'Endpoints and midpoints',
+  snapCentres: 'Centres',
+  snapIntersections: 'Intersections',
+  snapWallFaces: 'Wall faces',
+  snapAxis: 'Horizontal and vertical',
+  snapAngle: 'Angle',
+  snapPerpendicular: 'Perpendicular',
+  snapTangent: 'Tangent',
+  snaps: 'Snaps',
+  toolSelect: 'Select',
+  toolPan: 'Pan',
+  toolWall: 'Wall',
+  toolOpening: 'Door / window',
+  toolEllipticalArc: 'Elliptical arc',
+  // The Wall and Opening inspectors' read-only words (#64, #65, #66 §17).
+  kindDoor: 'Door',
+  kindWindow: 'Window',
+  kindRemovedSection: 'Removed section',
+  /** The swing is described from the plan reader's side, never as `L` or `R` (D6). */
+  opensThisSide(hostRef: string): string {
+    return `Opens toward this side of ${hostRef}`
+  },
+  opensOtherSide(hostRef: string): string {
+    return `Opens toward ${hostRef}'s other side`
+  },
+  // The save status under the undo button (#14, #49 deviation 3, #66 §17). The Library's fuller
+  // `Save failed · changes not stored` is a different sentence in a different place; this is the
+  // one-word-of-state label beside the undo button.
+  saveStatusFailed: 'Save failed',
+  // The Project settings dialog and the canvas zoom controls (#55, #49, #66 §17).
+  projectSettings: 'Project settings',
+  displayUnit: 'Display unit',
+  decimalPlaces: 'Decimal places',
+  defaultWallHeight: 'Default wall height',
+  zoomOut: 'Zoom out',
+  zoomIn: 'Zoom in',
+  fitToScreen: 'Fit to screen',
+  // The Item detail page and the shape editor (#58, #59, #66 §17). `Shapes`, `Custom Path`,
+  // `Item Footprint` and `Length` are the keys the gallery and the footprint canvas already use.
+  placements: 'Placements',
+  notPlaced: 'Not placed in this Project.',
+  area: 'Area',
+  perimeter: 'Perimeter',
+  bounds: 'Bounds',
+  /** An elliptical arc's two radii and its length, as the chip under the shape reads them. */
+  radii(rx: string, ry: string, unit: string, arcLength: string, unit2: string): string {
+    return `Radii ${rx} × ${ry} ${unit} · ${arcLength} ${unit2}`
+  },
+  /** What a snap will do to the point being drawn, in the acceptance text's own words (#64). */
+  joinToEndOf(ref: string): string {
+    return `Join to end of ${ref}`
+  },
+  attachTo(ref: string): string {
+    return `Attach to ${ref}`
+  },
+  // The last of the interface's own words (#66 criterion 16).
+  unlockSection: 'Unlock section',
+  notAnImage: "This file couldn't be read as an image",
+  calibrateScale: 'Calibrate Scale',
+  convertToCustomPath: 'Convert to Custom Path',
+  calibrationRequiredHint: "Calibrate this Floor's Plan Image to draw measured shapes",
+  moreMenu: 'More',
+  /** Which Edge is selected, and what kind of segment it is (#59 §1). */
+  edgeOfKind(edge: number, kind: string): string {
+    return `Edge ${edge} · ${kind}`
+  },
 } as const
 
 /**
@@ -537,3 +874,27 @@ export function placementFitMessage(
   }
   return `${presetName} doesn't fit here: it would run past the end of ${hostRef}.`
 }
+
+/**
+ * The Warning strip's sentences (#66 §11–§12).
+ *
+ * The strip holds no copy of its own and no `if (type === 'wall_crossing')`: it renders
+ * `warningSentence(warning)` for whatever the engine produced, and a later producer (#67,
+ * #76–#79) adds one row here plus its `{type, produce}` and nothing else. A test fails if a
+ * registered producer's `messageKey` has no row, so the fallback below is a sentence nobody
+ * is meant to see rather than a silent gap.
+ *
+ * The numbers come from the engine as millimetres and are rounded here, in the one place a
+ * measurement becomes a word — the same rule `placementFitMessage` follows.
+ */
+export const WARNING_COPY: Readonly<Record<string, (params: WarningParams) => string>> = {
+  wall_crossing: (params) =>
+    `${String(params.a)} crosses ${String(params.b)} without a join: ${mmWords(Number(params.mm))} mm overlap.`,
+  wall_overlap: (params) =>
+    `${String(params.a)} runs along ${String(params.b)} for ${mmWords(Number(params.mm))} mm without a join.`,
+}
+
+/** The sentence one warning says. */
+export const warningSentence = (messageKey: string, params: WarningParams): string =>
+  WARNING_COPY[messageKey]?.(params) ?? STRINGS.warningCopyMissing
+

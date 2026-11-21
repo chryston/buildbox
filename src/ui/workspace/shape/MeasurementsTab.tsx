@@ -9,6 +9,7 @@
 import type { ReactNode } from 'react'
 import { footprintArea, footprintPerimeter, footprintSize } from '../../../domain'
 import { readoutMm } from '../displayUnits'
+import { STRINGS } from '../../strings'
 import type { DisplayFormat, ItemFootprint } from '../../../domain'
 
 export interface MeasurementsTabProps {
@@ -29,9 +30,9 @@ export function MeasurementsTab(props: MeasurementsTabProps): ReactNode {
   const read = (mm: number): string => readoutMm(mm, format.unit, format.precision)
   return (
     <dl className="bb-measurements" data-testid="measurements-tab">
-      <dt data-testid="measurements-area-label">Area</dt>
+      <dt data-testid="measurements-area-label">{STRINGS.area}</dt>
       <dd data-testid="measurements-area">{squareMetres(footprintArea(footprint))}</dd>
-      <dt data-testid="measurements-perimeter-label">Perimeter</dt>
+      <dt data-testid="measurements-perimeter-label">{STRINGS.perimeter}</dt>
       <dd data-testid="measurements-perimeter">{read(footprintPerimeter(footprint))}</dd>
       <dt data-testid="measurements-bounds-label">{boundsLabel}</dt>
       <dd data-testid="measurements-bounds">{`${read(size.width)} × ${read(size.depth)}`}</dd>

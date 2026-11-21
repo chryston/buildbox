@@ -68,7 +68,7 @@ test('a Backup restored into an empty profile is the same Project', async ({ pag
     // every time.
     const restoredRecord = await storedRecord(restored, 'proj-kitchen-wall')
     if (restoredRecord === null) throw new Error('the restore wrote no record')
-    expect(restoredRecord.schemaVersion).toBe(5)
+    expect(restoredRecord.schemaVersion).toBe(6)
     expect(canonical(withoutMintedViewIds(restoredRecord.data)))
       .toBe(canonical(migratedForComparison(record.data, record.schemaVersion)))
     expect(await storedAssetHashes(restored)).toEqual(originalAssets)
