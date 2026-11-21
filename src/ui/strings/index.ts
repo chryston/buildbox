@@ -728,6 +728,22 @@ export const STRINGS = {
   placingPreset(name: string, width: string, depth: string, unit: string): string {
     return `Placing ${name} — drag a box, or click for ${width} × ${depth} ${unit}`
   },
+  // The Snaps menu and the tool registry (#57 §4, #66 §17).
+  snapGrid: 'Grid',
+  snapEndpoints: 'Endpoints and midpoints',
+  snapCentres: 'Centres',
+  snapIntersections: 'Intersections',
+  snapWallFaces: 'Wall faces',
+  snapAxis: 'Horizontal and vertical',
+  snapAngle: 'Angle',
+  snapPerpendicular: 'Perpendicular',
+  snapTangent: 'Tangent',
+  snaps: 'Snaps',
+  toolSelect: 'Select',
+  toolPan: 'Pan',
+  toolWall: 'Wall',
+  toolOpening: 'Door / window',
+  toolEllipticalArc: 'Elliptical arc',
 } as const
 
 /**
