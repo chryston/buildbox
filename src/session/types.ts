@@ -151,10 +151,9 @@ export interface ProjectSession {
   deriveWalls(floorId: EntityId, optionId?: EntityId | null): FloorWalls
   /**
    * The Floor's Rooms: their areas, label anchors and Placed Item membership, through the same
-   * cache (#67 §3). Rooms are Existing-only until Design Options own them (#69), so there is no
-   * option to pass.
+   * cache (#67 §3, #69 §5). The Option decides which Rooms stand, so it is part of the answer.
    */
-  deriveRooms(floorId: EntityId): FloorRooms
+  deriveRooms(floorId: EntityId, optionId?: EntityId | null): FloorRooms
   /** Undo as a forward revision (#26). Works while save has failed. */
   undo(): Result<void, 'no-history'>
   /** Redo as a forward revision (#26). Works while save has failed. */

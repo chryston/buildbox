@@ -26,6 +26,7 @@
 import { warningKey, type Acknowledgement, type EntityId, type Project } from '../../domain'
 import { canonicalJson, compareCodePoints, stableHash, stableSort } from '../../lib'
 import { effectiveFloor, placementLabels } from '../effective'
+import { effectiveModel } from '../effectiveModel'
 import { roomOutlinePath } from '../../domain'
 import { deriveWalls } from '../walls'
 import { ROOM_PRODUCERS } from './producers/rooms'
@@ -111,13 +112,15 @@ const compareSubjectLists = (a: readonly WarningSubject[], b: readonly WarningSu
  * Backup restored, a copy made by `remapIds`, a test that shuffled the arrays — produces the
  * identical warnings with the identical keys (#66 criterion 10). The tidied outline comes from
  * `deriveWalls`, the same clean-up the Plan View draws, so a producer measures what the user
- * sees rather than the un-trimmed rectangle.
+ * sees rather than the un-trimmed rectangle. What the Option under review demolishes is not in
+ * front of a producer at all (#69 §5): a Wall knocked out in Option A cannot warn about crossing
+ * a Wall in Option A, and still can in Option B.
  */
-export const warningFloorOf = (project: Project, floorId: EntityId): WarningFloor => {
-  const derived = deriveWalls(project, floorId)
+export const warningFloorOf = (project: Project, floorId: EntityId, optionId: EntityId | null = null): WarningFloor => {
+  const model = effectiveModel(project, floorId, optionId)
+  const derived = deriveWalls(project, floorId, optionId)
   const outlineOf = new Map(derived.walls.map((wall) => [wall.id, wall.outline]))
-  const walls: WarningWall[] = project.existingModel.walls
-    .filter((wall) => wall.floorId === floorId)
+  const walls: WarningWall[] = model.standingWalls
     .flatMap((wall) => {
       const outline = outlineOf.get(wall.id)
       // A Wall `deriveWalls` did not outline is a Wall the drawing does not draw either; it
@@ -135,14 +138,12 @@ export const warningFloorOf = (project: Project, floorId: EntityId): WarningFloo
         },
       ]
     })
-  const junctions = project.existingModel.wallJunctions
-    .filter((junction) => junction.floorId === floorId)
+  const junctions = model.standingWallJunctions
     .map((junction) => ({
       id: junction.id,
       wallIds: [...junction.ends.map((end) => end.wallId), ...(junction.host === undefined ? [] : [junction.host.wallId])],
     }))
-  const rooms: WarningRoom[] = project.existingModel.rooms
-    .filter((room) => room.floorId === floorId)
+  const rooms: WarningRoom[] = model.standingRooms
     .map((room) => ({
       id: room.id,
       floorId: room.floorId,
@@ -150,7 +151,7 @@ export const warningFloorOf = (project: Project, floorId: EntityId): WarningFloo
       source: room.outline,
       outline: roomOutlinePath(room.outline),
     }))
-  const placements = effectiveFloor(project, 0, floorId, null).placements
+  const placements = effectiveFloor(project, 0, floorId, optionId).placements
   const designs = new Map(project.itemDesigns.map((design) => [design.id, design]))
   // `Base 600 #2` — the one label rule the Placed Items table shares with this strip (#67 §16).
   const labels = placementLabels(placements)
@@ -177,16 +178,17 @@ export const warningFloorOf = (project: Project, floorId: EntityId): WarningFloo
 }
 
 /**
- * Every warning of one Floor under one Design Option (#66 §2).
+ * Every warning of one Floor under one Design Option (#66 §2, #69 §6).
  *
- * `optionId` is not part of what a producer reads — Walls belong to the Existing Model until
- * #69 — it is the scope the acknowledgements are matched in, and half of every key. Hidden and
- * non-selectable content is warned about like anything else (#66 §4): visibility is a view
- * setting, and a warning that vanished when a Layer was hidden would be a warning the user
- * never agreed to dismiss (#32).
+ * `optionId` is both halves of the answer at once: it decides which model the producers run over
+ * — the Option's standing set, so proposed Walls warn too and demolished ones no longer do — and
+ * it is half of every key, so acknowledging a warning in Option A never covers the same warning in
+ * Option B. Hidden and non-selectable content is warned about like anything else (#66 §4):
+ * visibility is a view setting, and a warning that vanished when a Layer was hidden would be a
+ * warning the user never agreed to dismiss (#32).
  */
 export const deriveWarnings = (project: Project, floorId: EntityId, optionId: EntityId | null): FloorWarnings => {
-  const floor = warningFloorOf(project, floorId)
+  const floor = warningFloorOf(project, floorId, optionId)
   const stored = project.warningAcknowledgements
   const warnings: Warning[] = []
   for (const producer of WARNING_PRODUCERS) {

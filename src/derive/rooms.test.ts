@@ -229,16 +229,25 @@ describe('the Rooms cache entry (#67 §3)', () => {
 
   it('answers the same object for the same Project and revision, and a new one for a new revision', () => {
     const cache = createDeriveCache()
-    const first = cache.rooms(project, 1, FLOOR)
-    expect(cache.rooms(project, 1, FLOOR)).toBe(first)
-    expect(cache.rooms(project, 2, FLOOR)).not.toBe(first)
+    const first = cache.rooms(project, 1, FLOOR, null)
+    expect(cache.rooms(project, 1, FLOOR, null)).toBe(first)
+    expect(cache.rooms(project, 2, FLOOR, null)).not.toBe(first)
   })
 
   it('never answers one Floor from another Floor\'s entry', () => {
     const cache = createDeriveCache()
-    const mezz = cache.rooms(project, 1, 'floor-mezz')
-    expect(cache.rooms(project, 1, FLOOR).floorId).toBe(FLOOR)
-    expect(cache.rooms(project, 1, 'floor-mezz')).toBe(mezz)
+    const mezz = cache.rooms(project, 1, 'floor-mezz', null)
+    expect(cache.rooms(project, 1, FLOOR, null).floorId).toBe(FLOOR)
+    expect(cache.rooms(project, 1, 'floor-mezz', null)).toBe(mezz)
+  })
+
+  it('never answers one Design Option from another Option\'s entry (#69 §5)', () => {
+    const cache = createDeriveCache()
+    const existing = cache.rooms(project, 1, FLOOR, null)
+    const optionA = cache.rooms(project, 1, FLOOR, 'option-a')
+    expect(cache.rooms(project, 1, FLOOR, 'option-a')).toBe(optionA)
+    expect(cache.rooms(project, 1, FLOOR, 'option-b')).not.toBe(optionA)
+    expect(cache.rooms(project, 1, FLOOR, null)).toBe(existing)
   })
 })
 

@@ -26,6 +26,7 @@ import type { DeriveCache } from '../cache'
 import { cutListParts, isCutListCapable, type CutListRow } from './cutList'
 import { itemListRowsForFloor, type ItemListRow } from './itemList'
 import { RENOVATION_STATES, layerMatches, type OptionColumns, type QuantityScope, type RenovationState } from './scope'
+import { designOptionName } from '../effectiveModel'
 
 /** What one Floor under one Design Option contributes to a scope. */
 export interface FloorQuantities {
@@ -53,9 +54,7 @@ export function quantitiesForFloor(
   floorId: EntityId,
   optionId: EntityId | null,
 ): FloorQuantities {
-  // Both columns are empty for the Existing Model alone (export contract §7), which is the only
-  // arm a Project without Design Options can be counted under (#32 adds the others).
-  const option: OptionColumns = { designOptionId: optionId ?? '', designOption: '' }
+  const option: OptionColumns = { designOptionId: optionId ?? '', designOption: designOptionName(project, optionId) }
   const items = itemListRowsForFloor(project, floorId, option)
   const cuts: CutListRow[] = []
   for (const row of items) {

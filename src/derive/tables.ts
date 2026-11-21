@@ -41,7 +41,8 @@ import { designHeight, openingHeight, openingSpan, type EntityId, type HingeSide
 import { arcFromThrough } from '../geometry'
 import { compareCodePoints, stableSort } from '../lib'
 import { layerMatches, type OptionColumns, type QuantityScope, type RenovationState } from './quantities/scope'
-import { effectiveFloor, placementLabels } from './effective'
+import { effectiveFloor, placementLabels, type DerivedPlacement } from './effective'
+import { designOptionName, effectiveModel, type EffectiveEntity, type EffectiveModel } from './effectiveModel'
 import { deriveRooms, type FloorRooms, type RoomMembership } from './rooms'
 import { deriveWalls, type FloorWalls } from './walls'
 import { deriveWarnings } from './warnings/engine'
@@ -216,23 +217,45 @@ export interface TableDeps {
  * published in v1.0 now so that `#73` can fill them from the S8 model without moving a column,
  * which would be a major version.
  */
-function elementColumns(option: OptionColumns, floorId: EntityId, floor: string): ElementColumns {
+function elementColumns(
+  option: OptionColumns,
+  floorId: EntityId,
+  floor: string,
+  renovationState: RenovationState = 'existing',
+): ElementColumns {
   return {
     ...option,
     stableId: '',
     floorId,
     floor,
-    renovationState: 'existing',
+    renovationState,
     drawingLayerId: '',
     drawingLayer: UNLAYERED_LAYER,
     predecessorIds: [],
   }
 }
 
+/**
+ * The Renovation State the Option gives this entity.
+ *
+ * `existing` is the answer for anything the Option does not touch, which is also the answer for an
+ * entity the Option's own derive pass invented — a tidied Wall always names a stored one, so that
+ * arm never happens, and a row would rather say `existing` than nothing.
+ */
+function stateOf(rows: readonly EffectiveEntity<{ id: EntityId }>[], id: EntityId): RenovationState {
+  return rows.find((row) => row.entity.id === id)?.renovationState ?? 'existing'
+}
+
 /** The Rooms of one Floor: name, analytic area at six decimals, analytic perimeter at three. */
-function roomsForFloor(option: OptionColumns, floorId: EntityId, floor: string, derived: FloorRooms): RoomsRow[] {
+function roomsForFloor(
+  option: OptionColumns,
+  floorId: EntityId,
+  floor: string,
+  derived: FloorRooms,
+  model: EffectiveModel,
+): RoomsRow[] {
   return derived.rooms.map((room) => ({
-    ...elementColumns(option, floorId, floor),
+    ...elementColumns(option, floorId, floor, stateOf(model.rooms, room.id)),
     stableId: room.id,
     name: room.name,
     areaM2: room.areaM2,
@@ -252,17 +275,17 @@ function wallsForFloor(
   option: OptionColumns,
   floorId: EntityId,
   floor: string,
-  project: Project,
+  model: EffectiveModel,
   derived: FloorWalls,
 ): WallsRow[] {
-  const stored = new Map<EntityId, Wall>(project.existingModel.walls.map((wall) => [wall.id, wall]))
+  const stored = new Map<EntityId, Wall>(model.standingWalls.map((wall) => [wall.id, wall]))
   const rows: WallsRow[] = []
   for (const wall of derived.walls) {
     const source = stored.get(wall.id)
     if (source === undefined) continue
     const line = source.line
     rows.push({
-      ...elementColumns(option, floorId, floor),
+      ...elementColumns(option, floorId, floor, stateOf(model.walls, wall.id)),
       stableId: wall.id,
       classification: source.classification ?? '',
       constructionLabel: source.constructionLabel ?? '',
@@ -291,17 +314,17 @@ function openingsForFloor(
   option: OptionColumns,
   floorId: EntityId,
   floor: string,
-  project: Project,
+  model: EffectiveModel,
   derived: FloorWalls,
 ): OpeningsRow[] {
-  const stored = new Map<EntityId, Wall>(project.existingModel.walls.map((wall) => [wall.id, wall]))
+  const stored = new Map<EntityId, Wall>(model.standingWalls.map((wall) => [wall.id, wall]))
   const rows: OpeningsRow[] = []
-  for (const opening of project.existingModel.openings) {
-    if (opening.floorId !== floorId || !derived.byId.has(opening.hostWallId)) continue
+  for (const opening of model.standingOpenings) {
+    if (!derived.byId.has(opening.hostWallId)) continue
     const line = stored.get(opening.hostWallId)?.line
     if (line === undefined) continue
     rows.push({
-      ...elementColumns(option, floorId, floor),
+      ...elementColumns(option, floorId, floor, stateOf(model.openings, opening.id)),
       stableId: opening.id,
       kind: opening.kind,
       label: opening.label,
@@ -335,11 +358,12 @@ function placedItemsForFloor(
   floorId: EntityId,
   floor: string,
   project: Project,
+  model: EffectiveModel,
+  placements: readonly DerivedPlacement[],
   derived: FloorRooms,
 ): PlacedItemsRow[] {
-  const { placements } = effectiveFloor(project, 0, floorId, null)
   const labels = placementLabels(placements)
-  const stored = new Map(project.existingModel.placedItems.map((placed) => [placed.id, placed]))
+  const stored = new Map(model.standingPlacedItems.map((placed) => [placed.id, placed]))
   const designs = new Map(project.itemDesigns.map((design) => [design.id, design]))
   const { membership } = derived
   const rows: PlacedItemsRow[] = []
@@ -352,7 +376,7 @@ function placedItemsForFloor(
     const relation: RoomRelation =
       inside !== undefined ? 'inside' : memberships.some((each) => each.relation === 'crosses') ? 'crosses' : 'outside'
     rows.push({
-      ...elementColumns(option, floorId, floor),
+      ...elementColumns(option, floorId, floor, stateOf(model.placedItems, placement.id)),
       stableId: placement.id,
       label: labels.get(placement.id) ?? placement.label,
       itemDesignId: placement.designId,
@@ -444,24 +468,28 @@ export function tables(project: Project, scope: QuantityScope, deps: TableDeps):
   const warnings: WarningsRow[] = []
 
   for (const optionId of optionIds) {
-    // Both columns are empty for the Existing Model alone (export contract §7), which until #69 is
-    // the only arm a Project can be exported under.
-    const option: OptionColumns = { designOptionId: optionId ?? '', designOption: '' }
+    // Both columns are empty for the Existing Model alone (export contract §7); an Option names
+    // itself, and every row of its arm carries the State its owner gives it (#69 §5).
+    const option: OptionColumns = { designOptionId: optionId ?? '', designOption: designOptionName(project, optionId) }
     for (const floorId of floorIds) {
       const floor = floorNames.get(floorId)
       if (floor === undefined) continue
-      // Every element of an S7 Project is Existing Model on no Layer, so these two tests are the
-      // whole of the State and Layer scope for now — and they are the same two `quantities`
-      // applies, which is what keeps two tables of one ZIP agreeing about what is in the scope.
-      const counted = states.has('existing') && layerMatches(scope.drawingLayers, [])
-      if (counted) {
-        // One pass of each derive stage per Floor, shared by the tables that read it.
-        const derivedRooms = deriveRooms(project, floorId)
-        const derivedWalls = deriveWalls(project, floorId)
-        rooms.push(...roomsForFloor(option, floorId, floor, derivedRooms))
-        walls.push(...wallsForFloor(option, floorId, floor, project, derivedWalls))
-        openings.push(...openingsForFloor(option, floorId, floor, project, derivedWalls))
-        placedItems.push(...placedItemsForFloor(option, floorId, floor, project, derivedRooms))
+      // The Renovation State and the Drawing Layer are the whole scope of an element table, and
+      // they are the same two tests `quantities` applies (#62 §6), which is what keeps two tables
+      // of one ZIP agreeing about what is in the scope. The State is a per-row test now, because
+      // one Option's model holds Existing, Demolition and Proposed content at once (#69 §5).
+      if (layerMatches(scope.drawingLayers, [])) {
+        // One pass of each derive stage per Floor under this Option, shared by the tables that read it.
+        const model = effectiveModel(project, floorId, optionId)
+        const derivedRooms = deriveRooms(project, floorId, optionId)
+        const derivedWalls = deriveWalls(project, floorId, optionId)
+        const placements = effectiveFloor(project, 0, floorId, optionId).placements
+        const inScope = <T extends { renovationState: RenovationState }>(rows: readonly T[]): T[] =>
+          rows.filter((row) => states.has(row.renovationState))
+        rooms.push(...inScope(roomsForFloor(option, floorId, floor, derivedRooms, model)))
+        walls.push(...inScope(wallsForFloor(option, floorId, floor, model, derivedWalls)))
+        openings.push(...inScope(openingsForFloor(option, floorId, floor, model, derivedWalls)))
+        placedItems.push(...inScope(placedItemsForFloor(option, floorId, floor, project, model, placements, derivedRooms)))
       }
       // The Warnings List is scoped by Floor and Design Option only (export contract §3): no
       // Renovation State and no Layer ever hides a warning.
