@@ -44,7 +44,7 @@ export interface DrawToolDefinition extends WorkspaceToolDefinition {
 }
 
 /** The explanation a gated tool gives. One sentence, wherever it is read. */
-export const CALIBRATION_REQUIRED_HINT = "Calibrate this Floor's Plan Image to draw measured shapes"
+export const CALIBRATION_REQUIRED_HINT = STRINGS.calibrationRequiredHint
 
 /**
  * Whether a Floor's Plan Image is in the state that gates measured tools: present, and

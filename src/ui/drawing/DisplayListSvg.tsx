@@ -35,6 +35,7 @@ import type { ReactNode } from 'react'
 import { affineApply } from '../../derive'
 import type { Affine, Pt } from '../../derive'
 import { toSvgTree } from '../../drawing'
+import { STRINGS } from '../strings'
 import type {
   DisplayItem,
   DisplayList,
@@ -343,7 +344,7 @@ function renderNode(
       const unlock = interactions.onUnlock
       props.role = 'button'
       props.tabIndex = 0
-      props['aria-label'] = 'Unlock section'
+      props['aria-label'] = STRINGS.unlockSection
       props.onClick = ((event: React.MouseEvent) => {
         event.stopPropagation()
         unlock(id)

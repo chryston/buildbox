@@ -733,7 +733,7 @@ export function FloorWorkspace(): ReactNode {
     const read = await services.readPlanImage(file)
     input.value = ''
     if ('message' in read) {
-      setUploadError("This file couldn't be read as an image")
+      setUploadError(STRINGS.notAnImage)
       return
     }
     // A new picture never clears the objects drawn over it (#56): the upload is the upload.

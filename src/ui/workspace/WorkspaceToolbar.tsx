@@ -10,6 +10,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { STRINGS } from '../strings'
 
 /** One toolbar control or control cluster, with the slot width it claims. */
 export interface ToolbarGroup {
@@ -68,7 +69,7 @@ export function WorkspaceToolbar({ groups }: { groups: readonly ToolbarGroup[] }
         </div>
       ))}
       {overflowed.length > 0 && (
-        <ToolbarMenu label="More" testId="toolbar-more">
+        <ToolbarMenu label={STRINGS.moreMenu} testId="toolbar-more">
           {overflowed.map((group) => (
             <div key={group.id} data-testid={`toolbar-more-${group.id}`}>
               <div className="bb-workspace-menu-heading">{group.label}</div>

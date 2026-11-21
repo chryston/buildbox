@@ -795,6 +795,17 @@ export const STRINGS = {
   attachTo(ref: string): string {
     return `Attach to ${ref}`
   },
+  // The last of the interface's own words (#66 criterion 16).
+  unlockSection: 'Unlock section',
+  notAnImage: "This file couldn't be read as an image",
+  calibrateScale: 'Calibrate Scale',
+  convertToCustomPath: 'Convert to Custom Path',
+  calibrationRequiredHint: "Calibrate this Floor's Plan Image to draw measured shapes",
+  moreMenu: 'More',
+  /** Which Edge is selected, and what kind of segment it is (#59 §1). */
+  edgeOfKind(edge: number, kind: string): string {
+    return `Edge ${edge} · ${kind}`
+  },
 } as const
 
 /**

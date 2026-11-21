@@ -180,10 +180,10 @@ const NOT_A_MODULE = /\.test\.|\.bench\.|\.property\.|\.browser\.|(^|\/)testing\
 /**
  * The source with the things that are not copy taken out of it, whatever they are written as.
  *
- * A class list names a box. The argument of `new Error(…)` and of `console.warn(…)` is a message
- * to a developer reading a console or a stack, not a sentence a person is shown, and it is where
- * the invariant notes live — `BuildBox refused "…"` is a refusal explained to whoever debugs the
- * edit, and no interface renders it.
+ * A class list names a box. The argument of `new Error(…)`, of `console.warn(…)`, and the provider
+ * name handed to `useRequired(…)` are messages to a developer reading a console or a stack, not a
+ * sentence a person is shown, and they are where the invariant notes live — `BuildBox refused "…"`
+ * is a refusal explained to whoever debugs the edit, and no interface renders it.
  */
 function withoutNonCopy(source: string): string {
   return source
@@ -192,6 +192,7 @@ function withoutNonCopy(source: string): string {
     .replace(/\b(?:class|className)=(?:"[^"]*"|'[^']*'|\{[^}]*\})/g, ' ')
     .replace(/\bnew\s+\w*Error\s*\(\s*(?:'[^']*'|"[^"]*"|`[^`]*`)/g, ' ')
     .replace(/\bconsole\.\w+\(\s*(?:'[^']*'|"[^"]*"|`[^`]*`)/g, ' ')
+    .replace(/\buseRequired\s*\(\s*\w+\s*,\s*(?:'[^']*'|"[^"]*"|`[^`]*`)/g, ' ')
 }
 
 /**
@@ -232,19 +233,7 @@ const copyDebtFound = (): string[] =>
       .map((text) => `${path}\u0000${text}`),
   ))].sort()
 
-/**
- * The debt, written down.
- *
- * Every pair here is a sentence still sitting in a component instead of the table. The list is
- * read, never written, by the check below: it may only shrink, and a pair that has been migrated
- * but left in the file fails the same way a new one does. It goes away when the last entry does.
- */
-const EXEMPT_FILE = 'app/stringsDebt.json'
-const exempt = (): string[] => {
-  const listed = JSON.parse(readFileSync(`${srcRoot}/${EXEMPT_FILE}`, 'utf8')) as Record<string, string[]>
-  return Object.entries(listed).flatMap(([path, texts]) => texts.map((text) => `${path}\u0000${text}`))
-}
-
+/** `path` and `sentence` as one line of a failure message. */
 const pair = (entry: string): string => {
   const [path, text] = entry.split('\u0000')
   return `${path}: ${text}`
@@ -297,13 +286,7 @@ describe('the words BuildBox ships saying', () => {
   })
 
   it('leaves no sentence outside the copy table (#66 criterion 16)', () => {
-    const exempted = new Set(exempt())
-    expect(copyDebtFound().filter((entry) => !exempted.has(entry)).map(pair)).toEqual([])
-  })
-
-  it('keeps the exemption list honest: no entry is already paid off', () => {
-    const found = new Set(copyDebtFound())
-    expect(exempt().filter((entry) => !found.has(entry)).map(pair)).toEqual([])
+    expect(copyDebtFound().map(pair)).toEqual([])
   })
 
   it('scans no text the user typed', () => {

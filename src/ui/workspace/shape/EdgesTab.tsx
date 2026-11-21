@@ -188,7 +188,7 @@ export function EdgesTab(props: EdgesTabProps): ReactNode {
       {selectedEdge !== null && segment !== null && filletEdge === null && (
         <div className="bb-edge-editor" data-testid={`edge-editor-${selectedEdge}`}>
           <p className="bb-edge-editor-heading">
-            {`Edge ${selectedEdge} · ${EDGE_KIND_NAMES[segment.kind]}`}
+            {STRINGS.edgeOfKind(selectedEdge, EDGE_KIND_NAMES[segment.kind])}
           </p>
           {segment.kind === 'line' && (
             <LineEditor

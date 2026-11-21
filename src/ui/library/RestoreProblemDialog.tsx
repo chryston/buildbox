@@ -31,7 +31,7 @@ export interface RestoreProblemCopy {
  */
 export function restoreProblemCopy(problem: RestoreProblem): RestoreProblemCopy {
   if (problem.kind === 'media') {
-    return { heading: STRINGS.restoreProblemGeneric, body: STRINGS.restoreProblemBody('Plan Image') }
+    return { heading: STRINGS.restoreProblemGeneric, body: STRINGS.restoreProblemBody(STRINGS.planImage) }
   }
   if (problem.kind === 'unverified') {
     return { heading: STRINGS.restoreProblemUnverified, body: STRINGS.restoreProblemUnverifiedBody }

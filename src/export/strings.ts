@@ -59,6 +59,16 @@ export const TITLE_BLOCK = {
   page: 'Page',
 } as const
 
+/**
+ * The warning for a character the embedded font has no glyph for.
+ *
+ * A warning, not an error: the sheet still writes, with the missing characters left out of the
+ * text. It names the character and the string it appeared in, because the person choosing a font
+ * needs to know which of their labels the font cannot draw.
+ */
+export const noGlyphFor = (chars: string, text: string): string =>
+  `No glyph for ${chars} in "${text}"`
+
 /** `Dimensions in mm`, `Dimensions in cm`, `Dimensions in m`. */
 export const UNIT_STATEMENT: Readonly<Record<string, string>> = {
   mm: 'Dimensions in mm',

@@ -31,6 +31,7 @@ import { flatten } from './flatten'
 import { fileDate } from './format'
 import { MEDIA_TYPE, drawingFileName, uniqueSegments, archiveName } from './slug'
 import { SHEET_SIZING } from './sheet'
+import { noGlyphFor } from './strings'
 import { inlineAssets, writeSvg } from './svg'
 import { writePng } from './png'
 import { spliceITxt } from './pngMeta'
@@ -265,7 +266,7 @@ function glyphNotice(glyphs: readonly MissingGlyph[]): {
   missingGlyphs: string[]
 } {
   return {
-    warnings: glyphs.map((glyph) => `No glyph for ${glyph.chars.join(' ')} in "${glyph.text}"`),
+    warnings: glyphs.map((glyph) => noGlyphFor(glyph.chars.join(' '), glyph.text)),
     missingGlyphs: [...new Set(glyphs.map((glyph) => glyph.text))],
   }
 }
