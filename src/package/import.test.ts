@@ -402,8 +402,8 @@ describe('stageImport: hashes and assets', () => {
 
 describe('stageImport: the migrator chain', () => {
   it('refuses a Project saved by a newer BuildBox before touching a field', async () => {
-    await expectProblem(withManifest(await validArchive(), (m) => { m.domainSchemaVersion = 5 }), 'newer-schema', {
-      detail: { detected: 5, supported: 4 },
+    await expectProblem(withManifest(await validArchive(), (m) => { m.domainSchemaVersion = 6 }), 'newer-schema', {
+      detail: { detected: 6, supported: 5 },
     })
   })
 
@@ -438,6 +438,7 @@ describe('stageImport: the strict validator', () => {
         placedItems: [{ ...PROJECT.existingModel.placedItems[0]!, itemDesignId: 'design-does-not-exist' }],
         walls: PROJECT.existingModel.walls,
         wallJunctions: PROJECT.existingModel.wallJunctions,
+        openings: PROJECT.existingModel.openings,
       },
     }
     const archive = await encodeProject(broken as Project, assetSource, FIXTURE_BUILD)

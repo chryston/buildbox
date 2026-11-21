@@ -93,7 +93,12 @@ export function projectFromDesign(design: LegacyDesign, newId: () => string): Pr
     floors: [{ id: floorId, name: FLOOR_ONE_NAME, planImage: null }],
     views: [defaultPlanView(newId(), { id: floorId, name: FLOOR_ONE_NAME, planImage: null })],
     itemDesigns: design.units.map((unit) => cabinetItemDesign(unit)),
-    existingModel: { placedItems: design.units.map((unit) => cabinetPlacement(unit, floorId, newId())), walls: [], wallJunctions: [] },
+    existingModel: {
+      placedItems: design.units.map((unit) => cabinetPlacement(unit, floorId, newId())),
+      walls: [],
+      wallJunctions: [],
+      openings: [],
+    },
   }
 }
 

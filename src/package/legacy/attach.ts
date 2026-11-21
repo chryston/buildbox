@@ -91,7 +91,7 @@ export function floorPlanAsProject(
       }),
     ],
     itemDesigns: [],
-    existingModel: { placedItems: [], walls: [], wallJunctions: [] },
+    existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [] },
   }
   return appendContent(project, content, options.floorId, options.newId)
 }
@@ -137,6 +137,7 @@ function appendContent(
       placedItems: [...project.existingModel.placedItems, ...placements],
       walls: project.existingModel.walls,
       wallJunctions: project.existingModel.wallJunctions,
+      openings: project.existingModel.openings,
     },
   }
 

@@ -70,6 +70,10 @@ export const SIZE_ROLES: Record<SizeRole, SizeRow> = {
   'plan-line': { screen: { px: 1 }, paper: { mm: 0.25 } },
   'plan-line-selected': { screen: { px: 2 }, paper: { mm: 0.25 } },
   hairline: { screen: { px: 1 }, paper: { mm: 0.18 } },
+  // A removed section's dashed lines are drawn in the Floor's own millimetres, so the dash
+  // stays one dash whether the plan is at zoom 0.1 or printed at 1:100 (#65 §12).
+  'opening-dash': { screen: { mm: 150 }, paper: { mm: 3 } },
+  'opening-gap': { screen: { mm: 100 }, paper: { mm: 2 } },
   // The uncalibrated Plan Image's placeholder rect was `strokeWidth={2}` inside the zoomed
   // group, so on screen it is two millimetres of Floor, not two device pixels.
   'plan-placeholder-line': { screen: { mm: 2 }, paper: { mm: 0.25 } },
@@ -135,6 +139,31 @@ export const STYLES: Record<StyleKey, Style> = {
     strokeWidth: 'plan-line-selected',
   },
   'wall-face': { stroke: 'var(--bb-text)', strokeWidth: 'plan-line', hit: 'none' },
+  // An Opening's own lines are the Wall's weight, so a gap reads as part of the Wall rather
+  // than as something standing in it. Only these take a pointer: the swing is a hint.
+  'opening': { stroke: 'var(--bb-text)', strokeWidth: 'plan-line' },
+  'opening:selected': { stroke: 'var(--bb-accent)', strokeWidth: 'plan-line-selected' },
+  // The ghost of an Opening being placed (#65 §10): the accent while it fits, the danger colour
+  // the moment it does not, so the preview answers before the click rather than after it.
+  'opening:preview': { stroke: 'var(--bb-accent)', strokeWidth: 'plan-line', hit: 'none' },
+  'opening:preview-blocked': { stroke: 'var(--bb-danger-dot)', strokeWidth: 'plan-line', hit: 'none' },
+  'opening-gap-mark': {
+    stroke: 'var(--bb-danger-dot)',
+    strokeWidth: 'hairline',
+    dash: ['opening-dash', 'opening-gap'],
+    hit: 'none',
+  },
+  // The stretch of Wall the Opening took, from face to face. `transparent` is a colour, not
+  // `none`, so the region stays painted for the pointer and invisible to the eye — the marks
+  // above it are what a person sees, this is what a person hits (#65 §11).
+  'opening-hit': { fill: 'transparent', stroke: 'none' },
+  'opening-swing': { stroke: 'var(--bb-text)', strokeWidth: 'hairline', hit: 'none' },
+  'opening-window-line': { stroke: 'var(--bb-text)', strokeWidth: 'hairline' },
+  'opening-removed': {
+    stroke: 'var(--bb-text)',
+    strokeWidth: 'hairline',
+    dash: ['opening-dash', 'opening-gap'],
+  },
   'plan-dimension': { fill: 'var(--bb-accent)', size: 'plan-dimension', fontFamily: FONT_STACK, hit: 'none' },
   'plan-dimension-line': { stroke: 'var(--bb-accent)', strokeWidth: 'hairline', hit: 'none' },
   'plan-chip-box': {

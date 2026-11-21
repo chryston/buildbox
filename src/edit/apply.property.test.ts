@@ -11,8 +11,8 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import fc from 'fast-check'
 import { beforeAll, describe, expect, it } from 'vitest'
-import type { CabinetItemDesign, CabinetNode, GenericItemDesign, ItemDesign, ItemFootprint, PlacedItem, Project, Wall, WallJunction } from '../domain'
-import { footprintSize, validateProject } from '../domain'
+import type { CabinetItemDesign, CabinetNode, GenericItemDesign, ItemDesign, ItemFootprint, Opening, PlacedItem, Project, Wall, WallJunction } from '../domain'
+import { footprintSize, nextOpeningLabel, validateProject } from '../domain'
 import type { Preset } from '../geometry'
 import { DEG, normaliseDeg, pt, refLength, refPointAt } from '../geometry'
 import { arbProject } from '../domain/testing'
@@ -112,6 +112,10 @@ const templates = (g: Gen): GenericItemDesign[] =>
 const floorsWithImage = (g: Gen) => g.project.floors.filter((floor) => floor.planImage !== null)
 const wallList = (g: Gen): Wall[] => g.project.existingModel.walls
 const junctionList = (g: Gen): WallJunction[] => g.project.existingModel.wallJunctions
+const openingList = (g: Gen): Opening[] => g.project.existingModel.openings
+/** The Openings that have a hinge to flip: a window has none, and a sliding door has neither. */
+const hingedDoors = (g: Gen): Opening[] =>
+  openingList(g).filter((opening) => opening.swing === 'left' || opening.swing === 'right')
 
 /**
  * Whether two Walls lie on one straight line. A Junction has already put an end of each at the
@@ -589,7 +593,76 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
   },
   (g) => {
     const wall = pick(g, wallList(g))
-    return wall === undefined ? null : intent('wall.delete', { wallId: wall.id })
+    if (wall === undefined) return null
+    // The answer the dialog of #65 §8 would have sent, so a Wall with Openings in it is
+    // deletable in a sequence too. A stale answer is the case the handler refuses.
+    const hosted = openingList(g).filter((opening) => opening.hostWallId === wall.id)
+    return intent('wall.delete', {
+      wallId: wall.id,
+      ...(hosted.length === 0 ? {} : { openings: hosted.map((opening) => opening.id) }),
+    })
+  },
+  (g) => {
+    // A place that will usually take the Opening: away from both ends, and with the width the
+    // presets actually offer. A Wall whose Junction trims leave no room refuses it, which is
+    // the fit rule working, but the coverage below needs the accepted case too.
+    const wall = pick(g, wallList(g).filter((candidate) => refLength(candidate.line) > 1400))
+    if (wall === undefined) return null
+    const kind = pick(g, ['door', 'window', 'removed_section'] as const)!
+    const width = pick(g, [700, 900, 1000])!
+    const swing = pick(g, ['left', 'right', 'sliding'] as const)!
+    const room = refLength(wall.line) - width - 300
+    return intent(
+      'opening.create',
+      {
+        floorId: wall.floorId,
+        hostWallId: wall.id,
+        kind,
+        label: nextOpeningLabel(openingList(g), kind),
+        start: real(g, 150, Math.max(160, room)),
+        width,
+        sill: kind === 'window' ? 900 : 0,
+        head: kind === 'window' ? 2300 : 2100,
+        ...(kind === 'door'
+          ? { swing, ...(swing === 'sliding' ? {} : { hingeSide: pick(g, ['start', 'end'] as const)! }) }
+          : {}),
+      },
+      g.ids(1),
+    )
+  },
+  (g) => {
+    const opening = pick(g, openingList(g))
+    if (opening === undefined) return null
+    return intent('opening.setStart', {
+      openingId: opening.id,
+      start: Math.max(0, opening.start + real(g, -400, 400)),
+    })
+  },
+  (g) => {
+    const opening = pick(g, openingList(g))
+    if (opening === undefined) return null
+    const width = Math.max(100, opening.width + real(g, -400, 400))
+    return intent('opening.setWidth', {
+      openingId: opening.id,
+      width,
+      ...(bool(g) ? { start: Math.max(0, opening.start + real(g, -200, 200)) } : {}),
+    })
+  },
+  (g) => {
+    const opening = pick(g, hingedDoors(g))
+    return opening === undefined ? null : intent('opening.flipHinge', { openingId: opening.id })
+  },
+  (g) => {
+    const opening = pick(g, hingedDoors(g))
+    return opening === undefined ? null : intent('opening.flipSwing', { openingId: opening.id })
+  },
+  (g) => {
+    const opening = pick(g, openingList(g))
+    return opening === undefined ? null : intent('opening.rename', { openingId: opening.id, label: `Opening ${int(g, 1, 40)}` })
+  },
+  (g) => {
+    const opening = pick(g, openingList(g))
+    return opening === undefined ? null : intent('opening.delete', { openingId: opening.id })
   },
 ]
 

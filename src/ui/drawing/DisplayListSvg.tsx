@@ -56,6 +56,12 @@ export interface DisplayListInteractions {
   onItemPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
   /** A Wall band, clicked where it is drawn: it becomes the selected Wall (#64 §15). */
   onWallPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
+  /**
+   * An Opening's symbol, clicked where it is drawn: it becomes the selected Opening (#65 §11).
+   * Every part of the symbol — leaf, swing, glass lines — answers, because a person clicks the
+   * middle of a door, not the one millimetre of its leaf.
+   */
+  onOpeningPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
   /** The rotate grip: it starts a turn. */
   onRotatePointerDown?: (id: string, event: React.PointerEvent<SVGPathElement>) => void
   /** A click anywhere on a unit's own box. */
@@ -108,6 +114,16 @@ const TEST_IDS: Readonly<Record<string, (id: string) => string>> = {
   'dimension-depth': () => 'dimension-depth',
   'floor-bounds-chip': () => 'floor-bounds-chip',
   'wall': (id) => `wall-band-${id}`,
+  // Every mark of an Opening *is* the Opening: the leaf, a panel, an arrow, a window line or a
+  // removed section's dash all select the same one (#65 §11). The role is part of the name because
+  // one Opening draws several of them under one id, and a suite that clicked `opening-x` could not
+  // say which mark it had hit — or whether it had hit the ghost rather than the thing.
+  'opening-leaf': (id) => `opening-leaf-${id}`,
+  'opening-hit': (id) => `opening-hit-${id}`,
+  'opening-panel': (id) => `opening-panel-${id}`,
+  'opening-arrow': (id) => `opening-arrow-${id}`,
+  'opening-window': (id) => `opening-window-${id}`,
+  'opening-removed': (id) => `opening-removed-${id}`,
   'rotate-handle-group': () => 'rotate-handle-group',
   'rotate-handle': () => 'rotate-handle',
   void: (id) => `void-${id}`,
@@ -253,6 +269,14 @@ function renderNode(
     }
     if (role === 'wall' && interactions?.onWallPointerDown !== undefined) {
       const pick = interactions.onWallPointerDown
+      props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => {
+        event.stopPropagation()
+        pick(id, event)
+      }) as never
+      props.style = { cursor: 'pointer' }
+    }
+    if (role.startsWith('opening-') && role !== 'opening-gap' && interactions?.onOpeningPointerDown !== undefined) {
+      const pick = interactions.onOpeningPointerDown
       props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => {
         event.stopPropagation()
         pick(id, event)

@@ -33,6 +33,8 @@ import type {
   GenericItemDesign,
   ItemDesign,
   ItemFootprint,
+  Opening,
+  OpeningKind,
   PathItemFootprint,
   PlanImageMediaType,
   PlanView,
@@ -44,7 +46,12 @@ import type {
   WallJustification,
   WallJunction,
 } from './project'
-import type { CornerRadii, Preset, Pt } from '../geometry'
+import { defaultOpeningLabel } from './openings'
+import { fitOpening, gapChord, usableIntervals } from '../geometry'
+import type { CornerRadii, Preset, Pt, UsableGap } from '../geometry'
+
+/** The three kinds an Opening can take, cycled through by the generator (#65). */
+const ARB_OPENING_KINDS: readonly OpeningKind[] = ['door', 'window', 'removed_section']
 
 /** A Project that breaks exactly one invariant, and where the validator must say so. */
 export interface Corruption {
@@ -368,6 +375,8 @@ const arbWallStar = fc.record({
   }),
   kinds: fc.array(fc.constantFrom('line' as const, 'arc' as const), { minLength: 4, maxLength: 4 }),
   bulges: fc.array(fc.integer({ min: 20, max: 500 }), { minLength: 4, maxLength: 4 }),
+  // How many Openings the Project tries to cut into the star (#65).
+  openings: fc.integer({ min: 0, max: 3 }),
 })
 
 /**
@@ -493,6 +502,59 @@ export function arbProject(): fc.Arbitrary<Project> {
         }
       }
 
+      // Openings (#65): cut into the gaps the usable interval leaves, which is the same
+      // clean-up the validator reads. A generated Project is therefore valid by
+      // construction, and the property suites exercise the fit rule instead of tripping
+      // over it. Distinct gaps never overlap, so one Opening per gap is always safe.
+      const openings: Opening[] = []
+      if (walls.length > 0) {
+        const usable = usableIntervals(
+          walls.map((wall) => ({
+            id: wall.id,
+            line: wall.line,
+            thickness: wall.thickness,
+            justification: wall.justification,
+          })),
+          wallJunctions.map((junction) => ({
+            id: junction.id,
+            ends: junction.ends,
+            ...(junction.host === undefined ? {} : { host: junction.host }),
+          })),
+        )
+        const slots: { wall: Wall; gap: UsableGap }[] = []
+        for (const wall of walls) {
+          for (const gap of usable.get(wall.id)?.gaps ?? []) slots.push({ wall, gap })
+        }
+        const taken = new Map<OpeningKind, number>()
+        for (let index = 0; index < Math.min(star.openings, slots.length); index += 1) {
+          const slot = slots[index]!
+          const room = gapChord(slot.wall.line, slot.gap)
+          const width = Math.min(room, 300 + index * 100)
+          const start = slot.gap.from + (room - width) / 2
+          const interval = usable.get(slot.wall.id)
+          if (interval === undefined || width < 100 || !fitOpening(slot.wall.line, interval, start, width).fits) continue
+          const kind = ARB_OPENING_KINDS[index % ARB_OPENING_KINDS.length]!
+          const number = (taken.get(kind) ?? 0) + 1
+          taken.set(kind, number)
+          const sliding = index % 2 === 1
+          openings.push({
+            id: `opening-${openings.length}`,
+            floorId: slot.wall.floorId,
+            hostWallId: slot.wall.id,
+            kind,
+            label: defaultOpeningLabel(kind, number),
+            start,
+            width,
+            sill: kind === 'window' ? 900 : 0,
+            head: kind === 'door' ? 2100 : 2400,
+            ...(kind === 'door'
+              ? { swing: sliding ? ('sliding' as const) : ('left' as const) }
+              : {}),
+            ...(kind === 'door' && !sliding ? { hingeSide: 'start' as const } : {}),
+          })
+        }
+      }
+
       return {
         id: 'project-0',
         meta: { name: skeleton.name, address: skeleton.address },
@@ -504,7 +566,7 @@ export function arbProject(): fc.Arbitrary<Project> {
         floors,
         views,
         itemDesigns: designs,
-        existingModel: { placedItems, walls, wallJunctions },
+        existingModel: { placedItems, walls, wallJunctions, openings },
       }
     })
 }

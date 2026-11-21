@@ -29,7 +29,7 @@ import {
   drawWalls,
   unionRect,
 } from '../../drawing'
-import type { DisplayLayer, DisplayList, PlanPreview, Sizing } from '../../drawing'
+import type { DisplayLayer, DisplayList, OpeningPreview, PlanPreview, Sizing, WallOpenings } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
 import type { DisplayListInteractions } from '../drawing/DisplayListSvg'
 import { formatMm } from './displayUnits'
@@ -58,6 +58,20 @@ export interface PlanViewCanvasProps {
   tool: WorkspaceTool
   selection: string | null
   onSelect: (id: string | null) => void
+  /**
+   * Where the pointer is over the Floor, in Floor millimetres; `null` when it leaves the canvas.
+   * The tools that aim at the Floor rather than at a handle — the Opening ghost (#65) — read the
+   * pointer from here: an overlay drawn above the canvas cannot see the moves of the canvas under
+   * it, and a ghost that only appears when the pointer happens to cross the overlay's own pixels
+   * is a ghost that never appears.
+   */
+  onCursorChange?: (point: Point2 | null) => void
+  /**
+   * A click that landed on the Floor itself, in Floor millimetres — not a click on a footprint, a
+   * handle or the tool's own controls, and not the end of a drag. The Door / window tool places
+   * its Opening here (#65 criterion 1).
+   */
+  onCanvasClick?: (point: Point2) => void
   dragPreview: ItemDragPreview | null
   onDragPreview: (preview: ItemDragPreview | null) => void
   /** The pointer came up after a real move: commit the whole drag as one Intent. */
@@ -83,6 +97,18 @@ export interface PlanViewCanvasProps {
   selectedWallId?: string | null
   /** A Wall band was clicked; the selection moves to it (#64 §15). */
   onSelectWall?: (id: string) => void
+  /**
+   * The Floor's Openings, resolved against their hosts by `wallOpenings` (#65 §12). The caller
+   * resolves them because the same answer feeds the hit-testing and the drawing, and because a
+   * canvas that derived them itself would rebuild the Wall clean-up on every pointer move.
+   */
+  openings?: readonly WallOpenings[]
+  /** The selected Opening: its symbol drawn heavier than its neighbours (#65 §11). */
+  selectedOpeningId?: string | null
+  /** The Opening being placed right now, as a ghost (#65 §10). */
+  openingPreview?: OpeningPreview | null
+  /** An Opening's symbol was clicked; the selection moves to it (#65 §11). */
+  onSelectOpening?: (id: string) => void
   /** Drawn above the items while calibrating; it owns the pointer meanwhile. SVG: it lives in
    * the scene's own `<g>`, so it must be drawn in the Floor's millimetres. */
   overlay?: ReactNode
@@ -105,9 +131,10 @@ export interface PlanViewCanvasProps {
 export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   const {
     hostRef, svgRef, floor, showPlanImage, imageSrc, viewport, onViewport,
-    tool, selection, onSelect, dragPreview, onDragPreview, onMoveItem, onRotateItem,
+    tool, selection, onSelect, onCursorChange, onCanvasClick, dragPreview, onDragPreview, onMoveItem, onRotateItem,
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
     angleSnap, overlay, htmlOverlay, walls, selectedWallId = null, onSelectWall,
+    openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
   } = props
   const [hostSize, setHostSize] = useState({ width: 0, height: 0 })
   const [dragging, setDragging] = useState(false)
@@ -199,16 +226,6 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     panning.current = false
   }, [])
 
-  const onBackgroundClick = useCallback(() => {
-    // A pointerdown that a footprint or the rotate handle took is not a click on the Floor,
-    // even when the click itself lands on the root — which is what a drag does, its pointer
-    // coming up somewhere else. Clearing the selection there would undo the selection the
-    // same gesture just made.
-    if (consumedPointer.current) return
-    if (overlay !== undefined || htmlOverlay !== undefined || panMoved.current) return
-    if (tool === 'select') onSelect(null)
-  }, [overlay, htmlOverlay, panMoved, tool, onSelect])
-
   /** Client pixels to Floor millimetres — the one place the viewport is inverted. */
   const toFloor = useCallback((clientX: number, clientY: number): Point2 | null => {
     const el = svgRef.current
@@ -219,6 +236,32 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       y: (clientY - rect.top - viewport.panY) / viewport.zoom,
     }
   }, [svgRef, viewport])
+
+  /**
+   * Report the pointer to the tools that aim at the Floor, then pan if a pan is in progress. The
+   * order matters: a pan is a move too, and the ghost under a panning pointer should follow it.
+   */
+  const onCanvasPointerMove = useCallback((event: React.PointerEvent<SVGSVGElement>): void => {
+    onCursorChange?.(toFloor(event.clientX, event.clientY))
+    onPointerMove(event)
+  }, [onCursorChange, toFloor, onPointerMove])
+
+  const onBackgroundClick = useCallback((event: React.MouseEvent<SVGSVGElement>) => {
+    // A pointerdown that a footprint or the rotate handle took is not a click on the Floor,
+    // even when the click itself lands on the root — which is what a drag does, its pointer
+    // coming up somewhere else. Clearing the selection there would undo the selection the
+    // same gesture just made.
+    if (consumedPointer.current) return
+    if (overlay !== undefined || panMoved.current) return
+    // The Wall tool's layer takes its own clicks: a click that finished a Wall segment is not a
+    // click on the Floor. The Door / window tool has no layer of its own — its controls are
+    // transparent to the pointer — so a click that reached the canvas reached the Floor, and the
+    // tool places where it landed.
+    if (tool === 'select' && htmlOverlay === undefined) onSelect(null)
+    if (tool !== 'opening') return
+    const at = toFloor(event.clientX, event.clientY)
+    if (at !== null) onCanvasClick?.(at)
+  }, [overlay, htmlOverlay, panMoved, tool, onSelect, onCanvasClick, toFloor])
 
   function startItemDrag(id: string): void {
     const item = floor.placements.find((p) => p.id === id)
@@ -340,7 +383,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   // appended, or a Wall would land on top of the Item standing in it (#60 §3, #64 §15).
   const wallList = walls === undefined || walls === null || walls.walls.length === 0
     ? null
-    : drawWalls(walls, { sizing, selectedWallId })
+    : drawWalls(walls, { sizing, selectedWallId, openings, selectedOpeningId, preview: openingPreview })
   const withWalls: DisplayList = wallList === null
     ? list
     : {
@@ -368,7 +411,18 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     onWallPointerDown: onSelectWall === undefined
       ? undefined
       : (id) => {
+          // The click that selected this Wall must not be answered again as a click on the
+          // background, which would deselect it in the same gesture (#64 §15). While the Door /
+          // window tool is in hand the pointerdown is not a selection, and the background click
+          // still owns it: that click is what places the Opening.
+          if (tool !== 'opening') consumedPointer.current = true
           onSelectWall(id)
+        },
+    onOpeningPointerDown: onSelectOpening === undefined
+      ? undefined
+      : (id) => {
+          if (tool !== 'opening') consumedPointer.current = true
+          onSelectOpening(id)
         },
     onItemPointerDown: (id, event) => {
       lastClient.current = { x: event.clientX, y: event.clientY }
@@ -389,7 +443,8 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
         data-testid="floor-plan-canvas"
         style={{ touchAction: 'none', cursor }}
         onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
+        onPointerMove={onCanvasPointerMove}
+        onPointerLeave={() => onCursorChange?.(null)}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onClick={onBackgroundClick}

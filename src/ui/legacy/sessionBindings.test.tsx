@@ -13,7 +13,7 @@
 import { act, render } from '@testing-library/react'
 import { useEffect } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { INTENT_LABELS, intentIdCount } from '../../edit'
+import { INTENT_LABELS, intentIdCount, previewIntent } from '../../edit'
 import type { Intent, IntentType, PayloadOf } from '../../edit'
 import { createMemoryAdapter } from '../../persistence'
 import { openProject } from '../../session'
@@ -38,6 +38,9 @@ const testIntents: IntentBuilder = {
       now: TEST_NOW,
     }) as Intent
   },
+  // The same report the real Intent consults, so a test that deletes a Wall with Openings sees
+  // the review the app would show rather than one this file invented (#65 §8).
+  preview: (project, intent) => ({ review: previewIntent(project, intent).review }),
 }
 
 /** No test here loads a Plan Image, so no URL is ever asked for or handed out. */

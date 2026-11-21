@@ -17,14 +17,25 @@
  * the reference targets, and the tree walks are iterative — a stored tree is untrusted
  * input, so recursion depth is not an option.
  */
-import { arcFromThrough, PRESET_KINDS, refLength, refPointAt, toValidationProblems, distance, TOLERANCE_MM } from '../geometry'
-import type { ClosedPath, CornerRadii, Preset, Pt, Segment } from '../geometry'
+import {
+  arcFromThrough,
+  fitOpening,
+  PRESET_KINDS,
+  refLength,
+  refPointAt,
+  toValidationProblems,
+  distance,
+  TOLERANCE_MM,
+  usableIntervals,
+} from '../geometry'
+import type { ClosedPath, CornerRadii, JoinJunction, JoinWall, Preset, Pt, Segment, UsableInterval } from '../geometry'
 import { ROOT_PATH, childPath, problem, type ValidationProblem } from '../lib'
 import { MAX_TREE_DEPTH } from './cabinetPayload'
 import { formatGeometryProblem, type DisplayFormat } from './formatGeometryProblem'
 import { footprintProblems } from './footprint'
 import { nameKey } from './floorNames'
-import type { DisplayUnit, ItemFootprint, Project, WallEnd, WallRefLine } from './project'
+import { fitProblem, openingNoun } from './openings'
+import type { DisplayUnit, ItemFootprint, OpeningKind, Project, WallEnd, WallJustification, WallRefLine } from './project'
 
 export type ValidateProjectResult =
   | { ok: true; project: Project }
@@ -114,7 +125,25 @@ const SEGMENT_FIELDS: Record<string, readonly string[]> = {
 }
 const SEGMENT_KINDS = ['line', 'arc', 'ellipticalArc'] as const
 const POINT_FIELDS = ['x', 'y']
-const EXISTING_MODEL_FIELDS = ['placedItems', 'walls', 'wallJunctions']
+const EXISTING_MODEL_FIELDS = ['placedItems', 'walls', 'wallJunctions', 'openings']
+const OPENING_FIELDS = [
+  'id',
+  'floorId',
+  'hostWallId',
+  'kind',
+  'label',
+  'start',
+  'width',
+  'sill',
+  'head',
+  'swing',
+  'hingeSide',
+]
+/** The three kinds of Opening (#65 §1). */
+const OPENING_KINDS = ['door', 'window', 'removed_section']
+/** The CSV codes of export contract v1.0 (#68): stable words, never renamed. */
+const OPENING_SWINGS = ['left', 'right', 'sliding']
+const HINGE_SIDES = ['start', 'end']
 const WALL_FIELDS = [
   'id',
   'ref',
@@ -414,6 +443,12 @@ function indexIds(root: Rec): IdIndex {
       const junctions = childPath('existingModel', 'wallJunctions')
       model.wallJunctions.forEach((junction, i) => {
         if (isRecord(junction)) claim(junction.id, childPath(childPath(junctions, i), 'id'))
+      })
+    }
+    if (Array.isArray(model.openings)) {
+      const openings = childPath('existingModel', 'openings')
+      model.openings.forEach((opening, i) => {
+        if (isRecord(opening)) claim(opening.id, childPath(childPath(openings, i), 'id'))
       })
     }
   }
@@ -1228,8 +1263,21 @@ function validateWallLine(raw: unknown, path: string, add: Add): WallRefLine | n
 /** A Wall whose shape read cleanly, kept for the Junction cross-checks. */
 interface WallShape {
   id: string
+  /** The `W-<n>` a message names, kept for the Opening fit rule (#65 §5). */
+  ref: string
   floorId: string
   line: WallRefLine
+  /** Needed by the Opening fit rule, which reads the tidied band (#65 §3). */
+  thickness: number
+  justification: WallJustification
+}
+
+/** A Junction that read cleanly, in the shape `joinWalls` takes, for the fit rule (#65 §3). */
+interface JunctionShape {
+  id: string
+  floorId: string
+  ends: JoinJunction['ends']
+  host?: { wallId: string; at: number }
 }
 
 function validateWall(
@@ -1275,8 +1323,11 @@ function validateWall(
   checkNumber(raw.baseElevation, childPath(path, 'baseElevation'), 'the Wall height above the Floor Datum', add)
   checkPositive(raw.height, childPath(path, 'height'), 'the Wall height', add)
   checkUnknownFields(raw, path, WALL_FIELDS, add)
-  if (id === null || floorId === null || line === null) return null
-  return { id, floorId, line }
+  if (id === null || floorId === null || line === null || ref === null) return null
+  const thickness = raw.thickness
+  const justification = raw.justification
+  if (typeof thickness !== 'number' || typeof justification !== 'string') return null
+  return { id, ref, floorId, line, thickness, justification: justification as WallJustification }
 }
 
 /** The Wall ends a Junction holds, kept for the coincidence cross-checks. */
@@ -1372,9 +1423,10 @@ function validateWallJunctions(
   index: IdIndex,
   walls: Map<string, WallShape>,
   add: Add,
-): void {
+): JunctionShape[] {
   const junctions = checkArray(raw, path, 'the Wall Junctions', add)
-  if (junctions === null) return
+  const shapes: JunctionShape[] = []
+  if (junctions === null) return shapes
   // One Wall end, one Junction: the topology a Wall network is built on (#64 §2).
   const taken = new Map<string, string>()
   junctions.forEach((rawJunction, i) => {
@@ -1404,6 +1456,16 @@ function validateWallJunctions(
     }
     const host = validateJunctionHost(rawJunction.host, childPath(at, 'host'), walls, floorId, add)
     checkUnknownFields(rawJunction, at, WALL_JUNCTION_FIELDS, add)
+    // The shape `joinWalls` takes, kept for the Opening fit rule: an Opening's usable
+    // interval is read off the same clean-up that draws the band (#65 §3).
+    if (id !== null && floorId !== null) {
+      shapes.push({
+        id,
+        floorId,
+        ends: members.map((member) => ({ wallId: member.wall.id, end: member.end })),
+        ...(host === null ? {} : { host: { wallId: host.wall.id, at: host.at } }),
+      })
+    }
 
     const count = ends?.length ?? 0
     if (host === null) {
@@ -1436,6 +1498,7 @@ function validateWallJunctions(
       }
     })
   })
+  return shapes
 }
 
 function validateExistingModel(raw: unknown, path: string, index: IdIndex, add: Add): void {
@@ -1453,10 +1516,142 @@ function validateExistingModel(raw: unknown, path: string, index: IdIndex, add: 
     placedItems.forEach((item, i) => validatePlacedItem(item, childPath(itemsPath, i), index, add))
   }
   // Walls are validated before their Junctions, which need the Walls' shapes to check that
-  // the ends they name exist, stand on their Floor, and actually meet (#64 §2).
+  // the ends they name exist, stand on their Floor, and actually meet (#64 §2). Openings
+  // come last: they need both, because their usable interval is the tidied band (#65 §3).
   const walls = validateWalls(raw.walls, childPath(path, 'walls'), index, add)
-  validateWallJunctions(raw.wallJunctions, childPath(path, 'wallJunctions'), index, walls, add)
+  const junctions = validateWallJunctions(raw.wallJunctions, childPath(path, 'wallJunctions'), index, walls, add)
+  validateOpenings(raw.openings, childPath(path, 'openings'), index, walls, junctions, add)
   checkUnknownFields(raw, path, EXISTING_MODEL_FIELDS, add)
+}
+
+/**
+ * Every Opening of the Existing Model (#65 §2, §3, §5).
+ *
+ * An Opening is nothing without its host: it is an absence in one Wall, so a missing host,
+ * a host on another Floor, or a position the tidied Wall has no room for are all refused
+ * here rather than repaired. The room is measured by `fitOpening` against the usable
+ * interval `joinWalls` leaves — the same clean-up that draws the band — so a Project that
+ * validates is a Project whose Openings sit where the drawing shows them sitting.
+ */
+function validateOpenings(
+  raw: unknown,
+  path: string,
+  index: IdIndex,
+  walls: Map<string, WallShape>,
+  junctions: readonly JunctionShape[],
+  add: Add,
+): void {
+  const items = checkArray(raw, path, 'the Openings', add)
+  if (items === null) return
+  // One clean-up per Floor that actually carries an Opening, remembered for the rest of
+  // this pass: the fit rule and the drawing must read the same trims, never two estimates.
+  const byFloor = new Map<string, Map<string, UsableInterval>>()
+  const intervalsOf = (floorId: string): Map<string, UsableInterval> => {
+    const known = byFloor.get(floorId)
+    if (known !== undefined) return known
+    const shapes: JoinWall[] = []
+    for (const wall of walls.values()) {
+      if (wall.floorId === floorId) {
+        shapes.push({ id: wall.id, line: wall.line, thickness: wall.thickness, justification: wall.justification })
+      }
+    }
+    const links: JoinJunction[] = junctions
+      .filter((junction) => junction.floorId === floorId)
+      .map((junction) => ({
+        id: junction.id,
+        ends: junction.ends,
+        ...(junction.host === undefined ? {} : { host: junction.host }),
+      }))
+    const made = usableIntervals(shapes, links)
+    byFloor.set(floorId, made)
+    return made
+  }
+
+  items.forEach((rawOpening, i) => {
+    const at = childPath(path, i)
+    if (!isRecord(rawOpening)) {
+      add(at, WRONG_TYPE, 'Expected an Opening.')
+      return
+    }
+    const idPath = childPath(at, 'id')
+    const id = checkEntityId(rawOpening.id, idPath, 'the Opening ID', add)
+    if (id !== null) claimId(id, idPath, 'the Opening ID', index, add)
+
+    const floorPath = childPath(at, 'floorId')
+    const floorId = checkText(rawOpening.floorId, floorPath, 'the Floor this Opening is on', add)
+    if (floorId !== null && !index.floorIds.has(floorId)) {
+      add(floorPath, DANGLING_REFERENCE, 'Opening refers to a Floor that is not in this Project.')
+    }
+
+    // Exactly one host Wall, on the same Floor (#65 §2). Never reassigned behind the user's
+    // back, so a Wall that goes away takes its Openings with it through a review instead.
+    const hostPath = childPath(at, 'hostWallId')
+    const hostId = checkText(rawOpening.hostWallId, hostPath, 'the Wall this Opening is cut into', add)
+    let host: WallShape | null = null
+    if (hostId !== null) {
+      host = walls.get(hostId) ?? null
+      if (host === null) {
+        add(hostPath, DANGLING_REFERENCE, 'Opening refers to a Wall that is not in this Project.')
+      } else if (floorId !== null && host.floorId !== floorId) {
+        add(hostPath, DANGLING_REFERENCE, 'Opening and the Wall it is cut into stand on different Floors.')
+        host = null
+      }
+    }
+
+    const kind = checkOneOf(rawOpening.kind, childPath(at, 'kind'), 'the kind of Opening', OPENING_KINDS, add)
+    const label = checkFilledText(rawOpening.label, childPath(at, 'label'), 'the Opening label', add)
+    const start = checkNumber(rawOpening.start, childPath(at, 'start'), 'the distance along the Wall to the Opening', add)
+    const widthPath = childPath(at, 'width')
+    const width = checkNumber(rawOpening.width, widthPath, 'the Opening width', add)
+    if (width !== null && width <= 0) add(widthPath, OUT_OF_RANGE, 'Expected the Opening width greater than 0.')
+    // Either may be negative: a Opening can stand below the Floor Datum the way a Wall can.
+    const sill = checkNumber(rawOpening.sill, childPath(at, 'sill'), 'the height of the bottom of the Opening', add)
+    const headPath = childPath(at, 'head')
+    const head = checkNumber(rawOpening.head, headPath, 'the height of the top of the Opening', add)
+    if (sill !== null && head !== null && head <= sill) {
+      add(headPath, OUT_OF_RANGE, 'Expected the top of the Opening to be above its bottom.')
+    }
+
+    // The door fields belong to a door, and to nothing else (#65 §2): a window with a hinge
+    // side is a data mistake, not something to draw round.
+    const swingPath = childPath(at, 'swing')
+    const hingePath = childPath(at, 'hingeSide')
+    const hasSwing = rawOpening.swing !== undefined
+    const hasHinge = rawOpening.hingeSide !== undefined
+    const swing = hasSwing ? checkOneOf(rawOpening.swing, swingPath, 'which way the door swings', OPENING_SWINGS, add) : null
+    if (hasHinge) checkOneOf(rawOpening.hingeSide, hingePath, 'the jamb the door hangs on', HINGE_SIDES, add)
+    if (kind === 'door') {
+      if (!hasSwing) {
+        add(swingPath, MISSING, 'Missing which way the door swings.')
+      } else if (swing === 'sliding' && hasHinge) {
+        add(hingePath, UNKNOWN_FIELD, 'A sliding door hangs on no jamb, so it carries no hinge side.')
+      } else if (swing !== null && swing !== 'sliding' && !hasHinge) {
+        add(hingePath, MISSING, 'Missing the jamb the door hangs on.')
+      }
+    } else if (kind !== null) {
+      const noun = openingNoun(kind as OpeningKind)
+      if (hasSwing) add(swingPath, UNKNOWN_FIELD, `Expected a ${noun} to carry no door fields.`)
+      if (hasHinge) add(hingePath, UNKNOWN_FIELD, `Expected a ${noun} to carry no door fields.`)
+    }
+
+    checkUnknownFields(rawOpening, at, OPENING_FIELDS, add)
+    if (host === null || kind === null || start === null || width === null || width <= 0 || floorId === null) return
+    const usable = intervalsOf(floorId).get(host.id)
+    if (usable === undefined) return
+    const fit = fitOpening(host.line, usable, start, width)
+    if (!fit.fits) {
+      add(
+        childPath(at, 'start'),
+        OUT_OF_RANGE,
+        fitProblem(
+          { label: label ?? 'This Opening', kind: kind as OpeningKind, width },
+          host.ref,
+          fit,
+          (wallId) => walls.get(wallId)?.ref ?? wallId,
+        ),
+      )
+    }
+  })
 }
 
 /** Every Wall in the collection that read cleanly, by ID, plus the `ref`s already used. */

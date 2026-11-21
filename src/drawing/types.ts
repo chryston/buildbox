@@ -59,6 +59,8 @@ export type LayerKey =
   | 'sheet-grid'
   /** The Wall bands themselves (#64 §15): Building Elements, drawn under the footprints. */
   | 'walls'
+  /** The symbols inside a Wall's gaps (#65 §12), above the band they are cut into. */
+  | 'wall-openings'
   | 'placed-items'
   | 'plan-annotations'
   | 'placed-item-labels'
@@ -95,6 +97,7 @@ export const LAYER_ORDER: readonly LayerKey[] = [
   'plan-image',
   'sheet-grid',
   'walls',
+  'wall-openings',
   'placed-items',
   'plan-annotations',
   'placed-item-labels',
@@ -174,6 +177,23 @@ export type StyleKey =
   | 'wall:selected'
   /** One of the band's two faces, the line every tool snaps to. */
   | 'wall-face'
+  /** The leaf, panels or window mullion of an Opening — the part a click selects (#65 §12). */
+  | 'opening'
+  | 'opening:selected'
+  | 'opening:preview'
+  | 'opening:preview-blocked'
+  | 'opening-gap-mark'
+  /**
+   * The Opening's own footprint, filled with nothing the eye can see and everything a pointer
+   * needs: the marks are hairlines, and a hairline is a hard thing to click (#65 §11).
+   */
+  | 'opening-hit'
+  /** The quarter-circle a hinged door swings through: a hint of floor area, never a click. */
+  | 'opening-swing'
+  /** A window's three lines, drawn thinner than the Wall they sit in. */
+  | 'opening-window-line'
+  /** The two dashed lines that say a section of this Wall is simply gone. */
+  | 'opening-removed'
   | 'plan-label'
   | 'plan-dimension'
   | 'plan-dimension-line'
@@ -262,6 +282,9 @@ export type SizeRole =
   | 'plan-line'
   | 'plan-line-selected'
   | 'hairline'
+  /** The dash and the gap of a removed section's lines (#65 §12). */
+  | 'opening-dash'
+  | 'opening-gap'
   | 'plan-placeholder-line'
   | 'cabinet-outline'
   | 'cabinet-outline-bold'

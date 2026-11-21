@@ -82,6 +82,17 @@ export const WORKSPACE_TOOLS: readonly WorkspaceToolDefinition[] = [
     requiresCalibratedFloor: true,
     icon: 'M2 6 H18 M2 14 H18 M6 6 V14',
   },
+  {
+    id: 'opening',
+    label: 'Door / window',
+    testId: 'tool-opening',
+    // An Opening is placed in millimetres along a Wall, so it waits for a calibrated Plan Image
+    // on the same rule the Wall tool follows (#64 criterion 11, #65 §9).
+    requiresCalibratedFloor: true,
+    // A gap in a Wall, the leaf standing in it, the swing swept from the hinge: the symbol the
+    // Plan View draws, at the size a 24-unit button holds.
+    icon: 'M2 12 H7 M17 12 H22 M7 12 V4 M7 4 A8 8 0 0 1 15 12',
+  },
 ]
 
 /**

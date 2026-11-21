@@ -17,11 +17,14 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { originSnapCandidates } from '../../derive'
+import { originSnapCandidates, usableIntervals } from '../../derive'
+import type { Pt } from '../../derive'
+import { wallOpenings } from '../../drawing'
+import type { OpeningPreview } from '../../drawing'
 import type { Point2, Project, WallClassification } from '../../domain'
-import { summarizeFloorDependencies } from '../../domain'
+import { nextOpeningLabel, summarizeFloorDependencies } from '../../domain'
 import type { SessionAsset } from '../../session'
-import type { IntentType, PayloadOf } from '../../edit'
+import type { DependencyReview, IntentType, PayloadOf } from '../../edit'
 import {
   usePlanImageSrc,
   useSaveStatus,
@@ -43,6 +46,13 @@ import {
 } from './planModel'
 import { CALIBRATION_REQUIRED_HINT, WORKSPACE_TOOLS, floorNeedsCalibration, toolIsGated, toolTitle } from './toolbarRegistry'
 import { WallDraftOverlay, emptyWallDraft } from './wall/WallDraftOverlay'
+import { OpeningDraftOverlay } from './opening/OpeningDraftOverlay'
+import { OpeningInspector } from './opening/OpeningInspector'
+import { DeleteWallReviewDialog } from './wall/DeleteWallReviewDialog'
+import { emptyOpeningDraft, openingAim } from './opening/openingDraft'
+import type { OpeningAim, OpeningDraft } from './opening/openingDraft'
+import { DEFAULT_OPENING_PRESET_ID, openingPresetRow, resolveOpeningPreset } from './opening/openingPresets'
+import { readoutMm } from './displayUnits'
 import { WallInspector } from './wall/WallInspector'
 import { mergeableNeighbour } from './wall/wallDraft'
 import type { WallChainDraft, WallDraft } from './wall/wallDraft'
@@ -138,6 +148,13 @@ export function FloorWorkspace(): ReactNode {
 
   const tool = useWorkspace((state) => state.activeTool)
   const setTool = useWorkspace((state) => state.setTool)
+  /**
+   * The Opening being placed, or `null` (#65 §9). Local like the Wall draft: a ghost is not a
+   * proposal, and it belongs to the tool and the Floor it was started on.
+   */
+  const [openingDraft, setOpeningDraft] = useState<OpeningDraft | null>(null)
+  /** Where the tool's pointer stands; the ghost follows it, so it is state and not a ref. */
+  const [openingCursor, setOpeningCursor] = useState<Pt | null>(null)
   const selection = useWorkspace((state) => state.selection)
   const select = useWorkspace((state) => state.select)
   /** The Wall the inspector edits, or `null` (#64 §14). A Wall and an Item are never both. */
@@ -159,6 +176,47 @@ export function FloorWorkspace(): ReactNode {
       }
   const dragPreview = useWorkspace((state) => state.dragPreview)
   const setDragPreview = useWorkspace((state) => state.setDragPreview)
+  /** The Opening the inspector edits, or `null` (#65 §11). One thing is inspected at a time. */
+  const openingSelection = useWorkspace((state) => state.openingSelection)
+  const selectOpening = useWorkspace((state) => state.selectOpening)
+  /** This Floor's Openings, in the order the Project lists them. */
+  const floorOpenings = useMemo(
+    () => project.existingModel.openings.filter((opening) => opening.floorId === floorId),
+    [project.existingModel.openings, floorId],
+  )
+  /**
+   * The Openings resolved against their hosts for the Plan View (#65 §12), and the stretches
+   * each Wall can still hold for the tool's aim (#65 §5). Both are recomputed when the Walls or
+   * the Openings move, never on a pointer move.
+   */
+  const openingLayer = useMemo(
+    () => wallOpenings(project.existingModel.walls, project.existingModel.wallJunctions, floorOpenings),
+    [project.existingModel.walls, project.existingModel.wallJunctions, floorOpenings],
+  )
+  const usableByWall = useMemo(
+    () => usableIntervals(project.existingModel.walls, project.existingModel.wallJunctions),
+    [project.existingModel.walls, project.existingModel.wallJunctions],
+  )
+  /**
+   * The Opening the inspector edits, with the two numbers its distance toggle needs and cannot
+   * derive from the stored record alone: the far jamb the Plan View actually drew (an arc length
+   * on an arc Wall, where the stored `width` stays the chord) and the host's own reference-line
+   * length, which is what `Distance from end` counts back from (#65 §11).
+   */
+  const selectedOpening = useMemo(() => {
+    if (openingSelection === null) return null
+    const opening = floorOpenings.find((each) => each.id === openingSelection) ?? null
+    if (opening === null) return null
+    const host = project.existingModel.walls.find((wall) => wall.id === opening.hostWallId) ?? null
+    if (host === null) return null
+    const symbol = openingLayer.flatMap((wall) => wall.symbols).find((each) => each.id === opening.id) ?? null
+    return {
+      opening,
+      host,
+      end: symbol?.end ?? opening.start + opening.width,
+      hostLength: usableByWall.get(host.id)?.length ?? 0,
+    }
+  }, [openingSelection, floorOpenings, project.existingModel.walls, openingLayer, usableByWall])
   const angleSnap = useWorkspace((state) => state.snapSettings.angle)
   const snapSettings = useWorkspace((state) => state.snapSettings)
   /** The kinds the nine `Snaps ▾` rows switch on, recomputed only when a row changes. */
@@ -170,6 +228,13 @@ export function FloorWorkspace(): ReactNode {
   useEffect(() => {
     setWallDraft(null)
   }, [floorId])
+  useEffect(() => {
+    // Entering the tool hands it its draft. The aim needs the row being placed, so a tool that
+    // waited for the picker to be touched before it knew what it was placing would draw no ghost
+    // and place nothing at all. Leaving it, or the Floor under it, takes the draft back.
+    setOpeningDraft(tool === 'opening' ? emptyOpeningDraft(DEFAULT_OPENING_PRESET_ID) : null)
+    setOpeningCursor(null)
+  }, [tool, floorId])
   /** What the next Wall gets: the tool options plus the Floor's or Project's default height (#64 §16). */
   const wallDefaults = {
     ...wallOptions,
@@ -275,6 +340,96 @@ export function FloorWorkspace(): ReactNode {
 
   const send = <T extends IntentType>(type: T, payload: PayloadOf<T>): void => {
     dispatch(services.intent.build(type, payload))
+  }
+
+  /**
+   * Where the Opening would go if the pointer were here (#65 §10). The reach is a fixed number
+   * of pixels rather than millimetres, so the tool is as forgiving zoomed out as zoomed in, and
+   * the answer comes from the same kernel the Intent consults — a ghost the click would refuse
+   * is the one bug this file exists to prevent.
+   */
+  const aimAtOpening = (cursor: Pt | null): OpeningAim | null => {
+    if (cursor === null || openingDraft === null) return null
+    const { walls, wallJunctions } = project.existingModel
+    return openingAim(cursor, openingDraft, {
+      walls,
+      junctions: wallJunctions,
+      usable: usableByWall,
+      preset: openingPresetRow(openingDraft.presetId),
+      hostHeightOf: (wallId) => walls.find((wall) => wall.id === wallId)?.height ?? 0,
+      reach: 12 / (viewport?.zoom ?? 1),
+      refOf: (wallId) => walls.find((wall) => wall.id === wallId)?.ref ?? wallId,
+      format: (mm) => readoutMm(mm, project.preferences.displayUnit, project.preferences.displayPrecision),
+    })
+  }
+
+  /**
+   * The click that lands on a valid preview: one Opening, one Intent, one undo step (#26). The
+   * label is the next free one of its kind, because a person placing six doors is not going to
+   * name six doors.
+   */
+  const placeOpening = (aim: OpeningAim): void => {
+    if (floorId === null) return
+    const row = openingPresetRow(openingDraft?.presetId ?? DEFAULT_OPENING_PRESET_ID)
+    const host = project.existingModel.walls.find((wall) => wall.id === aim.hostWallId)
+    const preset = resolveOpeningPreset(row, host?.height ?? 0)
+    send('opening.create', {
+      floorId,
+      hostWallId: aim.hostWallId,
+      kind: preset.kind,
+      label: nextOpeningLabel(project.existingModel.openings, preset.kind),
+      start: aim.start,
+      width: preset.width,
+      sill: preset.sill,
+      head: preset.head,
+      ...(preset.swing === undefined ? {} : { swing: preset.swing, hingeSide: 'start' }),
+    })
+  }
+
+  /**
+   * A click on the Floor while the Door / window tool is in hand: place where the ghost stands,
+   * and where it does not fit do nothing at all — the bar has already said why in the sentence
+   * that names the Opening and the Wall (#65 criterion 1). The aim is recomputed for the point
+   * clicked rather than trusted from the last pointer move, because a click can be handled before
+   * the move that preceded it has been rendered.
+   */
+  const clickOnCanvas = (at: Pt): void => {
+    if (tool !== 'opening') return
+    const aimed = aimAtOpening(at)
+    if (aimed !== null && aimed.fits) placeOpening(aimed)
+  }
+
+  /** The ghost for where the pointer stands now, in the shape the Wall list takes (#65 §10). */
+  const openingAimNow = aimAtOpening(openingCursor)
+  const openingPreview: OpeningPreview | null = openingAimNow === null
+    ? null
+    : { symbols: [openingAimNow.symbol], blocked: !openingAimNow.fits, gap: openingAimNow.violated }
+
+  /**
+   * The delete a Wall with Openings has to be answered before it runs (#65 §8). The button asks
+   * the question by asking the same kernel the Intent consults what it would take with it, and
+   * the ids the answer lists are what the confirmed Intent carries back — so an Opening added
+   * after the question was asked makes the answer stale, and the Intent is refused rather than
+   * deleting something nobody agreed to.
+   */
+  const [deleteReview, setDeleteReview] = useState<DependencyReview | null>(null)
+  const deleteWall = (wallId: string): void => {
+    const { review } = services.intent.preview(project, services.intent.build('wall.delete', { wallId }))
+    if (review !== null) {
+      setDeleteReview(review)
+      return
+    }
+    send('wall.delete', { wallId })
+    selectWall(null)
+  }
+  const confirmDeleteWall = (): void => {
+    if (deleteReview === null) return
+    send('wall.delete', {
+      wallId: deleteReview.wallId,
+      openings: deleteReview.openings.map((opening) => opening.id),
+    })
+    setDeleteReview(null)
+    selectWall(null)
   }
 
   const selected = items.find((item) => item.id === selection) ?? null
@@ -396,6 +551,15 @@ export function FloorWorkspace(): ReactNode {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
+        // The Door / window tool backs out first: its controls float over the canvas and hold no
+        // focus of their own to take the key (#65 §9).
+        if (tool === 'opening') {
+          event.preventDefault()
+          setOpeningDraft(null)
+          setOpeningCursor(null)
+          setTool('select')
+          return
+        }
         if (designPreview === null && !pickingOrigin) return
         event.preventDefault()
         setDesignPreview(null)
@@ -404,13 +568,20 @@ export function FloorWorkspace(): ReactNode {
       }
       const target = event.target as HTMLElement | null
       if (target !== null && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+      // Enter places the Opening the ghost is standing on, exactly as a click there would.
+      if (tool === 'opening') {
+        if (event.key !== 'Enter') return
+        event.preventDefault()
+        if (openingAimNow !== null && openingAimNow.fits) placeOpening(openingAimNow)
+        return
+      }
       if (selected === null) return
       if (event.key === '[') send('plan.rotatePlacement', { placedItemId: selected.id, rotationDeg: quarterTurn(selected.rotationDeg, -1) })
       if (event.key === ']') send('plan.rotatePlacement', { placedItemId: selected.id, rotationDeg: quarterTurn(selected.rotationDeg, 1) })
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [selected, designPreview, pickingOrigin, setDesignPreview, setPickingOrigin, send])
+  }, [selected, designPreview, pickingOrigin, setDesignPreview, setPickingOrigin, send, tool, openingAimNow, placeOpening, setTool])
 
   const commitImage = (prepared: PreparedPlanImage): void => {
     const asset = prepared.asset
@@ -793,7 +964,26 @@ export function FloorWorkspace(): ReactNode {
           />
         }
         inspector={
-          selectedWall === null
+          selectedOpening !== null
+            ? <OpeningInspector
+                opening={selectedOpening.opening}
+                host={selectedOpening.host}
+                end={selectedOpening.end}
+                hostLength={selectedOpening.hostLength}
+                unit={project.preferences.displayUnit}
+                precision={project.preferences.displayPrecision}
+                onRename={(label) => send('opening.rename', { openingId: selectedOpening.opening.id, label })}
+                onSetWidth={(width) => send('opening.setWidth', { openingId: selectedOpening.opening.id, width })}
+                onSetStart={(start) => send('opening.setStart', { openingId: selectedOpening.opening.id, start })}
+                onFlipHinge={() => send('opening.flipHinge', { openingId: selectedOpening.opening.id })}
+                onFlipSwing={() => send('opening.flipSwing', { openingId: selectedOpening.opening.id })}
+                onSelectHost={() => selectWall(selectedOpening.opening.hostWallId)}
+                onDelete={() => {
+                  send('opening.delete', { openingId: selectedOpening.opening.id })
+                  selectOpening(null)
+                }}
+              />
+            : selectedWall === null
             ? <SelectionInspector
             item={selected}
             bounds={selection === null || derivedFloor === null
@@ -837,10 +1027,7 @@ export function FloorWorkspace(): ReactNode {
                 onOffset={(distance, side) => send('wall.offset', { wallId: selectedWall.wall.id, distance, side })}
                 onSplit={() => send('wall.split', { wallId: selectedWall.wall.id, at: selectedWall.derived.length / 2 })}
                 onMerge={(otherId) => send('wall.merge', { wallIds: [selectedWall.wall.id, otherId] as const })}
-                onDelete={() => {
-                  send('wall.delete', { wallId: selectedWall.wall.id })
-                  selectWall(null)
-                }}
+                onDelete={() => deleteWall(selectedWall.wall.id)}
               />
         }
         canvas={
@@ -857,6 +1044,8 @@ export function FloorWorkspace(): ReactNode {
               tool={tool}
               selection={selection}
               onSelect={select}
+              onCursorChange={setOpeningCursor}
+              onCanvasClick={clickOnCanvas}
               dragPreview={dragPreview}
               onDragPreview={setDragPreview}
               onMoveItem={(id, x, y) => send('plan.movePlacement', { placedItemId: id, translation: { x, y } })}
@@ -871,7 +1060,19 @@ export function FloorWorkspace(): ReactNode {
               angleSnap={angleSnap}
               walls={floorWalls}
               selectedWallId={wallSelection}
+              openings={openingLayer}
+              selectedOpeningId={openingSelection}
+              onSelectOpening={(id) => {
+                // While the Door / window tool is in hand a click on the plan is a click *on* the
+                // Wall under it: the marks there are the host being aimed at, not a selection, and
+                // selecting one would drop the tool the person is using (#65 criterion 1).
+                if (tool === 'opening') return
+                selectOpening(id)
+                setTool('select')
+              }}
+              openingPreview={openingPreview}
               onSelectWall={(id) => {
+                if (tool === 'opening') return
                 selectWall(id)
                 setTool('select')
               }}
@@ -914,6 +1115,19 @@ export function FloorWorkspace(): ReactNode {
                   unit={project.preferences.displayUnit}
                   precision={project.preferences.displayPrecision}
                 />
+              ) : tool === 'opening' ? (
+                <OpeningDraftOverlay
+                  draft={openingDraft ?? emptyOpeningDraft(DEFAULT_OPENING_PRESET_ID)}
+                  onDraft={setOpeningDraft}
+                  aim={openingAimNow}
+                  onCancel={() => {
+                    setOpeningDraft(null)
+                    setOpeningCursor(null)
+                    setTool('select')
+                  }}
+                  unit={project.preferences.displayUnit}
+                  precision={project.preferences.displayPrecision}
+                />
               ) : undefined}
             />
             )}
@@ -943,6 +1157,13 @@ export function FloorWorkspace(): ReactNode {
           </span>
         ) : null}
       />
+      {deleteReview !== null && (
+        <DeleteWallReviewDialog
+          review={deleteReview}
+          onConfirm={confirmDeleteWall}
+          onCancel={() => setDeleteReview(null)}
+        />
+      )}
       {pendingDistancePx !== null && floorId !== null && (
         <ScaleCalibrationModal
           distancePx={pendingDistancePx}

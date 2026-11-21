@@ -46,6 +46,7 @@ function project(): Project {
     existingModel: {
       walls: [],
       wallJunctions: [],
+      openings: [],
       placedItems: [placed('placed-1', 'floor-kitchen'), placed('placed-2', 'floor-kitchen'), placed('placed-3', 'floor-kitchen')],
     },
   }

@@ -85,6 +85,29 @@ export type {
   WallJustification,
   WallSide,
 } from './joinWalls'
+export {
+  arcLengthOfChord,
+  chordOfArcLength,
+  faceCurveBetween,
+  facePointAt,
+  fitOpening,
+  gapChord,
+  openingChord,
+  openingEnd,
+  refRadius,
+  refTangentAt,
+  usableIntervals,
+  wallPieces,
+} from './openings'
+export type {
+  BlockCause,
+  FaceOffsets,
+  OpeningFit,
+  UsableBlock,
+  UsableGap,
+  UsableInterval,
+  WallPiece,
+} from './openings'
 export { classify, interval, overlapLength } from './interval'
 export type { Interval } from './interval'
 export {

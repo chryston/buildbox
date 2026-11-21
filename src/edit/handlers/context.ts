@@ -8,7 +8,7 @@
  * function that spreads nodes.
  */
 import type { Project } from '../../domain'
-import type { Intent, IntentType, Locator } from '../intents'
+import type { DependencyReview, Intent, IntentType, Locator } from '../intents'
 
 export interface HandlerContext<T extends IntentType> {
   readonly project: Project
@@ -32,4 +32,11 @@ export interface IntentHandler<T extends IntentType> {
    * highlight what the user clicked even when the edit was refused.
    */
   readonly locate: (project: Project, intent: Intent<T>) => Locator
+  /**
+   * What this Intent takes with it, for the review the UI shows before it runs (#20 §4,
+   * #65 §8). `null` — the usual answer — means there is nothing to confirm. The handler
+   * re-checks the answer when the Intent comes back, so a report read against an old
+   * Project is refused rather than trusted.
+   */
+  readonly review?: (project: Project, intent: Intent<T>) => DependencyReview | null
 }

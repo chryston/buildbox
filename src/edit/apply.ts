@@ -16,7 +16,7 @@ import type { Patch } from 'immer'
 import { validateProject } from '../domain'
 import type { Project } from '../domain'
 import { problem } from '../lib'
-import type { Applied, Intent, IntentType, Locator, Rejection, RejectionCode } from './intents'
+import type { Applied, DependencyReview, Intent, IntentType, Locator, Rejection, RejectionCode } from './intents'
 import { IntentRejection } from './handlers/support'
 import { INTENT_HANDLERS } from './registry'
 import type { IntentHandler } from './handlers/context'
@@ -75,23 +75,27 @@ export function applyIntent(project: Project, intent: Intent): Applied | Rejecti
 }
 
 /**
- * What an Intent would touch, and whether it would be refused — without applying it.
+ * What an Intent would touch, whether it would be refused, and what it would take with it —
+ * without applying it.
  *
  * #48's toolbar greys itself out with this; #50's conflict banner asks its question before
  * the user commits to the gesture. The Locator is the same best-effort one a rejection
- * would have carried, so a greyed-out button still knows what it was pointing at.
+ * would have carried, so a greyed-out button still knows what it was pointing at. `review`
+ * is the dependency report of #65 §8: `null` for everything the user may do without being
+ * asked first, and the list of what would go with the edit when they may not.
  */
 export function previewIntent(
   project: Project,
   intent: Intent,
-): { affected: Locator; rejection: Rejection | null } {
+): { affected: Locator; rejection: Rejection | null; review: DependencyReview | null } {
   const handler = handlerFor(intent.type)
   const affected: Locator =
     handler === undefined
       ? { floorId: null, viewId: null, view: 'cabinet', itemDesignIds: [], placedItemIds: [] }
       : handler.locate(project, intent)
+  const review = handler?.review?.(project, intent) ?? null
   const result = applyIntent(project, intent)
-  return { affected, rejection: result.ok ? null : result }
+  return { affected, rejection: result.ok ? null : result, review }
 }
 
 /** Replay a recorded step forward, or an inverse patch backward. #48's undo is this. */

@@ -22,6 +22,8 @@
 
 import type { MigrationStage, PersistenceError, RecoveryPointKind, SaveFailureReason } from '../../session'
 import type { ExportFailureReason } from '../../export'
+import { openingNoun } from '../../domain'
+import type { FitFailure, OpeningKind } from '../../domain'
 
 /** `1 Floor` / `2 Floors` and the same for every countable noun the Library shows. */
 export const plural = (count: number, one: string, many: string): string =>
@@ -500,3 +502,38 @@ export const RESTORE_CHECK_NAMES = {
   'migration-failed': 'migration',
   'invalid-project': 'Project record',
 } as const
+
+/**
+ * The Openings' sentences (#65 §5, §10).
+ *
+ * `fitProblem` is re-exported rather than copied: the edit path already answers with it, and two
+ * wordings of one rejection is how an app ends up with a screenshot of a sentence it no longer
+ * says. The placement sentence beside it is the one case the domain cannot word, because a
+ * placement has no label yet — the preset's own name is what the person is choosing between.
+ *
+ * Neither shows a coordinate. The words name the Opening and the Wall; the Plan View is what
+ * shows the where.
+ */
+export { fitProblem, openingNoun } from '../../domain'
+
+/** Millimetres in a sentence: whole when they are whole, one decimal when they are not. */
+const mmWords = (mm: number): string => `${Math.round(mm * 10) / 10}`
+
+/** Why this preset will not fit where the pointer is standing (#65 §10). */
+export function placementFitMessage(
+  presetName: string,
+  kind: OpeningKind,
+  width: number,
+  hostRef: string,
+  failure: FitFailure,
+  refOf: (wallId: string) => string,
+): string {
+  if (failure.reason === 'no-room') {
+    return `This wall is shorter than a ${mmWords(width)} mm ${openingNoun(kind)}.`
+  }
+  const cause = failure.cause
+  if (cause !== null && cause.kind === 'junction') {
+    return `${presetName} doesn't fit here: it would cross the join with ${refOf(cause.wallId)}.`
+  }
+  return `${presetName} doesn't fit here: it would run past the end of ${hostRef}.`
+}

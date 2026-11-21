@@ -12,6 +12,7 @@
  * short of another creates nothing. Nothing here infers a join from proximity.
  */
 import type { EntityId, Project, Wall, WallEnd, WallJunction, WallJunctionEnd, WallRefLine } from '../../domain'
+import { openingDependencies } from '../../domain'
 import {
   DEG,
   TOLERANCE_MM,
@@ -19,6 +20,7 @@ import {
   distance,
   normaliseDeg,
   offsetRefLine,
+  openingEnd,
   pt,
   refLength,
   refParamAt,
@@ -26,9 +28,10 @@ import {
   refTangentDeg,
 } from '../../geometry'
 import { chainJunctionCount, wallEndKey } from '../intents'
-import type { CreateWallChain, Locator, WallEndTarget, WallIntent } from '../intents'
+import type { CreateWallChain, DependencyReview, Locator, WallEndTarget, WallIntent } from '../intents'
 import type { Handler, IntentHandler } from './context'
 import { refuse, spendIds } from './support'
+import { requireOpeningsFit } from './openingSupport'
 
 const wallPath = (wallId: EntityId): string => `existingModel.walls[${wallId}]`
 const junctionPath = (junctionId: EntityId): string => `existingModel.wallJunctions[${junctionId}]`
@@ -452,6 +455,20 @@ const splitWall: Handler<'wall.split'> = (ctx) => {
     }
   }
   const [newId, junctionId] = spendIds(ctx.intent.ids, 2, 'wall.split')
+  // Each Opening goes to the piece it lies on, its `start` measured from the new seam
+  // (#65 §7). One that straddles the seam blocks the split outright: the two pieces would
+  // each be left holding part of a hole that neither of them has.
+  for (const opening of ctx.draft.existingModel.openings) {
+    if (opening.hostWallId !== wallId) continue
+    const end = openingEnd(wall.line, opening.start, opening.width)
+    if (opening.start < at - TOLERANCE_MM && end > at + TOLERANCE_MM) {
+      refuse('split-blocked', wallPath(wallId), `The split point is inside ${opening.label}.`)
+    }
+    if (opening.start >= at) {
+      opening.hostWallId = newId
+      opening.start -= at
+    }
+  }
   const cut = refPointAt(wall.line, at)
   const arc = wall.line.kind === 'arc' ? { throughStart: refPointAt(wall.line, at / 2), throughEnd: refPointAt(wall.line, (at + length) / 2) } : null
   const startLine: WallRefLine = { ...wall.line, end: cut, ...(arc === null ? {} : { through: arc.throughStart }) }
@@ -575,19 +592,65 @@ const mergeWalls: Handler<'wall.merge'> = (ctx) => {
       member.wallId === secondId && member.end !== joinedSecond ? { wallId: firstId, end: farFirst } : member,
     )
   }
+  // Both pieces' Openings move to the Wall that survives. Both are moved, not just the
+  // second: the merged line starts at whichever piece reaches further back, so the survivor's
+  // own Openings shift by the same amount the other's do.
+  rehostOpenings(ctx.draft.existingModel.openings, first, firstId, line)
+  rehostOpenings(ctx.draft.existingModel.openings, second, firstId, line)
   ctx.draft.existingModel.wallJunctions = ctx.draft.existingModel.wallJunctions.filter((junction) => junction.id !== shared.id)
   ctx.draft.existingModel.walls = ctx.draft.existingModel.walls.filter((wall) => wall.id !== secondId)
+}
+
+/** Both pieces' Openings, read at the same point of the longer line (#65 §7). */
+const rehostOpenings = (
+  openings: Project['existingModel']['openings'],
+  from: Wall,
+  onto: EntityId,
+  line: WallRefLine,
+): void => {
+  for (const opening of openings) {
+    if (opening.hostWallId !== from.id) continue
+    opening.start = refParamAt(line, refPointAt(from.line, opening.start))
+    opening.hostWallId = onto
+  }
 }
 
 /**
  * Delete a Wall: its Junctions lose that end, a Junction left with one member and no host is
  * removed, and the Junctions hosted on it go with it — their branch ends become free ends, which
- * is what the homeowner sees as a wall that no longer meets anything (#64 §10). Nothing else is
- * deleted.
+ * is what the homeowner sees as a wall that no longer meets anything (#64 §10).
+ *
+ * Its Openings go too, but never quietly (#65 §8). An Opening is an absence in one Wall, so a
+ * Wall that has any cannot be deleted on its own: the review lists them, the homeowner agrees,
+ * and the agreement is re-checked here against the Project as it is now. An answer that no
+ * longer matches — an Opening added or removed since the dialog was shown — is refused, because
+ * deleting this Wall would then take something the homeowner never saw.
  */
 const deleteWall: Handler<'wall.delete'> = (ctx) => {
-  const { wallId } = ctx.intent.payload
-  requireWall(ctx.project, wallId)
+  const { wallId, openings: agreed } = ctx.intent.payload
+  const host = requireWall(ctx.project, wallId)
+  const hosted = ctx.project.existingModel.openings.filter((opening) => opening.hostWallId === wallId)
+  if (hosted.length > 0) {
+    if (agreed === undefined) {
+      refuse(
+        'has-dependants',
+        wallPath(wallId),
+        `${host.ref} has ${count(hosted.length)} in it. Deleting the wall deletes them too — nothing here does that for you.`,
+      )
+    }
+    const now = hosted.map((opening) => opening.id).sort()
+    const given = [...agreed].sort()
+    if (now.length !== given.length || now.some((id, index) => id !== given[index])) {
+      refuse(
+        'dependency-changed',
+        wallPath(wallId),
+        `${host.ref} does not have the same openings as when you asked. Check the list again.`,
+      )
+    }
+    ctx.draft.existingModel.openings = ctx.draft.existingModel.openings.filter(
+      (opening) => opening.hostWallId !== wallId,
+    )
+  }
   ctx.draft.existingModel.walls = ctx.draft.existingModel.walls.filter((wall) => wall.id !== wallId)
   ctx.draft.existingModel.wallJunctions = ctx.draft.existingModel.wallJunctions
     .filter((junction) => junction.host === undefined || junction.host.wallId !== wallId)
@@ -596,6 +659,28 @@ const deleteWall: Handler<'wall.delete'> = (ctx) => {
       return ends.length === junction.ends.length ? junction : { ...junction, ends }
     })
     .filter((junction) => junction.ends.length >= 2 || junction.host !== undefined)
+}
+
+/** `1 opening` / `3 openings` — the count the refusal gives. */
+const count = (n: number): string => `${n} ${n === 1 ? 'opening' : 'openings'}`
+
+/**
+ * The review a delete of a Wall with Openings has to be answered before it runs (#65 §8).
+ * Nothing is thrown here: a Wall that is not there has nothing to list, and the Intent is
+ * refused by the handler with the usual message.
+ */
+const deleteWallReview = (project: Project, wallId: EntityId): DependencyReview | null => {
+  const wall = project.existingModel.walls.find((candidate) => candidate.id === wallId)
+  if (wall === undefined) return null
+  const openings = openingDependencies(project, wallId)
+  if (openings.length === 0) return null
+  return {
+    kind: 'delete-wall',
+    wallId,
+    wallRef: wall.ref,
+    openings,
+    message: `Delete ${wall.ref} and its ${count(openings.length)}?`,
+  }
 }
 
 const planLocator = (floorId: EntityId | null): Locator => ({
@@ -614,17 +699,36 @@ const junctionFloor = (project: Project, junctionId: EntityId): EntityId | null 
 
 type WallHandlers = { [T in WallIntent['type']]: IntentHandler<T> }
 
+/**
+ * The Wall edits a Project's Openings have to survive (#65 §7): the edit runs, then every
+ * Opening is measured against the Wall it is cut into as that Wall now is. One that no longer
+ * fits refuses the whole edit with its own sentence, so a drag that would swallow a window is
+ * refused outright — and the tool's red proposal state reads the same rejection the commit
+ * would have got.
+ *
+ * `wall.createChain` is not wrapped: a Wall drawn this instant has nothing cut into it yet.
+ * `wall.delete` is not wrapped either, because its Openings are a review, not a fit failure.
+ */
+const withOpeningsChecked = <T extends WallIntent['type']>(run: Handler<T>): Handler<T> => (ctx) => {
+  run(ctx)
+  requireOpeningsFit(ctx.draft)
+}
+
 export const WALL_HANDLERS: WallHandlers = {
   'wall.createChain': { run: createChain, locate: (_project, intent) => planLocator(intent.payload.floorId) },
-  'wall.dragJunction': { run: dragJunction, locate: (project, intent) => planLocator(junctionFloor(project, intent.payload.junctionId)) },
-  'wall.dragEndpoint': { run: dragEndpoint, locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.dragBody': { run: dragBody, locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.setLength': { run: setLength, locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.setDirection': { run: setDirection, locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.setArc': { run: setArc, locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.setThickness': { run: setThickness, locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.offset': { run: offsetWall, locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.split': { run: splitWall, locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.merge': { run: mergeWalls, locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallIds[0])) },
-  'wall.delete': { run: deleteWall, locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
+  'wall.dragJunction': { run: withOpeningsChecked(dragJunction), locate: (project, intent) => planLocator(junctionFloor(project, intent.payload.junctionId)) },
+  'wall.dragEndpoint': { run: withOpeningsChecked(dragEndpoint), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
+  'wall.dragBody': { run: withOpeningsChecked(dragBody), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
+  'wall.setLength': { run: withOpeningsChecked(setLength), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
+  'wall.setDirection': { run: withOpeningsChecked(setDirection), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
+  'wall.setArc': { run: withOpeningsChecked(setArc), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
+  'wall.setThickness': { run: withOpeningsChecked(setThickness), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
+  'wall.offset': { run: withOpeningsChecked(offsetWall), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
+  'wall.split': { run: withOpeningsChecked(splitWall), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
+  'wall.merge': { run: withOpeningsChecked(mergeWalls), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallIds[0])) },
+  'wall.delete': {
+    run: deleteWall,
+    locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)),
+    review: (project, intent) => deleteWallReview(project, intent.payload.wallId),
+  },
 }

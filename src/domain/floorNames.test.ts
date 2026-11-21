@@ -30,7 +30,7 @@ const projectWith = (floorNames: string[], viewNames: [floorId: string, name: st
     floors,
     views,
     itemDesigns: [],
-    existingModel: { placedItems: [], walls: [], wallJunctions: [] },
+    existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [] },
   }
 }
 

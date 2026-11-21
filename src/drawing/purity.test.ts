@@ -25,11 +25,15 @@ const PURE_MODULES = ['drawing', 'derive'] as const
  *
  * Each is a value that differs between two runs of the same code — which is the whole
  * definition of impure for a module whose output is compared byte for byte.
+ *
+ * The three browser globals are matched as a *member access* rather than as a word, because
+ * `window` is a word this codebase owns: an Opening of kind `window` (#65) is domain
+ * vocabulary, and it appears in the drawing of one. `window.devicePixelRatio` and
+ * `window['innerWidth']` are what a pure module actually breaks itself with, and both still
+ * match.
  */
 const BANNED: readonly (readonly [RegExp, string])[] = [
-  [/\bwindow\b/, 'the global window'],
-  [/\bdocument\b/, 'the global document'],
-  [/\bnavigator\b/, 'the global navigator'],
+  [/\b(?:window|document|navigator)\s*[.?[[]/, 'a browser global'],
   [/\blocalStorage\b/, 'localStorage'],
   [/\bindexedDB\b/, 'indexedDB'],
   [/OffscreenCanvas/, 'OffscreenCanvas'],

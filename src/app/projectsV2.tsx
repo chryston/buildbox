@@ -10,7 +10,7 @@ import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import type { ReactNode } from 'react'
 import type { Root } from 'react-dom/client'
 import App from '../App'
-import { INTENT_LABELS, intentIdCount } from '../edit'
+import { INTENT_LABELS, intentIdCount, previewIntent } from '../edit'
 import type { Intent, IntentType, PayloadOf } from '../edit'
 import { collectLiveHashes, createMemoryAdapter } from '../persistence'
 import type { Ports } from '../persistence'
@@ -178,6 +178,7 @@ export function createIntentFactory(clock: ClockPort, ids: IdSource): IntentBuil
         now: clock.now(),
       } as Intent
     },
+    preview: (project, intent) => ({ review: previewIntent(project, intent).review }),
   }
 }
 

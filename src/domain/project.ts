@@ -224,6 +224,56 @@ export interface ExistingModel {
   walls: Wall[]
   /** The Wall Junctions (#64): the only thing that joins two Walls. */
   wallJunctions: WallJunction[]
+  /** Every Opening of every Floor (#65). One is hosted by exactly one Wall. */
+  openings: Opening[]
+}
+
+/** What an Opening is: an absence in one Wall, not a thing standing in a Room (#65). */
+export type OpeningKind = 'door' | 'window' | 'removed_section'
+
+/**
+ * Which way a door's leaf swings (#65 §2).
+ *
+ * These three words are the CSV codes of export contract v1.0 (#68) and never change.
+ * `left` and `right` are data only: the interface says "this side" and "the other side",
+ * because nothing in a plan fixes which way a reader is facing, and a wrong-looking
+ * convention is worse than no word at all. A sliding door hangs on neither jamb, so it
+ * carries no `hingeSide`.
+ */
+export type OpeningSwing = 'left' | 'right' | 'sliding'
+
+/** The jamb a hinged door hangs on: the host reference line's `start` end, or its `end`. */
+export type HingeSide = 'start' | 'end'
+
+/**
+ * A door, a window or a removed section in exactly one Wall (#65).
+ *
+ * An Opening is stored parametrically and never in Floor coordinates: `start` is a
+ * distance along the host Wall's reference line — arc length on an arc Wall — so moving,
+ * rotating, offsetting or re-justifying the host carries the Opening along with it and
+ * nothing has to be recomputed. `width` is the chord, the number on a drawing and the
+ * number a supplier quotes; the arc length a chord covers is derived, never stored.
+ */
+export interface Opening {
+  id: EntityId
+  floorId: EntityId
+  /** The one Wall this Opening is cut into. Never reassigned behind the user's back. */
+  hostWallId: EntityId
+  kind: OpeningKind
+  /** `Door 2` by default, numbered per kind within the Project; renameable. */
+  label: string
+  /** Distance along the host reference line to the near jamb, in millimetres. */
+  start: number
+  /** The chord across the Wall, in millimetres, greater than 0. */
+  width: number
+  /** Vertical Extent: the bottom of the opening, from Floor level. */
+  sill: number
+  /** Vertical Extent: the top of the opening, always above `sill`. */
+  head: number
+  /** Doors only; absent for a window or a removed section. */
+  swing?: OpeningSwing
+  /** Hinged doors only; absent when `swing` is `'sliding'`. */
+  hingeSide?: HingeSide
 }
 
 /** Where the reference line sits within the thickness, relative to its own direction (#64). */

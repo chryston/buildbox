@@ -95,6 +95,13 @@ export function remapIds(project: Project, newId: EntityId, allocate: IdAllocato
         ends: junction.ends.map((end) => ({ ...end, wallId: next(end.wallId) })),
         ...(junction.host === undefined ? {} : { host: { ...junction.host, wallId: next(junction.host.wallId) } }),
       })),
+      // An Opening keeps its host: the copy's Wall it is cut into is the copy's own (#65).
+      openings: project.existingModel.openings.map((opening) => ({
+        ...opening,
+        id: next(opening.id),
+        floorId: next(opening.floorId),
+        hostWallId: next(opening.hostWallId),
+      })),
     },
   }
 }
@@ -111,6 +118,7 @@ function entityIds(project: Project): EntityId[] {
   for (const item of project.existingModel.placedItems) ids.push(item.id)
   for (const wall of project.existingModel.walls) ids.push(wall.id)
   for (const junction of project.existingModel.wallJunctions) ids.push(junction.id)
+  for (const opening of project.existingModel.openings) ids.push(opening.id)
   return ids
 }
 
