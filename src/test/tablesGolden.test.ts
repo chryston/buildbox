@@ -258,7 +258,12 @@ describe('the Warnings List (#68 criterion 5)', () => {
       'unacknowledged',
       'acknowledged',
     ])
-    expect(rows.map((row) => cell('warnings', row, 'acknowledgement_note'))).toEqual(['', '', 'Builder to check'])
+    // The reopened row keeps the note it was acknowledged with (#66 §3); the open one has none.
+    expect(rows.map((row) => cell('warnings', row, 'acknowledgement_note'))).toEqual([
+      'Re-measure after the partition moves.',
+      '',
+      'Builder to check',
+    ])
   })
 
   it('sorts unacknowledged first, then by subject', () => {

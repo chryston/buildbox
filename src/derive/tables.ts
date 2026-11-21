@@ -182,7 +182,7 @@ export type WarningsRow = {
   /** `null` — an empty cell — when the producer measured an area or a percentage instead. */
   readonly measuredMm: number | null
   readonly message: string
-  /** The note of an `acknowledged` row; empty for every other status. */
+  /** The user's note, on an `acknowledged` row and on a reopened one; empty for an open warning. */
   readonly acknowledgementNote: string
 }
 
@@ -403,7 +403,9 @@ function warningsForFloor(
         otherId: other?.id ?? '',
         measuredMm: warning.measured.mm ?? null,
         message: deps.warningMessage(warning.messageKey, warning.params),
-        acknowledgementNote: warning.status === 'acknowledged' ? warning.acknowledgement?.note ?? '' : '',
+        // #66 §3: a reopened warning keeps its note visible beside `Reopened after change`, so the
+        // row carries it too — the note belongs to the decision, not to the status.
+        acknowledgementNote: warning.acknowledgement?.note ?? '',
       },
     ]
   })

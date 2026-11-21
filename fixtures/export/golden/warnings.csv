@@ -1,4 +1,4 @@
 ﻿status,floor_id,floor,design_option_id,design_option,warning_type,subject_type,subject_id,other_type,other_id,measured_mm,message,acknowledgement_note
-unacknowledged,seed-001,Floor 1,,,item_crosses_room,placed_item,seed-item-026,room,seed-room-012,,Base 600 #2 crosses Kitchen: 0.12 m² (50%) of its footprint is outside.,
+unacknowledged,seed-001,Floor 1,,,item_crosses_room,placed_item,seed-item-026,room,seed-room-012,,Base 600 #2 crosses Kitchen: 0.12 m² (50%) of its footprint is outside.,Re-measure after the partition moves.
 unacknowledged,seed-001,Floor 1,,,item_crosses_room,placed_item,seed-tbl-006,room,seed-room-019,,Base 600 #3 crosses Bedroom: 0.20 m² (83%) of its footprint is outside.,
 acknowledged,seed-001,Floor 1,,,item_crosses_room,placed_item,fp-wardrobe,room,seed-room-012,,Wardrobe crosses Kitchen: 0.02 m² (63%) of its footprint is outside.,Builder to check
