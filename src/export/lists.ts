@@ -23,6 +23,7 @@ import { sha256Hex } from '../lib'
 import { TABLES } from './csv/tables'
 import type { TableId } from './csv/tables'
 import { writeCsv } from './csv/write'
+import type { CsvRow } from './csv/write'
 import { fileDate } from './format'
 import { provenanceOf } from './provenance'
 import { describeScope } from './scope'
@@ -101,9 +102,15 @@ export async function exportLists(
   }
 
   const counted = quantities(snapshot.project, snapshot.revision, recipe.scope)
+  // The tables this function can write, by name. A `TableId` added to the contract before its rows
+  // are wired up here fails by name: the `id === 'items' ? items : cuts` this replaces would have
+  // written Cut List rows into a `rooms.csv` the moment a third table appeared (#68).
+  const rowsOf: Partial<Record<TableId, readonly CsvRow[]>> = { items: counted.items, 'cut-list': counted.cuts }
   const files: ExportFile[] = []
   const entries: ManifestFile[] = []
   for (const [index, id] of tables.entries()) {
+    const rows = rowsOf[id]
+    if (rows === undefined) throw new TypeError(`exportLists has no rows for the "${id}" table`)
     const fileName = listFileName(name, id, date)
     deps.onProgress?.({
       stage: 'file',
@@ -111,7 +118,7 @@ export async function exportLists(
       total: tables.length,
       label: fileName,
     })
-    const bytes = writeCsv(TABLES[id], id === 'items' ? counted.items : counted.cuts)
+    const bytes = writeCsv(TABLES[id], rows)
     files.push({ name: fileName, mediaType: CSV_MEDIA_TYPE, bytes })
     entries.push({
       path: fileName,

@@ -85,6 +85,9 @@ const shipped: Array<[string, string]> = [
   ...stringsOf(STRINGS, 'ui/strings'),
   ...stringsOf(WARNING_COPY, 'ui/strings/warning'),
   ...stringsOf(EXPORT_WORDS, 'export/strings'),
+  // #68 criterion 8: the CI scan covers every header and every enum code, because both are words
+  // a reader's spreadsheet filters on and neither is anything the user typed.
+  ...stringsOf(TABLES, 'export/csv/tables'),
   ...stringsOf(getPresetPack('hdb-bto-typical'), 'domain/presets'),
 ]
 
