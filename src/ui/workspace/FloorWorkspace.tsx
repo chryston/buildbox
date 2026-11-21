@@ -17,8 +17,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals } from '../../derive'
-import type { Pt } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings } from '../../derive'
+import type { Pt, Warning } from '../../derive'
 import { wallOpenings } from '../../drawing'
 import type { OpeningPreview } from '../../drawing'
 import type { Point2, Project, WallClassification } from '../../domain'
@@ -56,8 +56,10 @@ import { readoutMm } from './displayUnits'
 import { WallInspector } from './wall/WallInspector'
 import { mergeableNeighbour } from './wall/wallDraft'
 import type { WallChainDraft, WallDraft } from './wall/wallDraft'
-import { fitViewport } from './viewport'
+import { fitRect, fitViewport } from './viewport'
 import type { Viewport } from './viewport'
+import { WarningStrip } from './warnings/WarningStrip'
+import { warningBox } from './warnings/locateWarning'
 import { enabledKindsOf, useWorkspace, workspaceStore } from './workspaceStore'
 import { WorkspaceShell } from './WorkspaceShell'
 import { ToolbarMenu, ToolbarMenuItem, WorkspaceToolbar } from './WorkspaceToolbar'
@@ -338,8 +340,72 @@ export function FloorWorkspace(): ReactNode {
     setViewport(fitViewport(width, height, image?.widthMm ?? 800, image?.heightMm ?? 600))
   }
 
+  /**
+   * The active Floor's warnings, under the Existing-only option (#66 §11).
+   *
+   * The engine memoises on `(revision, floorId, optionId)` itself, so this is a pointer at the
+   * cached answer rather than a recompute; and because a warning is a function of the model
+   * alone, nothing the reader does to the view — pan, zoom, another saved view, the strip
+   * itself — can move a status (#66 criterion 2).
+   */
+  const floorWarnings = useMemo<readonly Warning[]>(
+    () => (floorId === null ? [] : deriveWarnings(project, floorId, null).warnings),
+    [project, floorId],
+  )
+
+  /**
+   * Select what a warning is about and put all of it on screen (#66 §13).
+   *
+   * Navigation, never an Edit Transaction: no Intent, so no history entry and no revision
+   * change, which is what lets a person walk the whole list with an Undo stack that never
+   * grows. A warning standing on another Floor opens that Floor first, because a selection
+   * the reader cannot see is not a locate.
+   */
+  const locateWarning = (warning: Warning): void => {
+    if (warning.floorId !== floorId) workspaceStore.getState().setActiveFloor(warning.floorId, null)
+    const primary = warning.subjects[0]
+    if (primary !== undefined) {
+      if (primary.type === 'wall') selectWall(primary.id)
+      else if (primary.type === 'opening') selectOpening(primary.id)
+      else select(primary.id)
+    }
+    const el = hostRef.current
+    if (el === null) return
+    const { width, height } = el.getBoundingClientRect()
+    if (width <= 0 || height <= 0) return
+    const box = warningBox(warning, project, derivedFloor?.placements ?? [])
+    if (box === null) return
+    setViewport(fitRect(width, height, box))
+  }
+
   const send = <T extends IntentType>(type: T, payload: PayloadOf<T>): void => {
     dispatch(services.intent.build(type, payload))
+  }
+
+  /**
+   * One Edit Transaction per decision (#66 §6).
+   *
+   * The subjects go in sorted, not in the engine's primary-first order: the key sorts them, and
+   * a record stored in display order would be a second key for the same warning the moment two
+   * Walls changed refs.
+   */
+  const acknowledgeWarning = (warning: Warning, note: string): void => {
+    send('warning.acknowledge', {
+      warningType: warning.type,
+      subjectIds: warning.subjects.map((subject) => subject.id).sort(),
+      designOptionId: warning.optionId,
+      signature: warning.signature,
+      note,
+    })
+  }
+
+  const editWarningNote = (warning: Warning, note: string): void => {
+    send('warning.editNote', {
+      warningType: warning.type,
+      subjectIds: warning.subjects.map((subject) => subject.id).sort(),
+      designOptionId: warning.optionId,
+      note,
+    })
   }
 
   /**
@@ -1141,21 +1207,36 @@ export function FloorWorkspace(): ReactNode {
             />
           </>
         }
-        warningStrip={uploadError !== null ? (
-          <span data-testid="upload-error" data-tone="error">{uploadError}</span>
-        ) : uncalibrated ? (
-          <span data-testid="uncalibrated-hint">
-            {CALIBRATION_REQUIRED_HINT}
-            <button
-              type="button"
-              data-testid="calibrate-now"
-              className="bb-workspace-tool-button"
-              onClick={() => setIsCalibrating(true)}
-            >
-              Calibrate now
-            </button>
-          </span>
-        ) : null}
+        warningStrip={
+          floorWarnings.length === 0 && uploadError === null && !uncalibrated ? null : (
+            <>
+              {uploadError !== null && (
+                <span data-testid="upload-error" data-tone="error">{uploadError}</span>
+              )}
+              {uploadError === null && uncalibrated && (
+                <span data-testid="uncalibrated-hint">
+                  {CALIBRATION_REQUIRED_HINT}
+                  <button
+                    type="button"
+                    data-testid="calibrate-now"
+                    className="bb-workspace-tool-button"
+                    onClick={() => setIsCalibrating(true)}
+                  >
+                    Calibrate now
+                  </button>
+                </span>
+              )}
+              {floorWarnings.length > 0 && (
+                <WarningStrip
+                  warnings={floorWarnings}
+                  onLocate={locateWarning}
+                  onAcknowledge={acknowledgeWarning}
+                  onEditNote={editWarningNote}
+                />
+              )}
+            </>
+          )
+        }
       />
       {deleteReview !== null && (
         <DeleteWallReviewDialog

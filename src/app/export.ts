@@ -35,6 +35,7 @@ import type {
   RecipeViewRef,
 } from '../export'
 import type { QuantityScope } from '../derive'
+import { countUnacknowledged } from '../derive'
 import type {
   ExportMeasurement,
   ExportPort,
@@ -287,9 +288,15 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
     },
 
     unacknowledgedWarnings(): number {
-      // The warnings engine is #66's. The line reads 0 until then, which is the truth rather
-      // than an omission: the dialog has to carry the line before it can carry a count.
-      return 0
+      // Every Floor of the Project under the Existing-only option (#66 §15). The dialog's own
+      // tick-boxes are finer than this, and the port has no scope argument to carry them — so
+      // the line counts what the Project holds rather than pretending to count what was ticked.
+      const project = snapshotOf().project
+      return countUnacknowledged(
+        project,
+        project.floors.map((floor) => floor.id),
+        [null],
+      )
     },
 
     async recall(key: string): Promise<Recipe | null> {

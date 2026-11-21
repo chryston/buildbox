@@ -24,6 +24,7 @@ import type { MigrationStage, PersistenceError, RecoveryPointKind, SaveFailureRe
 import type { ExportFailureReason } from '../../export'
 import { openingNoun } from '../../domain'
 import type { FitFailure, OpeningKind } from '../../domain'
+import type { WarningParams } from '../../derive'
 
 /** `1 Floor` / `2 Floors` and the same for every countable noun the Library shows. */
 export const plural = (count: number, one: string, many: string): string =>
@@ -471,6 +472,23 @@ export const STRINGS = {
       'image-format': 'A Plan Image is in a format that cannot be placed.',
     })[reason],
   exportFailedRetry: 'Untick that view and try again.',
+  // The Warning strip (#66 §11–§12). `Seen ✓` is a status, never a button: the action that
+  // produces it is `Acknowledge`, and the note that goes with it is always offered.
+  warningShow: 'Show',
+  warningHide: 'Hide',
+  /** `2 open · 1 seen`; the count of what the strip is holding, collapsed. */
+  warningCount: (open: number, seen: number): string => `${open} open · ${seen} seen`,
+  warningLocate: 'Locate',
+  warningAcknowledge: 'Acknowledge',
+  warningNoteOptional: 'Note (optional)',
+  warningNote: 'Note',
+  warningSave: 'Save',
+  warningSeen: 'Seen ✓',
+  /** The note stays visible after a reopen: a note that vanishes was never read. */
+  warningSeenNote: (note: string): string => `Seen ✓ · ${note}`,
+  warningReopened: 'Reopened after change',
+  /** Only reachable when a producer registers a `messageKey` this table has no row for. */
+  warningCopyMissing: 'This warning has no wording yet.',
 } as const
 
 /**
@@ -537,3 +555,27 @@ export function placementFitMessage(
   }
   return `${presetName} doesn't fit here: it would run past the end of ${hostRef}.`
 }
+
+/**
+ * The Warning strip's sentences (#66 §11–§12).
+ *
+ * The strip holds no copy of its own and no `if (type === 'wall_crossing')`: it renders
+ * `warningSentence(warning)` for whatever the engine produced, and a later producer (#67,
+ * #76–#79) adds one row here plus its `{type, produce}` and nothing else. A test fails if a
+ * registered producer's `messageKey` has no row, so the fallback below is a sentence nobody
+ * is meant to see rather than a silent gap.
+ *
+ * The numbers come from the engine as millimetres and are rounded here, in the one place a
+ * measurement becomes a word — the same rule `placementFitMessage` follows.
+ */
+export const WARNING_COPY: Readonly<Record<string, (params: WarningParams) => string>> = {
+  wall_crossing: (params) =>
+    `${String(params.a)} crosses ${String(params.b)} without a join: ${mmWords(Number(params.mm))} mm overlap.`,
+  wall_overlap: (params) =>
+    `${String(params.a)} runs along ${String(params.b)} for ${mmWords(Number(params.mm))} mm without a join.`,
+}
+
+/** The sentence one warning says. */
+export const warningSentence = (messageKey: string, params: WarningParams): string =>
+  WARNING_COPY[messageKey]?.(params) ?? STRINGS.warningCopyMissing
+

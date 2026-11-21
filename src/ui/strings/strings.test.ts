@@ -12,7 +12,8 @@
  * deserves.
  */
 import { describe, expect, it } from 'vitest'
-import { STRINGS } from './index'
+import { STRINGS, WARNING_COPY } from './index'
+import { WARNING_PRODUCERS } from '../../derive'
 
 /**
  * The words #19 §12 keeps out of user-facing copy, carried forward by #24, #27 and ADR-0008.
@@ -87,5 +88,18 @@ describe('the copy', () => {
           .map((text) => `${path}: ${text}`),
       )
     expect(offenders).toEqual([])
+  })
+
+  it('has copy for every warning the producers can raise', () => {
+    // The strip holds no `if (type === …)`; the copy table is the only extension point (#66
+    // §12). So the pair — the producers that are registered and the rows that are written —
+    // has to be checked against each other here, where both are visible. A producer's
+    // `messageKey` is its `type` by construction, so the registered types are exactly the keys
+    // the strip will be asked to say. A producer added by #67 or #76–#79 without a row fails
+    // this test rather than meeting the user with a sentence that says it has no wording.
+    for (const producer of WARNING_PRODUCERS) {
+      expect(WARNING_COPY[producer.type], `${producer.type} has no copy`).toBeTypeOf('function')
+    }
+    expect(WARNING_PRODUCERS.length).toBeGreaterThan(0)
   })
 })

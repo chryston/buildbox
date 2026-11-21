@@ -263,5 +263,17 @@ exports[`the copy > is the whole vocabulary of the interface 1`] = `
   "trashHeading": "Deleted Projects",
   "trashLede": "Projects remain recoverable for 30 days. Clearing browser data can remove trash immediately.",
   "viewTrash": "View Trash",
+  "warningAcknowledge": "Acknowledge",
+  "warningCopyMissing": "This warning has no wording yet.",
+  "warningCount": [Function],
+  "warningHide": "Hide",
+  "warningLocate": "Locate",
+  "warningNote": "Note",
+  "warningNoteOptional": "Note (optional)",
+  "warningReopened": "Reopened after change",
+  "warningSave": "Save",
+  "warningSeen": "Seen ✓",
+  "warningSeenNote": [Function],
+  "warningShow": "Show",
 }
 `;
