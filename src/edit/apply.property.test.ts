@@ -11,15 +11,15 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import fc from 'fast-check'
 import { beforeAll, describe, expect, it } from 'vitest'
-import type { CabinetItemDesign, CabinetNode, GenericItemDesign, ItemDesign, ItemFootprint, Opening, PlacedItem, Project, Wall, WallJunction } from '../domain'
-import { footprintSize, nextOpeningLabel, validateProject } from '../domain'
+import type { CabinetItemDesign, CabinetNode, GenericItemDesign, ItemDesign, ItemFootprint, Opening, PlacedItem, Project, Room, Wall, WallJunction } from '../domain'
+import { footprintSize, nextOpeningLabel, roomFaceCurve, roomOutlineAfterSlide, roomOutlinePath, roomSegments, validateProject } from '../domain'
 import type { Preset } from '../geometry'
-import { DEG, normaliseDeg, pt, refLength, refPointAt } from '../geometry'
+import { DEG, edgeToFace, normaliseDeg, ontoFaceVector, pt, refLength, refPointAt } from '../geometry'
 import { arbProject } from '../domain/testing'
 import { canonicalJson } from '../lib'
 import { convertLegacy } from '../package'
-import type { Intent, IntentType, PayloadOf, WallDraft, WallEndTarget } from './index'
-import { applyIntent, applyPatches, chainJunctionCount, createProject, INTENT_LABELS, PLAN_CATALOGUE } from './index'
+import type { Intent, IntentType, PayloadOf, RoomOutlineShape, WallDraft, WallEndTarget } from './index'
+import { applyIntent, applyPatches, chainJunctionCount, createProject, INTENT_LABELS, PLAN_CATALOGUE, SHELTER_ID_COUNT } from './index'
 import { intent, NOW } from './testing'
 
 const fixturesRoot = fileURLToPath(new URL('../../fixtures/legacy', import.meta.url))
@@ -116,6 +116,75 @@ const openingList = (g: Gen): Opening[] => g.project.existingModel.openings
 /** The Openings that have a hinge to flip: a window has none, and a sliding door has neither. */
 const hingedDoors = (g: Gen): Opening[] =>
   openingList(g).filter((opening) => opening.swing === 'left' || opening.swing === 'right')
+const roomList = (g: Gen): Room[] => g.project.existingModel.rooms
+/** The Walls some Room has an Edge lying on. */
+const referencedWalls = (g: Gen): Set<string> =>
+  new Set(g.project.existingModel.rooms.flatMap((room) => room.wallFaceRefs.map((reference) => reference.wallId)))
+
+/** An axis-aligned rectangle, the one outline a random Room edit can grow without breaking. */
+function box(left: number, top: number, right: number, bottom: number) {
+  return {
+    start: pt(left, top),
+    segments: [
+      { kind: 'line' as const, to: pt(right, top) },
+      { kind: 'line' as const, to: pt(right, bottom) },
+      { kind: 'line' as const, to: pt(left, bottom) },
+      { kind: 'line' as const, to: pt(left, top) },
+    ],
+  }
+}
+
+/**
+ * A rectangle whose first Edge runs along a Wall face 300 mm off it: parallel to the face and
+ * not yet on it, which is the state `room.attachFace` exists to end. A Room drawn at random has
+ * no face any Edge of it is parallel to, so without this the Intent would go untried.
+ */
+function faceRoom(wall: Wall, side: 'left' | 'right'): RoomOutlineShape | null {
+  const face = roomFaceCurve(wall, side)
+  if (face.segment.kind !== 'line') return null
+  const dx = face.segment.to.x - face.from.x
+  const dy = face.segment.to.y - face.from.y
+  const length = Math.hypot(dx, dy)
+  if (length < 600) return null
+  // The face's own normal, walked 300 mm for the gap and 1500 mm more for the Room's depth.
+  const ux = -dy / length
+  const uy = dx / length
+  const at = (metres: number): [number, number] => [ux * metres, uy * metres]
+  const [gx, gy] = at(300)
+  const [wx, wy] = at(1200)
+  // Only the first metre of the face: a Room the length of the Wall would sit on top of most
+  // of what the sequence has already drawn, and a Room that cannot be drawn leaves nothing for
+  // `room.attachFace` to act on later.
+  const along = Math.min(1, 1000 / length)
+  const near = pt(face.from.x + dx * along, face.from.y + dy * along)
+  const gapFrom = pt(face.from.x + gx, face.from.y + gy)
+  return {
+    kind: 'path',
+    path: {
+      start: gapFrom,
+      segments: [
+        { kind: 'line', to: pt(near.x + gx, near.y + gy) },
+        { kind: 'line', to: pt(near.x + wx, near.y + wy) },
+        { kind: 'line', to: pt(face.from.x + wx, face.from.y + wy) },
+        { kind: 'line', to: gapFrom },
+      ],
+    },
+  }
+}
+
+/**
+ * A Room outline for a random step: against a Wall face when there is a Wall to stand it on,
+ * anywhere on the Floor otherwise.
+ */
+function faceRoomOrBox(g: Gen, wall: Wall | undefined): RoomOutlineShape {
+  if (wall !== undefined) {
+    const against = faceRoom(wall, pick(g, ['left', 'right'] as const)!)
+    if (against !== null) return against
+  }
+  const left = real(g, -6000, 2000)
+  const top = real(g, -6000, 2000)
+  return { kind: 'path', path: box(left, top, left + real(g, 800, 4000), top + real(g, 800, 4000)) }
+}
 
 /**
  * Whether two Walls lie on one straight line. A Junction has already put an end of each at the
@@ -577,6 +646,19 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
       const second = wallList(g).find((candidate) => candidate.id === junction.ends[1]!.wallId)
       if (first === undefined || second === undefined) continue
       if (!collinear(first, second)) continue
+      // A Wall a Room is standing on cannot be merged: the joined Wall is a different reference
+      // line, and the handler says so rather than quietly re-pointing the Edge. Offering one
+      // here would spend the step on a refusal the Rooms coverage already tests on its own.
+      if (referencedWalls(g).has(first.id) || referencedWalls(g).has(second.id)) continue
+      // Merging drops the butt Junction and re-points whatever hung off the far end of the
+      // second Wall onto the far end of the first. So neither butt end may be joined twice, and
+      // the two far ends may not both be joined — that pair would come back with one end joined
+      // to the same Junction twice.
+      const joinedAt = (wallId: string, end: 'start' | 'end'): number =>
+        junctionList(g).filter((other) => other.id !== junction.id && other.ends.some((member) => member.wallId === wallId && member.end === end)).length
+      const [firstEnd, secondEnd] = [junction.ends[0]!.end, junction.ends[1]!.end] as const
+      if (joinedAt(first.id, firstEnd) > 0 || joinedAt(second.id, secondEnd) > 0) continue
+      if (joinedAt(first.id, firstEnd === 'start' ? 'end' : 'start') > 0 && joinedAt(second.id, secondEnd === 'start' ? 'end' : 'start') > 0) continue
       if (
         first.thickness !== second.thickness ||
         first.justification !== second.justification ||
@@ -700,6 +782,90 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
           note: `Note edited ${int(g, 1, 99)}`,
         })
   },
+  // #67: Rooms. Half the time a Room is drawn against a Wall face on purpose — an Edge parallel
+  // to a face and a known distance off it is the only thing `room.attachFace` can act on, and
+  // the reference that records is what `room.detachFace` later removes.
+  (g) => {
+    const floor = pick(g, g.project.floors)
+    // A drafter draws a handful of Rooms on a Floor, not a hundred, and a model buried under
+    // shelters leaves no Wall for the other intents to work on. The cap keeps the sequence a
+    // plan rather than a stress test.
+    if (floor === undefined || roomList(g).length >= 6) return null
+    const wall = pick(g, wallList(g))
+    const outline = faceRoomOrBox(g, wall)
+    return intent('room.create', { floorId: floor.id, outline, name: `Room ${int(g, 1, 60)}` }, g.ids(5))
+  },
+  (g) => {
+    const room = pick(g, roomList(g))
+    return room === undefined ? null : intent('room.rename', { roomId: room.id, name: `Room ${int(g, 1, 99)}` })
+  },
+  (g) => {
+    // The Edge IDs are the Room's own, restated: a caller that mints new ones is asking to
+    // delete a referenced Edge, which the handler refuses rather than re-point.
+    const room = pick(g, roomList(g).filter((each) => roomSegments(each.outline).length === 4))
+    if (room === undefined) return null
+    const path = roomOutlinePath(room.outline)
+    const corners = [path.start, ...path.segments.map((segment) => segment.to)]
+    const xs = corners.map((at) => at.x)
+    const ys = corners.map((at) => at.y)
+    const grown = {
+      kind: 'path' as const,
+      path: box(Math.min(...xs), Math.min(...ys), Math.max(...xs) + real(g, 0, 500), Math.max(...ys) + real(g, 0, 500)),
+    }
+    return intent('room.setOutline', { roomId: room.id, outline: grown }, [...room.outline.segmentIds])
+  },
+  (g) => {
+    // Every Edge that could lie on a face: parallel to it, and not already on it, because an
+    // Edge that is already there is a `no-change` rather than an edit. One of them is chosen at
+    // random rather than the first, so a step whose slide happens to be blocked does not spend
+    // the whole run on the same pair.
+    const candidates: Intent<'room.attachFace'>[] = []
+    for (const room of roomList(g)) {
+      // A Room with a reference already on it is a poor place to add a second one: sliding this
+      // Edge extends or shortens its neighbours, and a neighbour that is itself lying on a Wall
+      // face would end up hanging past the end of it. The first attach of a Room is the clean one.
+      if (room.wallFaceRefs.length > 0) continue
+      for (const segment of roomSegments(room.outline)) {
+        if (segment.segment.kind !== 'line') continue
+        for (const wall of wallList(g)) {
+          for (const side of ['left', 'right'] as const) {
+            const face = roomFaceCurve(wall, side)
+            const relation = edgeToFace(segment.segment, segment.from, face)
+            if (relation.skew > 0.01 || relation.distance <= 0.01 || relation.distance >= 500) continue
+            // Only an Edge the loop can take up: a slide that collapses the Room or runs a
+            // neighbour into itself is a blocked proposal, and offering one every step would
+            // spend the run on refusals.
+            const slid = roomOutlineAfterSlide(room.outline, segment.index + 1, ontoFaceVector(segment.segment, segment.from, face))
+            if (slid === null) continue
+            candidates.push(intent('room.attachFace', { roomId: room.id, segmentId: segment.id, wallId: wall.id, side }))
+          }
+        }
+      }
+    }
+    return pick(g, candidates) ?? null
+  },
+  (g) => {
+    const attached = roomList(g).filter((room) => room.wallFaceRefs.length > 0)
+    const room = pick(g, attached)
+    if (room === undefined) return null
+    const ref = room.wallFaceRefs[int(g, 0, room.wallFaceRefs.length - 1)]!
+    return intent('room.detachFace', { roomId: room.id, segmentId: ref.segmentId })
+  },
+  (g) => {
+    const floor = pick(g, g.project.floors)
+    // One shelter is a flat with four Walls and four Rooms of its own, all of them referenced,
+    // so a sequence that kept placing them would be all shelter and no plan.
+    if (floor === undefined || roomList(g).length >= 4 || wallList(g).length >= 16) return null
+    return intent(
+      'room.placeShelter',
+      {
+        floorId: floor.id,
+        centre: pt(real(g, -9000, 9000), real(g, -9000, 9000)),
+        orientationDeg: pick(g, [0, 90, 180, 270])!,
+      },
+      g.ids(SHELTER_ID_COUNT),
+    )
+  },
 ]
 
 /**
@@ -755,7 +921,90 @@ function runSequence(start: Project, seed: number, steps: number): Project {
 
 const STARTS: { name: string; project: Project }[] = []
 
+/**
+ * One scripted pass that takes every Intent whose precondition a random sequence often never
+ * finds.
+ *
+ * `room.attachFace` needs an Edge parallel to a Wall face and a known distance off it, which a
+ * random sequence only stumbles on when the Room happened to be drawn against that face; the
+ * same goes for the reference `room.detachFace` undoes, and for the two straight Walls
+ * butt-joined at a Junction of their own that `wall.merge` joins. Rather than leave the
+ * catalogue claim below at the mercy of the dice, this draws one Wall, one Room lying beside it,
+ * and a pair of collinear Walls, then walks through: draw, take the Edge up, rename, resize with
+ * the reference kept, let go, place a household shelter, and merge. The random sequences still
+ * run every one of these as often as they find a chance, checking the undo and validity of each.
+ */
+function seedRarePreconditions(): void {
+  const give = idSource()
+  const g: Gen = { rand: () => 0.5, project: createProject({ ids: give(6), now: NOW, name: 'Rooms' }), ids: give }
+  let current = g.project
+  const floorId = current.floors[0]!.id
+  const [wallId] = g.ids(1)
+  const [roomId] = g.ids(1)
+  const edgeIds = g.ids(5)
+  const edgeId = edgeIds[0]!
+  const shelterIds = g.ids(SHELTER_ID_COUNT)
+  const mergeIds = g.ids(3)
+  const wall: WallDraft = {
+    line: { kind: 'line', start: pt(0, 0), end: pt(4000, 0) },
+    thickness: 100,
+    justification: 'centre',
+    baseElevation: 0,
+    height: 2600,
+  }
+  // Edge 1 runs 300 mm off the Wall’s Kitchen-side face, which is the gap `room.attachFace` takes up.
+  const shape = (right: number, bottom: number, top: number): RoomOutlineShape => ({
+    kind: 'path',
+    path: {
+      start: pt(0, top),
+      segments: [
+        { kind: 'line', to: pt(right, top) },
+        { kind: 'line', to: pt(right, bottom) },
+        { kind: 'line', to: pt(0, bottom) },
+        { kind: 'line', to: pt(0, top) },
+      ],
+    },
+  })
+  const steps: Intent[] = [
+    intent('wall.createChain', { floorId, walls: [wall], starts: [{ kind: 'free' as const }], ends: [{ kind: 'free' as const }] }, [wallId]),
+    intent('room.create', { floorId, outline: shape(1000, 1550, 350), name: 'Kitchen' }, [roomId, ...edgeIds]),
+    intent('room.attachFace', { roomId, segmentId: edgeId, wallId, side: 'right' }),
+    intent('room.rename', { roomId, name: 'Study' }),
+    // The same four Edge names, so the reference survives: Edge 1 stays where it was taken up.
+    intent('room.setOutline', { roomId, outline: shape(1400, 1950, 50) }, edgeIds),
+    intent('room.detachFace', { roomId, segmentId: edgeId }),
+    intent('room.placeShelter', { floorId, centre: pt(60000, 60000), orientationDeg: 0 }, shelterIds),
+    // `wall.merge` wants two Walls on one straight line, butt-joined at a Junction of their own
+    // and free at both far ends. A random chain rarely leaves that shape standing, so draw it.
+    intent(
+      'wall.createChain',
+      {
+        floorId,
+        walls: [
+          { ...wall, line: { kind: 'line' as const, start: pt(0, 8000), end: pt(2000, 8000) } },
+          { ...wall, line: { kind: 'line' as const, start: pt(2000, 8000), end: pt(4000, 8000) } },
+        ],
+        starts: [{ kind: 'free' as const }, { kind: 'segment' as const, index: 0, end: 'end' as const }],
+        ends: [{ kind: 'segment' as const, index: 1, end: 'start' as const }, { kind: 'free' as const }],
+      },
+      mergeIds,
+    ),
+    intent('wall.merge', { wallIds: [mergeIds[0]!, mergeIds[1]!] }),
+  ]
+  for (const next of steps) {
+    const tally = seen.get(next.type) ?? { applied: 0, refused: 0 }
+    const result = applyIntent(current, next)
+    if (!result.ok) throw new Error(`${next.type}: ${JSON.stringify(result.problems)}`)
+    tally.applied += 1
+    seen.set(next.type, tally)
+    expect(validateProject(result.project).ok).toBe(true)
+    expect(canonicalJson(applyPatches(result.project, result.inversePatches))).toBe(canonicalJson(current))
+    current = result.project
+  }
+}
+
 beforeAll(async () => {
+  seedRarePreconditions()
   STARTS.push({ name: 'createProject', project: createProject({ ids: idSource()(6), now: NOW, name: 'New kitchen' }) })
   for (const rel of LEGACY_FIXTURES) {
     const result = await convertLegacy(read(rel), { newId: allocator() })
@@ -765,6 +1014,9 @@ beforeAll(async () => {
     }
   }
 })
+
+// 200 sequences of up to 50 Intents take ~2.6 s alone but exceed vitest's 5 s default on a loaded CI runner.
+const PROPERTY_TIMEOUT_MS = 30_000
 
 describe('a sequence of random Intents', () => {
   it('has a Project to start from for every legacy fixture', () => {
@@ -789,7 +1041,7 @@ describe('a sequence of random Intents', () => {
       ),
       { numRuns: 200 },
     )
-  })
+  }, PROPERTY_TIMEOUT_MS)
 
   it('does the same to a generated Project', () => {
     fc.assert(
@@ -805,7 +1057,7 @@ describe('a sequence of random Intents', () => {
       ),
       { numRuns: 100 },
     )
-  })
+  }, PROPERTY_TIMEOUT_MS)
 
   // The two properties above are only worth anything if they reached the whole catalogue.
   it('generated and accepted every Intent in the catalogue along the way', () => {

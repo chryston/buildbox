@@ -25,13 +25,18 @@
  */
 import { warningKey, type Acknowledgement, type EntityId, type Project } from '../../domain'
 import { canonicalJson, compareCodePoints, stableHash, stableSort } from '../../lib'
+import { effectiveFloor } from '../effective'
+import { roomOutlinePath } from '../../domain'
 import { deriveWalls } from '../walls'
+import { ROOM_PRODUCERS } from './producers/rooms'
 import { WALL_PRODUCERS } from './producers/walls'
 import type {
   FloorWarnings,
   Warning,
   WarningFloor,
+  WarningPlacement,
   WarningProducer,
+  WarningRoom,
   WarningStatus,
   WarningSubject,
   WarningWall,
@@ -45,7 +50,7 @@ import type {
  * (#68) would sort differently from the strip that fed it. A new producer is one entry here
  * and one file beside it.
  */
-export const WARNING_PRODUCERS: readonly WarningProducer[] = [...WALL_PRODUCERS]
+export const WARNING_PRODUCERS: readonly WarningProducer[] = [...WALL_PRODUCERS, ...ROOM_PRODUCERS]
 
 /**
  * The measurement signature of one candidate: `stableHash` of the canonical JSON of its
@@ -136,10 +141,45 @@ export const warningFloorOf = (project: Project, floorId: EntityId): WarningFloo
       id: junction.id,
       wallIds: [...junction.ends.map((end) => end.wallId), ...(junction.host === undefined ? [] : [junction.host.wallId])],
     }))
+  const rooms: WarningRoom[] = project.existingModel.rooms
+    .filter((room) => room.floorId === floorId)
+    .map((room) => ({
+      id: room.id,
+      floorId: room.floorId,
+      name: room.name,
+      source: room.outline,
+      outline: roomOutlinePath(room.outline),
+    }))
+  const placements = effectiveFloor(project, 0, floorId, null).placements
+  const designs = new Map(project.itemDesigns.map((design) => [design.id, design]))
+  // `Base 600 #2`: a Placed Item owns no name, so two of the same Design on one Floor are told
+  // apart by the order they were placed. A Design with one item on this Floor gets no ordinal,
+  // because there is nothing to tell apart (#67 §16).
+  const perDesign = new Map<EntityId, number>()
+  for (const placement of placements) perDesign.set(placement.designId, (perDesign.get(placement.designId) ?? 0) + 1)
+  const seen = new Map<EntityId, number>()
+  const warningPlacements: WarningPlacement[] = placements.map((placement) => {
+    const count = perDesign.get(placement.designId) ?? 1
+    const ordinal = (seen.get(placement.designId) ?? 0) + 1
+    seen.set(placement.designId, ordinal)
+    const design = designs.get(placement.designId)
+    return {
+      id: placement.id,
+      itemDesignId: placement.designId,
+      label: count > 1 ? `${placement.label} #${ordinal}` : placement.label,
+      worldPath: placement.worldPath,
+      translation: placement.translation,
+      rotationDeg: placement.rotationDeg,
+      footprint: design === undefined || design.kind !== 'generic' ? null : design.footprint,
+      origin: placement.origin,
+    }
+  })
   return {
     floorId,
     walls: stableSort(walls, (a, b) => compareCodePoints(a.id, b.id)),
     junctions: stableSort(junctions, (a, b) => compareCodePoints(a.id, b.id)),
+    rooms: stableSort(rooms, (a, b) => compareCodePoints(a.id, b.id)),
+    placements: stableSort(warningPlacements, (a, b) => compareCodePoints(a.id, b.id)),
   }
 }
 

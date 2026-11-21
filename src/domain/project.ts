@@ -19,7 +19,7 @@
  * - Geometry is canonical millimetres; the display unit and precision are Project
  *   preferences that never rewrite geometry (#13).
  */
-import type { ClosedPath, Preset } from '../geometry'
+import type { ClosedPath, Preset, WallSide } from '../geometry'
 import type { CabinetNode, GlobalSettings } from './cabinetPayload'
 
 /**
@@ -235,6 +235,85 @@ export interface ExistingModel {
   wallJunctions: WallJunction[]
   /** Every Opening of every Floor (#65). One is hosted by exactly one Wall. */
   openings: Opening[]
+  /**
+   * Every Room of every Floor (#67). A Room is explicit — never inferred from Walls — and
+   * belongs to exactly one Floor, so it carries its own `floorId` like a Wall does.
+   */
+  rooms: Room[]
+}
+
+/**
+ * Which face of a Wall a Room edge is referenced to (#67 §1).
+ *
+ * `left` and `right` are the reference line's own sides and are data only, exactly as a
+ * Wall's justification is: the interface names a face by the Room it borders
+ * (`W-5 · Kitchen side`), never by a side letter (#67 D8).
+ */
+export type WallFaceSide = WallSide
+
+/**
+ * One Room's standing claim on one Wall face (#67 §1).
+ *
+ * `segmentId` is the stable ID of one segment of the Room Outline, not its position: an edge
+ * inserted at the far end of the outline, or a corner filleted, must not silently move the
+ * reference onto a different edge. The referenced segment is always a **line** — an arc has
+ * no single face to lie on — and it always lies on the named face within the kernel's
+ * 0.01 mm tolerance, which is what makes "the edge follows the face" a statement about
+ * geometry rather than an intention.
+ */
+export interface RoomWallFaceRef {
+  /** The stable ID of one line segment of this Room's outline. */
+  segmentId: EntityId
+  /** The Wall whose face carries it; always on the Room's own Floor. */
+  wallId: EntityId
+  side: WallFaceSide
+}
+
+/** A Room's outline as a shape description, in Floor coordinates (#67 §1). */
+export type RoomOutline = PresetRoomOutline | PathRoomOutline
+
+/**
+ * A Room drawn from a preset: the same shape description an Item Footprint uses, placed in
+ * Floor rather than footprint-local millimetres.
+ *
+ * `segmentIds` lines up one-to-one with the segments the preset evaluates to, so a reference
+ * survives a parameter edit that keeps the shape's structure. An edit that changes the
+ * segment count — rounding a square corner adds an arc — is the edit layer's job to carry.
+ */
+export interface PresetRoomOutline {
+  kind: 'preset'
+  preset: Preset
+  /** Floor millimetres: the centre of the outline's local bounds. */
+  centre: Point2
+  /** Clockwise degrees in the +Y-down frame. */
+  orientationDeg: number
+  segmentIds: EntityId[]
+}
+
+/** A Room drawn as a Custom Path: the shape itself, with one stable ID per Edge. */
+export interface PathRoomOutline {
+  kind: 'path'
+  path: ClosedPath
+  segmentIds: EntityId[]
+}
+
+/**
+ * One Room (#67): a named, Floor-local area with an explicit outline and, optionally,
+ * references from its Edges to the Wall faces it borders.
+ *
+ * Nothing here is derived: area, perimeter, the label anchor and which Placed Items sit in
+ * it all come from `derive`, and the Renovation State comes from ownership like every other
+ * element. Two Rooms on one Floor may share an edge or touch at a point but may never
+ * overlap with positive area, which the strict validator and every proposal check enforce.
+ */
+export interface Room {
+  id: EntityId
+  floorId: EntityId
+  /** Required, editable, non-empty, at most 80 characters. Not unique. */
+  name: string
+  outline: RoomOutline
+  /** Every Edge of this outline that is referenced to a Wall face, in no particular order. */
+  wallFaceRefs: RoomWallFaceRef[]
 }
 
 /** What an Opening is: an absence in one Wall, not a thing standing in a Room (#65). */

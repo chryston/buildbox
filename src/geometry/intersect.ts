@@ -105,10 +105,25 @@ const eachPair = (
   })
 }
 
+/**
+ * Whether `p` is inside `path`, with the ray's own degeneracies settled.
+ *
+ * The winding test casts a ray to +X. When `p` sits exactly on the line an edge runs along —
+ * the ordinary case for two axis-aligned Rooms sharing a level, or for the midpoint of a
+ * piece cut at a reflex corner — that ray can run along the boundary and miss the crossing
+ * behind it, and an interior point comes back as outside. A point a hair above the same spot
+ * sees the same interior with nothing on its ray. The hair is far smaller than
+ * `TOLERANCE_MM`, so a point it moves across an outline is one `classifyPoint` has already
+ * called `'boundary'`.
+ */
+const RAY_HAIR_MM = 1e-6
+const windsInside = (p: Pt, path: ClosedPath): boolean =>
+  windingNumber(p, path) !== 0 || windingNumber({ x: p.x, y: p.y - RAY_HAIR_MM }, path) !== 0
+
 /** `'boundary'` within tolerance, otherwise the winding number decides inside or out. */
 export const classifyPoint = (p: Pt, path: ClosedPath): 'inside' | 'boundary' | 'outside' => {
   if (isBoundary(p, path)) return 'boundary'
-  return windingNumber(p, path) !== 0 ? 'inside' : 'outside'
+  return windsInside(p, path) ? 'inside' : 'outside'
 }
 
 /** True when `p` lies on the path's outline within tolerance. */
@@ -116,7 +131,7 @@ export const isBoundary = (p: Pt, path: ClosedPath): boolean =>
   path.segments.some((segment, i) => nearestOnSegment(p, segment, segmentStart(path, i)).distance <= TOLERANCE_MM)
 
 /** The winding test alone, which is what decides the interior of an overlap piece. */
-const isInside = (p: Pt, path: ClosedPath): boolean => windingNumber(p, path) !== 0
+const isInside = (p: Pt, path: ClosedPath): boolean => windsInside(p, path)
 
 /** Whether `inner` lies wholly inside `outer`, crosses it, or lies wholly outside. */
 export const containment = (inner: ClosedPath, outer: ClosedPath): 'inside' | 'crosses' | 'outside' => {

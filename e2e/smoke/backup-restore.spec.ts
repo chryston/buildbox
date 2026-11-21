@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs'
 import { expect, test } from '../support/fixtures'
+import { roomsFixtureProject } from '../../src/package/testing'
+import type { Project } from '../../src/domain'
 import {
   card,
   canonical,
@@ -68,10 +71,59 @@ test('a Backup restored into an empty profile is the same Project', async ({ pag
     // every time.
     const restoredRecord = await storedRecord(restored, 'proj-kitchen-wall')
     if (restoredRecord === null) throw new Error('the restore wrote no record')
-    expect(restoredRecord.schemaVersion).toBe(6)
+    expect(restoredRecord.schemaVersion).toBe(7)
     expect(canonical(withoutMintedViewIds(restoredRecord.data)))
       .toBe(canonical(migratedForComparison(record.data, record.schemaVersion)))
     expect(await storedAssetHashes(restored)).toEqual(originalAssets)
+    expect(problems).toEqual([])
+  } finally {
+    await fresh.close()
+  }
+})
+
+/**
+ * The strict importer and a v7 Backup that carries Rooms (#67 criterion 12, in the browser).
+ *
+ * `src/package/fixtures.test.ts` proves the golden file stages against the strict validator in
+ * Node. What only a browser answers is that the app's own import path — picker, staging, the
+ * write to IndexedDB — takes those same bytes and stores that same Project, Rooms and all:
+ * nothing along the way drops `existingModel.rooms` or rewrites an Edge reference.
+ *
+ * The profile is empty on purpose. A restore into a Library that already held the Project would
+ * take the collision path, and the claim here is the plain one: v7 bytes in, v7 Project out.
+ */
+const ROOMS_FIXTURE = new URL('../../fixtures/package/v7/rooms.buildbox', import.meta.url)
+const ROOMS_PROJECT = 'Maple Street Kitchen'
+
+test('a v7 Backup carrying Rooms is stored as the Project it holds', async ({ browser }) => {
+  const fresh = await browser.newContext()
+  try {
+    const page = await fresh.newPage()
+    const problems: string[] = []
+    page.on('pageerror', (error) => problems.push(error.message))
+    await page.goto('./', { waitUntil: 'networkidle' })
+    await expect(libraryHeading(page)).toBeVisible()
+
+    await restoreFile(page, { name: `${ROOMS_PROJECT}.buildbox`, buffer: readFileSync(ROOMS_FIXTURE) })
+    await expect(toast(page)).toContainText(`Restored ${ROOMS_PROJECT} from Backup.`)
+
+    const record = await storedRecord(page, 'project-0')
+    if (record === null) throw new Error('the restore wrote no record')
+    expect(record.schemaVersion).toBe(7)
+    // The file was written at the version the app writes, so no migration ran and nothing is
+    // forgiven: the stored payload is the fixture Project, Plan View ids included.
+    expect(canonical(record.data)).toBe(canonical(roomsFixtureProject()))
+
+    // The Rooms themselves, because they are what #67 added and what a careless importer loses:
+    // a preset Rectangle and a Custom Path, each holding one Edge to a face of the same Wall.
+    // The stored payload is the Project the importer wrote.
+    const stored = JSON.parse(canonical(record.data)) as Project
+    expect(stored.existingModel.rooms.map((room) => room.name)).toEqual(['Living', 'Study'])
+    expect(stored.existingModel.rooms.map((room) => room.outline.kind)).toEqual(['preset', 'path'])
+    expect(stored.existingModel.rooms.map((room) => room.wallFaceRefs)).toEqual([
+      [{ segmentId: 'edge-living-3', wallId: 'wall-1', side: 'left' }],
+      [{ segmentId: 'edge-study-1', wallId: 'wall-1', side: 'right' }],
+    ])
     expect(problems).toEqual([])
   } finally {
     await fresh.close()

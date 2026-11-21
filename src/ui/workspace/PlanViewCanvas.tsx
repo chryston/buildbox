@@ -19,22 +19,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import { affineApply, affineInvert, resolveSnap } from '../../derive'
-import type { DerivedFloor, FloorWalls, SnapCandidate, SnapKind } from '../../derive'
+import type { DerivedFloor, FloorRooms, FloorWalls, SnapCandidate, SnapKind } from '../../derive'
 import type { DisplayUnit, Point2 } from '../../domain'
 import { footprintPath } from '../../domain'
 import {
   LAYER_ORDER,
   displayRects,
   drawPlanView,
+  drawRooms,
   drawSelectionAnnotations,
   drawWarningBadges,
   drawWalls,
   unionRect,
+  wallLabelBoxes,
 } from '../../drawing'
-import type { BadgeSubject, DisplayLayer, DisplayList, OpeningPreview, PlanPreview, Sizing, WallOpenings } from '../../drawing'
+import type { BadgeSubject, DisplayLayer, DisplayList, OpeningPreview, PlanPreview, RoomProposal, Sizing, WallOpenings } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
 import type { DisplayListInteractions } from '../drawing/DisplayListSvg'
-import { formatMm } from './displayUnits'
+import { STRINGS } from '../strings'
+import { formatMm, formatSquareMetres } from './displayUnits'
 import { rotationFromPointer } from './rotateHandle'
 import { fitViewport, zoomAround } from './viewport'
 import type { Viewport } from './viewport'
@@ -111,6 +114,21 @@ export interface PlanViewCanvasProps {
   openingPreview?: OpeningPreview | null
   /** An Opening's symbol was clicked; the selection moves to it (#65 §11). */
   onSelectOpening?: (id: string) => void
+  /**
+   * The Floor's Rooms, derived through the session's cache (#67 §3). Their areas are drawn under
+   * the Wall bands and their labels in the same text half as the `W-n` references, so this canvas
+   * interleaves them by `LAYER_ORDER` rather than appending them.
+   */
+  rooms?: FloorRooms | null
+  /** The selected Room: heavier line and a deeper fill (#67 behaviour 3). */
+  selectedRoomId?: string | null
+  /** A Room's area was clicked; the selection moves to it (#67 behaviour 3). */
+  onSelectRoom?: (id: string) => void
+  /**
+   * The Room being drawn or edited, with every region it shares with another Room. Red and
+   * hatched when it cannot be committed, accent while it can (#67 behaviours 20–21).
+   */
+  roomProposal?: RoomProposal | null
   /** Drawn above the items while calibrating; it owns the pointer meanwhile. SVG: it lives in
    * the scene's own `<g>`, so it must be drawn in the Floor's millimetres. */
   overlay?: ReactNode
@@ -150,6 +168,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
     angleSnap, overlay, htmlOverlay, walls, selectedWallId = null, onSelectWall,
     openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
+    rooms = null, selectedRoomId = null, onSelectRoom, roomProposal = null,
     warningSubjects = [], onSelectWarningBadge,
   } = props
   const [hostSize, setHostSize] = useState({ width: 0, height: 0 })
@@ -394,19 +413,32 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     floor.planImage !== null && floor.planImage.assetHash === hash ? imageSrc : null
 
   const list = drawPlanView(floor, { showPlanImage, preview }, { sizing })
-  // Walls and footprints are two lists built for two reasons, but they share one z-order:
-  // `LAYER_ORDER` is the only source, so the bands are interleaved by layer rather than
-  // appended, or a Wall would land on top of the Item standing in it (#60 §3, #64 §15).
+  // Walls, Rooms and footprints are lists built for three reasons, but they share one z-order:
+  // `LAYER_ORDER` is the only source, so each is interleaved by layer rather than appended, or a
+  // Wall would land on top of the Item standing in it (#60 §3, #64 §15, #67 behaviour 35).
   const wallList = walls === undefined || walls === null || walls.walls.length === 0
     ? null
     : drawWalls(walls, { sizing, selectedWallId, openings, selectedOpeningId, preview: openingPreview })
-  const withWalls: DisplayList = wallList === null
+  // A Room's label may not sit on a `W-n` reference, and the only honest source for where those
+  // are is the placement that draws them.
+  const roomList = rooms === null || rooms.rooms.length === 0
+    ? null
+    : drawRooms(rooms, {
+      sizing,
+      selectedRoomId,
+      proposal: roomProposal,
+      obstacles: walls === undefined || walls === null ? [] : wallLabelBoxes(walls, sizing),
+      formatLabel: (name, squareMillimetres) => STRINGS.roomLabel(name, formatSquareMetres(squareMillimetres)),
+    })
+  const extra = [wallList, roomList].filter((one): one is DisplayList => one !== null)
+  const withWalls: DisplayList = extra.length === 0
     ? list
     : {
         ...list,
-        bounds: unionRect(list.bounds, wallList.bounds),
+        bounds: extra.reduce((bounds, one) => unionRect(bounds, one.bounds), list.bounds),
         layers: LAYER_ORDER.flatMap((key): DisplayLayer[] => {
-          const items = [...list.layers, ...wallList.layers]
+          const items = [list, ...extra]
+            .flatMap((one) => one.layers)
             .filter((layer) => layer.key === key)
             .flatMap((layer) => layer.items)
           return items.length === 0 ? [] : [{ key, items }]
@@ -450,6 +482,17 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       : (id) => {
           if (tool !== 'opening') consumedPointer.current = true
           onSelectOpening(id)
+        },
+    // A Room takes the pointer only while the Select tool is in hand. Under a drawing tool the
+    // click belongs to the tool — it closes a draft or drops a vertex — so the Room answers
+    // nothing and the click reaches the Floor behind it, which is what the draft is drawn on.
+    onRoomPointerDown: onSelectRoom === undefined || tool !== 'select'
+      ? undefined
+      : (id) => {
+          // The click that selected this Room must not be answered again as a click on the
+          // background, which would deselect it in the same gesture (#64 §15).
+          consumedPointer.current = true
+          onSelectRoom(id)
         },
     onItemPointerDown: (id, event) => {
       lastClient.current = { x: event.clientX, y: event.clientY }

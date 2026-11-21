@@ -35,7 +35,9 @@ import { formatGeometryProblem, type DisplayFormat } from './formatGeometryProbl
 import { footprintProblems } from './footprint'
 import { nameKey } from './floorNames'
 import { fitProblem, openingNoun } from './openings'
-import type { DisplayUnit, ItemFootprint, OpeningKind, Project, WallEnd, WallJustification, WallRefLine } from './project'
+import { roomFaceRelation, roomOutlineProblems, roomOverlaps, roomSegmentOf, roomSegments } from './rooms'
+import type { DisplayUnit, ItemFootprint, OpeningKind, Project, Room, RoomOutline, RoomWallFaceRef, WallEnd, WallJustification, WallRefLine } from './project'
+import type { WallSide } from '../geometry'
 import { ACKNOWLEDGEMENT_NOTE_MAX_LENGTH, warningKey } from './warnings'
 
 export type ValidateProjectResult =
@@ -126,7 +128,15 @@ const SEGMENT_FIELDS: Record<string, readonly string[]> = {
 }
 const SEGMENT_KINDS = ['line', 'arc', 'ellipticalArc'] as const
 const POINT_FIELDS = ['x', 'y']
-const EXISTING_MODEL_FIELDS = ['placedItems', 'walls', 'wallJunctions', 'openings']
+const EXISTING_MODEL_FIELDS = ['placedItems', 'walls', 'wallJunctions', 'openings', 'rooms']
+/** A Room's Edges are referenced to a Wall face on one of the reference line's two sides (#67 §1). */
+const ROOM_FACE_SIDES = ['left', 'right']
+const ROOM_FIELDS = ['id', 'floorId', 'name', 'outline', 'wallFaceRefs']
+const PRESET_ROOM_OUTLINE_FIELDS = ['kind', 'preset', 'centre', 'orientationDeg', 'segmentIds']
+const PATH_ROOM_OUTLINE_FIELDS = ['kind', 'path', 'segmentIds']
+const ROOM_FACE_REF_FIELDS = ['segmentId', 'wallId', 'side']
+/** A Room name this long is a mistake, not a name; the UI caps the field at the same number. */
+const ROOM_NAME_MAX_LENGTH = 80
 const OPENING_FIELDS = [
   'id',
   'floorId',
@@ -461,6 +471,12 @@ function indexIds(root: Rec): IdIndex {
       const openings = childPath('existingModel', 'openings')
       model.openings.forEach((opening, i) => {
         if (isRecord(opening)) claim(opening.id, childPath(childPath(openings, i), 'id'))
+      })
+    }
+    if (Array.isArray(model.rooms)) {
+      const rooms = childPath('existingModel', 'rooms')
+      model.rooms.forEach((room, i) => {
+        if (isRecord(room)) claim(room.id, childPath(childPath(rooms, i), 'id'))
       })
     }
   }
@@ -1521,7 +1537,7 @@ function validateWallJunctions(
   return shapes
 }
 
-function validateExistingModel(raw: unknown, path: string, index: IdIndex, add: Add): void {
+function validateExistingModel(raw: unknown, path: string, index: IdIndex, format: DisplayFormat, add: Add): void {
   if (raw === undefined) {
     add(path, MISSING, 'Missing the Existing Model.')
     return
@@ -1541,6 +1557,9 @@ function validateExistingModel(raw: unknown, path: string, index: IdIndex, add: 
   const walls = validateWalls(raw.walls, childPath(path, 'walls'), index, add)
   const junctions = validateWallJunctions(raw.wallJunctions, childPath(path, 'wallJunctions'), index, walls, add)
   validateOpenings(raw.openings, childPath(path, 'openings'), index, walls, junctions, add)
+  // Rooms come last: a Wall face reference is checked against the Wall's tidied face, so it
+  // needs the same Wall map the Openings needed (#67 §1).
+  validateRooms(raw.rooms, childPath(path, 'rooms'), index, walls, format, add)
   checkUnknownFields(raw, path, EXISTING_MODEL_FIELDS, add)
 }
 
@@ -1685,6 +1704,230 @@ function validateWalls(raw: unknown, path: string, index: IdIndex, add: Add): Ma
     if (shape !== null) walls.set(shape.id, shape)
   })
   return walls
+}
+
+/**
+ * Every Room of the Existing Model (#67 §1, §2).
+ *
+ * Three things are refused here that a Room could get wrong without anything else noticing:
+ *
+ *  - **An outline that is not a shape**, reported by the same geometry rules an Item
+ *    Footprint answers to, plus the one-per-Edge rule for the stable Edge IDs — a reference
+ *    that names nothing is a reference that will silently point at the wrong Edge later.
+ *  - **A Wall face reference that does not hold.** The Edge must exist, be straight, name a
+ *    Wall on the Room's own Floor, and actually lie on that face: within 0.01 mm of it and
+ *    parallel to it to the same tolerance over its own length. A file that validates is a
+ *    file whose "this Edge follows that face" is true, not merely intended.
+ *  - **Two Rooms on one Floor enclosing area in common.** A shared edge and a point contact
+ *    enclose nothing and are a normal drawing; positive area is a defect in the data and is
+ *    refused on the second Room's outline.
+ */
+function validateRooms(
+  raw: unknown,
+  path: string,
+  index: IdIndex,
+  walls: Map<string, WallShape>,
+  format: DisplayFormat,
+  add: Add,
+): void {
+  const items = checkArray(raw, path, 'the Rooms', add)
+  if (items === null) return
+  const placed: { room: Room; at: string }[] = []
+  items.forEach((rawRoom, i) => {
+    const at = childPath(path, i)
+    if (!isRecord(rawRoom)) {
+      add(at, WRONG_TYPE, 'Expected a Room.')
+      return
+    }
+    const idPath = childPath(at, 'id')
+    const id = checkEntityId(rawRoom.id, idPath, 'the Room ID', add)
+    if (id !== null) claimId(id, idPath, 'the Room ID', index, add)
+
+    const floorPath = childPath(at, 'floorId')
+    const floorId = checkEntityId(rawRoom.floorId, floorPath, 'the Room Floor ID', add)
+    if (floorId !== null && !index.floorIds.has(floorId)) {
+      add(floorPath, DANGLING_REFERENCE, `Expected the Room's Floor to be a Floor of this Project — no Floor has ID ${floorId}.`)
+    }
+
+    const namePath = childPath(at, 'name')
+    const name = checkFilledText(rawRoom.name, namePath, 'the Room name', add)
+    if (name !== null && name.length > ROOM_NAME_MAX_LENGTH) {
+      add(namePath, OUT_OF_RANGE, `Expected the Room name to be at most ${ROOM_NAME_MAX_LENGTH} characters — it is ${name.length}.`)
+    }
+
+    const outline = validateRoomOutline(rawRoom.outline, childPath(at, 'outline'), format, add)
+    const wallFaceRefs = validateRoomFaceRefs(rawRoom.wallFaceRefs, childPath(at, 'wallFaceRefs'), outline, walls, floorId, add)
+    checkUnknownFields(rawRoom, at, ROOM_FIELDS, add)
+    if (id !== null && floorId !== null && name !== null && outline !== null) {
+      placed.push({ room: { id, floorId, name, outline, wallFaceRefs }, at })
+    }
+  })
+
+  // One pass per Floor that carries more than one Room: overlap is symmetric, so the pair is
+  // reported once, on the outline of the Room that came second.
+  const byFloor = new Map<string, { room: Room; at: string }[]>()
+  for (const entry of placed) {
+    const list = byFloor.get(entry.room.floorId)
+    if (list === undefined) byFloor.set(entry.room.floorId, [entry])
+    else list.push(entry)
+  }
+  for (const list of byFloor.values()) {
+    if (list.length < 2) continue
+    for (const clash of roomOverlaps(list.map((entry) => entry.room))) {
+      const second = list.find((entry) => entry.room.id === clash.second)
+      if (second === undefined) continue
+      const first = list.find((entry) => entry.room.id === clash.first)
+      add(
+        childPath(second.at, 'outline'),
+        OUT_OF_RANGE,
+        `Expected Rooms on one Floor not to overlap — ${first?.room.name ?? clash.first} and ${second.room.name} share ${Math.round(clash.area).toLocaleString('en-US')} mm² of area.`,
+      )
+    }
+  }
+}
+
+/** One Room Outline — a preset or a Custom Path — with one stable ID per Edge. */
+function validateRoomOutline(raw: unknown, path: string, format: DisplayFormat, add: Add): RoomOutline | null {
+  if (raw === undefined) {
+    add(path, MISSING, 'Missing the Room Outline.')
+    return null
+  }
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected the Room Outline.')
+    return null
+  }
+  const kind = checkOneOf(raw.kind, childPath(path, 'kind'), 'the Room Outline shape', FOOTPRINT_KINDS, add)
+  const segmentIds = readSegmentIds(raw.segmentIds, childPath(path, 'segmentIds'), add)
+  const pathIds = childPath(path, 'segmentIds')
+  if (kind === 'preset') {
+    const preset = validatePreset(raw.preset, childPath(path, 'preset'), add)
+    const centre = readPoint(raw.centre, childPath(path, 'centre'), 'the Room Outline position', add)
+    const orientationDeg = checkNumber(raw.orientationDeg, childPath(path, 'orientationDeg'), 'the Room Outline orientation', add)
+    checkUnknownFields(raw, path, PRESET_ROOM_OUTLINE_FIELDS, add)
+    if (preset === null || centre === null || orientationDeg === null || segmentIds === null) return null
+    return finishRoomOutline({ kind: 'preset', preset, centre, orientationDeg, segmentIds }, pathIds, path, format, add)
+  }
+  if (kind === 'path') {
+    const closed = validateClosedPath(raw.path, childPath(path, 'path'), add)
+    checkUnknownFields(raw, path, PATH_ROOM_OUTLINE_FIELDS, add)
+    if (closed === null || segmentIds === null) return null
+    return finishRoomOutline({ kind: 'path', path: closed, segmentIds }, pathIds, path, format, add)
+  }
+  return null
+}
+
+/**
+ * The last two checks an outline has to pass: one Edge ID per Edge, and a shape at all.
+ *
+ * The count is checked before the shape, because a list that is one short means every
+ * reference after the gap names the wrong Edge — the more serious of the two, and the one a
+ * fillet that added an Edge without adding an ID produces.
+ */
+function finishRoomOutline(
+  outline: RoomOutline,
+  idsPath: string,
+  path: string,
+  format: DisplayFormat,
+  add: Add,
+): RoomOutline | null {
+  const edges = roomSegments(outline).length
+  if (outline.segmentIds.length !== edges) {
+    add(idsPath, OUT_OF_RANGE, `Expected one Edge ID per Edge of the Room Outline — the shape has ${edges} Edges, the list has ${outline.segmentIds.length}.`)
+    return null
+  }
+  const problems = roomOutlineProblems(outline)
+  for (const one of toValidationProblems(problems, path, (problem) => formatGeometryProblem(problem, format))) {
+    add(one.path, one.code, one.message)
+  }
+  return problems.length === 0 ? outline : null
+}
+
+/** A list of Edge IDs: each a well-formed ID, none of them the same twice. */
+function readSegmentIds(raw: unknown, path: string, add: Add): string[] | null {
+  const items = checkArray(raw, path, 'the Room Outline Edge IDs', add)
+  if (items === null) return null
+  const ids: string[] = []
+  const seen = new Set<string>()
+  items.forEach((rawId, i) => {
+    const at = childPath(path, i)
+    const id = checkEntityId(rawId, at, 'a Room Outline Edge ID', add)
+    if (id === null) return
+    if (seen.has(id)) {
+      add(at, DUPLICATE_MEMBER, `Expected each Edge ID of a Room Outline to be unique — ${id} is listed twice.`)
+      return
+    }
+    seen.add(id)
+    ids.push(id)
+  })
+  return ids
+}
+
+/** Every Wall face reference of one Room, each checked against the Edge and the face it names. */
+function validateRoomFaceRefs(
+  raw: unknown,
+  path: string,
+  outline: RoomOutline | null,
+  walls: Map<string, WallShape>,
+  floorId: string | null,
+  add: Add,
+): RoomWallFaceRef[] {
+  const items = checkArray(raw, path, 'the Room Wall face references', add)
+  if (items === null) return []
+  const refs: RoomWallFaceRef[] = []
+  const claimed = new Set<string>()
+  items.forEach((rawRef, i) => {
+    const at = childPath(path, i)
+    if (!isRecord(rawRef)) {
+      add(at, WRONG_TYPE, 'Expected a Wall face reference.')
+      return
+    }
+    const segmentPath = childPath(at, 'segmentId')
+    const wallPath = childPath(at, 'wallId')
+    const sidePath = childPath(at, 'side')
+    const segmentId = checkEntityId(rawRef.segmentId, segmentPath, 'the referenced Edge ID', add)
+    const wallId = checkEntityId(rawRef.wallId, wallPath, 'the referenced Wall ID', add)
+    const faceSide = checkOneOf(rawRef.side, sidePath, 'the referenced Wall face', ROOM_FACE_SIDES, add)
+    const side = faceSide === null ? null : (faceSide as WallSide)
+    checkUnknownFields(rawRef, at, ROOM_FACE_REF_FIELDS, add)
+    if (segmentId === null || wallId === null || side === null || outline === null) return
+
+    const segment = roomSegmentOf(outline, segmentId)
+    if (segment === null) {
+      add(segmentPath, DANGLING_REFERENCE, `Expected the referenced Edge to be an Edge of this Room Outline — no Edge has ID ${segmentId}.`)
+      return
+    }
+    if (segment.segment.kind !== 'line') {
+      add(segmentPath, OUT_OF_RANGE, `Expected Edge ${segment.edge} to be straight before it can be referenced to a Wall face — an arc has no single face to lie on.`)
+      return
+    }
+    if (claimed.has(segmentId)) {
+      add(segmentPath, DUPLICATE_MEMBER, `Expected at most one Wall face reference per Edge — Edge ${segment.edge} is referenced twice.`)
+      return
+    }
+    claimed.add(segmentId)
+
+    const wall = walls.get(wallId)
+    if (wall === undefined) {
+      add(wallPath, DANGLING_REFERENCE, `Expected the referenced Wall to be a Wall of this Project — no Wall has ID ${wallId}.`)
+      return
+    }
+    if (floorId !== null && wall.floorId !== floorId) {
+      add(wallPath, OUT_OF_RANGE, `Expected the referenced Wall ${wall.ref} to stand on the Room's own Floor — it stands on another.`)
+      return
+    }
+    const relation = roomFaceRelation(outline, { segmentId, wallId, side }, wall)
+    if (relation === null) return
+    const face = `${wall.ref} · ${side === 'left' ? 'left' : 'right'} face`
+    if (relation.distance > TOLERANCE_MM) {
+      add(at, OUT_OF_RANGE, `Expected Edge ${segment.edge} to lie on ${face} — it is ${relation.distance.toFixed(2)} mm away from it.`)
+      return
+    }
+    if (relation.skew > TOLERANCE_MM) {
+      add(at, OUT_OF_RANGE, `Expected Edge ${segment.edge} to run parallel to ${face} — it departs by ${relation.skew.toFixed(2)} mm over its own length.`)
+    }
+    refs.push({ segmentId, wallId, side })
+  })
+  return refs
 }
 
 /**
@@ -1847,7 +2090,7 @@ export function validateProject(value: unknown): ValidateProjectResult {
   validateFloors(value.floors, childPath(ROOT_PATH, 'floors'), index, add)
   validateViews(value.views, childPath(ROOT_PATH, 'views'), index, add)
   validateItemDesigns(value.itemDesigns, childPath(ROOT_PATH, 'itemDesigns'), index, displayFormatOf(value), add)
-  validateExistingModel(value.existingModel, childPath(ROOT_PATH, 'existingModel'), index, add)
+  validateExistingModel(value.existingModel, childPath(ROOT_PATH, 'existingModel'), index, displayFormatOf(value), add)
   validateAcknowledgements(value.warningAcknowledgements, childPath(ROOT_PATH, 'warningAcknowledgements'), index, add)
   checkUnknownFields(value, ROOT_PATH, PROJECT_FIELDS, add)
 

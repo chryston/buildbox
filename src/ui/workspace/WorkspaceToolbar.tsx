@@ -146,6 +146,8 @@ export function ToolbarMenuItem(props: {
   label: string
   testId?: string
   disabled?: boolean
+  /** Why the row is disabled, when it is: a disabled control explains itself (#55 §3). */
+  title?: string
   onSelect: () => void
 }): ReactNode {
   return (
@@ -153,6 +155,7 @@ export function ToolbarMenuItem(props: {
       type="button"
       role="menuitem"
       data-testid={props.testId}
+      title={props.title}
       disabled={props.disabled}
       className="bb-workspace-menu-item"
       onClick={props.onSelect}

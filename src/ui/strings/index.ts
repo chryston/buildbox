@@ -786,6 +786,36 @@ export const STRINGS = {
   area: 'Area',
   perimeter: 'Perimeter',
   bounds: 'Bounds',
+  // Rooms (#67). The name is what the inspector calls the field's subject; the label is the one
+  // sentence the Plan View draws, and it is drawn from the Room's own name and its analytic area.
+  room: 'Room',
+  roomLabel(name: string, area: string): string {
+    return `${name} · ${area}`
+  },
+  /**
+   * The one sentence a Room proposal that would overlap another earns (#67 §7). It is the same
+   * sentence the Intent refuses with, so the live check and the commit never disagree in words.
+   */
+  overlapsRoom(other: string, area: string): string {
+    return `Overlaps ${other} by ${area}.`
+  },
+  /** The Placed Item's membership (#67 §15): in one Room, crossing several, in none of them. */
+  insideRoom(name: string): string {
+    return `Inside ${name}`
+  },
+  crossesRooms(names: readonly string[]): string {
+    const head = names.slice(0, -1).join(', ')
+    const tail = names[names.length - 1] ?? ''
+    return `Crosses ${head === '' ? tail : `${head}${names.length > 2 ? ',' : ''} and ${tail}`}`
+  },
+  outsideAllRooms: 'Outside all Rooms',
+  /**
+   * The hint for a fixed-size placement (#67 §17): the household shelter has no box to drag, so
+   * the words say only what a click does and what size it lands at.
+   */
+  placingFixed(name: string, width: string, depth: string, unit: string): string {
+    return `Placing ${name} — click to place at ${width} × ${depth} ${unit} · Esc cancels`
+  },
   /** An elliptical arc's two radii and its length, as the chip under the shape reads them. */
   radii(rx: string, ry: string, unit: string, arcLength: string, unit2: string): string {
     return `Radii ${rx} × ${ry} ${unit} · ${arcLength} ${unit2}`
@@ -797,6 +827,25 @@ export const STRINGS = {
   attachTo(ref: string): string {
     return `Attach to ${ref}`
   },
+  // The Room-side face picker (#67 §10–§11, D8). A face is named by the Room it borders, never by
+  // which side of the Wall it is on: `W-5 · Kitchen's side` is read in a house, `left` in a manual.
+  attachToFace: 'Attach to wall face',
+  pickFace: 'Pick a wall face · Esc cancels',
+  attach: 'Attach',
+  detach: 'Detach',
+  attachedTo(label: string): string {
+    return `Attached to ${label}`
+  },
+  /** The distance the attach will move the Edge, already carrying its unit. */
+  movesEdge(distance: string): string {
+    return `Moves edge ${distance}`
+  },
+  /** An Edge already lying on the face it is being attached to. */
+  noMove: 'No move',
+  /** Nothing parallel and near: the picker says so rather than showing an empty list. */
+  noFaceInReach: 'No wall face is parallel to this edge within reach.',
+  /** The reason a preset Edge cannot follow a face at all (#67 §11). */
+  convertToAttach: 'Convert to Custom Path to attach this edge',
   // The last of the interface's own words (#66 criterion 16).
   unlockSection: 'Unlock section',
   notAnImage: "This file couldn't be read as an image",
@@ -892,6 +941,8 @@ export const WARNING_COPY: Readonly<Record<string, (params: WarningParams) => st
     `${String(params.a)} crosses ${String(params.b)} without a join: ${mmWords(Number(params.mm))} mm overlap.`,
   wall_overlap: (params) =>
     `${String(params.a)} runs along ${String(params.b)} for ${mmWords(Number(params.mm))} mm without a join.`,
+  item_crosses_room: (params) =>
+    `${String(params.a)} crosses ${String(params.b)}: ${Number(params.m2).toFixed(2)} m² (${Math.round(Number(params.pct))}%) of its footprint is outside.`,
 }
 
 /** The sentence one warning says. */

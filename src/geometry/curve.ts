@@ -575,13 +575,33 @@ const ellipticMeetings = (a: Segment, aFrom: Pt, b: Segment, bFrom: Pt, out: Seg
       lineLine({ kind: 'line', to: pieceA.to }, pieceA.from, { kind: 'line', to: pieceB.to }, pieceB.from, local)
       for (const meeting of [...local.crossings, ...local.touches]) {
         const at = refineOntoBoth(meeting.at, a, aFrom, b, bFrom)
-        const kind = meeting.kind === 'cross' && !nearEnd(at, a, aFrom) && !nearEnd(at, b, bFrom) ? 'cross' : 'touch'
+        const interior = !nearEnd(at, a, aFrom) && !nearEnd(at, b, bFrom)
+        const kind = meeting.kind === 'cross' || (interior && passesThrough(at, a, aFrom, b, bFrom)) ? 'cross' : 'touch'
         const target = kind === 'cross' ? out.crossings : out.touches
         if (target.some((m) => distance(m.at, at) <= TOLERANCE_MM)) continue
         target.push({ at, kind })
       }
     }
   }
+}
+
+/**
+ * Whether two curves pass through one another at a meeting, from their tangents there.
+ *
+ * `ellipticMeetings` solves on chord pieces, and a piece boundary is an interior point of the
+ * curve it belongs to — so a genuine crossing that happens to land on one comes back from the
+ * piece solve as a touch. `chordPieces` cuts at a sagitta of a hundredth of a millimetre, which
+ * for a 200 mm radius means a chord every ~0.57°, and a crossing at a round parametric angle
+ * like 60° lands on a boundary exactly. The tangents say what the piece could not: parallel
+ * means the two curves graze, anything else means one goes through the other.
+ */
+const passesThrough = (at: Pt, a: Segment, aFrom: Pt, b: Segment, bFrom: Pt): boolean => {
+  const ta = paramForPoint(a, aFrom, at)
+  const tb = paramForPoint(b, bFrom, at)
+  if (ta === null || tb === null) return false
+  const ua = tangentOn(a, aFrom, ta)
+  const ub = tangentOn(b, bFrom, tb)
+  return Math.abs(ua.x * ub.y - ua.y * ub.x) > 1e-9
 }
 
 const nearEnd = (at: Pt, segment: Segment, from: Pt): boolean =>

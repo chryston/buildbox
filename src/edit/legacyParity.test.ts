@@ -126,6 +126,14 @@ const EXTRA_INTENTS = [
   // by eye on the printed plan — so there is no store action either of these maps to.
   'warning.acknowledge',
   'warning.editNote',
+  // #67: the legacy app had no Rooms at all — a room was an empty area between Walls the
+  // drafter labelled by hand — so there is no store action any of these maps to.
+  'room.create',
+  'room.rename',
+  'room.setOutline',
+  'room.attachFace',
+  'room.detachFace',
+  'room.placeShelter',
 ]
 
 describe('action coverage', () => {

@@ -41,6 +41,9 @@ const NODE_ONLY_INCLUDE = [
   // every legacy fixture, which needs `package`'s converter, so it is a Node test in the
   // `test-support` element — and `import.meta.url` is only a file URL outside jsdom.
   'src/test/deriveCabinetItemDetail.test.ts',
+  // The Rooms scene fixture (#67 criterion 11) is checked as the browser loads it, from disk,
+  // so it is a Node test of the same kind.
+  'src/test/roomsScene.test.ts',
   // The invalid-proposal controller (#58 §6) lives in `ui` because it is UI state, but it is
   // a pure state machine — no React, no DOM — and the issue verifies it under Node.
   'src/ui/workspace/shape/**/*.test.ts',

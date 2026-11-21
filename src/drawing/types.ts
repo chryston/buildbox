@@ -57,6 +57,9 @@ export type LayerKey =
   | 'plan-image'
   /** The optional model grid #61 draws under a drawing when the recipe asks for one. */
   | 'sheet-grid'
+  /** The Room areas themselves (#67 behaviour 35): named Floor, drawn under every Wall band,
+      because a Wall stands on a Room's boundary and not the other way round. */
+  | 'rooms'
   /** The Wall bands themselves (#64 §15): Building Elements, drawn under the footprints. */
   | 'walls'
   /** The symbols inside a Wall's gaps (#65 §12), above the band they are cut into. */
@@ -66,6 +69,9 @@ export type LayerKey =
   | 'placed-item-labels'
   /** The `W-n` references (#64 §15), in the same untransformed text half as the item labels. */
   | 'wall-labels'
+  /** The `Kitchen · 13.08 m²` labels (#67 behaviour 35), after the Wall references because a
+      Room's name is the longer string and the one a person is looking for. */
+  | 'room-labels'
   | 'plan-dimensions'
   | 'plan-chip'
   | 'plan-handle'
@@ -99,12 +105,14 @@ export type LayerKey =
 export const LAYER_ORDER: readonly LayerKey[] = [
   'plan-image',
   'sheet-grid',
+  'rooms',
   'walls',
   'wall-openings',
   'placed-items',
   'plan-annotations',
   'placed-item-labels',
   'wall-labels',
+  'room-labels',
   'plan-dimensions',
   'plan-chip',
   'plan-handle',
@@ -181,6 +189,32 @@ export type StyleKey =
   | 'wall:selected'
   /** One of the band's two faces, the line every tool snaps to. */
   | 'wall-face'
+  /**
+   * A Room's area: named Floor, so lighter than the Wall standing on its edge (#67 behaviour
+   * 35). The fill is what makes a Room a region rather than a polygon someone drew.
+   */
+  | 'room'
+  | 'room:selected'
+  /** The Room being drawn or edited right now: the accent while it is valid (#67 behaviour 21). */
+  | 'room:proposal'
+  /** …and the danger colour the moment it overlaps another Room. Red, never orange. */
+  | 'room:proposal-blocked'
+  /**
+   * The region two Rooms share (#67 behaviour 20): painted red and outlined with a dash,
+   * because the eye has to find the part that is wrong rather than the whole shape.
+   */
+  | 'room-overlap'
+  /** The Room's own area again, filled with nothing the eye can see and everything a pointer
+      needs: the outline is a hairline, and a hairline is a hard thing to click (#65 §11). */
+  | 'room-hit'
+  /** The badge on an Edge that claims a Wall face: a filled diamond, the same size at any zoom,
+      because it marks a place on the drawing and not a place in the Flat (#67 §12). */
+  | 'room-anchor'
+  /** `Kitchen · 13.08 m²`, and the one smaller size it is allowed to shrink to. */
+  | 'room-label'
+  | 'room-label:min'
+  /** The line from a label that could not be fitted inside to the Room it names. */
+  | 'room-label-leader'
   /** The leaf, panels or window mullion of an Opening — the part a click selects (#65 §12). */
   | 'opening'
   | 'opening:selected'
@@ -270,6 +304,10 @@ export type StyleKey =
  */
 export type SizeRole =
   | 'plan-label'
+  /** The smallest a Room label is allowed to get before it moves instead (#67 behaviour 35). */
+  | 'room-label-min'
+  /** The badge marking an Edge that claims a Wall face (#67 §12). */
+  | 'room-anchor'
   | 'plan-dimension'
   | 'plan-chip'
   | 'plan-dim-offset'

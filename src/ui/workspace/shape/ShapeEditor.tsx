@@ -108,6 +108,8 @@ export interface ShapeEditorProps {
    * every other placement (#58 §2).
    */
   readonly readOnly?: boolean
+  /** The Placed Item's Room membership, shown on the Measurements tab (#67 §15). */
+  readonly membership?: string
 }
 
 const TABS: readonly { id: ShapeTabName; label: string }[] = [
@@ -122,7 +124,7 @@ export const CABINET_SHAPE_NOTE = STRINGS.cabinetShapeNote
 const IDLE = (footprint: ItemFootprint): ShapeDraft => ({ proposal: { state: 'idle' }, lastValid: footprint })
 
 export function ShapeEditor(props: ShapeEditorProps): ReactNode {
-  const { itemDesignId, design, layout = 'editor', readOnly = false } = props
+  const { itemDesignId, design, layout = 'editor', readOnly = false, membership } = props
   const { session, services } = useWorkspaceRoot()
   const project = useWorkspaceProject(session)
   const dispatch = useWorkspaceDispatch()
@@ -649,7 +651,7 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
               />
             )}
             {tab === 'measurements' && (
-              <MeasurementsTab footprint={shown} format={format} boundsLabel={STRINGS.bounds} />
+              <MeasurementsTab footprint={shown} format={format} boundsLabel={STRINGS.bounds} membership={membership} />
             )}
           </div>
         </div>

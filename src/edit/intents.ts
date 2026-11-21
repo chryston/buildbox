@@ -28,11 +28,15 @@ import type {
   OpeningSwing,
   PlanImage,
   Point2,
+  PathRoomOutline,
+  PresetRoomOutline,
   Project,
   WallClassification,
+  WallFaceSide,
   WallJustification,
   WallRefLine,
 } from '../domain'
+import { roomOutlinePath } from '../domain'
 import type { KeepFixed, Pt } from '../geometry'
 import type { ValidationProblem } from '../lib'
 
@@ -83,6 +87,12 @@ export type IntentType =
   | 'wall.split'
   | 'wall.merge'
   | 'wall.delete'
+  | 'room.create'
+  | 'room.rename'
+  | 'room.setOutline'
+  | 'room.attachFace'
+  | 'room.detachFace'
+  | 'room.placeShelter'
   | 'opening.create'
   | 'opening.setStart'
   | 'opening.setWidth'
@@ -525,6 +535,71 @@ export interface DeleteWall {
 }
 
 /**
+ * A Room Outline without its Edge IDs (#67 §1). The IDs come from `ids` like every other ID
+ * an Intent creates, so the payload states the shape and the caller states who owns each Edge.
+ */
+export type RoomOutlineShape =
+  | Omit<PresetRoomOutline, 'segmentIds'>
+  | Omit<PathRoomOutline, 'segmentIds'>
+
+/** Draw a Room (#67 §4). No `name` takes the lowest unused `Room N`. */
+export interface CreateRoom {
+  floorId: EntityId
+  outline: RoomOutlineShape
+  name?: string
+}
+
+/** Rename a Room (#67 §4). */
+export interface RenameRoom {
+  roomId: EntityId
+  name: string
+}
+
+/**
+ * Restate a Room's outline (#67 §7): the Shape tab, a handle drag, a fillet.
+ *
+ * `ids` carries one ID per Edge of the new outline. An Edge that keeps its identity keeps its
+ * ID, which is what lets a reference survive; an Edge whose ID disappears takes its attachment
+ * down with it, so the Intent is refused rather than quietly moving a reference onto a
+ * different Edge.
+ */
+export interface SetRoomOutline {
+  roomId: EntityId
+  outline: RoomOutlineShape
+}
+
+/**
+ * `Attach to wall face` (#67 §11): the Edge named by `segmentId` is slid onto the face and
+ * keeps following it. An Edge already attached elsewhere is reattached by the same Intent —
+ * `Detach, reattach` should not be two transactions.
+ */
+export interface AttachRoomFace {
+  roomId: EntityId
+  segmentId: EntityId
+  wallId: EntityId
+  side: WallFaceSide
+}
+
+/** `Detach`: the reference goes, the geometry stays exactly where it is (#67 §13). */
+export interface DetachRoomFace {
+  roomId: EntityId
+  segmentId: EntityId
+}
+
+/**
+ * Place the fixed `Household shelter` pack entry (#67 §17): Room, four Walls, four L
+ * junctions, four face references and one door, in one transaction. Every number comes from
+ * the pack, so the payload is only where it goes and which way it faces.
+ */
+export interface PlaceHouseholdShelter {
+  floorId: EntityId
+  /** Floor millimetres: the centre of the shelter's interior. */
+  centre: Point2
+  /** Clockwise degrees in the +Y-down frame, set in the Shape tab before commit. */
+  orientationDeg: number
+}
+
+/**
  * Place an Opening (#65 §5). A preset's values are resolved into this payload by the caller
  * and never linked afterwards: editing the pack afterwards changes nothing already placed.
  */
@@ -655,6 +730,12 @@ export interface IntentPayloads {
   'wall.split': SplitWall
   'wall.merge': MergeWalls
   'wall.delete': DeleteWall
+  'room.create': CreateRoom
+  'room.rename': RenameRoom
+  'room.setOutline': SetRoomOutline
+  'room.attachFace': AttachRoomFace
+  'room.detachFace': DetachRoomFace
+  'room.placeShelter': PlaceHouseholdShelter
   'opening.create': CreateOpening
   'opening.setStart': SetOpeningStart
   'opening.setWidth': SetOpeningWidth
@@ -714,6 +795,7 @@ export type ProjectIntent = Intent<'project.rename' | 'project.setPreferences'>
 export type CabinetIntent = Intent<Extract<IntentType, `cabinet.${string}`>>
 export type PlanIntent = Intent<Extract<IntentType, `plan.${string}`>>
 export type WallIntent = Intent<Extract<IntentType, `wall.${string}`>>
+export type RoomIntent = Intent<Extract<IntentType, `room.${string}`>>
 export type OpeningIntent = Intent<Extract<IntentType, `opening.${string}`>>
 export type DesignIntent = Intent<Extract<IntentType, `design.${string}`>>
 export type FloorIntent = Intent<Extract<IntentType, `floor.${string}`>>
@@ -770,6 +852,12 @@ export const INTENT_ID_ORDER: Record<IntentType, readonly string[]> = {
   'wall.split': ['wallId', 'junctionId'],
   'wall.merge': [],
   'wall.delete': [],
+  'room.create': ['roomId', 'segmentId…'],
+  'room.rename': [],
+  'room.setOutline': ['segmentId…'],
+  'room.attachFace': [],
+  'room.detachFace': [],
+  'room.placeShelter': ['roomId', 'openingId', 'wallId…', 'junctionId…', 'segmentId…'],
   'opening.create': ['openingId'],
   'opening.setStart': [],
   'opening.setWidth': [],
@@ -831,6 +919,14 @@ export function chainJunctionCount(payload: CreateWallChain): number {
   return keys.size
 }
 
+/** How many Edges a Room Outline shape has, and so how many Edge IDs it needs (#67 §1). */
+export function roomSegmentCount(outline: RoomOutlineShape): number {
+  return roomOutlinePath({ ...outline, segmentIds: [] }).segments.length
+}
+
+/** The IDs `room.placeShelter` spends: Room, door, 4 Walls, 4 junctions, 4 Edges (#67 §17). */
+export const SHELTER_ID_COUNT = 14
+
 export function intentIdCount(type: IntentType, payload?: PayloadOf): number {
   const order = INTENT_ID_ORDER[type]
   if (order[order.length - 1]?.endsWith('…') !== true) return order.length
@@ -845,6 +941,14 @@ export function intentIdCount(type: IntentType, payload?: PayloadOf): number {
       const chain = payload as CreateWallChain
       return chain.walls.length + chainJunctionCount(chain)
     }
+    case 'room.create':
+      return 1 + roomSegmentCount((payload as CreateRoom).outline)
+    case 'room.setOutline':
+      return roomSegmentCount((payload as SetRoomOutline).outline)
+    case 'room.placeShelter':
+      // One Room, one door, four Walls, four junctions and the four Edges of the shelter's
+      // Rectangle outline — fixed numbers, because the pack entry is fixed.
+      return SHELTER_ID_COUNT
     default:
       return fixed + VARIADIC_ID_COUNT
   }
@@ -900,6 +1004,8 @@ export type RejectionCode =
   | 'dependency-changed'
   /** An Opening edit this Opening cannot represent: a window has no hinge, a sliding door no side (#65 §6). */
   | 'invalid-opening'
+  /** A Room proposal that overlaps another Room, or a Wall edit a referenced Room edge cannot follow (#67 §7, §12). */
+  | 'room-blocked'
 
 /**
  * What an Intent takes with it, listed before it runs (#20 §4, #65 §8).

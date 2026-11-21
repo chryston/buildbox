@@ -35,6 +35,11 @@ export interface WallInspectorProps {
   onSplit: () => void
   onMerge: (otherId: EntityId) => void
   onDelete: () => void
+  /**
+   * Why Delete is out of action — a Room Edge stands on this Wall (#67 §12) — in the same words
+   * the refused Intent answers with; nothing when the Wall may be deleted.
+   */
+  deleteBlocked: string | null
 }
 
 /** Grouped thousands, as the issue writes a height: `2,600 mm`. */
@@ -65,7 +70,7 @@ function Row(props: { testId: string; label: string; value: string }): ReactNode
 export function WallInspector(props: WallInspectorProps): ReactNode {
   const {
     wall, derived, mergeableWith, unit, precision,
-    onSetLength, onSetRadius, onSetThickness, onOffset, onSplit, onMerge, onDelete,
+    onSetLength, onSetRadius, onSetThickness, onOffset, onSplit, onMerge, onDelete, deleteBlocked,
   } = props
   const [offsetText, setOffsetText] = useState('')
   const [offsetSide, setOffsetSide] = useState<'left' | 'right'>('left')
@@ -172,10 +177,23 @@ export function WallInspector(props: WallInspectorProps): ReactNode {
         >
           {mergeableWith === null ? STRINGS.wallMerge : STRINGS.wallMergeWith(mergeableWith.ref)}
         </button>
-        <button type="button" data-testid="wall-delete" className="bb-workspace-tool-button" onClick={onDelete}>
+        <button
+          type="button"
+          data-testid="wall-delete"
+          className="bb-workspace-tool-button"
+          disabled={deleteBlocked !== null}
+          title={deleteBlocked ?? undefined}
+          onClick={() => {
+            if (deleteBlocked === null) onDelete()
+          }}
+        >
           {STRINGS.delete}
         </button>
       </div>
+      {/* The Room's claim on this Wall, read out before the Intent is refused (#67 §12). */}
+      {deleteBlocked !== null && (
+        <p className="bb-workspace-field-error" data-testid="wall-delete-blocked">{deleteBlocked}</p>
+      )}
     </section>
   )
 }

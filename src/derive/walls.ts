@@ -24,6 +24,7 @@ import { joinWalls, refLength } from '../geometry'
 import type { ClosedPath, JoinJunction, JoinWall, Pt, Segment, WallSide } from '../geometry'
 import type { EntityId, Project } from '../domain'
 import type { WallFaceSource } from './snapCandidates'
+import { faceRoomNames } from './rooms'
 
 /** One tidied face, with the key that names it (#64 §6). */
 export interface DerivedFace {
@@ -176,11 +177,26 @@ export const deriveWalls = (project: Project, floorId: EntityId): FloorWalls => 
     cornersOf.set(wall.id, mine)
   }
 
+  // A face that borders a Room is named for it — `W-5 · Kitchen side face` — because that is how
+  // the person aiming at it is thinking: the side of the Kitchen, never the left or the right of a
+  // Wall (#67 §9). A face bordering no Room keeps the plain wording, which is the truth about it.
+  const faceNames = faceRoomNames(
+    walls.map((wall) => [...wall.faces]).flat(),
+    project.existingModel.rooms.filter((room) => room.floorId === floorId),
+  )
   const snapSources: WallFaceSource[] = walls.map((wall) => ({
     id: wall.id,
     label: `${wall.ref} · face`,
     corners: (cornersOf.get(wall.id) ?? []).map((corner) => ({ point: corner.point, label: corner.label })),
-    faces: wall.faces.map((face) => ({ from: face.from, to: face.to, segment: face.segment })),
+    faces: wall.faces.map((face) => {
+      const name = faceNames.get(`${face.wallId}|${face.side}`)
+      return {
+        from: face.from,
+        to: face.to,
+        segment: face.segment,
+        ...(name === undefined ? {} : { label: `${wall.ref} · ${name} side face` }),
+      }
+    }),
   }))
 
   return {

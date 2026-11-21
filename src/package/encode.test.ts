@@ -130,7 +130,7 @@ describe('encodeProject', () => {
     expect(manifest).toMatchObject({
       format: 'buildbox-project',
       packageVersion: 1,
-      domainSchemaVersion: 6,
+      domainSchemaVersion: 7,
       projectId: 'project-0',
       exportedAt: '2024-02-29T12:34:56.789Z',
       buildboxVersion: '1.2.3',

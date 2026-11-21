@@ -51,8 +51,9 @@ export interface WallFaceSource {
   readonly label: string
   /** Face corners: where two faces meet, or a face ends (D6: these ARE targets). */
   readonly corners: readonly { point: Pt; label: string }[]
-  /** The faces themselves, on their real curves: an arc face snaps to the arc, not its chord. */
-  readonly faces: readonly { from: Pt; to: Pt; segment: Segment }[]
+  /** The faces themselves, on their real curves: an arc face snaps to the arc, not its chord.
+      A face that borders a Room carries its own wording, `W-5 · Kitchen side face` (#67 §9). */
+  readonly faces: readonly { from: Pt; to: Pt; segment: Segment; label?: string }[]
 }
 
 export interface SnapSourceInput {
@@ -297,7 +298,7 @@ export const snapCandidates = (input: SnapSourceInput): SnapCandidate[] => {
       }
       for (const face of wall.faces) {
         const at = nearestOnFace(face, cursor)
-        if (at !== null && fresh(seen, at)) out.push({ point: at, kind: 'wallFace', label: wall.label })
+        if (at !== null && fresh(seen, at)) out.push({ point: at, kind: 'wallFace', label: face.label ?? wall.label })
       }
     }
   }

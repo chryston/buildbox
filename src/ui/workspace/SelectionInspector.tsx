@@ -56,6 +56,12 @@ export interface SelectionInspectorProps {
   preview: DesignEditPreview | null
   /** `Pick on canvas` is armed (#57 §5). */
   pickingOrigin: boolean
+  /**
+   * Which Room the selected Placed Item stands in, in one sentence (#67 §15). `undefined` when the
+   * Floor has no Rooms at all: an item on a Roomless Floor is not "outside all Rooms", it is on a
+   * Floor where the question is not asked.
+   */
+  membership?: string
   onSetPosition: (x: number, y: number) => void
   onSetRotation: (rotationDeg: number) => void
   /** A design-level edit: the workspace previews it or commits it, by placement count. */
@@ -318,6 +324,7 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
               design={design}
               layout="stacked"
               readOnly
+              membership={props.membership}
             />
           </div>
           {/* A cabinet's footprint, origin and colour are its construction (#42 §2), so the

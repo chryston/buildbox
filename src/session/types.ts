@@ -13,7 +13,7 @@
  */
 import type { Applied, Intent, Locator, Rejection } from '../edit'
 import type { LibraryRecord, PersistenceError, RecoveryPointKind, Result } from '../persistence'
-import type { DerivedFloor, DerivedItemDetail, FloorWalls } from '../derive'
+import type { DerivedFloor, DerivedItemDetail, FloorRooms, FloorWalls } from '../derive'
 import type { EntityId, Project } from '../domain'
 import type { ValidationProblem } from '../lib'
 
@@ -149,6 +149,12 @@ export interface ProjectSession {
   deriveItemDetail(designId: EntityId, floorId?: EntityId | null): DerivedItemDetail
   /** The Floor's tidied Walls, faces and corners, through the same cache (#64 §6). */
   deriveWalls(floorId: EntityId, optionId?: EntityId | null): FloorWalls
+  /**
+   * The Floor's Rooms: their areas, label anchors and Placed Item membership, through the same
+   * cache (#67 §3). Rooms are Existing-only until Design Options own them (#69), so there is no
+   * option to pass.
+   */
+  deriveRooms(floorId: EntityId): FloorRooms
   /** Undo as a forward revision (#26). Works while save has failed. */
   undo(): Result<void, 'no-history'>
   /** Redo as a forward revision (#26). Works while save has failed. */

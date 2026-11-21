@@ -33,6 +33,8 @@ import { effectiveFloor, effectiveItemDetail } from './effective'
 import type { DerivedFloor, DerivedItemDetail } from './effective'
 import { quantitiesForFloor } from './quantities/quantities'
 import type { FloorQuantities } from './quantities/quantities'
+import { deriveRooms } from './rooms'
+import type { FloorRooms } from './rooms'
 import { deriveWalls } from './walls'
 import type { FloorWalls } from './walls'
 import { deriveWarnings } from './warnings/engine'
@@ -68,6 +70,15 @@ export interface DeriveCache {
    * every pair of Walls in it — the same slot discipline as the Walls it reads through.
    */
   warnings(project: Project, revision: number, floorId: EntityId, optionId: EntityId | null): FloorWarnings
+  /**
+   * The Rooms of one Floor, measured, and how its Placed Items sit in them (#67 §3).
+   *
+   * The Plan View labels every Room on screen and the Rooms panel lists them, both on every
+   * render; the area, perimeter and label anchor of an Outline are analytic and the membership
+   * of every item against every Room is a pair of loops apiece. Rooms belong to the Existing
+   * Model, so there is no Design Option in the key — the same slot discipline as the Walls.
+   */
+  rooms(project: Project, revision: number, floorId: EntityId): FloorRooms
 }
 
 interface Entry {
@@ -113,7 +124,7 @@ export function createDeriveCache(opts: { maxEntries?: number } = {}): DeriveCac
    * revision replaces, which is why an old revision is never answered from a new one.
    */
   const remember = <T>(
-    kind: 'floor' | 'item' | 'quantities' | 'walls' | 'warnings',
+    kind: 'floor' | 'item' | 'quantities' | 'walls' | 'warnings' | 'rooms',
     projectToken: number,
     revision: number,
     id: EntityId,
@@ -152,5 +163,7 @@ export function createDeriveCache(opts: { maxEntries?: number } = {}): DeriveCac
       remember('walls', tokenOf(project), revision, floorId, optionId, () => deriveWalls(project, floorId)),
     warnings: (project, revision, floorId, optionId) =>
       remember('warnings', tokenOf(project), revision, floorId, optionId, () => deriveWarnings(project, floorId, optionId)),
+    rooms: (project, revision, floorId) =>
+      remember('rooms', tokenOf(project), revision, floorId, null, () => deriveRooms(project, floorId)),
   }
 }

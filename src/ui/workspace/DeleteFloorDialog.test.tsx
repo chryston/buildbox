@@ -33,6 +33,7 @@ const project = (over: Partial<Project> = {}): Project => ({
     walls: [],
     wallJunctions: [],
     openings: [],
+    rooms: [],
     placedItems: [
       { id: 'p1', itemDesignId: 'd1', floorId: 'floor-1', translation: { x: 0, y: 0 }, rotationDeg: 0, baseElevation: 0 },
       { id: 'p2', itemDesignId: 'd1', floorId: 'floor-1', translation: { x: 0, y: 0 }, rotationDeg: 0, baseElevation: 0 },
@@ -76,7 +77,7 @@ describe('what is leaning on the Floor', () => {
       ...project(),
       floors: [loft],
       views: [{ id: 'view-3', kind: 'plan', floorId: 'floor-2', name: 'Loft', isDefault: true, showPlanImage: true }],
-      existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [] },
+      existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [] },
     }
     const props = open(empty, loft)
     expect(screen.getByTestId('dependency-placedItems')).toHaveTextContent('0 Placed Items')
