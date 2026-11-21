@@ -63,6 +63,7 @@ const project = (over: Partial<Project> = {}): Project => ({
       baseElevation: 0,
     }],
   },
+  warningAcknowledgements: [],
   ...over,
 })
 

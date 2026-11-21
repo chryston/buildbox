@@ -47,6 +47,7 @@ describe('encodeProject determinism', () => {
         preferences: project.preferences,
         meta: project.meta,
         id: project.id,
+        warningAcknowledgements: project.warningAcknowledgements,
       }),
     )
     expect(await encodeProject(rebuilt, assets, FIXTURE_BUILD)).toEqual(

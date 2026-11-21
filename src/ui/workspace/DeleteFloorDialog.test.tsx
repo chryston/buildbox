@@ -39,6 +39,7 @@ const project = (over: Partial<Project> = {}): Project => ({
       { id: 'p3', itemDesignId: 'd2', floorId: 'floor-2', translation: { x: 0, y: 0 }, rotationDeg: 0, baseElevation: 0 },
     ],
   },
+  warningAcknowledgements: [],
   ...over,
 })
 

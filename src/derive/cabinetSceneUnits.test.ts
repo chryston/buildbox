@@ -53,6 +53,7 @@ const project = (parts: Partial<Project>): Project => ({
   views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Floor 1', isDefault: true, showPlanImage: true }],
   itemDesigns: [],
   existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [] },
+  warningAcknowledgements: [],
   ...parts,
 })
 

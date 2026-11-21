@@ -31,6 +31,7 @@ const project = (floors: Floor[]): Project => ({
   })),
   itemDesigns: [],
   existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [] },
+  warningAcknowledgements: [],
 })
 
 const open = (floors: Floor[], over: Partial<Parameters<typeof ManageFloorsDialog>[0]> = {}) => {

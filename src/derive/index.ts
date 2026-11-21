@@ -31,6 +31,21 @@ export { SNAP_ROW_KINDS, enabledSnapKinds, snapCandidates } from './snapCandidat
 export type { SnapGeometry, SnapSettingKinds, SnapSourceInput, WallFaceSource } from './snapCandidates'
 export { deriveWalls } from './walls'
 export type { DerivedCorner, DerivedFace, DerivedWall, FloorWalls } from './walls'
+export { WARNING_PRODUCERS, compareWarnings, countUnacknowledged, deriveWarnings, warningFloorOf, warningSignature } from './warnings/engine'
+export type {
+  FloorWarnings,
+  Warning,
+  WarningCandidate,
+  WarningFloor,
+  WarningJunction,
+  WarningMeasured,
+  WarningParams,
+  WarningProducer,
+  WarningStatus,
+  WarningSubject,
+  WarningSubjectKind,
+  WarningWall,
+} from './warnings/types'
 export {
   AFFINE_IDENTITY,
   affineApply,

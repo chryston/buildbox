@@ -13,7 +13,6 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { canonicalJsonBytes, sha256Hex } from '../lib'
 import type { PlanView, Project } from '../domain'
-import { encodeProject } from './encode'
 import { stageImport } from './import'
 import {
   allocateIds,
@@ -46,10 +45,6 @@ const ARCHIVE_V4 = readV4('reference.buildbox')
 // first Backup whose Project carries an Opening (#65).
 const ARCHIVE_V5 = readV5('openings.buildbox')
 const ASSET_BYTES = readV2(ASSET_ENTRY)
-const assetSource = async (): Promise<{ bytes: Uint8Array; mediaType: string }> => ({
-  bytes: ASSET_BYTES,
-  mediaType: 'image/png',
-})
 
 /** The record the v1 file was written from: no Plan Views (#56), pre-v3 footprints (#58). */
 function v1Record(): unknown {
@@ -103,7 +98,9 @@ function v3FixtureRecord(): unknown {
   const project = fixtureProject()
   const preferences: Record<string, unknown> = { ...project.preferences }
   delete preferences.defaultWallHeight
-  return { ...project, preferences, existingModel: { placedItems: project.existingModel.placedItems } }
+  const record: Record<string, unknown> = { ...project, preferences, existingModel: { placedItems: project.existingModel.placedItems } }
+  delete record.warningAcknowledgements
+  return record
 }
 
 /** The record the v4 file was written from: the current Project without the v5 addition. */
@@ -111,7 +108,16 @@ function v4FixtureRecord(): Project {
   const project = fixtureProject()
   const existingModel: Record<string, unknown> = { ...project.existingModel }
   delete existingModel.openings
-  return { ...project, existingModel } as unknown as Project
+  const record: Record<string, unknown> = { ...project, existingModel }
+  delete record.warningAcknowledgements
+  return record as unknown as Project
+}
+
+/** The record the v5 file was written from: the current Project without the v6 addition. */
+function v5FixtureRecord(): Project {
+  const record: Record<string, unknown> = { ...openingsFixtureProject() }
+  delete record.warningAcknowledgements
+  return record as unknown as Project
 }
 
 describe('the committed v1 Backup', () => {
@@ -236,19 +242,15 @@ describe('the committed v4 Backup (#64)', () => {
 })
 
 describe('the committed v5 Backup (#65)', () => {
-  it('stages into the Project it was written from, unmigrated', async () => {
+  it('stages into the current Project, with an empty Acknowledgement list', async () => {
     const result = await stageImport(ARCHIVE_V5, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
     expect(result.staged.project).toEqual(openingsFixtureProject())
-    expect(result.staged.migratedFrom).toBeNull()
-  })
-
-  it('is re-encoded byte for byte by this build', async () => {
-    expect(await encodeProject(openingsFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V5)
+    expect(result.staged.migratedFrom).toBe(5)
   })
 
   it('holds the canonical Project record, and nothing else', async () => {
-    const canonical = canonicalOf(openingsFixtureProject())
+    const canonical = canonicalOf(v5FixtureRecord())
     expect(new TextDecoder().decode(readV5('project.json'))).toBe(`${canonical}\n`)
 
     const staged = await stageImport(ARCHIVE_V5, { acceptPreview: false, allocateId: allocateIds() })

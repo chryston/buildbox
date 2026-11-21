@@ -165,6 +165,7 @@ export function fixtureProject(): Project {
         },
       ],
     },
+    warningAcknowledgements: [],
   }
 }
 
@@ -226,7 +227,7 @@ export function legacyFixtureRecord(): unknown {
   const project = fixtureProject()
   const preferences: Record<string, unknown> = { ...project.preferences }
   delete preferences.defaultWallHeight
-  return {
+  const record: Record<string, unknown> = {
     ...project,
     // Both files predate Walls (#64): neither the default height nor the two collections is
     // in the bytes they were written from, so the record stops at the Placed Items.
@@ -238,6 +239,10 @@ export function legacyFixtureRecord(): unknown {
         : design,
     ),
   }
+  // Warning Acknowledgements (#66) postdate both files, so the record carries none — not even
+  // an empty list, which a v2 BuildBox had no word for.
+  delete record.warningAcknowledgements
+  return record
 }
 
 /** An Item Footprint as the pre-v3 files wrote it. */

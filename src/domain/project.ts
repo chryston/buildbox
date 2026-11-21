@@ -53,6 +53,15 @@ export interface Project {
   views: PlanView[]
   itemDesigns: ItemDesign[]
   existingModel: ExistingModel
+  /**
+   * Every acknowledgement of a warning, in the order the user made them (#66 §5).
+   *
+   * Canonical and in Backups: an acknowledgement is a decision about the model, not a
+   * preference about the screen, so it survives a reload, a Backup and a second tab. The key
+   * is `(warningType, subjectIds, designOptionId)` and it is unique — two records for one
+   * warning would be two notes, and the strip shows one.
+   */
+  warningAcknowledgements: Acknowledgement[]
 }
 
 export interface ProjectMeta {
@@ -361,4 +370,51 @@ export interface PlacedItem {
   rotationDeg: number
   /** Millimetres above the Floor Datum; negative is valid (#25). */
   baseElevation: number
+}
+
+/**
+ * One warning the user has seen and chosen not to be told again (#66 §5).
+ *
+ * An acknowledgement says exactly one thing: this person saw this warning, at this state of
+ * the model, and had this much to say about it. It never changes geometry, never asserts
+ * that anything is safe or conforms to anything, and never travels with a View — it is
+ * scoped to a Design Option, because the decision was made about one alternative's model.
+ *
+ * `signature` is the 64-bit hash of every model field the warning was measured from. When
+ * those fields move, the hash the engine computes no longer matches the one stored, and the
+ * warning comes back as `reopened` with this note still attached. That is why the signature
+ * is stored rather than re-derived: the whole point is to remember what the model looked like
+ * when the decision was made.
+ */
+export interface Acknowledgement {
+  id: EntityId
+  /** The producer's stable `lower_snake_case` code — a `warning_type` value (#66 §1). */
+  warningType: string
+  /**
+   * Every entity the warning involves, sorted by code point, primary subject included.
+   *
+   * Sorted because this list is half of a key: the same two Walls must give the same key
+   * whichever order a producer happened to walk them in. The engine sorts, and validation
+   * refuses a stored list that is not sorted, so a hand-edited Backup cannot smuggle a second
+   * key for one warning.
+   */
+  subjectIds: EntityId[]
+  /**
+   * The Design Option the decision belongs to; `null` is "the Existing Model".
+   *
+   * `null`-only until Design Options ship (#83): validation refuses anything else, so the day
+   * Options arrive the stored records of every Project written before it are still valid.
+   */
+  designOptionId: EntityId | null
+  /** `stableHash` of the warning's signature inputs at the moment of acknowledging. */
+  signature: string
+  /**
+   * The user's note, plain text, at most 500 characters, possibly empty.
+   *
+   * Optional in the interface but always present as a string: an absent note and an empty one
+   * would be two shapes for the strip to render and no difference to show.
+   */
+  note: string
+  /** ISO 8601, read from the caller's clock when the Intent was made (#42 §3). */
+  acknowledgedAt: string
 }

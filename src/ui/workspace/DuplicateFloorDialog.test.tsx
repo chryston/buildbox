@@ -42,6 +42,7 @@ const project = (): Project => ({
       { id: 'p4', itemDesignId: 'd-fridge', floorId: 'floor-2', translation: { x: 0, y: 0 }, rotationDeg: 0, baseElevation: 0 },
     ],
   },
+  warningAcknowledgements: [],
 })
 
 const open = (sourceFloorId = 'floor-1') => {

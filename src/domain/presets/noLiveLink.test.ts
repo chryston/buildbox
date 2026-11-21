@@ -111,6 +111,7 @@ function projectBuiltFrom(pack: PresetPack): Project {
         },
       ],
     },
+    warningAcknowledgements: [],
   }
 }
 

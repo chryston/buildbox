@@ -103,6 +103,14 @@ export function remapIds(project: Project, newId: EntityId, allocate: IdAllocato
         hostWallId: next(opening.hostWallId),
       })),
     },
+    // An acknowledgement names its subjects by ID (#66), so a copy that did not rewrite them
+    // would come back with a note about a Wall that belongs to the Project it was copied from.
+    // `designOptionId` is `null` in every Project written today, and stays whatever it was.
+    warningAcknowledgements: project.warningAcknowledgements.map((acknowledgement) => ({
+      ...acknowledgement,
+      id: next(acknowledgement.id),
+      subjectIds: acknowledgement.subjectIds.map(next),
+    })),
   }
 }
 
@@ -119,6 +127,7 @@ function entityIds(project: Project): EntityId[] {
   for (const wall of project.existingModel.walls) ids.push(wall.id)
   for (const junction of project.existingModel.wallJunctions) ids.push(junction.id)
   for (const opening of project.existingModel.openings) ids.push(opening.id)
+  for (const acknowledgement of project.warningAcknowledgements) ids.push(acknowledgement.id)
   return ids
 }
 
