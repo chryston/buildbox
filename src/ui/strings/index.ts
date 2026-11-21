@@ -792,6 +792,30 @@ export const STRINGS = {
   roomLabel(name: string, area: string): string {
     return `${name} · ${area}`
   },
+  /**
+   * The one sentence a Room proposal that would overlap another earns (#67 §7). It is the same
+   * sentence the Intent refuses with, so the live check and the commit never disagree in words.
+   */
+  overlapsRoom(other: string, area: string): string {
+    return `Overlaps ${other} by ${area}.`
+  },
+  /** The Placed Item's membership (#67 §15): in one Room, crossing several, in none of them. */
+  insideRoom(name: string): string {
+    return `Inside ${name}`
+  },
+  crossesRooms(names: readonly string[]): string {
+    const head = names.slice(0, -1).join(', ')
+    const tail = names[names.length - 1] ?? ''
+    return `Crosses ${head === '' ? tail : `${head}${names.length > 2 ? ',' : ''} and ${tail}`}`
+  },
+  outsideAllRooms: 'Outside all Rooms',
+  /**
+   * The hint for a fixed-size placement (#67 §17): the household shelter has no box to drag, so
+   * the words say only what a click does and what size it lands at.
+   */
+  placingFixed(name: string, width: string, depth: string, unit: string): string {
+    return `Placing ${name} — click to place at ${width} × ${depth} ${unit} · Esc cancels`
+  },
   /** An elliptical arc's two radii and its length, as the chip under the shape reads them. */
   radii(rx: string, ry: string, unit: string, arcLength: string, unit2: string): string {
     return `Radii ${rx} × ${ry} ${unit} · ${arcLength} ${unit2}`

@@ -30,11 +30,14 @@ export interface RoomInspectorProps {
   readonly precision: number
   /** The name the Project should hold. Only called with a name the domain accepts. */
   readonly onRename: (name: string) => void
+  /** Take the keyboard with the text selected: this Room has just been committed (#67 §4). */
+  readonly focusName?: boolean
 }
 
 export function RoomInspector(props: RoomInspectorProps): ReactNode {
-  const { room, derived, unit, precision, onRename } = props
+  const { room, derived, unit, precision, onRename, focusName = false } = props
   const [text, setText] = useState(room.name)
+  const nameRef = useRef<HTMLInputElement>(null)
   /** The last name handed to the Project, so Enter followed by blur is one write, not two. */
   const sent = useRef<string | null>(null)
   // A rename from anywhere else — the canvas, another tab, an Undo — is what the field shows
@@ -43,6 +46,11 @@ export function RoomInspector(props: RoomInspectorProps): ReactNode {
     setText(room.name)
     sent.current = null
   }, [room.name])
+  useEffect(() => {
+    if (!focusName) return
+    nameRef.current?.focus()
+    nameRef.current?.select()
+  }, [focusName, room.id])
 
   const commit = (): void => {
     const next = text.trim()
@@ -68,6 +76,7 @@ export function RoomInspector(props: RoomInspectorProps): ReactNode {
       </label>
       <input
         id="room-name-field"
+        ref={nameRef}
         className="bb-workspace-input"
         data-testid="room-name-input"
         type="text"

@@ -20,11 +20,11 @@ import type { ReactNode } from 'react'
 import { originSnapCandidates, usableIntervals, deriveWarnings } from '../../derive'
 import type { Pt, Warning } from '../../derive'
 import { wallOpenings } from '../../drawing'
-import type { BadgeSubject, OpeningPreview } from '../../drawing'
+import type { BadgeSubject, OpeningPreview, RoomProposal } from '../../drawing'
 import type { Point2, Project, WallClassification } from '../../domain'
 import { nextOpeningLabel, summarizeFloorDependencies } from '../../domain'
 import type { SessionAsset } from '../../session'
-import type { DependencyReview, IntentType, PayloadOf } from '../../edit'
+import type { DependencyReview, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
   usePlanImageSrc,
   useSaveStatus,
@@ -44,7 +44,7 @@ import {
   placedOrigin,
   resolvePlanView,
 } from './planModel'
-import { CALIBRATION_REQUIRED_HINT, WORKSPACE_TOOLS, floorNeedsCalibration, toolIsGated, toolTitle } from './toolbarRegistry'
+import { CALIBRATION_REQUIRED_HINT, DRAW_TOOLS, WORKSPACE_TOOLS, floorNeedsCalibration, toolIsGated, toolTitle } from './toolbarRegistry'
 import { WallDraftOverlay, emptyWallDraft } from './wall/WallDraftOverlay'
 import { OpeningDraftOverlay } from './opening/OpeningDraftOverlay'
 import { OpeningInspector } from './opening/OpeningInspector'
@@ -55,6 +55,10 @@ import { DEFAULT_OPENING_PRESET_ID, openingPresetRow, resolveOpeningPreset } fro
 import { readoutMm } from './displayUnits'
 import { WallInspector } from './wall/WallInspector'
 import { RoomInspector } from './rooms/RoomInspector'
+import { RoomDraftOverlay } from './rooms/RoomDraftOverlay'
+import { ShelterLayer } from './rooms/ShelterLayer'
+import { roomDraftOutline, roomOutlineShapePath, roomOverlapPreview, shelterName, shelterOutline, shelterPackName } from './rooms/roomDraft'
+import type { PathDraft } from './shape/draftPath'
 import { mergeableNeighbour } from './wall/wallDraft'
 import type { WallChainDraft, WallDraft } from './wall/wallDraft'
 import { fitRect, fitViewport } from './viewport'
@@ -86,6 +90,12 @@ import { ExportDialog } from './export/ExportDialog'
 
 /** The package's per-file limit (#6): the largest Plan Image a file may be. */
 const MAX_PLAN_IMAGE_BYTES = 50 * 1024 * 1024
+
+/**
+ * The id the proposal the Plan View paints is drawn under. It is never a Room's id: a proposal is
+ * not in the model, and nothing may select it (#67 §7).
+ */
+const ROOM_PROPOSAL = '@room-proposal'
 
 /** The last placement on this Floor: the one a just-committed add has made. */
 function lastPlacedId(project: Project, floorId: string): string | null {
@@ -158,6 +168,53 @@ export function FloorWorkspace(): ReactNode {
 
   const tool = useWorkspace((state) => state.activeTool)
   const setTool = useWorkspace((state) => state.setTool)
+  /**
+   * The Room Outline being drawn, or `null` (#67 §4). Local like the Wall draft: a half-drawn
+   * outline is not a proposal, and it must not survive a Floor change or the tool being put down.
+   */
+  const [roomDraft, setRoomDraft] = useState<PathDraft | null>(null)
+  /** The Room whose Outline the open draft restates; `null` while drawing a new one (#67 §7). */
+  const [roomDraftTarget, setRoomDraftTarget] = useState<string | null>(null)
+  /** Which of the three shape tools is in hand: the one thing that says a Room is being drawn. */
+  const drawTool = tool === 'line' || tool === 'arc' || tool === 'ellipticalArc' ? tool : null
+  /** The fixed shelter entry, armed from `Shapes ▾` and placed by one click (#67 §17). */
+  const [shelterArmed, setShelterArmed] = useState(false)
+  const [shelterCentre, setShelterCentre] = useState<Pt | null>(null)
+  /** A Room that has just been created gets its name field focused, with the text selected. */
+  const [roomNameFocus, setRoomNameFocus] = useState(false)
+  /**
+   * The Rooms the live overlap check is asked about: this Floor's, in the shape the domain check
+   * takes. A derived Room carries its own outline, but overlapping is a domain question (#67 §2).
+   */
+  const floorDomainRooms = useMemo(
+    () => project.existingModel.rooms.filter((room) => room.floorId === floorId),
+    [project.existingModel.rooms, floorId],
+  )
+  const draftOutline = roomDraft === null ? null : roomDraftOutline(roomDraft)
+  const draftOverlap = roomOverlapPreview(roomDraftTarget, draftOutline, floorDomainRooms)
+  const shelterProposal = shelterArmed && shelterCentre !== null ? shelterOutline(shelterCentre, 0) : null
+  const shelterOverlap = roomOverlapPreview(null, shelterProposal, floorDomainRooms)
+  /** The one proposal the Plan View paints: the outline being drawn, or the shelter being aimed. */
+  const roomProposal: RoomProposal | null = draftOutline !== null
+    ? {
+      id: ROOM_PROPOSAL,
+      path: roomOutlineShapePath(draftOutline),
+      blocked: draftOverlap.blocked,
+      overlaps: draftOverlap.regions,
+    }
+    : shelterProposal === null
+      ? null
+      : {
+        id: ROOM_PROPOSAL,
+        path: roomOutlineShapePath(shelterProposal),
+        blocked: shelterOverlap.blocked,
+        overlaps: shelterOverlap.regions,
+      }
+  /** The Outlines a draft snaps to, so a Room can be drawn corner-to-corner with its neighbour. */
+  const roomSnapGeometry = useMemo(
+    () => (floorRooms === null ? [] : floorRooms.rooms.map((room) => ({ path: room.path, name: room.name }))),
+    [floorRooms],
+  )
   /**
    * The Opening being placed, or `null` (#65 §9). Local like the Wall draft: a ghost is not a
    * proposal, and it belongs to the tool and the Floor it was started on.
@@ -241,12 +298,25 @@ export function FloorWorkspace(): ReactNode {
   const snapSettings = useWorkspace((state) => state.snapSettings)
   /** The kinds the nine `Snaps ▾` rows switch on, recomputed only when a row changes. */
   const snapKinds = useMemo(() => enabledKindsOf(snapSettings), [snapSettings])
-  // A half-drawn chain belongs to the tool and to the Floor it was started on (#64 §12).
+  // A half-drawn chain belongs to the tool and to the Floor it was started on (#64 §12). The same
+  // holds for a Room Outline and for an armed shelter: putting the tool down puts the draft down.
   useEffect(() => {
     if (tool !== 'wall') setWallDraft(null)
+    if (tool !== 'line' && tool !== 'arc' && tool !== 'ellipticalArc') {
+      setRoomDraft(null)
+      setRoomDraftTarget(null)
+    }
+    if (tool !== 'select') {
+      setShelterArmed(false)
+      setShelterCentre(null)
+    }
   }, [tool])
   useEffect(() => {
     setWallDraft(null)
+    setRoomDraft(null)
+    setRoomDraftTarget(null)
+    setShelterArmed(false)
+    setShelterCentre(null)
   }, [floorId])
   useEffect(() => {
     // Entering the tool hands it its draft. The aim needs the row being placed, so a tool that
@@ -438,6 +508,59 @@ export function FloorWorkspace(): ReactNode {
 
   const send = <T extends IntentType>(type: T, payload: PayloadOf<T>): void => {
     dispatch(services.intent.build(type, payload))
+  }
+
+  /**
+   * A Room the workspace has just created takes the inspector, and its name field takes the
+   * keyboard with its text selected (#67 §4). The id is not handed back by the Intent, so the new
+   * Room is the one the Project did not have a moment ago.
+   */
+  const knownRooms = useRef<ReadonlySet<string>>(new Set())
+  const pendingRoomFocus = useRef(false)
+  useEffect(() => {
+    const ids = new Set(project.existingModel.rooms.map((room) => room.id))
+    const fresh = [...ids].filter((id) => !knownRooms.current.has(id))
+    knownRooms.current = ids
+    if (!pendingRoomFocus.current) return
+    pendingRoomFocus.current = false
+    const created = fresh[fresh.length - 1]
+    if (created === undefined) return
+    selectRoom(created)
+    setRoomNameFocus(true)
+  }, [project.existingModel.rooms, selectRoom])
+
+  /**
+   * `Close` on a Room draft: one Room, one Intent, one undo step (#67 §4).
+   *
+   * A draft opened on empty Floor creates; one opened with a Room selected restates that Room,
+   * which is the same overlap-checked path a Shape-tab edit follows. The overlay has already
+   * refused to close a proposal that overlaps, and the Intent checks again — the model cannot be
+   * reached with an overlap by any route.
+   */
+  const commitRoomDraft = (outline: RoomOutlineShape): void => {
+    if (floorId === null) return
+    if (roomDraftTarget === null) {
+      pendingRoomFocus.current = true
+      send('room.create', { floorId, outline })
+    } else {
+      send('room.setOutline', { roomId: roomDraftTarget, outline })
+    }
+    setRoomDraft(null)
+    setRoomDraftTarget(null)
+    setTool('select')
+  }
+
+  /**
+   * The click that places the household shelter: Room, four Walls, four references and one door,
+   * in one transaction (#67 §17). The orientation is the pack's own — the Shape tab's Orientation
+   * field is where a turned shelter comes from, and it is editable afterwards like everything else
+   * the entry creates.
+   */
+  const placeShelter = (centre: Pt): void => {
+    if (floorId === null) return
+    send('room.placeShelter', { floorId, centre, orientationDeg: 0 })
+    setShelterArmed(false)
+    setShelterCentre(null)
   }
 
   /**
@@ -885,6 +1008,50 @@ export function FloorWorkspace(): ReactNode {
       ),
     },
     {
+      /**
+       * `Shapes ▾` (#67 §4, §17): the three drawing tools that make a Room Outline, then the
+       * shipped pack's own entry. The group is the pack's, not a list of hard-coded objects — a
+       * second pack would fill the same menu from its own manifest.
+       */
+      id: 'shapes',
+      width: 124,
+      label: STRINGS.shapes,
+      content: (
+        <ToolbarMenu label={STRINGS.shapes} testId="shapes-menu">
+          {DRAW_TOOLS.map((definition) => (
+            <ToolbarMenuItem
+              key={definition.id}
+              label={definition.label}
+              testId={definition.testId}
+              title={toolTitle(definition, planImage)}
+              disabled={toolIsGated(definition, planImage)}
+              onSelect={() => {
+                setShelterArmed(false)
+                // A Room selected first is the Room this Outline restates (#67 §7); on empty
+                // Floor the same clicks draw a new one.
+                setRoomDraftTarget(roomSelection)
+                setTool(definition.id)
+              }}
+            />
+          ))}
+          <div className="bb-workspace-menu-heading">{shelterPackName()}</div>
+          <ToolbarMenuItem
+            label={shelterName()}
+            testId="place-household-shelter"
+            title={floorNeedsCalibration(planImage) ? CALIBRATION_REQUIRED_HINT : undefined}
+            disabled={floorNeedsCalibration(planImage)}
+            onSelect={() => {
+              setRoomDraft(null)
+              setRoomDraftTarget(null)
+              setShelterCentre(null)
+              setShelterArmed(true)
+              setTool('select')
+            }}
+          />
+        </ToolbarMenu>
+      ),
+    },
+    {
       id: 'add',
       width: 112,
       label: STRINGS.addItem,
@@ -1095,6 +1262,7 @@ export function FloorWorkspace(): ReactNode {
                 unit={project.preferences.displayUnit}
                 precision={project.preferences.displayPrecision}
                 onRename={(name) => send('room.rename', { roomId: selectedRoom.room.id, name })}
+                focusName={roomNameFocus}
               />
             : selectedOpening !== null
             ? <OpeningInspector
@@ -1196,7 +1364,9 @@ export function FloorWorkspace(): ReactNode {
               selectedWallId={wallSelection}
               rooms={floorRooms}
               selectedRoomId={roomSelection}
+              roomProposal={roomProposal}
               onSelectRoom={(id) => {
+                setRoomNameFocus(false)
                 selectRoom(id)
                 setTool('select')
               }}
@@ -1252,6 +1422,41 @@ export function FloorWorkspace(): ReactNode {
                   snapKinds={snapKinds}
                   gridSpacingMm={snapSettings.gridSpacingMm}
                   angleIncrementDeg={snapSettings.angle.incrementDeg}
+                  unit={project.preferences.displayUnit}
+                  precision={project.preferences.displayPrecision}
+                />
+              ) : drawTool !== null && floorId !== null && floorWalls !== null && viewport !== null && viewport !== undefined ? (
+                <RoomDraftOverlay
+                  viewport={viewport}
+                  floorWalls={floorWalls}
+                  roomGeometry={roomSnapGeometry}
+                  tool={drawTool}
+                  toolLabel={DRAW_TOOLS.find((definition) => definition.id === drawTool)!.label}
+                  draft={roomDraft}
+                  onDraft={setRoomDraft}
+                  onCancel={() => {
+                    setRoomDraft(null)
+                    setRoomDraftTarget(null)
+                    setTool('select')
+                  }}
+                  onClose={commitRoomDraft}
+                  overlap={draftOverlap}
+                  snapKinds={snapKinds}
+                  gridSpacingMm={snapSettings.gridSpacingMm}
+                  angleIncrementDeg={snapSettings.angle.incrementDeg}
+                  unit={project.preferences.displayUnit}
+                  precision={project.preferences.displayPrecision}
+                />
+              ) : shelterArmed && viewport !== null && viewport !== undefined ? (
+                <ShelterLayer
+                  viewport={viewport}
+                  onCentre={setShelterCentre}
+                  onPlace={placeShelter}
+                  onCancel={() => {
+                    setShelterArmed(false)
+                    setShelterCentre(null)
+                  }}
+                  overlap={shelterOverlap}
                   unit={project.preferences.displayUnit}
                   precision={project.preferences.displayPrecision}
                 />
