@@ -292,7 +292,10 @@ export function RoomDraftOverlay(props: RoomDraftOverlayProps): ReactNode {
       )}
       <div
         data-testid="room-draft-bar"
-        className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2"
+        // The bottom of the canvas belongs to the warnings strip (#66): with any warning open it
+        // covered the bar, so the overlap sentence could not be read and `Close` could not be
+        // pressed. Draft bars live at the top, where the shell puts its own.
+        className="absolute top-3 left-1/2 flex -translate-x-1/2 items-center gap-2"
         onClick={(event) => {
           // The bar sits inside the layer that places points; its own clicks are not canvas clicks.
           event.stopPropagation()

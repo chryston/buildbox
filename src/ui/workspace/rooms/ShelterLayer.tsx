@@ -87,7 +87,9 @@ export function ShelterLayer(props: ShelterLayerProps): ReactNode {
     >
       <div
         data-testid="shelter-bar"
-        className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2"
+        // The bottom of the canvas belongs to the warnings strip (#66), which would otherwise sit
+        // over the one sentence that says why the click is refused. Draft bars live at the top.
+        className="absolute top-3 left-1/2 flex -translate-x-1/2 items-center gap-2"
         onClick={(event) => {
           event.stopPropagation()
         }}
