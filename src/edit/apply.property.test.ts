@@ -1015,6 +1015,9 @@ beforeAll(async () => {
   }
 })
 
+// 200 sequences of up to 50 Intents take ~2.6 s alone but exceed vitest's 5 s default on a loaded CI runner.
+const PROPERTY_TIMEOUT_MS = 30_000
+
 describe('a sequence of random Intents', () => {
   it('has a Project to start from for every legacy fixture', () => {
     expect(STARTS.length).toBeGreaterThan(6)
@@ -1038,7 +1041,7 @@ describe('a sequence of random Intents', () => {
       ),
       { numRuns: 200 },
     )
-  })
+  }, PROPERTY_TIMEOUT_MS)
 
   it('does the same to a generated Project', () => {
     fc.assert(
@@ -1054,7 +1057,7 @@ describe('a sequence of random Intents', () => {
       ),
       { numRuns: 100 },
     )
-  })
+  }, PROPERTY_TIMEOUT_MS)
 
   // The two properties above are only worth anything if they reached the whole catalogue.
   it('generated and accepted every Intent in the catalogue along the way', () => {
