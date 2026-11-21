@@ -25,6 +25,7 @@ const BOUNDS = { x: 0, y: 0, w: 4000, h: 3000 }
 
 /** A checkbox, read as the input it is. */
 const checked = (testId: string): boolean => (screen.getByTestId(testId) as HTMLInputElement).checked
+const disabled = (testId: string): boolean => (screen.getByTestId(testId) as HTMLInputElement).disabled
 
 interface Fake {
   readonly port: ExportPort
@@ -411,6 +412,120 @@ describe('the Lists tab', () => {
     fireEvent.click(screen.getByTestId('export-lists-run'))
     await waitFor(() => expect(fake.listsRuns).toHaveLength(1))
     expect(fake.listsRuns[0]?.tables).toEqual(['items'])
+  })
+
+  /** Scope 9: the five tables of #68 are offered under the two of #62, each with its own count. */
+  it('offers Rooms, Walls, Openings, Placed Items and Warnings List with a row count each', async () => {
+    const fake = fakePort({
+      listsSummary: {
+        ...ITEM_SUMMARY,
+        cutListCapable: true,
+        rows: { items: 3, 'cut-list': 6, rooms: 0, walls: 2, openings: 1, 'placed-items': 4, warnings: 3 },
+      },
+    })
+    await open(fake.port)
+    await openLists()
+
+    // The order is the contract's, and it is the order of the checkboxes: a reader who works down
+    // the list works down the ZIP.
+    expect(
+      [...screen.getByTestId('export-lists-tables').querySelectorAll('input')].map((input) =>
+        input.getAttribute('data-testid'),
+      ),
+    ).toEqual([
+      'export-lists-table-items',
+      'export-lists-table-cut-list',
+      'export-lists-table-rooms',
+      'export-lists-table-walls',
+      'export-lists-table-openings',
+      'export-lists-table-placed-items',
+      'export-lists-table-warnings',
+    ])
+    const list = screen.getByTestId('export-lists-tables')
+    expect(list).toHaveTextContent('Item List')
+    expect(list).toHaveTextContent('Rooms')
+    expect(list).toHaveTextContent('Walls')
+    expect(list).toHaveTextContent('Openings')
+    expect(list).toHaveTextContent('Placed Items')
+    expect(list).toHaveTextContent('Warnings List')
+    // Nothing new is on by default: the #62 recipe is untouched by the five that arrived.
+    expect(checked('export-lists-table-rooms')).toBe(false)
+    expect(checked('export-lists-table-warnings')).toBe(false)
+    expect(screen.getByTestId('export-lists-rows-walls')).toHaveTextContent('2 rows')
+    expect(screen.getByTestId('export-lists-rows-openings')).toHaveTextContent('1 row')
+    expect(screen.getByTestId('export-lists-rows-placed-items')).toHaveTextContent('4 rows')
+    expect(screen.getByTestId('export-lists-rows-warnings')).toHaveTextContent('3 rows')
+    // Criterion 7: an empty table is an answer beside the checkbox, not a missing one.
+    expect(screen.getByTestId('export-lists-rows-rooms')).toHaveTextContent('0 rows')
+    expect(screen.getByTestId('export-lists-rows-rooms')).toHaveClass('bb-export-rows-empty')
+  })
+
+  /** Scope 9 + criterion 10: the new checkboxes reach the recipe the export is run with. */
+  it('sends the tables it was shown, the five new ones included', async () => {
+    const fake = fakePort({ listsSummary: { ...ITEM_SUMMARY, cutListCapable: true } })
+    await open(fake.port)
+    await openLists()
+
+    fireEvent.click(screen.getByTestId('export-lists-table-items'))
+    fireEvent.click(screen.getByTestId('export-lists-table-cut-list'))
+    fireEvent.click(screen.getByTestId('export-lists-table-rooms'))
+    fireEvent.click(screen.getByTestId('export-lists-table-warnings'))
+    await settle()
+
+    fireEvent.click(screen.getByTestId('export-lists-run'))
+    await waitFor(() => expect(fake.listsRuns).toHaveLength(1))
+    expect(fake.listsRuns[0]?.tables).toEqual(['rooms', 'warnings'])
+  })
+
+  /**
+   * Scope 9: the Warnings List is scoped by Floor and Design Option only, so alone it has nothing
+   * for the State and Layer controls to do. They go grey beside a note that says why.
+   */
+  it('disables the State and Layer controls when the Warnings List is the only table', async () => {
+    const fake = fakePort({ listsSummary: { ...ITEM_SUMMARY, cutListCapable: true } })
+    await open(fake.port)
+    await openLists()
+    expect(screen.queryByTestId('export-lists-warnings-ignore-scope')).toBeNull()
+    expect(disabled('export-lists-state-existing')).toBe(false)
+
+    fireEvent.click(screen.getByTestId('export-lists-table-items'))
+    fireEvent.click(screen.getByTestId('export-lists-table-cut-list'))
+    fireEvent.click(screen.getByTestId('export-lists-table-warnings'))
+    await settle()
+
+    expect(screen.getByTestId('export-lists-warnings-ignore-scope')).toHaveTextContent(
+      'Warnings ignore layers and states.',
+    )
+    expect(disabled('export-lists-state-existing')).toBe(true)
+    expect(disabled('export-lists-state-demolition')).toBe(true)
+    expect(disabled('export-lists-state-proposed')).toBe(true)
+    expect(disabled('export-lists-layers')).toBe(true)
+    // Floors are exactly what that table *is* scoped by, so they stay live. The Design Option select
+    // is disabled for a reason of its own — no Project has a second option until #73 — which is not
+    // this notice's doing and does not change with the table set.
+    expect(disabled('export-lists-floor-floor-1')).toBe(false)
+    // And the scope statement is still the sentence of the scope, warnings or no warnings.
+    expect(screen.getByTestId('export-lists-statement')).toHaveTextContent('All Floors')
+
+    fireEvent.click(screen.getByTestId('export-lists-run'))
+    await waitFor(() => expect(fake.listsRuns).toHaveLength(1))
+    expect(fake.listsRuns[0]?.tables).toEqual(['warnings'])
+  })
+
+  /** Scope 9: combined with anything else the controls stay live — for the tables that need them. */
+  it('leaves the State and Layer controls alone when the Warnings List shares the recipe', async () => {
+    const fake = fakePort({ listsSummary: { ...ITEM_SUMMARY, cutListCapable: true } })
+    await open(fake.port)
+    await openLists()
+
+    fireEvent.click(screen.getByTestId('export-lists-table-warnings'))
+    await settle()
+
+    expect(screen.queryByTestId('export-lists-warnings-ignore-scope')).toBeNull()
+    expect(disabled('export-lists-state-existing')).toBe(false)
+    expect(disabled('export-lists-layers')).toBe(false)
+    expect(checked('export-lists-table-warnings')).toBe(true)
+    expect(checked('export-lists-table-items')).toBe(true)
   })
 
   /** Criterion 11: one table is a bare CSV, and the dialog says so before the download. */

@@ -14,7 +14,7 @@
  */
 import { useEffect, useState } from 'react'
 import { SCOPE, defaultCutListStates } from '../../../export'
-import type { ExportProgress, ListsRecipe, ListsSummary, RecipeViewRef } from '../../../export'
+import type { ExportProgress, ListsRecipe, ListsSummary, RecipeViewRef, TableId } from '../../../export'
 import type { QuantityScope, RenovationState } from '../../../derive'
 import { STRINGS } from '../../strings'
 import type { ExportPort, ExportRunOutcome, ListsOptions } from './port'
@@ -23,6 +23,21 @@ import type { ReactNode } from 'react'
 
 /** Every Renovation State, in the order the Item List sorts by. */
 const STATES: readonly RenovationState[] = ['existing', 'demolition', 'proposed']
+
+/**
+ * The tables the tab offers, in the order the export contract lists them: the two of #62 first,
+ * then the five of #68. The id is the contract's own — the file name is built from it — and the
+ * label is the reader's word for the same thing, which is why the two are never the same string.
+ */
+const TABLE_ROWS: readonly { id: TableId; label: string }[] = [
+  { id: 'items', label: STRINGS.exportListItems },
+  { id: 'cut-list', label: STRINGS.exportListCutList },
+  { id: 'rooms', label: STRINGS.exportListRooms },
+  { id: 'walls', label: STRINGS.exportListWalls },
+  { id: 'openings', label: STRINGS.exportListOpenings },
+  { id: 'placed-items', label: STRINGS.exportListPlacedItems },
+  { id: 'warnings', label: STRINGS.exportListWarnings },
+]
 
 /** The scope every control starts on: everything, Existing Model only, every layer. */
 function fullScope(options: ListsOptions, origin: RecipeViewRef): QuantityScope {
@@ -139,6 +154,11 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
   // is absent rather than disabled, because a checkbox that can never be ticked is a question.
   const capable = summary?.cutListCapable ?? true
   const tables = capable ? recipe.tables : recipe.tables.filter((each) => each !== 'cut-list')
+  // The Warnings List is scoped by Floor and Design Option only (export contract §3), so on its own
+  // it has no use for the State and Layer controls: they go grey and say why, rather than looking
+  // like they work. Combined with any other table they stay live for that table — and the Warnings
+  // rows still ignore them, which is `derive`'s rule, not this panel's.
+  const warningsOnly = tables.length === 1 && tables[0] === 'warnings'
   const blocked = tables.length === 0 ? STRINGS.exportListsNeedTables : null
   const warnings = port.unacknowledgedWarnings()
 
@@ -161,53 +181,34 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
       <fieldset disabled={busy}>
         <legend>{STRINGS.exportListsGroupTables}</legend>
         <ul className="bb-export-views" data-testid="export-lists-tables">
-          <li>
-            <label>
-              <input
-                type="checkbox"
-                data-testid="export-lists-table-items"
-                checked={tables.includes('items')}
-                onChange={() => {
-                  toggleTable('items')
-                }}
-              />
-              <span>{STRINGS.exportListItems}</span>
-              {summary !== null && (
-                <span
-                  className={summary.rows.items === 0 ? 'helper bb-export-rows-empty' : 'helper'}
-                  data-testid="export-lists-rows-items"
-                >
-                  {STRINGS.exportListsRows(summary.rows.items)}
-                </span>
-              )}
-            </label>
-          </li>
-          {capable ? (
-            <li>
-              <label>
-                <input
-                  type="checkbox"
-                  data-testid="export-lists-table-cut-list"
-                  checked={tables.includes('cut-list')}
-                  onChange={() => {
-                    toggleTable('cut-list')
-                  }}
-                />
-                <span>{STRINGS.exportListCutList}</span>
-                {summary !== null && (
-                  <span
-                    className={summary.rows['cut-list'] === 0 ? 'helper bb-export-rows-empty' : 'helper'}
-                    data-testid="export-lists-rows-cut-list"
-                  >
-                    {STRINGS.exportListsRows(summary.rows['cut-list'])}
-                  </span>
-                )}
-              </label>
-            </li>
-          ) : (
-            <li className="helper" data-testid="export-lists-no-cabinets">
-              {STRINGS.exportListsNoCabinets}
-            </li>
+          {TABLE_ROWS.map(({ id, label }) =>
+            id === 'cut-list' && !capable ? (
+              <li className="helper" data-testid="export-lists-no-cabinets" key={id}>
+                {STRINGS.exportListsNoCabinets}
+              </li>
+            ) : (
+              <li key={id}>
+                <label>
+                  <input
+                    type="checkbox"
+                    data-testid={`export-lists-table-${id}`}
+                    checked={tables.includes(id)}
+                    onChange={() => {
+                      toggleTable(id)
+                    }}
+                  />
+                  <span>{label}</span>
+                  {summary !== null && (
+                    <span
+                      className={summary.rows[id] === 0 ? 'helper bb-export-rows-empty' : 'helper'}
+                      data-testid={`export-lists-rows-${id}`}
+                    >
+                      {STRINGS.exportListsRows(summary.rows[id])}
+                    </span>
+                  )}
+                </label>
+              </li>
+            ),
           )}
         </ul>
       </fieldset>
@@ -265,6 +266,7 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
                 type="checkbox"
                 data-testid={`export-lists-state-${state}`}
                 checked={recipe.scope.renovationStates.includes(state)}
+                disabled={warningsOnly}
                 onChange={() => {
                   toggleState(state)
                 }}
@@ -274,9 +276,14 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
           ))}
         </div>
         <label>
-          <input type="checkbox" data-testid="export-lists-layers" checked readOnly />
+          <input type="checkbox" data-testid="export-lists-layers" checked readOnly disabled={warningsOnly} />
           <span>{STRINGS.exportListsAllLayers}</span>
         </label>
+        {warningsOnly && (
+          <p className="helper" data-testid="export-lists-warnings-ignore-scope">
+            {STRINGS.exportListsWarningsIgnoreScope}
+          </p>
+        )}
       </fieldset>
 
       <div className="bb-export-notices" data-testid="export-lists-notices">
