@@ -324,6 +324,24 @@ describe('wall.dragBody', () => {
     expect(wallsOf(applied.project).find((wall) => wall.id === branch)!.line).toEqual(line(1500, 0, 1500, 2400))
     expect(junction.ends).toHaveLength(1)
   })
+
+  it('re-measures a Junction hosted on the neighbour that stretched to stay joined', () => {
+    // `W-1` hosts `W-3` at 1 200 mm and `W-2` butts `W-1`'s start. Dragging `W-2` moves `W-1`'s
+    // start, so the distance that describes `W-3` along `W-1` is no longer the one it was (#64 §10):
+    // `W-3` stands still and its measurement follows the Wall it stands on.
+    const started = chain(newProject(), [draft(line(0, 0, 3000, 0))], [free], [free])
+    const first = started.ids[0]!
+    const butted = chain(started.project, [draft(line(-2000, 0, 0, 0))], [free], [join(first, 'start')])
+    const hosted = chain(butted.project, [draft(line(1200, 900, 1200, 2400))], [attach(first)], [free])
+    const second = butted.ids[0]!
+
+    const applied = expectRoundTrip(hosted.project, intent('wall.dragBody', { wallId: second, delta: pt(20, 0) }, []))
+    const walls = wallsOf(applied.project)
+    expect(walls.find((wall) => wall.id === first)!.line).toEqual(line(20, 0, 3000, 0))
+    expect(walls.find((wall) => wall.id === second)!.line).toEqual(line(-1980, 0, 20, 0))
+    expect(walls.find((wall) => wall.id === hosted.ids[0]!)!.line).toEqual(line(1200, 0, 1200, 2400))
+    expect(junctionsOf(applied.project).find((entry) => entry.host !== undefined)!.host).toEqual({ wallId: first, at: 1180 })
+  })
 })
 
 describe('the numeric edits', () => {

@@ -82,6 +82,9 @@ const doorIn = (optionId: string, hostWallId: string, start: number, label: stri
 /** The correction the issue's rows are stated as: one Existing edit, wrapped. */
 const correct = (inner: Intent, taken: string[] = []) => intent('renovation.correctExistingModel', { inner }, taken)
 
+/** W-2 slid 20 mm east, the joins at both its ends following it. */
+const moveW2 = () => intent('wall.dragBody', { wallId: W2, delta: { x: 20, y: 0 } })
+
 /** W-6 slid 40 mm south, the one Wall of this scene that stands free of every join. */
 const moveW6 = () => intent('wall.dragBody', { wallId: W6, delta: { x: 0, y: 40 } })
 
@@ -90,21 +93,21 @@ const unwrap = <R extends { ok: boolean; problems?: readonly unknown[] }>(result
   return result as Extract<R, { ok: true }>
 }
 
-/** A Project with W-6 replaced in Option A (identity) and demolished in Option B. */
+/** A Project with W-2 replaced in Option A (identity) and demolished in Option B. */
 function splitScene(): Project {
   const before = project()
-  const replaced = unwrap(applyIntent(before, replaceInOption(A, W6, {})))
-  return unwrap(applyIntent(replaced.project, demolishIn(B, W6, [WINDOW_3]))).project
+  const replaced = unwrap(applyIntent(before, replaceInOption(A, W2, {})))
+  return unwrap(applyIntent(replaced.project, demolishIn(B, W2))).project
 }
 
 describe('the explicit Existing Model correction', () => {
   it('previews one line per Option, in option order, and commits exactly that in one undo', () => {
     const before = splitScene()
-    const wrap = correct(moveW6())
+    const wrap = correct(moveW2())
 
     const review = previewIntent(before, wrap).review as CorrectionReview | null
     expect(review).not.toBeNull()
-    expect(review!.message).toBe('Correct Existing Model: W-6')
+    expect(review!.message).toBe('Correct Existing Model: W-2')
     expect(review!.options.map((entry) => [entry.optionId, entry.optionName, entry.effect])).toEqual([
       [A, 'Option A', 'demolishes; successor stays aligned'],
       [B, 'Option B', 'demolishes'],
@@ -112,10 +115,10 @@ describe('the explicit Existing Model correction', () => {
 
     const applied = unwrap(applyIntent(before, wrap))
     // The survey moved…
-    expect(wall(applied.project, W6)!.line.start).toEqual({ x: 5000, y: 4240 })
-    // …the successor that had W-6's geometry moved with it…
-    expect(successor(applied.project, A, W6).line.start).toEqual({ x: 5000, y: 4240 })
-    // …and the Option that had only demolished W-6 holds the same bytes it held before.
+    expect(wall(applied.project, W2)!.line.start).toEqual({ x: 9620, y: 600 })
+    // …the successor that had W-2's geometry moved with it…
+    expect(successor(applied.project, A, W2).line.start).toEqual({ x: 9620, y: 600 })
+    // …and the Option that had only demolished W-2 holds the same bytes it held before.
     expect(canonicalJson(optionOf(applied.project, B))).toBe(canonicalJson(optionOf(before, B)))
     // One Edit Transaction: one undo puts every record back, in both containers.
     expect(canonicalJson(applyPatches(applied.project, applied.inversePatches))).toBe(canonicalJson(before))

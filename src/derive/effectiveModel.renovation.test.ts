@@ -36,7 +36,7 @@ const junctionOption: DesignOption = {
   id: 'option-b',
   name: 'Keep the study',
   demolishedIds: [],
-  proposed: { ...delta.proposed, wallJunctions: [entity<WallJunction>('junction-9', 'floor-0')] },
+  proposed: { ...delta.proposed, wallJunctions: [{ ...entity<WallJunction>('junction-9', 'floor-0'), ends: [] }] },
 }
 
 describe('effectiveModel — the three Renovation States (#69 §5)', () => {
@@ -104,6 +104,23 @@ describe('effectiveModel — the three Renovation States (#69 §5)', () => {
     const model = effectiveModel(project, 'floor-0', 'option-b')
     expect(model.walls.every((row) => row.renovationState !== 'demolition')).toBe(true)
     expect(model.wallJunctions.map((row) => [row.entity.id, row.renovationState])).toEqual([['junction-9', 'proposed']])
+  })
+
+  it('takes a Junction down with the Wall it stood on', () => {
+    const joined: Project = {
+      ...envelope.project,
+      existingModel: {
+        ...envelope.project.existingModel,
+        wallJunctions: [
+          { id: 'junction-kept', floorId: 'floor-0', ends: [{ wallId: 'wall-0', end: 'start' }, { wallId: 'wall-1', end: 'start' }] },
+          { id: 'junction-down', floorId: 'floor-0', ends: [{ wallId: 'wall-2', end: 'end' }, { wallId: 'wall-1', end: 'end' }] },
+        ],
+      },
+    }
+    const model = effectiveModel(withOption(joined, delta), 'floor-0', 'option-a')
+    // `wall-2` is gone, so the claim that its end met another Wall means nothing any more.
+    expect(model.standingWallJunctions.map((junction) => junction.id)).toEqual(['junction-kept'])
+    expect(model.standingWalls.some((wall) => wall.id === 'wall-2')).toBe(false)
   })
 })
 

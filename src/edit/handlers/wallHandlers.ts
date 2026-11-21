@@ -283,11 +283,29 @@ const createChain: Handler<'wall.createChain'> = (ctx) => {
 
 // --- Moving ------------------------------------------------------------------
 
-/** Move one Wall's end to an exact point, leaving the rest of its line alone. */
-const moveEnd = (project: Project, member: WallJunctionEnd, at: { x: number; y: number }): void => {
+/**
+ * Move one Wall's end to an exact point, leaving the rest of its line alone.
+ *
+ * Junctions standing *on* that Wall are measured along it, so the line moving takes them with it:
+ * each is re-measured from the member end it holds, exactly as `dragBody` re-measures the Junctions
+ * of the Wall it drags (#64 §10). Without this a neighbour that stretched to stay joined leaves its
+ * own hosted Junctions pointing at a distance that no longer describes it. `skip` names a Junction
+ * whose host the caller has already placed.
+ */
+const moveEnd = (project: Project, member: WallJunctionEnd, at: { x: number; y: number }, skip?: EntityId): void => {
   const wall = project.existingModel.walls.find((candidate) => candidate.id === member.wallId)
   if (wall === undefined) return
   wall.line = withEnd(wall.line, member.end, at)
+  for (const junction of project.existingModel.wallJunctions) {
+    if (junction.host?.wallId !== wall.id || junction.id === skip) continue
+    const attached = junction.ends[0]
+    if (attached === undefined) continue
+    const attachedWall = project.existingModel.walls.find((candidate) => candidate.id === attached.wallId)
+    if (attachedWall === undefined) continue
+    const length = refLength(wall.line)
+    const at = Math.min(length - TOLERANCE_MM, Math.max(TOLERANCE_MM, refParamAt(wall.line, endOf(attachedWall.line, attached.end))))
+    junction.host = { wallId: wall.id, at }
+  }
 }
 
 /**
@@ -312,7 +330,7 @@ const dragJunction: Handler<'wall.dragJunction'> = (ctx) => {
   const clamped = Math.min(length - TOLERANCE_MM, Math.max(TOLERANCE_MM, moved))
   const point = refPointAt(host.line, clamped)
   requireJunction(ctx.draft, junctionId).host = { wallId: host.id, at: clamped }
-  for (const member of junction.ends) moveEnd(ctx.draft, member, point)
+  for (const member of junction.ends) moveEnd(ctx.draft, member, point, junctionId)
 }
 
 /** Drag one free end. An end that joins another Wall moves by dragging its Junction. */

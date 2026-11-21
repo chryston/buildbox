@@ -78,6 +78,20 @@ function standing<T>(rows: readonly EffectiveEntity<T>[]): T[] {
 }
 
 /**
+ * A Junction is nothing but a claim that two Wall ends meet, so the Option that takes one of those
+ * Walls down takes the claim down with it — the join it carries in its own records is what stands
+ * in its place. Junctions are never listed as dependants of a demolition the way an Opening is,
+ * because there is nothing to detach: the join simply stops meaning anything.
+ */
+function standingJunctions(rows: readonly EffectiveEntity<WallJunction>[], demolished: ReadonlySet<EntityId>): WallJunction[] {
+  return standing(rows).filter(
+    (junction) =>
+      !(junction.host !== undefined && demolished.has(junction.host.wallId)) &&
+      !junction.ends.some((end) => demolished.has(end.wallId)),
+  )
+}
+
+/**
  * The effective model of one Floor under one Design Option.
  *
  * `floorId` of `null` is every Floor at once, which is what a project-wide lookup — a Wall table
@@ -114,7 +128,7 @@ export function effectiveModel(
     rooms,
     placedItems,
     standingWalls: standing(walls),
-    standingWallJunctions: standing(wallJunctions),
+    standingWallJunctions: standingJunctions(wallJunctions, demolished),
     standingOpenings: standing(openings),
     standingRooms: standing(rooms),
     standingPlacedItems: standing(placedItems),
