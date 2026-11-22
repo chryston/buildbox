@@ -118,8 +118,10 @@ export function NumberField(props: {
       : parsed
     const clamped = min === undefined ? next : Math.max(min, next)
     onCommit(clamped)
-    const committed = kind === 'mm' ? formatMm(clamped, unit, precision) : trimNumber(clamped)
-    if (committed === shown) setText(null)
+    // The Project's value is the only truth the field may show. A commit that was refused — a
+    // baseline edit the edit layer would not take — must leave the record's number in the box, not
+    // the number that was just declined.
+    setText(null)
   }
 
   return (
