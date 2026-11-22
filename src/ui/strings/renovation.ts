@@ -318,6 +318,14 @@ export const RENOVATION_STRINGS = {
   pasteLabel: (n: number, sourceName: string): string =>
     `Paste ${count(n, 'entity', 'entities')} from “${sourceName}”`,
 
+  // ---- Copy, and the clipboard it fills (#72 §3)
+  //
+  // The notice is the copy being honest about its own edge: a copy takes records, and a demolition
+  // record stands for something the Existing Model keeps. Saying the count out loud is cheaper than
+  // letting it be discovered as a gap in the other Project.
+  actionCopy: 'Copy',
+  copyDemolished: (n: number): string => `${count(n, 'demolished entity was', 'demolished entities were')} not copied`,
+
   // ---- the buttons every one of them ends with
   cancel: 'Cancel',
 } as const

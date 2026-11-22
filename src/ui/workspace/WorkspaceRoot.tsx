@@ -21,9 +21,9 @@ import {
 } from 'react'
 import type { ReactNode } from 'react'
 import type { Project } from '../../domain'
-import type { DependencyReview, Intent, IntentType, PayloadOf } from '../../edit'
+import type { CopySet, DependencyReview, Intent, IntentType, PayloadOf } from '../../edit'
 import type { DispatchResult, ProjectSession, SaveState, SessionAsset } from '../../session'
-import type { PlanImageMediaType } from '../../domain'
+import type { EntityId, PlanImageMediaType, PlanView } from '../../domain'
 import { workspaceStore } from './workspaceStore'
 import { STRINGS } from '../strings'
 import type { ViewportCache } from './viewport'
@@ -53,6 +53,14 @@ export interface WorkspaceIntentBuilder {
    * Project, and the copy handed to it is thrown away.
    */
   evaluate(project: Project, intent: Intent): Project | null
+  /**
+   * The Copy Set of `selection` as this saved view draws it (#72 §4): the records, the Item Designs
+   * they name, the Drawing Layers they stand on, and the count of what a copy cannot take.
+   * `captureCopySet` is an `edit` value, so the workspace asks `app` to run it — the same door
+   * `preview` and `evaluate` come through. Nothing is written and no revision moves: a copy reads.
+   * `null` when the selection brings nothing across, which is the workspace's cue to say nothing.
+   */
+  capture(project: Project, view: PlanView, selection: readonly EntityId[]): CopySet | null
 }
 
 /** The object-URL cache behind a Plan Image: `urlFor` is `null` until the bytes arrive. */

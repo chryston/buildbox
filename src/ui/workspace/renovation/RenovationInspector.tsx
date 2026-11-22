@@ -18,8 +18,12 @@ import type { RenovationState } from '../../../derive'
 import { RENOVATION_STRINGS } from '../../strings/renovation'
 import { displayLabel, swatchClass } from './displayTheme'
 
-/** One of §5's Actions. */
-export type RenovationInspectorAction = 'move' | 'demolish' | 'replace' | 'restore' | 'delete' | 'correct'
+/**
+ * One of §5's Actions, plus `copy` — which is not one of them (§5's table asks what may be done to
+ * this record in this Display, and a copy does nothing to it, #72 §3). It shares the row's plumbing
+ * because the workspace answers every action in one place.
+ */
+export type RenovationInspectorAction = 'move' | 'demolish' | 'replace' | 'restore' | 'delete' | 'correct' | 'copy'
 
 /** A `Replaces` or `Successor` entry: the entity, and the Display that draws it. */
 export interface RenovationInspectorLink {
@@ -102,6 +106,7 @@ const ACTION_LABELS: { [A in RenovationInspectorAction]: string } = {
   restore: RENOVATION_STRINGS.actionRestore,
   delete: RENOVATION_STRINGS.actionDelete,
   correct: RENOVATION_STRINGS.actionCorrect,
+  copy: RENOVATION_STRINGS.actionCopy,
 }
 
 /** The State's name, in the same words the mode bar, the legend and the candidate list use. */
@@ -226,6 +231,21 @@ export function RenovationInspector(props: RenovationInspectorProps): ReactNode 
           {ACTION_LABELS[action]} — {unavailable[action]}
         </p>
       ))}
+      {/* `Copy` is not one of §5's Actions: it asks nothing of this Display, because a copy writes
+          nothing here (#72 §3). It sits under the row rather than inside it, so a record can be
+          taken from any Display — including the ones where §5 offers nothing to do to it. */}
+      <div className="bb-renovation-inspector-actions" data-testid="renovation-inspector-copy-row">
+        <button
+          type="button"
+          className="bb-renovation-inspector-action"
+          data-testid="renovation-inspector-copy"
+          onClick={() => {
+            props.onAction('copy')
+          }}
+        >
+          {ACTION_LABELS.copy}
+        </button>
+      </div>
     </section>
   )
 }

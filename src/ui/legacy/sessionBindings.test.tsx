@@ -13,7 +13,7 @@
 import { act, render } from '@testing-library/react'
 import { useEffect } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { applyIntent, intentIdCount, intentLabel, previewIntent } from '../../edit'
+import { applyIntent, captureCopySet, intentIdCount, intentLabel, previewIntent } from '../../edit'
 import type { Intent, IntentType, PayloadOf } from '../../edit'
 import { createMemoryAdapter } from '../../persistence'
 import { openProject } from '../../session'
@@ -45,6 +45,9 @@ const testIntents: IntentBuilder = {
     const result = applyIntent({ ...project, designOptions: [] }, intent)
     return result.ok ? result.project : null
   },
+  // The real capture, for the same reason as the two above: no legacy surface copies (#72), and if
+  // one ever does it should see what the app would have put on the clipboard.
+  capture: (project, view, selection) => captureCopySet(project, view, selection),
 }
 
 /** No test here loads a Plan Image, so no URL is ever asked for or handed out. */

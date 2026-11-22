@@ -129,6 +129,9 @@ const FORBIDDEN = [
         'Switch to Proposed or Combined display to paste new work.',
         'its host Wall was not copied',
         'its Wall was not copied',
+        // The notice `Copy` gives when the selection held a demolition record. The plural half of the
+        // sentence is what survives minification — `count` is handed both forms as separate arguments.
+        'demolished entities were',
         ' from “',
       ]),
 ]

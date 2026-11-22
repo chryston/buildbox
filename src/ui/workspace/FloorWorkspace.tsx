@@ -109,6 +109,7 @@ import {
   successorOf,
 } from './renovation'
 import type { RenovationInspectorAction, RenovationInspectorLayer, RenovationInspectorLink, RenovationInspectorTarget, RenovationToolId, LayerSettingPatch } from './renovation'
+import { pasteClipboardStore } from './pasteClipboard'
 import { RENOVATION_STRINGS } from '../strings/renovation'
 import { FIELDS_UNLOCKED, FieldsLockedContext } from './fieldsLock'
 import type { FieldsLock } from './fieldsLock'
@@ -1076,6 +1077,24 @@ export function FloorWorkspace(): ReactNode {
     select(lastPlacedId(session.getSnapshot().project, floorId))
   }
 
+  /**
+   * `Copy` (#72 §3): the selected record, as this saved view draws it, onto this tab's clipboard.
+   * No Intent runs and no revision moves — a copy reads, which is what lets the same command work in
+   * a Project that has no Design Option at all. What the copy could not take is said out loud rather
+   * than left to be discovered later as a gap in the other Project.
+   */
+  const copyToClipboard = (entityId: string): void => {
+    // The flag is folded here, inside the function, rather than only at the two places that call it:
+    // the notice this command can give lives in the gated table, and a call site cannot retire a
+    // table the body still names. With the flag off the rest of this body is unreachable.
+    if (!FF_RENOVATION) return
+    if (view === null) return
+    const copySet = services.intent.capture(project, view, [entityId])
+    if (copySet === null) return
+    pasteClipboardStore.getState().hold(copySet)
+    if (copySet.demolishedCount > 0) showHiddenToolNotice(RENOVATION_STRINGS.copyDemolished(copySet.demolishedCount))
+  }
+
   // `[` and `]` turn the selected Placed Item a quarter turn about its Item Origin, and
   // Escape backs out of a pending design preview or a disarmed `Pick on canvas` (#57 §4).
   useEffect(() => {
@@ -1112,6 +1131,16 @@ export function FloorWorkspace(): ReactNode {
       }
       const target = event.target as HTMLElement | null
       if (target !== null && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+      // Ctrl/Cmd+C copies the selected record into this tab's clipboard (#72 §3). Nothing is
+      // dispatched, so the source Project keeps its revision; with nothing selected the key is left
+      // alone, because then it is not the workspace's key to answer.
+      if (FF_RENOVATION && (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'c') {
+        const copied = wallSelection ?? openingSelection ?? roomSelection ?? selection
+        if (copied === null) return
+        event.preventDefault()
+        copyToClipboard(copied)
+        return
+      }
       // Enter places the Opening the ghost is standing on, exactly as a click there would.
       if (tool === 'opening') {
         if (event.key !== 'Enter') return
@@ -1125,7 +1154,7 @@ export function FloorWorkspace(): ReactNode {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [selected, designPreview, pickingOrigin, setDesignPreview, setPickingOrigin, send, tool, openingAimNow, placeOpening, setTool, cycle, clearCycle, correctionUnlocked, lockCorrection])
+  }, [selected, designPreview, pickingOrigin, setDesignPreview, setPickingOrigin, send, tool, openingAimNow, placeOpening, setTool, cycle, clearCycle, correctionUnlocked, lockCorrection, copyToClipboard])
 
   const commitImage = (prepared: PreparedPlanImage): void => {
     const asset = prepared.asset
@@ -1713,6 +1742,10 @@ export function FloorWorkspace(): ReactNode {
   const runRenovationAction = (action: RenovationInspectorAction): void => {
     const id = wallSelection ?? openingSelection ?? roomSelection ?? selection
     if (id === null) return
+    if (action === 'copy') {
+      copyToClipboard(id)
+      return
+    }
     if (action === 'move') {
       // The move itself is the canvas's own drag; the button hands the canvas the focus so the
       // selected entity is the thing the next drag takes hold of.
