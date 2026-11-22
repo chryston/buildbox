@@ -17,7 +17,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, FF_RENOVATION } from '../../derive'
 import type { Pt, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings } from '../../drawing'
 import type { BadgeSubject, OpeningPreview, RoomProposal } from '../../drawing'
@@ -79,6 +79,9 @@ import { SelectionInspector } from './SelectionInspector'
 import type { DesignEdit } from './SelectionInspector'
 import { quarterTurn } from './rotateHandle'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
+// #69: the whole renovation surface is reached from `FF_RENOVATION` branches only, so a flag-off
+// build drops these three names — and every word they say — out of the bundle.
+import { DesignOptionsSection, MoveToOptionAction, RenovationOverlays } from './renovation'
 import { ForkDesignDialog, NewItemDialog } from './ItemDialogs'
 import { ManageFloorsDialog } from './ManageFloorsDialog'
 import { DeleteFloorDialog } from './DeleteFloorDialog'
@@ -567,6 +570,16 @@ export function FloorWorkspace(): ReactNode {
   const send = <T extends IntentType>(type: T, payload: PayloadOf<T>): void => {
     dispatch(services.intent.build(type, payload))
   }
+
+  /**
+   * The `Move to a Design Option…` action for the Existing entity being inspected (#69 §13).
+   *
+   * A flagged build only: with the flag off there is no such command, and the branch is gone before
+   * the bundle is written. Whether the action shows at all is the component's question — it stays
+   * hidden while the Project holds no Option, because a move with nowhere to go can only be refused.
+   */
+  const renovationAction = (entityId: string): ReactNode =>
+    FF_RENOVATION ? <MoveToOptionAction entityId={entityId} /> : null
 
   /**
    * A Room the workspace has just created takes the inspector, and its name field takes the
@@ -1323,6 +1336,7 @@ export function FloorWorkspace(): ReactNode {
                 precision={project.preferences.displayPrecision}
                 onRename={(name) => send('room.rename', { roomId: selectedRoom.room.id, name })}
                 focusName={roomNameFocus}
+                renovationAction={renovationAction(selectedRoom.room.id)}
               >
                 <RoomFacePicker
                   edges={roomEdgeRows(selectedRoom.room, floorWalls, floorDomainRooms)}
@@ -1371,6 +1385,7 @@ export function FloorWorkspace(): ReactNode {
                 onFlipHinge={() => send('opening.flipHinge', { openingId: selectedOpening.opening.id })}
                 onFlipSwing={() => send('opening.flipSwing', { openingId: selectedOpening.opening.id })}
                 onSelectHost={() => selectWall(selectedOpening.opening.hostWallId)}
+                renovationAction={renovationAction(selectedOpening.opening.id)}
                 onDelete={() => {
                   send('opening.delete', { openingId: selectedOpening.opening.id })
                   selectOpening(null)
@@ -1425,6 +1440,7 @@ export function FloorWorkspace(): ReactNode {
                 onMerge={(otherId) => send('wall.merge', { wallIds: [selectedWall.wall.id, otherId] as const })}
                 onDelete={() => deleteWall(selectedWall.wall.id)}
                 deleteBlocked={roomDeleteBlockFor(project, selectedWall.wall)}
+                renovationAction={renovationAction(selectedWall.wall.id)}
               />
         }
         canvas={
@@ -1670,8 +1686,13 @@ export function FloorWorkspace(): ReactNode {
             setSettingsOpen(false)
           }}
           onClose={() => setSettingsOpen(false)}
-        />
+        >
+          {FF_RENOVATION && <DesignOptionsSection />}
+        </ProjectSettingsDialog>
       )}
+      {/* The `Demolish W-3?` and `Move to a Design Option?` reviews (#69 §9, §13), asked for by the
+          inspector action or by #70's `Mark demolition` through the workspace store. */}
+      {FF_RENOVATION && <RenovationOverlays />}
       {manageFloorsOpen && (
         <ManageFloorsDialog
           project={project}

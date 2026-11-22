@@ -34,10 +34,12 @@ export interface RoomInspectorProps {
   readonly focusName?: boolean
   /** The Edges section, which is a different question from the name and the area (#67 §10). */
   readonly children?: ReactNode
+  /** The renovation action for this Room (#69 §13), when there is an Option to move it to. */
+  readonly renovationAction?: ReactNode
 }
 
 export function RoomInspector(props: RoomInspectorProps): ReactNode {
-  const { room, derived, unit, precision, onRename, focusName = false, children } = props
+  const { room, derived, unit, precision, onRename, focusName = false, children, renovationAction } = props
   const [text, setText] = useState(room.name)
   const nameRef = useRef<HTMLInputElement>(null)
   /** The last name handed to the Project, so Enter followed by blur is one write, not two. */
@@ -104,6 +106,7 @@ export function RoomInspector(props: RoomInspectorProps): ReactNode {
         <dd data-testid="room-measurements-bounds">{`${read(width)} × ${read(depth)}`}</dd>
       </dl>
       {children}
+      {renovationAction}
     </section>
   )
 }
