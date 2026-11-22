@@ -31,14 +31,18 @@ const scope = (over: Partial<QuantityScope>): QuantityScope => ({
 })
 
 /** The rows of one table, as the file holds them: header → value, one object per line. */
-async function csvOf(tables: ListsRecipe['tables'], over: Partial<QuantityScope> = {}): Promise<Record<string, string>[]> {
-  const at = scope(over)
+async function csvOf(
+  tables: ListsRecipe['tables'],
+  over: Partial<QuantityScope> = {},
+  at: Project = project,
+): Promise<Record<string, string>[]> {
+  const scopeOf = scope(over)
   // The Warnings List is written from sentences the caller supplies, so the test supplies them the
   // way the app does: for the scope being exported, keyed by what the row is about.
-  const result = await exportLists(snapshot, { tables, scope: at }, {
+  const result = await exportLists({ project: at, revision: 7 }, { tables, scope: scopeOf }, {
     clock: CLOCK,
     buildboxVersion: '0.0.0-test',
-    warningMessages: warningMessages(project, at, (key) => `sentence:${key}`),
+    warningMessages: warningMessages(at, scopeOf, (key) => `sentence:${key}`),
   })
   if (!result.ok) throw new Error(result.failures.map((each) => each.reason).join(', '))
   const wanted = tables[0]
@@ -94,6 +98,55 @@ describe('the Warnings List ignores the Layer and State selections (#73 §10)', 
     const wide = await csvOf(['warnings'])
     const narrow = await csvOf(['warnings'], { renovationStates: ['proposed'], drawingLayers: { layerIds: [], includeUnlayered: false } })
     expect(narrow).toEqual(wide)
+  })
+})
+
+describe('the Demolition state in the tables (#73 §2)', () => {
+  it('lists a Wall the Option takes down, and narrows it away with the States control', async () => {
+    const wall = (rows: Record<string, string>[]): string[] =>
+      rows.filter((row) => row['stable_id'] === 'seed-wall-003').map((row) => row['renovation_state'])
+    // Option A takes this Wall down, so its own list says so: the row is the demolition quantity.
+    expect(wall(await csvOf(['walls'], { designOptionIds: ['option-a'] }))).toEqual(['demolition'])
+    expect(wall(await csvOf(['walls'], { designOptionIds: ['option-a'], renovationStates: ['existing'] }))).toEqual([])
+    expect(wall(await csvOf(['walls'], { designOptionIds: ['option-a'], renovationStates: ['proposed'] }))).toEqual([])
+    // Option B takes the same Wall down; the Existing Model alone keeps it.
+    expect(wall(await csvOf(['walls'], { designOptionIds: ['option-b'] }))).toEqual(['demolition'])
+    expect(wall(await csvOf(['walls']))).toEqual(['existing'])
+  })
+
+  it('lists the Openings of a Wall that comes down, in that Wall', async () => {
+    // Every Opening in the fixture lives on a Wall neither Option touches, so the case is made here:
+    // Option A takes down the Wall that hosts two of them, and they come down with it.
+    const at: Project = {
+      ...project,
+      designOptions: (project.designOptions ?? []).map((option) =>
+        option.id === 'option-a' ? { ...option, demolishedIds: [...option.demolishedIds, 'seed-wall-004'] } : option,
+      ),
+    }
+    const rows = await csvOf(['openings'], { designOptionIds: ['option-a'] }, at)
+    const hosted = rows.filter((row) => row['host_wall_id'] === 'seed-wall-004')
+    expect(hosted.map((row) => row['stable_id']).sort()).toEqual(['seed-opening-014', 'seed-opening-015'])
+    // The Option marked the Wall and not the doors in it, so they say what they are. What the table
+    // owes them is a row that names its host, not silence because the host no longer stands.
+    for (const row of hosted) expect(row['renovation_state']).toBe('existing')
+    const marked = await csvOf(['openings'], { designOptionIds: ['option-a'] }, {
+      ...at,
+      designOptions: (at.designOptions ?? []).map((option) =>
+        option.id === 'option-a'
+          ? { ...option, demolishedIds: [...option.demolishedIds, 'seed-opening-014', 'seed-opening-015'] }
+          : option,
+      ),
+    })
+    expect(marked.filter((row) => row['host_wall_id'] === 'seed-wall-004').map((row) => row['renovation_state']))
+      .toEqual(['demolition', 'demolition'])
+  })
+
+  it('counts a placement the Option takes down in its own state', async () => {
+    const rows = await csvOf(['placed-items'], { designOptionIds: ['option-a'] })
+    const demolished = rows.filter((row) => row['renovation_state'] === 'demolition')
+    expect(demolished.map((row) => row['stable_id'])).toEqual(['seed-item-028'])
+    const list = await csvOf(['items'], { designOptionIds: ['option-a'] })
+    expect(list.filter((row) => row['renovation_state'] === 'demolition').map((row) => row['count'])).toEqual(['1'])
   })
 })
 

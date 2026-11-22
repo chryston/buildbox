@@ -88,7 +88,6 @@ export function itemListRowsForFloor(
     count: number
   }>()
   for (const { entity: placed, renovationState } of effectiveModel(project, floorId, optionId).placedItems) {
-    if (renovationState === 'demolition') continue
     if (!designs.has(placed.itemDesignId)) continue
     const layerId = entityLayerId(placed)
     const key = `${placed.itemDesignId}\u0000${renovationState}\u0000${layerId ?? ''}`
