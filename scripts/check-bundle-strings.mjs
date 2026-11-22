@@ -49,6 +49,8 @@ const FORBIDDEN = [
         'tools hidden in this display',
         'works in',
         'No Design Option',
+        'Choose what to place from the Library menu.',
+        'Select one thing to mark for demolition.',
       ]),
 ]
 // Only the files that could contain application code: an image or a font cannot.

@@ -82,7 +82,17 @@ import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 // #69: the whole renovation surface is reached from `FF_RENOVATION` branches only, so a flag-off
 // build drops these three names — and every word they say — out of the bundle. #70 adds the
 // saved-view block and the words its undo labels are built from.
-import { DesignOptionsSection, MoveToOptionAction, RenovationModeBar, RenovationOverlays, RenovationViewSection, displayLabel } from './renovation'
+import {
+  DesignOptionsSection,
+  MoveToOptionAction,
+  RenovationModeBar,
+  RenovationOverlays,
+  RenovationToolStrip,
+  RenovationViewSection,
+  displayLabel,
+  openDemolishDialog,
+} from './renovation'
+import type { RenovationToolId } from './renovation'
 import { RENOVATION_STRINGS } from '../strings/renovation'
 import { ForkDesignDialog, NewItemDialog } from './ItemDialogs'
 import { ManageFloorsDialog } from './ManageFloorsDialog'
@@ -176,6 +186,12 @@ export function FloorWorkspace(): ReactNode {
 
   const tool = useWorkspace((state) => state.activeTool)
   const setTool = useWorkspace((state) => state.setTool)
+  // #70 §3: the strip's temporary filter and its notice — UI session state, reset with the saved view.
+  const pickStates = useWorkspace((state) => state.pickStates)
+  const hiddenToolNotice = useWorkspace((state) => state.hiddenToolNotice)
+  const togglePickState = useWorkspace((state) => state.togglePickState)
+  const showHiddenToolNotice = useWorkspace((state) => state.showHiddenToolNotice)
+  const clearHiddenToolNotice = useWorkspace((state) => state.clearHiddenToolNotice)
   /**
    * The Room Outline being drawn, or `null` (#67 §4). Local like the Wall draft: a half-drawn
    * outline is not a proposal, and it must not survive a Floor change or the tool being put down.
@@ -1250,6 +1266,22 @@ export function FloorWorkspace(): ReactNode {
   const deleteFloorTarget = project.floors.find((candidate) => candidate.id === deleteFloorId) ?? null
   const origin = placedOrigin(project, selection)
 
+  // #70 §3: the two things only this component knows, which the strip cannot derive from the table —
+  // whether one thing is named well enough to mark, and which Design Option would own the record.
+  const renovationSelectedIds = [wallSelection, openingSelection, roomSelection, selection].filter((id) => id !== null)
+  const renovationOptionId = view === null ? null : viewDesignOptionId(view)
+  const renovationBlocked: Partial<Record<RenovationToolId, string>> =
+    renovationSelectedIds.length === 1 ? {} : { markDemolition: RENOVATION_STRINGS.markDemolitionNeedsOne }
+  const markRenovationDemolition = (): void => {
+    const entityId = renovationSelectedIds[0]
+    if (renovationOptionId === null || entityId === undefined) return
+    openDemolishDialog(entityId, renovationOptionId)
+  }
+  const showRenovationNotice = (next: string | null): void => {
+    if (next === null) clearHiddenToolNotice()
+    else showHiddenToolNotice(next)
+  }
+
   return (
     <>
       <WorkspaceShell
@@ -1318,10 +1350,24 @@ export function FloorWorkspace(): ReactNode {
         toolbar={<WorkspaceToolbar groups={groups} />}
         renovationBar={
           FF_RENOVATION && view !== null ? (
-            <RenovationModeBar
-              display={viewRenovationDisplay(view)}
-              optionName={designOptionsOf(project).find((option) => option.id === viewDesignOptionId(view))?.name ?? null}
-            />
+            <>
+              <RenovationModeBar
+                display={viewRenovationDisplay(view)}
+                optionName={designOptionsOf(project).find((option) => option.id === viewDesignOptionId(view))?.name ?? null}
+              />
+              <RenovationToolStrip
+                display={viewRenovationDisplay(view)}
+                hasDesignOption={renovationOptionId !== null}
+                activeTool={tool}
+                pickStates={pickStates}
+                notice={hiddenToolNotice}
+                blocked={renovationBlocked}
+                onTool={setTool}
+                onMarkDemolition={markRenovationDemolition}
+                onTogglePick={togglePickState}
+                onNotice={showRenovationNotice}
+              />
+            </>
           ) : undefined
         }
         viewCard={

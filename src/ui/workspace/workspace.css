@@ -930,3 +930,73 @@
   font-size: 12px;
   color: var(--bb-text-muted);
 }
+
+/* ---------------------------------------------------------------------------
+ * #70 §3: the contextual tool strip. One row under the mode bar: the tools this Display allows, the
+ * count it hides, and the `Pick:` filter pushed to the right end. The notice is a line of the same
+ * row rather than a second band, so an explanation never becomes a dialog.
+ * ------------------------------------------------------------------------- */
+.bb-renovation-tool-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-panel);
+}
+
+.bb-renovation-tool {
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: var(--bb-radius-sm);
+  border: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-app);
+  color: var(--bb-text-line);
+}
+
+.bb-renovation-tool[aria-pressed='true'] {
+  border-color: var(--bb-accent);
+  color: var(--bb-text-strong);
+}
+
+.bb-renovation-tool:disabled {
+  color: var(--bb-text-muted);
+  opacity: 0.6;
+}
+
+.bb-renovation-hidden-count {
+  font-size: 12px;
+  color: var(--bb-text-muted);
+}
+
+.bb-renovation-pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.bb-renovation-pick-label {
+  font-size: 12px;
+  color: var(--bb-text-muted);
+}
+
+.bb-renovation-pick-chip {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: var(--bb-radius-sm);
+  border: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-app);
+  color: var(--bb-text-muted);
+}
+
+.bb-renovation-pick-chip[aria-pressed='true'] {
+  color: var(--bb-text-strong);
+  border-color: var(--bb-accent);
+}
+
+.bb-renovation-notice {
+  font-size: 12px;
+  color: var(--bb-text-muted);
+  font-style: italic;
+}

@@ -89,6 +89,17 @@ export const RENOVATION_STRINGS = {
   pickFilter: 'Pick:',
   /** Why a hidden tool's shortcut did nothing: `Mark demolition works in Demolition / Combined display`. */
   toolWorksIn: (tool: string, displays: string): string => `${tool} works in ${displays} display`,
+  /** The strip's row that opens the shipped pack's library (#70 §3). */
+  toolPlaceItem: 'Place item',
+  /**
+   * Why a row is shown but inert. A disabled control explains itself (#55 §3), and these two say
+   * where the command actually lives: `Place item` is a menu the toolbar owns, and `Replace…` needs
+   * the dialog that asks what takes the entity's place, which lands with the correction dialogs.
+   */
+  placeItemLivesInLibrary: 'Choose what to place from the Library menu.',
+  replaceNeedsDialog: 'Replace… needs the dialog that asks what takes this one’s place, which is not in this build.',
+  /** Why `Mark demolition` waits: it marks one named thing, and nothing is named yet. */
+  markDemolitionNeedsOne: 'Select one thing to mark for demolition.',
 
   // ---- the undo tooltip of a saved-view setting (#70 §2)
   // The catalogue's default label (`Set Design Option`, `Set Renovation Display`) cannot name what

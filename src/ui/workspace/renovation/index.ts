@@ -19,8 +19,11 @@ export { RenovationOverlays } from './RenovationOverlays'
 // mode bar, the tool strip and the canvas legend all read from.
 export { RenovationViewSection } from './RenovationViewSection'
 export { RenovationModeBar } from './RenovationModeBar'
+export { RenovationToolStrip } from './RenovationToolStrip'
 export { DISPLAY_ORDER, DISPLAY_ROLES, DISPLAY_STATES, displayLabel, swatchClass } from './displayTheme'
 export type { DisplayRoles } from './displayTheme'
+export { RENOVATION_TOOL_ROWS, availableTools, displaysAllowing, hiddenToolCount, toolIsAvailable } from './toolAvailability'
+export type { RenovationToolId, RenovationToolRow } from './toolAvailability'
 
 /**
  * Ask for the `Demolish W-3?` review of one Existing entity, on behalf of one Design Option

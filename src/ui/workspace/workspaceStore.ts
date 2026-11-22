@@ -9,8 +9,8 @@
 import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
 import { useShallow } from 'zustand/react/shallow'
-import { enabledSnapKinds } from '../../derive'
-import type { SnapKind } from '../../derive'
+import { enabledSnapKinds, RENOVATION_STATES } from '../../derive'
+import type { RenovationState, SnapKind } from '../../derive'
 import type { ItemFootprint, Point2 } from '../../domain'
 import type { ShapeDraft } from './shape/proposal'
 import type { Viewport } from './viewport'
@@ -229,6 +229,21 @@ export interface WorkspaceState {
   activeHydrated: boolean
   /** The renovation dialog on screen, if any (#69 §9, §13). */
   renovationDialog: RenovationDialog
+  /**
+   * The strip's temporary `Pick:` filter (#70 §3): the Renovation States a click may take, in the
+   * three States' own order whatever the order of clicks. Empty means every state.
+   *
+   * It is UI session state and nothing else: never the Project, never a Backup, never an undo step.
+   * It resets when the saved view changes, because a filter set while comparing two Options is not a
+   * fact about the third view, and a stale filter that silently refuses to select anything is worse
+   * than no filter.
+   */
+  pickStates: readonly RenovationState[]
+  /**
+   * Why a hidden tool's keyboard shortcut did nothing (#70 §3), in the strip's own line; `null` when
+   * there is nothing to say. A notice, not a dialog: it explains a keystroke and gets out of the way.
+   */
+  hiddenToolNotice: string | null
 }
 
 export interface WorkspaceActions {
@@ -278,6 +293,11 @@ export interface WorkspaceActions {
   openMoveToOptionDialog(entityIds: readonly string[]): void
   /** Put the renovation dialog away. Nothing was written, which is the whole point of Cancel. */
   closeRenovationDialog(): void
+  /** Turn one `Pick:` chip on or off (#70 §3); the list stays in the three States' own order. */
+  togglePickState(state: RenovationState): void
+  /** Say why a hidden tool's shortcut did nothing (#70 §3). The newest question is the only answer shown. */
+  showHiddenToolNotice(notice: string): void
+  clearHiddenToolNotice(): void
   /** Another Project opened: its placements are not this one's to select. */
   reset(): void
 }
@@ -318,6 +338,8 @@ const INITIAL: WorkspaceState = {
   activeViewByFloor: {},
   activeHydrated: false,
   renovationDialog: null,
+  pickStates: [],
+  hiddenToolNotice: null,
 }
 
 /**
@@ -426,12 +448,18 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
       return {
         activeFloorId,
         activeViewByFloor,
+        // A new saved view is a new question: the `Pick:` filter and the shortcut notice belong to the
+        // view they were set on (#70 criterion 5).
+        pickStates: [],
+        hiddenToolNotice: null,
         ...movedAway(state, activeFloorId, activeViewByFloor),
       }
     }),
   setActiveView: (floorId, viewId) =>
     set((state) => ({
       activeViewByFloor: { ...state.activeViewByFloor, [floorId]: viewId },
+      pickStates: [],
+      hiddenToolNotice: null,
       ...movedAway(state, state.activeFloorId, { ...state.activeViewByFloor, [floorId]: viewId }),
     })),
   hydrateActive: (activeFloorId, viewsByFloor) =>
@@ -444,6 +472,16 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
     set({ renovationDialog: { kind: 'demolish', entityId, designOptionId } }),
   openMoveToOptionDialog: (entityIds) => set({ renovationDialog: { kind: 'move', entityIds } }),
   closeRenovationDialog: () => set({ renovationDialog: null }),
+  togglePickState: (state) =>
+    set((current) => ({
+      // The three States' own order, not the order of clicks: the chips and the list they filter must
+      // read the same way every time.
+      pickStates: current.pickStates.includes(state)
+        ? current.pickStates.filter((each) => each !== state)
+        : RENOVATION_STATES.filter((each) => each === state || current.pickStates.includes(each)),
+    })),
+  showHiddenToolNotice: (hiddenToolNotice) => set({ hiddenToolNotice }),
+  clearHiddenToolNotice: () => set({ hiddenToolNotice: null }),
   reset: () => set({ ...INITIAL }),
 }))
 
