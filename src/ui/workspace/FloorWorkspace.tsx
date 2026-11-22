@@ -22,7 +22,7 @@ import type { Pt, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings } from '../../drawing'
 import type { BadgeSubject, OpeningPreview, RoomProposal } from '../../drawing'
 import type { Point2, Project, WallClassification } from '../../domain'
-import { designOptionsOf, nextOpeningLabel, summarizeFloorDependencies } from '../../domain'
+import { designOptionsOf, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { DeleteWallReview, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
@@ -82,7 +82,7 @@ import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 // #69: the whole renovation surface is reached from `FF_RENOVATION` branches only, so a flag-off
 // build drops these three names — and every word they say — out of the bundle. #70 adds the
 // saved-view block and the words its undo labels are built from.
-import { DesignOptionsSection, MoveToOptionAction, RenovationOverlays, RenovationViewSection, displayLabel } from './renovation'
+import { DesignOptionsSection, MoveToOptionAction, RenovationModeBar, RenovationOverlays, RenovationViewSection, displayLabel } from './renovation'
 import { RENOVATION_STRINGS } from '../strings/renovation'
 import { ForkDesignDialog, NewItemDialog } from './ItemDialogs'
 import { ManageFloorsDialog } from './ManageFloorsDialog'
@@ -1316,6 +1316,14 @@ export function FloorWorkspace(): ReactNode {
           </>
         }
         toolbar={<WorkspaceToolbar groups={groups} />}
+        renovationBar={
+          FF_RENOVATION && view !== null ? (
+            <RenovationModeBar
+              display={viewRenovationDisplay(view)}
+              optionName={designOptionsOf(project).find((option) => option.id === viewDesignOptionId(view))?.name ?? null}
+            />
+          ) : undefined
+        }
         viewCard={
           <SavedViewCard
             project={project}

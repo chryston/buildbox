@@ -36,6 +36,20 @@ const FORBIDDEN = [
   // #70 §2: the saved-view card composes these two undo labels. A flag-off bundle carrying either
   // has shipped the card, and with it the Design Option and Renovation Display pickers.
   ...(process.env['VITE_FF_RENOVATION'] === 'true' ? [] : ['Set Design Option: ', 'Set Renovation Display: ']),
+  // #70 §3: the mode bar's four sentences. They are the whole content of a dark surface, so one per
+  // Display is the cheapest proof that the band — and with it the Renovation Display concept — stayed
+  // out of the flag-off bundle.
+  ...(process.env['VITE_FF_RENOVATION'] === 'true'
+    ? []
+    : [
+        'Surveying the shared baseline.',
+        'Marking what the option removes or replaces.',
+        'Editing new work owned by the option.',
+        'Everything together. All state-aware tools',
+        'tools hidden in this display',
+        'works in',
+        'No Design Option',
+      ]),
 ]
 // Only the files that could contain application code: an image or a font cannot.
 const SCANNED = new Set(['.js', '.mjs', '.css', '.html', '.json', '.svg', '.txt', '.map'])

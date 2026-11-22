@@ -17,8 +17,9 @@ export { MoveToOptionDialog, moveToOptionIsBlocked } from './MoveToOptionDialog'
 export { RenovationOverlays } from './RenovationOverlays'
 // #70 §2, §3: the saved-view block and the one table of Display colours and States the rail, the
 // mode bar, the tool strip and the canvas legend all read from.
-export { RenovationViewSection, displayLabel } from './RenovationViewSection'
-export { DISPLAY_ORDER, DISPLAY_ROLES, DISPLAY_STATES, swatchClass } from './displayTheme'
+export { RenovationViewSection } from './RenovationViewSection'
+export { RenovationModeBar } from './RenovationModeBar'
+export { DISPLAY_ORDER, DISPLAY_ROLES, DISPLAY_STATES, displayLabel, swatchClass } from './displayTheme'
 export type { DisplayRoles } from './displayTheme'
 
 /**

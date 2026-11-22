@@ -23,7 +23,7 @@ import type { DesignOption, PlanView, RenovationDisplay } from '../../../domain'
 import { viewDesignOptionId, viewRenovationDisplay } from '../../../domain'
 import { tokenVar } from '../../theme/tokens'
 import { RENOVATION_STRINGS } from '../../strings/renovation'
-import { DISPLAY_ORDER, DISPLAY_ROLES, DISPLAY_STATES, swatchClass } from './displayTheme'
+import { DISPLAY_ORDER, DISPLAY_ROLES, DISPLAY_STATES, displayLabel, swatchClass } from './displayTheme'
 
 export interface RenovationViewSectionProps {
   /** The saved view whose two settings these are. No view, no block: there is nothing to aim. */
@@ -35,16 +35,6 @@ export interface RenovationViewSectionProps {
   onSetRenovationDisplay(display: RenovationDisplay): void
   onExport(): void
 }
-
-/** The Display's name, in the words the whole feature uses for it. */
-const DISPLAY_LABELS: { [D in RenovationDisplay]: string } = {
-  existing: RENOVATION_STRINGS.displayExisting,
-  demolition: RENOVATION_STRINGS.displayDemolition,
-  proposed: RENOVATION_STRINGS.displayProposed,
-  combined: RENOVATION_STRINGS.displayCombined,
-}
-
-export const displayLabel = (display: RenovationDisplay): string => DISPLAY_LABELS[display]
 
 export function RenovationViewSection(props: RenovationViewSectionProps): ReactNode {
   const { view, options, onSetDesignOption, onSetRenovationDisplay, onExport } = props

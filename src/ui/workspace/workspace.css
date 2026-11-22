@@ -900,3 +900,33 @@
   gap: 8px;
   margin-top: 4px;
 }
+
+/* ---------------------------------------------------------------------------
+ * #70 §3: the mode bar. A full-width row between the toolbar and the body; the 3px bottom border and
+ * the tinted background are set inline from the Display's token roles, so the band is the same colour
+ * as the Display card that was clicked.
+ * ------------------------------------------------------------------------- */
+.bb-renovation-mode-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 7px 16px;
+  border-bottom: 3px solid var(--bb-border-card);
+  background: var(--bb-bg-app);
+}
+
+.bb-renovation-mode-display {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bb-text-strong);
+}
+
+.bb-renovation-mode-option {
+  font-size: 13px;
+  color: var(--bb-text-line);
+}
+
+.bb-renovation-mode-note {
+  font-size: 12px;
+  color: var(--bb-text-muted);
+}

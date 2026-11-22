@@ -61,8 +61,9 @@ export {
 } from './workspace/selection/overlapCycle'
 // #70 §2: the renovation block of the saved-view card, and the one Display-name and Display-colour
 // table the rail, the mode bar and the legend read.
-export { RenovationViewSection, displayLabel } from './workspace/renovation/RenovationViewSection'
-export { DISPLAY_ORDER, DISPLAY_ROLES, DISPLAY_STATES } from './workspace/renovation/displayTheme'
+export { RenovationViewSection } from './workspace/renovation/RenovationViewSection'
+export { RenovationModeBar } from './workspace/renovation/RenovationModeBar'
+export { DISPLAY_ORDER, DISPLAY_ROLES, DISPLAY_STATES, displayLabel } from './workspace/renovation/displayTheme'
 export { ExportDialog, UNIT_LABEL, type ExportDialogProps } from './workspace/export/ExportDialog'
 export {
   viewKey,
