@@ -807,3 +807,96 @@
   min-width: 0;
   min-height: 0;
 }
+
+/* ---------------------------------------------------------------------------
+ * #70 §2: the renovation block of the saved-view card.
+ *
+ * The Display cards are a 2x2 grid — Existing and Demolition across the top, Proposed and Combined
+ * below — each with its name and one swatch per Renovation State it shows. The active card is filled
+ * with its Display's tint and bordered in its Display colour, both set inline from the token roles in
+ * `displayTheme`, so the grid, the mode bar and the legend cannot drift apart on a colour.
+ * ------------------------------------------------------------------------- */
+.bb-renovation-view-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--bb-border-card);
+}
+
+.bb-renovation-display-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.bb-renovation-display-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 9px;
+  border-radius: var(--bb-radius-button);
+  border: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-inset);
+  cursor: pointer;
+  transition: background var(--bb-motion-card), border-color var(--bb-motion-card);
+}
+
+.bb-renovation-display-card:hover {
+  background: var(--bb-bg-choice);
+}
+
+.bb-renovation-display-name {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.bb-renovation-swatches {
+  display: inline-flex;
+  gap: 4px;
+}
+
+/* The three swatches are the prototype's, re-expressed with tokens: Existing is a solid fill,
+   Demolition is 45° hatching inside a dashed border, Proposed is a dashed border with no fill. */
+.bb-renovation-swatch {
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.bb-renovation-swatch-existing {
+  background: var(--bb-renovation-existing-border);
+  border: 1px solid var(--bb-renovation-existing-border);
+}
+
+.bb-renovation-swatch-demolition {
+  border: 1px dashed var(--bb-renovation-demolition-border);
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--bb-renovation-demolition-border) 0 1px,
+    transparent 1px 4px
+  );
+}
+
+.bb-renovation-swatch-proposed {
+  border: 1px dashed var(--bb-renovation-proposed-border);
+  background: transparent;
+}
+
+/* #71 renders the Drawing Layers list here; #72 the `Paste from other Project…` button. Both slots
+   exist so the card's shape is settled, and both are empty — nothing is drawn in their place. */
+.bb-renovation-layers-slot:empty,
+.bb-renovation-paste-slot:empty {
+  display: none;
+}
+
+.bb-renovation-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}

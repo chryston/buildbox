@@ -31,7 +31,13 @@ import type { ExportPort } from './export/port'
 
 /** An Intent, fully formed; `app` builds it from `edit`'s label table and id order. */
 export interface WorkspaceIntentBuilder {
-  build<T extends IntentType>(type: T, payload: PayloadOf<T>): Intent
+  /**
+   * `label` replaces the catalogue's default phrase — for the rare command whose undo tooltip has
+   * to name what was chosen, like a saved view's Design Option or Renovation Display (#70 §2). The
+   * caller composes it from `ui/strings`, because `edit` may hold neither the Option's name nor the
+   * Display's words.
+   */
+  build<T extends IntentType>(type: T, payload: PayloadOf<T>, label?: string): Intent
   /**
    * What an Intent would take with it, without applying it (#65 §8). The workspace asks before
    * a delete that has to be answered first; `previewIntent` itself is an `edit` value, and the

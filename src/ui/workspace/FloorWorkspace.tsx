@@ -22,7 +22,7 @@ import type { Pt, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings } from '../../drawing'
 import type { BadgeSubject, OpeningPreview, RoomProposal } from '../../drawing'
 import type { Point2, Project, WallClassification } from '../../domain'
-import { nextOpeningLabel, summarizeFloorDependencies } from '../../domain'
+import { designOptionsOf, nextOpeningLabel, summarizeFloorDependencies } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { DeleteWallReview, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
@@ -80,8 +80,10 @@ import type { DesignEdit } from './SelectionInspector'
 import { quarterTurn } from './rotateHandle'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 // #69: the whole renovation surface is reached from `FF_RENOVATION` branches only, so a flag-off
-// build drops these three names — and every word they say — out of the bundle.
-import { DesignOptionsSection, MoveToOptionAction, RenovationOverlays } from './renovation'
+// build drops these three names — and every word they say — out of the bundle. #70 adds the
+// saved-view block and the words its undo labels are built from.
+import { DesignOptionsSection, MoveToOptionAction, RenovationOverlays, RenovationViewSection, displayLabel } from './renovation'
+import { RENOVATION_STRINGS } from '../strings/renovation'
 import { ForkDesignDialog, NewItemDialog } from './ItemDialogs'
 import { ManageFloorsDialog } from './ManageFloorsDialog'
 import { DeleteFloorDialog } from './DeleteFloorDialog'
@@ -569,6 +571,13 @@ export function FloorWorkspace(): ReactNode {
 
   const send = <T extends IntentType>(type: T, payload: PayloadOf<T>): void => {
     dispatch(services.intent.build(type, payload))
+  }
+  /**
+   * The same transaction with a label that names what was chosen (#70 §2). Only the caller knows
+   * which Design Option or Renovation Display was clicked, and the undo tooltip has to say so.
+   */
+  const sendLabelled = <T extends IntentType>(type: T, payload: PayloadOf<T>, label: string): void => {
+    dispatch(services.intent.build(type, payload, label))
   }
 
   /**
@@ -1324,6 +1333,32 @@ export function FloorWorkspace(): ReactNode {
               if (view !== null) send('view.setShowPlanImage', { viewId: view.id, showPlanImage })
             }}
             onCalibrate={() => setIsCalibrating(true)}
+            renovation={
+              FF_RENOVATION ? (
+                <RenovationViewSection
+                  view={view}
+                  options={designOptionsOf(project)}
+                  onSetDesignOption={(designOptionId) => {
+                    if (view === null) return
+                    const name = designOptionsOf(project).find((option) => option.id === designOptionId)?.name ?? null
+                    sendLabelled(
+                      'view.setDesignOption',
+                      { viewId: view.id, designOptionId },
+                      RENOVATION_STRINGS.setDesignOption(name),
+                    )
+                  }}
+                  onSetRenovationDisplay={(renovationDisplay) => {
+                    if (view === null) return
+                    sendLabelled(
+                      'view.setRenovationDisplay',
+                      { viewId: view.id, renovationDisplay },
+                      RENOVATION_STRINGS.setRenovationDisplay(displayLabel(renovationDisplay)),
+                    )
+                  }}
+                  onExport={() => setIsExporting(true)}
+                />
+              ) : undefined
+            }
             onFit={fit}
           />
         }

@@ -60,6 +60,36 @@ export const RENOVATION_STRINGS = {
   moveBlocked: 'This Option cannot take the move:',
   moveConfirm: (optionName: string): string => `Move to ${optionName}`,
 
+  // ---- the saved-view card's renovation block (#70 §2)
+  // The Display names are the four words the whole feature is read by: the card grid, the mode bar,
+  // the `Pick:` chips, the undo label and the legend all say the same one for the same Display.
+  displayExisting: 'Existing',
+  displayDemolition: 'Demolition',
+  displayProposed: 'Proposed',
+  displayCombined: 'Combined',
+  designOptionField: 'Design Option',
+  renovationDisplayField: 'Renovation Display',
+  /** The first entry of the Design Option picker: the Existing Model on its own, which is a choice. */
+  noDesignOption: '— no Design Option —',
+  /** The card's footer. `Paste from other Project…` arrives with #72 and reserves its slot. */
+  exportEllipsis: 'Export…',
+  /** The two renovation tools the contextual strip can show (#70 §3). */
+  toolMarkDemolition: 'Mark demolition',
+  toolReplace: 'Replace…',
+
+  // ---- the mode bar (#70 §3): the Display, the Option, and what editing means right now
+  noDesignOptionShort: 'No Design Option',
+  modeExisting: 'Surveying the shared baseline. Changes here are explicit corrections seen by every option.',
+  modeDemolition: 'Marking what the option removes or replaces.',
+  modeProposed: 'Editing new work owned by the option. Demolished baseline is hidden.',
+  modeCombined: 'Everything together. All state-aware tools; overlaps cycle on repeated click.',
+  /** `3 tools hidden in this display` — the count the strip prints beside the tools it allows. */
+  toolsHidden: (n: number): string => `${n} tools hidden in this display`,
+  /** The temporary selection filter beside the strip: `Pick: Existing Demolition Proposed`. */
+  pickFilter: 'Pick:',
+  /** Why a hidden tool's shortcut did nothing: `Mark demolition works in Demolition / Combined display`. */
+  toolWorksIn: (tool: string, displays: string): string => `${tool} works in ${displays} display`,
+
   // ---- the undo tooltip of a saved-view setting (#70 §2)
   // The catalogue's default label (`Set Design Option`, `Set Renovation Display`) cannot name what
   // was chosen: the Option's name is Project data and the Display's is copy. So the card composes
