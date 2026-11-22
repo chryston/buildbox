@@ -56,7 +56,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): ReactNode {
           <section className="bb-workspace-card" data-testid="workspace-view-card">{viewCard}</section>
           {inspector}
         </aside>
-        <div className="bb-workspace-canvas-host" data-testid="workspace-canvas-host" ref={canvasHostRef}>
+        <div className="bb-workspace-canvas-host" data-testid="workspace-canvas-host" ref={canvasHostRef} tabIndex={-1}>
           {canvas}
           {draftBar !== undefined && draftBar !== null && (
             <div className="bb-workspace-draft-bar" data-testid="workspace-draft-bar">{draftBar}</div>

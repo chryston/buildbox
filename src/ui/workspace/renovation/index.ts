@@ -21,6 +21,12 @@ export { RenovationViewSection } from './RenovationViewSection'
 export { RenovationModeBar } from './RenovationModeBar'
 export { RenovationLegend } from './RenovationLegend'
 export { OverlapCycleList } from './OverlapCycleList'
+export { RenovationInspector } from './RenovationInspector'
+export type {
+  RenovationInspectorAction,
+  RenovationInspectorLink,
+  RenovationInspectorTarget,
+} from './RenovationInspector'
 export { RenovationErrorBanner } from './RenovationErrorBanner'
 export { RenovationToolStrip } from './RenovationToolStrip'
 export { DISPLAY_ORDER, DISPLAY_ROLES, DISPLAY_STATES, displayLabel, swatchClass } from './displayTheme'

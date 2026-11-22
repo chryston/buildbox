@@ -1096,3 +1096,140 @@
 .bb-renovation-overlap-row.is-current {
   font-weight: 600;
 }
+
+/* #70 §5: the inspector's renovation block, in the rail under the card. The badge is the State's own
+   colour — the same three tokens the swatches and the canvas use, so one State never looks like
+   another in two places. The rows are a definition list because they are exactly that: two labels
+   with the entity's answers. */
+.bb-renovation-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--bb-border);
+  border-radius: 6px;
+  background: var(--bb-bg-modal);
+}
+
+.bb-renovation-inspector-empty {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--bb-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.bb-renovation-inspector-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bb-renovation-inspector-ref {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.bb-renovation-inspector-badge {
+  padding: 1px 6px;
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.bb-renovation-inspector-badge-existing {
+  color: var(--bb-renovation-existing-border);
+  background: var(--bb-renovation-existing-tint);
+  border: 1px solid var(--bb-renovation-existing-border);
+}
+
+.bb-renovation-inspector-badge-demolition {
+  color: var(--bb-renovation-demolition-border);
+  background: var(--bb-renovation-demolition-tint);
+  border: 1px dashed var(--bb-renovation-demolition-border);
+}
+
+.bb-renovation-inspector-badge-proposed {
+  color: var(--bb-renovation-proposed-border);
+  background: var(--bb-renovation-proposed-tint);
+  border: 1px dashed var(--bb-renovation-proposed-border);
+}
+
+.bb-renovation-inspector-rows {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.bb-renovation-inspector-row {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.bb-renovation-inspector-row dt {
+  color: var(--bb-text-muted);
+  min-width: 64px;
+}
+
+.bb-renovation-inspector-row dd {
+  margin: 0;
+}
+
+.bb-renovation-inspector-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bb-renovation-inspector-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--bb-accent);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.bb-renovation-inspector-notice {
+  margin: 0;
+  font-size: 12px;
+  color: var(--bb-text-muted);
+}
+
+.bb-renovation-inspector-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bb-renovation-inspector-actions-label {
+  color: var(--bb-text-muted);
+  font-size: 11px;
+}
+
+.bb-renovation-inspector-action {
+  padding: 2px 8px;
+  border: 1px solid var(--bb-border);
+  border-radius: 4px;
+  background: var(--bb-bg-panel);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.bb-renovation-inspector-action:disabled {
+  cursor: not-allowed;
+  color: var(--bb-text-muted);
+}
+
+/* The reason a disabled action is still on screen: §5's rule is that it is never hidden, so the
+   reason reads as a sentence rather than a tooltip nobody opens. */
+.bb-renovation-inspector-reason {
+  margin: 0;
+  font-size: 11px;
+  color: var(--bb-text-muted);
+  line-height: 1.45;
+}

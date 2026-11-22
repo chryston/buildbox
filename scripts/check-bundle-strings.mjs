@@ -60,6 +60,14 @@ const FORBIDDEN = [
         'Layer colour is kept underneath renovation graphics',
         // #70 §8: the candidate list beside the pointer. No flag-off surface says it.
         'click again to cycle',
+        // #70 §5: the inspector's renovation block. `Move`, `Delete`, `Restore`, `Replaces` and the
+        // Kind words are product vocabulary that exists flag-off, so the needles are the sentences.
+        'Existing Model (shared)',
+        'Nothing selected. Click an entity',
+        'Proposed work is edited in Proposed or Combined display',
+        'Correcting the Existing Model needs the dialog',
+        'Correct Existing Model…',
+        'is drawn in',
       ]),
 ]
 // Only the files that could contain application code: an image or a font cannot.

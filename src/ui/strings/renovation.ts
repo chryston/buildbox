@@ -135,6 +135,36 @@ export const RENOVATION_STRINGS = {
   overlapHeader: (index: number, total: number): string => `Overlap ${index}/${total} · click again to cycle`,
   overlapRow: (stateLabel: string, name: string): string => `[${stateLabel}] ${name}`,
 
+  // ---- the inspector's renovation block (#70 §5)
+  // The row labels and the action labels are the issue's words. `Kind` and `Owner` are the two the
+  // card never had: a person deciding whether to demolish something needs to know what it is and
+  // who owns the edit before anything else. `Existing Model (shared)` is the answer that says an
+  // edit here is seen by every option, which is the whole reason Existing display is careful.
+  inspectorKind: 'Kind',
+  inspectorOwner: 'Owner',
+  inspectorReplaces: 'Replaces',
+  inspectorSuccessor: 'Successor',
+  inspectorActions: 'Actions',
+  ownerExistingModel: 'Existing Model (shared)',
+  kindWall: 'Wall',
+  kindOpening: 'Opening',
+  kindRoom: 'Room',
+  kindPlacedItem: 'Placed Item',
+  actionMove: 'Move',
+  actionRestore: 'Restore',
+  actionDelete: 'Delete',
+  actionCorrect: 'Correct Existing Model…',
+  /** §5's notice: Proposed work is not editable where it is not drawn as work. */
+  proposedInDemolitionNotice: 'Proposed work is edited in Proposed or Combined display',
+  /** §5's nothing-selected sentence, in the issue's words. */
+  nothingSelected:
+    'Nothing selected. Click an entity; click the same spot again to cycle overlapping Existing / Demolition / Proposed candidates.',
+  /** The reason `Correct Existing Model…` is disabled until the §7b dialog exists. */
+  correctNeedsDialog:
+    'Correcting the Existing Model needs the dialog that shows what each Design Option does, which is not in this build.',
+  /** The title of a Replaces/Successor link that needs a Display change to be seen. */
+  switchDisplayToFind: (name: string, display: string): string => `Select ${name} — it is drawn in ${display} display`,
+
   // ---- the buttons every one of them ends with
   cancel: 'Cancel',
 } as const
