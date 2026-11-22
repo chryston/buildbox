@@ -1000,3 +1000,35 @@
   color: var(--bb-text-muted);
   font-style: italic;
 }
+
+/* ---------------------------------------------------------------------------
+ * #70 §6: the error state. The same warn surface the warning strip uses — this is a notice that needs
+ * an answer, not a different kind of red — and it spans the workspace under the tool strip.
+ * ------------------------------------------------------------------------- */
+.bb-renovation-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 16px;
+  border-bottom: 1px solid var(--bb-warn-border);
+  background: var(--bb-warn-bg);
+  color: var(--bb-warn-text);
+  font-size: 12px;
+}
+
+.bb-renovation-error-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.bb-renovation-error-action {
+  flex: none;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: var(--bb-radius-sm);
+  border: 1px solid var(--bb-warn-border);
+  background: var(--bb-warn-button);
+  color: var(--bb-warn-button-text);
+}

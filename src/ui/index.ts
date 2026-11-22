@@ -63,6 +63,7 @@ export {
 // table the rail, the mode bar and the legend read.
 export { RenovationViewSection } from './workspace/renovation/RenovationViewSection'
 export { RenovationModeBar } from './workspace/renovation/RenovationModeBar'
+export { RenovationErrorBanner } from './workspace/renovation/RenovationErrorBanner'
 export { RenovationToolStrip } from './workspace/renovation/RenovationToolStrip'
 export { DISPLAY_ORDER, DISPLAY_ROLES, DISPLAY_STATES, displayLabel } from './workspace/renovation/displayTheme'
 export { ExportDialog, UNIT_LABEL, type ExportDialogProps } from './workspace/export/ExportDialog'

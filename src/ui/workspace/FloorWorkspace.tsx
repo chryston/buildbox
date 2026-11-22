@@ -85,6 +85,7 @@ import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import {
   DesignOptionsSection,
   MoveToOptionAction,
+  RenovationErrorBanner,
   RenovationModeBar,
   RenovationOverlays,
   RenovationToolStrip,
@@ -1367,6 +1368,27 @@ export function FloorWorkspace(): ReactNode {
                 onTogglePick={togglePickState}
                 onNotice={showRenovationNotice}
               />
+              {viewRenovationDisplay(view) !== 'existing' && renovationOptionId === null ? (
+                <RenovationErrorBanner
+                  display={viewRenovationDisplay(view)}
+                  options={designOptionsOf(project)}
+                  onSetDesignOption={(designOptionId) => {
+                    const name = designOptionsOf(project).find((option) => option.id === designOptionId)?.name ?? null
+                    sendLabelled(
+                      'view.setDesignOption',
+                      { viewId: view.id, designOptionId },
+                      RENOVATION_STRINGS.setDesignOption(name),
+                    )
+                  }}
+                  onShowExisting={() =>
+                    sendLabelled(
+                      'view.setRenovationDisplay',
+                      { viewId: view.id, renovationDisplay: 'existing' },
+                      RENOVATION_STRINGS.setRenovationDisplay(displayLabel('existing')),
+                    )
+                  }
+                />
+              ) : undefined}
             </>
           ) : undefined
         }

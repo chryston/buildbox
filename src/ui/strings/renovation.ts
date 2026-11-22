@@ -101,6 +101,15 @@ export const RENOVATION_STRINGS = {
   /** Why `Mark demolition` waits: it marks one named thing, and nothing is named yet. */
   markDemolitionNeedsOne: 'Select one thing to mark for demolition.',
 
+  // ---- the error state (#70 §6): a Display that describes an Option with no Option to describe
+  /**
+   * The banner's whole sentence, in the issue's words. It says what is missing, what the canvas is
+   * therefore not drawing, and that the tools are gone — the three things a person checks in order.
+   */
+  needsOption: (display: string): string =>
+    `${display} display needs an active Design Option. Nothing is drawn from options; editing tools are disabled.`,
+  showExisting: 'Show Existing',
+
   // ---- the undo tooltip of a saved-view setting (#70 §2)
   // The catalogue's default label (`Set Design Option`, `Set Renovation Display`) cannot name what
   // was chosen: the Option's name is Project data and the Display's is copy. So the card composes
