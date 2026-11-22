@@ -95,6 +95,14 @@ v8 is dark. `DOMAIN_SCHEMA_VERSION` is 8 only in a `VITE_FF_RENOVATION=true` bui
 The file stays on disk either way — the golden of a schema on its way in is not deleted because a
 flag is off — and when `#73` turns the flag on it becomes the version's golden unchanged.
 
+`v8/renovation-views.json` is the same Project with the renovation work in it, drawn by
+`scripts/make-renovation-views-seed.ts` through the Intents the app dispatches, and carried by
+`fixtures/e2e/preview-seed/renovation-views.json`. `Option A · Open kitchen` demolishes W-2 and
+replaces `Base 600 #1` with `Base 600 #1′`; `Option B · Widened opening` replaces W-2 with `W-2′` on
+W-2's own footprint; and the Floor carries the four saved views the Renovation Displays are named by.
+It is the scene `#70`'s Displays, cycle and screenshots stand on, and the one the empty pair of
+Options above is the *before* state of.
+
 ## How it was produced
 
 Hand-authored as a plain object, then written with `lib.canonicalJson` — keys sorted, no
