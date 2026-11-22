@@ -59,12 +59,9 @@ describe('the Lists scope over Design Options (#73 §8)', () => {
     const compared = await csvOf(['walls'], { designOptionIds: ['option-a', 'option-b'] })
     const under = (optionId: string): string[] =>
       compared.filter((row) => row['design_option_id'] === optionId).map((row) => row['stable_id'])
-    // The Walls neither Option touches: what one of them demolishes is that Option's own business,
-    // and this criterion is about the content the two schemes share.
-    const untouched = project.existingModel.walls
-      .filter((wall) => (project.designOptions ?? []).every((option) => !option.demolishedIds.includes(wall.id)))
-      .map((wall) => wall.id)
-      .sort()
+    // Every Wall of the Existing Model, including the one both Options take down: what an Option
+    // does to it is its State column, not whether the row exists.
+    const untouched = project.existingModel.walls.map((wall) => wall.id).sort()
     expect(untouched.length).toBeGreaterThan(0)
     for (const optionId of ['option-a', 'option-b']) {
       const ids = under(optionId).sort()
