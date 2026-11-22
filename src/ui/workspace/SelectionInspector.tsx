@@ -20,6 +20,7 @@ import type { Rect } from '../../drawing'
 import { STRINGS } from '../strings'
 import { PLAN_SWATCHES } from './planColors'
 import { formatMm, parseToMm } from './displayUnits'
+import { useFieldsLocked } from './fieldsLock'
 import type { PlanItemView } from './planModel'
 import { quarterTurn } from './rotateHandle'
 import { ShapeEditor } from './shape/ShapeEditor'
@@ -99,6 +100,7 @@ export function NumberField(props: {
   onCommit: (value: number) => void
 }): ReactNode {
   const { label, testId, value, kind, unit, precision, min, onCommit } = props
+  const { locked, notice } = useFieldsLocked()
   const shown = kind === 'mm' ? formatMm(value, unit, precision) : trimNumber(value)
   const [text, setText] = useState<string | null>(null)
 
@@ -132,6 +134,8 @@ export function NumberField(props: {
         className="bb-workspace-input"
         type="number"
         step="any"
+        disabled={locked}
+        title={notice === '' ? undefined : notice}
         value={text ?? shown}
         onChange={(event) => setText(event.target.value)}
         onBlur={commit}
@@ -187,6 +191,7 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
     onSetPosition, onSetRotation, onEditDesign, onPreviewOrigin, onApplyPreview,
     onCancelPreview, onTogglePick, onFork, onOpenDetail, onDelete, onTransfer, renovationAction,
   } = props
+  const { locked, notice } = useFieldsLocked()
   const isCabinet = design === null || design.kind === 'cabinet'
   const pending = preview !== null && preview.itemDesignId === item.designId ? preview : null
   const count = item.placementCount
@@ -306,6 +311,8 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
             data-testid="design-name"
             className="bb-workspace-input"
             type="text"
+            disabled={locked}
+            title={notice === '' ? undefined : notice}
             value={pending?.name ?? design.name}
             onChange={(event) => onEditDesign({ name: event.target.value })}
           />

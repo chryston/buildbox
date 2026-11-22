@@ -17,6 +17,7 @@ import type { DerivedWall } from '../../../derive'
 import type { DisplayUnit, EntityId, Wall } from '../../../domain'
 import { STRINGS } from '../../strings'
 import { NumberField } from '../SelectionInspector'
+import { useFieldsLocked } from '../fieldsLock'
 import { ToolbarMenu } from '../WorkspaceToolbar'
 import { circleThrough } from './wallDraft'
 
@@ -74,6 +75,7 @@ export function WallInspector(props: WallInspectorProps): ReactNode {
     wall, derived, mergeableWith, unit, precision,
     onSetLength, onSetRadius, onSetThickness, onOffset, onSplit, onMerge, onDelete, deleteBlocked, renovationAction,
   } = props
+  const { locked, notice } = useFieldsLocked()
   const [offsetText, setOffsetText] = useState('')
   const [offsetSide, setOffsetSide] = useState<'left' | 'right'>('left')
   const line = wall.line
@@ -137,12 +139,16 @@ export function WallInspector(props: WallInspectorProps): ReactNode {
             id="wall-offset-field"
             data-testid="wall-offset-field"
             type="number"
+            disabled={locked}
+            title={notice === '' ? undefined : notice}
             value={offsetText}
             onChange={(event) => setOffsetText(event.target.value)}
           />
           <select
             data-testid="wall-offset-side"
             aria-label={STRINGS.wallOffsetSide}
+            disabled={locked}
+            title={notice === '' ? undefined : notice}
             value={offsetSide}
             onChange={(event) => setOffsetSide(event.target.value as 'left' | 'right')}
           >

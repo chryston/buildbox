@@ -17,6 +17,7 @@ import type { DerivedRoom } from '../../../derive'
 import type { DisplayUnit, Room } from '../../../domain'
 import { STRINGS } from '../../strings'
 import { formatSquareMetres, readoutMm } from '../displayUnits'
+import { useFieldsLocked } from '../fieldsLock'
 import '../shape/shape.css'
 
 /** The longest name the domain allows (#67 §1). */
@@ -40,6 +41,7 @@ export interface RoomInspectorProps {
 
 export function RoomInspector(props: RoomInspectorProps): ReactNode {
   const { room, derived, unit, precision, onRename, focusName = false, children, renovationAction } = props
+  const { locked, notice } = useFieldsLocked()
   const [text, setText] = useState(room.name)
   const nameRef = useRef<HTMLInputElement>(null)
   /** The last name handed to the Project, so Enter followed by blur is one write, not two. */
@@ -84,6 +86,8 @@ export function RoomInspector(props: RoomInspectorProps): ReactNode {
         className="bb-workspace-input"
         data-testid="room-name-input"
         type="text"
+        disabled={locked}
+        title={notice === '' ? undefined : notice}
         value={text}
         maxLength={MAX_NAME}
         onChange={(event) => setText(event.target.value)}

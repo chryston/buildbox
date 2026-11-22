@@ -253,6 +253,13 @@ export interface WorkspaceState {
   /** The renovation dialog on screen, if any (#69 §9, §13). */
   renovationDialog: RenovationDialog
   /**
+   * §7c: the one Existing entity whose handles and fields are unlocked for one pending correction,
+   * or `null`. Every baseline selection starts locked in Existing display; `Correct Existing
+   * Model…` unlocks it, and committing or pressing Escape locks it again. UI-session state, never
+   * undoable (#26), and an id only.
+   */
+  correctionUnlocked: string | null
+  /**
    * The strip's temporary `Pick:` filter (#70 §3): the Renovation States a click may take, in the
    * three States' own order whatever the order of clicks. Empty means every state.
    *
@@ -332,6 +339,10 @@ export interface WorkspaceActions {
   openCorrectExistingDialog(intent: Intent, entityId: string): void
   /** Ask `Restore <ref>?` before a demolition record leaves one Design Option (#70 §7d). */
   openRestoreDialog(entityId: string, designOptionId: string): void
+  /** §7c: hand one Existing entity its handles and fields back, for one pending correction. */
+  unlockCorrection(entityId: string): void
+  /** §7c: put the lock back — what Escape does, and what committing does through the dialog. */
+  lockCorrection(): void
   /** Put the renovation dialog away. Nothing was written, which is the whole point of Cancel. */
   closeRenovationDialog(): void
   /** Turn one `Pick:` chip on or off (#70 §3); the list stays in the three States' own order. */
@@ -383,6 +394,7 @@ const INITIAL: WorkspaceState = {
   activeViewByFloor: {},
   activeHydrated: false,
   renovationDialog: null,
+  correctionUnlocked: null,
   pickStates: [],
   hiddenToolNotice: null,
   cycle: null,
@@ -525,9 +537,13 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
   openForcedChoiceDialog: (intent, entityId, display, optionId) =>
     set({ renovationDialog: { kind: 'forced-choice', intent, entityId, display, optionId } }),
   openCorrectExistingDialog: (intent, entityId) =>
-    set({ renovationDialog: { kind: 'correct-existing', intent, entityId } }),
+    // Asking the danger question is the commit leaving: the unlock was for that one pending edit,
+    // so the entity is locked again whether the answer is Confirm or Cancel (#70 §7c).
+    set({ renovationDialog: { kind: 'correct-existing', intent, entityId }, correctionUnlocked: null }),
   openRestoreDialog: (entityId, designOptionId) =>
     set({ renovationDialog: { kind: 'restore', entityId, designOptionId } }),
+  unlockCorrection: (entityId) => set({ correctionUnlocked: entityId }),
+  lockCorrection: () => set({ correctionUnlocked: null }),
   closeRenovationDialog: () => set({ renovationDialog: null }),
   togglePickState: (state) =>
     set((current) => ({

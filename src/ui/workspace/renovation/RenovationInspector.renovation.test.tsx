@@ -112,16 +112,11 @@ describe('the inspector of a demolished Existing Wall (#70 criterion 13)', () =>
 })
 
 describe('the inspector of an Existing Wall in Existing display (#70 criterion 14)', () => {
-  it('shows `Correct Existing Model…` as the only action, disabled with its reason', () => {
-    renderInspector({
-      target: baselineWall(),
-      display: 'existing',
-      unavailable: { correct: 'Correcting the Existing Model needs the dialog.' },
-    })
-    expect(screen.getByTestId('renovation-inspector-action-correct')).toBeDisabled()
-    expect(screen.getByTestId('renovation-inspector-reason-correct')).toHaveTextContent(
-      'Correcting the Existing Model needs the dialog.',
-    )
+  it('offers `Correct Existing Model…` as the only action, ready to unlock the record', () => {
+    // §7c: the press is no longer a promise of a dialog that does not exist — it is the unlock that
+    // hands this entity its handles and fields back.
+    renderInspector({ target: baselineWall(), display: 'existing' })
+    expect(screen.getByTestId('renovation-inspector-action-correct')).toBeEnabled()
     expect(screen.queryByTestId('renovation-inspector-action-move')).toBeNull()
     expect(screen.queryByTestId('renovation-inspector-action-demolish')).toBeNull()
     expect(screen.queryByTestId('renovation-inspector-action-replace')).toBeNull()

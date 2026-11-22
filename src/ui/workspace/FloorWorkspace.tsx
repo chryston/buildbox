@@ -98,12 +98,16 @@ import {
   entityFields,
   openDemolishDialog,
   openForcedChoiceDialog,
+  openCorrectExistingDialog,
   openRestoreDialog,
+  baselineEditLocked,
   subjectOfIntent,
   successorOf,
 } from './renovation'
 import type { RenovationInspectorAction, RenovationInspectorLink, RenovationInspectorTarget, RenovationToolId } from './renovation'
 import { RENOVATION_STRINGS } from '../strings/renovation'
+import { FIELDS_UNLOCKED, FieldsLockedContext } from './fieldsLock'
+import type { FieldsLock } from './fieldsLock'
 import { ForkDesignDialog, NewItemDialog } from './ItemDialogs'
 import { ManageFloorsDialog } from './ManageFloorsDialog'
 import { DeleteFloorDialog } from './DeleteFloorDialog'
@@ -277,6 +281,10 @@ export function FloorWorkspace(): ReactNode {
   const togglePickState = useWorkspace((state) => state.togglePickState)
   const showHiddenToolNotice = useWorkspace((state) => state.showHiddenToolNotice)
   const clearHiddenToolNotice = useWorkspace((state) => state.clearHiddenToolNotice)
+  // §7c: the one Existing entity `Correct Existing Model…` has handed its handles and fields back.
+  const correctionUnlocked = useWorkspace((state) => state.correctionUnlocked)
+  const unlockCorrection = useWorkspace((state) => state.unlockCorrection)
+  const lockCorrection = useWorkspace((state) => state.lockCorrection)
   // #70 §8: what the last click reached, and the candidates it left behind for the list.
   const cycle = useWorkspace((state) => state.cycle)
   const cycleCandidates = useWorkspace((state) => state.cycleCandidates)
@@ -695,7 +703,16 @@ export function FloorWorkspace(): ReactNode {
     const result = dispatch(intent)
     if (!FF_RENOVATION || result.ok || result.code !== 'baseline-correction-required') return
     const entityId = subjectOfIntent(intent)
-    if (entityId === null || renovationOptionId === null || renovationDisplayNow === 'existing') return
+    if (entityId === null || renovationOptionId === null) return
+    if (renovationDisplayNow === 'existing') {
+      // The Existing display is where a survey edit is meant, so an edit refused there is the one
+      // this build cannot answer alone: the person unlocked this entity, and the question the answer
+      // owes is what the correction does to every Design Option (#70 §7b, §7c). An entity nobody
+      // unlocked never produces this Intent — its handles and fields were shut.
+      if (correctionUnlocked !== entityId) return
+      openCorrectExistingDialog(intent, entityId)
+      return
+    }
     openForcedChoiceDialog(intent, entityId, renovationDisplayNow, renovationOptionId)
   }
   const send = <T extends IntentType>(type: T, payload: PayloadOf<T>): void => {
@@ -1048,6 +1065,13 @@ export function FloorWorkspace(): ReactNode {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
+        // An unlocked correction is abandoned first: the handles and fields shut again and nothing
+        // was written, which is the whole point of the press being reversible (#70 criterion 20).
+        if (FF_RENOVATION && correctionUnlocked !== null) {
+          event.preventDefault()
+          lockCorrection()
+          return
+        }
         // A running overlap cycle backs out first: Esc ends the cycle (#70 criterion 18) and the
         // selection it made stays, because the click that made it was a real selection.
         if (FF_RENOVATION && cycle !== null) {
@@ -1085,7 +1109,7 @@ export function FloorWorkspace(): ReactNode {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [selected, designPreview, pickingOrigin, setDesignPreview, setPickingOrigin, send, tool, openingAimNow, placeOpening, setTool, cycle, clearCycle])
+  }, [selected, designPreview, pickingOrigin, setDesignPreview, setPickingOrigin, send, tool, openingAimNow, placeOpening, setTool, cycle, clearCycle, correctionUnlocked, lockCorrection])
 
   const commitImage = (prepared: PreparedPlanImage): void => {
     const asset = prepared.asset
@@ -1524,10 +1548,28 @@ export function FloorWorkspace(): ReactNode {
     }
   }, [wallSelection, openingSelection, roomSelection, selection, renovationStates, renovationOptionId, project, view])
 
-  /** §5's rule: an action this build cannot honour yet is disabled with its reason, never hidden. */
-  const renovationInspectorBlocked: Partial<Record<RenovationInspectorAction, string>> = {
-    correct: RENOVATION_STRINGS.correctNeedsDialog,
-  }
+  const renovationSubject = wallSelection ?? openingSelection ?? roomSelection ?? selection
+  /**
+   * §7c: whether the selection is a baseline record being looked at in the Existing display while the
+   * Project carries a Design Option — the one case its handles, its grip and its fields stay shut. The
+   * Project's own count is the test because it is the test the edit layer makes: with no Option there
+   * is nothing sharing the record, and an Existing edit commits as it always did (criterion 24).
+   */
+  const baselineLocked = FF_RENOVATION && baselineEditLocked({
+    display: renovationDisplayNow,
+    hasOptions: designOptionsOf(project).length > 0,
+    state: renovationStates?.get(renovationSubject ?? '') ?? 'existing',
+    unlockedId: correctionUnlocked,
+    entityId: renovationSubject ?? '',
+  })
+  /**
+   * §7c: what the inspector's shut fields say. The sentence comes from the renovation copy table,
+   * which only this branch reaches — the fields read the words off the context, so a flag-off build
+   * never pulls that table in to explain a field it always lets people type in.
+   */
+  const fieldsLock: FieldsLock = baselineLocked
+    ? { locked: true, notice: RENOVATION_STRINGS.correctLocked }
+    : FIELDS_UNLOCKED
 
   const runRenovationAction = (action: RenovationInspectorAction): void => {
     const id = wallSelection ?? openingSelection ?? roomSelection ?? selection
@@ -1541,6 +1583,13 @@ export function FloorWorkspace(): ReactNode {
     }
     if (action === 'demolish') {
       markRenovationDemolition()
+      return
+    }
+    if (action === 'correct') {
+      // §7c: the press is the unlock. This entity gets its handles, its grip and its fields back, and
+      // the edit made with them is the one that asks what it does to every Design Option. It needs no
+      // Option of its own to be pressed against — the record it opens is the shared one.
+      unlockCorrection(id)
       return
     }
     if (renovationOptionId === null) return
@@ -1744,7 +1793,6 @@ export function FloorWorkspace(): ReactNode {
                     target={renovationTarget}
                     display={renovationDisplayNow}
                     hasDesignOption={designOptionsOf(project).length > 0}
-                    unavailable={renovationInspectorBlocked}
                     onAction={runRenovationAction}
                     onSelectEntity={selectRenovationEntity}
                   />
@@ -1755,7 +1803,10 @@ export function FloorWorkspace(): ReactNode {
           />
         }
         inspector={
-          selectedRoom !== null
+          // §7c: the inspector rail reads one flag for whether its fields are shut, instead of a prop
+          // threaded through four inspectors that each have to remember to honour it.
+          <FieldsLockedContext.Provider value={fieldsLock}>
+          {selectedRoom !== null
             ? <RoomInspector
                 room={selectedRoom.room}
                 derived={selectedRoom.derived}
@@ -1870,6 +1921,8 @@ export function FloorWorkspace(): ReactNode {
                 deleteBlocked={roomDeleteBlockFor(project, selectedWall.wall)}
                 renovationAction={renovationAction(selectedWall.wall.id)}
               />
+          }
+          </FieldsLockedContext.Provider>
         }
         canvas={
           <>
@@ -1884,6 +1937,7 @@ export function FloorWorkspace(): ReactNode {
               onViewport={setViewport}
               tool={tool}
               selection={selection}
+              editLocked={baselineLocked}
               onSelect={select}
               onCursorChange={setOpeningCursor}
               onCanvasClick={clickOnCanvas}

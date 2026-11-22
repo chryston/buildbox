@@ -65,7 +65,7 @@ const FORBIDDEN = [
         'Existing Model (shared)',
         'Nothing selected. Click an entity',
         'Proposed work is edited in Proposed or Combined display',
-        'Correcting the Existing Model needs the dialog',
+        'is drawn against this record',
         'Correct Existing Model…',
         'is drawn in',
         // #70 §7a, §7b: the forced choice and the danger dialog. `Cancel`, `move`, `change` and the

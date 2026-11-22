@@ -159,9 +159,9 @@ export const RENOVATION_STRINGS = {
   /** §5's nothing-selected sentence, in the issue's words. */
   nothingSelected:
     'Nothing selected. Click an entity; click the same spot again to cycle overlapping Existing / Demolition / Proposed candidates.',
-  /** The reason `Correct Existing Model…` is disabled until the §7b dialog exists. */
-  correctNeedsDialog:
-    'Correcting the Existing Model needs the dialog that shows what each Design Option does, which is not in this build.',
+  /** §7c: the tooltip on a shut field — what to press, and why the record is shared. */
+  correctLocked:
+    'Every Design Option is drawn against this record. Press Correct Existing Model… below to change it.',
   /** The title of a Replaces/Successor link that needs a Display change to be seen. */
   switchDisplayToFind: (name: string, display: string): string => `Select ${name} — it is drawn in ${display} display`,
 

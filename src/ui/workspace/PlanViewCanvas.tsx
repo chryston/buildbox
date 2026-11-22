@@ -91,6 +91,15 @@ export interface PlanViewCanvasProps {
   onMoveItem: (id: string, x: number, y: number) => void
   /** The pointer came up after a turn: commit the whole turn as one Intent. */
   onRotateItem: (id: string, rotationDeg: number) => void
+  /**
+   * The selection is shown but cannot be edited (#70 §7c): no end handles, no rotate grip, and a
+   * pointer that selects without dragging.
+   *
+   * The workspace decides when — a baseline entity in Existing display with Design Options open is
+   * one press of `Correct Existing Model…` away from being editable — and this only withholds the
+   * offers. Refusing the Intent itself stays the edit layer's job.
+   */
+  editLocked?: boolean
   /** The design edit awaiting `Apply` (D3), or `null`. */
   designPreview: DesignEditPreview | null
   /** `Pick on canvas` armed: the next click on the selected placement sets the Item Origin. */
@@ -197,6 +206,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   const {
     hostRef, svgRef, floor, showPlanImage, imageSrc, viewport, onViewport,
     tool, selection, onSelect, onCursorChange, onCanvasClick, dragPreview, onDragPreview, onMoveItem, onRotateItem,
+    editLocked = false,
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
     angleSnap, overlay, htmlOverlay, walls, renovation = null, selectedWallId = null, onSelectWall,
     openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
@@ -351,6 +361,8 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       return
     }
     onSelect(id)
+    // A locked selection is still a selection: the click inspects, it does not move (#70 §7c).
+    if (editLocked) return
     const startX = lastClient.current.x
     const startY = lastClient.current.y
     const origX = item.translation.x
@@ -482,7 +494,9 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     : openings.filter((host) => states.has(host.wallId))
   const wallList = drawnWalls === undefined || drawnWalls === null || drawnWalls.walls.length === 0
     ? null
-    : drawWalls(drawnWalls, { sizing, selectedWallId, openings: drawnOpenings, selectedOpeningId, preview: openingPreview })
+    : drawWalls(drawnWalls, {
+      sizing, selectedWallId, openings: drawnOpenings, selectedOpeningId, preview: openingPreview, handles: !editLocked,
+    })
   // A Room's label may not sit on a `W-n` reference, and the only honest source for where those
   // are is the placement that draws them.
   const roomList = drawnRooms === null || drawnRooms.rooms.length === 0
@@ -509,7 +523,9 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
         }),
       }
   const annotations = overlay === undefined
-    ? drawSelectionAnnotations(floor, selection, { sizing, formatLength, preview })
+    ? drawSelectionAnnotations(floor, selection, {
+      sizing, formatLength, preview, handles: !editLocked,
+    })
     : null
   // One flat text layer, not two. The drawing's words and the selection's words are built as
   // separate lists because they are keyed differently — one by the revision, one by a click —
