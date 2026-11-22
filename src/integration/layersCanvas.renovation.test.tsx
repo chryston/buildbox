@@ -36,6 +36,8 @@ const fixturesRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../fix
 
 const FLOOR_1 = 'seed-view-001'
 const PROPOSED = 'views-view-014'
+/** `Option B · Combined`, the view that has made `Structure` read-only. */
+const COMBINED = 'views-view-016'
 const FURNITURE = 'layers-001'
 const STRUCTURE = 'layers-003'
 const ISLAND = 'fp-island'
@@ -211,7 +213,7 @@ describe('a saved view’s Drawing Layers on its Plan View', () => {
   it('moves the inspected entity to another layer and asks nothing about the baseline (#71 §5)', async () => {
     // A view with a Design Option open, which is the condition under which an unwrapped edit of
     // Existing Model content is refused. Reassignment is presentation, so it must sail past.
-    await openView('views-view-016')
+    await openView(COMBINED)
     press(`wall-band-${WALL}`)
     const select = screen.getByTestId('renovation-inspector-layer')
     expect(select).toHaveValue(FURNITURE)

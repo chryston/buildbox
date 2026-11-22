@@ -295,29 +295,31 @@ export function RenovationLayers(props: RenovationLayersProps): ReactNode {
                       </button>
                     )}
                   </label>
-                  <span className="bb-layer-field-label" data-testid={`layer-view-order-label-${key}`}>
-                    {str.layerViewOrder}
+                  <span className="bb-layer-order">
+                    <span className="bb-layer-field-label" data-testid={`layer-view-order-label-${key}`}>
+                      {str.layerViewOrder}
+                    </span>
+                    <button
+                      type="button"
+                      className="bb-layer-step"
+                      aria-label={str.layerViewOrderUpAria(name)}
+                      data-testid={`layer-view-forward-${key}`}
+                      disabled={edges.front}
+                      onClick={() => moveInView(key, 'forward')}
+                    >
+                      {str.layerForward}
+                    </button>
+                    <button
+                      type="button"
+                      className="bb-layer-step"
+                      aria-label={str.layerViewOrderDownAria(name)}
+                      data-testid={`layer-view-back-${key}`}
+                      disabled={edges.back}
+                      onClick={() => moveInView(key, 'back')}
+                    >
+                      {str.layerBack}
+                    </button>
                   </span>
-                  <button
-                    type="button"
-                    className="bb-layer-step"
-                    aria-label={str.layerViewOrderUpAria(name)}
-                    data-testid={`layer-view-forward-${key}`}
-                    disabled={edges.front}
-                    onClick={() => moveInView(key, 'forward')}
-                  >
-                    {str.layerForward}
-                  </button>
-                  <button
-                    type="button"
-                    className="bb-layer-step"
-                    aria-label={str.layerViewOrderDownAria(name)}
-                    data-testid={`layer-view-back-${key}`}
-                    disabled={edges.back}
-                    onClick={() => moveInView(key, 'back')}
-                  >
-                    {str.layerBack}
-                  </button>
                 </div>
               )}
 
@@ -362,26 +364,28 @@ export function RenovationLayers(props: RenovationLayersProps): ReactNode {
                       onBlur={() => commitColor(layer.id, layer.color)}
                     />
                   </label>
-                  <button
-                    type="button"
-                    className="bb-layer-step"
-                    aria-label={str.layerMoveUpAria(name)}
-                    data-testid={`layer-up-${key}`}
-                    disabled={edges.front}
-                    onClick={() => props.onMoveProject(layer.id, 'forward')}
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    className="bb-layer-step"
-                    aria-label={str.layerMoveDownAria(name)}
-                    data-testid={`layer-down-${key}`}
-                    disabled={edges.back}
-                    onClick={() => props.onMoveProject(layer.id, 'back')}
-                  >
-                    ↓
-                  </button>
+                  <span className="bb-layer-steps">
+                    <button
+                      type="button"
+                      className="bb-layer-step"
+                      aria-label={str.layerMoveUpAria(name)}
+                      data-testid={`layer-up-${key}`}
+                      disabled={edges.front}
+                      onClick={() => props.onMoveProject(layer.id, 'forward')}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      className="bb-layer-step"
+                      aria-label={str.layerMoveDownAria(name)}
+                      data-testid={`layer-down-${key}`}
+                      disabled={edges.back}
+                      onClick={() => props.onMoveProject(layer.id, 'back')}
+                    >
+                      ↓
+                    </button>
+                  </span>
                   <button
                     type="button"
                     className="bb-workspace-button-danger"

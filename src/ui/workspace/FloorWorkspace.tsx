@@ -1602,9 +1602,11 @@ export function FloorWorkspace(): ReactNode {
         .map((subject) => entityLayerKey.get(subject.id) ?? UNLAYERED_LAYER_KEY)
         .find((key) => !effectiveLayerSetting(project, view, key).visible)
       if (hidden === undefined) return ''
-      return RENOVATION_STRINGS.warningHiddenSuffix(
+      // The sentence above it ends in a full stop, and the suffix the issue writes begins with a
+      // middot — without a space between them the strip reads `…is outside.· Furniture hidden…`.
+      return ` ${RENOVATION_STRINGS.warningHiddenSuffix(
         drawingLayerById(project, hidden)?.name ?? RENOVATION_STRINGS.layerUnlayered,
-      )
+      )}`
     }
   }, [project, view, entityLayerKey])
 

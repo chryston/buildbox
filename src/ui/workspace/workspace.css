@@ -1005,6 +1005,30 @@
   border-top-style: dashed;
 }
 
+/* The two steps are one control that happens to have two halves: a rail narrow enough to wrap the
+   Project row wraps it between the pair otherwise, which reads as a broken control (#71 §3). */
+.bb-layer-steps {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+/* The words and the two buttons are one control here too: `View order` with its buttons wrapped
+   away from it names nothing. */
+.bb-layer-order {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+/* `Delete…` is the one action here that ends the layer, so it takes the end of the row it lands on
+   rather than sitting beside the arrows it has nothing to do with. */
+.bb-layer-project .bb-workspace-button-danger {
+  margin-inline-start: auto;
+}
+
 .bb-layer-field {
   display: inline-flex;
   align-items: center;
