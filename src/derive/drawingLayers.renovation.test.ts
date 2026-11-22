@@ -40,7 +40,6 @@ const scene: Project = {
   existingModel: {
     ...base.existingModel,
     walls: base.existingModel.walls.map((wall) => ({ ...wall, drawingLayerId: STRUCTURE })),
-    wallJunctions: base.existingModel.wallJunctions.map((junction) => ({ ...junction, drawingLayerId: STRUCTURE })),
     openings: base.existingModel.openings.map((opening) => ({ ...opening, drawingLayerId: STRUCTURE })),
     placedItems: base.existingModel.placedItems.map((item) => ({ ...item, drawingLayerId: FURNITURE })),
   },
