@@ -68,6 +68,21 @@ const FORBIDDEN = [
         'Correcting the Existing Model needs the dialog',
         'Correct Existing Model…',
         'is drawn in',
+        // #70 §7a, §7b: the forced choice and the danger dialog. `Cancel`, `move`, `change` and the
+        // Option's own name exist flag-off, so the needles are the sentences around them.
+        'belongs to the Existing Model',
+        'Moving a baseline entity is never done silently',
+        'add moved successor',
+        'Correct Existing Model instead',
+        'Cancel — change nothing',
+        'Correct the shared Existing Model?',
+        'retains it as Existing',
+        'demolishes it (no successor)',
+        'its successor stays aligned',
+        'its successor keeps its own geometry',
+        'Use this for measuring errors',
+        'only Existing Model entities can be demolished',
+        'Mark demolition:',
       ]),
 ]
 // Only the files that could contain application code: an image or a font cannot.

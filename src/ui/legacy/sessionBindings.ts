@@ -48,6 +48,13 @@ export interface IntentBuilder {
    * may be read.
    */
   preview(project: Project, intent: Intent): { review: DependencyReview | null }
+  /**
+   * What one Intent would make of the Project, without committing it, with the Design Options set
+   * aside (#70 §7a): the workspace asks it what an edit of an Existing entity would have done to the
+   * record, so a successor can carry the geometry the person was dragging toward. `null` when the
+   * edit does not land. Nothing is written.
+   */
+  evaluate(project: Project, intent: Intent): Project | null
 }
 
 /** The object-URL cache behind a Plan Image: `urlFor` is `null` until the bytes have been read. */

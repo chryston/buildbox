@@ -24,7 +24,7 @@ import type { BadgeSubject, OpeningPreview, RoomProposal } from '../../drawing'
 import type { Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
 import { designOptionsOf, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay } from '../../domain'
 import type { SessionAsset } from '../../session'
-import type { DeleteWallReview, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
+import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
   usePlanImageSrc,
   useSaveStatus,
@@ -91,10 +91,15 @@ import {
   RenovationOverlays,
   RenovationToolStrip,
   RenovationViewSection,
+  DISPLAY_LABELS,
   DISPLAY_STATES,
   RenovationInspector,
   displayLabel,
+  entityFields,
   openDemolishDialog,
+  openForcedChoiceDialog,
+  subjectOfIntent,
+  successorOf,
 } from './renovation'
 import type { RenovationInspectorAction, RenovationInspectorLink, RenovationInspectorTarget, RenovationToolId } from './renovation'
 import { RENOVATION_STRINGS } from '../strings/renovation'
@@ -118,6 +123,17 @@ const MAX_PLAN_IMAGE_BYTES = 50 * 1024 * 1024
  * not in the model, and nothing may select it (#67 §7).
  */
 const ROOM_PROPOSAL = '@room-proposal'
+
+/**
+ * The commands that take a record out of the model. Outside the Existing display these mean a
+ * demolition record rather than a deletion (#70 criterion 26), which is why they are listed once here
+ * instead of being recognised where each delete happens to be sent.
+ */
+const DELETES_ARE_DEMOLITIONS: readonly IntentType[] = [
+  'wall.delete',
+  'opening.delete',
+  'plan.removeObject',
+]
 
 /** The last placement on this Floor: the one a just-committed add has made. */
 function lastPlacedId(project: Project, floorId: string): string | null {
@@ -658,16 +674,78 @@ export function FloorWorkspace(): ReactNode {
     setWarningFocus((previous) => ({ key: first.key, nonce: (previous?.nonce ?? 0) + 1 }))
   }, [floorWarnings])
 
+  /**
+   * One transaction, and the two renovation answers a refusal can lead to (#70 §7a, criterion 26).
+   *
+   * Both are dark unless the flag is on, and both rest on the same fact: the Existing Model is the
+   * baseline every Design Option is drawn against, so outside the Existing display an edit of it is
+   * refused instead of run. A refusal is exactly the moment to ask — nothing has been committed, the
+   * revision is where it was, and Cancel changes nothing. In the Existing display the same edit is
+   * today's bare rejection: there the baseline is what a person is working on (#70 §7c).
+   */
+  const sendIntent = (intent: Intent): void => {
+    if (FF_RENOVATION) {
+      const demolition = deleteAsDemolition(intent)
+      if (demolition !== null) {
+        dispatch(demolition)
+        return
+      }
+    }
+    const result = dispatch(intent)
+    if (!FF_RENOVATION || result.ok || result.code !== 'baseline-correction-required') return
+    const entityId = subjectOfIntent(intent)
+    if (entityId === null || renovationOptionId === null || renovationDisplayNow === 'existing') return
+    openForcedChoiceDialog(intent, entityId, renovationDisplayNow, renovationOptionId)
+  }
   const send = <T extends IntentType>(type: T, payload: PayloadOf<T>): void => {
-    dispatch(services.intent.build(type, payload))
+    sendIntent(services.intent.build(type, payload))
   }
   /**
    * The same transaction with a label that names what was chosen (#70 §2). Only the caller knows
    * which Design Option or Renovation Display was clicked, and the undo tooltip has to say so.
    */
   const sendLabelled = <T extends IntentType>(type: T, payload: PayloadOf<T>, label: string): void => {
-    dispatch(services.intent.build(type, payload, label))
+    sendIntent(services.intent.build(type, payload, label))
   }
+
+  /**
+   * `Delete` of an Existing entity outside the Existing display, turned into the demolition record it
+   * means (criterion 26): the survey keeps what it said and this Option records that it takes the
+   * entity down. `null` says send the Intent as asked — inside the Existing display, where deleting
+   * from the baseline is the job, or for an entity that is not baseline work, or for a command that
+   * is not a delete.
+   */
+  const deleteAsDemolition = (intent: Intent): Intent | null => {
+    if (renovationDisplayNow === 'existing' || renovationOptionId === null) return null
+    if (!DELETES_ARE_DEMOLITIONS.includes(intent.type)) return null
+    const entityId = subjectOfIntent(intent)
+    if (entityId === null || renovationStates?.get(entityId) !== 'existing') return null
+    const ref = entityFields(project, entityId)?.ref ?? entityId
+    return services.intent.build(
+      'renovation.demolish',
+      { entityId, target: { designOptionId: renovationOptionId } },
+      RENOVATION_STRINGS.markDemolitionLabel(ref),
+    )
+  }
+
+  /**
+   * A Replace that landed: the successor it wrote takes the inspector as soon as the Project does,
+   * because the work a person is about to do belongs to the successor, not to the baseline record
+   * that has just become a memory of it (#70 §7a, §7e).
+   */
+  const pendingReplace = useRef<{ predecessorId: string; optionId: string } | null>(null)
+  useEffect(() => {
+    const pending = pendingReplace.current
+    if (pending === null) return
+    pendingReplace.current = null
+    const proposed = designOptionsOf(project).find((each) => each.id === pending.optionId)?.proposed
+    const hit = proposed === undefined ? null : successorOf(proposed, pending.predecessorId)
+    if (hit === null) return
+    if (hit.kind === 'wall') selectWall(hit.id)
+    else if (hit.kind === 'opening') selectOpening(hit.id)
+    else if (hit.kind === 'room') selectRoom(hit.id)
+    else select(hit.id)
+  }, [project])
 
   /**
    * The `Move to a Design Option…` action for the Existing entity being inspected (#69 §13).
@@ -1354,6 +1432,15 @@ export function FloorWorkspace(): ReactNode {
   const markRenovationDemolition = (): void => {
     const entityId = renovationSelectedIds[0]
     if (renovationOptionId === null || entityId === undefined) return
+    // §7e: a demolition record is only ever about baseline work. The Option's own work is deleted, and
+    // something already marked down has no second demolition to record — the tool says so instead of
+    // opening a dialog whose answer would be refused.
+    const state = renovationStates?.get(entityId)
+    if (state !== undefined && state !== 'existing') {
+      const ref = entityFields(project, entityId)?.ref ?? entityId
+      showRenovationNotice(RENOVATION_STRINGS.notExisting(ref, DISPLAY_LABELS[state]))
+      return
+    }
     openDemolishDialog(entityId, renovationOptionId)
   }
   const showRenovationNotice = (next: string | null): void => {
@@ -1438,7 +1525,6 @@ export function FloorWorkspace(): ReactNode {
 
   /** §5's rule: an action this build cannot honour yet is disabled with its reason, never hidden. */
   const renovationInspectorBlocked: Partial<Record<RenovationInspectorAction, string>> = {
-    replace: RENOVATION_STRINGS.replaceNeedsDialog,
     correct: RENOVATION_STRINGS.correctNeedsDialog,
   }
 
@@ -1463,6 +1549,14 @@ export function FloorWorkspace(): ReactNode {
         { entityId: id, target: { designOptionId: renovationOptionId } },
         RENOVATION_STRINGS.setRenovationDisplay(displayLabel('existing')),
       )
+      return
+    }
+    if (action === 'replace') {
+      // §7e: the inspector's `Replace…` is §7a's Replace with the geometry left alone — one demolition
+      // record and one successor standing exactly where the baseline record stood, which the person
+      // then edits. `edit: {}` is that: every field copied (#69 §7).
+      send('renovation.replace', { entityId: id, edit: {}, target: { designOptionId: renovationOptionId } })
+      pendingReplace.current = { predecessorId: id, optionId: renovationOptionId }
       return
     }
     if (action === 'delete') {

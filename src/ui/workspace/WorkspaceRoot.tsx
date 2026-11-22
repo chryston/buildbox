@@ -22,7 +22,7 @@ import {
 import type { ReactNode } from 'react'
 import type { Project } from '../../domain'
 import type { DependencyReview, Intent, IntentType, PayloadOf } from '../../edit'
-import type { ProjectSession, SaveState, SessionAsset } from '../../session'
+import type { DispatchResult, ProjectSession, SaveState, SessionAsset } from '../../session'
 import type { PlanImageMediaType } from '../../domain'
 import { workspaceStore } from './workspaceStore'
 import { STRINGS } from '../strings'
@@ -44,6 +44,15 @@ export interface WorkspaceIntentBuilder {
    * workspace reaches `edit` only through what `app` hands it.
    */
   preview(project: Project, intent: Intent): { review: DependencyReview | null }
+  /**
+   * What one Intent would make of the Project, without committing it (#70 §7a). The Design Options
+   * are set aside for the answer: the question this answers is what the edit does to the record it
+   * names — the geometry a successor would have to carry — not whether this Option's dependent
+   * updates would follow it, which is the correction's own question and can be refused. `null` when
+   * the edit does not land at all. Nothing is written anywhere: `edit` is a pure function of a
+   * Project, and the copy handed to it is thrown away.
+   */
+  evaluate(project: Project, intent: Intent): Project | null
 }
 
 /** The object-URL cache behind a Plan Image: `urlFor` is `null` until the bytes arrive. */
@@ -177,7 +186,7 @@ export function usePlanImageSrc(assetUrls: WorkspaceAssetUrls, sha256: string | 
  * before it gets here, so a refusal means the view and the handlers disagree — say so
  * rather than drop it silently.
  */
-export function useWorkspaceDispatch(): (intent: Intent, newAssets?: readonly SessionAsset[]) => void {
+export function useWorkspaceDispatch(): (intent: Intent, newAssets?: readonly SessionAsset[]) => DispatchResult {
   const { session } = useWorkspaceRoot()
   return useCallback(
     (intent: Intent, newAssets?: readonly SessionAsset[]) => {
@@ -185,6 +194,7 @@ export function useWorkspaceDispatch(): (intent: Intent, newAssets?: readonly Se
         ? session.dispatch(intent)
         : session.dispatch(intent, { newAssets })
       if (!result.ok) console.warn(`BuildBox refused "${intent.label}": ${result.code}`)
+      return result
     },
     [session],
   )

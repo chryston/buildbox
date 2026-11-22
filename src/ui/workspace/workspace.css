@@ -1097,6 +1097,20 @@
   font-weight: 600;
 }
 
+/* §7a's forced choice: three stacked buttons, in the order the issue gives them, so the primary
+ * answer sits under the question and Cancel is the last thing a hand reaches. */
+.bb-renovation-choice-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* §7b's warning paragraph: the danger colour carries the weight the words already have. */
+.bb-workspace-dialog-danger {
+  color: var(--bb-danger-text);
+}
+
 /* #70 §5: the inspector's renovation block, in the rail under the card. The badge is the State's own
    colour — the same three tokens the swatches and the canvas use, so one State never looks like
    another in two places. The rows are a definition list because they are exactly that: two labels

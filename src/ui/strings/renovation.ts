@@ -165,6 +165,41 @@ export const RENOVATION_STRINGS = {
   /** The title of a Replaces/Successor link that needs a Display change to be seen. */
   switchDisplayToFind: (name: string, display: string): string => `Select ${name} — it is drawn in ${display} display`,
 
+  // ---- the protected edits (#70 §7a, §7b)
+  // §7a's sentence is one thought with the two names inside it, so it is stored as the three pieces
+  // around them: the Display and the Option are the words a person is being warned about, and the
+  // dialog bolds them without the copy table having to carry markup.
+  forcedChoiceTitle: (ref: string): string => `${ref} belongs to the Existing Model`,
+  forcedChoiceLead: 'You are in',
+  forcedChoiceBetween: 'display editing',
+  forcedChoiceTail: '. Moving a baseline entity is never done silently. Choose what you mean:',
+  forcedChoiceReplace: (option: string, ref: string): string =>
+    `Replace in ${option} — demolish ${ref}, add moved successor`,
+  forcedChoiceCorrect: 'Correct Existing Model instead… (all options)',
+  forcedChoiceCancel: 'Cancel — change nothing',
+  // §7b: the danger dialog. `Every Design Option` is the phrase the whole warning turns on, so it
+  // is the one thing in the paragraph the dialog sets in bold.
+  correctTitle: 'Correct the shared Existing Model?',
+  correctLead: 'This changes the survey baseline, not a Design Option.',
+  correctEvery: 'Every Design Option',
+  correctWillSee: (ref: string, change: string): string => `will see ${ref} ${change}:`,
+  correctRetains: '— retains it as Existing',
+  correctDemolishes: '— demolishes it (no successor)',
+  correctAligned: '— demolishes it; its successor stays aligned',
+  correctOwnGeometry: '— demolishes it; its successor keeps its own geometry',
+  correctMuted: 'One atomic transaction with dependent updates. Use this for measuring errors, not design changes.',
+  correctConfirm: 'Correct Existing Model',
+  /** The `<change>` word, chosen from what the pending edit does to the record. */
+  changeMove: 'move',
+  changeChange: 'change',
+  changeRemoved: 'be removed',
+  changeAppear: 'appear',
+  /** The transaction label §7a's `Delete` writes: a demolition record, never a deletion. */
+  markDemolitionLabel: (ref: string): string => `Mark demolition: ${ref}`,
+  /** §7e: `Mark demolition` aimed at something that is not baseline work. */
+  notExisting: (ref: string, state: string): string =>
+    `${ref} is ${state} — only Existing Model entities can be demolished`,
+
   // ---- the buttons every one of them ends with
   cancel: 'Cancel',
 } as const

@@ -11,8 +11,9 @@ import { createStore } from 'zustand/vanilla'
 import { useShallow } from 'zustand/react/shallow'
 import { enabledSnapKinds, RENOVATION_STATES } from '../../derive'
 import type { RenovationState, SnapKind } from '../../derive'
+import type { Intent } from '../../edit'
 import type { CycleCandidate, CycleState } from './selection/overlapCycle'
-import type { ItemFootprint, Point2 } from '../../domain'
+import type { ItemFootprint, Point2, RenovationDisplay } from '../../domain'
 import type { ShapeDraft } from './shape/proposal'
 import type { Viewport } from './viewport'
 
@@ -168,6 +169,22 @@ export interface ShapeDraftState {
 export type RenovationDialog =
   | { readonly kind: 'demolish'; readonly entityId: string; readonly designOptionId: string }
   | { readonly kind: 'move'; readonly entityIds: readonly string[] }
+  /**
+   * §7a: an Existing entity was edited from a Display that is not Existing, so nothing committed and
+   * the person has to say what they meant. The refused Intent is carried along as the pending edit —
+   * it is UI-session state, never the Project, and it is what `Replace in <Option>` turns into a
+   * successor and `Correct Existing Model instead…` wraps.
+   */
+  | {
+    readonly kind: 'forced-choice'
+    readonly intent: Intent
+    readonly entityId: string
+    /** Which Display the edit was made from and which Option it was editing, as ids. */
+    readonly display: RenovationDisplay
+    readonly optionId: string
+  }
+  /** §7b: the same pending edit, on its way to the danger dialog. */
+  | { readonly kind: 'correct-existing'; readonly intent: Intent; readonly entityId: string }
   | null
 
 export interface WorkspaceState {
@@ -304,6 +321,10 @@ export interface WorkspaceActions {
   openDemolishDialog(entityId: string, designOptionId: string): void
   /** Ask for `Move to a Design Option?` of the selected Existing entities (#69 §13). */
   openMoveToOptionDialog(entityIds: readonly string[]): void
+  /** Ask what an Existing-entity edit from another Display was meant to be (#70 §7a). */
+  openForcedChoiceDialog(intent: Intent, entityId: string, display: RenovationDisplay, optionId: string): void
+  /** Ask the §7b danger question about the same pending edit. */
+  openCorrectExistingDialog(intent: Intent, entityId: string): void
   /** Put the renovation dialog away. Nothing was written, which is the whole point of Cancel. */
   closeRenovationDialog(): void
   /** Turn one `Pick:` chip on or off (#70 §3); the list stays in the three States' own order. */
@@ -494,6 +515,10 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
   openDemolishDialog: (entityId, designOptionId) =>
     set({ renovationDialog: { kind: 'demolish', entityId, designOptionId } }),
   openMoveToOptionDialog: (entityIds) => set({ renovationDialog: { kind: 'move', entityIds } }),
+  openForcedChoiceDialog: (intent, entityId, display, optionId) =>
+    set({ renovationDialog: { kind: 'forced-choice', intent, entityId, display, optionId } }),
+  openCorrectExistingDialog: (intent, entityId) =>
+    set({ renovationDialog: { kind: 'correct-existing', intent, entityId } }),
   closeRenovationDialog: () => set({ renovationDialog: null }),
   togglePickState: (state) =>
     set((current) => ({
