@@ -42,6 +42,15 @@ export interface WarningStripProps {
    * is the same reason a "scroll to comment" link in every other app carries a counter.
    */
   focus?: { key: string; nonce: number } | null
+  /**
+   * Extra words for one row, appended to its sentence.
+   *
+   * This is how a gated feature talks to the strip without the strip importing its copy: the caller
+   * builds the function inside a flag check and hands over `undefined` otherwise. #71 §7 uses it for
+   * a subject this view does not draw — the warning stays, because it is a fact about the model, and
+   * the suffix says why the thing it warns about is nowhere on screen.
+   */
+  suffix?(warning: Warning): string
 }
 
 /** Open and reopened rows come first; within each group the engine's order stands (#66 §11). */
@@ -55,7 +64,7 @@ const subjectLabel = (warning: Warning): string =>
   String(warning.params.a ?? warning.subjects[0]?.id ?? '')
 
 export function WarningStrip(props: WarningStripProps): ReactNode {
-  const { warnings, onLocate, onAcknowledge, onEditNote, focus = null } = props
+  const { warnings, onLocate, onAcknowledge, onEditNote, focus = null, suffix } = props
   const [expanded, setExpanded] = useState(false)
   // A badge opened the strip; the row is not in the document until it has, so the scroll waits
   // for the render the open causes rather than reaching for an element that is not there yet.
@@ -123,6 +132,7 @@ export function WarningStrip(props: WarningStripProps): ReactNode {
             >
               <span className="bb-warnings-sentence" data-testid={`warning-sentence-${warning.key}`}>
                 {warningSentence(warning.messageKey, warning.params)}
+                {suffix?.(warning) ?? ''}
               </span>
               {warning.status === 'reopened' && (
                 <span className="bb-warnings-status" data-testid={`warning-status-${warning.key}`}>

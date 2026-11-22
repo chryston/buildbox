@@ -120,6 +120,8 @@ const FORBIDDEN = [
         'Becomes Unlayered',
         'lose their own settings',
         'stops being drawn here',
+        'hidden in this view — warning still applies',
+        'Read-only in this view: inspect only.',
         'Unused. Nothing else changes.',
       ]),
 ]

@@ -34,6 +34,8 @@ export { OverlapCycleList } from './OverlapCycleList'
 export { RenovationInspector } from './RenovationInspector'
 export type {
   RenovationInspectorAction,
+  RenovationInspectorLayer,
+  RenovationInspectorLayerOption,
   RenovationInspectorLink,
   RenovationInspectorTarget,
 } from './RenovationInspector'

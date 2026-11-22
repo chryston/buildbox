@@ -41,6 +41,7 @@ const STRUCTURE = 'layers-003'
 const ISLAND = 'fp-island'
 const SOFA = 'fp-sofa'
 const WALL = 'seed-wall-002'
+const WARDROBE = 'fp-wardrobe'
 
 function sceneProject(): Project {
   const text = readFileSync(join(fixturesRoot, 'domain', 'v8', 'layers.json'), 'utf8')
@@ -186,5 +187,66 @@ describe('a saved view’s Drawing Layers on its Plan View', () => {
     expect(view.session.getSnapshot().history.undoLabel).toBe(label)
     // The press still inspected it: the Item is selected, which is what read-only is for.
     expect(screen.getByTestId('selection-inspector')).toBeInTheDocument()
+  })
+
+  it('shuts the inspector’s own fields over a read-only layer (#71 criterion 11)', async () => {
+    // A view with a Design Option open, because that is the view whose inspector carries the
+    // renovation block the Layer row and the `[RO]` line live in.
+    await openView('views-view-016')
+    await expand(FURNITURE)
+    await userEvent.setup().click(screen.getByTestId(`layer-editable-${FURNITURE}`))
+
+    press(`wall-band-${WALL}`)
+    expect(screen.getByTestId('renovation-inspector-layer')).toHaveValue(FURNITURE)
+    // Inspected, not hidden: the numbers are still there to read.
+    expect(screen.getByTestId('selection-inspector')).toBeInTheDocument()
+    expect(screen.getByTestId('renovation-inspector-readonly')).toHaveTextContent(
+      '[RO] Read-only in this view: inspect only.',
+    )
+    // Both ways in — the field and the Layer row — are shut together.
+    expect(screen.getByTestId('design-name')).toBeDisabled()
+    expect(screen.getByTestId('renovation-inspector-layer')).toBeDisabled()
+  })
+
+  it('moves the inspected entity to another layer and asks nothing about the baseline (#71 §5)', async () => {
+    // A view with a Design Option open, which is the condition under which an unwrapped edit of
+    // Existing Model content is refused. Reassignment is presentation, so it must sail past.
+    await openView('views-view-016')
+    press(`wall-band-${WALL}`)
+    const select = screen.getByTestId('renovation-inspector-layer')
+    expect(select).toHaveValue(FURNITURE)
+
+    await userEvent.setup().selectOptions(select, [STRUCTURE])
+
+    expect(screen.queryByTestId('correct-existing-dialog')).toBeNull()
+    expect(screen.queryByTestId('forced-choice-dialog')).toBeNull()
+    const moved = view.project().existingModel.placedItems.find(
+      (item) => item.id === workspaceStore.getState().selection,
+    )
+    expect(moved?.drawingLayerId).toBe(STRUCTURE)
+    // One Edit Transaction, named for where the content went.
+    expect(view.session.getSnapshot().history.undoLabel).toBe('Move to Layer: Structure')
+  })
+
+  it('keeps the warning row and says why its subject is nowhere on screen (#71 criterion 9)', async () => {
+    // `Option A · Proposed` has Furniture's Visible box unchecked, and the one warning this fixture
+    // earns is about a wardrobe standing on Furniture.
+    await openView(PROPOSED)
+    expect(badged()).toEqual([WARDROBE])
+    await userEvent.setup().click(screen.getByTestId('warning-toggle'))
+
+    const rows = screen.getAllByTestId(/warning-sentence-/)
+    expect(rows.filter((row) => (row.getAttribute('data-testid') ?? '').includes(WARDROBE))).toHaveLength(1)
+    const row = rows.find((each) => (each.getAttribute('data-testid') ?? '').includes(WARDROBE))
+    // The row stays — the warning is a fact about the model — and the words say why its subject is
+    // nowhere on this canvas.
+    expect(row?.textContent ?? '').toContain('· Furniture hidden in this view — warning still applies')
+
+    const key = (row?.getAttribute('data-testid') ?? '').replace('warning-sentence-', '')
+    await userEvent.setup().click(screen.getByTestId(`warning-locate-${key}`))
+    // Locate still finds it…
+    expect(workspaceStore.getState().selection).toBe(WARDROBE)
+    // …and it never changes a layer's visibility to make a warning visible.
+    expect(screen.queryByTestId(`placed-object-${ISLAND}`)).toBeNull()
   })
 })

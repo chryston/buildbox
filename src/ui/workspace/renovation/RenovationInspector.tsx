@@ -31,6 +31,23 @@ export interface RenovationInspectorLink {
   readonly drawn: boolean
 }
 
+/** One row of the inspector's `Layer` select: a layer of the Project, or `Unlayered` (`id: null`). */
+export interface RenovationInspectorLayerOption {
+  readonly id: string | null
+  readonly name: string
+}
+
+/** The selected entity's Drawing Layer row (#71 §5). */
+export interface RenovationInspectorLayer {
+  /** The layer the entity stands on; `null` is `Unlayered`. */
+  readonly current: string | null
+  /** Every layer in Project order, then `Unlayered` — the whole list, because moving content is a
+   *  choice between all of them, not between the two ends of a slider. */
+  readonly options: readonly RenovationInspectorLayerOption[]
+  /** `null` when this view lets the entity be moved; the layer's name when it does not (#71 criterion 11). */
+  readonly readOnlyLayer: string | null
+}
+
 /** What is selected, in the words the inspector prints. */
 export interface RenovationInspectorTarget {
   readonly id: string
@@ -45,6 +62,13 @@ export interface RenovationInspectorTarget {
 export interface RenovationInspectorProps {
   /** The selected entity, or `null` when nothing is selected. */
   target: RenovationInspectorTarget | null
+  /**
+   * The `Layer` row under Owner, or `null` when there is no row to show. Absent entirely means the
+   * feature is not in this build at all — the flag-off answer, where the row does not exist.
+   */
+  layer?: RenovationInspectorLayer | null
+  /** Move the selected entity to another layer (`null` is `Unlayered`) — one Edit Transaction. */
+  onLayerChange?: (layerId: string | null) => void
   /** The Display the canvas is showing, which decides the Actions row. */
   display: RenovationDisplay
   /**
@@ -88,7 +112,7 @@ const STATE_LABELS: { [S in RenovationState]: string } = {
 }
 
 export function RenovationInspector(props: RenovationInspectorProps): ReactNode {
-  const { target, display, unavailable = {}, hasDesignOption } = props
+  const { target, display, unavailable = {}, hasDesignOption, layer } = props
   if (target === null) {
     return (
       <p className="bb-renovation-inspector-empty" data-testid="renovation-inspector-empty">
@@ -119,6 +143,33 @@ export function RenovationInspector(props: RenovationInspectorProps): ReactNode 
           <dt>{RENOVATION_STRINGS.inspectorOwner}</dt>
           <dd data-testid="renovation-inspector-owner">{target.owner}</dd>
         </div>
+        {layer === null || layer === undefined ? null : (
+          <div className="bb-renovation-inspector-row">
+            <dt>{RENOVATION_STRINGS.inspectorLayer}</dt>
+            <dd>
+              {/*
+                Which layer this content is filed under (#71 §5). The whole Project list is offered,
+                `Unlayered` last: moving content between layers is a choice between all of them. It is
+                presentation — the record's renovation ownership does not move with it, which is why
+                reassigning an Existing Model entity never opens a protected-edit dialog — and the one
+                thing that stops it is a layer this view has made read-only.
+              */}
+              <select
+                data-testid="renovation-inspector-layer"
+                aria-label={RENOVATION_STRINGS.inspectorLayer}
+                value={layer.current ?? ''}
+                disabled={layer.readOnlyLayer !== null}
+                onChange={(event) => props.onLayerChange?.(event.target.value === '' ? null : event.target.value)}
+              >
+                {layer.options.map((option) => (
+                  <option key={option.id ?? 'unlayered'} value={option.id ?? ''}>
+                    {option.name}
+                  </option>
+                ))}
+              </select>
+            </dd>
+          </div>
+        )}
         {target.replaces.length > 0 && (
           <div className="bb-renovation-inspector-row">
             <dt>{RENOVATION_STRINGS.inspectorReplaces}</dt>
@@ -140,6 +191,11 @@ export function RenovationInspector(props: RenovationInspectorProps): ReactNode 
           </div>
         )}
       </dl>
+      {layer !== null && layer !== undefined && layer.readOnlyLayer !== null ? (
+        <p className="bb-renovation-inspector-notice" data-testid="renovation-inspector-readonly">
+          {RENOVATION_STRINGS.inspectorReadOnly}
+        </p>
+      ) : null}
       {target.state === 'proposed' && display === 'demolition' && (
         <p className="bb-renovation-inspector-notice" data-testid="renovation-inspector-notice">
           {RENOVATION_STRINGS.proposedInDemolitionNotice}

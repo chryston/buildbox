@@ -256,6 +256,20 @@ export const RENOVATION_STRINGS = {
   deleteLayerCancel: 'Cancel — change nothing',
   /** A press that wanted to edit content this view has made read-only (#71 §4, criterion 11). */
   layerReadOnlyNotice: (layer: string): string => `${layer} is read-only in this view — inspect only`,
+  /** The inspector's row that moves content between layers (#71 §5). One word, like `Owner` above it. */
+  inspectorLayer: 'Layer',
+  /**
+   * The line the inspector prints while the selected content stands on a read-only layer (#71 §4,
+   * criterion 11). It says both halves of read-only: what the view will not do, and what it still
+   * will — inspecting is not a consolation prize, it is the point of leaving the layer drawn.
+   */
+  inspectorReadOnly: '[RO] Read-only in this view: inspect only.',
+  /**
+   * The suffix on a warning-strip row whose subject this view does not draw (#71 §7, criterion 9).
+   * The row stays because the warning is a fact about the model, not about this view's drawing; the
+   * suffix says why the thing it warns about is nowhere to be seen.
+   */
+  warningHiddenSuffix: (layer: string): string => `· ${layer} hidden in this view — warning still applies`,
 
   // ---- the Layers list itself (#71 §3)
   // `Layers (front first)` is the header because the list is drawn in the order content is drawn,

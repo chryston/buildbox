@@ -17,12 +17,12 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, FF_RENOVATION, layerAccessOf, effectiveLayerOrder, snapCandidateAllowed } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, FF_RENOVATION, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, snapCandidateAllowed } from '../../derive'
 import type { DisplayModel, LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings } from '../../drawing'
 import type { BadgeSubject, OpeningPreview, RoomProposal } from '../../drawing'
 import type { Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
-import { designOptionsOf, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride } from '../../domain'
+import { designOptionsOf, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
@@ -108,7 +108,7 @@ import {
   subjectOfIntent,
   successorOf,
 } from './renovation'
-import type { RenovationInspectorAction, RenovationInspectorLink, RenovationInspectorTarget, RenovationToolId, LayerSettingPatch } from './renovation'
+import type { RenovationInspectorAction, RenovationInspectorLayer, RenovationInspectorLink, RenovationInspectorTarget, RenovationToolId, LayerSettingPatch } from './renovation'
 import { RENOVATION_STRINGS } from '../strings/renovation'
 import { FIELDS_UNLOCKED, FieldsLockedContext } from './fieldsLock'
 import type { FieldsLock } from './fieldsLock'
@@ -705,7 +705,15 @@ export function FloorWorkspace(): ReactNode {
       }
     }
     const result = dispatch(intent)
-    if (!FF_RENOVATION || result.ok || result.code !== 'baseline-correction-required') return
+    if (!FF_RENOVATION || result.ok) return
+    if (result.code === 'layer-blocked') {
+      // New content had nowhere it was allowed to go (#71 §2): the tool's own press is undone, the
+      // revision never moved, and the notice says which layer stood in the way and what would move it.
+      const problem = result.problems[0]
+      if (problem !== undefined) showHiddenToolNotice(problem.message)
+      return
+    }
+    if (result.code !== 'baseline-correction-required') return
     const entityId = subjectOfIntent(intent)
     if (renovationOptionId === null) return
     if (renovationDisplayNow === 'existing') {
@@ -1538,6 +1546,68 @@ export function FloorWorkspace(): ReactNode {
       snapCandidateAllowed(project, view, entityLayerKey.get(ownerId) ?? UNLAYERED_LAYER_KEY)
   }, [project, view, entityLayerKey])
 
+  /** The entity the inspector is showing, whichever picker named it (#70 §5, #71 §5). */
+  const inspectedEntityId = wallSelection ?? openingSelection ?? roomSelection ?? selection
+
+  /**
+   * The inspector's `Layer` row (#71 §5): every layer in Project order, then `Unlayered`, with this
+   * entity's own layer current.
+   *
+   * The row is disabled when the entity's layer is read-only in this view — the same promise that
+   * takes the handles off the canvas, read from the layer's own switch rather than from the Display's
+   * edit rules, because `Editable` is a statement about this layer and not about the Display.
+   */
+  const inspectorLayer: RenovationInspectorLayer | null = useMemo(() => {
+    if (!FF_RENOVATION || view === null || inspectedEntityId === null) return null
+    const key = entityLayerKey?.get(inspectedEntityId) ?? UNLAYERED_LAYER_KEY
+    return {
+      current: key === UNLAYERED_LAYER_KEY ? null : key,
+      options: [
+        ...drawingLayersOf(project).map((each) => ({ id: each.id as string | null, name: each.name })),
+        { id: null, name: RENOVATION_STRINGS.layerUnlayered },
+      ],
+      readOnlyLayer: effectiveLayerSetting(project, view, key).editable
+        ? null
+        : drawingLayerById(project, key)?.name ?? RENOVATION_STRINGS.layerUnlayered,
+    }
+  }, [project, view, entityLayerKey, inspectedEntityId])
+
+  /** Whether the inspected entity stands on a read-only layer: its fields are shown and disabled (#71 criterion 11). */
+  const inspectedReadOnly = (inspectorLayer?.readOnlyLayer ?? null) !== null
+
+  /**
+   * One Edit Transaction: file the inspected entity under another layer (`null` is `Unlayered`).
+   *
+   * It changes presentation only. An Existing Model entity keeps its renovation ownership — the
+   * record is still the survey's, whichever layer it is drawn on — so this is never a baseline
+   * correction and never opens a protected-edit dialog (#71 §5).
+   */
+  const moveInspectedEntityToLayer = (layerId: string | null): void => {
+    if (inspectedEntityId === null) return
+    const name = layerId === null ? RENOVATION_STRINGS.layerUnlayered : drawingLayerById(project, layerId)?.name ?? layerId
+    sendLabelled('entity.setLayer', { entityId: inspectedEntityId, layerId }, RENOVATION_STRINGS.entitySetLayerLabel(name))
+  }
+
+  /**
+   * The strip's suffix for a warning whose subject this view does not draw (#71 §7, criterion 9).
+   *
+   * The row stays because the warning is a fact about the model, not about this view's drawing; the
+   * words say why the thing it warns about is nowhere on screen. `Locate` is untouched — it still
+   * selects the subject, and it never changes a layer's visibility to make a warning visible.
+   */
+  const warningLayerSuffix = useMemo(() => {
+    if (!FF_RENOVATION || view === null || entityLayerKey === null) return undefined
+    return (warning: Warning): string => {
+      const hidden = warning.subjects
+        .map((subject) => entityLayerKey.get(subject.id) ?? UNLAYERED_LAYER_KEY)
+        .find((key) => !effectiveLayerSetting(project, view, key).visible)
+      if (hidden === undefined) return ''
+      return RENOVATION_STRINGS.warningHiddenSuffix(
+        drawingLayerById(project, hidden)?.name ?? RENOVATION_STRINGS.layerUnlayered,
+      )
+    }
+  }, [project, view, entityLayerKey])
+
   // ---- the inspector's renovation block (#70 §5)
   /**
    * What the inspector prints about the selection. The lookup covers the open Option's own work as
@@ -1634,7 +1704,9 @@ export function FloorWorkspace(): ReactNode {
    */
   const fieldsLock: FieldsLock = baselineLocked
     ? { locked: true, notice: RENOVATION_STRINGS.correctLocked }
-    : FIELDS_UNLOCKED
+    : FF_RENOVATION && inspectedReadOnly
+      ? { locked: true, notice: RENOVATION_STRINGS.layerReadOnlyNotice(inspectorLayer?.readOnlyLayer ?? '') }
+      : FIELDS_UNLOCKED
 
   const runRenovationAction = (action: RenovationInspectorAction): void => {
     const id = wallSelection ?? openingSelection ?? roomSelection ?? selection
@@ -1943,6 +2015,8 @@ export function FloorWorkspace(): ReactNode {
                     target={renovationTarget}
                     display={renovationDisplayNow}
                     hasDesignOption={designOptionsOf(project).length > 0}
+                    layer={inspectorLayer}
+                    onLayerChange={moveInspectedEntityToLayer}
                     onAction={runRenovationAction}
                     onSelectEntity={selectRenovationEntity}
                   />
@@ -2286,6 +2360,7 @@ export function FloorWorkspace(): ReactNode {
                   onAcknowledge={acknowledgeWarning}
                   onEditNote={editWarningNote}
                   focus={warningFocus}
+                  suffix={warningLayerSuffix}
                 />
               )}
             </>
