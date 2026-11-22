@@ -109,6 +109,9 @@ test('the banner a Display with no Design Option shows', async ({ page }) => {
   await openRenovationPlan(page)
   await page.getByTestId('display-combined').click()
   await settle(page)
-  await expect(page.getByTestId('renovation-error-banner')).toBeVisible()
-  await expect(canvasHost(page)).toHaveScreenshot('renovation-error-banner.png', { mask: masks(page) })
+  const banner = page.getByTestId('renovation-error-banner')
+  await expect(banner).toBeVisible()
+  // The banner is a strip of its own, above the canvas rather than inside it, so it is
+  // photographed as itself: the sentence, the Option picker it hands back, and the escape hatch.
+  await expect(banner).toHaveScreenshot('renovation-error-banner.png')
 })
