@@ -97,11 +97,13 @@ flag is off — and when `#73` turns the flag on it becomes the version's golden
 
 `v8/renovation-views.json` is the same Project with the renovation work in it, drawn by
 `scripts/make-renovation-views-seed.ts` through the Intents the app dispatches, and carried by
-`fixtures/e2e/preview-seed/renovation-views.json`. `Option A · Open kitchen` demolishes W-2 and
-replaces `Base 600 #1` with `Base 600 #1′`; `Option B · Widened opening` replaces W-2 with `W-2′` on
-W-2's own footprint; and the Floor carries the four saved views the Renovation Displays are named by.
-It is the scene `#70`'s Displays, cycle and screenshots stand on, and the one the empty pair of
-Options above is the *before* state of.
+`fixtures/e2e/preview-seed/renovation-views.json`. `Option A · Open kitchen` demolishes W-2, replaces
+`Base 600 #1` with `Base 600 #1′` and adds a new Island; `Option B · Widened opening` replaces W-2
+with `W-2′` on W-2's own footprint; and the Floor carries the four saved views the Renovation
+Displays are named by. The Island is the one record in the file no Intent drew — no shipped Intent
+places new work into an Option — so the script writes it as a domain record and the validator is what
+proves it is a legal one. It is the scene `#70`'s Displays, cycle and screenshots stand on, and the
+one the empty pair of Options above is the *before* state of.
 
 ## How it was produced
 

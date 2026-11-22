@@ -948,7 +948,7 @@
             "showPlanImage": true
           },
           {
-            "id": "views-view-013",
+            "id": "views-view-014",
             "kind": "plan",
             "floorId": "seed-001",
             "name": "Option A · Proposed",
@@ -958,7 +958,7 @@
             "renovationDisplay": "proposed"
           },
           {
-            "id": "views-view-014",
+            "id": "views-view-015",
             "kind": "plan",
             "floorId": "seed-001",
             "name": "Option A · Demolition",
@@ -968,7 +968,7 @@
             "renovationDisplay": "demolition"
           },
           {
-            "id": "views-view-015",
+            "id": "views-view-016",
             "kind": "plan",
             "floorId": "seed-001",
             "name": "Option B · Combined",
@@ -1006,6 +1006,18 @@
                   "predecessorIds": [
                     "seed-item-028"
                   ]
+                },
+                {
+                  "id": "views-island-013",
+                  "itemDesignId": "tpl-island",
+                  "floorId": "seed-001",
+                  "translation": {
+                    "x": 1800,
+                    "y": 4200
+                  },
+                  "rotationDeg": 0,
+                  "baseElevation": 0,
+                  "predecessorIds": []
                 }
               ]
             }
@@ -1242,7 +1254,7 @@
       "revision": 1,
       "savedAt": "2026-01-01T09:00:00+08:00",
       "schemaVersion": 8,
-      "sizeBytes": 160445,
+      "sizeBytes": 160608,
       "lastBackupInitiatedAt": null,
       "lastBackupRevision": null,
       "trashedAt": null,

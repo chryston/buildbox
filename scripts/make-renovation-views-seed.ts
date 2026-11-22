@@ -7,20 +7,21 @@
  * Kitchen on W-5, the Bedroom and `Base 600 #1`, all of it drawn through the Intents the app
  * dispatches — and then does the rest of the issue's scene the same way, through `applyIntent`:
  *
- *   Option A · Open kitchen   demolishes W-2; replaces `Base 600 #1` with `Base 600 #1′`
+ *   Option A · Open kitchen   demolishes W-2; replaces `Base 600 #1` with `Base 600 #1′`; adds a
+ *                             new Island (see below)
  *   Option B · Widened opening replaces W-2 with `W-2′` on the same footprint
  *
  * plus the saved views the Displays are named by: the Floor's default view on the Existing Model,
  * `Option A · Proposed`, `Option A · Demolition` and `Option B · Combined`, each written by
  * `view.create` followed by `view.setDesignOption` and `view.setRenovationDisplay`.
  *
- * One row of the issue's scene cannot be built this way, so it is not in the fixture: Option A's
- * "plus a new Island". No Intent in the shipped set creates a Placed Item that belongs to an
- * Option — `renovation.replace` makes a successor out of an Existing one, `renovation.placeOpening`
- * and `renovation.knockThrough` make Openings, and nothing pushes onto
- * `designOptions[].proposed.placedItems`. Writing the Island by hand would put a Placed Item in the
- * file that no editor could have made, which is the thing this script exists to prevent. The gap is
- * reported with the milestone.
+ * The Island is the one record in the file that is not the product of an Intent, because no Intent
+ * in the shipped set creates a Placed Item owned by an Option — `renovation.replace` makes a
+ * successor out of an Existing one, `renovation.placeOpening` and `renovation.knockThrough` make
+ * Openings, and nothing pushes onto `designOptions[].proposed.placedItems`. Placing new work into
+ * an Option is the authoring follow-up #70 leaves behind it, so the Island is written as a domain
+ * record and `validateProject` below is what proves it is a legal one. Everything else in the
+ * fixture is what the editor could have drawn.
  *
  * It runs only with the flag on, because the file it writes is a v8 Project:
  *
@@ -131,6 +132,37 @@ current = apply(
   newIds('successor', 8),
 )
 
+// --- the Island: the one record no Intent can make -------------------------------------------
+//
+// The issue's Option A adds a new Island, and nothing in the shipped Intent set creates a Placed
+// Item that belongs to an Option: `renovation.replace` makes a successor out of an Existing one,
+// `renovation.placeOpening` and `renovation.knockThrough` make Openings, and no handler pushes onto
+// `proposed.placedItems`. Option-authoring — placing new work into an Option — is the follow-up
+// issue #70 leaves behind it, so the Island is written here as a domain record and the validator
+// below is what proves it is a legal one. It is the only hand-written entity in this file, and the
+// only thing standing in for an Intent that does not exist yet.
+
+const islandDesign =
+  current.itemDesigns.find((each) => each.name === 'Kitchen island') ?? fail('the catalogue holds no Kitchen island')
+const ISLAND = {
+  id: newIds('island', 1)[0]!,
+  itemDesignId: islandDesign.id,
+  floorId,
+  // Free in the middle of the Kitchen, clear of `Base 600 #1′` (2,900 × 3,000) and of every Existing
+  // placement: the Island is new work standing in a room whose cabinetry the same Option moved.
+  translation: { x: 1800, y: 4200 },
+  rotationDeg: 0,
+  baseElevation: 0,
+  // Invented from nothing, which the validator spells out: an empty list, not an absent field.
+  predecessorIds: [],
+}
+current = {
+  ...current,
+  designOptions: current.designOptions?.map((each) =>
+    each.id === OPTION_A ? { ...each, proposed: { ...each.proposed, placedItems: [...each.proposed.placedItems, ISLAND] } } : each,
+  ),
+}
+
 // --- the saved views the Displays are named by ------------------------------------------------
 
 function view(name: string, designOptionId: string | null, renovationDisplay: string): string {
@@ -186,6 +218,18 @@ if (successorItem === undefined) fail('Option A proposes no Placed Item')
 if (!successorItem.entity.predecessorIds?.includes(baseItem.id))
   fail('the replacement Placed Item does not name `Base 600 #1` as its predecessor')
 if (successorItem.entity.translation.x !== baseItem.translation.x + 900) fail('Base 600 #1′ is not where it was moved to')
+// The Island: new work, no predecessor, and nowhere in the Existing Model.
+if (optionA.proposed.placedItems.length !== 2) fail('Option A does not hold the replacement and the Island')
+const island = optionA.proposed.placedItems.find((each) => each.id === ISLAND.id)
+if (island === undefined) fail('the Island is not in Option A')
+if ((island.predecessorIds ?? []).length !== 0) fail('the Island names a predecessor it does not have')
+if (current.existingModel.placedItems.some((each) => each.id === ISLAND.id)) fail('the Island is in the Existing Model')
+// Membership is derived from the Existing Model, so it cannot see proposed work; the Kitchen's own
+// outline is the check. It is the rectangle `make-renovation-36-seed.ts` drew — x 700…3,925 (the
+// right Edge standing on W-5's Kitchen-side face), y 700…5,400 — and the Island's 500 × 300
+// footprint, origin at its corner, has to fall inside it and clear of `Base 600 #1′` at 2,900 × 3,000.
+if (ISLAND.translation.x < 700 || ISLAND.translation.x + 500 > 3925 || ISLAND.translation.y < 700 || ISLAND.translation.y + 300 > 5400)
+  fail('the Island does not stand inside the Kitchen')
 // With no Option, the Existing Model is the whole picture — the rule the error state rests on.
 if (existingModel.walls.some((row) => row.renovationState !== 'existing'))
   fail('the Existing Model is not all-Existing')
@@ -255,7 +299,7 @@ console.log(
   `make-renovation-views-seed: ${OUT}\n` +
     `  ${DOMAIN_OUT}\n` +
     `  Options: ${optionA.name} / ${optionB.name}\n` +
-    `  Option A: ${String(optionA.demolishedIds.length)} demolition(s), ${String(optionA.proposed.placedItems.length)} proposed Placed Item(s)\n` +
+    `  Option A: ${String(optionA.demolishedIds.length)} demolition(s), ${String(optionA.proposed.placedItems.length)} proposed Placed Item(s) (replacement + Island)\n` +
     `  Option B: ${String(optionB.proposed.walls.length)} proposed Wall(s)\n` +
     `  views: ${views.map((each) => `${each.name}[${each.designOptionId ?? '—'}/${each.renovationDisplay ?? 'existing'}]`).join(', ')}\n` +
     `  ids minted: ${nextId} (A proposed ${viewAProposed}, B combined ${viewBCombined})`,

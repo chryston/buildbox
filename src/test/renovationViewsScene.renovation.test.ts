@@ -18,9 +18,10 @@
  * Option B is the other half of the scene: it replaces W-2 with `W-2′` on W-2's own footprint, so
  * the two Options disagree about one Wall and each one's model is untouched by the other's.
  *
- * The issue's scene also has Option A adding an Island. No Intent in the shipped set creates a
- * Placed Item owned by an Option, so the fixture carries no Island and this file asserts the rest;
- * the gap is in `scripts/make-renovation-views-seed.ts` and reported with the milestone.
+ * The Island is the one record in the fixture that no Intent drew — no shipped Intent creates a
+ * Placed Item owned by an Option — and `scripts/make-renovation-views-seed.ts` says so where it
+ * writes it. What this file cares about is that the validator accepts it and the four Displays treat
+ * it like any other piece of an Option's own work.
  *
  * It runs in the `renovation` project (`npm run test:renovation`): a flag-off build has no v8, so
  * it could only misread these bytes.
@@ -70,11 +71,17 @@ describe('the renovation-views scene (#70 criterion 7)', () => {
   it('holds Option A as the demolition of W-2 and the replacement of `Base 600 #1`', () => {
     expect([...optionA.demolishedIds].sort()).toEqual([wallByRef('W-2').id, baseItem.id].sort())
     expect(optionA.proposed.walls).toEqual([])
-    expect(optionA.proposed.placedItems).toHaveLength(1)
+    expect(optionA.proposed.placedItems).toHaveLength(2)
     const successor = optionA.proposed.placedItems[0]!
     expect(successor.predecessorIds).toEqual([baseItem.id])
     expect(successor.translation.x).toBe(baseItem.translation.x + 900)
     expect(successor.itemDesignId).toBe(baseItem.itemDesignId)
+    // The Island is new work: no predecessor, its own design, standing in the Kitchen.
+    const island = optionA.proposed.placedItems[1]!
+    expect(island.predecessorIds).toEqual([])
+    expect(island.itemDesignId).toBe(project.itemDesigns.find((design) => design.name === 'Kitchen island')!.id)
+    expect(island.translation).toEqual({ x: 1800, y: 4200 })
+    expect(model.placedItems.some((placed) => placed.id === island.id)).toBe(false)
   })
 
   it('holds Option B as W-2′ on W-2’s own footprint', () => {
@@ -90,6 +97,7 @@ describe('the renovation-views scene (#70 criterion 7)', () => {
   it('draws the four Displays of Option A exactly as criterion 7 says', () => {
     const w2 = wallByRef('W-2').id
     const successor = optionA.proposed.placedItems[0]!.id
+    const island = optionA.proposed.placedItems[1]!.id
 
     const existing = drawn(optionA.id, 'existing')
     expect(existing.walls[w2]).toBe('existing')
@@ -97,11 +105,13 @@ describe('the renovation-views scene (#70 criterion 7)', () => {
     // Nothing the Option owns is drawn, in any Display, with the Existing Display aimed at the
     // Option that owns it.
     expect(successor in existing.items).toBe(false)
+    expect(island in existing.items).toBe(false)
 
     const demolition = drawn(optionA.id, 'demolition')
     expect(demolition.walls[w2]).toBe('demolition')
     expect(demolition.items[baseItem.id]).toBe('demolition')
     expect(successor in demolition.items).toBe(false)
+    expect(island in demolition.items).toBe(false)
     // The Demolition display draws no proposed thing at all, of any kind.
     expect(Object.values(demolition.walls)).not.toContain('proposed')
     expect(Object.values(demolition.items)).not.toContain('proposed')
@@ -110,11 +120,13 @@ describe('the renovation-views scene (#70 criterion 7)', () => {
     expect(w2 in proposed.walls).toBe(false)
     expect(baseItem.id in proposed.items).toBe(false)
     expect(proposed.items[successor]).toBe('proposed')
+    expect(proposed.items[island]).toBe('proposed')
 
     const combined = drawn(optionA.id, 'combined')
     expect(combined.walls[w2]).toBe('demolition')
     expect(combined.items[baseItem.id]).toBe('demolition')
     expect(combined.items[successor]).toBe('proposed')
+    expect(combined.items[island]).toBe('proposed')
     // The five Walls Option A leaves standing still stand, in every Display.
     for (const display of ['existing', 'demolition', 'proposed', 'combined'] as const) {
       const standing = Object.entries(drawn(optionA.id, display).walls).filter(([id]) => id !== w2)
