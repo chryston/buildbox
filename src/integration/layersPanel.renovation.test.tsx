@@ -219,6 +219,17 @@ describe('the Layers list', () => {
     expect(layer(STRUCTURE).color).toBe('#b9b9c2')
   })
 
+  it('hides the Unlayered row for this view alone, in one undo step', async () => {
+    await renderWorkspace(sceneProject())
+    // Opened first or not: the row's own checkbox is the same control either way.
+    await userEvent.setup().click(screen.getByTestId('layer-toggle-unlayered'))
+    await userEvent.setup().click(screen.getByTestId('layer-visible-unlayered'))
+    // The row is a row like any other: hiding it is an override on this view, written the same way.
+    expect(JSON.stringify(savedView(FLOOR_1).layerSettings)).toBe('{"unlayered":{"visible":false,"selectable":true,"editable":true}}')
+    expect(savedView(PROPOSED).layerSettings?.unlayered).toBeUndefined()
+    expect(undoLabel()).toBe('Set Layer: Unlayered — hidden')
+  })
+
   it('offers `Use Project layer order` only to a view that has an order of its own', async () => {
     await renderWorkspace(sceneProject())
     expect(screen.queryByTestId('layer-use-project-order')).toBeNull()
