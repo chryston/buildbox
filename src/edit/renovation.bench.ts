@@ -12,14 +12,22 @@
  * `npm run bench` prints the means; the run fails above the issue's budgets — 30 ms for apply +
  * validate, 50 ms for derive — and the flag-off pass never sees this file (#69 Scope 16).
  *
- * **The apply budget is breached on this Project and the run says so.** Whole-document validation
- * costs 138 ms of the 152 ms a `replaceInOption` takes, and the correction previews every Option so
- * it pays that six times. The decomposition is measured in #69's report: Room overlap pairs are 70 µs
- * each (1305 pairs on this Project), the Design Option pass is 97 ms, the 630 Item Designs are 29 ms,
- * and the Walls, Openings, Junctions and Placed Items together are 15 ms. Meeting 30 ms needs
- * validation scoped to the entities a transaction touched plus their referrers, which is what
- * architecture §4 allows and what the issue directs when a budget is breached; the budget itself is
- * not moved. `effectiveFloor` is nowhere near its ceiling at 1.3 ms.
+ * **The apply budget is met; the correction is not, and the run says so.** Validation is scoped to
+ * the entities a Transaction touched plus their referrers (#69 §8, architecture §4), which took a
+ * `replaceInOption` from 152 ms to 13 ms on this Project: the whole-document pass it used to pay
+ * costs 80 ms, of which the 630 Item Designs are 29 ms and the Design Option pass 50 ms, and a
+ * replace touches a dozen records. What is left of that 13 ms is the handler's own work and the
+ * four milliseconds the scoped pass cannot skip — claiming every ID in the Project, the Wall shape
+ * map every Opening is measured against, and the Room outlines.
+ *
+ * `correctExistingModel` still costs 220 ms and the row fails. It is not one validation: it derives
+ * each of the three Options' effective models, checks each one's Openings still fit its hosts, and
+ * validates each merged view, so it pays a scoped pass three times (60 ms) plus the merge and the
+ * fit checks (10 ms) — and the remaining 150 ms is the correction's own machinery, replaying the
+ * baseline edit's patches onto every Option's successors and comparing the result. Meeting 30 ms
+ * there means validating each Option's delta rather than its merged whole, which is a change to
+ * §12's blocker machinery, not to the validator, and is not done here. The budgets are not moved.
+ * `effectiveFloor` is nowhere near its ceiling at 1.5 ms.
  */
 import { bench, describe } from 'vitest'
 import { effectiveFloor } from '../derive'

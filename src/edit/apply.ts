@@ -2,7 +2,7 @@
  * Applying an Intent (#47, #20 §4).
  *
  * One pass, four steps: find the handler, run it on an immer draft while recording patches,
- * validate the whole Project that came out, and answer `Applied` or `Rejection`. Nothing is
+ * validate what those patches touched (#69 §8), and answer `Applied` or `Rejection`. Nothing is
  * written to the caller's Project — `applyIntent` is a pure function from
  * `(project, intent)` to the next Project, which is why #48's history can replay it, #49's
  * autosave can debounce it, and a test can call it without a store at all.
@@ -17,6 +17,7 @@ import { validateProject } from '../domain'
 import type { Project } from '../domain'
 import { designOptionsOf } from '../domain'
 import { FF_RENOVATION, problem } from '../lib'
+import { validationScopeFor } from './validationScope'
 import type { Applied, DependencyReview, Intent, IntentType, Locator, Rejection, RejectionCode } from './intents'
 import { IntentRejection } from './handlers/support'
 import { pruneStaleAcknowledgements } from './handlers/warningHandlers'
@@ -92,7 +93,7 @@ export function applyIntent(project: Project, intent: Intent): Applied | Rejecti
     )
   }
 
-  const result = validateProject(next)
+  const result = validateProject(next, validationScopeFor(patches, project, next))
   if (!result.ok) return { ok: false, code: 'invalid-project', problems: result.problems }
   if (patches.length === 0) {
     return rejected('no-change', 'type', `${intent.type} left the Project exactly as it was.`)

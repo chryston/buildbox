@@ -208,6 +208,30 @@ const ACCESSORY_FIELDS = ['id', 'type', 'label']
 type Rec = Record<string, unknown>
 type Add = (path: string, code: string, message: string) => void
 
+/**
+ * The entities one validation pass is asked to check (#69 §8).
+ *
+ * Whole-document validation is what loading and importing a Project do, and what every test gets
+ * when it calls `validateProject` with no second argument. One Edit Transaction may not cost that:
+ * architecture §4 scopes validation to what the transaction touched, so `applyIntent` hands the
+ * validator the records it wrote plus every record that names one of them. Cross-references still
+ * resolve, because the ID index, the Wall map, the Junction shapes, the Room outlines and the
+ * overlap pool are built over the whole document either way — a scoped pass reports a dangling
+ * reference just as readily, it simply does not re-derive the geometry of a record nothing touched.
+ */
+export interface ValidationScope {
+  readonly entities: ReadonlySet<string>
+}
+
+type Checks = ValidationScope | null
+
+/**
+ * Whether this pass must check `raw`. `null` checks everything; a record the pass cannot identify
+ * is always checked, because only a record with an ID can be proven untouched.
+ */
+const inScope = (checks: Checks, raw: unknown): boolean =>
+  checks === null || !isRecord(raw) || typeof raw.id !== 'string' || raw.id === '' || checks.entities.has(raw.id)
+
 const isRecord = (value: unknown): value is Rec =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
@@ -1309,10 +1333,22 @@ function validateItemDesign(raw: unknown, path: string, index: IdIndex, format: 
   }
 }
 
-function validateItemDesigns(raw: unknown, path: string, index: IdIndex, format: DisplayFormat, add: Add): void {
+function validateItemDesigns(
+  raw: unknown,
+  path: string,
+  index: IdIndex,
+  format: DisplayFormat,
+  checks: Checks,
+  add: Add,
+): void {
   const designs = checkArray(raw, path, 'the Item Designs', add)
   if (designs === null) return
-  designs.forEach((design, i) => validateItemDesign(design, childPath(path, i), index, format, add))
+  designs.forEach((design, i) => {
+    // A Design's ID is claimed over the whole document by `indexIds`, so skipping an untouched
+    // Design cannot hide a duplicate (#69 §8).
+    if (!inScope(checks, design)) return
+    validateItemDesign(design, childPath(path, i), index, format, add)
+  })
 }
 
 function validatePlacedItem(raw: unknown, path: string, index: IdIndex, scope: ModelScope, add: Add): void {
@@ -1610,6 +1646,7 @@ function validateWallJunctions(
   index: IdIndex,
   scope: ModelScope,
   walls: Map<string, WallShape>,
+  checks: Checks,
   add: Add,
   // The Wall ends already joined. One Wall end takes one Junction across the **effective** model,
   // so the pass over a Design Option starts from the ends the Existing Model has taken — otherwise
@@ -1672,6 +1709,12 @@ function validateWallJunctions(
       })
     }
 
+    // Everything below is this Junction's own geometry: its ends meeting at one point, or sitting
+    // on the host at the distance it gives. An untouched Junction still contributes its shape above,
+    // which is what the Opening fit rule reads, so skipping the measurement changes nothing any
+    // other record is checked against (#69 §8).
+    if (!inScope(checks, rawJunction)) return
+
     const count = ends?.length ?? 0
     if (host === null) {
       if (count < 2) {
@@ -1725,6 +1768,7 @@ function validateExistingModel(
   path: string,
   index: IdIndex,
   format: DisplayFormat,
+  checks: Checks,
   add: Add,
 ): ExistingPass {
   if (raw === undefined) {
@@ -1738,18 +1782,31 @@ function validateExistingModel(
   const itemsPath = childPath(path, 'placedItems')
   const placedItems = checkArray(raw.placedItems, itemsPath, 'the Existing Model Placed Items', add)
   if (placedItems !== null) {
-    placedItems.forEach((item, i) => validatePlacedItem(item, childPath(itemsPath, i), index, EXISTING_SCOPE, add))
+    placedItems.forEach((item, i) => {
+      if (!inScope(checks, item)) return
+      validatePlacedItem(item, childPath(itemsPath, i), index, EXISTING_SCOPE, add)
+    })
   }
   // Walls are validated before their Junctions, which need the Walls' shapes to check that
   // the ends they name exist, stand on their Floor, and actually meet (#64 §2). Openings
   // come last: they need both, because their usable interval is the tidied band (#65 §3).
+  // Every Wall is validated even out of scope: the map the three passes below resolve against
+  // is built here, and skipping one would invent a dangling reference (#69 §8).
   const refs = new Map<string, string>()
   const walls = validateWalls(raw.walls, childPath(path, 'walls'), index, refs, EXISTING_SCOPE, add)
-  const junctions = validateWallJunctions(raw.wallJunctions, childPath(path, 'wallJunctions'), index, EXISTING_SCOPE, walls, add)
-  validateOpenings(raw.openings, childPath(path, 'openings'), index, EXISTING_SCOPE, walls, junctions, add)
+  const junctions = validateWallJunctions(
+    raw.wallJunctions,
+    childPath(path, 'wallJunctions'),
+    index,
+    EXISTING_SCOPE,
+    walls,
+    checks,
+    add,
+  )
+  validateOpenings(raw.openings, childPath(path, 'openings'), index, EXISTING_SCOPE, walls, junctions, checks, add)
   // Rooms come last: a Wall face reference is checked against the Wall's tidied face, so it
   // needs the same Wall map the Openings needed (#67 §1).
-  const rooms = validateRooms(raw.rooms, childPath(path, 'rooms'), index, EXISTING_SCOPE, walls, format, add)
+  const rooms = validateRooms(raw.rooms, childPath(path, 'rooms'), index, EXISTING_SCOPE, walls, format, checks, add)
   checkUnknownFields(raw, path, EXISTING_MODEL_FIELDS, add)
   return { walls, junctions, refs, rooms }
 }
@@ -1772,6 +1829,7 @@ function validateDesignOptions(
   index: IdIndex,
   format: DisplayFormat,
   existing: ExistingPass,
+  checks: Checks,
   add: Add,
 ): void {
   if (raw === undefined) return
@@ -1861,6 +1919,11 @@ function validateDesignOptions(
     }
     // An unparseable Option ID is still an Option: the scope only asks whether one is in force.
     const scope: ModelScope = { optionId: optionId ?? at, demolished, proposedIds, proposedWallIds }
+    // The Option's own records are the only ones this pass could have been asked about, and reading
+    // their IDs is a walk of strings: an Option that nothing touched and no changed record names is
+    // skipped whole, which is where the rest of the reference Project's Option cost was (#69 §8).
+    // Its ID, its name and its demolition records were checked above either way.
+    if (checks !== null && !checks.entities.has(optionId ?? '') && ![...proposedIds].some((id) => checks.entities.has(id))) return
 
     const optionWalls = validateWalls(proposed.walls, childPath(proposedPath, 'walls'), index, new Map(existing.refs), scope, add)
     const walls = new Map<string, WallShape>()
@@ -1884,12 +1947,15 @@ function validateDesignOptions(
         index,
         scope,
         walls,
+        // Past the guard above, this Option is one the pass was asked about: everything inside it
+        // is checked, in full, whatever the scope.
+        null,
         add,
         joinedEndsOf(standing),
       ),
     ]
-    validateOpenings(proposed.openings, childPath(proposedPath, 'openings'), index, scope, walls, junctions, add)
-    const optionRooms = validateRooms(proposed.rooms, childPath(proposedPath, 'rooms'), index, scope, walls, format, add)
+    validateOpenings(proposed.openings, childPath(proposedPath, 'openings'), index, scope, walls, junctions, null, add)
+    const optionRooms = validateRooms(proposed.rooms, childPath(proposedPath, 'rooms'), index, scope, walls, format, null, add)
     const itemsPath = childPath(proposedPath, 'placedItems')
     const placedItems = checkArray(proposed.placedItems, itemsPath, 'the proposed Placed Items', add)
     if (placedItems !== null) {
@@ -1920,6 +1986,7 @@ function validateOpenings(
   scope: ModelScope,
   walls: Map<string, WallShape>,
   junctions: readonly JunctionShape[],
+  checks: Checks,
   add: Add,
 ): void {
   const items = checkArray(raw, path, 'the Openings', add)
@@ -1957,6 +2024,10 @@ function validateOpenings(
     const idPath = childPath(at, 'id')
     const id = checkEntityId(rawOpening.id, idPath, 'the Opening ID', add)
     if (id !== null) claimId(id, idPath, 'the Opening ID', index, add)
+    // The rest of this record is its own fit, which reads the tidied band of every Wall on the
+    // Floor: the one thing in this file worth skipping for an Opening nothing touched (#69 §8).
+    // Its ID is claimed over the whole document by `indexIds`, so a duplicate still surfaces.
+    if (!inScope(checks, rawOpening)) return
 
     const floorPath = childPath(at, 'floorId')
     const floorId = checkText(rawOpening.floorId, floorPath, 'the Floor this Opening is on', add)
@@ -2075,6 +2146,7 @@ function validateRooms(
   scope: ModelScope,
   walls: Map<string, WallShape>,
   format: DisplayFormat,
+  checks: Checks,
   add: Add,
 ): { room: Room; at: string }[] {
   const items = checkArray(raw, path, 'the Rooms', add)
@@ -2102,10 +2174,18 @@ function validateRooms(
       add(namePath, OUT_OF_RANGE, `Expected the Room name to be at most ${ROOM_NAME_MAX_LENGTH} characters — it is ${name.length}.`)
     }
 
+    // The outline is validated for every Room, in scope or not: it costs microseconds and it is
+    // what the overlap pass below compares against, so a proposed Room is still tested against an
+    // Existing one neither this transaction nor its referrers touched (#69 §8).
     const outline = validateRoomOutline(rawRoom.outline, childPath(at, 'outline'), format, add)
-    const wallFaceRefs = validateRoomFaceRefs(rawRoom.wallFaceRefs, childPath(at, 'wallFaceRefs'), outline, index, scope, walls, floorId, add)
-    checkPredecessorIds(rawRoom.predecessorIds, at, index, scope, add)
-    checkUnknownFields(rawRoom, at, ROOM_FIELDS, add)
+    const mine = inScope(checks, rawRoom)
+    const wallFaceRefs = mine
+      ? validateRoomFaceRefs(rawRoom.wallFaceRefs, childPath(at, 'wallFaceRefs'), outline, index, scope, walls, floorId, add)
+      : []
+    if (mine) {
+      checkPredecessorIds(rawRoom.predecessorIds, at, index, scope, add)
+      checkUnknownFields(rawRoom, at, ROOM_FIELDS, add)
+    }
     if (id !== null && floorId !== null && name !== null && outline !== null) {
       placed.push({ room: { id, floorId, name, outline, wallFaceRefs }, at })
     }
@@ -2432,12 +2512,16 @@ function displayFormatOf(value: Rec): DisplayFormat {
 /**
  * Validate an unknown value as a current-schema {@link Project}.
  *
- * On success the *same object reference* comes back typed as `Project`: nothing is
- * copied, rebuilt or defaulted, so a caller can hand the result straight to `immer` or
- * hash it and get the bytes it was given. On failure every broken invariant is listed,
- * in the order described at the top of this file.
+ * On success the *same object reference* comes back typed as `Project`: nothing is copied, rebuilt
+ * or defaulted, so a caller can hand the result straight to `immer` or hash it and get the bytes it
+ * was given. On failure every broken invariant is listed, in the order described at the top of this
+ * file.
+ *
+ * With no `checks` the whole document is validated, which is what loading, importing and every test
+ * do. `applyIntent` passes a {@link ValidationScope} instead, because a Transaction may not cost a
+ * whole re-read of a Project (#69 §8).
  */
-export function validateProject(value: unknown): ValidateProjectResult {
+export function validateProject(value: unknown, checks: ValidationScope | null = null): ValidateProjectResult {
   // The same reference, kept un-narrowed: validation proves the shape, it never rebuilds
   // the value, so a valid Project comes back as the exact object that was handed in.
   const source: unknown = value
@@ -2460,12 +2544,28 @@ export function validateProject(value: unknown): ValidateProjectResult {
   validatePreferences(value.preferences, childPath(ROOT_PATH, 'preferences'), add)
   validateFloors(value.floors, childPath(ROOT_PATH, 'floors'), index, add)
   validateViews(value.views, childPath(ROOT_PATH, 'views'), index, add)
-  validateItemDesigns(value.itemDesigns, childPath(ROOT_PATH, 'itemDesigns'), index, displayFormatOf(value), add)
-  const existing = validateExistingModel(value.existingModel, childPath(ROOT_PATH, 'existingModel'), index, displayFormatOf(value), add)
+  validateItemDesigns(value.itemDesigns, childPath(ROOT_PATH, 'itemDesigns'), index, displayFormatOf(value), checks, add)
+  const existing = validateExistingModel(
+    value.existingModel,
+    childPath(ROOT_PATH, 'existingModel'),
+    index,
+    displayFormatOf(value),
+    checks,
+    add,
+  )
   // The Existing Model's own Rooms first, so a Project with no Design Options reports exactly the
-  // problems it reported before this pass existed, in the same order.
+  // problems it reported before this pass existed, in the same order. Every Room outline is in the
+  // pool, scoped pass or not, so an overlap is never missed because one side was untouched.
   checkRoomOverlaps(existing.rooms, add)
-  validateDesignOptions(value.designOptions, childPath(ROOT_PATH, 'designOptions'), index, displayFormatOf(value), existing, add)
+  validateDesignOptions(
+    value.designOptions,
+    childPath(ROOT_PATH, 'designOptions'),
+    index,
+    displayFormatOf(value),
+    existing,
+    checks,
+    add,
+  )
   validateAcknowledgements(value.warningAcknowledgements, childPath(ROOT_PATH, 'warningAcknowledgements'), index, index.optionIds, add)
   checkUnknownFields(value, ROOT_PATH, PROJECT_FIELDS, add)
 

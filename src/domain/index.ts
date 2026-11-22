@@ -190,4 +190,4 @@ export {
 export { formatDisplay, formatLength, fromMm, toMm } from './units/unitConversion'
 export { formatGeometryProblem } from './formatGeometryProblem'
 export type { DisplayFormat } from './formatGeometryProblem'
-export { validateProject, type ValidateProjectResult } from './validate'
+export { validateProject, type ValidateProjectResult, type ValidationScope } from './validate'

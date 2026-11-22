@@ -30,7 +30,7 @@
 import { applyPatches, produceWithPatches } from 'immer'
 import type { Patch } from 'immer'
 import { designOptionsOf, validateProject } from '../../domain'
-import type { DesignOption, EntityId, Opening, PlacedItem, Project, Room, Wall, WallJunction } from '../../domain'
+import type { DesignOption, EntityId, Opening, PlacedItem, Project, Room, ValidationScope, Wall, WallJunction } from '../../domain'
 import { canonicalJson, FF_RENOVATION } from '../../lib'
 import type {
   CorrectionEffect,
@@ -48,6 +48,7 @@ import type {
 import type { Handler, IntentHandler } from './context'
 import { requireOpeningsFit } from './openingSupport'
 import { effectiveView, IntentRejection, refuse, requireHandler } from './support'
+import { scopeAround } from '../validationScope'
 
 /** The correction-table Intent types, written once; `renovationEdits` excludes exactly these. */
 export type CorrectionIntentType = Extract<
@@ -291,7 +292,7 @@ function runCorrection(project: Project, draft: Project, inner: Intent, ids: str
   designOptionsOf(draft).forEach((_option, index) => {
     const before = designOptionsOf(project)[index]!
     // Whatever this Option stands on has to still hold, whether or not it had work to move.
-    const problem = optionProblem(project, draft, before)
+    const problem = optionProblem(project, draft, before, subjects.map((entry) => entry.id))
     if (problem !== null) report(problem)
   })
   return subjects
@@ -303,7 +304,7 @@ function runCorrection(project: Project, draft: Project, inner: Intent, ids: str
  * edge a corrected Wall cannot carry (#69 §12's blockers). The Option is measured as its own
  * effective Project, which is the only way to see baseline work and proposed work in one place.
  */
-function optionProblem(base: Project, draft: Project, before: DesignOption): Block | null {
+function optionProblem(base: Project, draft: Project, before: DesignOption, changed: readonly EntityId[]): Block | null {
   const view = effectiveView(draft, null, before.id)
   const block = (path: string, message: string): Block => ({ optionId: before.id, code: 'option-blocked', path, message })
   const standing = new Set(view.existingModel.walls.map((entry) => entry.id))
@@ -322,7 +323,13 @@ function optionProblem(base: Project, draft: Project, before: DesignOption): Blo
     if (!(error instanceof IntentRejection)) throw error
     return optionBlock(before, error)
   }
-  const checked = validateProject(asPlainModel(view))
+  // The same scoping rule as `applyIntent`, applied to a Project this Transaction built: the
+  // correction changed these baseline records, this Option holds its own work, and everything that
+  // names either has to still hold. Re-reading the whole merged model per Option is what made a
+  // correction cost a second (#69 §8, §12).
+  const own = COLLECTIONS.flatMap((key) => collectionOf(before.proposed, key).map((entity) => entity.id))
+  const scope = scopeAround(view, [...changed, ...own])
+  const checked = validateProject(asPlainModel(view, scope), scope)
   if (checked.ok) return null
   return block(checked.problems[0]!.path, `${before.name}: ${checked.problems[0]!.message}`)
 }
@@ -331,9 +338,17 @@ function optionProblem(base: Project, draft: Project, before: DesignOption): Blo
  * One Option's effective model read as a plain single-model Project: the merge has already decided
  * what stands, so what is left to ask of it is geometry, not provenance — and its own records are
  * checked against the real Project by the same apply that writes this one.
+ *
+ * Only the records the pass will actually read are rewritten. `predecessorIds` is a provenance
+ * field, so it is meaningless on a record the merge has already placed, and rewriting all 1 500 of
+ * them to satisfy a pass over a few dozen cost more than the pass itself (#69 §8). Every record of
+ * a merged view that carries the field is one of this Option's own, and those are all in the scope
+ * the caller passes, so nothing left unstripped is a record the pass reads.
  */
-function asPlainModel(view: Project): Project {
-  const stripped = <T extends { predecessorIds?: EntityId[] }>(entity: T): T => {
+function asPlainModel(view: Project, scope: ValidationScope | null): Project {
+  const stripped = <T extends { id: EntityId; predecessorIds?: EntityId[] }>(entity: T): T => {
+    if (entity.predecessorIds === undefined) return entity
+    if (scope !== null && !scope.entities.has(entity.id)) return entity
     const rest: Record<string, unknown> = { ...entity }
     delete rest.predecessorIds
     return rest as T
