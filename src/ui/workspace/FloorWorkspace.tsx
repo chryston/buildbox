@@ -1394,6 +1394,7 @@ export function FloorWorkspace(): ReactNode {
             : selectedWall === null
             ? <SelectionInspector
             item={selected}
+            renovationAction={renovationAction(selection ?? '')}
             bounds={selection === null || derivedFloor === null
               ? null
               : derivedFloor.placements.find((p) => p.id === selection)?.worldBounds ?? null}
