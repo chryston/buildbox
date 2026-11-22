@@ -87,6 +87,26 @@ const FORBIDDEN = [
         // so the needles are the two sentences only that dialog says.
         'Removes the demolition record in',
         'Also deletes successor(s):',
+        // #71 §2, §5, §8: the Drawing Layer surface. `Unlayered` is already said by the export
+        // scope's layer list (#70), so the needles are the undo labels the rows compose and the
+        // sentences only the layer list, its delete dialog and the read-only refusal say.
+        'New Layer: ',
+        'Rename Layer: ',
+        'Set Layer Colour: ',
+        'Reorder Layer: ',
+        'Delete Layer: ',
+        'Set Active Layer: ',
+        'Move to Layer: ',
+        'Snap to Hidden Content',
+        'A layer needs a name.',
+        'A layer colour is six hex digits',
+        'is already at the front',
+        'The order has to name every layer',
+        'On this layer:',
+        'will become Unlayered',
+        'Nothing is on it.',
+        'The Unlayered row is hidden in this view',
+        'is read-only in this view',
       ]),
 ]
 // Only the files that could contain application code: an image or a font cannot.

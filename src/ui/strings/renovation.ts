@@ -204,6 +204,48 @@ export const RENOVATION_STRINGS = {
   notExisting: (ref: string, state: string): string =>
     `${ref} is ${state} — only Existing Model entities can be demolished`,
 
+  // ---- the Drawing Layers (#71 §2, §5, §8)
+  // The undo label is the row's own words plus what was chosen, the way `Set Design Option: Option A`
+  // reads (#70 §2): a history entry has to say which layer, because "Rename Layer" four times deep is
+  // no help at all. The layer's name is Project data, so it arrives as an argument.
+  layerAddLabel: (name: string): string => `New Layer: ${name}`,
+  layerRenameLabel: (name: string): string => `Rename Layer: ${name}`,
+  layerSetColorLabel: (name: string): string => `Set Layer Colour: ${name}`,
+  layerMoveLabel: (name: string, edge: string): string => `Reorder Layer: ${name} → ${edge}`,
+  layerDeleteLabel: (name: string): string => `Delete Layer: ${name}`,
+  layerSettingLabel: (name: string, state: string): string => `Set Layer: ${name} — ${state}`,
+  layerOrderLabel: (name: string): string => `Reorder Layers: ${name}`,
+  layerActiveLabel: (name: string): string => `Set Active Layer: ${name}`,
+  layerSnapLabel: (state: string): string => `Snap to Hidden Content: ${state}`,
+  entitySetLayerLabel: (name: string): string => `Move to Layer: ${name}`,
+  /** The row that holds content with no layer of its own. One word, said the same way everywhere. */
+  layerUnlayered: 'Unlayered',
+  /** Which end a `Reorder Layer` moved a layer to, in the label's `→ <end>`. */
+  layerEdgeFront: 'front',
+  layerEdgeBack: 'back',
+  /** The three states of a layer's own row, as the label names them. */
+  layerStateVisible: 'visible',
+  layerStateHidden: 'hidden',
+  layerStateSelectable: 'selectable',
+  layerStateNotSelectable: 'not selectable',
+  layerStateEditable: 'editable',
+  layerStateNotEditable: 'read-only',
+  layerStateColour: 'colour',
+  layerStateDefault: 'follow the Project',
+  /** The one word for whether this view may snap to content it is not drawing. */
+  layerOn: 'On',
+  layerOff: 'Off',
+  // `Delete Services?` — the question is the review's own sentence, so only the rows beside it are copy.
+  deleteLayerModel: (n: number): string => count(n, 'Model entity', 'Model entities'),
+  deleteLayerAnnotations: (n: number): string => count(n, 'Annotation', 'Annotations'),
+  deleteLayerOverrides: (n: number): string => count(n, 'saved view', 'saved views'),
+  deleteLayerOnIt: 'On this layer:',
+  deleteLayerMore: (n: number): string => `and ${n} more`,
+  /** The consequence the dialog cannot leave out: where the content goes, and whether it is seen. */
+  deleteLayerBecomes: 'The content becomes Unlayered and stays drawn.',
+  deleteLayerHidden: 'The Unlayered row is hidden in this view, so this content stops being drawn here.',
+  deleteLayerConfirm: 'Delete layer',
+
   // ---- the buttons every one of them ends with
   cancel: 'Cancel',
 } as const
