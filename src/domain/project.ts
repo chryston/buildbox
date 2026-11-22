@@ -21,6 +21,7 @@
  */
 import type { ClosedPath, Preset, WallSide } from '../geometry'
 import type { CabinetNode, GlobalSettings } from './cabinetPayload'
+import { nameKey } from './floorNames'
 
 /**
  * An opaque entity ID (#42 §3): 1–128 UTF-16 code units, no leading or trailing
@@ -197,6 +198,26 @@ export const DEFAULT_LAYER_SETTING: Readonly<LayerSetting> = Object.freeze({
 })
 
 /**
+ * The kind of thing a creation tool is about to make, which is the only question #71 §2's default
+ * table answers. It is the one place a layer *name* is load-bearing, and the only place the three
+ * default names are written: `Structure`, `Services` and `Furniture` are ordinary layers a person
+ * may rename or delete, so a creation tool looks for the name and never for an ID or a reserved row.
+ */
+export type CreationSubtype = 'fabric' | 'service' | 'item'
+
+/**
+ * Which of the three default layers each subtype belongs to (#71 §2). Walls, Openings, Rooms and
+ * any other built fabric are `fabric` — a Room is surveyed fabric like the Walls around it, which is
+ * the decision this issue owns. `service` is the row Service Runs and Risers will use when they
+ * exist; nothing creates one yet.
+ */
+export const DEFAULT_LAYER_NAMES: Record<CreationSubtype, string> = {
+  fabric: 'Structure',
+  service: 'Services',
+  item: 'Furniture',
+}
+
+/**
  * The three layers a new Project starts with (#71 §1), back to front, with the names and colours
  * the issue names.
  *
@@ -206,9 +227,9 @@ export const DEFAULT_LAYER_SETTING: Readonly<LayerSetting> = Object.freeze({
  * deleting `Services` and making a new layer called `Services` brings the rule back.
  */
 export const DEFAULT_DRAWING_LAYERS: readonly { name: string; color: string }[] = Object.freeze([
-  { name: 'Structure', color: '#b9b9c2' },
-  { name: 'Services', color: '#5fb3ff' },
-  { name: 'Furniture', color: '#e3a857' },
+  { name: DEFAULT_LAYER_NAMES.fabric, color: '#b9b9c2' },
+  { name: DEFAULT_LAYER_NAMES.service, color: '#5fb3ff' },
+  { name: DEFAULT_LAYER_NAMES.item, color: '#e3a857' },
 ])
 
 /** The colour a layer made by `New layer` starts with (#71 §5). */
@@ -222,6 +243,23 @@ export const drawingLayerById = (project: Project, id: EntityId | null | undefin
   id === null || id === undefined
     ? null
     : drawingLayersOf(project).find((layer) => layer.id === id) ?? null
+
+/**
+ * The layer a creation tool's subtype default names (#71 §2), or `null` when no layer carries it.
+ *
+ * Names are compared the way every uniqueness rule compares them, so `structure` finds `Structure`.
+ * Two layers may carry the same name — uniqueness is not a layer rule — and the back-to-front order
+ * decides: the one drawn furthest forward wins, because that is the row a person would point at.
+ */
+export function drawingLayerByName(project: Project, name: string): DrawingLayer | null {
+  const key = nameKey(name)
+  const layers = drawingLayersOf(project)
+  for (let index = layers.length - 1; index >= 0; index -= 1) {
+    const layer = layers[index]
+    if (layer !== undefined && nameKey(layer.name) === key) return layer
+  }
+  return null
+}
 
 /** The setting a saved view holds for one layer key, or `undefined` when it says nothing about it. */
 export const viewLayerSettingOverride = (view: PlanView, key: string): LayerSetting | undefined =>

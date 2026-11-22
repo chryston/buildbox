@@ -28,6 +28,7 @@ import {
   sameJsonValue,
   spendIds,
 } from './support'
+import { creationLayerField } from './creationLayer'
 
 /**
  * The `plan.*` handlers, minus the three that are about another Floor — removing a Plan
@@ -77,7 +78,7 @@ function clearGenericItems(draft: Project, floorId: EntityId): void {
 }
 
 const addObject: Handler<'plan.addObject'> = (ctx) => {
-  const { floorId, catalogKey } = ctx.intent.payload
+  const { floorId, catalogKey, target } = ctx.intent.payload
   const [itemDesignId, placedItemId] = spendIds(ctx.intent.ids, 2, ctx.intent.type)
   requireFloor(ctx.project, floorId)
   const entry = PLAN_CATALOGUE[catalogKey]
@@ -102,6 +103,8 @@ const addObject: Handler<'plan.addObject'> = (ctx) => {
     translation: centreAt(LEGACY_SPAWN_X_MM, LEGACY_SPAWN_Y_MM, entry.w, entry.h),
     rotationDeg: 0,
     baseElevation: entry.base,
+    // A Placed Item is furniture, not fabric: it joins `Furniture` (#71 §2).
+    ...creationLayerField(ctx.project, target?.viewId, 'item'),
   })
 }
 
@@ -114,7 +117,7 @@ const addObject: Handler<'plan.addObject'> = (ctx) => {
  * The new Placed Item spawns at the legacy corner with no turn and on the Floor Datum.
  */
 const placeDesign: Handler<'plan.placeDesign'> = (ctx) => {
-  const { floorId, itemDesignId } = ctx.intent.payload
+  const { floorId, itemDesignId, target } = ctx.intent.payload
   const [placedItemId] = spendIds(ctx.intent.ids, 1, ctx.intent.type)
   requireFloor(ctx.project, floorId)
   const design = findDesign(ctx.project, itemDesignId)
@@ -129,6 +132,7 @@ const placeDesign: Handler<'plan.placeDesign'> = (ctx) => {
     translation: centreAt(LEGACY_SPAWN_X_MM, LEGACY_SPAWN_Y_MM, width, depth),
     rotationDeg: 0,
     baseElevation: 0,
+    ...creationLayerField(ctx.project, target?.viewId, 'item'),
   })
 }
 

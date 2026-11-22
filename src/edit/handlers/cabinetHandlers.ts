@@ -42,6 +42,7 @@ import {
   runCabinet,
   spendIds,
 } from './support'
+import { creationLayerField } from './creationLayer'
 
 type CabinetHandlers = { [T in Extract<IntentType, `cabinet.${string}`>]: IntentHandler<T> }
 
@@ -251,6 +252,9 @@ const addUnit: Handler<'cabinet.addUnit'> = (ctx) => {
     translation: { x: rightEdge + 20 + settings.width / 2, y: settings.depth / 2 },
     rotationDeg: 0,
     baseElevation: 0,
+    // A cabinet is a Placed Item, so it joins `Furniture` like anything else stood on the floor.
+    // This legacy path has no saved view to consult, so the Project's own layer decides (#71 §2).
+    ...creationLayerField(ctx.project, null, 'item'),
   })
 }
 

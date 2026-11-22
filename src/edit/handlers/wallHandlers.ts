@@ -31,6 +31,7 @@ import { chainJunctionCount, wallEndKey } from '../intents'
 import type { CreateWallChain, DependencyReview, Intent, IntentTarget, Locator, MergeWalls, WallEndTarget, WallIntent } from '../intents'
 import { FF_RENOVATION } from '../../lib'
 import type { Handler, IntentHandler } from './context'
+import { creationLayerField } from './creationLayer'
 import { containerOf, effectiveView, isInOption, proposedProvenance, refuse, spendIds } from './support'
 import { faceRefsOn, followWallFaces, refuseReferencedWall } from './roomSupport'
 import { openingsStillFit, requireOpeningsFit } from './openingSupport'
@@ -249,6 +250,9 @@ const createChain: Handler<'wall.createChain'> = (ctx) => {
     ...(wall.constructionLabel === undefined ? {} : { constructionLabel: wall.constructionLabel }),
     baseElevation: wall.baseElevation,
     height: wall.height,
+    // New Walls are built fabric, so they join `Structure` — or the view's active layer, or nothing —
+    // and a read-only layer refuses the whole chain before any of it is drawn (#71 §2).
+    ...creationLayerField(ctx.project, payload.target?.viewId, 'fabric'),
     ...proposedProvenance(inOption),
   }))
   container.walls.push(...created)

@@ -179,7 +179,16 @@ export type IntentType = S7IntentType | RenovationIntentType
  * flag can make.
  */
 export interface IntentTarget {
-  target?: { designOptionId: EntityId | null }
+  target?: {
+    designOptionId: EntityId | null
+    /**
+     * The saved view the tool was used in, which is what decides the Drawing Layer new content lands
+     * on and whether that layer may be edited here at all (#71 §2). Absent means no saved view is in
+     * play — a Project-level surface, or a caller that predates layers — and the layer's Project
+     * defaults apply: new content still goes to its default layer, and nothing is refused.
+     */
+    viewId?: EntityId | null
+  }
 }
 
 /** The payload each Intent type carries. */
@@ -792,7 +801,7 @@ export interface PlaceOpeningInOption {
   swing?: OpeningSwing
   hingeSide?: HingeSide
   /** Always an Option: this Intent has no Existing-Model form, which is `opening.create`. */
-  target: { designOptionId: EntityId }
+  target: { designOptionId: EntityId; viewId?: EntityId | null }
 }
 
 /**
@@ -805,7 +814,7 @@ export interface KnockThroughInOption {
   label: string
   start: number
   width: number
-  target: { designOptionId: EntityId }
+  target: { designOptionId: EntityId; viewId?: EntityId | null }
 }
 
 /**

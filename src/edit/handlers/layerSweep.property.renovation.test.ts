@@ -42,8 +42,6 @@ const COLORS = ['#b9b9c2', '#5fb3ff', '#e3a857', '#9ad48a', '#123456']
 /** One layer command, built against the Project it is about to be applied to. */
 type Command = (project: Project) => Intent
 
-const NOW = '2026-11-22T00:00:00.000Z'
-
 const layerId = (n: number): string => `sweep-layer-${n}`
 const nameOf = (index: number): string => NAMES[index]!
 const colorOf = (index: number): string => COLORS[index]!

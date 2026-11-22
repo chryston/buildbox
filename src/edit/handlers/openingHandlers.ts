@@ -13,8 +13,9 @@
  * a window has no hinge, and a sliding door has neither a hinge jamb nor an opening side.
  */
 import type { EntityId, Project } from '../../domain'
-import type { CreateOpening, Locator, OpeningIntent } from '../intents'
+import type { Locator, OpeningIntent } from '../intents'
 import type { Handler, IntentHandler } from './context'
+import { creationLayerField } from './creationLayer'
 import { refuse, spendIds } from './support'
 import {
   editOpening,
@@ -44,8 +45,7 @@ const openingFloor = (project: Project, openingId: EntityId): EntityId | null =>
  * own, so it cannot stand anywhere but on its Wall's Floor.
  */
 const createOpening: Handler<'opening.create'> = (ctx) => {
-  const { floorId, hostWallId, kind, label, start, width, sill, head, swing, hingeSide } =
-    ctx.intent.payload as CreateOpening
+  const { floorId, hostWallId, kind, label, start, width, sill, head, swing, hingeSide, target } = ctx.intent.payload
   if (!ctx.project.floors.some((floor) => floor.id === floorId)) {
     refuse('unknown-target', `floors[${floorId}]`, `No floor answers to ${floorId}.`)
   }
@@ -73,6 +73,8 @@ const createOpening: Handler<'opening.create'> = (ctx) => {
     head,
     ...(swing === undefined ? {} : { swing }),
     ...(hingeSide === undefined ? {} : { hingeSide }),
+    // An Opening is built fabric like the Wall it is cut into (#71 §2).
+    ...creationLayerField(ctx.project, target?.viewId, 'fabric'),
   })
 }
 

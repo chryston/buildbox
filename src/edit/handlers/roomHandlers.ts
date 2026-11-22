@@ -24,6 +24,7 @@ import { TOLERANCE_MM, distance, edgeToFace, lengthOf, ontoFaceVector, pt } from
 import type { Locator, RoomIntent, RoomOutlineShape } from '../intents'
 import type { IntentHandler } from './context'
 import { nextWallRef } from './wallHandlers'
+import { creationLayerField } from './creationLayer'
 import { refuse, requireFloor, sameJsonValue, spendIds } from './support'
 import { checkRoomProposal, edgeName, faceOf, roomPath, requireRoom, requireWall, wallPathOf } from './roomSupport'
 
@@ -79,6 +80,9 @@ const createRoom: IntentHandler<'room.create'> = {
       name: intent.payload.name ?? nextRoomName(project),
       outline: withIds(intent.payload.outline, segmentIds),
       wallFaceRefs: [],
+      // A Room is surveyed built fabric like the Walls around it, which is the layer decision #71 §2
+      // owns: new Rooms join `Structure`.
+      ...creationLayerField(project, intent.payload.target?.viewId, 'fabric'),
     }
     checkRoomProposal(project, room)
     draft.existingModel.rooms.push(room)
@@ -264,6 +268,9 @@ const placeShelter: IntentHandler<'room.placeShelter'> = {
     })
 
     const height = floor.defaultWallHeight ?? project.preferences.defaultWallHeight
+    // The whole pack is built fabric — its Walls, its door and the Room between them — so one
+    // resolution decides all three, and a read-only layer refuses the pack before any of it stands.
+    const layer = creationLayerField(project, intent.payload.target?.viewId, 'fabric')
     const walls: Wall[] = lines.map((line, index) => {
       const previous = lines[(index - 1 + lines.length) % lines.length]
       const next = lines[(index + 1) % lines.length]
@@ -282,6 +289,7 @@ const placeShelter: IntentHandler<'room.placeShelter'> = {
         justification: 'centre',
         baseElevation: 0,
         height,
+        ...layer,
       }
       draft.existingModel.walls.push(wall)
       return wall
@@ -330,9 +338,10 @@ const placeShelter: IntentHandler<'room.placeShelter'> = {
       head: doorHeight,
       swing: 'left',
       hingeSide: 'start',
+      ...layer,
     }
 
-    const room: Room = { id: roomId, floorId: floor.id, name: nextRoomName(project), outline, wallFaceRefs }
+    const room: Room = { id: roomId, floorId: floor.id, name: nextRoomName(project), outline, wallFaceRefs, ...layer }
     checkRoomProposal(project, room)
     draft.existingModel.wallJunctions.push(...junctions)
     draft.existingModel.openings.push(door)

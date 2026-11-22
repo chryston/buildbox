@@ -178,12 +178,14 @@ export type {
 } from './project'
 export {
   DEFAULT_DRAWING_LAYERS,
+  DEFAULT_LAYER_NAMES,
   DEFAULT_LAYER_SETTING,
   NEW_LAYER_COLOR,
   RENOVATION_DISPLAYS,
   UNLAYERED_LAYER_KEY,
   designOptionsOf,
   drawingLayerById,
+  drawingLayerByName,
   drawingLayersOf,
   entityLayerId,
   viewActiveLayerId,
@@ -194,6 +196,7 @@ export {
   viewSnapToHidden,
 } from './project'
 export type {
+  CreationSubtype,
   DrawingLayer,
   LayerSetting,
 } from './project'
