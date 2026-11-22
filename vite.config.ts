@@ -86,6 +86,11 @@ const LAYOUT_BROWSER_INCLUDE = ['src/ui/**/*.browser.test.{ts,tsx}']
 // for files it has no flag to read, and `npm run test:renovation` is the run that does.
 const FF_RENOVATION = process.env['VITE_FF_RENOVATION'] === 'true'
 const RENOVATION_INCLUDE = ['src/**/*.renovation.test.{ts,tsx}']
+// The two renovation suites are split the way `pure` and `dom` are: a `.tsx` suite needs a DOM, and
+// a `.ts` one must not be handed one — a model test run under jsdom is a model test that cannot see
+// `document`, and a component test run under Node is a crash.
+const RENOVATION_NODE_INCLUDE = ['src/**/*.renovation.test.ts']
+const RENOVATION_DOM_INCLUDE = ['src/**/*.renovation.test.tsx']
 // The #69 benches measure a model a flag-off build does not carry, so the flag-off `npm run bench`
 // never looks for them; `npm run bench:renovation` is the run that does.
 const RENOVATION_BENCH_EXCLUDE = FF_RENOVATION ? [] : ['src/**/renovation*.bench.ts']
@@ -156,7 +161,7 @@ export default defineConfig({
               test: {
                 name: 'renovation',
                 environment: 'node',
-                include: RENOVATION_INCLUDE,
+                include: RENOVATION_NODE_INCLUDE,
                 exclude: [...SHARED_EXCLUDE],
                 setupFiles: ['src/test/pure-setup.ts'],
               },
@@ -166,7 +171,7 @@ export default defineConfig({
               test: {
                 name: 'renovation-dom',
                 environment: 'jsdom',
-                include: ['src/**/*.renovation.test.tsx'],
+                include: RENOVATION_DOM_INCLUDE,
                 exclude: [...SHARED_EXCLUDE],
                 setupFiles: ['./src/test/setup.ts'],
               },
