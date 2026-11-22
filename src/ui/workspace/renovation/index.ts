@@ -15,6 +15,7 @@ export { DesignOptionsSection, designOptionNameProblem, nextDesignOptionName } f
 export { DeleteDesignOptionDialog, deleteOptionRows } from './DeleteDesignOptionDialog'
 export { DemolishWallDialog, demolishIsBlocked } from './DemolishWallDialog'
 export { CorrectExistingDialog, correctIsBlocked } from './CorrectExistingDialog'
+export { RestoreDialog } from './RestoreDialog'
 export { ForcedChoiceDialog } from './ForcedChoiceDialog'
 export { MoveToOptionAction } from './MoveToOptionAction'
 export { MoveToOptionDialog, moveToOptionIsBlocked } from './MoveToOptionDialog'
@@ -71,4 +72,12 @@ export const openForcedChoiceDialog = (
 /** Ask the §7b danger question about the same pending edit. */
 export const openCorrectExistingDialog = (intent: Intent, entityId: string): void => {
   workspaceStore.getState().openCorrectExistingDialog(intent, entityId)
+}
+
+/**
+ * Ask `Restore <ref>?` before a demolition record leaves one Design Option (#70 §7d). The dialog
+ * reads which of the Option's successors fall from the Intent's own preview, so this carries ids.
+ */
+export const openRestoreDialog = (entityId: string, designOptionId: string): void => {
+  workspaceStore.getState().openRestoreDialog(entityId, designOptionId)
 }

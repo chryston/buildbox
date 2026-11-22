@@ -98,6 +98,7 @@ import {
   entityFields,
   openDemolishDialog,
   openForcedChoiceDialog,
+  openRestoreDialog,
   subjectOfIntent,
   successorOf,
 } from './renovation'
@@ -1544,11 +1545,10 @@ export function FloorWorkspace(): ReactNode {
     }
     if (renovationOptionId === null) return
     if (action === 'restore') {
-      sendLabelled(
-        'renovation.restore',
-        { entityId: id, target: { designOptionId: renovationOptionId } },
-        RENOVATION_STRINGS.setRenovationDisplay(displayLabel('existing')),
-      )
+      // §7d: taking a demolition record out of one Option can bring the Option's own successors down
+      // with it, so the press asks before anything is written. The transaction keeps the label the
+      // handler gives it — nothing to do with a Display change, which is what this used to claim.
+      openRestoreDialog(id, renovationOptionId)
       return
     }
     if (action === 'replace') {

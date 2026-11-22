@@ -196,6 +196,10 @@ export const RENOVATION_STRINGS = {
   changeAppear: 'appear',
   /** The transaction label §7a's `Delete` writes: a demolition record, never a deletion. */
   markDemolitionLabel: (ref: string): string => `Mark demolition: ${ref}`,
+  // §7d: `Restore W-2?`. The question is the review's own sentence, so only the consequence is
+  // copy: which Option loses the record, and which of its successors falls with it.
+  restoreBody: (option: string): string => `Removes the demolition record in ${option}.`,
+  restoreDeletes: (refs: string): string => `Also deletes successor(s): ${refs}`,
   /** §7e: `Mark demolition` aimed at something that is not baseline work. */
   notExisting: (ref: string, state: string): string =>
     `${ref} is ${state} — only Existing Model entities can be demolished`,

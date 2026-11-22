@@ -83,6 +83,10 @@ const FORBIDDEN = [
         'Use this for measuring errors',
         'only Existing Model entities can be demolished',
         'Mark demolition:',
+        // #70 §7d: the restore confirmation. `Restore` is product vocabulary that exists flag-off,
+        // so the needles are the two sentences only that dialog says.
+        'Removes the demolition record in',
+        'Also deletes successor(s):',
       ]),
 ]
 // Only the files that could contain application code: an image or a font cannot.

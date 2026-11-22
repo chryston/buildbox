@@ -36,6 +36,7 @@ export {
   openForcedChoiceDialog,
   openMoveToOptionDialog,
   openCorrectExistingDialog,
+  openRestoreDialog,
 } from './workspace/renovation'
 export type { ActiveViewState, Viewport, ViewportCache } from './workspace'
 // #70's two pure halves: the tool table the contextual strip reads, and the overlap cycle the canvas

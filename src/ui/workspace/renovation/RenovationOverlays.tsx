@@ -17,7 +17,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { CorrectionReview, DemolitionReview, Intent, MoveToOptionReview } from '../../../edit'
+import type { CorrectionReview, DemolitionReview, Intent, MoveToOptionReview, RestoreReview } from '../../../edit'
 import { designOptionsOf } from '../../../domain'
 import type { DispatchResult } from '../../../session'
 import { useWorkspaceProject, useWorkspaceRoot } from '../WorkspaceRoot'
@@ -27,6 +27,7 @@ import { DemolishWallDialog } from './DemolishWallDialog'
 import { displayLabel } from './displayTheme'
 import { ForcedChoiceDialog } from './ForcedChoiceDialog'
 import { MoveToOptionDialog } from './MoveToOptionDialog'
+import { RestoreDialog } from './RestoreDialog'
 import { entityFields, replaceEditOf, successorOf } from './pendingEdit'
 import { RENOVATION_STRINGS } from '../../strings/renovation'
 
@@ -101,6 +102,19 @@ export function RenovationOverlays(): ReactNode {
         review: services.intent.preview(
           project,
           services.intent.build('renovation.correctExistingModel', { inner: dialog.intent }),
+        ).review,
+        options,
+      }
+    // §7d asks the restoration's own question: which of the Option's successors stand on the record
+    // that is about to be taken away.
+    if (dialog.kind === 'restore')
+      return {
+        review: services.intent.preview(
+          project,
+          services.intent.build('renovation.restore', {
+            entityId: dialog.entityId,
+            target: { designOptionId: dialog.designOptionId },
+          }),
         ).review,
         options,
       }
@@ -245,6 +259,37 @@ export function RenovationOverlays(): ReactNode {
       <CorrectExistingDialog
         review={review}
         change={changeWordOf(inner.type)}
+        problem={problem ?? undefined}
+        onConfirm={confirm}
+        onCancel={dismiss}
+      />
+    )
+  }
+
+  if (dialog.kind === 'restore' && shown.review?.kind === 'restore') {
+    const review: RestoreReview = shown.review
+    const option = shown.options.find((each) => each.id === dialog.designOptionId)
+    // The Option has gone away since the press: there is no record left to take out of it, and
+    // nothing was written, so the dialog does not ask.
+    if (option === undefined) return null
+    const confirm = (): void => {
+      setProblem(null)
+      const result = session.dispatch(
+        services.intent.build('renovation.restore', {
+          entityId: review.entityId,
+          target: { designOptionId: dialog.designOptionId },
+        }),
+      )
+      if (!result.ok) {
+        setProblem(refusalOf(result))
+        return
+      }
+      close()
+    }
+    return (
+      <RestoreDialog
+        review={review}
+        optionName={option.name}
         problem={problem ?? undefined}
         onConfirm={confirm}
         onCancel={dismiss}

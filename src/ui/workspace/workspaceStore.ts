@@ -185,6 +185,11 @@ export type RenovationDialog =
   }
   /** §7b: the same pending edit, on its way to the danger dialog. */
   | { readonly kind: 'correct-existing'; readonly intent: Intent; readonly entityId: string }
+  /**
+   * §7d: `Restore W-2?` — the person is about to take a demolition record out of one Design Option,
+   * and the Option's own successors may stand on it. Ids only: the review is read from the preview.
+   */
+  | { readonly kind: 'restore'; readonly entityId: string; readonly designOptionId: string }
   | null
 
 export interface WorkspaceState {
@@ -325,6 +330,8 @@ export interface WorkspaceActions {
   openForcedChoiceDialog(intent: Intent, entityId: string, display: RenovationDisplay, optionId: string): void
   /** Ask the §7b danger question about the same pending edit. */
   openCorrectExistingDialog(intent: Intent, entityId: string): void
+  /** Ask `Restore <ref>?` before a demolition record leaves one Design Option (#70 §7d). */
+  openRestoreDialog(entityId: string, designOptionId: string): void
   /** Put the renovation dialog away. Nothing was written, which is the whole point of Cancel. */
   closeRenovationDialog(): void
   /** Turn one `Pick:` chip on or off (#70 §3); the list stays in the three States' own order. */
@@ -519,6 +526,8 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
     set({ renovationDialog: { kind: 'forced-choice', intent, entityId, display, optionId } }),
   openCorrectExistingDialog: (intent, entityId) =>
     set({ renovationDialog: { kind: 'correct-existing', intent, entityId } }),
+  openRestoreDialog: (entityId, designOptionId) =>
+    set({ renovationDialog: { kind: 'restore', entityId, designOptionId } }),
   closeRenovationDialog: () => set({ renovationDialog: null }),
   togglePickState: (state) =>
     set((current) => ({
