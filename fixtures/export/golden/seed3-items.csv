@@ -1,0 +1,15 @@
+floor_id,floor,design_option_id,design_option,renovation_state,item_design_id,item_design,count,width_mm,depth_mm,height_mm
+seed-001,Ground Floor,option-a,Option A · Open kitchen,existing,seed-item-027,Base 600,1,600,400,850
+seed-001,Ground Floor,option-a,Option A · Open kitchen,existing,export-008,Base 600′,1,600,400,850
+seed-001,Ground Floor,option-a,Option A · Open kitchen,existing,unit-kitchen-base,Base Unit,1,600,500,800
+seed-001,Ground Floor,option-a,Option A · Open kitchen,existing,seed-007,Fridge,2,180,180,1800
+seed-001,Ground Floor,option-a,Option A · Open kitchen,existing,seed-012,Island,2,500,300,900
+seed-001,Ground Floor,option-a,Option A · Open kitchen,existing,seed-011,Kitchen counter,1,900,150,900
+seed-001,Ground Floor,option-a,Option A · Open kitchen,existing,seed-006,Sofa (3-seat),1,600,220,850
+seed-001,Ground Floor,option-a,Option A · Open kitchen,existing,unit-kitchen-tall,Tall Unit,1,600,560,2100
+seed-001,Ground Floor,option-a,Option A · Open kitchen,existing,seed-009,Toilet,1,100,140,750
+seed-001,Ground Floor,option-a,Option A · Open kitchen,existing,seed-010,Wardrobe,1,300,120,2400
+seed-001,Ground Floor,option-a,Option A · Open kitchen,existing,seed-008,Washer,1,120,120,850
+seed-001,Ground Floor,option-a,Option A · Open kitchen,demolition,seed-item-027,Base 600,1,600,400,850
+seed-001,Ground Floor,option-a,Option A · Open kitchen,proposed,seed-item-027,Base 600,1,600,400,850
+seed-001,Ground Floor,option-a,Option A · Open kitchen,proposed,tpl-island,Kitchen island,1,500,300,900

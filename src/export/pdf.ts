@@ -254,7 +254,9 @@ export async function writePdf(input: PdfInput): Promise<{ bytes: Uint8Array; mi
   doc.setCreationDate(when)
   doc.setModificationDate(when)
 
-  const metadata = doc.context.stream(xmpPacket(input.provenance), {
+  // The packet goes out as bytes, not as a string: pdf-lib encodes a string as PDFDocEncoding, which
+  // has no room for the `·` a view name carries, and XMP is UTF-8 by its own specification.
+  const metadata = doc.context.stream(new TextEncoder().encode(xmpPacket(input.provenance)), {
     Type: PDFName.of('Metadata'),
     Subtype: PDFName.of('XML'),
   })

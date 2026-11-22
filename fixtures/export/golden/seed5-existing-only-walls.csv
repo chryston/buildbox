@@ -1,0 +1,7 @@
+stable_id,floor_id,floor,design_option_id,design_option,renovation_state,drawing_layer_id,drawing_layer,classification,construction_label,shape,length_mm,radius_mm,thickness_mm,justification,bottom_mm,top_mm,height_mm,predecessor_ids
+seed-wall-002,seed-001,Ground Floor,,,existing,export-003,Structure,,,straight,9000,,200,centre,0,2600,2600,
+seed-wall-003,seed-001,Ground Floor,,,existing,export-003,Structure,,,straight,6000,,200,centre,0,2600,2600,
+seed-wall-004,seed-001,Ground Floor,,,existing,export-003,Structure,,,straight,9000,,200,centre,0,2600,2600,
+seed-wall-005,seed-001,Ground Floor,,,existing,export-003,Structure,,,straight,6000,,200,centre,0,2600,2600,
+seed-wall-010,seed-001,Ground Floor,,,existing,export-003,Structure,,,straight,6000,,150,centre,0,2600,2600,
+seed-wall-013,seed-001,Ground Floor,,,existing,export-003,Structure,,,straight,2500,,100,centre,0,2600,2600,

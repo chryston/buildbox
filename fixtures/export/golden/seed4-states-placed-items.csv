@@ -1,0 +1,3 @@
+stable_id,floor_id,floor,design_option_id,design_option,renovation_state,drawing_layer_id,drawing_layer,label,item_design_id,item_design,rotation_deg,bottom_mm,top_mm,room_id,room,room_relation,predecessor_ids
+views-island-013,seed-001,Ground Floor,option-a,Option A · Open kitchen,proposed,,Unlayered,Kitchen island,tpl-island,Kitchen island,0,0,900,seed-room-017,Kitchen,inside,
+views-successor-001,seed-001,Ground Floor,option-a,Option A · Open kitchen,proposed,,Unlayered,Base 600 #2,seed-item-027,Base 600,0,0,850,seed-room-017,Kitchen,inside,

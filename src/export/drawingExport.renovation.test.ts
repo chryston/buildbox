@@ -82,9 +82,7 @@ describe('the recorded composition (#73 §1, criterion 3)', () => {
       const [record] = recipe.composition ?? []
       expect(record, format).toBeDefined()
       expect(record?.['view_id'], format).toBe('views-view-016')
-      // `view_name` is not asserted for the PDF: pdf-lib encodes a stream string as PDFDocEncoding,
-      // so the `·` this fixture's view name carries arrives as U+FFFD. Reported, not papered over.
-      if (format === 'svg') expect(record?.['view_name'], format).toBe('Option B · Combined')
+      expect(record?.['view_name'], format).toBe('Option B · Combined')
       expect(record?.['design_option_id'], format).toBe('option-b')
       expect(record?.['renovation_display'], format).toBe('combined')
       expect((record?.['included_layers'] as unknown[]).length, format).toBeGreaterThan(0)
