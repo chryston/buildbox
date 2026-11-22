@@ -17,8 +17,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, FF_RENOVATION, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, snapCandidateAllowed } from '../../derive'
-import type { DisplayModel, LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, FF_RENOVATION, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, snapCandidateAllowed } from '../../derive'
+import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings } from '../../drawing'
 import type { BadgeSubject, LayerGates, OpeningPreview, RoomProposal } from '../../drawing'
 import type { Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
@@ -204,7 +204,7 @@ export function FloorWorkspace(): ReactNode {
   const renovationStates: ReadonlyMap<string, RenovationState> | null =
     renovationOptionId === null || floorId === null || view === null
       ? null
-      : statesOf(displayModel(effectiveModel(project, floorId, renovationOptionId), viewRenovationDisplay(view)))
+      : displayStates(displayModel(effectiveModel(project, floorId, renovationOptionId), viewRenovationDisplay(view)))
   /**
    * The Project the canvas's geometry is derived from. `deriveWalls` and `deriveRooms` derive the
    * standing set, but a Wall marked for demolition is still drawn — with the demolition overlay on it
@@ -213,15 +213,10 @@ export function FloorWorkspace(): ReactNode {
    * junctions and faces are then computed over the Walls that are actually on screen; the Display's
    * own list above still decides what reaches the canvas.
    */
-  const drawingProject = useMemo<Project>(() => {
-    if (renovationOptionId === null) return project
-    return {
-      ...project,
-      designOptions: designOptionsOf(project).map((option) =>
-        option.id === renovationOptionId ? { ...option, demolishedIds: [] } : option,
-      ),
-    }
-  }, [project, renovationOptionId])
+  const drawingProject = useMemo<Project>(
+    () => displayProject(project, renovationOptionId),
+    [project, renovationOptionId],
+  )
   /** The Floor the canvas draws, from the session's one derive cache (#60 criterion 3). */
   const derivedFloor =
     floorId === null
@@ -1529,13 +1524,7 @@ export function FloorWorkspace(): ReactNode {
    */
   const entityLayerKey = useMemo(() => {
     if (!FF_RENOVATION || floorId === null) return null
-    const model = effectiveModel(project, floorId, renovationOptionId)
-    const layerOf = new Map<string, string>()
-    for (const { entity } of model.walls) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
-    for (const { entity } of model.openings) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
-    for (const { entity } of model.rooms) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
-    for (const { entity } of model.placedItems) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
-    return layerOf
+    return entityLayerKeys(project, floorId, renovationOptionId)
   }, [project, floorId, renovationOptionId])
 
   /**
@@ -2535,14 +2524,5 @@ export function FloorWorkspace(): ReactNode {
   )
 }
 
-/**
- * Which entities a Renovation Display draws, and as what (#70 criterion 7).
- *
- * `displayModel` already answered both — it is the Display's own rows, each carrying the State it is
- * drawn in — so this only turns them into the lookup the canvas needs. Openings are in here too: a
- * Display that does not draw a Wall does not draw what is cut in it either.
- */
-function statesOf(model: DisplayModel): ReadonlyMap<string, RenovationState> {
-  const rows = [...model.walls, ...model.openings, ...model.rooms, ...model.placedItems]
-  return new Map(rows.map((row) => [row.entity.id, row.renovationState]))
-}
+
+

@@ -794,12 +794,9 @@ export const STRINGS = {
   area: 'Area',
   perimeter: 'Perimeter',
   bounds: 'Bounds',
-  // Rooms (#67). The name is what the inspector calls the field's subject; the label is the one
-  // sentence the Plan View draws, and it is drawn from the Room's own name and its analytic area.
+  // Rooms (#67). The name is what the inspector calls the field's subject; the sentence the Plan View
+  // draws is `export/strings.ts`'s `roomLabel`, which the sheet draws too.
   room: 'Room',
-  roomLabel(name: string, area: string): string {
-    return `${name} · ${area}`
-  },
   /**
    * The one sentence a Room proposal that would overlap another earns (#67 §7). It is the same
    * sentence the Intent refuses with, so the live check and the commit never disagree in words.

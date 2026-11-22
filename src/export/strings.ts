@@ -12,6 +12,7 @@
  */
 
 import type { RenovationState } from '../derive'
+import type { RenovationDisplay } from '../domain'
 import type { Orientation, PageSize } from './types'
 
 /** The fixed footer, verbatim from #61 §5. Every format writes this one string. */
@@ -44,12 +45,52 @@ export const DESIGN_OPTION = 'Existing only'
 /** `Page 1/1`. Multi-page Drawing Sets arrive in #85. */
 export const pageStatement = (page: number, of: number): string => `Page ${page}/${of}`
 
+/**
+ * A Room's label on the plan: its name and its area (#67 §4), `Kitchen · 13.08 m²`.
+ *
+ * The one place this sentence is written. The canvas passes it to `drawing` as `formatRoomLabel` and
+ * the sheet passes the same function, so a Room cannot be called one size on the screen and another
+ * on the paper drawn from it. The area is always square metres to two decimals, whatever the
+ * Project's display unit — the same rule the Room inspector's own field follows.
+ */
+export const roomLabel = (name: string, squareMillimetres: number): string =>
+  `${name} · ${(squareMillimetres / 1_000_000).toFixed(2)} m²`
+
+/**
+ * The four Renovation Displays by the name a sheet prints (#73 §1).
+ *
+ * This is the one list of the four names: `ui/strings/renovation.ts` reads it for the mode bar, the
+ * saved-view card and the undo labels, so a Display cannot be called one thing on the canvas and
+ * another on the paper that came out of it.
+ */
+export const DISPLAY_NAME: Readonly<Record<RenovationDisplay, string>> = {
+  existing: 'Existing',
+  demolition: 'Demolition',
+  proposed: 'Proposed',
+  combined: 'Combined',
+}
+
+/**
+ * The renovation legend's two rows (#73 §1).
+ *
+ * Only the two States that carry an overlay have a swatch to show: `Existing` is content drawn in
+ * its own layer colour, which is not a thing a legend can point at. The screen's legend says
+ * `Demolition (hatch overlay)`; a printed one says the State, because the swatch beside it is the
+ * hatch.
+ */
+export const RENOVATION_LEGEND: Readonly<Record<Extract<RenovationState, 'demolition' | 'proposed'>, string>> = {
+  demolition: 'Demolition',
+  proposed: 'Proposed',
+}
+
 /** The title-block labels, keyed by the row that shows them. */
 export const TITLE_BLOCK = {
   project: 'Project',
   floor: 'Floor',
   itemDesign: 'Item',
   designOption: 'Design option',
+  /** The Renovation Display row, which sits under the Design Option it belongs to (#73 §1). */
+  renovationDisplay: 'Display',
   view: 'View',
   /** The view name a scaled-up Item sheet carries, where a Floor sheet carries the Floor's name. */
   itemDetail: 'Item Detail',

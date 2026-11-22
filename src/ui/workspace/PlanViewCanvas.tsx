@@ -36,8 +36,8 @@ import { OverlapCycleList } from './renovation/OverlapCycleList'
 import { cycleOrder, nextCycle, reachableCandidates } from './selection/overlapCycle'
 import type { CycleCandidate, CycleState } from './selection/overlapCycle'
 import type { DisplayListInteractions } from '../drawing/DisplayListSvg'
-import { STRINGS } from '../strings'
-import { formatMm, formatSquareMetres } from './displayUnits'
+import { roomLabel } from '../../export'
+import { formatMm } from './displayUnits'
 import { rotationFromPointer } from './rotateHandle'
 import { fitViewport, zoomAround } from './viewport'
 import type { Viewport } from './viewport'
@@ -497,7 +497,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       openingPreview,
       selectedRoomId,
       roomProposal,
-      formatRoomLabel: (name, squareMillimetres) => STRINGS.roomLabel(name, formatSquareMetres(squareMillimetres)),
+      formatRoomLabel: roomLabel,
       handles: handlesFor,
     },
   )

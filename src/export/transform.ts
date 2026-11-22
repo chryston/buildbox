@@ -126,14 +126,3 @@ export function translateList(dx: number, dy: number, list: DisplayList): Displa
   return mapList(affineTranslate(dx, dy), list)
 }
 
-/**
- * The layers a recipe keeps.
- *
- * `layers` is S8's override and is absent until then; absent means the view's own, which is the
- * whole list. Filtering happens here rather than in the writers so that all three formats agree
- * on what "the drawing" was.
- */
-export function keepLayers(layers: readonly DisplayLayer[], keep: readonly string[] | undefined): DisplayLayer[] {
-  if (keep === undefined) return [...layers]
-  return layers.filter((layer) => keep.includes(layer.key))
-}

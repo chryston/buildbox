@@ -16,11 +16,20 @@
  */
 
 import { canonicalJson } from '../lib'
+import { drawingComposition } from './composition'
 // The export contract has one version, and `csv/tables.ts` is where it is written (#62 §5): a
 // drawing and a CSV carry the same number because they read the same constant.
 import { CSV_CONTRACT_VERSION } from './csv/tables'
 import { PRODUCT_NAME } from './strings'
-import type { ExportDeps, ExportSnapshot, ListsRecipe, Recipe } from './types'
+import type { ExportDeps, ExportSnapshot, ListsRecipe, Recipe, RecipeViewRef, RecordedComposition } from './types'
+import type { Project } from '../domain'
+
+/** What one drawing was drawn from, or nothing for an Item Detail, which has no layers to record. */
+function compositionOf(project: Project, view: RecipeViewRef): RecordedComposition | null {
+  if (view.kind !== 'plan') return null
+  const planView = project.views.find((each) => each.id === view.viewId)
+  return planView === undefined ? null : drawingComposition(project, planView, planView.floorId, view.toggles).recorded
+}
 
 /**
  * The provenance of one export.
@@ -46,6 +55,18 @@ export function provenanceOf(
   recipe: Recipe | ListsRecipe,
   deps: Pick<ExportDeps, 'clock' | 'buildboxVersion' | 'contractVersion' | 'unsavedChanges'>,
 ): Provenance {
+  // A drawing's recipe carries what its sheets were drawn from (#73 §1); a list's carries its scope,
+  // which is already its whole story. The composition is derived here rather than handed in by the
+  // dialog so that no caller can publish a recipe whose record disagrees with its request.
+  const published: Recipe | ListsRecipe =
+    'views' in recipe
+      ? {
+          ...recipe,
+          composition: recipe.views
+            .map((view) => compositionOf(snapshot.project, view))
+            .filter((each): each is RecordedComposition => each !== null),
+        }
+      : recipe
   return {
     generator: PRODUCT_NAME,
     buildbox_version: deps.buildboxVersion,
@@ -54,7 +75,7 @@ export function provenanceOf(
     project_id: snapshot.project.id,
     project_revision: snapshot.revision,
     ...(deps.unsavedChanges === true ? { unsaved_changes: true as const } : {}),
-    recipe,
+    recipe: published,
   }
 }
 

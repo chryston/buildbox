@@ -21,15 +21,27 @@
  */
 
 import type { DisplayLayer, DisplayList, MissingGlyph, Rect } from '../drawing'
-import { drawItemDetail, drawPlanView } from '../drawing'
-import { effectiveFloor, effectiveItemDetail } from '../derive'
+import { drawFloorView, drawItemDetail, wallOpenings } from '../drawing'
+import {
+  FF_RENOVATION,
+  deriveRooms,
+  deriveWalls,
+  displayModel,
+  displayProject,
+  displayStates,
+  effectiveFloor,
+  effectiveItemDetail,
+  effectiveModel,
+} from '../derive'
+import { viewDesignOptionId, viewRenovationDisplay } from '../domain'
+import { drawingComposition } from './composition'
 import { autoOrientation, fitCheck, fitDenominator, sheetOf } from './fit'
 import type { FitSuggestion, Sheet } from './fit'
 import { formatLength } from './format'
-import { scaleDerivedFloor, scaleDerivedItemDetail } from './scaleInput'
+import { scaleDerivedFloor, scaleDerivedItemDetail, scaleFloorRooms, scaleFloorWalls, scaleWallOpenings } from './scaleInput'
 import { SHEET_SIZING, footerItems, frameItems, furnitureLayer, gridItems, scaleBarItems, titleBlockItems } from './sheet'
-import { NOT_TO_SCALE, TITLE_BLOCK, scaleStatement, unitStatement } from './strings'
-import { keepLayers, translateList } from './transform'
+import { NOT_TO_SCALE, TITLE_BLOCK, roomLabel, scaleStatement, unitStatement } from './strings'
+import { translateList } from './transform'
 import type { ExportSnapshot, Recipe, RecipeViewRef } from './types'
 
 /** One view, on the sheet it belongs on, in millimetres of paper. */
@@ -88,11 +100,40 @@ function rawDrawing(
   if (view.kind === 'plan') {
     const planView = project.views.find((each) => each.id === view.viewId)
     if (planView === undefined) return { ok: false, reason: 'unknown-view' }
-    const floor = effectiveFloor(project, revision, planView.floorId, null)
-    const list = drawPlanView(
-      scaleDerivedFloor(floor, shrink),
-      { showPlanImage: planView.showPlanImage },
-      { sizing: SHEET_SIZING },
+    const floorId = planView.floorId
+    const composition = drawingComposition(project, planView, floorId, view.toggles)
+    const drawn = displayProject(project, composition.optionId)
+    // The screen's recipe, line for line (#70 §F): the standing geometry comes from the Project with
+    // the active Option's demolition records set aside, so a Wall marked for demolition is still
+    // drawn — with its overlay on it — while `displayStates` decides what reaches the paper at all.
+    // The Openings are resolved against the Existing Model's Walls, which is what the canvas does.
+    const { list } = drawFloorView(
+      {
+        floor: scaleDerivedFloor(effectiveFloor(drawn, revision, floorId, composition.optionId), shrink),
+        walls: scaleFloorWalls(deriveWalls(drawn, floorId, composition.optionId), shrink),
+        rooms: scaleFloorRooms(deriveRooms(drawn, floorId, composition.optionId), shrink),
+        openings: scaleWallOpenings(
+          wallOpenings(
+            project.existingModel.walls,
+            project.existingModel.wallJunctions,
+            project.existingModel.openings.filter((each) => each.floorId === floorId),
+          ),
+          shrink,
+        ),
+      },
+      {
+        sizing: SHEET_SIZING,
+        showPlanImage: planView.showPlanImage,
+        renovation: composition.optionId === null
+          ? null
+          : {
+              states: displayStates(
+                displayModel(effectiveModel(project, floorId, composition.optionId), viewRenovationDisplay(planView)),
+              ),
+            },
+        layers: composition.gates,
+        formatRoomLabel: roomLabel,
+      },
     )
     return {
       ok: true,
@@ -137,9 +178,12 @@ export function modelBounds(snapshot: ExportSnapshot, view: RecipeViewRef): Rect
   if (view.kind === 'plan') {
     const planView = project.views.find((each) => each.id === view.viewId)
     if (planView === undefined) return null
+    // The same Floor `rawDrawing` draws, Option and all: a fixed scale is checked against the extent
+    // of what will be drawn, and a Design Option's proposed Walls can reach past the Existing Model.
+    const optionId = FF_RENOVATION ? viewDesignOptionId(planView) : null
     // A Floor with no Plan Image and nothing on it has no extent, which is not the same as there
     // being no such view: criterion 7 wants its sheet drawn, frame and all.
-    return effectiveFloor(project, revision, planView.floorId, null).bounds ?? { x: 0, y: 0, w: 0, h: 0 }
+    return effectiveFloor(displayProject(project, optionId), revision, planView.floorId, optionId).bounds ?? { x: 0, y: 0, w: 0, h: 0 }
   }
   const design = project.itemDesigns.find((each) => each.id === view.itemDesignId)
   if (design === undefined) return null
@@ -224,13 +268,13 @@ export function composeSheet(
     drawing: {
       space: drawn.space,
       bounds: { x: 0, y: 0, w: sheet.widthMm, h: sheet.heightMm },
-      layers: recipe.layers === undefined ? placed.layers : keepLayers(placed.layers, recipe.layers),
+      layers: placed.layers,
       missingGlyphs: placed.missingGlyphs,
     },
     list: {
       space: drawn.space,
       bounds: { x: 0, y: 0, w: sheet.widthMm, h: sheet.heightMm },
-      layers: recipe.layers === undefined ? layers : keepLayers(layers, recipe.layers),
+      layers,
       missingGlyphs: placed.missingGlyphs,
     },
     viewName: raw.drawing.viewName,

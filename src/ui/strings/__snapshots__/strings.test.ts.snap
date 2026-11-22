@@ -411,7 +411,6 @@ exports[`the copy > is the whole vocabulary of the interface 1`] = `
   "retrySave": "Retry save",
   "returnToProjects": "← Return to Projects",
   "room": "Room",
-  "roomLabel": [Function],
   "rotation": "Rotation",
   "roundAllCorners": "Round all corners",
   "saveFailed": "Save failed · changes not stored",
