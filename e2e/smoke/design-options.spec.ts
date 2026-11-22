@@ -118,6 +118,10 @@ test('reviews the move of a surveyed Item and refuses it outside a correction', 
   // is where the move itself, and its Undo, are driven through a correction.
   await expect(page.getByTestId('move-problem')).toHaveText('Moving work to a Design Option runs inside a correction.')
   await expect(dialog).toBeVisible()
+  // The refusal does not empty the review it refused: the reason and the Item it was about stay on
+  // the same screen, so the danger paragraph is never promising items no list names.
+  await expect(dialog.getByTestId(`move-item-${SOFA}`)).toContainText('Sofa')
+  await expect(dialog.getByTestId('move-count')).toHaveText('1 entity')
   await page.getByTestId('move-to-option-cancel').click()
   await expect(dialog).toBeHidden()
   await expect(placedObject(page, SOFA)).toBeVisible()

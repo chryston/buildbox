@@ -174,4 +174,20 @@ describe('the Move to a Design Option review', () => {
     await user.click(action)
     await screen.findByTestId('move-to-option-dialog')
   })
+
+  it('keeps naming the entity it refused, next to the reason', async () => {
+    const user = userEvent.setup()
+    await renderWorkspace()
+    await ask(() => openMoveToOptionDialog([SOFA]))
+    await screen.findByTestId('move-to-option-dialog')
+
+    // Nothing here opens a correction, so the write is refused (#69 §12) — and the review that was
+    // confirmed has to stay on the screen the reason appears on, or the person is told the move
+    // changed nothing about a list of nothing.
+    await user.click(screen.getByTestId('move-to-option-confirm'))
+    await screen.findByTestId('move-problem')
+    expect(screen.getByTestId('move-danger')).toHaveTextContent('these items leave the Existing Model')
+    expect(screen.getByTestId(`move-item-${SOFA}`)).toHaveTextContent('Sofa')
+    expect(screen.getByTestId('move-count')).toHaveTextContent('1 entity')
+  })
 })
