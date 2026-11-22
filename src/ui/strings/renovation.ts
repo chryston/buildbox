@@ -60,6 +60,14 @@ export const RENOVATION_STRINGS = {
   moveBlocked: 'This Option cannot take the move:',
   moveConfirm: (optionName: string): string => `Move to ${optionName}`,
 
+  // ---- the undo tooltip of a saved-view setting (#70 §2)
+  // The catalogue's default label (`Set Design Option`, `Set Renovation Display`) cannot name what
+  // was chosen: the Option's name is Project data and the Display's is copy. So the card composes
+  // the whole line and hands it to `IntentBuilder.build`, which puts it on the transaction the undo
+  // tooltip reads. `none` is the words for `— no Design Option —`, not an absence of a label.
+  setDesignOption: (name: string | null): string => `Set Design Option: ${name ?? 'none'}`,
+  setRenovationDisplay: (display: string): string => `Set Renovation Display: ${display}`,
+
   // ---- the buttons every one of them ends with
   cancel: 'Cancel',
 } as const

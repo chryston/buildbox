@@ -169,11 +169,13 @@ export function createSessionServices(
  */
 export function createIntentFactory(clock: ClockPort, ids: IdSource): IntentBuilder {
   return {
-    build<T extends IntentType>(type: T, payload: PayloadOf<T>): Intent {
+    build<T extends IntentType>(type: T, payload: PayloadOf<T>, label?: string): Intent {
       return {
         type,
         payload,
-        label: intentLabel(type),
+        // The caller's label wins: a saved-view card knows which Option or Display was chosen and
+        // the undo tooltip has to name it (#70 §2). Everyone else gets the catalogue's default.
+        label: label ?? intentLabel(type),
         ids: ids(intentIdCount(type, payload)),
         now: clock.now(),
       } as Intent

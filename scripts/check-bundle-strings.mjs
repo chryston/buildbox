@@ -33,6 +33,9 @@ const FORBIDDEN = [
   ...(process.env['VITE_FF_RENOVATION'] === 'true'
     ? []
     : ['Nothing in the Existing Model changes.', 'Move to a Design Option']),
+  // #70 §2: the saved-view card composes these two undo labels. A flag-off bundle carrying either
+  // has shipped the card, and with it the Design Option and Renovation Display pickers.
+  ...(process.env['VITE_FF_RENOVATION'] === 'true' ? [] : ['Set Design Option: ', 'Set Renovation Display: ']),
 ]
 // Only the files that could contain application code: an image or a font cannot.
 const SCANNED = new Set(['.js', '.mjs', '.css', '.html', '.json', '.svg', '.txt', '.map'])
