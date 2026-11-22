@@ -118,6 +118,15 @@ export const RENOVATION_STRINGS = {
   setDesignOption: (name: string | null): string => `Set Design Option: ${name ?? 'none'}`,
   setRenovationDisplay: (display: string): string => `Set Renovation Display: ${display}`,
 
+  // ---- the legend under the canvas (#70 §4)
+  // The three marks in the words the issue gives them, next to the same swatches the Display cards
+  // use. `Existing` is the word the whole product already has for that State, so the legend reuses
+  // `displayExisting` rather than saying it a second way.
+  legendDemolition: 'Demolition (hatch overlay)',
+  legendProposed: 'Proposed (halo overlay)',
+  /** The muted sentence after the three: the overlay never replaces the layer's own colour. */
+  legendLayerNote: 'Layer colour is kept underneath renovation graphics',
+
   // ---- the buttons every one of them ends with
   cancel: 'Cancel',
 } as const

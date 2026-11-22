@@ -53,6 +53,11 @@ const FORBIDDEN = [
         'Select one thing to mark for demolition.',
         'display needs an active Design Option.',
         'Show Existing',
+        // #70 §4: the legend under the canvas. Its two overlay labels and its note are words no
+        // flag-off surface says, so they prove the row stayed out of the shipped bundle.
+        'Demolition (hatch overlay)',
+        'Proposed (halo overlay)',
+        'Layer colour is kept underneath renovation graphics',
       ]),
 ]
 // Only the files that could contain application code: an image or a font cannot.

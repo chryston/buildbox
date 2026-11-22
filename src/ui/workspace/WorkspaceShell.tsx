@@ -22,6 +22,12 @@ export interface WorkspaceShellProps {
    * Project. Absent with the renovation flag off, which leaves the #55 layout untouched.
    */
   renovationBar?: ReactNode
+  /**
+   * The legend under the canvas (#70 §4): a row of the shell below the body, for the same reason the
+   * mode bar is one above it — the canvas host sizes its `<svg>` to its own height. Absent with the
+   * renovation flag off, which leaves the #55 layout untouched.
+   */
+  renovationLegend?: ReactNode
   viewCard: ReactNode
   inspector: ReactNode
   canvas: ReactNode
@@ -39,7 +45,7 @@ export interface WorkspaceShellProps {
 }
 
 export function WorkspaceShell(props: WorkspaceShellProps): ReactNode {
-  const { header, toolbar, renovationBar, viewCard, inspector, canvas, draftBar, warningStrip, notes, railOpen, canvasHostRef } = props
+  const { header, toolbar, renovationBar, renovationLegend, viewCard, inspector, canvas, draftBar, warningStrip, notes, railOpen, canvasHostRef } = props
   return (
     <div className="bb-workspace" data-testid="floor-workspace">
       <header className="bb-workspace-header">{header}</header>
@@ -63,6 +69,9 @@ export function WorkspaceShell(props: WorkspaceShellProps): ReactNode {
           <aside className="bb-workspace-notes" data-testid="workspace-notes">{notes}</aside>
         )}
       </div>
+      {renovationLegend !== undefined && renovationLegend !== null && renovationLegend !== false && (
+        <div className="bb-renovation-legend-row">{renovationLegend}</div>
+      )}
     </div>
   )
 }

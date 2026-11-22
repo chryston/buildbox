@@ -86,6 +86,7 @@ import {
   DesignOptionsSection,
   MoveToOptionAction,
   RenovationErrorBanner,
+  RenovationLegend,
   RenovationModeBar,
   RenovationOverlays,
   RenovationToolStrip,
@@ -1394,6 +1395,7 @@ export function FloorWorkspace(): ReactNode {
           </>
         }
         toolbar={<WorkspaceToolbar groups={groups} />}
+        renovationLegend={FF_RENOVATION && view !== null ? <RenovationLegend /> : undefined}
         renovationBar={
           FF_RENOVATION && view !== null ? (
             <>

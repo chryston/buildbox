@@ -1032,3 +1032,31 @@
   background: var(--bb-warn-button);
   color: var(--bb-warn-button-text);
 }
+
+/* The legend under the canvas (#70 §4): one row of the shell, the three marks and the muted note
+   that says the layer colour is still underneath them. The swatches are the card's own. */
+.bb-renovation-legend-row {
+  flex: none;
+  border-top: 1px solid var(--bb-border);
+  background: var(--bb-bg-card);
+}
+
+.bb-renovation-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--bb-text-body);
+}
+
+.bb-renovation-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bb-renovation-legend-note {
+  color: var(--bb-text-muted);
+}
