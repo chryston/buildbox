@@ -8,12 +8,12 @@
  * user reading `Undo Set Design Option` with no idea which Option it brings back.
  */
 import { describe, expect, it } from 'vitest'
+import { createFakeClock } from '../session/testing'
 import { RENOVATION_STRINGS } from '../ui'
 import { createIntentFactory } from './projectsV2'
 
-const clock = { now: () => '2026-11-22T09:00:00.000Z' }
-const ids = (n: number): string[] => Array.from({ length: n }, (_, at) => `id-${at}`)
-const factory = createIntentFactory(clock, ids)
+const ids = (count = 0): string[] => Array.from({ length: count }, (_, at) => `id-${at}`)
+const factory = createIntentFactory(createFakeClock(), ids)
 
 describe('the undo label of a saved-view setting', () => {
   it('names the Design Option the card chose', () => {
