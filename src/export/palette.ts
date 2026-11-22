@@ -24,6 +24,12 @@ const PRINT_VARS: Readonly<Record<string, string>> = {
   // ghost. A sheet does carry those: an export of a Floor with a violation in it should not print
   // the warning as ink. Dark enough to survive a photocopy, like the measurement blue.
   '--bb-danger-dot': '#8a1a1a',
+  // The renovation overlays (#70 §F) do reach a sheet: a drawing of a Design Option is exactly the
+  // drawing a client asks for. Both are darker than the screen theme's for the same reason the
+  // danger red is — a photocopied set is how these get to a site — and the demolition ink is the
+  // danger red's own value, because "this is going" and "this is wrong" are the same mark on paper.
+  '--bb-renovation-demolition-border': '#8a1a1a',
+  '--bb-renovation-proposed-border': '#1a6b3a',
   '--bb-bg-card': '#ffffff',
   '--bb-border-card': '#8e8e96',
   '--color-accent': '#1a4f8a',

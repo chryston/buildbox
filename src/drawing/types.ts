@@ -247,6 +247,12 @@ export type StyleKey =
   | 'plan-warning-badge-text'
   | 'plan-warning-badge-leader'
   | 'plan-placeholder'
+  /** The demolition overlay: a dashed outline in the demolition colour, hatched inside (#70 §F). */
+  | 'renovation-demolition'
+  /** The 45° hatching itself, one hairline per diagonal. */
+  | 'renovation-hatch'
+  /** The proposed overlay: a dashed halo outside the outline, in the proposed colour. */
+  | 'renovation-halo'
   | 'cabinet-panel-oak'
   | 'cabinet-panel-walnut'
   | 'cabinet-panel-white'
@@ -332,6 +338,11 @@ export type SizeRole =
   /** The dash and the gap of a removed section's lines (#65 §12). */
   | 'opening-dash'
   | 'opening-gap'
+  /** The renovation overlays' dash and gap, and the two distances they are drawn at (#70 §F). */
+  | 'renovation-dash'
+  | 'renovation-gap'
+  | 'renovation-halo-gap'
+  | 'renovation-hatch-pitch'
   | 'plan-placeholder-line'
   | 'cabinet-outline'
   | 'cabinet-outline-bold'

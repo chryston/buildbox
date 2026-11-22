@@ -17,8 +17,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, FF_RENOVATION } from '../../derive'
-import type { Pt, RoomFaceCandidate, Warning } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, effectiveModel, FF_RENOVATION } from '../../derive'
+import type { DisplayModel, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings } from '../../drawing'
 import type { BadgeSubject, OpeningPreview, RoomProposal } from '../../drawing'
 import type { Point2, Project, WallClassification } from '../../domain'
@@ -162,16 +162,30 @@ export function FloorWorkspace(): ReactNode {
   const image = planImageForView(project, view, imageSrc)
   const items = planItemsForFloor(project, floorId)
   const library = itemLibrary(project)
+  /**
+   * The Design Option this view draws (#70 §F). Flag-off, or a view with no Option, is `null`, and
+   * every derivation below is the Existing Model exactly as it has always been.
+   */
+  const renovationOptionId = FF_RENOVATION && view !== null ? viewDesignOptionId(view) : null
+  /**
+   * The State of every entity this view's Renovation Display draws, and the only list of what the
+   * Display draws at all: an entity absent from it is not on the canvas (#70 criterion 7). The
+   * overlays themselves are `drawing`'s rules, laid on the outlines the canvas already has.
+   */
+  const renovationStates: ReadonlyMap<string, RenovationState> | null =
+    renovationOptionId === null || floorId === null || view === null
+      ? null
+      : statesOf(displayModel(effectiveModel(project, floorId, renovationOptionId), viewRenovationDisplay(view)))
   /** The Floor the canvas draws, from the session's one derive cache (#60 criterion 3). */
-  const derivedFloor = floorId === null ? null : session.deriveFloor(floorId)
+  const derivedFloor = floorId === null ? null : session.deriveFloor(floorId, renovationOptionId)
   /** The tidied Walls, faces and corners the Wall tool snaps to, from the same cache (#64 §6). */
-  const floorWalls = floorId === null ? null : session.deriveWalls(floorId)
+  const floorWalls = floorId === null ? null : session.deriveWalls(floorId, renovationOptionId)
   /**
    * The Floor's Rooms: their areas, label anchors and Placed Item membership, from the same cache
-   * (#67 §3). Rooms are Existing-only until Design Options own them (#69), so there is no option
-   * to derive them against.
+   * (#67 §3). A view drawing a Design Option sees that Option's Rooms standing where its own walls
+   * put them, which is what `optionId` is for (#69).
    */
-  const floorRooms = floorId === null ? null : session.deriveRooms(floorId)
+  const floorRooms = floorId === null ? null : session.deriveRooms(floorId, renovationOptionId)
   /**
    * The chain being drawn, or `null` (#64 §12). Local like the shape draft: a half-drawn chain is
    * not a proposal and must not survive a reload, a Floor change or the tool being put down.
@@ -1270,7 +1284,6 @@ export function FloorWorkspace(): ReactNode {
   // #70 §3: the two things only this component knows, which the strip cannot derive from the table —
   // whether one thing is named well enough to mark, and which Design Option would own the record.
   const renovationSelectedIds = [wallSelection, openingSelection, roomSelection, selection].filter((id) => id !== null)
-  const renovationOptionId = view === null ? null : viewDesignOptionId(view)
   const renovationBlocked: Partial<Record<RenovationToolId, string>> =
     renovationSelectedIds.length === 1 ? {} : { markDemolition: RENOVATION_STRINGS.markDemolitionNeedsOne }
   const markRenovationDemolition = (): void => {
@@ -1586,6 +1599,7 @@ export function FloorWorkspace(): ReactNode {
               precision={project.preferences.displayPrecision}
               angleSnap={angleSnap}
               walls={floorWalls}
+              renovation={renovationStates === null ? null : { states: renovationStates }}
               selectedWallId={wallSelection}
               rooms={floorRooms}
               selectedRoomId={roomSelection}
@@ -1868,4 +1882,16 @@ export function FloorWorkspace(): ReactNode {
       )}
     </>
   )
+}
+
+/**
+ * Which entities a Renovation Display draws, and as what (#70 criterion 7).
+ *
+ * `displayModel` already answered both — it is the Display's own rows, each carrying the State it is
+ * drawn in — so this only turns them into the lookup the canvas needs. Openings are in here too: a
+ * Display that does not draw a Wall does not draw what is cut in it either.
+ */
+function statesOf(model: DisplayModel): ReadonlyMap<string, RenovationState> {
+  const rows = [...model.walls, ...model.openings, ...model.rooms, ...model.placedItems]
+  return new Map(rows.map((row) => [row.entity.id, row.renovationState]))
 }

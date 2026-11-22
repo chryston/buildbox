@@ -19,21 +19,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import { affineApply, affineInvert, resolveSnap } from '../../derive'
-import type { DerivedFloor, FloorRooms, FloorWalls, SnapCandidate, SnapKind } from '../../derive'
+import type { DerivedFloor, FloorRooms, FloorWalls, RenovationState, SnapCandidate, SnapKind } from '../../derive'
 import type { DisplayUnit, Point2 } from '../../domain'
 import { footprintPath } from '../../domain'
 import {
   LAYER_ORDER,
   displayRects,
   drawPlanView,
+  drawPlacement,
   drawRooms,
   drawSelectionAnnotations,
   drawWarningBadges,
   drawWalls,
+  pathToCommands,
+  renovationOverlays,
   unionRect,
   wallLabelBoxes,
 } from '../../drawing'
-import type { BadgeSubject, DisplayLayer, DisplayList, OpeningPreview, PlanPreview, RoomProposal, Sizing, WallOpenings } from '../../drawing'
+import type { BadgeSubject, DisplayLayer, DisplayList, OpeningPreview, PlanPreview, RenovationOutline, RoomProposal, Sizing, WallOpenings } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
 import type { DisplayListInteractions } from '../drawing/DisplayListSvg'
 import { STRINGS } from '../strings'
@@ -98,6 +101,15 @@ export interface PlanViewCanvasProps {
   angleSnap: AngleSnap
   /** The Floor's tidied Walls, drawn as bands under the footprints (#64 §15). */
   walls?: FloorWalls | null
+  /**
+   * The Renovation Display this canvas is drawing (#70 §F), or nothing at all when the flag is off.
+   *
+   * `states` answers two questions with one map: an entity absent from it is not drawn in this
+   * Display, and an entity present in it is drawn as that State — which decides the overlay laid on
+   * top. The entity's own item is never rewritten: the overlay arrives as separate display-list
+   * items in the same layer, so the layer's colour is still what is underneath it.
+   */
+  renovation?: { states: ReadonlyMap<string, RenovationState> } | null
   /** The selected Wall: drawn with a heavier line and its end handles (#64 §15). */
   selectedWallId?: string | null
   /** A Wall band was clicked; the selection moves to it (#64 §15). */
@@ -166,7 +178,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     hostRef, svgRef, floor, showPlanImage, imageSrc, viewport, onViewport,
     tool, selection, onSelect, onCursorChange, onCanvasClick, dragPreview, onDragPreview, onMoveItem, onRotateItem,
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
-    angleSnap, overlay, htmlOverlay, walls, selectedWallId = null, onSelectWall,
+    angleSnap, overlay, htmlOverlay, walls, renovation = null, selectedWallId = null, onSelectWall,
     openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
     rooms = null, selectedRoomId = null, onSelectRoom, roomProposal = null,
     warningSubjects = [], onSelectWarningBadge,
@@ -412,25 +424,53 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   const resolveAsset = (hash: string): string | null =>
     floor.planImage !== null && floor.planImage.assetHash === hash ? imageSrc : null
 
-  const list = drawPlanView(floor, { showPlanImage, preview }, { sizing })
+  // #70 §F: a Renovation Display draws a subset of the Floor and marks what it draws. The subset is
+  // `states`' domain — an entity the Display does not draw is absent from it — and the marking is
+  // the overlay items `renovationOverlays` lays in each entity's own layer. Flag-off, `renovation`
+  // is null and every one of these is the same object the canvas was already given.
+  const states = renovation === null ? null : renovation.states
+  const drawnFloor: DerivedFloor = states === null
+    ? floor
+    : { ...floor, placements: floor.placements.filter((p) => states.has(p.id)) }
+  const drawnWalls: FloorWalls | null | undefined = states === null || walls === undefined || walls === null
+    ? walls
+    : { ...walls, walls: walls.walls.filter((wall) => states.has(wall.id)) }
+  const drawnRooms: FloorRooms | null = states === null || rooms === null
+    ? rooms
+    : { ...rooms, rooms: rooms.rooms.filter((room) => states.has(room.id)) }
+  const overlayList: DisplayList | null = states === null
+    ? null
+    : {
+        space: 'floor',
+        bounds: drawnFloor.bounds ?? { x: 0, y: 0, w: 0, h: 0 },
+        layers: renovationOverlays(renovationOutlines(drawnFloor, drawnWalls ?? null, drawnRooms), states, sizing),
+        missingGlyphs: [],
+      }
+
+  const list = drawPlanView(renovation === null ? floor : drawnFloor, { showPlanImage, preview }, { sizing })
   // Walls, Rooms and footprints are lists built for three reasons, but they share one z-order:
   // `LAYER_ORDER` is the only source, so each is interleaved by layer rather than appended, or a
   // Wall would land on top of the Item standing in it (#60 §3, #64 §15, #67 behaviour 35).
-  const wallList = walls === undefined || walls === null || walls.walls.length === 0
+  // An Opening belongs to the Wall it is cut in: a Display that does not draw that Wall does not
+  // draw its Openings either, and `drawWalls` is handed only the hosts it will find.
+  const drawnOpenings = states === null
+    ? openings
+    : openings.filter((host) => states.has(host.wallId))
+  const wallList = drawnWalls === undefined || drawnWalls === null || drawnWalls.walls.length === 0
     ? null
-    : drawWalls(walls, { sizing, selectedWallId, openings, selectedOpeningId, preview: openingPreview })
+    : drawWalls(drawnWalls, { sizing, selectedWallId, openings: drawnOpenings, selectedOpeningId, preview: openingPreview })
   // A Room's label may not sit on a `W-n` reference, and the only honest source for where those
   // are is the placement that draws them.
-  const roomList = rooms === null || rooms.rooms.length === 0
+  const roomList = drawnRooms === null || drawnRooms.rooms.length === 0
     ? null
-    : drawRooms(rooms, {
+    : drawRooms(drawnRooms, {
       sizing,
       selectedRoomId,
       proposal: roomProposal,
-      obstacles: walls === undefined || walls === null ? [] : wallLabelBoxes(walls, sizing),
+      obstacles: drawnWalls === undefined || drawnWalls === null ? [] : wallLabelBoxes(drawnWalls, sizing),
       formatLabel: (name, squareMillimetres) => STRINGS.roomLabel(name, formatSquareMetres(squareMillimetres)),
     })
-  const extra = [wallList, roomList].filter((one): one is DisplayList => one !== null)
+  const extra = [wallList, roomList, overlayList].filter((one): one is DisplayList => one !== null)
   const withWalls: DisplayList = extra.length === 0
     ? list
     : {
@@ -597,3 +637,35 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
 }
 
 // -------------------------------------------------------------------- the derived Floor
+
+/**
+ * The outlines the renovation overlays are laid on (#70 §F).
+ *
+ * Each one is the same outline the entity's own item is drawn from — a Wall's tidied band, a Placed
+ * Item's world path, a Room's evaluated loop — so the dashed outline sits exactly on the edge it is
+ * annotating rather than beside it. Entities the Display does not draw are absent from `states` and
+ * are left out here too: an overlay on something invisible would be a mark with nothing under it.
+ */
+function renovationOutlines(
+  floor: DerivedFloor,
+  walls: FloorWalls | null,
+  rooms: FloorRooms | null,
+): RenovationOutline[] {
+  return [
+    ...(walls === null ? [] : walls.walls.map((wall): RenovationOutline => ({
+      ref: { id: wall.id, role: 'wall' },
+      layer: 'walls',
+      outline: pathToCommands(wall.outline),
+    }))),
+    ...floor.placements.map((placement): RenovationOutline => ({
+      ref: { id: placement.id, role: 'placed-item' },
+      layer: 'placed-items',
+      outline: drawPlacement(placement, null).segments,
+    })),
+    ...(rooms === null ? [] : rooms.rooms.map((room): RenovationOutline => ({
+      ref: { id: room.id, role: 'room' },
+      layer: 'rooms',
+      outline: pathToCommands(room.path),
+    }))),
+  ]
+}
