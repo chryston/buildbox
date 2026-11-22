@@ -33,9 +33,42 @@ export {
   MoveToOptionAction,
   RenovationOverlays,
   openDemolishDialog,
+  openForcedChoiceDialog,
   openMoveToOptionDialog,
+  openCorrectExistingDialog,
+  openRestoreDialog,
 } from './workspace/renovation'
 export type { ActiveViewState, Viewport, ViewportCache } from './workspace'
+// #70's two pure halves: the tool table the contextual strip reads, and the overlap cycle the canvas
+// selection walks. Both are copy-free and store-free, so they are testable without a canvas and the
+// strip and the inspector can be written against them later. `cycleOrder` is exported because #74
+// extends *this* ordering with Plan View Range grouping rather than writing a second one (#70 §8).
+export {
+  RENOVATION_TOOL_ROWS,
+  availableTools,
+  displaysAllowing,
+  hiddenToolCount,
+  toolIsAvailable,
+  type RenovationToolId,
+  type RenovationToolRow,
+} from './workspace/renovation/toolAvailability'
+export {
+  cycleOrder,
+  isSameSpot,
+  nextCycle,
+  reachableCandidates,
+  type CanvasPoint,
+  type CycleCandidate,
+  type CycleOutcome,
+  type CycleState,
+} from './workspace/selection/overlapCycle'
+// #70 §2: the renovation block of the saved-view card, and the one Display-name and Display-colour
+// table the rail, the mode bar and the legend read.
+export { RenovationViewSection } from './workspace/renovation/RenovationViewSection'
+export { RenovationModeBar } from './workspace/renovation/RenovationModeBar'
+export { RenovationErrorBanner } from './workspace/renovation/RenovationErrorBanner'
+export { RenovationToolStrip } from './workspace/renovation/RenovationToolStrip'
+export { DISPLAY_ORDER, DISPLAY_ROLES, DISPLAY_STATES, displayLabel } from './workspace/renovation/displayTheme'
 export { ExportDialog, UNIT_LABEL, type ExportDialogProps } from './workspace/export/ExportDialog'
 export {
   viewKey,
@@ -60,6 +93,7 @@ export {
   needsPreview,
   openShape,
   planItemsForFloor,
+  planViewsForFloor,
   propose,
   proposalFootprint,
   proposalMessage,

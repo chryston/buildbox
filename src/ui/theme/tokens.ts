@@ -255,6 +255,17 @@ export const TOKEN = {
   workspaceToolbarHeight: "--bb-workspace-toolbar-height",
   workspaceRailWidth: "--bb-workspace-rail-width",
   workspaceNotesWidth: "--bb-workspace-notes-width",
+
+  /* Renovation Displays (#70 §3) — border + tint per Display, shared by the mode bar, the Display
+     cards and the canvas legend. */
+  renovationExistingBorder: "--bb-renovation-existing-border",
+  renovationExistingTint: "--bb-renovation-existing-tint",
+  renovationDemolitionBorder: "--bb-renovation-demolition-border",
+  renovationDemolitionTint: "--bb-renovation-demolition-tint",
+  renovationProposedBorder: "--bb-renovation-proposed-border",
+  renovationProposedTint: "--bb-renovation-proposed-tint",
+  renovationCombinedBorder: "--bb-renovation-combined-border",
+  renovationCombinedTint: "--bb-renovation-combined-tint",
 } as const
 
 /** One token's role, as this table names it. */

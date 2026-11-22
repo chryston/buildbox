@@ -33,6 +33,61 @@ const FORBIDDEN = [
   ...(process.env['VITE_FF_RENOVATION'] === 'true'
     ? []
     : ['Nothing in the Existing Model changes.', 'Move to a Design Option']),
+  // #70 §2: the saved-view card composes these two undo labels. A flag-off bundle carrying either
+  // has shipped the card, and with it the Design Option and Renovation Display pickers.
+  ...(process.env['VITE_FF_RENOVATION'] === 'true' ? [] : ['Set Design Option: ', 'Set Renovation Display: ']),
+  // #70 §3: the mode bar's four sentences. They are the whole content of a dark surface, so one per
+  // Display is the cheapest proof that the band — and with it the Renovation Display concept — stayed
+  // out of the flag-off bundle.
+  ...(process.env['VITE_FF_RENOVATION'] === 'true'
+    ? []
+    : [
+        'Surveying the shared baseline.',
+        'Marking what the option removes or replaces.',
+        'Editing new work owned by the option.',
+        'Everything together. All state-aware tools',
+        'tools hidden in this display',
+        'works in',
+        'No Design Option',
+        'Choose what to place from the Library menu.',
+        'Select one thing to mark for demolition.',
+        'display needs an active Design Option.',
+        'Show Existing',
+        // #70 §4: the legend under the canvas. Its two overlay labels and its note are words no
+        // flag-off surface says, so they prove the row stayed out of the shipped bundle.
+        'Demolition (hatch overlay)',
+        'Proposed (halo overlay)',
+        'Layer colour is kept underneath renovation graphics',
+        // #70 §8: the candidate list beside the pointer. No flag-off surface says it.
+        'click again to cycle',
+        // #70 §5: the inspector's renovation block. `Move`, `Delete`, `Restore`, `Replaces` and the
+        // Kind words are product vocabulary that exists flag-off, so the needles are the sentences.
+        'Existing Model (shared)',
+        'Nothing selected. Click an entity',
+        'Proposed work is edited in Proposed or Combined display',
+        'is drawn against this record',
+        'Correct Existing Model…',
+        'is drawn in',
+        // #70 §7a, §7b: the forced choice and the danger dialog. `Cancel`, `move`, `change` and the
+        // Option's own name exist flag-off, so the needles are the sentences around them.
+        'belongs to the Existing Model',
+        'Moving a baseline entity is never done silently',
+        'add moved successor',
+        'Correct Existing Model instead',
+        'Cancel — change nothing',
+        'Correct the shared Existing Model?',
+        'retains it as Existing',
+        'demolishes it (no successor)',
+        'its successor stays aligned',
+        'its successor keeps its own geometry',
+        'Use this for measuring errors',
+        'only Existing Model entities can be demolished',
+        'Mark demolition:',
+        // #70 §7d: the restore confirmation. `Restore` is product vocabulary that exists flag-off,
+        // so the needles are the two sentences only that dialog says.
+        'Removes the demolition record in',
+        'Also deletes successor(s):',
+      ]),
 ]
 // Only the files that could contain application code: an image or a font cannot.
 const SCANNED = new Set(['.js', '.mjs', '.css', '.html', '.json', '.svg', '.txt', '.map'])

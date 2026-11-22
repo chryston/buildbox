@@ -807,3 +807,443 @@
   min-width: 0;
   min-height: 0;
 }
+
+/* ---------------------------------------------------------------------------
+ * #70 §2: the renovation block of the saved-view card.
+ *
+ * The Display cards are a 2x2 grid — Existing and Demolition across the top, Proposed and Combined
+ * below — each with its name and one swatch per Renovation State it shows. The active card is filled
+ * with its Display's tint and bordered in its Display colour, both set inline from the token roles in
+ * `displayTheme`, so the grid, the mode bar and the legend cannot drift apart on a colour.
+ * ------------------------------------------------------------------------- */
+.bb-renovation-view-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--bb-border-card);
+}
+
+.bb-renovation-display-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.bb-renovation-display-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 9px;
+  border-radius: var(--bb-radius-button);
+  border: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-inset);
+  cursor: pointer;
+  transition: background var(--bb-motion-card), border-color var(--bb-motion-card);
+}
+
+.bb-renovation-display-card:hover {
+  background: var(--bb-bg-choice);
+}
+
+.bb-renovation-display-name {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.bb-renovation-swatches {
+  display: inline-flex;
+  gap: 4px;
+}
+
+/* The three swatches are the prototype's, re-expressed with tokens: Existing is a solid fill,
+   Demolition is 45° hatching inside a dashed border, Proposed is a dashed border with no fill. */
+.bb-renovation-swatch {
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.bb-renovation-swatch-existing {
+  background: var(--bb-renovation-existing-border);
+  border: 1px solid var(--bb-renovation-existing-border);
+}
+
+.bb-renovation-swatch-demolition {
+  border: 1px dashed var(--bb-renovation-demolition-border);
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--bb-renovation-demolition-border) 0 1px,
+    transparent 1px 4px
+  );
+}
+
+.bb-renovation-swatch-proposed {
+  border: 1px dashed var(--bb-renovation-proposed-border);
+  background: transparent;
+}
+
+/* #71 renders the Drawing Layers list here; #72 the `Paste from other Project…` button. Both slots
+   exist so the card's shape is settled, and both are empty — nothing is drawn in their place. */
+.bb-renovation-layers-slot:empty,
+.bb-renovation-paste-slot:empty {
+  display: none;
+}
+
+.bb-renovation-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ---------------------------------------------------------------------------
+ * #70 §3: the mode bar. A full-width row between the toolbar and the body; the 3px bottom border and
+ * the tinted background are set inline from the Display's token roles, so the band is the same colour
+ * as the Display card that was clicked.
+ * ------------------------------------------------------------------------- */
+.bb-renovation-mode-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 7px 16px;
+  border-bottom: 3px solid var(--bb-border-card);
+  background: var(--bb-bg-app);
+}
+
+.bb-renovation-mode-display {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bb-text-strong);
+}
+
+.bb-renovation-mode-option {
+  font-size: 13px;
+  color: var(--bb-text-line);
+}
+
+.bb-renovation-mode-note {
+  font-size: 12px;
+  color: var(--bb-text-muted);
+}
+
+/* ---------------------------------------------------------------------------
+ * #70 §3: the contextual tool strip. One row under the mode bar: the tools this Display allows, the
+ * count it hides, and the `Pick:` filter pushed to the right end. The notice is a line of the same
+ * row rather than a second band, so an explanation never becomes a dialog.
+ * ------------------------------------------------------------------------- */
+.bb-renovation-tool-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-panel);
+}
+
+.bb-renovation-tool {
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: var(--bb-radius-sm);
+  border: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-app);
+  color: var(--bb-text-line);
+}
+
+.bb-renovation-tool[aria-pressed='true'] {
+  border-color: var(--bb-accent);
+  color: var(--bb-text-strong);
+}
+
+.bb-renovation-tool:disabled {
+  color: var(--bb-text-muted);
+  opacity: 0.6;
+}
+
+.bb-renovation-hidden-count {
+  font-size: 12px;
+  color: var(--bb-text-muted);
+}
+
+.bb-renovation-pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.bb-renovation-pick-label {
+  font-size: 12px;
+  color: var(--bb-text-muted);
+}
+
+.bb-renovation-pick-chip {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: var(--bb-radius-sm);
+  border: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-app);
+  color: var(--bb-text-muted);
+}
+
+.bb-renovation-pick-chip[aria-pressed='true'] {
+  color: var(--bb-text-strong);
+  border-color: var(--bb-accent);
+}
+
+.bb-renovation-notice {
+  font-size: 12px;
+  color: var(--bb-text-muted);
+  font-style: italic;
+}
+
+/* ---------------------------------------------------------------------------
+ * #70 §6: the error state. The same warn surface the warning strip uses — this is a notice that needs
+ * an answer, not a different kind of red — and it spans the workspace under the tool strip.
+ * ------------------------------------------------------------------------- */
+.bb-renovation-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 16px;
+  border-bottom: 1px solid var(--bb-warn-border);
+  background: var(--bb-warn-bg);
+  color: var(--bb-warn-text);
+  font-size: 12px;
+}
+
+.bb-renovation-error-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.bb-renovation-error-action {
+  flex: none;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: var(--bb-radius-sm);
+  border: 1px solid var(--bb-warn-border);
+  background: var(--bb-warn-button);
+  color: var(--bb-warn-button-text);
+}
+
+/* The legend under the canvas (#70 §4): one row of the shell, the three marks and the muted note
+   that says the layer colour is still underneath them. The swatches are the card's own. */
+.bb-renovation-legend-row {
+  flex: none;
+  border-top: 1px solid var(--bb-border);
+  background: var(--bb-bg-card);
+}
+
+.bb-renovation-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--bb-text-body);
+}
+
+.bb-renovation-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bb-renovation-legend-note {
+  color: var(--bb-text-muted);
+}
+
+/* The on-canvas candidate list (#70 §8): beside the pointer, above the drawing, inside the host
+   (`overflow: hidden` is the last line of defence, `clampOverlay` is the first). */
+.bb-renovation-overlap {
+  position: absolute;
+  z-index: 4;
+  min-width: 160px;
+  max-width: 320px;
+  padding: 6px 8px;
+  border: 1px solid var(--bb-renovation-combined-border);
+  border-radius: var(--bb-radius-sm);
+  background: var(--bb-bg-modal);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 35%);
+  font-size: 12px;
+  color: var(--bb-text);
+  pointer-events: none;
+}
+
+.bb-renovation-overlap-header {
+  margin-bottom: 4px;
+  color: var(--bb-text-muted);
+}
+
+.bb-renovation-overlap-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bb-renovation-overlap-row {
+  white-space: nowrap;
+}
+
+.bb-renovation-overlap-row.is-current {
+  font-weight: 600;
+}
+
+/* §7a's forced choice: three stacked buttons, in the order the issue gives them, so the primary
+ * answer sits under the question and Cancel is the last thing a hand reaches. */
+.bb-renovation-choice-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* §7b's warning paragraph: the danger colour carries the weight the words already have. */
+.bb-workspace-dialog-danger {
+  color: var(--bb-danger-text);
+}
+
+/* #70 §5: the inspector's renovation block, in the rail under the card. The badge is the State's own
+   colour — the same three tokens the swatches and the canvas use, so one State never looks like
+   another in two places. The rows are a definition list because they are exactly that: two labels
+   with the entity's answers. */
+.bb-renovation-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--bb-border);
+  border-radius: 6px;
+  background: var(--bb-bg-modal);
+}
+
+.bb-renovation-inspector-empty {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--bb-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.bb-renovation-inspector-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bb-renovation-inspector-ref {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.bb-renovation-inspector-badge {
+  padding: 1px 6px;
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.bb-renovation-inspector-badge-existing {
+  color: var(--bb-renovation-existing-border);
+  background: var(--bb-renovation-existing-tint);
+  border: 1px solid var(--bb-renovation-existing-border);
+}
+
+.bb-renovation-inspector-badge-demolition {
+  color: var(--bb-renovation-demolition-border);
+  background: var(--bb-renovation-demolition-tint);
+  border: 1px dashed var(--bb-renovation-demolition-border);
+}
+
+.bb-renovation-inspector-badge-proposed {
+  color: var(--bb-renovation-proposed-border);
+  background: var(--bb-renovation-proposed-tint);
+  border: 1px dashed var(--bb-renovation-proposed-border);
+}
+
+.bb-renovation-inspector-rows {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.bb-renovation-inspector-row {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.bb-renovation-inspector-row dt {
+  color: var(--bb-text-muted);
+  min-width: 64px;
+}
+
+.bb-renovation-inspector-row dd {
+  margin: 0;
+}
+
+.bb-renovation-inspector-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bb-renovation-inspector-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--bb-accent);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.bb-renovation-inspector-notice {
+  margin: 0;
+  font-size: 12px;
+  color: var(--bb-text-muted);
+}
+
+.bb-renovation-inspector-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bb-renovation-inspector-actions-label {
+  color: var(--bb-text-muted);
+  font-size: 11px;
+}
+
+.bb-renovation-inspector-action {
+  padding: 2px 8px;
+  border: 1px solid var(--bb-border);
+  border-radius: 4px;
+  background: var(--bb-bg-panel);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.bb-renovation-inspector-action:disabled {
+  cursor: not-allowed;
+  color: var(--bb-text-muted);
+}
+
+/* The reason a disabled action is still on screen: §5's rule is that it is never hidden, so the
+   reason reads as a sentence rather than a tooltip nobody opens. */
+.bb-renovation-inspector-reason {
+  margin: 0;
+  font-size: 11px;
+  color: var(--bb-text-muted);
+  line-height: 1.45;
+}

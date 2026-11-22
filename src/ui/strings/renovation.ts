@@ -60,6 +60,150 @@ export const RENOVATION_STRINGS = {
   moveBlocked: 'This Option cannot take the move:',
   moveConfirm: (optionName: string): string => `Move to ${optionName}`,
 
+  // ---- the saved-view card's renovation block (#70 §2)
+  // The Display names are the four words the whole feature is read by: the card grid, the mode bar,
+  // the `Pick:` chips, the undo label and the legend all say the same one for the same Display.
+  displayExisting: 'Existing',
+  displayDemolition: 'Demolition',
+  displayProposed: 'Proposed',
+  displayCombined: 'Combined',
+  designOptionField: 'Design Option',
+  renovationDisplayField: 'Renovation Display',
+  /** The first entry of the Design Option picker: the Existing Model on its own, which is a choice. */
+  noDesignOption: '— no Design Option —',
+  /** The card's footer. `Paste from other Project…` arrives with #72 and reserves its slot. */
+  exportEllipsis: 'Export…',
+  /** The two renovation tools the contextual strip can show (#70 §3). */
+  toolMarkDemolition: 'Mark demolition',
+  toolReplace: 'Replace…',
+
+  // ---- the mode bar (#70 §3): the Display, the Option, and what editing means right now
+  noDesignOptionShort: 'No Design Option',
+  modeExisting: 'Surveying the shared baseline. Changes here are explicit corrections seen by every option.',
+  modeDemolition: 'Marking what the option removes or replaces.',
+  modeProposed: 'Editing new work owned by the option. Demolished baseline is hidden.',
+  modeCombined: 'Everything together. All state-aware tools; overlaps cycle on repeated click.',
+  /** `3 tools hidden in this display` — the count the strip prints beside the tools it allows. */
+  toolsHidden: (n: number): string => `${n} tools hidden in this display`,
+  /** The temporary selection filter beside the strip: `Pick: Existing Demolition Proposed`. */
+  pickFilter: 'Pick:',
+  /** Why a hidden tool's shortcut did nothing: `Mark demolition works in Demolition / Combined display`. */
+  toolWorksIn: (tool: string, displays: string): string => `${tool} works in ${displays} display`,
+  /** The strip's row that opens the shipped pack's library (#70 §3). */
+  toolPlaceItem: 'Place item',
+  /**
+   * Why a row is shown but inert. A disabled control explains itself (#55 §3), and these two say
+   * where the command actually lives: `Place item` is a menu the toolbar owns, and `Replace…` needs
+   * the dialog that asks what takes the entity's place, which lands with the correction dialogs.
+   */
+  placeItemLivesInLibrary: 'Choose what to place from the Library menu.',
+  replaceNeedsDialog: 'Replace… needs the dialog that asks what takes this one’s place, which is not in this build.',
+  /** Why `Mark demolition` waits: it marks one named thing, and nothing is named yet. */
+  markDemolitionNeedsOne: 'Select one thing to mark for demolition.',
+
+  // ---- the error state (#70 §6): a Display that describes an Option with no Option to describe
+  /**
+   * The banner's whole sentence, in the issue's words. It says what is missing, what the canvas is
+   * therefore not drawing, and that the tools are gone — the three things a person checks in order.
+   */
+  needsOption: (display: string): string =>
+    `${display} display needs an active Design Option. Nothing is drawn from options; editing tools are disabled.`,
+  showExisting: 'Show Existing',
+
+  // ---- the undo tooltip of a saved-view setting (#70 §2)
+  // The catalogue's default label (`Set Design Option`, `Set Renovation Display`) cannot name what
+  // was chosen: the Option's name is Project data and the Display's is copy. So the card composes
+  // the whole line and hands it to `IntentBuilder.build`, which puts it on the transaction the undo
+  // tooltip reads. `none` is the words for `— no Design Option —`, not an absence of a label.
+  setDesignOption: (name: string | null): string => `Set Design Option: ${name ?? 'none'}`,
+  setRenovationDisplay: (display: string): string => `Set Renovation Display: ${display}`,
+
+  // ---- the legend under the canvas (#70 §4)
+  // The three marks in the words the issue gives them, next to the same swatches the Display cards
+  // use. `Existing` is the word the whole product already has for that State, so the legend reuses
+  // `displayExisting` rather than saying it a second way.
+  legendDemolition: 'Demolition (hatch overlay)',
+  legendProposed: 'Proposed (halo overlay)',
+  /** The muted sentence after the three: the overlay never replaces the layer's own colour. */
+  legendLayerNote: 'Layer colour is kept underneath renovation graphics',
+
+  // ---- the on-canvas candidate list (#70 §8)
+  // The header counts the click that has been made, not the ones still to come: `1/2` is "this is
+  // the first of two", which is what a person reading it while deciding whether to click again wants
+  // to know. The row is the State in brackets and the entity's full name — never shortened, because
+  // `W-2` and `W-2′` are one character apart and a truncated name cannot tell them apart.
+  overlapHeader: (index: number, total: number): string => `Overlap ${index}/${total} · click again to cycle`,
+  overlapRow: (stateLabel: string, name: string): string => `[${stateLabel}] ${name}`,
+
+  // ---- the inspector's renovation block (#70 §5)
+  // The row labels and the action labels are the issue's words. `Kind` and `Owner` are the two the
+  // card never had: a person deciding whether to demolish something needs to know what it is and
+  // who owns the edit before anything else. `Existing Model (shared)` is the answer that says an
+  // edit here is seen by every option, which is the whole reason Existing display is careful.
+  inspectorKind: 'Kind',
+  inspectorOwner: 'Owner',
+  inspectorReplaces: 'Replaces',
+  inspectorSuccessor: 'Successor',
+  inspectorActions: 'Actions',
+  ownerExistingModel: 'Existing Model (shared)',
+  kindWall: 'Wall',
+  kindOpening: 'Opening',
+  kindRoom: 'Room',
+  kindPlacedItem: 'Placed Item',
+  actionMove: 'Move',
+  actionRestore: 'Restore',
+  actionDelete: 'Delete',
+  actionCorrect: 'Correct Existing Model…',
+  /** §5's notice: Proposed work is not editable where it is not drawn as work. */
+  proposedInDemolitionNotice: 'Proposed work is edited in Proposed or Combined display',
+  /** §5's nothing-selected sentence, in the issue's words. */
+  nothingSelected:
+    'Nothing selected. Click an entity; click the same spot again to cycle overlapping Existing / Demolition / Proposed candidates.',
+  /** §7c: the tooltip on a shut field — what to press, and why the record is shared. */
+  correctLocked:
+    'Every Design Option is drawn against this record. Press Correct Existing Model… below to change it.',
+  /** The title of a Replaces/Successor link that needs a Display change to be seen. */
+  switchDisplayToFind: (name: string, display: string): string => `Select ${name} — it is drawn in ${display} display`,
+
+  // ---- the protected edits (#70 §7a, §7b)
+  // §7a's sentence is one thought with the two names inside it, so it is stored as the three pieces
+  // around them: the Display and the Option are the words a person is being warned about, and the
+  // dialog bolds them without the copy table having to carry markup.
+  forcedChoiceTitle: (ref: string): string => `${ref} belongs to the Existing Model`,
+  forcedChoiceLead: 'You are in',
+  forcedChoiceBetween: 'display editing',
+  forcedChoiceTail: '. Moving a baseline entity is never done silently. Choose what you mean:',
+  forcedChoiceReplace: (option: string, ref: string): string =>
+    `Replace in ${option} — demolish ${ref}, add moved successor`,
+  forcedChoiceCorrect: 'Correct Existing Model instead… (all options)',
+  forcedChoiceCancel: 'Cancel — change nothing',
+  // §7b: the danger dialog. `Every Design Option` is the phrase the whole warning turns on, so it
+  // is the one thing in the paragraph the dialog sets in bold.
+  correctTitle: 'Correct the shared Existing Model?',
+  correctLead: 'This changes the survey baseline, not a Design Option.',
+  correctEvery: 'Every Design Option',
+  correctWillSee: (ref: string, change: string): string => `will see ${ref} ${change}:`,
+  correctRetains: '— retains it as Existing',
+  correctDemolishes: '— demolishes it (no successor)',
+  correctAligned: '— demolishes it; its successor stays aligned',
+  correctOwnGeometry: '— demolishes it; its successor keeps its own geometry',
+  correctMuted: 'One atomic transaction with dependent updates. Use this for measuring errors, not design changes.',
+  correctConfirm: 'Correct Existing Model',
+  /** The `<change>` word, chosen from what the pending edit does to the record. */
+  changeMove: 'move',
+  changeChange: 'change',
+  changeRemoved: 'be removed',
+  changeAppear: 'appear',
+  /** The transaction label §7a's `Delete` writes: a demolition record, never a deletion. */
+  markDemolitionLabel: (ref: string): string => `Mark demolition: ${ref}`,
+  // §7d: `Restore W-2?`. The question is the review's own sentence, so only the consequence is
+  // copy: which Option loses the record, and which of its successors falls with it.
+  restoreBody: (option: string): string => `Removes the demolition record in ${option}.`,
+  restoreDeletes: (refs: string): string => `Also deletes successor(s): ${refs}`,
+  /** §7e: `Mark demolition` aimed at something that is not baseline work. */
+  notExisting: (ref: string, state: string): string =>
+    `${ref} is ${state} — only Existing Model entities can be demolished`,
+
   // ---- the buttons every one of them ends with
   cancel: 'Cancel',
 } as const

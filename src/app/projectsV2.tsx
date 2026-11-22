@@ -10,7 +10,7 @@ import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import type { ReactNode } from 'react'
 import type { Root } from 'react-dom/client'
 import App from '../App'
-import { intentIdCount, intentLabel, previewIntent } from '../edit'
+import { applyIntent, intentIdCount, intentLabel, previewIntent } from '../edit'
 import type { Intent, IntentType, PayloadOf } from '../edit'
 import { collectLiveHashes, createMemoryAdapter } from '../persistence'
 import type { Ports } from '../persistence'
@@ -169,16 +169,25 @@ export function createSessionServices(
  */
 export function createIntentFactory(clock: ClockPort, ids: IdSource): IntentBuilder {
   return {
-    build<T extends IntentType>(type: T, payload: PayloadOf<T>): Intent {
+    build<T extends IntentType>(type: T, payload: PayloadOf<T>, label?: string): Intent {
       return {
         type,
         payload,
-        label: intentLabel(type),
+        // The caller's label wins: a saved-view card knows which Option or Display was chosen and
+        // the undo tooltip has to name it (#70 §2). Everyone else gets the catalogue's default.
+        label: label ?? intentLabel(type),
         ids: ids(intentIdCount(type, payload)),
         now: clock.now(),
       } as Intent
     },
     preview: (project, intent) => ({ review: previewIntent(project, intent).review }),
+    evaluate: (project, intent) => {
+      // The Options set aside: the answer is what the edit does to the record, and the baseline
+      // protection (#70 §7a) is a rule about Options existing, not about the edit.
+      const stripped = { ...project, designOptions: [] }
+      const result = applyIntent(stripped, intent)
+      return result.ok ? result.project : null
+    },
   }
 }
 

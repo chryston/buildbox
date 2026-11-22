@@ -13,7 +13,7 @@
  * - **Reordering is not editing.** `floor.reorder` moves one array entry and touches no
  *   geometry, which is what criterion 2 measures byte for byte.
  */
-import { floorHasDependencies, nextFloorName } from '../../domain'
+import { defaultPlanView, floorHasDependencies, nextFloorName, viewDesignOptionId, viewRenovationDisplay } from '../../domain'
 import type { EntityId, Floor, PlanView, Project } from '../../domain'
 import type { FloorIntent, Locator, PlanIntent, TransferPlanObjectsToFloor, ViewIntent } from '../intents'
 import type { Handler, IntentHandler } from './context'
@@ -60,14 +60,10 @@ const createFloor: Handler<'floor.create'> = (ctx) => {
   const name = ctx.intent.payload.name?.trim() ?? ''
   const finalName = name === '' ? nextFloorName(ctx.project) : name
   ctx.draft.floors.push({ id: floorId, name: finalName, planImage: null })
-  ctx.draft.views.push({
-    id: viewId,
-    kind: 'plan',
-    floorId,
-    name: finalName,
-    isDefault: true,
-    showPlanImage: true,
-  })
+  // The Floor and the view that shows it are one transaction, and the view is the one
+  // `defaultPlanView` describes: the Existing Model, through no Design Option, on the Existing
+  // Display (#70 §1) — a Floor that has just arrived has nothing else to look through.
+  ctx.draft.views.push(defaultPlanView(viewId, { id: floorId, name: finalName, planImage: null }))
 }
 
 /** Renaming a Floor never renames its default Plan View: the two are separate names. */
@@ -181,14 +177,17 @@ const duplicateFloor: Handler<'floor.duplicate'> = (ctx) => {
   }
   const at = Math.max(0, Math.min(ctx.draft.floors.length, toIndex))
   ctx.draft.floors.splice(at, 0, copy)
-  ctx.draft.views.push({
-    id: newViewId,
-    kind: 'plan',
-    floorId: newFloorId,
-    name: trimmed,
-    isDefault: true,
-    showPlanImage: true,
-  })
+  // The duplicate is looked at the same way as the original (#70 §1): the Design Option and the
+  // Renovation Display travel with it, because duplicating the Kitchen level while looking at
+  // `Option A · Open kitchen` in Combined is a request for the same view of a copy, not for a
+  // second Floor that has to be re-aimed by hand before it shows anything.
+  const sourceView = defaultViewOf(ctx.project, floorId)
+  ctx.draft.views.push(
+    defaultPlanView(newViewId, copy, {
+      designOptionId: sourceView === undefined ? null : viewDesignOptionId(sourceView),
+      renovationDisplay: sourceView === undefined ? 'existing' : viewRenovationDisplay(sourceView),
+    }),
+  )
   copied.forEach((item, index) => {
     ctx.draft.existingModel.placedItems.push({ ...item, id: newPlacedIds[index] as string, floorId: newFloorId })
   })
@@ -259,11 +258,22 @@ const moveToFloor: Handler<'plan.moveToFloor'> = (ctx) => {
 
 // --- Plan Views ---------------------------------------------------------------
 
-/** A named Plan View on a Floor, showing its Plan Image until the user says otherwise. */
+/**
+ * A named Plan View on a Floor, showing the same thing the view it was made from shows (#70 §1).
+ *
+ * "New view" means "this, differently", so the Design Option and the Renovation Display are copied
+ * from `fromViewId` — the view the user was looking at when they pressed New view — and not reset
+ * to the Existing Model. A view that arrives back at the Existing Display makes them re-aim the
+ * card before they can see what they duplicated, which is the opposite of why they asked. With no
+ * `fromViewId`, or one that no longer names a view, the Floor's own default view is the source; a
+ * Floor with no default view at all is not a valid Project, so the fallback is the Existing Model.
+ */
 const createPlanView: Handler<'view.create'> = (ctx) => {
-  const { floorId, name } = ctx.intent.payload
+  const { floorId, name, fromViewId } = ctx.intent.payload
   requireFloor(ctx.project, floorId)
   const [viewId] = spendIds(ctx.intent.ids, 1, ctx.intent.type)
+  const source =
+    ctx.project.views.find((candidate) => candidate.id === fromViewId) ?? defaultViewOf(ctx.project, floorId)
   ctx.draft.views.push({
     id: viewId,
     kind: 'plan',
@@ -271,6 +281,8 @@ const createPlanView: Handler<'view.create'> = (ctx) => {
     name: name.trim(),
     isDefault: false,
     showPlanImage: true,
+    designOptionId: source === undefined ? null : viewDesignOptionId(source),
+    renovationDisplay: source === undefined ? 'existing' : viewRenovationDisplay(source),
   })
 }
 

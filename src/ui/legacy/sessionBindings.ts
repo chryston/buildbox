@@ -33,7 +33,14 @@ import { projectUnits } from './projectView'
  * `edit`'s, and only `app` may read them as values.
  */
 export interface IntentBuilder {
-  build<T extends IntentType>(type: T, payload: PayloadOf<T>): Intent
+  /**
+   * The transaction the caller wants on the record. `label` overrides the catalogue's default — the
+   * undo tooltip reads that string — for the few Intents whose default cannot name what was chosen:
+   * `Set Design Option: Option A · Open kitchen` and `Set Renovation Display: Combined` (#70 §2).
+   * The words are `ui/strings` copy and the name is Project data, so only the caller can compose
+   * them; every other caller leaves `label` out and gets `intentLabel(type)`.
+   */
+  build<T extends IntentType>(type: T, payload: PayloadOf<T>, label?: string): Intent
   /**
    * What an Intent would take with it, without applying it (#65 §8). The delete of a Wall with
    * Openings has to be answered before it runs, and the answer is the same report the Intent
@@ -41,6 +48,13 @@ export interface IntentBuilder {
    * may be read.
    */
   preview(project: Project, intent: Intent): { review: DependencyReview | null }
+  /**
+   * What one Intent would make of the Project, without committing it, with the Design Options set
+   * aside (#70 §7a): the workspace asks it what an edit of an Existing entity would have done to the
+   * record, so a successor can carry the geometry the person was dragging toward. `null` when the
+   * edit does not land. Nothing is written.
+   */
+  evaluate(project: Project, intent: Intent): Project | null
 }
 
 /** The object-URL cache behind a Plan Image: `urlFor` is `null` until the bytes have been read. */

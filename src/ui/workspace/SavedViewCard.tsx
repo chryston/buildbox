@@ -36,6 +36,13 @@ export interface SavedViewCardProps {
   onShowPlanImage(showPlanImage: boolean): void
   onCalibrate(): void
   onFit(): void
+  /**
+   * The renovation block of #70 §2, rendered directly under the view picker: which Design Option
+   * this view looks through and which Renovation Display it draws. The card stays free of
+   * renovation itself — it takes a finished block — so a flag-off build never mentions the feature
+   * and the rail is byte-identical to the one #56 shipped.
+   */
+  renovation?: ReactNode
 }
 
 /**
@@ -66,7 +73,7 @@ export function planViewNameProblem(project: Project, floorId: string, name: str
 export function SavedViewCard(props: SavedViewCardProps): ReactNode {
   const {
     project, floor, views, view, planImage, unit, precision,
-    onFloor, onView, onAddPlanView, onManageFloors, onShowPlanImage, onCalibrate, onFit,
+    onFloor, onView, onAddPlanView, onManageFloors, onShowPlanImage, onCalibrate, onFit, renovation,
   } = props
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
@@ -147,6 +154,9 @@ export function SavedViewCard(props: SavedViewCardProps): ReactNode {
           {STRINGS.manageFloorsEllipsis}
         </button>
       </div>
+      {/* The renovation block reads as part of the picker it follows: which view, through which
+          Option, on which Display (#70 §2). Absent with the flag off. */}
+      {renovation}
       {adding && (
         <div className="bb-workspace-add-view" data-testid="add-view-form">
           <label className="bb-workspace-field-label" htmlFor="add-view-name">{STRINGS.planViewNameField}</label>

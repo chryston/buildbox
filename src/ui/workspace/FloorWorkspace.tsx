@@ -17,14 +17,14 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, FF_RENOVATION } from '../../derive'
-import type { Pt, RoomFaceCandidate, Warning } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, FF_RENOVATION } from '../../derive'
+import type { DisplayModel, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings } from '../../drawing'
 import type { BadgeSubject, OpeningPreview, RoomProposal } from '../../drawing'
-import type { Point2, Project, WallClassification } from '../../domain'
-import { nextOpeningLabel, summarizeFloorDependencies } from '../../domain'
+import type { Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
+import { designOptionsOf, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay } from '../../domain'
 import type { SessionAsset } from '../../session'
-import type { DeleteWallReview, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
+import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
   usePlanImageSrc,
   useSaveStatus,
@@ -80,8 +80,34 @@ import type { DesignEdit } from './SelectionInspector'
 import { quarterTurn } from './rotateHandle'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 // #69: the whole renovation surface is reached from `FF_RENOVATION` branches only, so a flag-off
-// build drops these three names — and every word they say — out of the bundle.
-import { DesignOptionsSection, MoveToOptionAction, RenovationOverlays } from './renovation'
+// build drops these three names — and every word they say — out of the bundle. #70 adds the
+// saved-view block and the words its undo labels are built from.
+import {
+  DesignOptionsSection,
+  MoveToOptionAction,
+  RenovationErrorBanner,
+  RenovationLegend,
+  RenovationModeBar,
+  RenovationOverlays,
+  RenovationToolStrip,
+  RenovationViewSection,
+  DISPLAY_LABELS,
+  DISPLAY_STATES,
+  RenovationInspector,
+  displayLabel,
+  entityFields,
+  openDemolishDialog,
+  openForcedChoiceDialog,
+  openCorrectExistingDialog,
+  openRestoreDialog,
+  baselineEditLocked,
+  subjectOfIntent,
+  successorOf,
+} from './renovation'
+import type { RenovationInspectorAction, RenovationInspectorLink, RenovationInspectorTarget, RenovationToolId } from './renovation'
+import { RENOVATION_STRINGS } from '../strings/renovation'
+import { FIELDS_UNLOCKED, FieldsLockedContext } from './fieldsLock'
+import type { FieldsLock } from './fieldsLock'
 import { ForkDesignDialog, NewItemDialog } from './ItemDialogs'
 import { ManageFloorsDialog } from './ManageFloorsDialog'
 import { DeleteFloorDialog } from './DeleteFloorDialog'
@@ -102,6 +128,17 @@ const MAX_PLAN_IMAGE_BYTES = 50 * 1024 * 1024
  * not in the model, and nothing may select it (#67 §7).
  */
 const ROOM_PROPOSAL = '@room-proposal'
+
+/**
+ * The commands that take a record out of the model. Outside the Existing display these mean a
+ * demolition record rather than a deletion (#70 criterion 26), which is why they are listed once here
+ * instead of being recognised where each delete happens to be sent.
+ */
+const DELETES_ARE_DEMOLITIONS: readonly IntentType[] = [
+  'wall.delete',
+  'opening.delete',
+  'plan.removeObject',
+]
 
 /** The last placement on this Floor: the one a just-committed add has made. */
 function lastPlacedId(project: Project, floorId: string): string | null {
@@ -149,16 +186,80 @@ export function FloorWorkspace(): ReactNode {
   const image = planImageForView(project, view, imageSrc)
   const items = planItemsForFloor(project, floorId)
   const library = itemLibrary(project)
+  /**
+   * The Design Option this view draws (#70 §F). Flag-off, or a view with no Option, is `null`, and
+   * every derivation below is the Existing Model exactly as it has always been.
+   */
+  const renovationOptionId = FF_RENOVATION && view !== null ? viewDesignOptionId(view) : null
+  /**
+   * The State of every entity this view's Renovation Display draws, and the only list of what the
+   * Display draws at all: an entity absent from it is not on the canvas (#70 criterion 7). The
+   * overlays themselves are `drawing`'s rules, laid on the outlines the canvas already has.
+   */
+  const renovationStates: ReadonlyMap<string, RenovationState> | null =
+    renovationOptionId === null || floorId === null || view === null
+      ? null
+      : statesOf(displayModel(effectiveModel(project, floorId, renovationOptionId), viewRenovationDisplay(view)))
+  /**
+   * The Project the canvas's geometry is derived from. `deriveWalls` and `deriveRooms` derive the
+   * standing set, but a Wall marked for demolition is still drawn — with the demolition overlay on it
+   * (#70 §The four Renovation Displays) — so with an Option open the geometry comes from the same
+   * Project with that Option's `demolishedIds` set aside. This decides only what *can* be drawn, and
+   * junctions and faces are then computed over the Walls that are actually on screen; the Display's
+   * own list above still decides what reaches the canvas.
+   */
+  const drawingProject = useMemo<Project>(() => {
+    if (renovationOptionId === null) return project
+    return {
+      ...project,
+      designOptions: designOptionsOf(project).map((option) =>
+        option.id === renovationOptionId ? { ...option, demolishedIds: [] } : option,
+      ),
+    }
+  }, [project, renovationOptionId])
   /** The Floor the canvas draws, from the session's one derive cache (#60 criterion 3). */
-  const derivedFloor = floorId === null ? null : session.deriveFloor(floorId)
+  const derivedFloor =
+    floorId === null
+      ? null
+      : renovationOptionId === null
+        ? session.deriveFloor(floorId, null)
+        : effectiveFloor(drawingProject, session.getSnapshot().revision, floorId, renovationOptionId)
   /** The tidied Walls, faces and corners the Wall tool snaps to, from the same cache (#64 §6). */
-  const floorWalls = floorId === null ? null : session.deriveWalls(floorId)
+  const floorWalls =
+    floorId === null
+      ? null
+      : renovationOptionId === null
+        ? session.deriveWalls(floorId, null)
+        : deriveWalls(drawingProject, floorId, renovationOptionId)
   /**
    * The Floor's Rooms: their areas, label anchors and Placed Item membership, from the same cache
-   * (#67 §3). Rooms are Existing-only until Design Options own them (#69), so there is no option
-   * to derive them against.
+   * (#67 §3). A view drawing a Design Option sees that Option's Rooms standing where its own walls
+   * put them, which is what `optionId` is for (#69).
    */
-  const floorRooms = floorId === null ? null : session.deriveRooms(floorId)
+  const floorRooms =
+    floorId === null
+      ? null
+      : renovationOptionId === null
+        ? session.deriveRooms(floorId, null)
+        : deriveRooms(drawingProject, floorId, renovationOptionId)
+  /**
+   * What an entity is called, in the words the drawing already uses for it: a Wall's display
+   * reference (`W-2′`), a Placed Item's Design name, a Room's name. The overlap list prints these
+   * in full — `W-2` and `W-2′` are one character apart, so a shortened name is a list that cannot be
+   * read (#70 criterion 16).
+   */
+  const nameOfEntity = useCallback(
+    (id: string): string => {
+      const wall = floorWalls?.byId.get(id)
+      if (wall !== undefined) return wall.ref
+      const placement = derivedFloor?.placements.find((item) => item.id === id)
+      if (placement !== undefined) return placement.label
+      const room = floorRooms?.rooms.find((each) => each.id === id)
+      if (room !== undefined) return room.name
+      return id
+    },
+    [floorWalls, derivedFloor, floorRooms],
+  )
   /**
    * The chain being drawn, or `null` (#64 §12). Local like the shape draft: a half-drawn chain is
    * not a proposal and must not survive a reload, a Floor change or the tool being put down.
@@ -174,6 +275,21 @@ export function FloorWorkspace(): ReactNode {
 
   const tool = useWorkspace((state) => state.activeTool)
   const setTool = useWorkspace((state) => state.setTool)
+  // #70 §3: the strip's temporary filter and its notice — UI session state, reset with the saved view.
+  const pickStates = useWorkspace((state) => state.pickStates)
+  const hiddenToolNotice = useWorkspace((state) => state.hiddenToolNotice)
+  const togglePickState = useWorkspace((state) => state.togglePickState)
+  const showHiddenToolNotice = useWorkspace((state) => state.showHiddenToolNotice)
+  const clearHiddenToolNotice = useWorkspace((state) => state.clearHiddenToolNotice)
+  // §7c: the one Existing entity `Correct Existing Model…` has handed its handles and fields back.
+  const correctionUnlocked = useWorkspace((state) => state.correctionUnlocked)
+  const unlockCorrection = useWorkspace((state) => state.unlockCorrection)
+  const lockCorrection = useWorkspace((state) => state.lockCorrection)
+  // #70 §8: what the last click reached, and the candidates it left behind for the list.
+  const cycle = useWorkspace((state) => state.cycle)
+  const cycleCandidates = useWorkspace((state) => state.cycleCandidates)
+  const setCycle = useWorkspace((state) => state.setCycle)
+  const clearCycle = useWorkspace((state) => state.clearCycle)
   /**
    * The Room Outline being drawn, or `null` (#67 §4). Local like the Wall draft: a half-drawn
    * outline is not a proposal, and it must not survive a Floor change or the tool being put down.
@@ -567,9 +683,91 @@ export function FloorWorkspace(): ReactNode {
     setWarningFocus((previous) => ({ key: first.key, nonce: (previous?.nonce ?? 0) + 1 }))
   }, [floorWarnings])
 
-  const send = <T extends IntentType>(type: T, payload: PayloadOf<T>): void => {
-    dispatch(services.intent.build(type, payload))
+  /**
+   * One transaction, and the two renovation answers a refusal can lead to (#70 §7a, criterion 26).
+   *
+   * Both are dark unless the flag is on, and both rest on the same fact: the Existing Model is the
+   * baseline every Design Option is drawn against, so outside the Existing display an edit of it is
+   * refused instead of run. A refusal is exactly the moment to ask — nothing has been committed, the
+   * revision is where it was, and Cancel changes nothing. In the Existing display the same edit is
+   * today's bare rejection: there the baseline is what a person is working on (#70 §7c).
+   */
+  const sendIntent = (intent: Intent): void => {
+    if (FF_RENOVATION) {
+      const demolition = deleteAsDemolition(intent)
+      if (demolition !== null) {
+        dispatch(demolition)
+        return
+      }
+    }
+    const result = dispatch(intent)
+    if (!FF_RENOVATION || result.ok || result.code !== 'baseline-correction-required') return
+    const entityId = subjectOfIntent(intent)
+    if (renovationOptionId === null) return
+    if (renovationDisplayNow === 'existing') {
+      // The Existing display is where a survey edit is meant, so a refusal there is never noise about
+      // a stray drag: it is the one edit this build cannot answer alone, whether the person unlocked
+      // the record's fields (§7c), pressed `Delete` on it, or drew a new record with a survey tool.
+      // The answer owed is what the change does to every Design Option (#70 §7b, §7e) — and a tool
+      // that has not drawn the record yet gives the refusal no subject to name.
+      openCorrectExistingDialog(intent, entityId)
+      return
+    }
+    // A refusal in a Design Option's own display is the forced choice: replace the record with a
+    // Design Option entity, or correct the Existing Model. Both answers need the entity that was
+    // refused, so a refusal naming none has no choice to offer.
+    if (entityId === null) return
+    openForcedChoiceDialog(intent, entityId, renovationDisplayNow, renovationOptionId)
   }
+  const send = <T extends IntentType>(type: T, payload: PayloadOf<T>): void => {
+    sendIntent(services.intent.build(type, payload))
+  }
+  /**
+   * The same transaction with a label that names what was chosen (#70 §2). Only the caller knows
+   * which Design Option or Renovation Display was clicked, and the undo tooltip has to say so.
+   */
+  const sendLabelled = <T extends IntentType>(type: T, payload: PayloadOf<T>, label: string): void => {
+    sendIntent(services.intent.build(type, payload, label))
+  }
+
+  /**
+   * `Delete` of an Existing entity outside the Existing display, turned into the demolition record it
+   * means (criterion 26): the survey keeps what it said and this Option records that it takes the
+   * entity down. `null` says send the Intent as asked — inside the Existing display, where deleting
+   * from the baseline is the job, or for an entity that is not baseline work, or for a command that
+   * is not a delete.
+   */
+  const deleteAsDemolition = (intent: Intent): Intent | null => {
+    if (renovationDisplayNow === 'existing' || renovationOptionId === null) return null
+    if (!DELETES_ARE_DEMOLITIONS.includes(intent.type)) return null
+    const entityId = subjectOfIntent(intent)
+    if (entityId === null || renovationStates?.get(entityId) !== 'existing') return null
+    const ref = entityFields(project, entityId)?.ref ?? entityId
+    return services.intent.build(
+      'renovation.demolish',
+      { entityId, target: { designOptionId: renovationOptionId } },
+      RENOVATION_STRINGS.markDemolitionLabel(ref),
+    )
+  }
+
+  /**
+   * A Replace that landed: the successor it wrote takes the inspector as soon as the Project does,
+   * because the work a person is about to do belongs to the successor, not to the baseline record
+   * that has just become a memory of it (#70 §7a, §7e).
+   */
+  const pendingReplace = useRef<{ predecessorId: string; optionId: string } | null>(null)
+  useEffect(() => {
+    const pending = pendingReplace.current
+    if (pending === null) return
+    pendingReplace.current = null
+    const proposed = designOptionsOf(project).find((each) => each.id === pending.optionId)?.proposed
+    const hit = proposed === undefined ? null : successorOf(proposed, pending.predecessorId)
+    if (hit === null) return
+    if (hit.kind === 'wall') selectWall(hit.id)
+    else if (hit.kind === 'opening') selectOpening(hit.id)
+    else if (hit.kind === 'room') selectRoom(hit.id)
+    else select(hit.id)
+  }, [project])
 
   /**
    * The `Move to a Design Option…` action for the Existing entity being inspected (#69 §13).
@@ -871,6 +1069,20 @@ export function FloorWorkspace(): ReactNode {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
+        // An unlocked correction is abandoned first: the handles and fields shut again and nothing
+        // was written, which is the whole point of the press being reversible (#70 criterion 20).
+        if (FF_RENOVATION && correctionUnlocked !== null) {
+          event.preventDefault()
+          lockCorrection()
+          return
+        }
+        // A running overlap cycle backs out first: Esc ends the cycle (#70 criterion 18) and the
+        // selection it made stays, because the click that made it was a real selection.
+        if (FF_RENOVATION && cycle !== null) {
+          event.preventDefault()
+          clearCycle()
+          return
+        }
         // The Door / window tool backs out first: its controls float over the canvas and hold no
         // focus of their own to take the key (#65 §9).
         if (tool === 'opening') {
@@ -901,7 +1113,7 @@ export function FloorWorkspace(): ReactNode {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [selected, designPreview, pickingOrigin, setDesignPreview, setPickingOrigin, send, tool, openingAimNow, placeOpening, setTool])
+  }, [selected, designPreview, pickingOrigin, setDesignPreview, setPickingOrigin, send, tool, openingAimNow, placeOpening, setTool, cycle, clearCycle, correctionUnlocked, lockCorrection])
 
   const commitImage = (prepared: PreparedPlanImage): void => {
     const asset = prepared.asset
@@ -1241,6 +1453,194 @@ export function FloorWorkspace(): ReactNode {
   const deleteFloorTarget = project.floors.find((candidate) => candidate.id === deleteFloorId) ?? null
   const origin = placedOrigin(project, selection)
 
+  // #70 §3: the two things only this component knows, which the strip cannot derive from the table —
+  // whether one thing is named well enough to mark, and which Design Option would own the record.
+  const renovationSelectedIds = [wallSelection, openingSelection, roomSelection, selection].filter((id) => id !== null)
+  const renovationBlocked: Partial<Record<RenovationToolId, string>> =
+    renovationSelectedIds.length === 1 ? {} : { markDemolition: RENOVATION_STRINGS.markDemolitionNeedsOne }
+  const markRenovationDemolition = (): void => {
+    const entityId = renovationSelectedIds[0]
+    if (renovationOptionId === null || entityId === undefined) return
+    // §7e: a demolition record is only ever about baseline work. The Option's own work is deleted, and
+    // something already marked down has no second demolition to record — the tool says so instead of
+    // opening a dialog whose answer would be refused.
+    const state = renovationStates?.get(entityId)
+    if (state !== undefined && state !== 'existing') {
+      const ref = entityFields(project, entityId)?.ref ?? entityId
+      showRenovationNotice(RENOVATION_STRINGS.notExisting(ref, DISPLAY_LABELS[state]))
+      return
+    }
+    openDemolishDialog(entityId, renovationOptionId)
+  }
+  const showRenovationNotice = (next: string | null): void => {
+    if (next === null) clearHiddenToolNotice()
+    else showHiddenToolNotice(next)
+  }
+
+  // ---- the inspector's renovation block (#70 §5)
+  /**
+   * What the inspector prints about the selection. The lookup covers the open Option's own work as
+   * well as the Existing Model, because a Proposed Wall answers a click exactly like a baseline one
+   * and the per-kind inspectors only know the Existing Model. `Replaces` and `Successor` come from
+   * the same predecessor references the Replace Intent wrote (#69 §5), so the links are the model's
+   * own history rather than a guess from geometry.
+   */
+  const renovationDisplayNow: RenovationDisplay = view === null ? 'existing' : viewRenovationDisplay(view)
+  const renovationTarget = useMemo((): RenovationInspectorTarget | null => {
+    const id = wallSelection ?? openingSelection ?? roomSelection ?? selection
+    if (id === null || renovationStates === null) return null
+    const state = renovationStates.get(id)
+    if (state === undefined) return null
+    const model = project.existingModel
+    const option = designOptionsOf(project).find((each) => each.id === renovationOptionId) ?? null
+    const proposed = option?.proposed ?? null
+    const describe = (
+      entityId: string,
+    ): { ref: string; kind: string; predecessors: readonly string[] } | null => {
+      const wall = [...model.walls, ...(proposed?.walls ?? [])].find((each) => each.id === entityId)
+      if (wall !== undefined) return { ref: wall.ref, kind: RENOVATION_STRINGS.kindWall, predecessors: wall.predecessorIds ?? [] }
+      const opening = [...model.openings, ...(proposed?.openings ?? [])].find((each) => each.id === entityId)
+      if (opening !== undefined)
+        return { ref: opening.label, kind: RENOVATION_STRINGS.kindOpening, predecessors: opening.predecessorIds ?? [] }
+      const room = [...model.rooms, ...(proposed?.rooms ?? [])].find((each) => each.id === entityId)
+      if (room !== undefined) return { ref: room.name, kind: RENOVATION_STRINGS.kindRoom, predecessors: room.predecessorIds ?? [] }
+      const placed = [...model.placedItems, ...(proposed?.placedItems ?? [])].find((each) => each.id === entityId)
+      if (placed !== undefined) {
+        const design = project.itemDesigns.find((each) => each.id === placed.itemDesignId)
+        return {
+          ref: design?.name ?? entityId,
+          kind: RENOVATION_STRINGS.kindPlacedItem,
+          predecessors: placed.predecessorIds ?? [],
+        }
+      }
+      return null
+    }
+    const self = describe(id)
+    if (self === null) return null
+    // The shortest Display that draws an entity: the one worth switching to when the current one
+    // does not draw it at all.
+    const displayOf = (entityId: string): RenovationDisplay => {
+      const each = renovationStates.get(entityId)
+      return each === 'demolition' ? 'demolition' : each === 'proposed' ? 'proposed' : 'existing'
+    }
+    const link = (entityId: string): RenovationInspectorLink | null => {
+      const each = describe(entityId)
+      if (each === null) return null
+      const display = displayOf(entityId)
+      return { id: entityId, ref: each.ref, display, drawn: DISPLAY_STATES[renovationDisplayNow].includes(renovationStates.get(entityId) ?? 'existing') }
+    }
+    const successors = [
+      ...(proposed?.walls ?? []),
+      ...(proposed?.openings ?? []),
+      ...(proposed?.rooms ?? []),
+      ...(proposed?.placedItems ?? []),
+    ]
+      .filter((each) => (each.predecessorIds ?? []).includes(id))
+      .map((each) => link(each.id))
+      .filter((each): each is RenovationInspectorLink => each !== null)
+    return {
+      id,
+      ref: self.ref,
+      kind: self.kind,
+      state,
+      owner:
+        state === 'proposed'
+          ? option?.name ?? RENOVATION_STRINGS.noDesignOptionShort
+          : RENOVATION_STRINGS.ownerExistingModel,
+      replaces: self.predecessors.map(link).filter((each): each is RenovationInspectorLink => each !== null),
+      successors,
+    }
+  }, [wallSelection, openingSelection, roomSelection, selection, renovationStates, renovationOptionId, project, view])
+
+  const renovationSubject = wallSelection ?? openingSelection ?? roomSelection ?? selection
+  /**
+   * §7c: whether the selection is a baseline record being looked at in the Existing display while the
+   * Project carries a Design Option — the one case its handles, its grip and its fields stay shut. The
+   * Project's own count is the test because it is the test the edit layer makes: with no Option there
+   * is nothing sharing the record, and an Existing edit commits as it always did (criterion 24).
+   */
+  const baselineLocked = FF_RENOVATION && baselineEditLocked({
+    display: renovationDisplayNow,
+    hasOptions: designOptionsOf(project).length > 0,
+    state: renovationStates?.get(renovationSubject ?? '') ?? 'existing',
+    unlockedId: correctionUnlocked,
+    entityId: renovationSubject ?? '',
+  })
+  /**
+   * §7c: what the inspector's shut fields say. The sentence comes from the renovation copy table,
+   * which only this branch reaches — the fields read the words off the context, so a flag-off build
+   * never pulls that table in to explain a field it always lets people type in.
+   */
+  const fieldsLock: FieldsLock = baselineLocked
+    ? { locked: true, notice: RENOVATION_STRINGS.correctLocked }
+    : FIELDS_UNLOCKED
+
+  const runRenovationAction = (action: RenovationInspectorAction): void => {
+    const id = wallSelection ?? openingSelection ?? roomSelection ?? selection
+    if (id === null) return
+    if (action === 'move') {
+      // The move itself is the canvas's own drag; the button hands the canvas the focus so the
+      // selected entity is the thing the next drag takes hold of.
+      setTool('select')
+      hostRef.current?.focus()
+      return
+    }
+    if (action === 'demolish') {
+      markRenovationDemolition()
+      return
+    }
+    if (action === 'correct') {
+      // §7c: the press is the unlock. This entity gets its handles, its grip and its fields back, and
+      // the edit made with them is the one that asks what it does to every Design Option. It needs no
+      // Option of its own to be pressed against — the record it opens is the shared one.
+      unlockCorrection(id)
+      return
+    }
+    if (renovationOptionId === null) return
+    if (action === 'restore') {
+      // §7d: taking a demolition record out of one Option can bring the Option's own successors down
+      // with it, so the press asks before anything is written. The transaction keeps the label the
+      // handler gives it — nothing to do with a Display change, which is what this used to claim.
+      openRestoreDialog(id, renovationOptionId)
+      return
+    }
+    if (action === 'replace') {
+      // §7e: the inspector's `Replace…` is §7a's Replace with the geometry left alone — one demolition
+      // record and one successor standing exactly where the baseline record stood, which the person
+      // then edits. `edit: {}` is that: every field copied (#69 §7).
+      send('renovation.replace', { entityId: id, edit: {}, target: { designOptionId: renovationOptionId } })
+      pendingReplace.current = { predecessorId: id, optionId: renovationOptionId }
+      return
+    }
+    if (action === 'delete') {
+      // A Design Option's own work has no demolition to keep: `renovation.demolish` deletes the
+      // record and the things that hung off it in one transaction (#69 §7).
+      send('renovation.demolish', { entityId: id, target: { designOptionId: renovationOptionId } })
+    }
+  }
+
+  /**
+   * A `Replaces` / `Successor` link: select the entity, and switch Display only when the current one
+   * does not draw it — which makes the switch navigation plus one undoable Display change, not a
+   * silent repaint.
+   */
+  const selectRenovationEntity = (id: string, display: RenovationDisplay): void => {
+    const state = renovationStates?.get(id)
+    if (view !== null && state !== undefined && !DISPLAY_STATES[renovationDisplayNow].includes(state)) {
+      sendLabelled(
+        'view.setRenovationDisplay',
+        { viewId: view.id, renovationDisplay: display },
+        RENOVATION_STRINGS.setRenovationDisplay(displayLabel(display)),
+      )
+    }
+    const model = project.existingModel
+    const proposed = designOptionsOf(project).find((each) => each.id === renovationOptionId)?.proposed ?? null
+    if ([...model.walls, ...(proposed?.walls ?? [])].some((each) => each.id === id)) selectWall(id)
+    else if ([...model.openings, ...(proposed?.openings ?? [])].some((each) => each.id === id)) selectOpening(id)
+    else if ([...model.rooms, ...(proposed?.rooms ?? [])].some((each) => each.id === id)) selectRoom(id)
+    else select(id)
+  }
+
   return (
     <>
       <WorkspaceShell
@@ -1307,6 +1707,50 @@ export function FloorWorkspace(): ReactNode {
           </>
         }
         toolbar={<WorkspaceToolbar groups={groups} />}
+        renovationLegend={FF_RENOVATION && view !== null ? <RenovationLegend /> : undefined}
+        renovationBar={
+          FF_RENOVATION && view !== null ? (
+            <>
+              <RenovationModeBar
+                display={viewRenovationDisplay(view)}
+                optionName={designOptionsOf(project).find((option) => option.id === viewDesignOptionId(view))?.name ?? null}
+              />
+              <RenovationToolStrip
+                display={viewRenovationDisplay(view)}
+                hasDesignOption={renovationOptionId !== null}
+                activeTool={tool}
+                pickStates={pickStates}
+                notice={hiddenToolNotice}
+                blocked={renovationBlocked}
+                onTool={setTool}
+                onMarkDemolition={markRenovationDemolition}
+                onTogglePick={togglePickState}
+                onNotice={showRenovationNotice}
+              />
+              {viewRenovationDisplay(view) !== 'existing' && renovationOptionId === null ? (
+                <RenovationErrorBanner
+                  display={viewRenovationDisplay(view)}
+                  options={designOptionsOf(project)}
+                  onSetDesignOption={(designOptionId) => {
+                    const name = designOptionsOf(project).find((option) => option.id === designOptionId)?.name ?? null
+                    sendLabelled(
+                      'view.setDesignOption',
+                      { viewId: view.id, designOptionId },
+                      RENOVATION_STRINGS.setDesignOption(name),
+                    )
+                  }}
+                  onShowExisting={() =>
+                    sendLabelled(
+                      'view.setRenovationDisplay',
+                      { viewId: view.id, renovationDisplay: 'existing' },
+                      RENOVATION_STRINGS.setRenovationDisplay(displayLabel('existing')),
+                    )
+                  }
+                />
+              ) : undefined}
+            </>
+          ) : undefined
+        }
         viewCard={
           <SavedViewCard
             project={project}
@@ -1324,11 +1768,49 @@ export function FloorWorkspace(): ReactNode {
               if (view !== null) send('view.setShowPlanImage', { viewId: view.id, showPlanImage })
             }}
             onCalibrate={() => setIsCalibrating(true)}
+            renovation={
+              FF_RENOVATION ? (
+                <>
+                  <RenovationViewSection
+                  view={view}
+                  options={designOptionsOf(project)}
+                  onSetDesignOption={(designOptionId) => {
+                    if (view === null) return
+                    const name = designOptionsOf(project).find((option) => option.id === designOptionId)?.name ?? null
+                    sendLabelled(
+                      'view.setDesignOption',
+                      { viewId: view.id, designOptionId },
+                      RENOVATION_STRINGS.setDesignOption(name),
+                    )
+                  }}
+                  onSetRenovationDisplay={(renovationDisplay) => {
+                    if (view === null) return
+                    sendLabelled(
+                      'view.setRenovationDisplay',
+                      { viewId: view.id, renovationDisplay },
+                      RENOVATION_STRINGS.setRenovationDisplay(displayLabel(renovationDisplay)),
+                    )
+                  }}
+                  onExport={() => setIsExporting(true)}
+                />
+                  <RenovationInspector
+                    target={renovationTarget}
+                    display={renovationDisplayNow}
+                    hasDesignOption={designOptionsOf(project).length > 0}
+                    onAction={runRenovationAction}
+                    onSelectEntity={selectRenovationEntity}
+                  />
+                </>
+              ) : undefined
+            }
             onFit={fit}
           />
         }
         inspector={
-          selectedRoom !== null
+          // §7c: the inspector rail reads one flag for whether its fields are shut, instead of a prop
+          // threaded through four inspectors that each have to remember to honour it.
+          <FieldsLockedContext.Provider value={fieldsLock}>
+          {selectedRoom !== null
             ? <RoomInspector
                 room={selectedRoom.room}
                 derived={selectedRoom.derived}
@@ -1443,6 +1925,8 @@ export function FloorWorkspace(): ReactNode {
                 deleteBlocked={roomDeleteBlockFor(project, selectedWall.wall)}
                 renovationAction={renovationAction(selectedWall.wall.id)}
               />
+          }
+          </FieldsLockedContext.Provider>
         }
         canvas={
           <>
@@ -1457,6 +1941,7 @@ export function FloorWorkspace(): ReactNode {
               onViewport={setViewport}
               tool={tool}
               selection={selection}
+              editLocked={baselineLocked}
               onSelect={select}
               onCursorChange={setOpeningCursor}
               onCanvasClick={clickOnCanvas}
@@ -1475,6 +1960,18 @@ export function FloorWorkspace(): ReactNode {
               precision={project.preferences.displayPrecision}
               angleSnap={angleSnap}
               walls={floorWalls}
+              renovation={
+                renovationStates === null
+                  ? null
+                  : {
+                      states: renovationStates,
+                      pickStates,
+                      cycle,
+                      cycleCandidates,
+                      onCycle: setCycle,
+                      nameOf: nameOfEntity,
+                    }
+              }
               selectedWallId={wallSelection}
               rooms={floorRooms}
               selectedRoomId={roomSelection}
@@ -1757,4 +2254,16 @@ export function FloorWorkspace(): ReactNode {
       )}
     </>
   )
+}
+
+/**
+ * Which entities a Renovation Display draws, and as what (#70 criterion 7).
+ *
+ * `displayModel` already answered both — it is the Display's own rows, each carrying the State it is
+ * drawn in — so this only turns them into the lookup the canvas needs. Openings are in here too: a
+ * Display that does not draw a Wall does not draw what is cut in it either.
+ */
+function statesOf(model: DisplayModel): ReadonlyMap<string, RenovationState> {
+  const rows = [...model.walls, ...model.openings, ...model.rooms, ...model.placedItems]
+  return new Map(rows.map((row) => [row.entity.id, row.renovationState]))
 }

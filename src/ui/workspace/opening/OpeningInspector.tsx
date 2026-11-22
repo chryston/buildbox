@@ -24,6 +24,7 @@ import type { ReactNode } from 'react'
 import type { DisplayUnit, Opening, Wall } from '../../../domain'
 import { STRINGS } from '../../strings'
 import { NumberField } from '../SelectionInspector'
+import { useFieldsLocked } from '../fieldsLock'
 import { readoutMm } from '../displayUnits'
 
 /** Grouped thousands, as the issue writes a sill: `1,050 mm`. */
@@ -74,6 +75,7 @@ export function OpeningInspector(props: OpeningInspectorProps): ReactNode {
     opening, host, end, hostLength, unit, precision,
     onRename, onSetWidth, onSetStart, onFlipHinge, onFlipSwing, onSelectHost, onDelete, renovationAction,
   } = props
+  const { locked, notice } = useFieldsLocked()
   const [labelText, setLabelText] = useState(opening.label)
   const [from, setFrom] = useState<'start' | 'end'>('start')
   // Another Opening selected, or this one renamed by the Intent: the field reads the Project.
@@ -105,6 +107,8 @@ export function OpeningInspector(props: OpeningInspectorProps): ReactNode {
         className="bb-workspace-input"
         data-testid="opening-inspector-label"
         type="text"
+        disabled={locked}
+        title={notice === '' ? undefined : notice}
         value={labelText}
         onChange={(event) => setLabelText(event.target.value)}
         onBlur={commitLabel}

@@ -41,6 +41,13 @@ export interface WallDrawOptions {
   /** The selected Opening, drawn heavier than its neighbours. */
   selectedOpeningId?: string | null
   /**
+   * Whether the selected Wall's end handles are drawn at all; `true` unless said otherwise.
+   *
+   * A handle is an offer to edit, so a selection that cannot be edited is drawn without them
+   * (#70 §7c) — the Wall still reads as selected, only nothing invites a drag.
+   */
+  handles?: boolean
+  /**
    * The Opening being placed right now (#65 §10): a ghost of the symbol at the position the
    * pointer is aiming at, in the accent when it fits and in the danger colour when it does not,
    * with the stretch it would violate marked between its ends.
@@ -152,7 +159,9 @@ export function wallLabelBoxes(walls: FloorWalls, sizing: Sizing): Rect[] {
  * end handles as squares on the tidied end caps.
  */
 export function drawWalls(walls: FloorWalls, options: WallDrawOptions): DisplayList {
-  const { sizing, selectedWallId = null, openings = [], selectedOpeningId = null, preview = null } = options
+  const {
+    sizing, selectedWallId = null, openings = [], selectedOpeningId = null, preview = null, handles: showHandles = true,
+  } = options
   const shapes: DisplayItem[] = []
   const symbols: DisplayItem[] = []
   const labels: DisplayItem[] = []
@@ -227,7 +236,7 @@ export function drawWalls(walls: FloorWalls, options: WallDrawOptions): DisplayL
       layout,
     })
 
-    if (wall.id !== selectedWallId) continue
+    if (wall.id !== selectedWallId || !showHandles) continue
     const r = resolveSize('plan-handle-r', sizing).mm
     for (const cap of [
       mid(wall.faces[0].from, wall.faces[1].from),

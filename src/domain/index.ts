@@ -163,6 +163,7 @@ export type {
   ProjectMeta,
   ProjectPreferences,
   ProposedModel,
+  RenovationDisplay,
   Room,
   RoomOutline,
   RoomWallFaceRef,
@@ -175,7 +176,7 @@ export type {
   WallJunctionEnd,
   WallRefLine,
 } from './project'
-export { designOptionsOf } from './project'
+export { RENOVATION_DISPLAYS, designOptionsOf, viewDesignOptionId, viewRenovationDisplay } from './project'
 export { remapIds, type IdAllocator } from './remapIds'
 export { ACKNOWLEDGEMENT_NOTE_MAX_LENGTH, warningKey } from './warnings'
 export {

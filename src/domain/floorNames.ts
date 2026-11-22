@@ -10,7 +10,7 @@
  * `kitchen` and `ＫＩＴＣＨＥＮ` (NFC) are the same name typed differently, and a Project
  * that holds two of them cannot be renamed out of it.
  */
-import type { EntityId, Floor, PlanView, Project } from './project'
+import type { EntityId, Floor, PlanView, Project, RenovationDisplay } from './project'
 
 /** The comparison key every uniqueness rule uses. */
 export const nameKey = (name: string): string => name.trim().normalize('NFC').toLowerCase()
@@ -37,14 +37,26 @@ export function nextFloorName(project: Project): string {
  * The Plan View a Floor comes with: named after the Floor, drawing its Plan Image until the
  * user says otherwise. Every Floor has exactly one, in the same transaction that created
  * the Floor — new, converted, migrated or duplicated.
+ *
+ * It looks at the Existing Model through no Design Option and the Existing Display (#70 §1):
+ * a Floor that has just arrived has nothing else to look through. `view` restates both for the
+ * one caller that copies a view rather than inventing one — `floor.duplicate` carries the
+ * Option and Display of the Floor it duplicated, because a duplicate the user has to re-aim is
+ * a duplicate that lost the thing they were looking at.
  */
-export const defaultPlanView = (viewId: EntityId, floor: Floor): PlanView => ({
+export const defaultPlanView = (
+  viewId: EntityId,
+  floor: Floor,
+  view?: { designOptionId: EntityId | null; renovationDisplay: RenovationDisplay },
+): PlanView => ({
   id: viewId,
   kind: 'plan',
   floorId: floor.id,
   name: floor.name,
   isDefault: true,
   showPlanImage: true,
+  designOptionId: view?.designOptionId ?? null,
+  renovationDisplay: view?.renovationDisplay ?? 'existing',
 })
 
 /** Whether another Plan View of the same Floor already answers to `name`, ignoring case. */

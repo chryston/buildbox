@@ -7,6 +7,7 @@
 //   npm run test:screenshots                    check the committed baselines
 //   npm run test:screenshots -- --update        rewrite them (see e2e/README.md)
 //   npm run test:screenshots -- --grep floor    any other arg goes to playwright
+//   npm run test:screenshots:renovation         the same, of the VITE_FF_RENOVATION artifact (#70)
 //
 // Two jobs, in order:
 //   1. stage the prototype sources the specs ask for into .prototype-cache/ (gitignored).
@@ -22,6 +23,8 @@ import { fileURLToPath } from 'node:url'
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const cacheRoot = join(repoRoot, '.prototype-cache')
 const CONFIG = 'playwright.screenshots.config.ts'
+/** The dark feature's own tier: a different artifact, a different port, its own baselines (#70). */
+const RENOVATION_CONFIG = 'playwright.screenshots.renovation.config.ts'
 const NODE_MODULES_VOLUME = 'buildbox-pw-node-modules'
 
 /** The exact `@playwright/test` version, which is also the container tag (#39 §1). */
@@ -152,7 +155,14 @@ function stage(request) {
 
 const argv = process.argv.slice(2)
 const update = argv.includes('--update')
-const passthrough = argv.filter((arg) => arg !== '--update')
+// `--renovation` photographs the `VITE_FF_RENOVATION` artifact instead: the flag is baked in at build
+// time, so the tier needs its own build, its own preview port and its own baselines — and it can
+// never rewrite a flag-off one (#70).
+const renovation = argv.includes('--renovation')
+const passthrough = argv.filter((arg) => arg !== '--update' && arg !== '--renovation')
+const config = renovation ? RENOVATION_CONFIG : CONFIG
+const build = renovation ? 'npx vite build --mode renovation' : 'npm run build'
+const snapshots = renovation ? 'e2e/screenshots-renovation/__snapshots__' : 'e2e/screenshots/__snapshots__'
 
 const version = playwrightVersion()
 const image = `mcr.microsoft.com/playwright:v${version}-noble`
@@ -164,16 +174,18 @@ for (const request of prototypeRequests()) stage(request)
 // the bind mount as root, so hand them back to the calling user before it exits — a root-owned
 // dist/ makes the next host `vite build` fail to empty the output directory.
 const shellQuote = (arg) => `'${arg.replaceAll(`'`, `'\\''`)}'`
-const test = `npx playwright test -c ${CONFIG}${passthrough.map((arg) => ` ${shellQuote(arg)}`).join('')}${
+const test = `npx playwright test -c ${config}${passthrough.map((arg) => ` ${shellQuote(arg)}`).join('')}${
   update ? ' --update-snapshots' : ''
 }`
 const handBack =
-  'for p in e2e/screenshots/__snapshots__ test-results playwright-report dist; do ' +
+  `for p in ${snapshots} e2e/screenshots/__snapshots__ test-results playwright-report dist; do ` +
   `[ -e "/work/$p" ] && chown -R ${process.getuid()}:${process.getgid()} "/work/$p"; done; true`
 // One artifact since #53: Local Projects is the app, so every scene photographs `dist/`.
-const inner = `npm ci && npm run build && ${test}; rc=$?; ${handBack}; exit $rc`
+const inner = `npm ci && ${build} && ${test}; rc=$?; ${handBack}; exit $rc`
 
-console.log(`run-screenshots: ${image} (${update ? 'updating' : 'checking'} baselines)`)
+console.log(
+  `run-screenshots: ${image} (${renovation ? 'renovation, ' : ''}${update ? 'updating' : 'checking'} baselines)`,
+)
 const docker = runOrFail(
   'docker',
   'docker',

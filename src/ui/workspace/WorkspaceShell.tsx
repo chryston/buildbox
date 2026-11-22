@@ -15,6 +15,19 @@ import './workspace.css'
 export interface WorkspaceShellProps {
   header: ReactNode
   toolbar: ReactNode
+  /**
+   * The mode bar (#70 §3): a full-width row between the toolbar and the body, coloured by Renovation
+   * Display. It is a row of the shell rather than a child of the canvas host, because the host sizes
+   * its `<svg>` to its own full height and an in-flow band there would shift the canvas for every
+   * Project. Absent with the renovation flag off, which leaves the #55 layout untouched.
+   */
+  renovationBar?: ReactNode
+  /**
+   * The legend under the canvas (#70 §4): a row of the shell below the body, for the same reason the
+   * mode bar is one above it — the canvas host sizes its `<svg>` to its own height. Absent with the
+   * renovation flag off, which leaves the #55 layout untouched.
+   */
+  renovationLegend?: ReactNode
   viewCard: ReactNode
   inspector: ReactNode
   canvas: ReactNode
@@ -32,17 +45,18 @@ export interface WorkspaceShellProps {
 }
 
 export function WorkspaceShell(props: WorkspaceShellProps): ReactNode {
-  const { header, toolbar, viewCard, inspector, canvas, draftBar, warningStrip, notes, railOpen, canvasHostRef } = props
+  const { header, toolbar, renovationBar, renovationLegend, viewCard, inspector, canvas, draftBar, warningStrip, notes, railOpen, canvasHostRef } = props
   return (
     <div className="bb-workspace" data-testid="floor-workspace">
       <header className="bb-workspace-header">{header}</header>
       {toolbar}
+      {renovationBar}
       <div className="bb-workspace-body">
         <aside className="bb-workspace-rail" data-open={railOpen ? 'true' : 'false'} data-testid="workspace-rail">
           <section className="bb-workspace-card" data-testid="workspace-view-card">{viewCard}</section>
           {inspector}
         </aside>
-        <div className="bb-workspace-canvas-host" data-testid="workspace-canvas-host" ref={canvasHostRef}>
+        <div className="bb-workspace-canvas-host" data-testid="workspace-canvas-host" ref={canvasHostRef} tabIndex={-1}>
           {canvas}
           {draftBar !== undefined && draftBar !== null && (
             <div className="bb-workspace-draft-bar" data-testid="workspace-draft-bar">{draftBar}</div>
@@ -55,6 +69,9 @@ export function WorkspaceShell(props: WorkspaceShellProps): ReactNode {
           <aside className="bb-workspace-notes" data-testid="workspace-notes">{notes}</aside>
         )}
       </div>
+      {renovationLegend !== undefined && renovationLegend !== null && renovationLegend !== false && (
+        <div className="bb-renovation-legend-row">{renovationLegend}</div>
+      )}
     </div>
   )
 }

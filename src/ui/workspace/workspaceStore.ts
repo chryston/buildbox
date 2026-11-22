@@ -9,9 +9,11 @@
 import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
 import { useShallow } from 'zustand/react/shallow'
-import { enabledSnapKinds } from '../../derive'
-import type { SnapKind } from '../../derive'
-import type { ItemFootprint, Point2 } from '../../domain'
+import { enabledSnapKinds, RENOVATION_STATES } from '../../derive'
+import type { RenovationState, SnapKind } from '../../derive'
+import type { Intent } from '../../edit'
+import type { CycleCandidate, CycleState } from './selection/overlapCycle'
+import type { ItemFootprint, Point2, RenovationDisplay } from '../../domain'
 import type { ShapeDraft } from './shape/proposal'
 import type { Viewport } from './viewport'
 
@@ -167,6 +169,27 @@ export interface ShapeDraftState {
 export type RenovationDialog =
   | { readonly kind: 'demolish'; readonly entityId: string; readonly designOptionId: string }
   | { readonly kind: 'move'; readonly entityIds: readonly string[] }
+  /**
+   * §7a: an Existing entity was edited from a Display that is not Existing, so nothing committed and
+   * the person has to say what they meant. The refused Intent is carried along as the pending edit —
+   * it is UI-session state, never the Project, and it is what `Replace in <Option>` turns into a
+   * successor and `Correct Existing Model instead…` wraps.
+   */
+  | {
+    readonly kind: 'forced-choice'
+    readonly intent: Intent
+    readonly entityId: string
+    /** Which Display the edit was made from and which Option it was editing, as ids. */
+    readonly display: RenovationDisplay
+    readonly optionId: string
+  }
+  /** §7b: the same pending edit, on its way to the danger dialog. */
+  | { readonly kind: 'correct-existing'; readonly intent: Intent; readonly entityId: string | null }
+  /**
+   * §7d: `Restore W-2?` — the person is about to take a demolition record out of one Design Option,
+   * and the Option's own successors may stand on it. Ids only: the review is read from the preview.
+   */
+  | { readonly kind: 'restore'; readonly entityId: string; readonly designOptionId: string }
   | null
 
 export interface WorkspaceState {
@@ -229,6 +252,40 @@ export interface WorkspaceState {
   activeHydrated: boolean
   /** The renovation dialog on screen, if any (#69 §9, §13). */
   renovationDialog: RenovationDialog
+  /**
+   * §7c: the one Existing entity whose handles and fields are unlocked for one pending correction,
+   * or `null`. Every baseline selection starts locked in Existing display; `Correct Existing
+   * Model…` unlocks it, and committing or pressing Escape locks it again. UI-session state, never
+   * undoable (#26), and an id only.
+   */
+  correctionUnlocked: string | null
+  /**
+   * The strip's temporary `Pick:` filter (#70 §3): the Renovation States a click may take, in the
+   * three States' own order whatever the order of clicks. Empty means every state.
+   *
+   * It is UI session state and nothing else: never the Project, never a Backup, never an undo step.
+   * It resets when the saved view changes, because a filter set while comparing two Options is not a
+   * fact about the third view, and a stale filter that silently refuses to select anything is worse
+   * than no filter.
+   */
+  pickStates: readonly RenovationState[]
+  /**
+   * Why a hidden tool's keyboard shortcut did nothing (#70 §3), in the strip's own line; `null` when
+   * there is nothing to say. A notice, not a dialog: it explains a keystroke and gets out of the way.
+   */
+  hiddenToolNotice: string | null
+  /**
+   * What the last click on the canvas left behind (#70 §8): where it landed, the candidates that
+   * were reachable there and which one is now selected — or `null` when no cycle is running. The
+   * cycle is a answer to "what did I just click", so it lives with the tool and the selection: never
+   * the Project, never a Backup, never an undo step.
+   */
+  cycle: CycleState | null
+  /**
+   * The candidates of the running cycle, in cycle order (top first) and already narrowed by the
+   * `Pick:` filter — the list the canvas draws beside the pointer. Empty with no cycle.
+   */
+  cycleCandidates: readonly CycleCandidate[]
 }
 
 export interface WorkspaceActions {
@@ -276,8 +333,27 @@ export interface WorkspaceActions {
   openDemolishDialog(entityId: string, designOptionId: string): void
   /** Ask for `Move to a Design Option?` of the selected Existing entities (#69 §13). */
   openMoveToOptionDialog(entityIds: readonly string[]): void
+  /** Ask what an Existing-entity edit from another Display was meant to be (#70 §7a). */
+  openForcedChoiceDialog(intent: Intent, entityId: string, display: RenovationDisplay, optionId: string): void
+  /** Ask the §7b danger question about the same pending edit. */
+  openCorrectExistingDialog(intent: Intent, entityId: string | null): void
+  /** Ask `Restore <ref>?` before a demolition record leaves one Design Option (#70 §7d). */
+  openRestoreDialog(entityId: string, designOptionId: string): void
+  /** §7c: hand one Existing entity its handles and fields back, for one pending correction. */
+  unlockCorrection(entityId: string): void
+  /** §7c: put the lock back — what Escape does, and what committing does through the dialog. */
+  lockCorrection(): void
   /** Put the renovation dialog away. Nothing was written, which is the whole point of Cancel. */
   closeRenovationDialog(): void
+  /** Turn one `Pick:` chip on or off (#70 §3); the list stays in the three States' own order. */
+  togglePickState(state: RenovationState): void
+  /** Say why a hidden tool's shortcut did nothing (#70 §3). The newest question is the only answer shown. */
+  showHiddenToolNotice(notice: string): void
+  clearHiddenToolNotice(): void
+  /** Record what a click on the canvas reached (#70 §8); `null` ends the cycle. */
+  setCycle(cycle: CycleState | null, candidates?: readonly CycleCandidate[]): void
+  /** Esc, a click on nothing, or a changed candidate set: the cycle is over (#70 criterion 18). */
+  clearCycle(): void
   /** Another Project opened: its placements are not this one's to select. */
   reset(): void
 }
@@ -318,6 +394,11 @@ const INITIAL: WorkspaceState = {
   activeViewByFloor: {},
   activeHydrated: false,
   renovationDialog: null,
+  correctionUnlocked: null,
+  pickStates: [],
+  hiddenToolNotice: null,
+  cycle: null,
+  cycleCandidates: [],
 }
 
 /**
@@ -426,12 +507,22 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
       return {
         activeFloorId,
         activeViewByFloor,
+        // A new saved view is a new question: the `Pick:` filter and the shortcut notice belong to the
+        // view they were set on (#70 criterion 5).
+        pickStates: [],
+        hiddenToolNotice: null,
+        cycle: null,
+        cycleCandidates: [],
         ...movedAway(state, activeFloorId, activeViewByFloor),
       }
     }),
   setActiveView: (floorId, viewId) =>
     set((state) => ({
       activeViewByFloor: { ...state.activeViewByFloor, [floorId]: viewId },
+      pickStates: [],
+      hiddenToolNotice: null,
+      cycle: null,
+      cycleCandidates: [],
       ...movedAway(state, state.activeFloorId, { ...state.activeViewByFloor, [floorId]: viewId }),
     })),
   hydrateActive: (activeFloorId, viewsByFloor) =>
@@ -443,7 +534,29 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
   openDemolishDialog: (entityId, designOptionId) =>
     set({ renovationDialog: { kind: 'demolish', entityId, designOptionId } }),
   openMoveToOptionDialog: (entityIds) => set({ renovationDialog: { kind: 'move', entityIds } }),
+  openForcedChoiceDialog: (intent, entityId, display, optionId) =>
+    set({ renovationDialog: { kind: 'forced-choice', intent, entityId, display, optionId } }),
+  openCorrectExistingDialog: (intent, entityId) =>
+    // Asking the danger question is the commit leaving: the unlock was for that one pending edit,
+    // so the entity is locked again whether the answer is Confirm or Cancel (#70 §7c).
+    set({ renovationDialog: { kind: 'correct-existing', intent, entityId }, correctionUnlocked: null }),
+  openRestoreDialog: (entityId, designOptionId) =>
+    set({ renovationDialog: { kind: 'restore', entityId, designOptionId } }),
+  unlockCorrection: (entityId) => set({ correctionUnlocked: entityId }),
+  lockCorrection: () => set({ correctionUnlocked: null }),
   closeRenovationDialog: () => set({ renovationDialog: null }),
+  togglePickState: (state) =>
+    set((current) => ({
+      // The three States' own order, not the order of clicks: the chips and the list they filter must
+      // read the same way every time.
+      pickStates: current.pickStates.includes(state)
+        ? current.pickStates.filter((each) => each !== state)
+        : RENOVATION_STATES.filter((each) => each === state || current.pickStates.includes(each)),
+    })),
+  showHiddenToolNotice: (hiddenToolNotice) => set({ hiddenToolNotice }),
+  clearHiddenToolNotice: () => set({ hiddenToolNotice: null }),
+  setCycle: (cycle, candidates = []) => set({ cycle, cycleCandidates: cycle === null ? [] : candidates }),
+  clearCycle: () => set({ cycle: null, cycleCandidates: [] }),
   reset: () => set({ ...INITIAL }),
 }))
 

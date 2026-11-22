@@ -141,6 +141,28 @@ jobs:
           name: screenshots
           path: test-results/
 
+  # The dark feature's baselines (#70): the same pinned container and the same zero-tolerance diff,
+  # on a build made with `.env.renovation` — a flag-off artifact draws no mode bar, no Display card
+  # and no overlay, so these scenes have nothing to be photographed by.
+  screenshots-renovation:
+    name: screenshots-renovation
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: screenshots (renovation flag on)
+        run: npm run test:screenshots:renovation
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-renovation
+          path: test-results/
+
   # Baselines move only in a PR that says so (#39 §4). Add "CI / screenshot-guard" to the
   # required status checks: it passes trivially when no baseline changed, and fails when one
   # did and the update-snapshots label is missing.
@@ -157,7 +179,7 @@ jobs:
           BASE_REF: origin/${{ github.base_ref }}
           HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'update-snapshots') }}
         run: |
-          changed=$(git diff --name-only "${BASE_REF}"...HEAD -- 'e2e/screenshots/__snapshots__/**')
+          changed=$(git diff --name-only "${BASE_REF}"...HEAD -- 'e2e/screenshots/__snapshots__/**' 'e2e/screenshots-renovation/__snapshots__/**')
           if [ -n "${changed}" ] && [ "${HAS_LABEL}" != 'true' ]; then
             echo "::error::Screenshot baselines changed without the update-snapshots label"
             echo "Changed baselines:"

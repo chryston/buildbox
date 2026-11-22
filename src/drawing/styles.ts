@@ -84,6 +84,15 @@ export const SIZE_ROLES: Record<SizeRole, SizeRow> = {
   // stays one dash whether the plan is at zoom 0.1 or printed at 1:100 (#65 §12).
   'opening-dash': { screen: { mm: 150 }, paper: { mm: 3 } },
   'opening-gap': { screen: { mm: 100 }, paper: { mm: 2 } },
+  // The renovation overlays' dash (#70 §F): shorter than an Opening's, because it runs round a
+  // whole Wall rather than marking two jamb lines.
+  'renovation-dash': { screen: { mm: 90 }, paper: { mm: 2 } },
+  'renovation-gap': { screen: { mm: 60 }, paper: { mm: 1.4 } },
+  // The halo sits this far outside the outline — three device pixels on a screen, whatever the
+  // zoom, and a hairline's worth of ink on paper.
+  'renovation-halo-gap': { screen: { px: 3 }, paper: { mm: 0.6 } },
+  // The distance between two hatching lines.
+  'renovation-hatch-pitch': { screen: { px: 7 }, paper: { mm: 1.4 } },
   // The uncalibrated Plan Image's placeholder rect was `strokeWidth={2}` inside the zoomed
   // group, so on screen it is two millimetres of Floor, not two device pixels.
   'plan-placeholder-line': { screen: { mm: 2 }, paper: { mm: 0.25 } },
@@ -182,6 +191,29 @@ export const STYLES: Record<StyleKey, Style> = {
   'room-label': { fill: 'var(--bb-text)', size: 'plan-label', fontFamily: FONT_STACK, hit: 'none' },
   'room-label:min': { fill: 'var(--bb-text)', size: 'room-label-min', fontFamily: FONT_STACK, hit: 'none' },
   'room-label-leader': { stroke: 'var(--bb-text)', strokeWidth: 'hairline', hit: 'none' },
+  // The renovation overlays (#70 §F): bounded graphics laid over the entity's own layer style,
+  // which they never rewrite — the Wall a Design Option demolishes is still drawn in the `walls`
+  // layer's colour, and the dashed outline plus 45° hatching is what says it is going. Both are
+  // hit-transparent: a click belongs to the entity underneath, not to the annotation on it.
+  'renovation-demolition': {
+    stroke: 'var(--bb-renovation-demolition-border)',
+    strokeWidth: 'hairline',
+    dash: ['renovation-dash', 'renovation-gap'],
+    hit: 'none',
+  },
+  'renovation-hatch': {
+    stroke: 'var(--bb-renovation-demolition-border)',
+    strokeWidth: 'hairline',
+    hit: 'none',
+  },
+  // The proposed halo is dashed for the same reason the demolition outline is: a solid ring would
+  // read as the entity's own edge, and the entity's edge is already drawn, in its own colour.
+  'renovation-halo': {
+    stroke: 'var(--bb-renovation-proposed-border)',
+    strokeWidth: 'hairline',
+    dash: ['renovation-dash', 'renovation-gap'],
+    hit: 'none',
+  },
   // An Opening's own lines are the Wall's weight, so a gap reads as part of the Wall rather
   // than as something standing in it. Only these take a pointer: the swing is a hint.
   'opening': { stroke: 'var(--bb-text)', strokeWidth: 'plan-line' },

@@ -33,6 +33,12 @@ export type AnnotationOptions = DrawOptions & {
   formatLength: (mm: number) => string
   /** The same preview the Floor is being drawn with, so the crosshairs follow the pointer. */
   preview?: PlanPreview | null
+  /**
+   * Whether the rotate grip is drawn; `true` unless said otherwise. The grip is an offer to edit, so
+   * a selection that cannot be edited is drawn without it (#70 §7c) — the measurement, the chip and
+   * the Item Origins stay, because they tell a person where the thing is.
+   */
+  handles?: boolean
 }
 
 /** How many characters of `Floor bounds …` fit the chip: the placer's own width per character. */
@@ -53,7 +59,7 @@ export function drawSelectionAnnotations(
   const selected = d.placements.find((p) => p.id === placementId)
   if (selected === undefined) return null
 
-  const { sizing, formatLength } = options
+  const { sizing, formatLength, handles: showHandles = true } = options
   const drawn = new Map<EntityId, DrawnPlacement>()
   for (const p of d.placements) {
     if (p.designId === selected.designId) drawn.set(p.id, drawPlacement(p, options.preview))
@@ -83,7 +89,7 @@ export function drawSelectionAnnotations(
   if (annotations.length > 0) layers.push({ key: 'plan-annotations', items: annotations })
   if (dimensions.length > 0) layers.push({ key: 'plan-dimensions', items: dimensions })
   if (chipItems.length > 0) layers.push({ key: 'plan-chip', items: chipItems })
-  if (focus !== null) layers.push({ key: 'plan-handle', items: [rotateHandle(focus, sizing)] })
+  if (focus !== null && showHandles) layers.push({ key: 'plan-handle', items: [rotateHandle(focus, sizing)] })
   if (layers.length === 0) return null
 
   let bounds = focus.world

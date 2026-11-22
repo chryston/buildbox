@@ -20,7 +20,8 @@
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
     "test:e2e:renovation": "npm run typecheck && vite build --mode renovation && VITE_FF_RENOVATION=true node scripts/check-bundle-strings.mjs && playwright test --config playwright.renovation.config.ts",
-    "test:screenshots": "node scripts/run-screenshots.mjs"
+    "test:screenshots": "node scripts/run-screenshots.mjs",
+    "test:screenshots:renovation": "node scripts/run-screenshots.mjs --renovation"
   },
   "engines": {
     "node": ">=24"

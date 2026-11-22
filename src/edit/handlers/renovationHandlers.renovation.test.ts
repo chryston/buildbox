@@ -141,7 +141,10 @@ describe('designOption.delete', () => {
         placedItems: 0,
         demolished: 0,
         acknowledgements: 1,
+        // No saved view is looking through Option B in this fixture (#70 §1).
+        views: 0,
       },
+      viewNames: [],
       message: 'Delete Option B and everything it proposes?',
     })
   })

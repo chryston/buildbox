@@ -116,6 +116,7 @@ export interface DisplayListSvgProps {
 /** The `data-testid` each role answers with, or nothing when the role is not addressable. */
 const TEST_IDS: Readonly<Record<string, (id: string) => string>> = {
   'placed-item': (id) => `placed-object-${id}`,
+  'wall-handle': (id) => `wall-handle-${id}`,
   'item-label': (id) => `item-label-${id}`,
   'origin-marker': (id) => `origin-marker-${id}`,
   'warning-badge': (id) => `warning-badge-${id}`,
