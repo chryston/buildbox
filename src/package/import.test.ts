@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import { sha256Hex, unzipEntries, zipEntries, type ZipLimits } from '../lib'
 import type { Migrator, Project } from '../domain'
+import { DOMAIN_SCHEMA_VERSION } from '../domain'
 import { PACKAGE_LIMITS } from './constants'
 import { encodeProject } from './encode'
 import { migrateDomainProject, stageImport } from './import'
@@ -402,8 +403,11 @@ describe('stageImport: hashes and assets', () => {
 
 describe('stageImport: the migrator chain', () => {
   it('refuses a Project saved by a newer BuildBox before touching a field', async () => {
-    await expectProblem(withManifest(await validArchive(), (m) => { m.domainSchemaVersion = 8 }), 'newer-schema', {
-      detail: { detected: 8, supported: 7 },
+    // One ahead of whatever this build writes: a preview build is a version further along the
+    // chain, and "newer" has to mean newer than it, not newer than production (#69 §1).
+    const newer = DOMAIN_SCHEMA_VERSION + 1
+    await expectProblem(withManifest(await validArchive(), (m) => { m.domainSchemaVersion = newer }), 'newer-schema', {
+      detail: { detected: newer, supported: DOMAIN_SCHEMA_VERSION },
     })
   })
 

@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { canonicalJsonBytes, readZipIndex, sha256Hex, unzipEntries, type ZipLimits } from '../lib'
-import type { Project } from '../domain'
+import { DOMAIN_SCHEMA_VERSION, type Project } from '../domain'
 import { encodeProject, type AssetSource } from './encode'
 import { FIXTURE_BUILD, fixtureProject } from './testing'
 
@@ -130,7 +130,7 @@ describe('encodeProject', () => {
     expect(manifest).toMatchObject({
       format: 'buildbox-project',
       packageVersion: 1,
-      domainSchemaVersion: 7,
+      domainSchemaVersion: DOMAIN_SCHEMA_VERSION,
       projectId: 'project-0',
       exportedAt: '2024-02-29T12:34:56.789Z',
       buildboxVersion: '1.2.3',
