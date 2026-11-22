@@ -310,6 +310,14 @@ export const RENOVATION_STRINGS = {
   layerCollapseAria: (name: string): string => `Hide the settings for ${name}`,
   layerActiveAria: (name: string): string => `Draw new content on ${name} in this view`,
 
+  // ---- the cross-Project paste (#72 §6)
+  // The transaction label is the count of what comes across and the name of the Project it came
+  // from, both of which are data: a released bundle holds neither the number of records in a copy
+  // nor the name of a Project it has never seen, so the row that sends the paste composes the
+  // sentence from the review it was built from.
+  pasteLabel: (n: number, sourceName: string): string =>
+    `Paste ${count(n, 'entity', 'entities')} from “${sourceName}”`,
+
   // ---- the buttons every one of them ends with
   cancel: 'Cancel',
 } as const

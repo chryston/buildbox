@@ -49,6 +49,8 @@ import { RENOVATION_EDIT_INTENT_ID_ORDER } from './handlers/renovationEdits'
 import { CORRECTION_INTENT_ID_ORDER } from './handlers/correctionHandlers'
 import { RENOVATION_INTENT_ID_ORDER } from './handlers/renovationHandlers'
 import { LAYER_INTENT_ID_ORDER } from './handlers/layerHandlers'
+import { PASTE_INTENT_ID_ORDER } from './handlers/pasteHandlers'
+import type { CopySet } from './copySet'
 
 /**
  * Every Intent type the released catalogue answers (#47), one per current store action.
@@ -165,6 +167,7 @@ export type RenovationIntentType =
   | 'view.setActiveLayer'
   | 'view.setSnapToHidden'
   | 'entity.setLayer'
+  | 'renovation.pasteFromProject'
 
 /** Every Intent type the catalogue can answer: the S7 set, plus the renovation set in a flagged build. */
 export type IntentType = S7IntentType | RenovationIntentType
@@ -1006,6 +1009,48 @@ export interface SetEntityLayer {
   layerId: EntityId | null
 }
 
+/**
+ * The cross-Project paste (#72 §4, §5), dark until `VITE_FF_RENOVATION` is on.
+ *
+ * The payload is the by-value snapshot `Copy` took in the other Project — nothing about the
+ * destination, because the same clipboard entry pasted into a second Project is a different edit.
+ * Where it lands is read off the view it was asked in: its Design Option takes the work, its Floor
+ * owns it, and its display decides whether the Existing Model is being corrected (#72 Scope 2).
+ *
+ * The IDs are pre-allocated like every other Intent's, in the order `PASTE_INTENT_ID_ORDER` states,
+ * and the count depends only on this payload: one per copied record, one per Item Design it brings,
+ * one per source Layer. A Layer the mapping sends onto an existing one, and an Opening dropped for
+ * want of its Wall, leave their slots unspent rather than shifting the ones after them.
+ */
+export interface PasteFromOtherProject {
+  /** The Floor the copy stands on — the Floor of the view it was pasted into. */
+  floorId: EntityId
+  /** The saved view the paste was asked in: it decides the container and the undo target. */
+  viewId: EntityId
+  copySet: CopySet
+}
+
+/** Where one source Layer's work goes: onto a Layer this Project has, onto a new one, or nowhere. */
+export type PasteLayerTarget =
+  | { readonly kind: 'existing'; readonly layerId: EntityId }
+  | { readonly kind: 'new' }
+  | { readonly kind: 'unlayered' }
+
+/** One row of the mapping dialog's answer. */
+export interface PasteLayerResolution {
+  readonly sourceLayerId: EntityId
+  readonly target: PasteLayerTarget
+}
+
+/**
+ * The mapping the review was answered with (#72 §5). It rides `resolutions` rather than the payload
+ * because it is an answer to a question the review asked, and the handler re-checks it the way every
+ * other review's answer is re-checked: a paste with a used Layer left unasked is refused, not guessed.
+ */
+export interface PasteResolutions {
+  readonly layers: readonly PasteLayerResolution[]
+}
+
 /** `type → payload`, the one place the catalogue's shape is written down. */
 export interface IntentPayloads {
   'project.rename': RenameProject
@@ -1105,6 +1150,7 @@ export interface IntentPayloads {
   'view.setActiveLayer': SetViewActiveLayer
   'view.setSnapToHidden': SetViewSnapToHidden
   'entity.setLayer': SetEntityLayer & IntentTarget
+  'renovation.pasteFromProject': PasteFromOtherProject
 }
 
 export type PayloadOf<T extends IntentType = IntentType> = IntentPayloads[T]
@@ -1244,7 +1290,7 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
  * import of the renovation module becomes dead, so a released bundle carries neither table.
  */
 const ID_ORDER_BY_TYPE: Partial<Record<IntentType, readonly string[]>> = FF_RENOVATION
-  ? { ...INTENT_ID_ORDER, ...RENOVATION_INTENT_ID_ORDER, ...RENOVATION_EDIT_INTENT_ID_ORDER, ...CORRECTION_INTENT_ID_ORDER, ...LAYER_INTENT_ID_ORDER }
+  ? { ...INTENT_ID_ORDER, ...RENOVATION_INTENT_ID_ORDER, ...RENOVATION_EDIT_INTENT_ID_ORDER, ...CORRECTION_INTENT_ID_ORDER, ...LAYER_INTENT_ID_ORDER, ...PASTE_INTENT_ID_ORDER }
   : INTENT_ID_ORDER
 
 /**
@@ -1326,6 +1372,23 @@ export function intentIdCount(type: IntentType, payload?: PayloadOf): number {
       // and an Option's aligned successor is re-run with no IDs at all (#69 §12).
       const inner = (payload as CorrectExistingModel).inner
       return intentIdCount(inner.type, inner.payload)
+    }
+    case 'renovation.pasteFromProject': {
+      // One ID per copied record, one per Item Design it brings, one per source Layer (#72 §4).
+      // Read straight off the snapshot so the count needs nothing but the payload: a Layer sent
+      // onto one this Project already has, and an Opening dropped for want of its Wall, leave
+      // their slots unspent rather than shifting the ones after them.
+      const pasted = (payload as PasteFromOtherProject).copySet
+      const { walls, wallJunctions, openings, rooms, placedItems } = pasted.entities
+      return (
+        walls.length +
+        wallJunctions.length +
+        openings.length +
+        rooms.length +
+        placedItems.length +
+        pasted.itemDesigns.length +
+        pasted.layers.length
+      )
     }
     default:
       return fixed + VARIADIC_ID_COUNT
@@ -1582,7 +1645,56 @@ export interface MoveToOptionReview {
   readonly message: string
 }
 
-/** What an Intent would take with it, per review family. */
+/** Where pasted work would land, per the ownership table of #72 Scope 2. */
+export type PasteDestination =
+  /** Proposed or Combined display: the work belongs to that Option, and only that Option sees it. */
+  | { readonly kind: 'option'; readonly designOptionId: EntityId; readonly designOptionName: string }
+  /** Existing display of a Project with no Design Options: the shared baseline takes it, alone. */
+  | { readonly kind: 'existing' }
+  /**
+   * Existing display with Design Options drawn against the baseline: the write is the same one, but
+   * it has to travel inside a baseline correction so every Option is reviewed first (#70 §7).
+   */
+  | { readonly kind: 'correct-existing' }
+  /** Demolition display, or a Proposed/Combined display with no Option chosen: nothing is written. */
+  | { readonly kind: 'blocked'; readonly reason: string }
+
+/** One source Drawing Layer, and what the destination offers for it (#72 §5). */
+export interface PasteLayerRow {
+  readonly sourceLayerId: EntityId
+  readonly sourceLayerName: string
+  readonly sourceLayerColor: string
+  /** How many of the pasted entities ride this layer. */
+  readonly itemCount: number
+  /** The destination layer with the same name, when one has it — a suggestion, never a decision. */
+  readonly suggestedLayerId: EntityId | null
+  readonly suggestedLayerName: string | null
+}
+
+/** One record the paste cannot bring whole: the dialog lists these under its own heading. */
+export interface PasteLoss {
+  /** `Door 1`, `Kitchen edge 2` — what the person would look for on the drawing. */
+  readonly ref: string
+  readonly reason: string
+}
+
+/** `Paste from “Unit 4 Fitout” — map Drawing Layers`, in data form (#72 §5). */
+export interface PasteReview {
+  readonly kind: 'paste-from-project'
+  readonly sourceProjectId: EntityId
+  readonly sourceProjectName: string
+  /** The records that come across — the `<n>` of `Paste <n> entities from …`. */
+  readonly entityCount: number
+  /** The records that ride no layer. They need no row: they stay Unlayered here too. */
+  readonly unlayeredCount: number
+  /** One row per source layer the pasted entities actually use, in the source's own order. */
+  readonly rows: readonly PasteLayerRow[]
+  readonly notComingAcross: readonly PasteLoss[]
+  readonly detached: readonly PasteLoss[]
+  readonly destination: PasteDestination
+}
+
+/** What an Intent takes with it, per review family. */
 export type DependencyReview =
   | DeleteWallReview
   | DeleteDesignOptionReview
@@ -1591,6 +1703,7 @@ export type DependencyReview =
   | RestoreReview
   | CorrectionReview
   | MoveToOptionReview
+  | PasteReview
 
 export interface Applied {
   ok: true

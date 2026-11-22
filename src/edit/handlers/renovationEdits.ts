@@ -47,9 +47,13 @@ import { checkRoomProposal, edgeName, faceCanCarry, slideOntoFace } from './room
 import { creationLayerField } from './creationLayer'
 import { effectiveView, refuse, spendIds } from './support'
 import type { CorrectionIntentType } from './correctionHandlers'
+import type { PasteIntentType } from './pasteHandlers'
 
 /** The edit-table Intent types, written once: the renovation set less the two corrections. */
-type EditIntentType = Exclude<Extract<RenovationIntentType, `renovation.${string}`>, CorrectionIntentType>
+type EditIntentType = Exclude<
+  Extract<RenovationIntentType, `renovation.${string}`>,
+  CorrectionIntentType | PasteIntentType
+>
 
 /** The Option an edit belongs to; without it there is nothing to write into. */
 function requireOption(draft: Project, optionId: EntityId): DesignOption {

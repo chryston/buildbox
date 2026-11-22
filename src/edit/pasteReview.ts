@@ -20,6 +20,7 @@
 import { designOptionsOf, nameKey, viewDesignOptionId, viewRenovationDisplay } from '../domain'
 import type { EntityId, PlanView, Project } from '../domain'
 import { roomEdgeName } from '../derive'
+import type { PasteDestination, PasteLayerRow, PasteLoss, PasteReview } from './intents'
 import type { CopySet } from './copySet'
 
 /** The one sentence a display that cannot take new work answers with (#72 Scope 2). */
@@ -28,55 +29,6 @@ export const PASTE_BLOCKED = 'Switch to Proposed or Combined display to paste ne
 /** Why a record will not come across, in the two words the dialog prints beside its name. */
 export const PASTE_LOSS_HOST = 'its host Wall was not copied'
 export const PASTE_DETACH_FACE = 'its Wall was not copied'
-
-/** Where pasted work would land, per the ownership table of #72 Scope 2. */
-export type PasteDestination =
-  /** Proposed or Combined display: the work belongs to that Option, and only that Option sees it. */
-  | { readonly kind: 'option'; readonly designOptionId: EntityId; readonly designOptionName: string }
-  /** Existing display of a Project with no Design Options: the shared baseline takes it, alone. */
-  | { readonly kind: 'existing' }
-  /**
-   * Existing display with Design Options drawn against the baseline: the write is the same one, but
-   * it has to travel inside a baseline correction so every Option is reviewed first (#70 §7).
-   */
-  | { readonly kind: 'correct-existing' }
-  /** Demolition display, or a Proposed/Combined display with no Option chosen: nothing is written. */
-  | { readonly kind: 'blocked'; readonly reason: string }
-
-/** One source Drawing Layer, and what the destination offers for it. */
-export interface PasteLayerRow {
-  readonly sourceLayerId: EntityId
-  readonly sourceLayerName: string
-  readonly sourceLayerColor: string
-  /** How many of the pasted entities ride this layer. */
-  readonly itemCount: number
-  /** The destination layer with the same name, when one has it — a suggestion, never a decision. */
-  readonly suggestedLayerId: EntityId | null
-  readonly suggestedLayerName: string | null
-}
-
-/** One record the paste cannot bring whole: the dialog lists these under its own heading. */
-export interface PasteLoss {
-  /** `Opening D-3`, `Kitchen edge 2` — what the person would look for on the drawing. */
-  readonly ref: string
-  readonly reason: string
-}
-
-/** `Paste from “Unit 4 Fitout” — map Drawing Layers`, in data form. */
-export interface PasteReview {
-  readonly kind: 'paste-from-project'
-  readonly sourceProjectId: EntityId
-  readonly sourceProjectName: string
-  /** The records that come across — the `<n>` of `Paste <n> entities from …`. */
-  readonly entityCount: number
-  /** The records that ride no layer. They need no row: they stay Unlayered here too. */
-  readonly unlayeredCount: number
-  /** One row per source layer the pasted entities actually use, in the source's own order. */
-  readonly rows: readonly PasteLayerRow[]
-  readonly notComingAcross: readonly PasteLoss[]
-  readonly detached: readonly PasteLoss[]
-  readonly destination: PasteDestination
-}
 
 /**
  * Where the active view says new work belongs (#72 Scope 2).
