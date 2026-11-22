@@ -23,22 +23,14 @@ import type { DerivedFloor, FloorRooms, FloorWalls, RenovationState, SnapCandida
 import type { DisplayUnit, Point2 } from '../../domain'
 import { footprintPath } from '../../domain'
 import {
-  LAYER_ORDER,
-  displayRects,
   candidatesAtPoint,
+  drawFloorView,
   drawOrderOf,
-  drawPlanView,
-  drawPlacement,
-  drawRooms,
   drawSelectionAnnotations,
   drawWarningBadges,
-  drawWalls,
-  pathToCommands,
-  renovationOverlays,
-  unionRect,
-  wallLabelBoxes,
+  displayRects,
 } from '../../drawing'
-import type { BadgeSubject, DisplayItem, DisplayLayer, DisplayList, OpeningPreview, PlanPreview, RenovationOutline, RoomProposal, Sizing, WallOpenings } from '../../drawing'
+import type { BadgeSubject, DisplayList, LayerGates, OpeningPreview, PlanPreview, RoomProposal, Sizing, WallOpenings } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
 import { OverlapCycleList } from './renovation/OverlapCycleList'
 import { cycleOrder, nextCycle, reachableCandidates } from './selection/overlapCycle'
@@ -198,71 +190,12 @@ export interface PlanViewCanvasProps {
    * to be painted say what those are.
    *
    * The badges are built here and never in the Floor's own list, which is what keeps them off
-   * the export — the sheets are composed from `drawPlanView` and `drawWalls` alone, and warnings
-   * never appear on drawings.
+   * the export — the sheet composes the same `drawFloorView` the screen does, and warnings never
+   * appear on drawings.
    */
   warningSubjects?: readonly BadgeSubject[]
   /** A badge was clicked: open the Warning strip at that entity's first row. */
   onSelectWarningBadge?: (id: string) => void
-}
-
-/**
- * What this saved view lets the canvas do with one entity (#71 §4), answered by the caller — the one
- * place the Project, the view and the effective model are all in hand. `derive` computes the answers
- * (`layerAccessOf`, `effectiveLayerSetting`); this is the same answers shaped for a canvas that may
- * not read the domain.
- */
-export interface LayerGates {
-  /** Does this view draw it at all: the Display's table and the layer's Visible box. */
-  drawn(id: string): boolean
-  /** Can a click reach it: drawn, the row's Selectable box, and the `Pick:` filter. */
-  pickable(id: string): boolean
-  /** Can it be edited: pickable, and the row's Editable box. */
-  modifiable(id: string): boolean
-  /** The colour this view paints it in, or `null` for its own colours. */
-  colorOf(id: string): string | null
-  /** The back-to-front index of its layer, which is the order the paint follows inside a z-band. */
-  orderOf(id: string): number
-  /** The layer's name when this view will not let it be edited, else `null`. */
-  readOnlyLayerOf(id: string): string | null
-  /** A press that wanted to edit read-only content: the notice that says so. */
-  onRefusal?: (layerName: string) => void
-}
-
-/**
- * The layer pass over an assembled display list (#71 §1, §4).
- *
- * An item whose entity this view has hidden is not painted at all; one whose layer has a colour of
- * its own is painted in it, which is how a `Structure` layer drawn grey reads as one thing on the
- * drawing; and inside every z-band the items follow their layer's back-to-front order, the last
- * painted landing on top. An item with no `ref` — a grid line, a chip, the plan image — belongs to no
- * entity: it keeps its own colour and paints with the entity it follows.
- */
-function paintByLayer(list: DisplayList, layers: LayerGates): DisplayList {
-  return {
-    ...list,
-    layers: list.layers.map((band) => {
-      // An item with no `ref` of its own takes the order of the entity before it, so a Room's label
-      // still paints with its Room and a Wall's dimension with its Wall.
-      let lastOrder = 0
-      const items = band.items
-        .filter((item) => item.ref === undefined || layers.drawn(item.ref.id))
-        .map((item): { order: number; item: DisplayItem } => {
-          const id = item.ref?.id
-          if (id === undefined) return { order: lastOrder, item }
-          lastOrder = layers.orderOf(id)
-          const colour = layers.colorOf(id)
-          // `color` is what the renderer paints a path's fill and stroke, or a label's glyphs, with.
-          // An image carries pixels and a group carries other items rather than paint of its own, so
-          // neither takes the layer's colour.
-          if (colour === null || item.kind === 'image' || item.kind === 'group') return { order: lastOrder, item }
-          return { order: lastOrder, item: { ...item, color: colour } }
-        })
-      // `Array.prototype.sort` is stable, so entities of one layer keep the order their own drawing
-      // gave them — which is the Renovation order #70 established, one layer down.
-      return { key: band.key, items: items.sort((a, b) => a.order - b.order).map((entry) => entry.item) }
-    }),
-  }
 }
 
 /**
@@ -539,7 +472,6 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   // the handles and the snap targets — while the warnings, the quantities and the tables go on
   // counting it, because hiding is a decision about this view, not about the building.
   const layers = layerGates
-  const shown = (id: string): boolean => (states === null || states.has(id)) && (layers === null || layers.drawn(id))
   /** Handles belong to a selection this view will let be edited, and to no other (#71 §4). */
   const handlesFor = (id: string | null | undefined): boolean =>
     !editLocked && (layers === null || id === undefined || id === null || layers.modifiable(id))
@@ -547,68 +479,29 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     (id): id is string => typeof id === 'string',
   )
   const selectionReadOnly = layers !== null && selectedIds.some((id) => layers.readOnlyLayerOf(id) !== null)
-  const drawnFloor: DerivedFloor = states === null && layers === null
-    ? floor
-    : { ...floor, placements: floor.placements.filter((p) => shown(p.id)) }
-  const drawnWalls: FloorWalls | null | undefined = (states === null && layers === null) || walls === undefined || walls === null
-    ? walls
-    : { ...walls, walls: walls.walls.filter((wall) => shown(wall.id)) }
-  const drawnRooms: FloorRooms | null = (states === null && layers === null) || rooms === null
-    ? rooms
-    : { ...rooms, rooms: rooms.rooms.filter((room) => shown(room.id)) }
-  const overlayList: DisplayList | null = states === null
-    ? null
-    : {
-        space: 'floor',
-        bounds: drawnFloor.bounds ?? { x: 0, y: 0, w: 0, h: 0 },
-        layers: renovationOverlays(renovationOutlines(drawnFloor, drawnWalls ?? null, drawnRooms), states, sizing),
-        missingGlyphs: [],
-      }
-
-  const list = drawPlanView(renovation === null ? floor : drawnFloor, { showPlanImage, preview }, { sizing })
-  // Walls, Rooms and footprints are lists built for three reasons, but they share one z-order:
-  // `LAYER_ORDER` is the only source, so each is interleaved by layer rather than appended, or a
-  // Wall would land on top of the Item standing in it (#60 §3, #64 §15, #67 behaviour 35).
-  // An Opening belongs to the Wall it is cut in: a Display that does not draw that Wall does not
-  // draw its Openings either, and `drawWalls` is handed only the hosts it will find.
-  const drawnOpenings = states === null && layers === null
-    ? openings
-    : openings.filter((host) => shown(host.wallId))
-  const wallList = drawnWalls === undefined || drawnWalls === null || drawnWalls.walls.length === 0
-    ? null
-    : drawWalls(drawnWalls, {
-      sizing, selectedWallId, openings: drawnOpenings, selectedOpeningId, preview: openingPreview, handles: handlesFor(selectedWallId),
-    })
-  // A Room's label may not sit on a `W-n` reference, and the only honest source for where those
-  // are is the placement that draws them.
-  const roomList = drawnRooms === null || drawnRooms.rooms.length === 0
-    ? null
-    : drawRooms(drawnRooms, {
+  // #70 §F, #71 §1/§4 and #73 §1: the Display's subset, the Layers' hiding and recolouring, and the
+  // interleaving of the five lists are the sheet's business too, so they live in `drawFloorView`.
+  // That sharing is the whole point: an exported drawing is the drawing on the screen, and the only
+  // thing a sheet may leave out is what a sheet has no pointer for — the selection's measurements,
+  // its handles and the Warning badges.
+  const view = drawFloorView(
+    { floor, walls, rooms, openings },
+    {
       sizing,
+      renovation: states === null ? null : { states },
+      layers,
+      showPlanImage,
+      preview,
+      selectedWallId,
+      selectedOpeningId,
+      openingPreview,
       selectedRoomId,
-      proposal: roomProposal,
-      obstacles: drawnWalls === undefined || drawnWalls === null ? [] : wallLabelBoxes(drawnWalls, sizing),
-      formatLabel: (name, squareMillimetres) => STRINGS.roomLabel(name, formatSquareMetres(squareMillimetres)),
-    })
-  const extra = [wallList, roomList, overlayList].filter((one): one is DisplayList => one !== null)
-  const withWalls: DisplayList = extra.length === 0
-    ? list
-    : {
-        ...list,
-        bounds: extra.reduce((bounds, one) => unionRect(bounds, one.bounds), list.bounds),
-        layers: LAYER_ORDER.flatMap((key): DisplayLayer[] => {
-          const items = [list, ...extra]
-            .flatMap((one) => one.layers)
-            .filter((layer) => layer.key === key)
-            .flatMap((layer) => layer.items)
-          return items.length === 0 ? [] : [{ key, items }]
-        }),
-      }
-  // #71 §1, §4: the layer pass over what was assembled — hidden content is not painted, a layer with
-  // a colour of its own paints its content in it, and inside every z-band the items follow their
-  // layer's back-to-front order. The band's own interleaving stays the rule across bands, because
-  // that is what keeps a Wall under the Item standing in it (#60 §3, #67 behaviour 35).
-  const painted: DisplayList = layers === null ? withWalls : paintByLayer(withWalls, layers)
+      roomProposal,
+      formatRoomLabel: (name, squareMillimetres) => STRINGS.roomLabel(name, formatSquareMetres(squareMillimetres)),
+      handles: handlesFor,
+    },
+  )
+  const { list: painted, floor: drawnFloor, walls: drawnWalls, rooms: drawnRooms, openings: drawnOpenings } = view
   const annotations = overlay === undefined
     ? drawSelectionAnnotations(floor, selection, {
       sizing, formatLength, preview, handles: !editLocked && !selectionReadOnly,
@@ -881,36 +774,3 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   )
 }
 
-// -------------------------------------------------------------------- the derived Floor
-
-/**
- * The outlines the renovation overlays are laid on (#70 §F).
- *
- * Each one is the same outline the entity's own item is drawn from — a Wall's tidied band, a Placed
- * Item's world path, a Room's evaluated loop — so the dashed outline sits exactly on the edge it is
- * annotating rather than beside it. Entities the Display does not draw are absent from `states` and
- * are left out here too: an overlay on something invisible would be a mark with nothing under it.
- */
-function renovationOutlines(
-  floor: DerivedFloor,
-  walls: FloorWalls | null,
-  rooms: FloorRooms | null,
-): RenovationOutline[] {
-  return [
-    ...(walls === null ? [] : walls.walls.map((wall): RenovationOutline => ({
-      ref: { id: wall.id, role: 'wall' },
-      layer: 'walls',
-      outline: pathToCommands(wall.outline),
-    }))),
-    ...floor.placements.map((placement): RenovationOutline => ({
-      ref: { id: placement.id, role: 'placed-item' },
-      layer: 'placed-items',
-      outline: drawPlacement(placement, null).segments,
-    })),
-    ...(rooms === null ? [] : rooms.rooms.map((room): RenovationOutline => ({
-      ref: { id: room.id, role: 'room' },
-      layer: 'rooms',
-      outline: pathToCommands(room.path),
-    }))),
-  ]
-}
