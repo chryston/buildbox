@@ -11,13 +11,13 @@
  */
 
 import type { DisplayItem, LayerKey, PathCommand, SizeRole, StyleKey } from '../drawing'
-import type { Pt, Rect } from '../derive'
+import type { Pt, Rect, RenovationState } from '../derive'
 import { layoutText, lineCommands, rectCommands, resolveSize } from '../drawing'
 import type { Sheet } from './fit'
 import { FOOTER_BAND_MM } from './fit'
 import {
-  DESIGN_OPTION,
   EXPORT_FOOTER,
+  RENOVATION_LEGEND,
   SCALE_BAR_LABEL,
   TITLE_BLOCK,
   pageStatement,
@@ -34,6 +34,10 @@ export interface TitleBlockFields {
   readonly subjectLabel: string
   readonly subject: string
   readonly view: string
+  /** The Option the sheet was drawn from, or `Existing only` when there is none (#73 §1). */
+  readonly designOption: string
+  /** The Renovation Display, present only when a Design Option is active. */
+  readonly renovationDisplay?: string
   /** `Scale 1:50`, or `Not to scale`. */
   readonly scale: string
   /** `Dimensions in mm`. */
@@ -124,7 +128,10 @@ export function titleBlockItems(rect: Rect, fields: TitleBlockFields): DisplayIt
     rule({ x: rect.x, y: rect.y }, { x: rect.x + rect.w, y: rect.y }),
     text('sheet-title', fields.project, { x: left, y: top }),
     ...pair(fields.subjectLabel, fields.subject, { x: left, y: row1 }),
-    ...pair(TITLE_BLOCK.designOption, DESIGN_OPTION, { x: left, y: row2 }),
+    ...pair(TITLE_BLOCK.designOption, fields.designOption, { x: left, y: row2 }),
+    ...(fields.renovationDisplay === undefined
+      ? []
+      : pair(TITLE_BLOCK.renovationDisplay, fields.renovationDisplay, { x: left, y: row3 })),
     ...pair(TITLE_BLOCK.view, fields.view, { x: col2, y: row1 }),
     ...pair(TITLE_BLOCK.scale, fields.scale, { x: col2, y: row2 }),
     text('sheet-value', fields.unit, { x: col2, y: row3 }),
@@ -162,6 +169,39 @@ export function scaleBarItems(sheet: Sheet, denominator: number): DisplayItem[] 
   }
   items.push(rule({ x: left, y: baseY + height }, { x: right, y: baseY + height }))
   return items
+}
+
+/**
+ * The Renovation legend: what a hatch and a halo on this sheet mean (#73 §1).
+ *
+ * It sits above the title block, on the left, where the drawing has no business reaching — the
+ * mirror of the scale bar, which is right-aligned because it is measured with a ruler and the
+ * legend is only read. One row per State the sheet actually marks, stacked upward, so a Combined
+ * sheet says both and an Existing sheet says neither: `Existing` is content drawn in its own layer
+ * colour, which is not a thing a swatch can point at.
+ *
+ * The swatch is the overlay itself at legend size — the demolition outline with a hatch line across
+ * it, the proposed halo — so the mark on the paper and the mark in the key are drawn by the same
+ * style and cannot drift apart.
+ */
+export function renovationLegendItems(sheet: Sheet, states: readonly RenovationState[]): DisplayItem[] {
+  const baseY = (sheet.titleBlock ?? sheet.footer).y - 4
+  const x = sheet.content.x
+  const swatch = { w: 3.5, h: 2 }
+  const rows = (['demolition', 'proposed'] as const).filter((state) => states.includes(state))
+  return rows.flatMap((state, index): DisplayItem[] => {
+    const top = baseY - 4 * (index + 1)
+    return [
+      path(rectCommands(x, top, swatch.w, swatch.h), state === 'demolition' ? 'renovation-demolition' : 'renovation-halo'),
+      ...(state === 'demolition'
+        ? [path(
+          lineCommands({ x: x + 0.4, y: top + swatch.h - 0.4 }, { x: x + swatch.w - 0.4, y: top + 0.4 }),
+          'renovation-hatch',
+        )]
+        : []),
+      text('sheet-label', RENOVATION_LEGEND[state], { x: x + swatch.w + 1.5, y: top + 1.5 }),
+    ]
+  })
 }
 
 /** The model-space steps a grid may be drawn at, coarse to fine. */

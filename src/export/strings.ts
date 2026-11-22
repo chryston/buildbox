@@ -59,9 +59,10 @@ export const roomLabel = (name: string, squareMillimetres: number): string =>
 /**
  * The four Renovation Displays by the name a sheet prints (#73 §1).
  *
- * This is the one list of the four names: `ui/strings/renovation.ts` reads it for the mode bar, the
- * saved-view card and the undo labels, so a Display cannot be called one thing on the canvas and
- * another on the paper that came out of it.
+ * This is the name a sheet prints. `ui/strings/renovation.ts` keeps the four words the flagged
+ * surface uses beside it: the two tables say the same words, and the screen's copy stays inside the
+ * flag-gated table the banned-word scan reads, so a Display cannot be called one thing on the canvas
+ * and another on the paper that came out of it.
  */
 export const DISPLAY_NAME: Readonly<Record<RenovationDisplay, string>> = {
   existing: 'Existing',

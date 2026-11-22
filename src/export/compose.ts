@@ -24,6 +24,7 @@ import type { DisplayLayer, DisplayList, MissingGlyph, Rect } from '../drawing'
 import { drawFloorView, drawItemDetail, wallOpenings } from '../drawing'
 import {
   FF_RENOVATION,
+  designOptionName,
   deriveRooms,
   deriveWalls,
   displayModel,
@@ -33,14 +34,15 @@ import {
   effectiveItemDetail,
   effectiveModel,
 } from '../derive'
+import type { RenovationState } from '../derive'
 import { viewDesignOptionId, viewRenovationDisplay } from '../domain'
 import { drawingComposition } from './composition'
 import { autoOrientation, fitCheck, fitDenominator, sheetOf } from './fit'
 import type { FitSuggestion, Sheet } from './fit'
 import { formatLength } from './format'
 import { scaleDerivedFloor, scaleDerivedItemDetail, scaleFloorRooms, scaleFloorWalls, scaleWallOpenings } from './scaleInput'
-import { SHEET_SIZING, footerItems, frameItems, furnitureLayer, gridItems, scaleBarItems, titleBlockItems } from './sheet'
-import { NOT_TO_SCALE, TITLE_BLOCK, roomLabel, scaleStatement, unitStatement } from './strings'
+import { SHEET_SIZING, footerItems, frameItems, furnitureLayer, gridItems, renovationLegendItems, scaleBarItems, titleBlockItems } from './sheet'
+import { DESIGN_OPTION, DISPLAY_NAME, NOT_TO_SCALE, TITLE_BLOCK, roomLabel, scaleStatement, unitStatement } from './strings'
 import { translateList } from './transform'
 import type { ExportSnapshot, Recipe, RecipeViewRef } from './types'
 
@@ -80,6 +82,12 @@ interface RawDrawing {
   readonly viewName: string
   readonly subjectLabel: string
   readonly subject: string
+  /** What the sheet has to say about the Design Option, or null when it was drawn from neither. */
+  readonly renovation: {
+    readonly designOption: string
+    readonly renovationDisplay: string
+    readonly states: readonly RenovationState[]
+  } | null
 }
 
 /**
@@ -107,6 +115,11 @@ function rawDrawing(
     // the active Option's demolition records set aside, so a Wall marked for demolition is still
     // drawn — with its overlay on it — while `displayStates` decides what reaches the paper at all.
     // The Openings are resolved against the Existing Model's Walls, which is what the canvas does.
+    // The Display's own states, both for the drawing (which entity is drawn at all, and marked as
+    // what) and for the sheet's legend, which has to say what the marks it carries mean.
+    const states = composition.optionId === null
+      ? null
+      : displayStates(displayModel(effectiveModel(project, floorId, composition.optionId), viewRenovationDisplay(planView)))
     const { list } = drawFloorView(
       {
         floor: scaleDerivedFloor(effectiveFloor(drawn, revision, floorId, composition.optionId), shrink),
@@ -124,13 +137,7 @@ function rawDrawing(
       {
         sizing: SHEET_SIZING,
         showPlanImage: planView.showPlanImage,
-        renovation: composition.optionId === null
-          ? null
-          : {
-              states: displayStates(
-                displayModel(effectiveModel(project, floorId, composition.optionId), viewRenovationDisplay(planView)),
-              ),
-            },
+        renovation: states === null ? null : { states },
         layers: composition.gates,
         formatRoomLabel: roomLabel,
       },
@@ -142,6 +149,13 @@ function rawDrawing(
         viewName: planView.name,
         subjectLabel: TITLE_BLOCK.floor,
         subject: project.floors.find((each) => each.id === planView.floorId)?.name ?? '',
+        renovation: composition.optionId === null || states === null
+          ? null
+          : {
+              designOption: designOptionName(project, composition.optionId),
+              renovationDisplay: DISPLAY_NAME[viewRenovationDisplay(planView)],
+              states: [...new Set(states.values())],
+            },
       },
     }
   }
@@ -162,6 +176,7 @@ function rawDrawing(
       viewName: TITLE_BLOCK.itemDetail,
       subjectLabel: TITLE_BLOCK.itemDesign,
       subject: design.name,
+      renovation: null,
     },
   }
 }
@@ -241,6 +256,8 @@ export function composeSheet(
           subjectLabel: raw.drawing.subjectLabel,
           subject: raw.drawing.subject,
           view: raw.drawing.viewName,
+          designOption: raw.drawing.renovation?.designOption ?? DESIGN_OPTION,
+          ...(raw.drawing.renovation === null ? {} : { renovationDisplay: raw.drawing.renovation.renovationDisplay }),
           scale,
           unit: unitStatement(recipe.unit),
           date: clock.localDate(),
@@ -249,6 +266,9 @@ export function composeSheet(
       : []),
     ...(recipe.titleBlock ? footerItems(sheet) : []),
     ...(recipe.scale === 'fit' ? [] : scaleBarItems(sheet, recipe.scale)),
+    // The legend belongs to the drawing rather than the frame: a sheet drawn without a title block
+    // still carries its hatches, and a mark nobody can read is not information (#73 §1).
+    ...(raw.drawing.renovation === null ? [] : renovationLegendItems(sheet, raw.drawing.renovation.states)),
   ]
   const placed = translateList(offset.x, offset.y, drawn)
   const layers: DisplayLayer[] = [
