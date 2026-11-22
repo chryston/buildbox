@@ -156,7 +156,7 @@ describe('the Delete Layer review', () => {
     const layers = view.project().drawingLayers ?? []
     const added = layers[layers.length - 1]!
     await askToDelete(added.id)
-    expect(screen.getByTestId('delete-layer-dialog')).toHaveTextContent('Nothing is on it.')
+    expect(screen.getByTestId('delete-layer-dialog')).toHaveTextContent('Unused. Nothing else changes.')
     expect(screen.queryByTestId('delete-layer-table')).toBeNull()
     expect(screen.queryByTestId('delete-layer-members')).toBeNull()
   })

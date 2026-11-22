@@ -38,7 +38,7 @@ import {
   unionRect,
   wallLabelBoxes,
 } from '../../drawing'
-import type { BadgeSubject, DisplayLayer, DisplayList, OpeningPreview, PlanPreview, RenovationOutline, RoomProposal, Sizing, WallOpenings } from '../../drawing'
+import type { BadgeSubject, DisplayItem, DisplayLayer, DisplayList, OpeningPreview, PlanPreview, RenovationOutline, RoomProposal, Sizing, WallOpenings } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
 import { OverlapCycleList } from './renovation/OverlapCycleList'
 import { cycleOrder, nextCycle, reachableCandidates } from './selection/overlapCycle'
@@ -139,6 +139,17 @@ export interface PlanViewCanvasProps {
     /** An entity's full name, for the candidate rows. */
     nameOf?: (id: string) => string
   } | null
+  /**
+   * The Drawing Layer gates of this saved view (#71 §4), answered per entity by the caller — the one
+   * place the Project, the view and the effective model are all in hand. Absent means every entity is
+   * drawn, pickable and modifiable in its own colours: the flag-off answer, and the answer a Project
+   * with no layers gives whatever the flag does.
+   *
+   * This is a prop of its own rather than part of `renovation` because a layer applies to a view that
+   * has no Design Option at all — hiding `Furniture` in the Existing display is the same act — and a
+   * canvas whose gates rode on the Display would silently stop gating one.
+   */
+  layerGates?: LayerGates | null
   /** The selected Wall: drawn with a heavier line and its end handles (#64 §15). */
   selectedWallId?: string | null
   /** A Wall band was clicked; the selection moves to it (#64 §15). */
@@ -196,6 +207,65 @@ export interface PlanViewCanvasProps {
 }
 
 /**
+ * What this saved view lets the canvas do with one entity (#71 §4), answered by the caller — the one
+ * place the Project, the view and the effective model are all in hand. `derive` computes the answers
+ * (`layerAccessOf`, `effectiveLayerSetting`); this is the same answers shaped for a canvas that may
+ * not read the domain.
+ */
+export interface LayerGates {
+  /** Does this view draw it at all: the Display's table and the layer's Visible box. */
+  drawn(id: string): boolean
+  /** Can a click reach it: drawn, the row's Selectable box, and the `Pick:` filter. */
+  pickable(id: string): boolean
+  /** Can it be edited: pickable, and the row's Editable box. */
+  modifiable(id: string): boolean
+  /** The colour this view paints it in, or `null` for its own colours. */
+  colorOf(id: string): string | null
+  /** The back-to-front index of its layer, which is the order the paint follows inside a z-band. */
+  orderOf(id: string): number
+  /** The layer's name when this view will not let it be edited, else `null`. */
+  readOnlyLayerOf(id: string): string | null
+  /** A press that wanted to edit read-only content: the notice that says so. */
+  onRefusal?: (layerName: string) => void
+}
+
+/**
+ * The layer pass over an assembled display list (#71 §1, §4).
+ *
+ * An item whose entity this view has hidden is not painted at all; one whose layer has a colour of
+ * its own is painted in it, which is how a `Structure` layer drawn grey reads as one thing on the
+ * drawing; and inside every z-band the items follow their layer's back-to-front order, the last
+ * painted landing on top. An item with no `ref` — a grid line, a chip, the plan image — belongs to no
+ * entity: it keeps its own colour and paints with the entity it follows.
+ */
+function paintByLayer(list: DisplayList, layers: LayerGates): DisplayList {
+  return {
+    ...list,
+    layers: list.layers.map((band) => {
+      // An item with no `ref` of its own takes the order of the entity before it, so a Room's label
+      // still paints with its Room and a Wall's dimension with its Wall.
+      let lastOrder = 0
+      const items = band.items
+        .filter((item) => item.ref === undefined || layers.drawn(item.ref.id))
+        .map((item): { order: number; item: DisplayItem } => {
+          const id = item.ref?.id
+          if (id === undefined) return { order: lastOrder, item }
+          lastOrder = layers.orderOf(id)
+          const colour = layers.colorOf(id)
+          // `color` is what the renderer paints a path's fill and stroke, or a label's glyphs, with.
+          // An image carries pixels and a group carries other items rather than paint of its own, so
+          // neither takes the layer's colour.
+          if (colour === null || item.kind === 'image' || item.kind === 'group') return { order: lastOrder, item }
+          return { order: lastOrder, item: { ...item, color: colour } }
+        })
+      // `Array.prototype.sort` is stable, so entities of one layer keep the order their own drawing
+      // gave them — which is the Renovation order #70 established, one layer down.
+      return { key: band.key, items: items.sort((a, b) => a.order - b.order).map((entry) => entry.item) }
+    }),
+  }
+}
+
+/**
  * The one cache the Plan View reads through (#60 criterion 3).
  *
  * Module-level and shared by every canvas in the app, keyed by the Project's identity and
@@ -208,7 +278,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     tool, selection, onSelect, onCursorChange, onCanvasClick, dragPreview, onDragPreview, onMoveItem, onRotateItem,
     editLocked = false,
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
-    angleSnap, overlay, htmlOverlay, walls, renovation = null, selectedWallId = null, onSelectWall,
+    angleSnap, overlay, htmlOverlay, walls, renovation = null, layerGates = null, selectedWallId = null, onSelectWall,
     openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
     rooms = null, selectedRoomId = null, onSelectRoom, roomProposal = null,
     warningSubjects = [], onSelectWarningBadge,
@@ -465,15 +535,27 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   // the overlay items `renovationOverlays` lays in each entity's own layer. Flag-off, `renovation`
   // is null and every one of these is the same object the canvas was already given.
   const states = renovation === null ? null : renovation.states
-  const drawnFloor: DerivedFloor = states === null
+  // #71 §4: a layer this view has hidden takes its content off the drawing — and off the pick list,
+  // the handles and the snap targets — while the warnings, the quantities and the tables go on
+  // counting it, because hiding is a decision about this view, not about the building.
+  const layers = layerGates
+  const shown = (id: string): boolean => (states === null || states.has(id)) && (layers === null || layers.drawn(id))
+  /** Handles belong to a selection this view will let be edited, and to no other (#71 §4). */
+  const handlesFor = (id: string | null | undefined): boolean =>
+    !editLocked && (layers === null || id === undefined || id === null || layers.modifiable(id))
+  const selectedIds = [selectedWallId, selectedOpeningId, selectedRoomId, selection].filter(
+    (id): id is string => typeof id === 'string',
+  )
+  const selectionReadOnly = layers !== null && selectedIds.some((id) => layers.readOnlyLayerOf(id) !== null)
+  const drawnFloor: DerivedFloor = states === null && layers === null
     ? floor
-    : { ...floor, placements: floor.placements.filter((p) => states.has(p.id)) }
-  const drawnWalls: FloorWalls | null | undefined = states === null || walls === undefined || walls === null
+    : { ...floor, placements: floor.placements.filter((p) => shown(p.id)) }
+  const drawnWalls: FloorWalls | null | undefined = (states === null && layers === null) || walls === undefined || walls === null
     ? walls
-    : { ...walls, walls: walls.walls.filter((wall) => states.has(wall.id)) }
-  const drawnRooms: FloorRooms | null = states === null || rooms === null
+    : { ...walls, walls: walls.walls.filter((wall) => shown(wall.id)) }
+  const drawnRooms: FloorRooms | null = (states === null && layers === null) || rooms === null
     ? rooms
-    : { ...rooms, rooms: rooms.rooms.filter((room) => states.has(room.id)) }
+    : { ...rooms, rooms: rooms.rooms.filter((room) => shown(room.id)) }
   const overlayList: DisplayList | null = states === null
     ? null
     : {
@@ -489,13 +571,13 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   // Wall would land on top of the Item standing in it (#60 §3, #64 §15, #67 behaviour 35).
   // An Opening belongs to the Wall it is cut in: a Display that does not draw that Wall does not
   // draw its Openings either, and `drawWalls` is handed only the hosts it will find.
-  const drawnOpenings = states === null
+  const drawnOpenings = states === null && layers === null
     ? openings
-    : openings.filter((host) => states.has(host.wallId))
+    : openings.filter((host) => shown(host.wallId))
   const wallList = drawnWalls === undefined || drawnWalls === null || drawnWalls.walls.length === 0
     ? null
     : drawWalls(drawnWalls, {
-      sizing, selectedWallId, openings: drawnOpenings, selectedOpeningId, preview: openingPreview, handles: !editLocked,
+      sizing, selectedWallId, openings: drawnOpenings, selectedOpeningId, preview: openingPreview, handles: handlesFor(selectedWallId),
     })
   // A Room's label may not sit on a `W-n` reference, and the only honest source for where those
   // are is the placement that draws them.
@@ -522,9 +604,14 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
           return items.length === 0 ? [] : [{ key, items }]
         }),
       }
+  // #71 §1, §4: the layer pass over what was assembled — hidden content is not painted, a layer with
+  // a colour of its own paints its content in it, and inside every z-band the items follow their
+  // layer's back-to-front order. The band's own interleaving stays the rule across bands, because
+  // that is what keeps a Wall under the Item standing in it (#60 §3, #67 behaviour 35).
+  const painted: DisplayList = layers === null ? withWalls : paintByLayer(withWalls, layers)
   const annotations = overlay === undefined
     ? drawSelectionAnnotations(floor, selection, {
-      sizing, formatLength, preview, handles: !editLocked,
+      sizing, formatLength, preview, handles: !editLocked && !selectionReadOnly,
     })
     : null
   // One flat text layer, not two. The drawing's words and the selection's words are built as
@@ -532,8 +619,8 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   // but they reach the screen as a single untransformed group, which is what keeps a label
   // upright and addressable by one name.
   const textOnly: DisplayList = annotations === null
-    ? withWalls
-    : { ...annotations, layers: [...withWalls.layers, ...annotations.layers] }
+    ? painted
+    : { ...annotations, layers: [...painted.layers, ...annotations.layers] }
   // The badges are placed against what this canvas is about to paint, and nothing else: the
   // labels, the dimensions, the chip and the selection's handles are the boxes a `!` must not
   // cover, and they only exist here (#66 §14).
@@ -542,8 +629,8 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     : drawWarningBadges(warningSubjects, {
         sizing,
         obstacles: annotations === null
-          ? displayRects(withWalls)
-          : [...displayRects(withWalls), ...displayRects(annotations)],
+          ? displayRects(painted)
+          : [...displayRects(painted), ...displayRects(annotations)],
       })
 
   /**
@@ -589,8 +676,12 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
         drawOrder: drawOrderOf('wall-openings', candidates.length),
       })
     }
+    // #71 criterion 10: content this view will not let be picked is not a candidate at all — the
+    // cycle never walks to it and the list beside the pointer never names it. A read-only layer is
+    // still a selectable one, so only the Selectable answer and the `Pick:` filter cut anything here.
+    const reachable = layers === null ? candidates : candidates.filter((one) => layers.pickable(one.entityId))
     const outcome = nextCycle(
-      candidates,
+      reachable,
       renovation.pickStates ?? [],
       { x: clientX - rect.left, y: clientY - rect.top },
       renovation.cycle ?? null,
@@ -599,9 +690,23 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     // functions, so a row cannot disagree with what the next click selects.
     renovation.onCycle(
       outcome.state,
-      outcome.state === null ? [] : cycleOrder(reachableCandidates(candidates, renovation.pickStates ?? [])),
+      outcome.state === null ? [] : cycleOrder(reachableCandidates(reachable, renovation.pickStates ?? [])),
     )
     return outcome.selected?.entityId ?? clickedId
+  }
+
+  /**
+   * What one press selects, after the layer gates (#71 §4): `null` means nothing here is reachable,
+   * which is the same answer as a click on empty Floor — the selection clears and the press is not
+   * swallowed, so the background handler gets to say so.
+   */
+  function pickTarget(clickedId: string, clientX: number, clientY: number): string | null {
+    const answer = cyclePick(clickedId, clientX, clientY) ?? clickedId
+    if (layers === null || layers.pickable(answer)) return answer
+    // The click passes through what it landed on: the next reachable thing under the pointer takes
+    // it, and when there is nothing reachable the press belongs to the background after all.
+    const through = layers.pickable(clickedId) ? answer : null
+    return through === null || layers.pickable(through) ? through : null
   }
 
   const interactions: DisplayListInteractions = {
@@ -613,13 +718,17 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
           // window tool is in hand the pointerdown is not a selection, and the background click
           // still owns it: that click is what places the Opening.
           if (tool !== 'opening') consumedPointer.current = true
-          selectById(cyclePick(id, event.clientX, event.clientY) ?? id)
+          const answer = pickTarget(id, event.clientX, event.clientY)
+          if (answer === null) consumedPointer.current = false
+          else selectById(answer)
         },
     onOpeningPointerDown: onSelectOpening === undefined
       ? undefined
       : (id, event) => {
           if (tool !== 'opening') consumedPointer.current = true
-          selectById(cyclePick(id, event.clientX, event.clientY) ?? id)
+          const answer = pickTarget(id, event.clientX, event.clientY)
+          if (answer === null) consumedPointer.current = false
+          else selectById(answer)
         },
     // A Room takes the pointer only while the Select tool is in hand. Under a drawing tool the
     // click belongs to the tool — it closes a draft or drops a vertex — so the Room answers
@@ -630,7 +739,9 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
           // The click that selected this Room must not be answered again as a click on the
           // background, which would deselect it in the same gesture (#64 §15).
           consumedPointer.current = true
-          selectById(cyclePick(id, event.clientX, event.clientY) ?? id)
+          const answer = pickTarget(id, event.clientX, event.clientY)
+          if (answer === null) consumedPointer.current = false
+          else selectById(answer)
         },
     onItemPointerDown: (id, event) => {
       lastClient.current = { x: event.clientX, y: event.clientY }
@@ -643,10 +754,24 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
         selectById(picked)
         return
       }
+      // A read-only layer is a selectable one: the press inspects the Item and says why it will not
+      // move it, rather than dragging it and writing an edit this view refused (#71 criterion 11).
+      if (layers !== null && !layers.modifiable(id)) {
+        selectById(id)
+        const readOnly = layers.readOnlyLayerOf(id)
+        if (readOnly !== null) layers.onRefusal?.(readOnly)
+        return
+      }
       startItemDrag(id)
     },
     onRotatePointerDown: (id, event) => {
       lastClient.current = { x: event.clientX, y: event.clientY }
+      lastPointer.current = toFloor(event.clientX, event.clientY)
+      if (layers !== null && !layers.modifiable(id)) {
+        const readOnly = layers.readOnlyLayerOf(id)
+        if (readOnly !== null) layers.onRefusal?.(readOnly)
+        return
+      }
       startRotateDrag(id)
     },
     onWarningBadgePointerDown: onSelectWarningBadge,

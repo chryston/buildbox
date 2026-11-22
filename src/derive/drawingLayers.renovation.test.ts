@@ -194,7 +194,10 @@ describe('layer settings never reach the numbers or the warnings (#71 criterion 
   })
 
   it('still lists a hidden entity in the warnings it earns', () => {
-    // Criterion 9's own claim, from the other side: the warning is a fact about the model.
+    // Criterion 9's own claim, from the other side: the warning is a fact about the model. The Placed
+    // Items table is the same kind of fact — `tables()` is handed a Project, a scope and a layer
+    // column the *export* chooses (`drawingLayers`), and no saved view at all, so a view's Visible
+    // box has no way to reach a row.
     const warnings = canonicalJson(deriveWarnings(muted(scene), FLOOR, null))
     expect(canonicalJson(deriveWarnings(scene, FLOOR, null))).toBe(warnings)
   })

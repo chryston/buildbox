@@ -254,6 +254,8 @@ export const RENOVATION_STRINGS = {
   deleteLayerResultOverrides: (n: number): string => `${n} ${n === 1 ? 'loses' : 'lose'} their own settings`,
   /** The way out that changes nothing, said as what it does (#71 §5). */
   deleteLayerCancel: 'Cancel — change nothing',
+  /** A press that wanted to edit content this view has made read-only (#71 §4, criterion 11). */
+  layerReadOnlyNotice: (layer: string): string => `${layer} is read-only in this view — inspect only`,
 
   // ---- the Layers list itself (#71 §3)
   // `Layers (front first)` is the header because the list is drawn in the order content is drawn,

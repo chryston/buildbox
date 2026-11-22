@@ -227,7 +227,7 @@ function reviewDeleteLayer(project: Project, layerId: EntityId, viewId: EntityId
     unlayeredHidden,
     message:
       members.length === 0
-        ? `Delete ${layer.name}? Nothing is on it.`
+        ? 'Unused. Nothing else changes.'
         : `Delete ${layer.name}? ${members.length} ${members.length === 1 ? 'item is' : 'items are'} on it and will become Unlayered.`,
   }
 }

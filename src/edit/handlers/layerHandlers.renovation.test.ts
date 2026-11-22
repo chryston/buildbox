@@ -240,7 +240,7 @@ describe('layer.delete (#71 §5)', () => {
     expect(review.unused).toBe(true)
     expect(review.counts).toEqual({ model: 0, annotations: 0, overrides: 0 })
     expect(review.members).toEqual([])
-    expect(review.message).toBe('Delete Services? Nothing is on it.')
+    expect(review.message).toBe('Unused. Nothing else changes.')
   })
 
   it('un-files every member, drops every override and order entry, and clears the active layer', () => {

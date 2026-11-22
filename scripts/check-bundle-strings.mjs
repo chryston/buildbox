@@ -120,6 +120,7 @@ const FORBIDDEN = [
         'Becomes Unlayered',
         'lose their own settings',
         'stops being drawn here',
+        'Unused. Nothing else changes.',
       ]),
 ]
 // Only the files that could contain application code: an image or a font cannot.

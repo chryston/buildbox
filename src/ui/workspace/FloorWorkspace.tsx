@@ -17,12 +17,12 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, FF_RENOVATION } from '../../derive'
-import type { DisplayModel, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, FF_RENOVATION, layerAccessOf, effectiveLayerOrder } from '../../derive'
+import type { DisplayModel, LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings } from '../../drawing'
 import type { BadgeSubject, OpeningPreview, RoomProposal } from '../../drawing'
 import type { Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
-import { designOptionsOf, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, NEW_LAYER_COLOR } from '../../domain'
+import { designOptionsOf, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
@@ -74,6 +74,7 @@ import { WorkspaceShell } from './WorkspaceShell'
 import { ToolbarMenu, ToolbarMenuItem, WorkspaceToolbar } from './WorkspaceToolbar'
 import type { ToolbarGroup } from './WorkspaceToolbar'
 import { PlanViewCanvas } from './PlanViewCanvas'
+import type { LayerGates } from './PlanViewCanvas'
 import { SavedViewCard } from './SavedViewCard'
 import { SelectionInspector } from './SelectionInspector'
 import type { DesignEdit } from './SelectionInspector'
@@ -1480,6 +1481,42 @@ export function FloorWorkspace(): ReactNode {
     else showHiddenToolNotice(next)
   }
 
+  /**
+   * The Drawing Layer gates of this view (#71 §4), one answer per entity, composed from `derive`'s
+   * pure rules over the model the canvas is drawing. The canvas may not read the domain, so the
+   * entity → layer lookup happens here and the canvas is handed four booleans, a colour, an order and
+   * a name.
+   *
+   * `displayIncluded` is `true` because the Display's own subset is already applied by `states`: the
+   * layer gate is the second of the two, and `layerAccessOf` intersects them.
+   */
+  const layerGates: LayerGates | null = useMemo(() => {
+    if (!FF_RENOVATION || view === null || floorId === null) return null
+    const model = effectiveModel(project, floorId, renovationOptionId)
+    const layerOf = new Map<string, string>()
+    for (const { entity } of model.walls) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
+    for (const { entity } of model.openings) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
+    for (const { entity } of model.rooms) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
+    for (const { entity } of model.placedItems) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
+    const keyOf = (id: string): string => layerOf.get(id) ?? UNLAYERED_LAYER_KEY
+    const access = (id: string): LayerAccess => layerAccessOf(project, view, keyOf(id), { displayIncluded: true })
+    const order = effectiveLayerOrder(project, view)
+    return {
+      drawn: (id) => access(id).drawn,
+      pickable: (id) => access(id).pickable,
+      modifiable: (id) => access(id).modifiable,
+      // The colour that paints content is the one this view was given — `Colour in this view` — and
+      // not the Project default, because the default is a swatch that names the row while the
+      // Renovation Display's own palette (#70) is what paints the drawing. A view that says "draw
+      // Structure in this colour" is a deliberate act, and it is the one that repaints.
+      colorOf: (id) => viewLayerSettingOverride(view, keyOf(id))?.color ?? null,
+      orderOf: (id) => order.indexOf(keyOf(id)),
+      readOnlyLayerOf: (id) =>
+        access(id).modifiable ? null : drawingLayerById(project, keyOf(id))?.name ?? RENOVATION_STRINGS.layerUnlayered,
+      onRefusal: (name) => showHiddenToolNotice(RENOVATION_STRINGS.layerReadOnlyNotice(name)),
+    }
+  }, [project, view, floorId, renovationOptionId, showHiddenToolNotice])
+
   // ---- the inspector's renovation block (#70 §5)
   /**
    * What the inspector prints about the selection. The lookup covers the open Option's own work as
@@ -2060,6 +2097,7 @@ export function FloorWorkspace(): ReactNode {
                       nameOf: nameOfEntity,
                     }
               }
+              layerGates={layerGates}
               selectedWallId={wallSelection}
               rooms={floorRooms}
               selectedRoomId={roomSelection}
