@@ -30,7 +30,7 @@
 import { applyPatches, produceWithPatches } from 'immer'
 import type { Patch } from 'immer'
 import { designOptionsOf, validateProject } from '../../domain'
-import type { DesignOption, EntityId, Opening, PlacedItem, Project, Room, ValidationScope, Wall, WallJunction } from '../../domain'
+import type { DesignOption, EntityId, Opening, PlacedItem, Project, Room, Wall, WallJunction } from '../../domain'
 import { canonicalJson, FF_RENOVATION } from '../../lib'
 import type {
   CorrectionEffect,
@@ -357,7 +357,7 @@ function optionProblem(base: Project, draft: Project, before: DesignOption, subj
     COLLECTIONS.some((key) => collectionOf(before.proposed, key).some((entity) => scope.entities.has(entity.id)))
   if (!touched) return null
   const entities = new Set([...scope.entities, ...own])
-  const checked = validateProject(asPlainModel(view, { entities }), { entities })
+  const checked = validateProject(asPlainModel(view), { entities })
   if (checked.ok) return null
   return block(checked.problems[0]!.path, `${before.name}: ${checked.problems[0]!.message}`)
 }
@@ -367,16 +367,16 @@ function optionProblem(base: Project, draft: Project, before: DesignOption, subj
  * what stands, so what is left to ask of it is geometry, not provenance — and its own records are
  * checked against the real Project by the same apply that writes this one.
  *
- * Only the records the pass will actually read are rewritten. `predecessorIds` is a provenance
- * field, so it is meaningless on a record the merge has already placed, and rewriting all 1 500 of
- * them to satisfy a pass over a few dozen cost more than the pass itself (#69 §8). Every record of
- * a merged view that carries the field is one of this Option's own, and those are all in the scope
- * the caller passes, so nothing left unstripped is a record the pass reads.
+ * Only the records that carry the field are rewritten. `predecessorIds` is a provenance field, so it
+ * is meaningless on a record the merge has already placed, and rewriting all 1 500 of them to satisfy
+ * a pass over a few dozen cost more than the pass itself (#69 §8). Every record of a merged view that
+ * carries the field is one of this Option's own — the Existing Model holds no provenance — and it is
+ * stripped whether or not this pass reads it, because a record left carrying it reads as a record the
+ * Existing Model invented, which is a blocker this Option did not earn.
  */
-function asPlainModel(view: Project, scope: ValidationScope | null): Project {
+function asPlainModel(view: Project): Project {
   const stripped = <T extends { id: EntityId; predecessorIds?: EntityId[] }>(entity: T): T => {
     if (entity.predecessorIds === undefined) return entity
-    if (scope !== null && !scope.entities.has(entity.id)) return entity
     const rest: Record<string, unknown> = { ...entity }
     delete rest.predecessorIds
     return rest as T

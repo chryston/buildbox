@@ -24,6 +24,7 @@ const seed = JSON.parse(
   readFileSync(join(fixturesRoot, 'e2e', 'preview-seed', 'renovation-36.json'), 'utf8'),
 ) as { projects: { data: Project }[] }
 
+const W1 = 'seed-wall-002'
 const W2 = 'seed-wall-003'
 const W6 = 'seed-wall-013'
 const WINDOW_3 = 'seed-opening-016'
@@ -151,5 +152,14 @@ describe('the scoped per-Option blocker check against a full read of the model (
   it('agrees when the Option holds an aligned successor that follows the move', () => {
     const scene = unwrap(applyIntent(project(), replaceInOption(A, W2, {}))).project
     agrees(scene, intent('wall.dragBody', { wallId: W2, delta: { x: 20, y: 0 } }), 'successor follows')
+  })
+
+  it('agrees when the correction moves a Wall next to one the Option has copied', () => {
+    // The successor of W-2 is not itself corrected here, but it stands where W-2 stood in this
+    // Option's model, and W-2 is read because it names the corrected Wall. A pass that only strips
+    // provenance from the records it means to read leaves that copy looking like a Wall the Existing
+    // Model invented, which is a blocker the Option did not earn.
+    const scene = unwrap(applyIntent(project(), replaceInOption(A, W2, {}))).project
+    agrees(scene, intent('wall.setThickness', { wallId: W1, thickness: 150 }), 'neighbour corrected')
   })
 })
