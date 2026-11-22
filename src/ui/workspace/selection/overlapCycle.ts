@@ -117,3 +117,23 @@ export function nextCycle(
   const index = continues ? (previous.index + 1) % ordered.length : 0
   return { selected: ordered[index]!, state: { point, candidateIds: ids, index } }
 }
+
+/** A box in CSS pixels: the candidate list's own size, or the canvas host's. */
+export interface CanvasSize {
+  readonly width: number
+  readonly height: number
+}
+
+/**
+ * Where the candidate list goes: beside the pointer, and never past the canvas bounds (#70
+ * criterion 16). The list is placed to the lower-right of the click, which is where it does not
+ * cover the thing just clicked, and pulled back when that would hang it off the right or bottom
+ * edge. A list bigger than the canvas sits at the origin — the names are never shortened, so the
+ * list keeps its width and the canvas is the thing that is too small.
+ */
+export function clampOverlay(at: CanvasPoint, size: CanvasSize, bounds: CanvasSize, gap = 12): CanvasPoint {
+  return {
+    x: Math.max(4, Math.min(at.x + gap, bounds.width - size.width - 4)),
+    y: Math.max(4, Math.min(at.y + gap, bounds.height - size.height - 4)),
+  }
+}

@@ -220,6 +220,24 @@ export function FloorWorkspace(): ReactNode {
         ? session.deriveRooms(floorId, null)
         : deriveRooms(drawingProject, floorId, renovationOptionId)
   /**
+   * What an entity is called, in the words the drawing already uses for it: a Wall's display
+   * reference (`W-2′`), a Placed Item's Design name, a Room's name. The overlap list prints these
+   * in full — `W-2` and `W-2′` are one character apart, so a shortened name is a list that cannot be
+   * read (#70 criterion 16).
+   */
+  const nameOfEntity = useCallback(
+    (id: string): string => {
+      const wall = floorWalls?.byId.get(id)
+      if (wall !== undefined) return wall.ref
+      const placement = derivedFloor?.placements.find((item) => item.id === id)
+      if (placement !== undefined) return placement.label
+      const room = floorRooms?.rooms.find((each) => each.id === id)
+      if (room !== undefined) return room.name
+      return id
+    },
+    [floorWalls, derivedFloor, floorRooms],
+  )
+  /**
    * The chain being drawn, or `null` (#64 §12). Local like the shape draft: a half-drawn chain is
    * not a proposal and must not survive a reload, a Floor change or the tool being put down.
    */
@@ -240,6 +258,11 @@ export function FloorWorkspace(): ReactNode {
   const togglePickState = useWorkspace((state) => state.togglePickState)
   const showHiddenToolNotice = useWorkspace((state) => state.showHiddenToolNotice)
   const clearHiddenToolNotice = useWorkspace((state) => state.clearHiddenToolNotice)
+  // #70 §8: what the last click reached, and the candidates it left behind for the list.
+  const cycle = useWorkspace((state) => state.cycle)
+  const cycleCandidates = useWorkspace((state) => state.cycleCandidates)
+  const setCycle = useWorkspace((state) => state.setCycle)
+  const clearCycle = useWorkspace((state) => state.clearCycle)
   /**
    * The Room Outline being drawn, or `null` (#67 §4). Local like the Wall draft: a half-drawn
    * outline is not a proposal, and it must not survive a Floor change or the tool being put down.
@@ -944,6 +967,13 @@ export function FloorWorkspace(): ReactNode {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
+        // A running overlap cycle backs out first: Esc ends the cycle (#70 criterion 18) and the
+        // selection it made stays, because the click that made it was a real selection.
+        if (FF_RENOVATION && cycle !== null) {
+          event.preventDefault()
+          clearCycle()
+          return
+        }
         // The Door / window tool backs out first: its controls float over the canvas and hold no
         // focus of their own to take the key (#65 §9).
         if (tool === 'opening') {
@@ -974,7 +1004,7 @@ export function FloorWorkspace(): ReactNode {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [selected, designPreview, pickingOrigin, setDesignPreview, setPickingOrigin, send, tool, openingAimNow, placeOpening, setTool])
+  }, [selected, designPreview, pickingOrigin, setDesignPreview, setPickingOrigin, send, tool, openingAimNow, placeOpening, setTool, cycle, clearCycle])
 
   const commitImage = (prepared: PreparedPlanImage): void => {
     const asset = prepared.asset
@@ -1633,7 +1663,18 @@ export function FloorWorkspace(): ReactNode {
               precision={project.preferences.displayPrecision}
               angleSnap={angleSnap}
               walls={floorWalls}
-              renovation={renovationStates === null ? null : { states: renovationStates }}
+              renovation={
+                renovationStates === null
+                  ? null
+                  : {
+                      states: renovationStates,
+                      pickStates,
+                      cycle,
+                      cycleCandidates,
+                      onCycle: setCycle,
+                      nameOf: nameOfEntity,
+                    }
+              }
               selectedWallId={wallSelection}
               rooms={floorRooms}
               selectedRoomId={roomSelection}

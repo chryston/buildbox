@@ -11,6 +11,7 @@ import { createStore } from 'zustand/vanilla'
 import { useShallow } from 'zustand/react/shallow'
 import { enabledSnapKinds, RENOVATION_STATES } from '../../derive'
 import type { RenovationState, SnapKind } from '../../derive'
+import type { CycleCandidate, CycleState } from './selection/overlapCycle'
 import type { ItemFootprint, Point2 } from '../../domain'
 import type { ShapeDraft } from './shape/proposal'
 import type { Viewport } from './viewport'
@@ -244,6 +245,18 @@ export interface WorkspaceState {
    * there is nothing to say. A notice, not a dialog: it explains a keystroke and gets out of the way.
    */
   hiddenToolNotice: string | null
+  /**
+   * What the last click on the canvas left behind (#70 §8): where it landed, the candidates that
+   * were reachable there and which one is now selected — or `null` when no cycle is running. The
+   * cycle is a answer to "what did I just click", so it lives with the tool and the selection: never
+   * the Project, never a Backup, never an undo step.
+   */
+  cycle: CycleState | null
+  /**
+   * The candidates of the running cycle, in cycle order (top first) and already narrowed by the
+   * `Pick:` filter — the list the canvas draws beside the pointer. Empty with no cycle.
+   */
+  cycleCandidates: readonly CycleCandidate[]
 }
 
 export interface WorkspaceActions {
@@ -298,6 +311,10 @@ export interface WorkspaceActions {
   /** Say why a hidden tool's shortcut did nothing (#70 §3). The newest question is the only answer shown. */
   showHiddenToolNotice(notice: string): void
   clearHiddenToolNotice(): void
+  /** Record what a click on the canvas reached (#70 §8); `null` ends the cycle. */
+  setCycle(cycle: CycleState | null, candidates?: readonly CycleCandidate[]): void
+  /** Esc, a click on nothing, or a changed candidate set: the cycle is over (#70 criterion 18). */
+  clearCycle(): void
   /** Another Project opened: its placements are not this one's to select. */
   reset(): void
 }
@@ -340,6 +357,8 @@ const INITIAL: WorkspaceState = {
   renovationDialog: null,
   pickStates: [],
   hiddenToolNotice: null,
+  cycle: null,
+  cycleCandidates: [],
 }
 
 /**
@@ -452,6 +471,8 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
         // view they were set on (#70 criterion 5).
         pickStates: [],
         hiddenToolNotice: null,
+        cycle: null,
+        cycleCandidates: [],
         ...movedAway(state, activeFloorId, activeViewByFloor),
       }
     }),
@@ -460,6 +481,8 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
       activeViewByFloor: { ...state.activeViewByFloor, [floorId]: viewId },
       pickStates: [],
       hiddenToolNotice: null,
+      cycle: null,
+      cycleCandidates: [],
       ...movedAway(state, state.activeFloorId, { ...state.activeViewByFloor, [floorId]: viewId }),
     })),
   hydrateActive: (activeFloorId, viewsByFloor) =>
@@ -482,6 +505,8 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
     })),
   showHiddenToolNotice: (hiddenToolNotice) => set({ hiddenToolNotice }),
   clearHiddenToolNotice: () => set({ hiddenToolNotice: null }),
+  setCycle: (cycle, candidates = []) => set({ cycle, cycleCandidates: cycle === null ? [] : candidates }),
+  clearCycle: () => set({ cycle: null, cycleCandidates: [] }),
   reset: () => set({ ...INITIAL }),
 }))
 

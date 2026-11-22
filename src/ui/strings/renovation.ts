@@ -127,6 +127,14 @@ export const RENOVATION_STRINGS = {
   /** The muted sentence after the three: the overlay never replaces the layer's own colour. */
   legendLayerNote: 'Layer colour is kept underneath renovation graphics',
 
+  // ---- the on-canvas candidate list (#70 §8)
+  // The header counts the click that has been made, not the ones still to come: `1/2` is "this is
+  // the first of two", which is what a person reading it while deciding whether to click again wants
+  // to know. The row is the State in brackets and the entity's full name — never shortened, because
+  // `W-2` and `W-2′` are one character apart and a truncated name cannot tell them apart.
+  overlapHeader: (index: number, total: number): string => `Overlap ${index}/${total} · click again to cycle`,
+  overlapRow: (stateLabel: string, name: string): string => `[${stateLabel}] ${name}`,
+
   // ---- the buttons every one of them ends with
   cancel: 'Cancel',
 } as const

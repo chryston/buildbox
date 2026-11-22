@@ -58,6 +58,8 @@ const FORBIDDEN = [
         'Demolition (hatch overlay)',
         'Proposed (halo overlay)',
         'Layer colour is kept underneath renovation graphics',
+        // #70 §8: the candidate list beside the pointer. No flag-off surface says it.
+        'click again to cycle',
       ]),
 ]
 // Only the files that could contain application code: an image or a font cannot.

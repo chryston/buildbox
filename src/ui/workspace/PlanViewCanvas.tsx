@@ -38,6 +38,10 @@ import {
 } from '../../drawing'
 import type { BadgeSubject, DisplayLayer, DisplayList, OpeningPreview, PlanPreview, RenovationOutline, RoomProposal, Sizing, WallOpenings } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
+import { candidatesAtPoint, drawOrderOf } from './selection/cycleCandidates'
+import { OverlapCycleList } from './renovation/OverlapCycleList'
+import { cycleOrder, nextCycle, reachableCandidates } from './selection/overlapCycle'
+import type { CycleCandidate, CycleState } from './selection/overlapCycle'
 import type { DisplayListInteractions } from '../drawing/DisplayListSvg'
 import { STRINGS } from '../strings'
 import { formatMm, formatSquareMetres } from './displayUnits'
@@ -109,7 +113,22 @@ export interface PlanViewCanvasProps {
    * top. The entity's own item is never rewritten: the overlay arrives as separate display-list
    * items in the same layer, so the layer's colour is still what is underneath it.
    */
-  renovation?: { states: ReadonlyMap<string, RenovationState> } | null
+  renovation?: {
+    states: ReadonlyMap<string, RenovationState>
+    /**
+     * The `Pick:` filter (#70 §3): the States a click may select. Empty means every State, which is
+     * the chips-off state; a State left out is neither cycled to nor listed as a candidate.
+     */
+    pickStates?: readonly RenovationState[]
+    /** What the previous click left behind, or `null` when no cycle is running. */
+    cycle?: CycleState | null
+    /** What this click reached, so the candidate list can be drawn and the next click can continue. */
+    onCycle?: (cycle: CycleState | null, candidates: readonly CycleCandidate[]) => void
+    /** The running cycle's candidates, in cycle order — the list beside the pointer. */
+    cycleCandidates?: readonly CycleCandidate[]
+    /** An entity's full name, for the candidate rows. */
+    nameOf?: (id: string) => string
+  } | null
   /** The selected Wall: drawn with a heavier line and its end handles (#64 §15). */
   selectedWallId?: string | null
   /** A Wall band was clicked; the selection moves to it (#64 §15). */
@@ -304,7 +323,11 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     // click on the Floor. The Door / window tool has no layer of its own — its controls are
     // transparent to the pointer — so a click that reached the canvas reached the Floor, and the
     // tool places where it landed.
-    if (tool === 'select' && htmlOverlay === undefined) onSelect(null)
+    if (tool === 'select' && htmlOverlay === undefined) {
+      // A click on nothing is "any other click": the cycle is over (#70 criterion 18).
+      if (renovation !== null) renovation.onCycle?.(null, [])
+      onSelect(null)
+    }
     if (tool !== 'opening') return
     const at = toFloor(event.clientX, event.clientY)
     if (at !== null) onCanvasClick?.(at)
@@ -506,38 +529,103 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
           : [...displayRects(withWalls), ...displayRects(annotations)],
       })
 
+  /**
+   * Select by id, whichever collection the id belongs to — the cycle returns an id, and the four
+   * selections are four callbacks. Flag-off this is what the canvas already did per entity type.
+   */
+  function selectById(id: string): void {
+    if (drawnWalls?.walls.some((wall) => wall.id === id) === true) onSelectWall?.(id)
+    else if (drawnOpenings.some((host) => host.symbols.some((symbol) => symbol.id === id))) onSelectOpening?.(id)
+    else if (drawnRooms?.rooms.some((room) => room.id === id) === true) onSelectRoom?.(id)
+    else onSelect(id)
+  }
+
+  /**
+   * One click on a drawn entity, answered by the cycle (#70 §8, criteria 15–18): the candidates are
+   * whatever this Display drew under the point, `nextCycle` picks the top one or walks to the next,
+   * and the answer is reported so the candidate list can be drawn. `null` means "no cycle here" —
+   * the flag is off, the tool is not Select, or nothing reachable was under the pointer — and the
+   * caller selects what was clicked, exactly as it did before.
+   */
+  function cyclePick(clickedId: string, clientX: number, clientY: number): string | null {
+    if (renovation === null || tool !== 'select' || renovation.onCycle === undefined) return null
+    const at = toFloor(clientX, clientY)
+    const host = hostRef.current
+    if (at === null || host === null || states === null) return null
+    const rect = host.getBoundingClientRect()
+    const candidates = candidatesAtPoint(at, {
+      walls: (drawnWalls?.walls ?? []).map((wall) => ({ id: wall.id, outline: wall.outline })),
+      placements: drawnFloor.placements.map((item) => ({ id: item.id, outline: item.worldPath })),
+      rooms: (drawnRooms?.rooms ?? []).map((room) => ({ id: room.id, outline: room.path })),
+      states,
+    })
+    // An Opening answers the pointer through its own symbol, which the Wall drawing lays above the
+    // Wall it is cut in. The symbol's geometry is not a closed path the hit test can take, so the
+    // click itself is the evidence that it is drawn and selectable here — and its layer puts it
+    // above the Wall, which is what the canvas painted.
+    const isOpening = drawnOpenings.some((host) => host.symbols.some((symbol) => symbol.id === clickedId))
+    const openingState = isOpening ? states.get(clickedId) : undefined
+    if (openingState !== undefined) {
+      candidates.push({
+        entityId: clickedId,
+        renovationState: openingState,
+        drawOrder: drawOrderOf('wall-openings', candidates.length),
+      })
+    }
+    const outcome = nextCycle(
+      candidates,
+      renovation.pickStates ?? [],
+      { x: clientX - rect.left, y: clientY - rect.top },
+      renovation.cycle ?? null,
+    )
+    // The list shows the same list the cycle walks, in the same order — one call to the same two
+    // functions, so a row cannot disagree with what the next click selects.
+    renovation.onCycle(
+      outcome.state,
+      outcome.state === null ? [] : cycleOrder(reachableCandidates(candidates, renovation.pickStates ?? [])),
+    )
+    return outcome.selected?.entityId ?? clickedId
+  }
+
   const interactions: DisplayListInteractions = {
     onWallPointerDown: onSelectWall === undefined
       ? undefined
-      : (id) => {
+      : (id, event) => {
           // The click that selected this Wall must not be answered again as a click on the
           // background, which would deselect it in the same gesture (#64 §15). While the Door /
           // window tool is in hand the pointerdown is not a selection, and the background click
           // still owns it: that click is what places the Opening.
           if (tool !== 'opening') consumedPointer.current = true
-          onSelectWall(id)
+          selectById(cyclePick(id, event.clientX, event.clientY) ?? id)
         },
     onOpeningPointerDown: onSelectOpening === undefined
       ? undefined
-      : (id) => {
+      : (id, event) => {
           if (tool !== 'opening') consumedPointer.current = true
-          onSelectOpening(id)
+          selectById(cyclePick(id, event.clientX, event.clientY) ?? id)
         },
     // A Room takes the pointer only while the Select tool is in hand. Under a drawing tool the
     // click belongs to the tool — it closes a draft or drops a vertex — so the Room answers
     // nothing and the click reaches the Floor behind it, which is what the draft is drawn on.
     onRoomPointerDown: onSelectRoom === undefined || tool !== 'select'
       ? undefined
-      : (id) => {
+      : (id, event) => {
           // The click that selected this Room must not be answered again as a click on the
           // background, which would deselect it in the same gesture (#64 §15).
           consumedPointer.current = true
-          onSelectRoom(id)
+          selectById(cyclePick(id, event.clientX, event.clientY) ?? id)
         },
     onItemPointerDown: (id, event) => {
       lastClient.current = { x: event.clientX, y: event.clientY }
       lastPointer.current = toFloor(event.clientX, event.clientY)
       event.stopPropagation()
+      // A click that the cycle answers with a *different* entity is not a drag of the thing under
+      // the pointer: walking down a stack selects, it does not move (#70 criterion 15).
+      const picked = cyclePick(id, event.clientX, event.clientY)
+      if (picked !== null && picked !== id) {
+        selectById(picked)
+        return
+      }
       startItemDrag(id)
     },
     onRotatePointerDown: (id, event) => {
@@ -626,6 +714,17 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
           </>
         )}
       </svg>
+      {renovation !== null && renovation.cycle !== null && renovation.cycle !== undefined && (renovation.cycleCandidates ?? []).length > 1 && (
+        // More than one candidate under the pointer: the list says so beside it, inside the canvas
+        // bounds (#70 criterion 16).
+        <OverlapCycleList
+          point={renovation.cycle.point}
+          candidates={renovation.cycleCandidates ?? []}
+          index={renovation.cycle.index}
+          nameOf={renovation.nameOf ?? (() => '')}
+          bounds={hostSize}
+        />
+      )}
       {htmlOverlay}
       {pixelsPerMm !== null && (
         <div className="bb-workspace-scale-hint" data-testid="scale-hint">
