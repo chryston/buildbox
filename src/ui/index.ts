@@ -95,6 +95,7 @@ export {
   markedField,
   needsPreview,
   openShape,
+  pasteClipboardStore,
   planItemsForFloor,
   planViewsForFloor,
   propose,

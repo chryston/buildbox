@@ -122,6 +122,32 @@ const FORBIDDEN = [
         'hidden in this view — warning still applies',
         'Read-only in this view: inspect only.',
         'Unused. Nothing else changes.',
+        // #72 §5, §6: the paste review and the transaction label. The three sentences are the ones
+        // only the mapping dialog says, and `Paste from other Project` is the base of the undo label
+        // the Intent carries — proof the paste handler stayed behind the flag with its command.
+        'Paste from other Project',
+        'Switch to Proposed or Combined display to paste new work.',
+        'its host Wall was not copied',
+        'its Wall was not copied',
+        // The notice `Copy` gives when the selection held a demolition record. The plural half of the
+        // sentence is what survives minification — `count` is handed both forms as separate arguments.
+        'demolished entities were',
+        // #72 §5: the footer command, the review's own questions and the two ways a paste can be
+        // refused in words. Each is a fragment long enough to be this feature's and nothing else's.
+        'Paste from other Project…',
+        'Copy something in another Project first.',
+        '” — map Drawing Layers',
+        '”. Choose where each layer',
+        'Unlayered entities stay',
+        'Will not come across:',
+        'Will be detached:',
+        'Existing display: pasted entities join the shared Existing Model',
+        'Correct Existing Model and paste',
+        'Paste with this mapping',
+        '— choose —',
+        'Use suggested “',
+        ' (name match)',
+        ' from “',
       ]),
 ]
 // Only the files that could contain application code: an image or a font cannot.

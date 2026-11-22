@@ -23,9 +23,8 @@ import type { ClosedPath, LineSegment, Pt } from '../../geometry'
 import { TOLERANCE_MM, distance, edgeToFace, lengthOf, ontoFaceVector, pt } from '../../geometry'
 import type { Locator, RoomIntent, RoomOutlineShape } from '../intents'
 import type { IntentHandler } from './context'
-import { nextWallRef } from './wallHandlers'
 import { creationLayerField } from './creationLayer'
-import { refuse, requireFloor, sameJsonValue, spendIds } from './support'
+import { nextWallRef, refuse, requireFloor, sameJsonValue, spendIds } from './support'
 import { checkRoomProposal, edgeName, faceOf, roomPath, requireRoom, requireWall, wallPathOf } from './roomSupport'
 
 /** The pack the fixed shelter entry lives in (#64). */

@@ -30,6 +30,7 @@ function entityIds(project: Project): EntityId[] {
   for (const wall of project.existingModel.walls) ids.push(wall.id)
   for (const junction of project.existingModel.wallJunctions) ids.push(junction.id)
   for (const opening of project.existingModel.openings) ids.push(opening.id)
+  for (const room of project.existingModel.rooms) ids.push(room.id)
   return ids
 }
 

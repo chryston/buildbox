@@ -19,8 +19,8 @@
  * (`src/ui/workspace`), which builds its own Intents against the same session.
  */
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
-import type { CabinetMaterialId, DrawerConfig, ElementType, GlobalSettings, Project } from '../../domain'
-import type { DependencyReview, Intent, IntentType, PayloadOf } from '../../edit'
+import type { CabinetMaterialId, DrawerConfig, ElementType, EntityId, GlobalSettings, PlanView, Project } from '../../domain'
+import type { CopySet, DependencyReview, Intent, IntentType, PayloadOf } from '../../edit'
 import type { ProjectSession, SaveState, SessionAsset } from '../../session'
 import { useProject, useProjectSelector, useSession } from './useProject'
 import { STRINGS } from '..'
@@ -55,6 +55,13 @@ export interface IntentBuilder {
    * edit does not land. Nothing is written.
    */
   evaluate(project: Project, intent: Intent): Project | null
+  /**
+   * The Copy Set of `selection` as this saved view draws it (#72 §4) — the snapshot `Copy` hands the
+   * tab's clipboard, and the reason a copy writes nothing: no Intent runs, no revision moves.
+   * `captureCopySet` is an `edit` value, so it is read here, where `edit` may be read. `null` when
+   * the selection brings nothing across.
+   */
+  capture(project: Project, view: PlanView, selection: readonly EntityId[]): CopySet | null
 }
 
 /** The object-URL cache behind a Plan Image: `urlFor` is `null` until the bytes have been read. */

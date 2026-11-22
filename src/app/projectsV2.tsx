@@ -10,7 +10,7 @@ import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import type { ReactNode } from 'react'
 import type { Root } from 'react-dom/client'
 import App from '../App'
-import { applyIntent, intentIdCount, intentLabel, previewIntent } from '../edit'
+import { applyIntent, captureCopySet, copySetSize, intentIdCount, intentLabel, previewIntent } from '../edit'
 import type { Intent, IntentType, PayloadOf } from '../edit'
 import { collectLiveHashes, createMemoryAdapter } from '../persistence'
 import type { Ports } from '../persistence'
@@ -187,6 +187,13 @@ export function createIntentFactory(clock: ClockPort, ids: IdSource): IntentBuil
       const stripped = { ...project, designOptions: [] }
       const result = applyIntent(stripped, intent)
       return result.ok ? result.project : null
+    },
+    // A copy reads (#72 §4): the snapshot is taken from the Project as it stands, no Intent runs and
+    // no revision moves. Nothing to carry across is reported as nothing, so the workspace can stay
+    // silent rather than say "copied" about an empty clipboard.
+    capture: (project, view, selection) => {
+      const copySet = captureCopySet(project, view, selection)
+      return copySetSize(copySet) === 0 ? null : copySet
     },
   }
 }

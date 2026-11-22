@@ -310,6 +310,48 @@ export const RENOVATION_STRINGS = {
   layerCollapseAria: (name: string): string => `Hide the settings for ${name}`,
   layerActiveAria: (name: string): string => `Draw new content on ${name} in this view`,
 
+  // ---- the cross-Project paste (#72 §6)
+  // The transaction label is the count of what comes across and the name of the Project it came
+  // from, both of which are data: a released bundle holds neither the number of records in a copy
+  // nor the name of a Project it has never seen, so the row that sends the paste composes the
+  // sentence from the review it was built from.
+  pasteLabel: (n: number, sourceName: string): string =>
+    `Paste ${count(n, 'entity', 'entities')} from “${sourceName}”`,
+
+  // ---- Copy, and the clipboard it fills (#72 §3)
+  //
+  // The notice is the copy being honest about its own edge: a copy takes records, and a demolition
+  // record stands for something the Existing Model keeps. Saying the count out loud is cheaper than
+  // letting it be discovered as a gap in the other Project.
+  actionCopy: 'Copy',
+  copyDemolished: (n: number): string => `${count(n, 'demolished entity was', 'demolished entities were')} not copied`,
+
+  // ---- `Paste from other Project…` and its mapping review (#72 §5)
+  //
+  // The command is offered from the card footer, where the copy's destination is the thing on screen.
+  // The dialog's job is one question per layer the copy brings, and it is asked before anything is
+  // written: a suggestion is shown, never applied, because a name that happens to match is not an
+  // answer a person gave.
+  pasteFromOtherProject: 'Paste from other Project…',
+  pasteNeedsCopy: 'Copy something in another Project first.',
+  pasteTitle: (source: string): string => `Paste from “${source}” — map Drawing Layers`,
+  pasteIntro: (n: number, source: string): string =>
+    `${count(n, 'entity', 'entities')} from “${source}”. Choose where each layer’s work lands.`,
+  pasteUnlayered: (n: number): string => `${count(n, 'Unlayered entity stays', 'Unlayered entities stay')} Unlayered.`,
+  pasteColSource: 'Source layer',
+  pasteColItems: 'Items',
+  pasteColDestination: 'Destination',
+  pasteChoose: '— choose —',
+  pasteNameMatch: (name: string): string => `${name} (name match)`,
+  pasteCreateHere: (name: string): string => `Create “${name}” here`,
+  pasteUseSuggested: (name: string): string => `Use suggested “${name}”`,
+  pasteNotComingAcross: 'Will not come across:',
+  pasteWillDetach: 'Will be detached:',
+  pasteExistingDanger:
+    'Existing display: pasted entities join the shared Existing Model and every Design Option will see them.',
+  pasteCorrectAndPaste: 'Correct Existing Model and paste',
+  pasteConfirm: 'Paste with this mapping',
+
   // ---- the buttons every one of them ends with
   cancel: 'Cancel',
 } as const

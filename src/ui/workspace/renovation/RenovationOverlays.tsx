@@ -17,10 +17,21 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { CorrectionReview, DeleteLayerReview, DemolitionReview, Intent, MoveToOptionReview, RestoreReview } from '../../../edit'
-import { designOptionsOf } from '../../../domain'
+import type {
+  CorrectionReview,
+  DeleteLayerReview,
+  DemolitionReview,
+  Intent,
+  MoveToOptionReview,
+  PasteLayerResolution,
+  PasteReview,
+  RestoreReview,
+} from '../../../edit'
+import { designOptionsOf, drawingLayersOf } from '../../../domain'
+import type { Project } from '../../../domain'
 import type { DispatchResult } from '../../../session'
 import { useWorkspaceProject, useWorkspaceRoot } from '../WorkspaceRoot'
+import { usePasteClipboard } from '../pasteClipboard'
 import { useWorkspace } from '../workspaceStore'
 import { CorrectExistingDialog } from './CorrectExistingDialog'
 import { DeleteLayerDialog } from './DeleteLayerDialog'
@@ -28,6 +39,7 @@ import { DemolishWallDialog } from './DemolishWallDialog'
 import { displayLabel } from './displayTheme'
 import { ForcedChoiceDialog } from './ForcedChoiceDialog'
 import { MoveToOptionDialog } from './MoveToOptionDialog'
+import { PasteFromOtherProjectDialog } from './PasteFromOtherProjectDialog'
 import { RestoreDialog } from './RestoreDialog'
 import { entityFields, replaceEditOf, successorOf } from './pendingEdit'
 import { RENOVATION_STRINGS } from '../../strings/renovation'
@@ -56,11 +68,32 @@ function changeWordOf(intentType: string): string {
   return RENOVATION_STRINGS.changeChange
 }
 
+/**
+ * The first of the ids a paste minted that the Project now holds, and which collection it is in
+ * (#72 criterion 5). The paste spends its ids in a fixed order and keeps none back to say which it
+ * used, so the answer is read off the Project: an Opening dropped for want of its Wall, or a record
+ * that came with an id already spent, simply is not there to be found.
+ */
+function pastedHit(project: Project, ids: readonly string[]): { readonly id: string; readonly kind: string } | null {
+  const models = [project.existingModel, ...designOptionsOf(project).map((option) => option.proposed)]
+  for (const id of ids) {
+    for (const model of models) {
+      if (model.walls.some((each) => each.id === id)) return { id, kind: 'wall' }
+      if (model.openings.some((each) => each.id === id)) return { id, kind: 'opening' }
+      if (model.rooms.some((each) => each.id === id)) return { id, kind: 'room' }
+      if (model.placedItems.some((each) => each.id === id)) return { id, kind: 'item' }
+    }
+  }
+  return null
+}
+
 export function RenovationOverlays(): ReactNode {
   const { session, services } = useWorkspaceRoot()
   const project = useWorkspaceProject(session)
   const dialog = useWorkspace((state) => state.renovationDialog)
   const close = useWorkspace((state) => state.closeRenovationDialog)
+  /** The tab's clipboard: the copy being asked about, and the Project it came from. */
+  const clipboard = usePasteClipboard((state) => state)
   const askCorrection = useWorkspace((state) => state.openCorrectExistingDialog)
   const selectWall = useWorkspace((state) => state.selectWall)
   const selectOpening = useWorkspace((state) => state.selectOpening)
@@ -72,6 +105,9 @@ export function RenovationOverlays(): ReactNode {
   const [awaitingSuccessor, setAwaitingSuccessor] = useState<{ predecessorId: string; optionId: string } | null>(
     null,
   )
+
+  /** A paste that landed: the first record it wrote takes the inspector as soon as the Project does. */
+  const [awaitingPaste, setAwaitingPaste] = useState<readonly string[] | null>(null)
 
   /** The open dialog's review and the Options to move to, both read from the live Project. */
   const shown = useMemo(() => {
@@ -133,8 +169,22 @@ export function RenovationOverlays(): ReactNode {
         ).review,
         options,
       }
+    // #72 §5 asks the paste its own question: which layers the copy brings, what cannot come across,
+    // and where it would land. The copy is the tab's, so the question is asked of the clipboard.
+    if (dialog.kind === 'paste' && clipboard.copy !== null)
+      return {
+        review: services.intent.preview(
+          project,
+          services.intent.build('renovation.pasteFromProject', {
+            floorId: dialog.floorId,
+            viewId: dialog.viewId,
+            copySet: clipboard.copy,
+          }),
+        ).review,
+        options,
+      }
     return { review: null, options }
-  }, [dialog, targetOptionId, project, services])
+  }, [dialog, targetOptionId, project, services, clipboard])
 
   useEffect(() => {
     if (awaitingSuccessor === null) return
@@ -148,6 +198,22 @@ export function RenovationOverlays(): ReactNode {
     }
     setAwaitingSuccessor(null)
   }, [awaitingSuccessor, project, selectWall, selectOpening, selectRoom, selectItem])
+
+  /**
+   * A paste that landed: the first record it wrote takes the inspector (#72 criterion 5). The
+   * workspace carries one selection, not a set, so the work that was just written is pointed at
+   * rather than all of it held — and it is pointed at only once the Project really has it.
+   */
+  useEffect(() => {
+    if (awaitingPaste === null) return
+    const hit = pastedHit(project, awaitingPaste)
+    setAwaitingPaste(null)
+    if (hit === null) return
+    if (hit.kind === 'wall') selectWall(hit.id)
+    else if (hit.kind === 'opening') selectOpening(hit.id)
+    else if (hit.kind === 'room') selectRoom(hit.id)
+    else selectItem(hit.id)
+  }, [awaitingPaste, project, selectWall, selectOpening, selectRoom, selectItem])
 
   const dismiss = (): void => {
     setProblem(null)
@@ -329,6 +395,46 @@ export function RenovationOverlays(): ReactNode {
       close()
     }
     return <DeleteLayerDialog review={review} problem={problem ?? undefined} onConfirm={confirm} onCancel={dismiss} />
+  }
+
+  // #72 §5. The copy belongs to the tab and the answer belongs to this Project: the rows are the
+  // paste Intent's own review, and confirming sends that same Intent back with the mapping attached
+  // as its resolutions, so what was written is what was shown. A refusal leaves the dialog open with
+  // the answers already given — the person is one change away from a paste, not back at the start.
+  if (dialog.kind === 'paste' && shown.review?.kind === 'paste-from-project' && clipboard.copy !== null) {
+    const review: PasteReview = shown.review
+    const copySet = clipboard.copy
+    const confirm = (resolutions: readonly PasteLayerResolution[], correct: boolean): void => {
+      setProblem(null)
+      const label = RENOVATION_STRINGS.pasteLabel(review.entityCount, review.sourceProjectName)
+      const inner = services.intent.build(
+        'renovation.pasteFromProject',
+        { floorId: dialog.floorId, viewId: dialog.viewId, copySet },
+        label,
+      )
+      // A correction spends the ids the paste minted, so the inner Intent travels with none of them
+      // (#69 §12): one transaction and one undo either way, and one name for both.
+      const built = correct
+        ? services.intent.build('renovation.correctExistingModel', { inner: { ...inner, ids: [] } }, label)
+        : inner
+      const result = session.dispatch({ ...built, resolutions: { layers: resolutions } })
+      if (!result.ok) {
+        setProblem(refusalOf(result))
+        return
+      }
+      setAwaitingPaste(built.ids)
+      close()
+    }
+    return (
+      <PasteFromOtherProjectDialog
+        review={review}
+        copySet={copySet}
+        destinations={drawingLayersOf(project).map((layer) => ({ id: layer.id, name: layer.name }))}
+        problem={problem ?? undefined}
+        onConfirm={confirm}
+        onCancel={dismiss}
+      />
+    )
   }
 
   // Nothing to review: the entity the dialog was asked about is gone, or the Project has no

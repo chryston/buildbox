@@ -27,6 +27,9 @@ export { RenovationViewSection } from './RenovationViewSection'
 export { RenovationLayers, layerSettingWord } from './RenovationLayers'
 export type { LayerSettingPatch, RenovationLayersProps } from './RenovationLayers'
 export { DeleteLayerDialog } from './DeleteLayerDialog'
+// #72 §5: the mapping review a cross-Project paste asks before anything is written.
+export { PasteFromOtherProjectDialog } from './PasteFromOtherProjectDialog'
+export type { PasteDestinationLayer, PasteDialogProps } from './PasteFromOtherProjectDialog'
 export { LAYER_NEUTRAL_COLOR, layerSwatchClass } from './layersTheme'
 export { RenovationModeBar } from './RenovationModeBar'
 export { RenovationLegend } from './RenovationLegend'
@@ -98,4 +101,14 @@ export const openRestoreDialog = (entityId: string, designOptionId: string): voi
  */
 export const openDeleteLayerDialog = (layerId: string, viewId: string | null): void => {
   workspaceStore.getState().openDeleteLayerDialog(layerId, viewId)
+}
+
+/**
+ * Ask where this tab's copy lands in this Project (#72 §5). The copy itself is never carried: it
+ * lives on the tab's clipboard, which is what keeps a copy made in another Project from ever being
+ * mistaken for one made here. The saved view the question was asked in comes along, as it does for
+ * every other write.
+ */
+export const openPasteDialog = (floorId: string, viewId: string): void => {
+  workspaceStore.getState().openPasteDialog(floorId, viewId)
 }

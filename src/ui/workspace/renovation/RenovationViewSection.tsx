@@ -41,11 +41,13 @@ export interface RenovationViewSectionProps {
    * view, through which Option, on which Display, with which layers.
    */
   layers?: ReactNode
+  /** #72 §5: `Paste from other Project…`, in the footer slot to the left of `Export…`. */
+  paste?: ReactNode
   onExport(): void
 }
 
 export function RenovationViewSection(props: RenovationViewSectionProps): ReactNode {
-  const { view, options, onSetDesignOption, onSetRenovationDisplay, layers, onExport } = props
+  const { view, options, onSetDesignOption, onSetRenovationDisplay, layers, paste, onExport } = props
   if (view === null) return null
   const activeOption = viewDesignOptionId(view)
   const activeDisplay = viewRenovationDisplay(view)
@@ -108,8 +110,12 @@ export function RenovationViewSection(props: RenovationViewSectionProps): ReactN
       </div>
 
       <div className="bb-renovation-card-footer">
-        {/* `Paste from other Project…` (#72) takes the slot to the left of Export when it arrives. */}
-        <span className="bb-renovation-paste-slot" data-testid="renovation-paste-slot" />
+        {/* `Paste from other Project…` (#72 §5) in the slot to the left of Export. A flag-off build
+            renders nothing here for the same reason the layers slot above does: the caller never
+            builds it. */}
+        <span className="bb-renovation-paste-slot" data-testid="renovation-paste-slot">
+          {paste}
+        </span>
         <button type="button" data-testid="card-export" className="bb-workspace-tool-button" onClick={onExport}>
           {RENOVATION_STRINGS.exportEllipsis}
         </button>

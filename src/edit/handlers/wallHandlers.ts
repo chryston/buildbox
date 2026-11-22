@@ -32,7 +32,7 @@ import type { CreateWallChain, DependencyReview, Intent, IntentTarget, Locator, 
 import { FF_RENOVATION } from '../../lib'
 import type { Handler, IntentHandler } from './context'
 import { creationLayerField } from './creationLayer'
-import { containerOf, effectiveView, isInOption, proposedProvenance, refuse, spendIds } from './support'
+import { containerOf, effectiveView, isInOption, nextWallRef, proposedProvenance, refuse, spendIds } from './support'
 import { faceRefsOn, followWallFaces, refuseReferencedWall } from './roomSupport'
 import { openingsStillFit, requireOpeningsFit } from './openingSupport'
 
@@ -60,20 +60,6 @@ const junctionOf = (project: Project, wallId: EntityId, end: WallEnd): WallJunct
   project.existingModel.wallJunctions.find((junction) =>
     junction.ends.some((member) => member.wallId === wallId && member.end === end),
   )
-
-/**
- * The next free `W-n`. The Project keeps no counter of its own, so this is one past the highest
- * number in use among the Walls that exist; a deleted Wall's number is spent only until the
- * Walls above it are deleted too (#64 §1).
- */
-export const nextWallRef = (project: Project): string => {
-  let highest = 0
-  for (const wall of project.existingModel.walls) {
-    const digits = /\d+/.exec(wall.ref)
-    if (digits !== null) highest = Math.max(highest, Number(digits[0]))
-  }
-  return `W-${highest + 1}`
-}
 
 // --- Reference lines ---------------------------------------------------------
 

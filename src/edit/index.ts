@@ -67,6 +67,14 @@ export {
   type OffsetWall,
   type OpeningIntent,
   type PayloadOf,
+  type PasteDestination,
+  type PasteFromOtherProject,
+  type PasteLayerResolution,
+  type PasteLayerRow,
+  type PasteLayerTarget,
+  type PasteLoss,
+  type PasteResolutions,
+  type PasteReview,
   type PinNode,
   type PlaceHouseholdShelter,
   type PlacePlanDesign,
@@ -116,5 +124,9 @@ export {
   type WallIntent,
 } from './intents'
 export { INTENT_LABELS, intentLabel } from './labels'
+// The two halves of the cross-Project paste of #72: what `Copy` takes with it, and what the mapping
+// dialog is built from. Both read a Project and answer with data; neither writes one.
+export { captureCopySet, copySetSize, type CopySet } from './copySet'
+export { PASTE_BLOCKED, PASTE_DETACH_FACE, PASTE_LOSS_HOST, pasteDestinationOf, pasteReviewOf } from './pasteReview'
 export { CUSTOM_PLAN_ENTRY, PLAN_CATALOGUE, type PlanCatalogueEntry } from './planCatalogue'
 export { INTENT_TYPES } from './registry'
