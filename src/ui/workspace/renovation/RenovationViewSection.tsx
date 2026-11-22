@@ -13,10 +13,11 @@
  * the removal or the replacement the interesting part. Each card carries one swatch per Renovation
  * State it shows, so the grid says what will appear before anything is clicked.
  *
- * The **Layers** slot is reserved here and renders nothing: #71 builds the Drawing Layers list and
- * its two toggles into this position. The footer reserves `Paste from other Project…`'s position to
- * the left of `Export…` and renders no disabled placeholder — an empty slot is a promise about a
- * future version, and a greyed-out button is a question the user cannot answer.
+ * The **Layers** slot below the Display grid holds the Drawing Layers list (#71 §3), which the
+ * caller passes in from the same flagged branch: this block decides where it sits, not what it does.
+ * The footer reserves `Paste from other Project…`'s position to the left of `Export…` and renders no
+ * disabled placeholder — an empty slot is a promise about a future version, and a greyed-out button
+ * is a question the user cannot answer.
  */
 import type { ReactNode } from 'react'
 import type { DesignOption, PlanView, RenovationDisplay } from '../../../domain'
@@ -33,11 +34,18 @@ export interface RenovationViewSectionProps {
   /** One Edit Transaction, labelled with what was chosen (#70 §2). */
   onSetDesignOption(designOptionId: string | null): void
   onSetRenovationDisplay(display: RenovationDisplay): void
+  /**
+   * The Drawing Layers list (#71 §3), built by the caller inside the same flagged branch that renders
+   * this block. It is a slot rather than a prop-per-control because the list is a section of its own
+   * with a store hook of its own, and this block's job is to hold it in reading order: which saved
+   * view, through which Option, on which Display, with which layers.
+   */
+  layers?: ReactNode
   onExport(): void
 }
 
 export function RenovationViewSection(props: RenovationViewSectionProps): ReactNode {
-  const { view, options, onSetDesignOption, onSetRenovationDisplay, onExport } = props
+  const { view, options, onSetDesignOption, onSetRenovationDisplay, layers, onExport } = props
   if (view === null) return null
   const activeOption = viewDesignOptionId(view)
   const activeDisplay = viewRenovationDisplay(view)
@@ -93,9 +101,11 @@ export function RenovationViewSection(props: RenovationViewSectionProps): ReactN
         })}
       </div>
 
-      {/* #71 fills this slot with the Drawing Layers list and its two toggles. Nothing is rendered
-          here until then, and nothing is rendered *instead* — an empty slot is not a stub. */}
-      <div className="bb-renovation-layers-slot" data-testid="renovation-layers-slot" />
+      {/* #71's Drawing Layers list, in the position the slot was reserved for. A flag-off build
+          renders nothing here because the caller never builds it — not a placeholder, not a stub. */}
+      <div className="bb-renovation-layers-slot" data-testid="renovation-layers-slot">
+        {layers}
+      </div>
 
       <div className="bb-renovation-card-footer">
         {/* `Paste from other Project…` (#72) takes the slot to the left of Export when it arrives. */}

@@ -893,6 +893,182 @@
   display: none;
 }
 
+/* ------------------------------------------------------- drawing layers (#71) */
+
+.bb-renovation-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bb-renovation-layers-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.bb-layer-add {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--bb-radius-button);
+  border: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-button);
+  color: var(--bb-text-button);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.bb-layer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bb-layer-item {
+  padding: 6px 7px;
+  border-radius: var(--bb-radius-button);
+  border: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-inset);
+}
+
+.bb-layer-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* The swatch is the layer's colour as this view will draw it — the Project's, or this view's own.
+   `Unlayered` has no colour of its own, so it takes the theme's neutral. */
+.bb-layer-swatch {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border-radius: 3px;
+  border: 1px solid var(--bb-border-inset);
+}
+
+.bb-layer-swatch-neutral {
+  background: var(--bb-text-muted);
+}
+
+.bb-layer-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ⊘, [RO] and ◐ are the row saying what it is without being opened: not pickable, read-only, and
+   drawn in a colour this view chose for itself. */
+.bb-layer-mark {
+  flex: none;
+  font-size: 11px;
+  color: var(--bb-text-muted);
+}
+
+.bb-layer-disclosure {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--bb-text-muted);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.bb-layer-view,
+.bb-layer-project {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--bb-border-card);
+}
+
+/* The Project half is separated from the view half on purpose: one row answers two questions, and
+   the second one is answered by every other saved view in the Project too. */
+.bb-layer-project {
+  border-top-style: dashed;
+}
+
+.bb-layer-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--bb-text-body);
+}
+
+.bb-layer-field-label {
+  font-size: 11px;
+  color: var(--bb-text-subtle);
+}
+
+.bb-layer-step,
+.bb-layer-reset {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--bb-radius-button);
+  border: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-button);
+  color: var(--bb-text-button);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.bb-layer-reset {
+  border-style: dashed;
+}
+
+.bb-layer-step:disabled,
+.bb-layer-reset:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.bb-layer-snap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--bb-text-body);
+}
+
+.bb-layer-review-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.bb-layer-review-table th,
+.bb-layer-review-table td {
+  padding: 4px 6px;
+  text-align: left;
+  border-bottom: 1px solid var(--bb-border-inset);
+}
+
+.bb-layer-review-table th {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--bb-text-subtle);
+}
+
+
 .bb-renovation-card-footer {
   display: flex;
   align-items: center;

@@ -1,7 +1,7 @@
 /**
- * The renovation dialogs the workspace can be asked to show (#69 §9, §13; #70 §7a, §7b).
+ * The renovation dialogs the workspace can be asked to show (#69 §9, §13; #70 §7a, §7b; #71 §5).
  *
- * One mount, four dialogs, all dark: `FloorWorkspace` renders this only from a flagged branch, so a
+ * One mount, every dialog, all dark: `FloorWorkspace` renders this only from a flagged branch, so a
  * flag-off build carries neither the components nor a word of their copy.
  *
  * The rule the whole file exists to hold: a dialog never decides what an edit costs, and never writes
@@ -17,12 +17,13 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { CorrectionReview, DemolitionReview, Intent, MoveToOptionReview, RestoreReview } from '../../../edit'
+import type { CorrectionReview, DeleteLayerReview, DemolitionReview, Intent, MoveToOptionReview, RestoreReview } from '../../../edit'
 import { designOptionsOf } from '../../../domain'
 import type { DispatchResult } from '../../../session'
 import { useWorkspaceProject, useWorkspaceRoot } from '../WorkspaceRoot'
 import { useWorkspace } from '../workspaceStore'
 import { CorrectExistingDialog } from './CorrectExistingDialog'
+import { DeleteLayerDialog } from './DeleteLayerDialog'
 import { DemolishWallDialog } from './DemolishWallDialog'
 import { displayLabel } from './displayTheme'
 import { ForcedChoiceDialog } from './ForcedChoiceDialog'
@@ -118,6 +119,17 @@ export function RenovationOverlays(): ReactNode {
             entityId: dialog.entityId,
             target: { designOptionId: dialog.designOptionId },
           }),
+        ).review,
+        options,
+      }
+    // #71 §5 asks the deletion's own question: what is on the layer, and how many views have an
+    // opinion of it that the delete drops. The view the row stands in answers one further question —
+    // whether Unlayered is drawn here — and changes nothing about the write.
+    if (dialog.kind === 'delete-layer')
+      return {
+        review: services.intent.preview(
+          project,
+          services.intent.build('layer.delete', { layerId: dialog.layerId, viewId: dialog.viewId }),
         ).review,
         options,
       }
@@ -298,6 +310,25 @@ export function RenovationOverlays(): ReactNode {
         onCancel={dismiss}
       />
     )
+  }
+
+  // #71 §5. The layer went away while the question was open — deleted from another view of the same
+  // Project, or undone out from under the dialog — then there is nothing to ask about, and the
+  // write would be refused anyway.
+  if (dialog.kind === 'delete-layer' && shown.review?.kind === 'delete-layer') {
+    const review: DeleteLayerReview = shown.review
+    const confirm = (): void => {
+      setProblem(null)
+      const result = session.dispatch(
+        services.intent.build('layer.delete', { layerId: review.layerId, viewId: dialog.viewId }, RENOVATION_STRINGS.layerDeleteLabel(review.layerName)),
+      )
+      if (!result.ok) {
+        setProblem(refusalOf(result))
+        return
+      }
+      close()
+    }
+    return <DeleteLayerDialog review={review} problem={problem ?? undefined} onConfirm={confirm} onCancel={dismiss} />
   }
 
   // Nothing to review: the entity the dialog was asked about is gone, or the Project has no

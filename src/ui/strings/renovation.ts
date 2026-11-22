@@ -243,8 +243,56 @@ export const RENOVATION_STRINGS = {
   deleteLayerMore: (n: number): string => `and ${n} more`,
   /** The consequence the dialog cannot leave out: where the content goes, and whether it is seen. */
   deleteLayerBecomes: 'The content becomes Unlayered and stays drawn.',
-  deleteLayerHidden: 'The Unlayered row is hidden in this view, so this content stops being drawn here.',
+  deleteLayerHidden: 'The Unlayered row is currently HIDDEN in this view, so this content stops being drawn here.',
   deleteLayerConfirm: 'Delete layer',
+  // The three columns are read as one sentence per row — `Model entities · 12 · become Unlayered` —
+  // and the row that answers with a consequence of its own is the one about saved views.
+  deleteLayerColumnDependency: 'Dependency',
+  deleteLayerColumnCount: 'Count',
+  deleteLayerColumnResult: 'Result',
+  deleteLayerResultUnlayered: 'Becomes Unlayered',
+  deleteLayerResultOverrides: (n: number): string => `${n} ${n === 1 ? 'loses' : 'lose'} their own settings`,
+  /** The way out that changes nothing, said as what it does (#71 §5). */
+  deleteLayerCancel: 'Cancel — change nothing',
+
+  // ---- the Layers list itself (#71 §3)
+  // `Layers (front first)` is the header because the list is drawn in the order content is drawn,
+  // not the order the array stores: the top row is the one on top of the drawing.
+  layersHeader: 'Layers (front first)',
+  /** The name a layer made by `+` starts with, and the accessible name of the `+` button. */
+  layerNewName: 'New layer',
+  layerSelectable: 'Selectable',
+  layerEditable: 'Editable',
+  layerActive: 'Active',
+  layerColourInView: 'Colour in this view',
+  layerReset: 'reset',
+  layerViewOrder: 'View order',
+  layerForward: 'forward',
+  layerBack: 'back',
+  layerProjectSection: 'Project:',
+  layerProjectColour: 'Project default colour',
+  layerDelete: 'Delete…',
+  layersNone: 'No Drawing Layers. All content is Unlayered.',
+  layerSnapToHidden: 'Snap to hidden content',
+  layerUseProjectOrder: 'Use Project layer order',
+  /** The three markers, each of which says why a row does not answer the way its switches read. */
+  layerMarkNotSelectable: 'Not selectable',
+  layerMarkReadOnly: 'Read-only',
+  layerMarkOverride: 'View style override',
+  // A row's controls are named with the layer in them: `Hide Furniture in this view`, because the
+  // list has a dozen checkboxes and `Hide` on its own is a question.
+  layerShow: (name: string): string => `Show ${name} in this view`,
+  layerHide: (name: string): string => `Hide ${name} in this view`,
+  layerRenameAria: (name: string): string => `Rename ${name}`,
+  layerProjectColourAria: (name: string): string => `Project default colour for ${name}`,
+  layerViewColourAria: (name: string): string => `Colour for ${name} in this view`,
+  layerMoveUpAria: (name: string): string => `Move ${name} toward the front in the Project layer order`,
+  layerMoveDownAria: (name: string): string => `Move ${name} toward the back in the Project layer order`,
+  layerViewOrderUpAria: (name: string): string => `Move ${name} toward the front in this view`,
+  layerViewOrderDownAria: (name: string): string => `Move ${name} toward the back in this view`,
+  layerExpandAria: (name: string): string => `Show the settings for ${name}`,
+  layerCollapseAria: (name: string): string => `Hide the settings for ${name}`,
+  layerActiveAria: (name: string): string => `Draw new content on ${name} in this view`,
 
   // ---- the buttons every one of them ends with
   cancel: 'Cancel',

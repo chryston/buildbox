@@ -107,6 +107,19 @@ const FORBIDDEN = [
         'Nothing is on it.',
         'The Unlayered row is hidden in this view',
         'is read-only in this view',
+        // #71 §3, §5: the Layers list in the saved-view card and the review behind `Delete…`.
+        // `Layers`, `Unlayered`, `Active` and `Delete` are short words a flag-off surface could say by
+        // accident, so the needles are the row's and the table's own sentences.
+        'Layers (front first)',
+        'No Drawing Layers. All content is Unlayered.',
+        'Colour in this view',
+        'Project default colour',
+        'Use Project layer order',
+        'Snap to hidden content',
+        'View style override',
+        'Becomes Unlayered',
+        'lose their own settings',
+        'stops being drawn here',
       ]),
 ]
 // Only the files that could contain application code: an image or a font cannot.

@@ -190,6 +190,12 @@ export type RenovationDialog =
    * and the Option's own successors may stand on it. Ids only: the review is read from the preview.
    */
   | { readonly kind: 'restore'; readonly entityId: string; readonly designOptionId: string }
+  /**
+   * #71 §5: `Delete Services?` — the layer is about to lose its name, its colour and every view's
+   * opinion of it, and the content on it comes back Unlayered. Ids only, like the others: the counts
+   * and the names are read from the preview, so the dialog cannot promise what the write will not do.
+   */
+  | { readonly kind: 'delete-layer'; readonly layerId: string; readonly viewId: string | null }
   | null
 
 export interface WorkspaceState {
@@ -339,6 +345,12 @@ export interface WorkspaceActions {
   openCorrectExistingDialog(intent: Intent, entityId: string | null): void
   /** Ask `Restore <ref>?` before a demolition record leaves one Design Option (#70 §7d). */
   openRestoreDialog(entityId: string, designOptionId: string): void
+  /**
+   * Ask `Delete <layer>?` before a Drawing Layer goes away (#71 §5). The view the row stands in comes
+   * along because the review answers one question from it — whether the content that comes back
+   * Unlayered is still drawn here — and nothing else.
+   */
+  openDeleteLayerDialog(layerId: string, viewId: string | null): void
   /** §7c: hand one Existing entity its handles and fields back, for one pending correction. */
   unlockCorrection(entityId: string): void
   /** §7c: put the lock back — what Escape does, and what committing does through the dialog. */
@@ -542,6 +554,7 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
     set({ renovationDialog: { kind: 'correct-existing', intent, entityId }, correctionUnlocked: null }),
   openRestoreDialog: (entityId, designOptionId) =>
     set({ renovationDialog: { kind: 'restore', entityId, designOptionId } }),
+  openDeleteLayerDialog: (layerId, viewId) => set({ renovationDialog: { kind: 'delete-layer', layerId, viewId } }),
   unlockCorrection: (entityId) => set({ correctionUnlocked: entityId }),
   lockCorrection: () => set({ correctionUnlocked: null }),
   closeRenovationDialog: () => set({ renovationDialog: null }),

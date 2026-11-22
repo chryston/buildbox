@@ -22,7 +22,7 @@ import type { DisplayModel, Pt, RenovationState, RoomFaceCandidate, Warning } fr
 import { wallOpenings } from '../../drawing'
 import type { BadgeSubject, OpeningPreview, RoomProposal } from '../../drawing'
 import type { Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
-import { designOptionsOf, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay } from '../../domain'
+import { designOptionsOf, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, NEW_LAYER_COLOR } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
@@ -91,6 +91,8 @@ import {
   RenovationOverlays,
   RenovationToolStrip,
   RenovationViewSection,
+  RenovationLayers,
+  layerSettingWord,
   DISPLAY_LABELS,
   DISPLAY_STATES,
   RenovationInspector,
@@ -100,11 +102,12 @@ import {
   openForcedChoiceDialog,
   openCorrectExistingDialog,
   openRestoreDialog,
+  openDeleteLayerDialog,
   baselineEditLocked,
   subjectOfIntent,
   successorOf,
 } from './renovation'
-import type { RenovationInspectorAction, RenovationInspectorLink, RenovationInspectorTarget, RenovationToolId } from './renovation'
+import type { RenovationInspectorAction, RenovationInspectorLink, RenovationInspectorTarget, RenovationToolId, LayerSettingPatch } from './renovation'
 import { RENOVATION_STRINGS } from '../strings/renovation'
 import { FIELDS_UNLOCKED, FieldsLockedContext } from './fieldsLock'
 import type { FieldsLock } from './fieldsLock'
@@ -1791,6 +1794,91 @@ export function FloorWorkspace(): ReactNode {
                       RENOVATION_STRINGS.setRenovationDisplay(displayLabel(renovationDisplay)),
                     )
                   }}
+                  layers={
+                    <RenovationLayers
+                      project={project}
+                      view={view}
+                      // `+` is one transaction whose undo reads `New Layer: New layer`; the id comes
+                      // back so the row opens with its name focused (#71 §3).
+                      onAddLayer={() => {
+                        const intent = services.intent.build(
+                          'layer.add',
+                          { name: RENOVATION_STRINGS.layerNewName, color: NEW_LAYER_COLOR },
+                          RENOVATION_STRINGS.layerAddLabel(RENOVATION_STRINGS.layerNewName),
+                        )
+                        void sendIntent(intent)
+                        return intent.ids[0] ?? null
+                      }}
+                      onRenameLayer={(layerId, name) =>
+                        sendLabelled('layer.rename', { layerId, name }, RENOVATION_STRINGS.layerRenameLabel(name))
+                      }
+                      onSetProjectColor={(layerId, color) =>
+                        sendLabelled(
+                          'layer.setColor',
+                          { layerId, color },
+                          RENOVATION_STRINGS.layerSetColorLabel(drawingLayerById(project, layerId)?.name ?? ''),
+                        )
+                      }
+                      onMoveProject={(layerId, direction) =>
+                        sendLabelled(
+                          'layer.move',
+                          { layerId, direction },
+                          RENOVATION_STRINGS.layerMoveLabel(
+                            drawingLayerById(project, layerId)?.name ?? '',
+                            direction === 'forward' ? RENOVATION_STRINGS.layerEdgeFront : RENOVATION_STRINGS.layerEdgeBack,
+                          ),
+                        )
+                      }
+                      onDeleteLayer={(layerId) => openDeleteLayerDialog(layerId, view?.id ?? null)}
+                      onSetSetting={(layerKey, setting: LayerSettingPatch) => {
+                        if (view === null) return
+                        sendLabelled(
+                          'view.setLayerSetting',
+                          { viewId: view.id, layerKey, setting },
+                          RENOVATION_STRINGS.layerSettingLabel(
+                            drawingLayerById(project, layerKey)?.name ?? RENOVATION_STRINGS.layerUnlayered,
+                            layerSettingWord(setting),
+                          ),
+                        )
+                      }}
+                      onSetViewOrder={(layerOrder, movedLayerId) => {
+                        if (view === null) return
+                        sendLabelled(
+                          'view.setLayerOrder',
+                          { viewId: view.id, layerOrder },
+                          RENOVATION_STRINGS.layerOrderLabel(
+                            drawingLayerById(project, movedLayerId)?.name ?? RENOVATION_STRINGS.layerUnlayered,
+                          ),
+                        )
+                      }}
+                      onUseProjectOrder={() => {
+                        if (view === null) return
+                        sendLabelled(
+                          'view.setLayerOrder',
+                          { viewId: view.id, layerOrder: null },
+                          RENOVATION_STRINGS.layerOrderLabel(view.name),
+                        )
+                      }}
+                      onSetActiveLayer={(layerId) => {
+                        if (view === null) return
+                        sendLabelled(
+                          'view.setActiveLayer',
+                          { viewId: view.id, layerId },
+                          RENOVATION_STRINGS.layerActiveLabel(
+                            drawingLayerById(project, layerId)?.name ?? RENOVATION_STRINGS.layerUnlayered,
+                          ),
+                        )
+                      }}
+                      onSetSnapToHidden={(snapToHidden) => {
+                        if (view === null) return
+                        sendLabelled(
+                          'view.setSnapToHidden',
+                          { viewId: view.id, snapToHidden },
+                          RENOVATION_STRINGS.layerSnapLabel(snapToHidden ? RENOVATION_STRINGS.layerOn : RENOVATION_STRINGS.layerOff),
+                        )
+                      }}
+                    />
+                  }
                   onExport={() => setIsExporting(true)}
                 />
                   <RenovationInspector

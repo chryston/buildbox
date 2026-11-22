@@ -23,6 +23,11 @@ export { RenovationOverlays } from './RenovationOverlays'
 // #70 §2, §3: the saved-view block and the one table of Display colours and States the rail, the
 // mode bar, the tool strip and the canvas legend all read from.
 export { RenovationViewSection } from './RenovationViewSection'
+// #71 §3, §5: the Layers list in that slot, and the review that stands behind `Delete…`.
+export { RenovationLayers, layerSettingWord } from './RenovationLayers'
+export type { LayerSettingPatch, RenovationLayersProps } from './RenovationLayers'
+export { DeleteLayerDialog } from './DeleteLayerDialog'
+export { LAYER_NEUTRAL_COLOR, layerSwatchClass } from './layersTheme'
 export { RenovationModeBar } from './RenovationModeBar'
 export { RenovationLegend } from './RenovationLegend'
 export { OverlapCycleList } from './OverlapCycleList'
@@ -82,4 +87,13 @@ export const openCorrectExistingDialog = (intent: Intent, entityId: string | nul
  */
 export const openRestoreDialog = (entityId: string, designOptionId: string): void => {
   workspaceStore.getState().openRestoreDialog(entityId, designOptionId)
+}
+
+/**
+ * Ask `Delete <layer>?` before a Drawing Layer goes away (#71 §5). The view the row stands in comes
+ * along for one question of the review — whether the content that comes back Unlayered is still
+ * drawn there — and changes nothing about the delete.
+ */
+export const openDeleteLayerDialog = (layerId: string, viewId: string | null): void => {
+  workspaceStore.getState().openDeleteLayerDialog(layerId, viewId)
 }
