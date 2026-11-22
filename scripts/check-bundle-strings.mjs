@@ -90,14 +90,13 @@ const FORBIDDEN = [
         // #71 §2, §5, §8: the Drawing Layer surface. `Unlayered` is already said by the export
         // scope's layer list (#70), so the needles are the undo labels the rows compose and the
         // sentences only the layer list, its delete dialog and the read-only refusal say.
-        'New Layer: ',
-        'Rename Layer: ',
-        'Set Layer Colour: ',
-        'Reorder Layer: ',
-        'Delete Layer: ',
-        'Set Active Layer: ',
-        'Move to Layer: ',
-        'Snap to Hidden Content',
+        'New layer: ',
+        'Rename layer: ',
+        'Set layer colour: ',
+        'Reorder layer: ',
+        'Delete layer: ',
+        'Set active layer: ',
+        'Move to layer: ',
         'A layer needs a name.',
         'A layer colour is six hex digits',
         'is already at the front',

@@ -193,7 +193,7 @@ describe('the Delete Layer review', () => {
     expect(drawingLayerById(view.project(), SERVICES)).toBeNull()
     expect(onServices()).toEqual([])
     expect(viewLayerSettingOverride(savedView(PROPOSED), SERVICES)).toBeUndefined()
-    expect(view.session.getSnapshot().history.undoLabel).toBe('Delete Layer: Services')
+    expect(view.session.getSnapshot().history.undoLabel).toBe('Delete layer: Services')
 
     await undo()
     expect(drawingLayerById(view.project(), SERVICES)?.name).toBe('Services')

@@ -206,18 +206,18 @@ export const RENOVATION_STRINGS = {
 
   // ---- the Drawing Layers (#71 §2, §5, §8)
   // The undo label is the row's own words plus what was chosen, the way `Set Design Option: Option A`
-  // reads (#70 §2): a history entry has to say which layer, because "Rename Layer" four times deep is
+  // reads (#70 §2): a history entry has to say which layer, because "Rename layer" four times deep is
   // no help at all. The layer's name is Project data, so it arrives as an argument.
-  layerAddLabel: (name: string): string => `New Layer: ${name}`,
-  layerRenameLabel: (name: string): string => `Rename Layer: ${name}`,
-  layerSetColorLabel: (name: string): string => `Set Layer Colour: ${name}`,
-  layerMoveLabel: (name: string, edge: string): string => `Reorder Layer: ${name} → ${edge}`,
-  layerDeleteLabel: (name: string): string => `Delete Layer: ${name}`,
-  layerSettingLabel: (name: string, state: string): string => `Set Layer: ${name} — ${state}`,
-  layerOrderLabel: (name: string): string => `Reorder Layers: ${name}`,
-  layerActiveLabel: (name: string): string => `Set Active Layer: ${name}`,
-  layerSnapLabel: (state: string): string => `Snap to Hidden Content: ${state}`,
-  entitySetLayerLabel: (name: string): string => `Move to Layer: ${name}`,
+  layerAddLabel: (name: string): string => `New layer: ${name}`,
+  layerRenameLabel: (name: string): string => `Rename layer: ${name}`,
+  layerSetColorLabel: (name: string): string => `Set layer colour: ${name}`,
+  layerMoveLabel: (name: string, edge: string): string => `Reorder layer: ${name} → ${edge}`,
+  layerDeleteLabel: (name: string): string => `Delete layer: ${name}`,
+  layerSettingLabel: (name: string, state: string): string => `Set layer: ${name} — ${state}`,
+  layerOrderLabel: (name: string): string => `Reorder layers: ${name}`,
+  layerActiveLabel: (name: string): string => `Set active layer: ${name}`,
+  layerSnapLabel: (state: string): string => `Snap to hidden content: ${state}`,
+  entitySetLayerLabel: (name: string): string => `Move to layer: ${name}`,
   /** The row that holds content with no layer of its own. One word, said the same way everywhere. */
   layerUnlayered: 'Unlayered',
   /** Which end a `Reorder Layer` moved a layer to, in the label's `→ <end>`. */

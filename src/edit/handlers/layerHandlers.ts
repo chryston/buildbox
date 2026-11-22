@@ -52,7 +52,7 @@ export const LAYER_INTENT_ID_ORDER: { [T in LayerIntentType]: readonly string[] 
  * The default label per layer Intent.
  *
  * Four of these are the base of a longer label: the row that sends them appends what was chosen —
- * `Rename Layer: Services`, `Set Layer Visibility: Furniture — hidden` (#71 §8) — because a layer's
+ * `Rename layer: Services`, `Set layer visibility: Furniture — hidden` (#71 §8) — because a layer's
  * name is Project data and the setting's words are `ui/strings` copy, neither of which this table
  * may hold.
  */

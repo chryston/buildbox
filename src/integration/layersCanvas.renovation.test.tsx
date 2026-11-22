@@ -225,7 +225,7 @@ describe('a saved view’s Drawing Layers on its Plan View', () => {
     )
     expect(moved?.drawingLayerId).toBe(STRUCTURE)
     // One Edit Transaction, named for where the content went.
-    expect(view.session.getSnapshot().history.undoLabel).toBe('Move to Layer: Structure')
+    expect(view.session.getSnapshot().history.undoLabel).toBe('Move to layer: Structure')
   })
 
   it('keeps the warning row and says why its subject is nowhere on screen (#71 criterion 9)', async () => {

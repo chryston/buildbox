@@ -227,7 +227,7 @@ describe('the Layers list', () => {
     // The row is a row like any other: hiding it is an override on this view, written the same way.
     expect(JSON.stringify(savedView(FLOOR_1).layerSettings)).toBe('{"unlayered":{"visible":false,"selectable":true,"editable":true}}')
     expect(savedView(PROPOSED).layerSettings?.unlayered).toBeUndefined()
-    expect(undoLabel()).toBe('Set Layer: Unlayered — hidden')
+    expect(undoLabel()).toBe('Set layer: Unlayered — hidden')
   })
 
   it('offers `Use Project layer order` only to a view that has an order of its own', async () => {
@@ -239,7 +239,7 @@ describe('the Layers list', () => {
     expect(rowNames()).toEqual(['Unlayered', 'Services', 'Structure', 'Furniture'])
     await userEvent.setup().click(screen.getByTestId('layer-use-project-order'))
     expect(viewLayerOrder(savedView(DEMOLITION))).toBeNull()
-    expect(undoLabel()).toBe('Reorder Layers: Option A · Demolition')
+    expect(undoLabel()).toBe('Reorder layers: Option A · Demolition')
     // Following the Project again means the Project's front is the front here too.
     expect(rowNames()).toEqual(['Unlayered', 'Structure', 'Furniture', 'Services'])
     expect(screen.queryByTestId('layer-use-project-order')).toBeNull()
@@ -253,7 +253,7 @@ describe('the Layers list', () => {
     expect(screen.getByTestId('layer-down-layers-002')).toBeDisabled()
     await userEvent.setup().click(screen.getByTestId('layer-up-layers-002'))
     expect(rowNames()).toEqual(['Unlayered', 'Structure', 'Services', 'Furniture'])
-    expect(undoLabel()).toBe('Reorder Layer: Services → front')
+    expect(undoLabel()).toBe('Reorder layer: Services → front')
     await openView(PROPOSED)
     expect(rowNames()).toEqual(['Unlayered', 'Structure', 'Services', 'Furniture'])
     // …and the view with its own order keeps it.
@@ -271,25 +271,25 @@ describe('the Layers list', () => {
 
     await user.click(screen.getByTestId('layer-visible-layers-003'))
     expect(screen.getByTestId('layer-visible-layers-003')).not.toBeChecked()
-    expect(undoLabel()).toBe('Set Layer: Structure — hidden')
+    expect(undoLabel()).toBe('Set layer: Structure — hidden')
     await undo()
     expect(screen.getByTestId('layer-visible-layers-003')).toBeChecked()
     expect(viewLayerSettingOverride(savedView(FLOOR_1), STRUCTURE)).toBeUndefined()
 
     await user.click(screen.getByTestId('layer-editable-layers-003'))
-    expect(undoLabel()).toBe('Set Layer: Structure — read-only')
+    expect(undoLabel()).toBe('Set layer: Structure — read-only')
     await undo()
     expect(screen.getByTestId('layer-editable-layers-003')).toBeChecked()
 
     await user.click(screen.getByTestId('layer-active-unlayered'))
     expect(screen.getByTestId('layer-active-unlayered')).toBeChecked()
-    expect(undoLabel()).toBe('Set Active Layer: Unlayered')
+    expect(undoLabel()).toBe('Set active layer: Unlayered')
     await undo()
     expect(screen.getByTestId('layer-active-layers-003')).toBeChecked()
 
     commitColor('layer-view-colour-layers-003', '#202020')
     expect(swatchColor(STRUCTURE)).toBe(rgb('#202020'))
-    expect(undoLabel()).toBe('Set Layer: Structure — colour')
+    expect(undoLabel()).toBe('Set layer: Structure — colour')
     await undo()
     expect(swatchColor(STRUCTURE)).toBe(rgb('#b9b9c2'))
 
@@ -297,19 +297,19 @@ describe('the Layers list', () => {
     // write waits for the blur.
     commitColor('layer-view-colour-layers-003', '#303030')
     commitColor('layer-view-colour-layers-003', '#404040')
-    expect(undoLabel()).toBe('Set Layer: Structure — colour')
+    expect(undoLabel()).toBe('Set layer: Structure — colour')
     await undo()
     expect(swatchColor(STRUCTURE)).toBe(rgb('#303030'))
     await undo()
     expect(swatchColor(STRUCTURE)).toBe(rgb('#b9b9c2'))
 
     await user.click(screen.getByTestId('layer-view-forward-layers-001'))
-    expect(undoLabel()).toBe('Reorder Layers: Furniture')
+    expect(undoLabel()).toBe('Reorder layers: Furniture')
     await undo()
     expect(viewLayerOrder(savedView(FLOOR_1))).toBeNull()
 
     await user.click(screen.getByTestId('layer-snap-to-hidden'))
-    expect(undoLabel()).toBe('Snap to Hidden Content: On')
+    expect(undoLabel()).toBe('Snap to hidden content: On')
     await undo()
     expect(screen.getByTestId('layer-snap-to-hidden')).not.toBeChecked()
 
@@ -318,7 +318,7 @@ describe('the Layers list', () => {
     await user.type(name, 'Walls')
     await user.tab()
     expect(layer(STRUCTURE).name).toBe('Walls')
-    expect(undoLabel()).toBe('Rename Layer: Walls')
+    expect(undoLabel()).toBe('Rename layer: Walls')
     await undo()
     expect(layer(STRUCTURE).name).toBe('Structure')
   })
@@ -329,7 +329,7 @@ describe('the Layers list', () => {
     // The new layer is the front-most of the Project's layers — under the Unlayered row, which is
     // always the top of the drawing.
     await waitFor(() => expect(rowNames()).toEqual(['Unlayered', 'New layer', 'Structure', 'Furniture', 'Services']))
-    expect(undoLabel()).toBe('New Layer: New layer')
+    expect(undoLabel()).toBe('New layer: New layer')
     // The row is open and its name is focused and selected, so typing replaces the name (#71 §3).
     const layers = view.project().drawingLayers ?? []
     const added = layers[layers.length - 1]!

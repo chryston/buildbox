@@ -1928,7 +1928,7 @@ export function FloorWorkspace(): ReactNode {
                     <RenovationLayers
                       project={project}
                       view={view}
-                      // `+` is one transaction whose undo reads `New Layer: New layer`; the id comes
+                      // `+` is one transaction whose undo reads `New layer: New layer`; the id comes
                       // back so the row opens with its name focused (#71 §3).
                       onAddLayer={() => {
                         const intent = services.intent.build(
