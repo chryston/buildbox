@@ -17,7 +17,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, effectiveModel, FF_RENOVATION } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, FF_RENOVATION } from '../../derive'
 import type { DisplayModel, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings } from '../../drawing'
 import type { BadgeSubject, OpeningPreview, RoomProposal } from '../../drawing'
@@ -176,16 +176,48 @@ export function FloorWorkspace(): ReactNode {
     renovationOptionId === null || floorId === null || view === null
       ? null
       : statesOf(displayModel(effectiveModel(project, floorId, renovationOptionId), viewRenovationDisplay(view)))
+  /**
+   * The Project the canvas's geometry is derived from. `deriveWalls` and `deriveRooms` derive the
+   * standing set, but a Wall marked for demolition is still drawn — with the demolition overlay on it
+   * (#70 §The four Renovation Displays) — so with an Option open the geometry comes from the same
+   * Project with that Option's `demolishedIds` set aside. This decides only what *can* be drawn, and
+   * junctions and faces are then computed over the Walls that are actually on screen; the Display's
+   * own list above still decides what reaches the canvas.
+   */
+  const drawingProject = useMemo<Project>(() => {
+    if (renovationOptionId === null) return project
+    return {
+      ...project,
+      designOptions: designOptionsOf(project).map((option) =>
+        option.id === renovationOptionId ? { ...option, demolishedIds: [] } : option,
+      ),
+    }
+  }, [project, renovationOptionId])
   /** The Floor the canvas draws, from the session's one derive cache (#60 criterion 3). */
-  const derivedFloor = floorId === null ? null : session.deriveFloor(floorId, renovationOptionId)
+  const derivedFloor =
+    floorId === null
+      ? null
+      : renovationOptionId === null
+        ? session.deriveFloor(floorId, null)
+        : effectiveFloor(drawingProject, session.getSnapshot().revision, floorId, renovationOptionId)
   /** The tidied Walls, faces and corners the Wall tool snaps to, from the same cache (#64 §6). */
-  const floorWalls = floorId === null ? null : session.deriveWalls(floorId, renovationOptionId)
+  const floorWalls =
+    floorId === null
+      ? null
+      : renovationOptionId === null
+        ? session.deriveWalls(floorId, null)
+        : deriveWalls(drawingProject, floorId, renovationOptionId)
   /**
    * The Floor's Rooms: their areas, label anchors and Placed Item membership, from the same cache
    * (#67 §3). A view drawing a Design Option sees that Option's Rooms standing where its own walls
    * put them, which is what `optionId` is for (#69).
    */
-  const floorRooms = floorId === null ? null : session.deriveRooms(floorId, renovationOptionId)
+  const floorRooms =
+    floorId === null
+      ? null
+      : renovationOptionId === null
+        ? session.deriveRooms(floorId, null)
+        : deriveRooms(drawingProject, floorId, renovationOptionId)
   /**
    * The chain being drawn, or `null` (#64 §12). Local like the shape draft: a half-drawn chain is
    * not a proposal and must not survive a reload, a Floor change or the tool being put down.
