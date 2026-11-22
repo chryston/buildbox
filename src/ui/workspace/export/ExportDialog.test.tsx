@@ -55,6 +55,7 @@ const ITEM_SUMMARY: ListsSummary = {
   statement: 'Floor plan · All Floors · Existing only · Existing, Demolition, Proposed · all layers incl. Unlayered',
   rows: { items: 3, 'cut-list': 0, rooms: 0, walls: 0, openings: 0, 'placed-items': 0, warnings: 0 },
   cutListCapable: false,
+  hiddenInView: { count: 0, refs: [] },
 }
 
 function fakePort(options?: {

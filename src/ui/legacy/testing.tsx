@@ -112,6 +112,7 @@ export const TEST_EXPORT_PORT: ExportPort = {
     statement: '',
     rows: { items: 0, 'cut-list': 0, rooms: 0, walls: 0, openings: 0, 'placed-items': 0, warnings: 0 },
     cutListCapable: false,
+    hiddenInView: { count: 0, refs: [] },
   }),
   recallLists: async () => null,
   rememberLists: () => {},

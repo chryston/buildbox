@@ -106,13 +106,13 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
   const scopeKey = JSON.stringify(recipe.scope)
   useEffect(() => {
     let alive = true
-    void port.summariseLists(recipe.scope).then((next) => {
+    void port.summariseLists(recipe.scope, origin).then((next) => {
       if (alive) setSummary(next)
     })
     return () => {
       alive = false
     }
-  }, [port, scopeKey])
+  }, [port, scopeKey, origin])
 
   const patch = (next: Partial<ListsRecipe>): void => {
     setOutcome(null)

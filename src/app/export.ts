@@ -356,11 +356,15 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
       }
     },
 
-    async summariseLists(scope: QuantityScope) {
+    async summariseLists(scope: QuantityScope, origin: RecipeViewRef) {
       // `listsSummary` is the cheap half of `export` — the derivation, not the writers — and it is
-      // still loaded on demand so the first paint never waits for the module.
+      // still loaded on demand so the first paint never waits for the module. The originating view
+      // goes with the scope because the dialog's hidden-in-view count is that view's, not the
+      // Project's (#73 §2); an Item Detail View hides nothing, so it answers `null`.
       const { listsSummary } = await import('../export')
-      return listsSummary(snapshotOf(), scope)
+      const { project } = deps.session().getSnapshot()
+      const view = origin.kind === 'plan' ? project.views.find((each) => each.id === origin.viewId) ?? null : null
+      return listsSummary(snapshotOf(), scope, view)
     },
 
     async recallLists(key: string): Promise<ListsRecipe | null> {

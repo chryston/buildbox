@@ -84,12 +84,13 @@ export interface ExportPort {
   listsOptions(): ListsOptions
   /**
    * What a scope would export, as the controls move: the plain-words statement, the rows each
-   * table would hold, and whether a design with parts to cut is in scope at all.
+   * table would hold, whether a design with parts to cut is in scope at all, and how many of those
+   * rows the originating view hides (#73 §2).
    *
    * Asynchronous for the same reason `measure` is: the derivation lives in `export`, which is
    * loaded on demand so that a reader who never presses Export does not download it.
    */
-  summariseLists(scope: QuantityScope): Promise<ListsSummary>
+  summariseLists(scope: QuantityScope, origin: RecipeViewRef): Promise<ListsSummary>
   /** The last lists recipe used for this view on this device, if there is one. */
   recallLists(key: string): Promise<ListsRecipe | null>
   rememberLists(key: string, recipe: ListsRecipe): void
