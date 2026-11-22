@@ -122,10 +122,20 @@ describe('an Existing Model edit needs the correction (#70 criterion 19)', () =>
   })
 
   it('is the protection refusing, not the edit: wrapped in the correction the same Intent is no longer refused for the baseline', { timeout: 60_000 }, () => {
+    // The same Project with its Options taken away: the guard only fires while Options exist, so the
+    // inner Intent runs on its own merits here. An Intent that writes nothing when nothing stops it —
+    // a Door renamed to the label it already carries, a width set to the width it has — writes nothing
+    // wrapped either, and the correction is not the rule that was holding it.
+    const bare: Project = { ...project, designOptions: [] }
+    const writesNothing = (each: Intent): boolean => {
+      const own = applyIntent(bare, each)
+      return own.ok && canonicalJson(own.project.existingModel) === baseline
+    }
     fc.assert(
       fc.property(editIntent, (each) => {
         const refused = applyIntent(project, each)
         if (refused.ok || refused.code !== 'baseline-correction-required') return
+        if (writesNothing(each)) return
         const corrected = applyIntent(project, intent('renovation.correctExistingModel', { inner: each }))
         // The correction can still be refused on its own merits — an Option whose dependent update
         // cannot follow is `option-blocked` — but never by the rule it exists to answer.

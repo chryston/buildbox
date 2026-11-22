@@ -385,6 +385,11 @@ function asPlainModel(view: Project): Project {
   return {
     ...view,
     designOptions: [],
+    // The same reason, one level up: a saved view looks through an Option this synthetic Project
+    // deliberately does not carry, so a bound view would read as a dangling reference — a blocker
+    // this Option did not earn. The pass measures geometry, never which Option a view looks
+    // through, so the binding is dropped with the Options it points at (#70 §7b).
+    views: view.views.map((each) => (each.designOptionId === undefined ? each : { ...each, designOptionId: null })),
     existingModel: {
       ...model,
       walls: model.walls.map(stripped),
