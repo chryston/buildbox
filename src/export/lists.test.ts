@@ -317,7 +317,7 @@ describe('listsSummary', () => {
   test('names the scope and counts the rows each table would hold', () => {
     const summary = listsSummary({ project, revision: 3 }, scopeFor())
     expect(summary.statement).toBe(
-      'All Floors · Existing only · Existing, Demolition, Proposed · all layers incl. Unlayered',
+      'All Floors · Existing Model only · Existing, Demolition, Proposed · all layers incl. Unlayered',
     )
     expect(summary.rows.items).toBe(3)
     expect(summary.rows['cut-list']).toBeGreaterThan(0)

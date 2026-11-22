@@ -50,6 +50,24 @@ export type CutListRow = {
 /** A `CutListRow` before the scope's three columns are put on it. */
 export type CutListPart = Omit<CutListRow, keyof OptionColumns | 'renovationState'>
 
+/**
+ * One Cut List row's panels, still kept apart by the Drawing Layer the Placed Items stand on.
+ *
+ * The Cut List has no Layer column either: `quantities` merges the groups of one panel back
+ * together once the scope's Drawing Layers have filtered them (#73 criterion 7), for the same
+ * memoisation reason as the Item List's groups.
+ */
+export type CutListGroup = CutListRow & { readonly layerId: EntityId | null }
+
+/** The Cut List row a group of panels writes: every field but the Layer it was split by. */
+export function cutListRow(group: CutListGroup): CutListRow {
+  const {
+    designOptionId, designOption, renovationState, itemDesignId, itemDesign, part,
+    lengthMm, widthMm, thicknessMm, material, qtyPerItem, itemCount, qtyInScope, notes,
+  } = group
+  return { designOptionId, designOption, renovationState, itemDesignId, itemDesign, part, lengthMm, widthMm, thicknessMm, material, qtyPerItem, itemCount, qtyInScope, notes }
+}
+
 /** Whether an Item Design has a cut list at all. Today: a cabinet, and nothing else. */
 export function isCutListCapable(design: ItemDesign): design is CabinetItemDesign {
   return design.kind === 'cabinet'

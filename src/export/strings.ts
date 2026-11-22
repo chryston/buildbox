@@ -84,7 +84,7 @@ export const unitStatement = (unit: string): string =>
 export const SCALE_BAR_LABEL = '1 m'
 
 /**
- * The words the Lists dialog's scope summary is built from (#62 §7).
+ * The words the Lists dialog's scope summary is built from (#62 §7, #73 §3).
  *
  * The summary is a sentence, so it needs the connective tissue a table of labels has no use for.
  * `Existing only` is `DESIGN_OPTION`, the same words the title block uses for the same fact.
@@ -94,14 +94,18 @@ export const SCOPE = {
   join: ', ',
   allFloors: 'All Floors',
   existingOnly: DESIGN_OPTION,
+  /** `Existing Model only` — the option control's third arm, spelled out in the sentence (#73 §2). */
+  existingModelOnly: 'Existing Model only',
+  /** ` (compared)` — several Design Options, so every Existing row is repeated once per Option. */
+  compared: ' (compared)',
   states: {
     existing: 'Existing',
     demolition: 'Demolition',
     proposed: 'Proposed',
   } as Readonly<Record<RenovationState, string>>,
   allLayers: 'all layers incl. Unlayered',
-  selectedLayers: 'selected layers',
-  inclUnlayered: ' incl. Unlayered',
+  /** The name the Layers control gives content on no Drawing Layer, named in the sentence too. */
+  unlayered: 'Unlayered',
 } as const
 
 /**

@@ -322,7 +322,10 @@ export { EXPORT_FOOTER, NOT_TO_SCALE, scaleStatement, SCOPE } from './strings'
 // The whole table as one namespace, for the CI scan over shipped strings (#66 criterion 8),
 // which has to see every word the writers can put in a file rather than the four the dialog asks for.
 export * as EXPORT_WORDS from './strings'
-export { defaultCutListStates, describeScope } from './scope'
+export { defaultCutListStates, defaultListsScope, describeScope } from './scope'
+export { hiddenInView } from './hiddenInView'
+export type { HiddenInView } from './hiddenInView'
+export { needsActiveOption } from './blocking'
 export { exportLists, listsSummary, CSV_MEDIA_TYPE } from './lists'
 export type { ListsSummary } from './lists'
 export { LENGTH_DP, AREA_DP, ANGLE_DP, INTEGER_DP, formatNumber, neutralise, quote } from './csv/format'
