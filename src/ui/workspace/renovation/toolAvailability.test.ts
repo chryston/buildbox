@@ -1,0 +1,67 @@
+/**
+ * The contextual tool strip's table (#70 §3, criterion 4). The counts are the acceptance test: they
+ * are what the strip prints, and they come out of the rows rather than being written down twice.
+ */
+import { describe, expect, it } from 'vitest'
+import type { RenovationDisplay } from '../../../domain'
+import { RENOVATION_TOOL_ROWS, availableTools, displaysAllowing, hiddenToolCount, toolIsAvailable } from './toolAvailability'
+
+const displays: RenovationDisplay[] = ['existing', 'demolition', 'proposed', 'combined']
+
+describe('the tool table of #70 §3', () => {
+  it('hides the number of tools each Display says it hides', () => {
+    expect(hiddenToolCount('existing', true)).toBe(2)
+    expect(hiddenToolCount('demolition', true)).toBe(4)
+    expect(hiddenToolCount('proposed', true)).toBe(2)
+    expect(hiddenToolCount('combined', true)).toBe(0)
+    // §6: Demolition, Proposed or Combined with no Design Option — everything but looking is hidden.
+    expect(hiddenToolCount('demolition', false)).toBe(6)
+    expect(hiddenToolCount('proposed', false)).toBe(6)
+    expect(hiddenToolCount('combined', false)).toBe(6)
+    // The Existing Display never needs an Option: the shared baseline is always there to survey.
+    expect(hiddenToolCount('existing', false)).toBe(2)
+  })
+
+  it('shows Select in every column, and only Select in the error state', () => {
+    for (const display of displays) expect(toolIsAvailable('select', display, true)).toBe(true)
+    // §6: Demolition, Proposed or Combined with no Option — nothing can be owned, so nothing else
+    // is offered. The Existing Display is the exception: a Project with no Options at all is still
+    // drawn and edited on it, exactly as it was before any of this existed.
+    for (const display of ['demolition', 'proposed', 'combined'] as const)
+      expect(availableTools(display, false)).toEqual(['select'])
+    expect(availableTools('existing', false)).toEqual(['select', 'wall', 'opening', 'room', 'placeItem'])
+  })
+
+  it('puts the renovation tools in Demolition and Combined only', () => {
+    for (const tool of ['markDemolition', 'replace'] as const) {
+      expect(displaysAllowing(tool)).toEqual(['demolition', 'combined'])
+      expect(toolIsAvailable(tool, 'existing', true)).toBe(false)
+      expect(toolIsAvailable(tool, 'proposed', true)).toBe(false)
+      expect(toolIsAvailable(tool, 'combined', true)).toBe(true)
+      // The Display is right and the Option is missing: still hidden, because there is nothing to
+      // own the demolition record or the replacement.
+      expect(toolIsAvailable(tool, 'combined', false)).toBe(false)
+    }
+  })
+
+  it('keeps the shape tools for surveying and for new work, and off the Demolition Display', () => {
+    for (const tool of ['wall', 'opening', 'room', 'placeItem'] as const) {
+      expect(displaysAllowing(tool)).toEqual(['existing', 'proposed', 'combined'])
+      expect(toolIsAvailable(tool, 'demolition', true)).toBe(false)
+      expect(toolIsAvailable(tool, 'existing', true)).toBe(true)
+      expect(toolIsAvailable(tool, 'existing', false)).toBe(true)
+      expect(toolIsAvailable(tool, 'proposed', false)).toBe(false)
+    }
+  })
+
+  it('is one row per tool, each reachable somewhere — so #81 adds a row and nothing else', () => {
+    expect(RENOVATION_TOOL_ROWS).toHaveLength(7)
+    for (const row of RENOVATION_TOOL_ROWS) {
+      expect(row.allowedIn.length).toBeGreaterThan(0)
+      expect(displaysAllowing(row.id)).toEqual(row.allowedIn)
+    }
+    // Every tool the table names is available in at least one Display, or it is a dead row.
+    const reachable = new Set(displays.flatMap((display) => availableTools(display, true)))
+    expect([...reachable].sort()).toEqual(RENOVATION_TOOL_ROWS.map((row) => row.id).sort())
+  })
+})
