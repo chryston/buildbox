@@ -26,7 +26,6 @@ const fixturesRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../fix
 const renovationSeed = JSON.parse(
   readFileSync(join(fixturesRoot, 'e2e', 'preview-seed', 'renovation-views.json'), 'utf8'),
 ) as PreviewSeed
-const projectName = renovationSeed.library.find((record) => record.id === renovationSeed.projects[0]!.id)!.name
 
 /** A preview build never opens the database real work lives in (#53); the seed lands where it looks. */
 const PREVIEW_DB_NAME = 'buildbox-preview'
