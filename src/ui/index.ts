@@ -20,6 +20,10 @@ import './theme/tokens.css'
 import './library/library.css'
 
 export { STRINGS, WARNING_COPY, warningSentence } from './strings'
+// #69's copy is kept apart from the table because the surface it names is dark: a flag-off build
+// ships neither those dialogs nor a word of what they say. `app`'s banned-word scan reads this
+// table with the others, which is why it is exported rather than read off the filesystem.
+export { RENOVATION_STRINGS } from './strings/renovation'
 export type { ActiveViewState, Viewport, ViewportCache } from './workspace'
 export { ExportDialog, UNIT_LABEL, type ExportDialogProps } from './workspace/export/ExportDialog'
 export {

@@ -27,6 +27,12 @@ const FORBIDDEN = [
   // has shipped the renovation catalogue to production, which is the thing the flag exists to
   // prevent. A flagged build is allowed to carry it, so the check is skipped when the flag is on.
   ...(process.env['VITE_FF_RENOVATION'] === 'true' ? [] : ['__renovation_intents__']),
+  // The same rule for the words: the renovation dialogs and the `Design Options` settings section
+  // are dark, so a flag-off bundle that still carries their copy has shipped a surface nobody can
+  // open. Two sentences prove it — one the delete review says, one the move review asks.
+  ...(process.env['VITE_FF_RENOVATION'] === 'true'
+    ? []
+    : ['Nothing in the Existing Model changes.', 'Move to a Design Option']),
 ]
 // Only the files that could contain application code: an image or a font cannot.
 const SCANNED = new Set(['.js', '.mjs', '.css', '.html', '.json', '.svg', '.txt', '.map'])

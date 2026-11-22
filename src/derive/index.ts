@@ -71,6 +71,12 @@ export type {
 } from './effective'
 export { designOptionName, effectiveModel } from './effectiveModel'
 export type { EffectiveEntity, EffectiveModel } from './effectiveModel'
+/**
+ * The build-time feature flags (#69, architecture §11), re-exported because `ui` may not reach
+ * `lib` (#20 §2). A component asks this whether a dark surface exists at all, and the answer is a
+ * constant, so the branch it guards — and everything the branch names — leaves the bundle.
+ */
+export { FF_RENOVATION } from '../lib'
 export { DERIVE_CACHE_MAX_ENTRIES, createDeriveCache } from './cache'
 export type { DeriveCache } from './cache'
 export { isCutListCapable, cutListParts } from './quantities/cutList'
