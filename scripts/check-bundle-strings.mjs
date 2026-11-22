@@ -132,6 +132,21 @@ const FORBIDDEN = [
         // The notice `Copy` gives when the selection held a demolition record. The plural half of the
         // sentence is what survives minification — `count` is handed both forms as separate arguments.
         'demolished entities were',
+        // #72 §5: the footer command, the review's own questions and the two ways a paste can be
+        // refused in words. Each is a fragment long enough to be this feature's and nothing else's.
+        'Paste from other Project…',
+        'Copy something in another Project first.',
+        '” — map Drawing Layers',
+        '”. Choose where each layer',
+        'Unlayered entities stay',
+        'Will not come across:',
+        'Will be detached:',
+        'Existing display: pasted entities join the shared Existing Model',
+        'Correct Existing Model and paste',
+        'Paste with this mapping',
+        '— choose —',
+        'Use suggested “',
+        ' (name match)',
         ' from “',
       ]),
 ]

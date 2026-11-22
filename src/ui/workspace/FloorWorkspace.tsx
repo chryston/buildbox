@@ -104,12 +104,13 @@ import {
   openCorrectExistingDialog,
   openRestoreDialog,
   openDeleteLayerDialog,
+  openPasteDialog,
   baselineEditLocked,
   subjectOfIntent,
   successorOf,
 } from './renovation'
 import type { RenovationInspectorAction, RenovationInspectorLayer, RenovationInspectorLink, RenovationInspectorTarget, RenovationToolId, LayerSettingPatch } from './renovation'
-import { pasteClipboardStore } from './pasteClipboard'
+import { canPasteHere, pasteClipboardStore, usePasteClipboard } from './pasteClipboard'
 import { RENOVATION_STRINGS } from '../strings/renovation'
 import { FIELDS_UNLOCKED, FieldsLockedContext } from './fieldsLock'
 import type { FieldsLock } from './fieldsLock'
@@ -286,6 +287,10 @@ export function FloorWorkspace(): ReactNode {
   const togglePickState = useWorkspace((state) => state.togglePickState)
   const showHiddenToolNotice = useWorkspace((state) => state.showHiddenToolNotice)
   const clearHiddenToolNotice = useWorkspace((state) => state.clearHiddenToolNotice)
+  // #72 §12: the tab's clipboard answers whether `Paste from other Project…` can be offered here at
+  // all — something has to have been copied, and it has to have come from a different Project.
+  const clipboard = usePasteClipboard((state) => state)
+  const pasteHere = canPasteHere(clipboard, project.id)
   // §7c: the one Existing entity `Correct Existing Model…` has handed its handles and fields back.
   const correctionUnlocked = useWorkspace((state) => state.correctionUnlocked)
   const unlockCorrection = useWorkspace((state) => state.unlockCorrection)
@@ -2043,6 +2048,22 @@ export function FloorWorkspace(): ReactNode {
                         )
                       }}
                     />
+                  }
+                  paste={
+                    // The command is offered wherever a copy from another Project is waiting; the
+                    // tooltip says what to do instead when there is nothing to offer (#72 §12).
+                    <button
+                      type="button"
+                      data-testid="renovation-paste-button"
+                      className="bb-workspace-tool-button"
+                      disabled={!pasteHere}
+                      title={pasteHere ? undefined : RENOVATION_STRINGS.pasteNeedsCopy}
+                      onClick={() => {
+                        if (view !== null && floorId !== null) openPasteDialog(floorId, view.id)
+                      }}
+                    >
+                      {RENOVATION_STRINGS.pasteFromOtherProject}
+                    </button>
                   }
                   onExport={() => setIsExporting(true)}
                 />

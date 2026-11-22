@@ -196,6 +196,12 @@ export type RenovationDialog =
    * and the names are read from the preview, so the dialog cannot promise what the write will not do.
    */
   | { readonly kind: 'delete-layer'; readonly layerId: string; readonly viewId: string | null }
+  /**
+   * #72 §5: `Paste from other Project…`. The copy itself is the tab's clipboard, never this state —
+   * what is carried is the saved view the paste was asked in, which decides the container the work
+   * lands in and the undo target, exactly as it does for every other write.
+   */
+  | { readonly kind: 'paste'; readonly floorId: string; readonly viewId: string }
   | null
 
 export interface WorkspaceState {
@@ -355,6 +361,8 @@ export interface WorkspaceActions {
   unlockCorrection(entityId: string): void
   /** §7c: put the lock back — what Escape does, and what committing does through the dialog. */
   lockCorrection(): void
+  /** #72 §5: ask where the tab's copy should land, in the saved view the question was asked from. */
+  openPasteDialog(floorId: string, viewId: string): void
   /** Put the renovation dialog away. Nothing was written, which is the whole point of Cancel. */
   closeRenovationDialog(): void
   /** Turn one `Pick:` chip on or off (#70 §3); the list stays in the three States' own order. */
@@ -555,6 +563,7 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
   openRestoreDialog: (entityId, designOptionId) =>
     set({ renovationDialog: { kind: 'restore', entityId, designOptionId } }),
   openDeleteLayerDialog: (layerId, viewId) => set({ renovationDialog: { kind: 'delete-layer', layerId, viewId } }),
+  openPasteDialog: (floorId, viewId) => set({ renovationDialog: { kind: 'paste', floorId, viewId } }),
   unlockCorrection: (entityId) => set({ correctionUnlocked: entityId }),
   lockCorrection: () => set({ correctionUnlocked: null }),
   closeRenovationDialog: () => set({ renovationDialog: null }),
