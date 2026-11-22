@@ -211,6 +211,11 @@ export function followWallFaces(project: Project, draft: Project): void {
   const moved: Room[] = []
   for (const room of draft.existingModel.rooms) {
     if (room.wallFaceRefs.length === 0) continue
+    // A Room can only move when one of the Walls it rides on moved. Every reference still holding
+    // the same record means every check below would compare a face with itself (#69 §8).
+    let carried = false
+    for (const ref of room.wallFaceRefs) if (before.get(ref.wallId) !== after.get(ref.wallId)) carried = true
+    if (!carried) continue
     const base = requireRoom(project, room.id)
     for (const ref of room.wallFaceRefs) {
       const host = after.get(ref.wallId)

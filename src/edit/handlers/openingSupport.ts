@@ -101,20 +101,93 @@ export const requireFits = (project: Project, opening: Opening, start: number, w
   requireFit(project, host, opening, start, width)
 }
 
+/** The Walls one Junction names: its ends, and its host when it is a run-through. */
+const namedBy = (junction: { ends: readonly { wallId: string }[]; host?: { wallId: string } }): string[] =>
+  junction.ends.map((end) => end.wallId).concat(junction.host === undefined ? [] : [junction.host.wallId])
+
+/**
+ * The usable intervals of the Walls that matter and nothing else.
+ *
+ * A Wall's interval is set by the Junctions naming it and by the geometry of the Walls on the far
+ * side of each of those — that is the whole dependency, so the tidy pass can run over a
+ * neighbourhood instead of a Floor (#65 §7, #69 §8).
+ */
+const usableScoped = (project: Project, floorId: string, wanted: ReadonlySet<string>): Map<string, UsableInterval> => {
+  const junctions = project.existingModel.wallJunctions.filter(
+    (junction) => junction.floorId === floorId && namedBy(junction).some((wallId) => wanted.has(wallId)),
+  )
+  const touched = new Set<string>(wanted)
+  for (const junction of junctions) for (const wallId of namedBy(junction)) touched.add(wallId)
+  const walls: JoinWall[] = project.existingModel.walls
+    .filter((wall) => wall.floorId === floorId && touched.has(wall.id))
+    .map((wall) => ({ id: wall.id, line: wall.line, thickness: wall.thickness, justification: wall.justification }))
+  const shapes: JoinJunction[] = junctions.map((junction) => ({
+    id: junction.id,
+    ends: junction.ends,
+    ...(junction.host === undefined ? {} : { host: junction.host }),
+  }))
+  return usableIntervals(walls, shapes)
+}
+
+/**
+ * The Walls whose ends an edit could have moved: the ones it rewrote, and the ones a Junction it
+ * rewrote, added or removed runs into. Read by reference, because Immer leaves every record the edit
+ * did not touch the same object on both sides (#69 §8). A Junction that went away is expanded here
+ * rather than by the caller, because by then nothing in the Project names its Walls any more.
+ */
+export const movedHosts = (before: Project, after: Project): Set<string> => {
+  const ids = new Set<string>()
+  const wasWalls = new Set(before.existingModel.walls.map((wall) => wall.id))
+  const nowWalls = new Map(after.existingModel.walls.map((wall) => [wall.id, wall]))
+  for (const wall of before.existingModel.walls) if (nowWalls.get(wall.id) !== wall) ids.add(wall.id)
+  for (const wall of after.existingModel.walls) if (!wasWalls.has(wall.id)) ids.add(wall.id)
+  const wasJunctions = new Set(before.existingModel.wallJunctions.map((junction) => junction.id))
+  const nowJunctions = new Map(after.existingModel.wallJunctions.map((junction) => [junction.id, junction]))
+  for (const junction of before.existingModel.wallJunctions) {
+    if (nowJunctions.get(junction.id) === junction) continue
+    ids.add(junction.id)
+    for (const wallId of namedBy(junction)) ids.add(wallId)
+  }
+  for (const junction of after.existingModel.wallJunctions) {
+    if (wasJunctions.has(junction.id)) continue
+    ids.add(junction.id)
+    for (const wallId of namedBy(junction)) ids.add(wallId)
+  }
+  return ids
+}
+
+/** The Walls named by a set of moved records, whichever collection those records live in. */
+const affectedWalls = (project: Project, moved: ReadonlySet<string>): Set<string> => {
+  const walls = new Set<string>()
+  for (const wall of project.existingModel.walls) if (moved.has(wall.id)) walls.add(wall.id)
+  for (const junction of project.existingModel.wallJunctions) {
+    if (!moved.has(junction.id)) continue
+    for (const wallId of namedBy(junction)) walls.add(wallId)
+  }
+  return walls
+}
+
 /**
  * Every Opening of a Project still fits — the check a Wall edit passes on its way out
  * (#65 §7). A Wall that is being deleted is skipped: that case is a review, not a fit
  * failure, and the review has already run by the time this does.
+ *
+ * With `moved`, only the Openings whose host that edit could have shortened are re-checked, which is
+ * the same scoping rule the validator applies (#69 §8): an Opening on a Wall the Transaction never
+ * touched, and never joined to a Wall it did, cannot have stopped fitting.
  */
-export const requireOpeningsFit = (project: Project): void => {
+export const requireOpeningsFit = (project: Project, moved: ReadonlySet<string> | null = null): void => {
   if (project.existingModel.openings.length === 0) return
+  const walls = new Map(project.existingModel.walls.map((wall) => [wall.id, wall]))
+  const wanted = moved === null ? null : affectedWalls(project, moved)
   const cache = new Map<string, Map<string, UsableInterval>>()
   for (const opening of project.existingModel.openings) {
-    const host = hostOf(project, opening)
+    const host = walls.get(opening.hostWallId)
     if (host === undefined) continue
+    if (wanted !== null && !wanted.has(host.id)) continue
     let usable = cache.get(host.floorId)
     if (usable === undefined) {
-      usable = usableOfFloor(project, host.floorId)
+      usable = wanted === null ? usableOfFloor(project, host.floorId) : usableScoped(project, host.floorId, wanted)
       cache.set(host.floorId, usable)
     }
     const interval = usable.get(host.id)
@@ -127,6 +200,14 @@ export const requireOpeningsFit = (project: Project): void => {
       fitProblem(opening, host.ref, { reason: fit.reason, cause: fit.cause }, refOf(project)),
     )
   }
+}
+
+/**
+ * The fit check as an Intent handler's `after` step: the Openings whose host this Transaction
+ * moved, re-checked against the Project it finished with (#65 §7, #69 §8).
+ */
+export const openingsStillFit = (before: Project, after: Project): void => {
+  requireOpeningsFit(after, movedHosts(before, after))
 }
 
 /**

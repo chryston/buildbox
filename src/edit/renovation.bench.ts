@@ -20,13 +20,15 @@
  * four milliseconds the scoped pass cannot skip — claiming every ID in the Project, the Wall shape
  * map every Opening is measured against, and the Room outlines.
  *
- * `correctExistingModel` still costs 220 ms and the row fails. It is not one validation: it derives
- * each of the three Options' effective models, checks each one's Openings still fit its hosts, and
- * validates each merged view, so it pays a scoped pass three times (60 ms) plus the merge and the
- * fit checks (10 ms) — and the remaining 150 ms is the correction's own machinery, replaying the
- * baseline edit's patches onto every Option's successors and comparing the result. Meeting 30 ms
- * there means validating each Option's delta rather than its merged whole, which is a change to
- * §12's blocker machinery, not to the validator, and is not done here. The budgets are not moved.
+ * `correctExistingModel` still costs 95 ms and the row fails; it was 1 005 ms reading the whole
+ * document (#69 §12) and 209 ms after the first scoping. What is left is structural: an ordinary
+ * edit on this Project costs 27 ms — one Immer transaction, the acknowledgement prune, and the
+ * scoped validation — and a correction is two transactions, because the edit is applied on its own
+ * first to learn it as patches before the commit replays those patches onto every Option that stands
+ * on the record. The per-Option validation and the fit sweep that follow now read only the records
+ * the correction moved and the records that name them. Meeting 30 ms there means dropping the second
+ * transaction — recording the handler's writes and applying them to each successor directly — which
+ * is a change to the handler contract, not to this row. The budgets are not moved.
  * `effectiveFloor` is nowhere near its ceiling at 1.5 ms.
  */
 import { bench, describe } from 'vitest'

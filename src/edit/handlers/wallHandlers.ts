@@ -28,12 +28,12 @@ import {
   refTangentDeg,
 } from '../../geometry'
 import { chainJunctionCount, wallEndKey } from '../intents'
-import type { CreateWallChain, DependencyReview, IntentTarget, Locator, MergeWalls, WallEndTarget, WallIntent } from '../intents'
+import type { CreateWallChain, DependencyReview, Intent, IntentTarget, Locator, MergeWalls, WallEndTarget, WallIntent } from '../intents'
 import { FF_RENOVATION } from '../../lib'
 import type { Handler, IntentHandler } from './context'
 import { containerOf, effectiveView, isInOption, proposedProvenance, refuse, spendIds } from './support'
 import { faceRefsOn, followWallFaces, refuseReferencedWall } from './roomSupport'
-import { requireOpeningsFit } from './openingSupport'
+import { openingsStillFit, requireOpeningsFit } from './openingSupport'
 
 const wallPath = (wallId: EntityId): string => `existingModel.walls[${wallId}]`
 const junctionPath = (junctionId: EntityId): string => `existingModel.wallJunctions[${junctionId}]`
@@ -779,21 +779,26 @@ type WallHandlers = { [T in WallIntent['type']]: IntentHandler<T> }
 const withOpeningsChecked = <T extends WallIntent['type']>(run: Handler<T>): Handler<T> => (ctx) => {
   run(ctx)
   followWallFaces(ctx.project, ctx.draft)
-  requireOpeningsFit(ctx.draft)
 }
+
+/** Every Wall edit that can move a host's ends, with the fit check owed on the finished Project. */
+const wallHandler = <T extends WallIntent['type']>(
+  run: Handler<T>,
+  locate: (project: Project, intent: Intent<T>) => Locator,
+): IntentHandler<T> => ({ run: withOpeningsChecked(run), locate, after: openingsStillFit })
 
 export const WALL_HANDLERS: WallHandlers = {
   'wall.createChain': { run: createChain, locate: (_project, intent) => planLocator(intent.payload.floorId) },
-  'wall.dragJunction': { run: withOpeningsChecked(dragJunction), locate: (project, intent) => planLocator(junctionFloor(project, intent.payload.junctionId)) },
-  'wall.dragEndpoint': { run: withOpeningsChecked(dragEndpoint), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.dragBody': { run: withOpeningsChecked(dragBody), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.setLength': { run: withOpeningsChecked(setLength), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.setDirection': { run: withOpeningsChecked(setDirection), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.setArc': { run: withOpeningsChecked(setArc), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.setThickness': { run: withOpeningsChecked(setThickness), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.offset': { run: withOpeningsChecked(offsetWall), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.split': { run: withOpeningsChecked(splitWall), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.merge': { run: withOpeningsChecked(mergeWalls), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallIds[0])) },
+  'wall.dragJunction': wallHandler(dragJunction, (project, intent) => planLocator(junctionFloor(project, intent.payload.junctionId))),
+  'wall.dragEndpoint': wallHandler(dragEndpoint, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
+  'wall.dragBody': wallHandler(dragBody, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
+  'wall.setLength': wallHandler(setLength, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
+  'wall.setDirection': wallHandler(setDirection, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
+  'wall.setArc': wallHandler(setArc, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
+  'wall.setThickness': wallHandler(setThickness, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
+  'wall.offset': wallHandler(offsetWall, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
+  'wall.split': wallHandler(splitWall, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
+  'wall.merge': wallHandler(mergeWalls, (project, intent) => planLocator(wallFloor(project, intent.payload.wallIds[0]))),
   'wall.delete': {
     run: deleteWall,
     locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)),

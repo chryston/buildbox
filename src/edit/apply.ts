@@ -75,6 +75,15 @@ export function applyIntent(project: Project, intent: Intent): Applied | Rejecti
     throw error
   }
 
+  // What the finished Project owes the rules a handler could not check from inside the draft
+  // (#65 §7): the plain result, not a proxy, so a sweep of the Floor costs what it reads.
+  try {
+    handler.after?.(project, next)
+  } catch (error) {
+    if (error instanceof IntentRejection) return { ok: false, code: error.code, problems: error.problems }
+    throw error
+  }
+
   // Once a Project carries a Design Option, the Existing Model is the baseline every alternative is
   // drawn against, so changing it is a command of its own: `renovation.correctExistingModel`, which
   // previews the edit against every Option and commits it or nothing (#69 §12). The question is

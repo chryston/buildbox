@@ -46,7 +46,7 @@ import type {
   RenovationIntentType,
 } from '../intents'
 import type { Handler, IntentHandler } from './context'
-import { requireOpeningsFit } from './openingSupport'
+import { openingsStillFit, requireOpeningsFit } from './openingSupport'
 import { effectiveView, IntentRejection, refuse, requireHandler } from './support'
 import { scopeAround } from '../validationScope'
 
@@ -270,29 +270,37 @@ function runCorrection(project: Project, draft: Project, inner: Intent, ids: str
   const aligned = alignedSuccessors(project, subjects)
   const replay = new Map<EntityId, Patch[]>()
   // Walking the patches one at a time is what makes the indices mean the same thing they meant to
-  // the handler: `probe` is the Project as it stood the moment each patch was written.
-  let probe: Project = project
+  // the handler. The running state they are read against is a shallow copy of each collection the
+  // patches touch — the entity at an index is all that is ever asked of it, and copying the whole
+  // Project once per patch made a correction cost a second per patch (#69 §12).
+  const live = new Map<Collection, { id: EntityId }[]>()
   for (const patch of patches) {
     const [root, key, index] = patch.path
     if (root === 'existingModel' && isCollection(key) && typeof index === 'number') {
-      const entity = collectionOf(probe.existingModel, key)[index]
+      let list = live.get(key)
+      if (list === undefined) {
+        list = collectionOf(project.existingModel, key).slice()
+        live.set(key, list)
+      }
+      const entity = list[index]
       const targets = entity === undefined ? undefined : aligned.get(entity.id)
       if (targets !== undefined) {
         for (const target of targets) {
-          const list = replay.get(target.optionId) ?? []
-          list.push({ ...patch, path: ['designOptions', target.optionIndex, 'proposed', target.collection, target.index, ...patch.path.slice(3) ] })
-          replay.set(target.optionId, list)
+          const pending = replay.get(target.optionId) ?? []
+          pending.push({ ...patch, path: ['designOptions', target.optionIndex, 'proposed', target.collection, target.index, ...patch.path.slice(3) ] })
+          replay.set(target.optionId, pending)
         }
       }
+      if (patch.op === 'remove') list.splice(index, 1)
+      else if (patch.op === 'add') list.splice(index, 0, patch.value as { id: EntityId })
     }
-    probe = applyPatches(probe, [patch])
   }
   for (const patchesOfOption of replay.values()) applyPatches(draft, patchesOfOption)
 
   designOptionsOf(draft).forEach((_option, index) => {
     const before = designOptionsOf(project)[index]!
     // Whatever this Option stands on has to still hold, whether or not it had work to move.
-    const problem = optionProblem(project, draft, before, subjects.map((entry) => entry.id))
+    const problem = optionProblem(project, draft, before, subjects)
     if (problem !== null) report(problem)
   })
   return subjects
@@ -304,7 +312,8 @@ function runCorrection(project: Project, draft: Project, inner: Intent, ids: str
  * edge a corrected Wall cannot carry (#69 §12's blockers). The Option is measured as its own
  * effective Project, which is the only way to see baseline work and proposed work in one place.
  */
-function optionProblem(base: Project, draft: Project, before: DesignOption, changed: readonly EntityId[]): Block | null {
+function optionProblem(base: Project, draft: Project, before: DesignOption, subjects: readonly Subject[]): Block | null {
+  const changed = subjects.map((entry) => entry.id)
   const view = effectiveView(draft, null, before.id)
   const block = (path: string, message: string): Block => ({ optionId: before.id, code: 'option-blocked', path, message })
   const standing = new Set(view.existingModel.walls.map((entry) => entry.id))
@@ -318,18 +327,37 @@ function optionProblem(base: Project, draft: Project, before: DesignOption, chan
     if (gone !== undefined) return block('designOptions', `${before.name} has a join on ${labelOf(base, gone)}, which this correction takes down.`)
   }
   try {
-    requireOpeningsFit(view)
+    requireOpeningsFit(view, new Set(changed))
   } catch (error) {
     if (!(error instanceof IntentRejection)) throw error
     return optionBlock(before, error)
   }
   // The same scoping rule as `applyIntent`, applied to a Project this Transaction built: the
-  // correction changed these baseline records, this Option holds its own work, and everything that
-  // names either has to still hold. Re-reading the whole merged model per Option is what made a
-  // correction cost a second (#69 §8, §12).
-  const own = COLLECTIONS.flatMap((key) => collectionOf(before.proposed, key).map((entity) => entity.id))
-  const scope = scopeAround(view, [...changed, ...own])
-  const checked = validateProject(asPlainModel(view, scope), scope)
+  // correction changed these baseline records, and this Option's own work only matters where it was
+  // copied from or attached to one of them. Everything else in the Option was standing before this
+  // Transaction and was not written by it (#69 §8, §12).
+  const moved = new Set(changed)
+  const own = COLLECTIONS.flatMap((key) =>
+    collectionOf(before.proposed, key)
+      .filter((entity) => (entity.predecessorIds ?? []).some((id) => moved.has(id)))
+      .map((entity) => entity.id),
+  )
+  const scope = scopeAround(view, changed)
+  // An Option this correction neither copied work into nor touched with a record of its own cannot
+  // have been moved by it — unless the correction moved geometry at all, because a Room the baseline
+  // slid is checked against this Option's Rooms by a rule no scope narrows. Every rule that could
+  // newly fail on a still record — a Door that no longer fits, an Edge that lost its face, a Join
+  // whose Wall went away — reads a proposed record that names, or was copied from, something the
+  // correction wrote. The checks above read every proposed record regardless, because "standing on a
+  // Wall that came down" is not a reference the scope finds.
+  const geometry = subjects.some((entry) => entry.collection !== 'openings' && entry.collection !== 'placedItems')
+  const touched =
+    geometry ||
+    own.length > 0 ||
+    COLLECTIONS.some((key) => collectionOf(before.proposed, key).some((entity) => scope.entities.has(entity.id)))
+  if (!touched) return null
+  const entities = new Set([...scope.entities, ...own])
+  const checked = validateProject(asPlainModel(view, { entities }), { entities })
   if (checked.ok) return null
   return block(checked.problems[0]!.path, `${before.name}: ${checked.problems[0]!.message}`)
 }
@@ -486,9 +514,12 @@ function correctionReview(project: Project, inner: Intent, ids: string[]): Corre
   const blocks: Block[] = []
   const seen: { subjects: Subject[] } = { subjects: [] }
   try {
-    produceWithPatches(project, (draft) => {
+    const [produced] = produceWithPatches(project, (draft) => {
       seen.subjects = runCorrection(project, draft as unknown as Project, inner, ids, (block) => blocks.push(block))
+      return draft
     })
+    // The same check the commit will run, so a preview never promises a correction the commit refuses.
+    openingsStillFit(project, produced)
   } catch (error) {
     if (!(error instanceof IntentRejection)) throw error
     // The baseline edit is impossible on its own; `previewIntent` answers with that rejection, and
@@ -610,6 +641,9 @@ export const CORRECTION_HANDLERS: { [T in CorrectionIntentType]: IntentHandler<T
       if (inner.type === 'renovation.moveToDesignOption') return moveReview(project, inner.payload as MoveToDesignOption)
       return correctionReview(project, inner, intent.ids)
     },
+    // The corrected Wall and every successor the replay moved: the Openings standing on them are
+    // re-checked against the Project this Transaction finished with (#65 §7).
+    after: openingsStillFit,
   },
   'renovation.moveToDesignOption': {
     // Only ever the inner Intent of a correction: on its own it would move baseline data with
