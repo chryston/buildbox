@@ -113,6 +113,10 @@ let elm = apply(base, 'project.rename', { name: '14 Elm St' })
 elm = apply(elm, 'layer.delete', { layerId: SERVICES, viewId: null })
 elm = apply(elm, 'view.rename', { viewId: OPTION_A_VIEW, name: 'Option A · Combined' })
 elm = apply(elm, 'view.setRenovationDisplay', { viewId: OPTION_A_VIEW, renovationDisplay: 'combined' })
+// The view a paste is driven in has to draw the layer the copy lands on. This view inherited
+// `Furniture` hidden from the layers scene, and a paste onto a layer it refuses to draw would leave
+// the browser tier hunting for a record that is really in the Project.
+elm = apply(elm, 'view.setLayerSetting', { viewId: OPTION_A_VIEW, layerKey: FURNITURE, setting: { visible: null } })
 
 // The storage identity, not domain content: see the header.
 fitout = { ...fitout, id: FITOUT_ID as EntityId }

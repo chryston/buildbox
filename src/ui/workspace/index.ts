@@ -24,6 +24,7 @@ export type {
   WorkspaceServices,
 } from './WorkspaceRoot'
 export { FloorWorkspace } from './FloorWorkspace'
+export { pasteClipboardStore } from './pasteClipboard'
 export { CabinetCanvas } from './cabinet/CabinetCanvas'
 export type { CabinetCanvasProps } from './cabinet/CabinetCanvas'
 export type { CabinetDetail } from './cabinet/layout'
