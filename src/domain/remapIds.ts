@@ -21,7 +21,8 @@
  * order followed — for a cabinet — by its tree in pre-order (a space, then its dividers,
  * then its accessories, then its left subtree, then its right), then the Placed Items in
  * array order, then the Walls in array order, then the Wall Junctions in array order
- * (#64). Slot 0 belongs to the Project and is filled by `newId`, which the caller
+ * (#64), then the Openings, then the Rooms (#67), then the warning acknowledgements. Slot 0
+ * belongs to the Project and is filled by `newId`, which the caller
  * minted; every later slot takes the allocator's ID at the same index. A test that finds
  * one ID it cannot explain can name the position it went wrong at, and remapping the same
  * Project twice gives the same copy rather than one shaped by enumeration order.
@@ -32,13 +33,13 @@
  * corrupt the copy rather than rename it.
  */
 import type { CabinetNode } from './cabinetPayload'
-import type { EntityId, ItemDesign, Project } from './project'
+import type { EntityId, ItemDesign, Project, ProposedModel } from './project'
 
 /** Fresh IDs, `count` at a time (#42 §3: domain never mints one). */
 export type IdAllocator = (count: number) => EntityId[]
 
 /** An entity's old ID in, its replacement out — the one lookup every rebuild shares. */
-type Replace = (id: EntityId) => EntityId
+export type IdReplacement = (id: EntityId) => EntityId
 
 /**
  * A copy of `project` in which every entity ID is new: the Project's own identity is
@@ -63,7 +64,7 @@ export function remapIds(project: Project, newId: EntityId, allocate: IdAllocato
     if (!map.has(id)) map.set(id, fresh[index])
   })
   // An ID the walk did not collect is a walk that no longer matches the schema.
-  const next: Replace = (id) => {
+  const next: IdReplacement = (id) => {
     const mapped = map.get(id)
     if (mapped === undefined) {
       throw new Error(`remapIds found no replacement for ${id}: the walk missed a field.`)
@@ -77,32 +78,7 @@ export function remapIds(project: Project, newId: EntityId, allocate: IdAllocato
     floors: project.floors.map((floor) => ({ ...floor, id: next(floor.id) })),
     views: project.views.map((view) => ({ ...view, id: next(view.id), floorId: next(view.floorId) })),
     itemDesigns: project.itemDesigns.map((design) => remapDesign(design, next)),
-    existingModel: {
-      ...project.existingModel,
-      placedItems: project.existingModel.placedItems.map((item) => ({
-        ...item,
-        id: next(item.id),
-        itemDesignId: next(item.itemDesignId),
-        floorId: next(item.floorId),
-      })),
-      // A Wall and its Junctions are entities too (#64): each carries its own ID, stands on
-      // a Floor, and a Junction names the Walls it joins.
-      walls: project.existingModel.walls.map((wall) => ({ ...wall, id: next(wall.id), floorId: next(wall.floorId) })),
-      wallJunctions: project.existingModel.wallJunctions.map((junction) => ({
-        ...junction,
-        id: next(junction.id),
-        floorId: next(junction.floorId),
-        ends: junction.ends.map((end) => ({ ...end, wallId: next(end.wallId) })),
-        ...(junction.host === undefined ? {} : { host: { ...junction.host, wallId: next(junction.host.wallId) } }),
-      })),
-      // An Opening keeps its host: the copy's Wall it is cut into is the copy's own (#65).
-      openings: project.existingModel.openings.map((opening) => ({
-        ...opening,
-        id: next(opening.id),
-        floorId: next(opening.floorId),
-        hostWallId: next(opening.hostWallId),
-      })),
-    },
+    existingModel: { ...project.existingModel, ...remapEntities(project.existingModel, next) },
     // An acknowledgement names its subjects by ID (#66), so a copy that did not rewrite them
     // would come back with a note about a Wall that belongs to the Project it was copied from.
     // `designOptionId` is `null` in every Project written today, and stays whatever it was.
@@ -110,6 +86,54 @@ export function remapIds(project: Project, newId: EntityId, allocate: IdAllocato
       ...acknowledgement,
       id: next(acknowledgement.id),
       subjectIds: acknowledgement.subjectIds.map(next),
+    })),
+  }
+}
+
+/**
+ * The same five collections with every ID and every reference inside them replaced through `next`.
+ *
+ * The one place that knows which field of a plan record is an ID. `remapIds` pays for a whole
+ * Project with it; a paste that brings a handful of records across from another Project (#72)
+ * brings their references with them and nothing else, so it brings its own map. Both walk this
+ * function, so the field list cannot drift from the schema in one of the two.
+ *
+ * `predecessorIds` is provenance, not a reference that has to resolve: it names records of the
+ * Project the work was copied *from*, which is a different Project by the time this is called, so
+ * the caller decides what happens to it — `remapIds` leaves it alone, a paste drops it.
+ */
+export function remapEntities(model: ProposedModel, next: IdReplacement): ProposedModel {
+  return {
+    placedItems: model.placedItems.map((item) => ({
+      ...item,
+      id: next(item.id),
+      itemDesignId: next(item.itemDesignId),
+      floorId: next(item.floorId),
+    })),
+    // A Wall and its Junctions are entities too (#64): each carries its own ID, stands on
+    // a Floor, and a Junction names the Walls it joins.
+    walls: model.walls.map((wall) => ({ ...wall, id: next(wall.id), floorId: next(wall.floorId) })),
+    wallJunctions: model.wallJunctions.map((junction) => ({
+      ...junction,
+      id: next(junction.id),
+      floorId: next(junction.floorId),
+      ends: junction.ends.map((end) => ({ ...end, wallId: next(end.wallId) })),
+      ...(junction.host === undefined ? {} : { host: { ...junction.host, wallId: next(junction.host.wallId) } }),
+    })),
+    // An Opening keeps its host: the copy's Wall it is cut into is the copy's own (#65).
+    openings: model.openings.map((opening) => ({
+      ...opening,
+      id: next(opening.id),
+      floorId: next(opening.floorId),
+      hostWallId: next(opening.hostWallId),
+    })),
+    // A Room owns its outline (#67): the Edge IDs are its own, and each face reference names the
+    // Wall that edge is attached to.
+    rooms: model.rooms.map((room) => ({
+      ...room,
+      id: next(room.id),
+      floorId: next(room.floorId),
+      wallFaceRefs: room.wallFaceRefs.map((reference) => ({ ...reference, wallId: next(reference.wallId) })),
     })),
   }
 }
@@ -127,6 +151,7 @@ function entityIds(project: Project): EntityId[] {
   for (const wall of project.existingModel.walls) ids.push(wall.id)
   for (const junction of project.existingModel.wallJunctions) ids.push(junction.id)
   for (const opening of project.existingModel.openings) ids.push(opening.id)
+  for (const room of project.existingModel.rooms) ids.push(room.id)
   for (const acknowledgement of project.warningAcknowledgements) ids.push(acknowledgement.id)
   return ids
 }
@@ -147,7 +172,7 @@ function collectSpace(node: CabinetNode, ids: EntityId[]): void {
  * trees are at most `MAX_TREE_DEPTH` deep (#42 §4) and the recursion is bounded; the
  * untrusted-bytes walk with its explicit stack is `validateProject`'s job.
  */
-function remapSpace(node: CabinetNode, next: Replace): CabinetNode {
+function remapSpace(node: CabinetNode, next: IdReplacement): CabinetNode {
   const copy: CabinetNode = { ...node, id: next(node.id) }
   if (node.dividers !== undefined) {
     copy.dividers = node.dividers.map((divider) => ({ ...divider, id: next(divider.id) }))
@@ -162,7 +187,7 @@ function remapSpace(node: CabinetNode, next: Replace): CabinetNode {
 }
 
 /** A cabinet rebuilds its tree; a generic design only had its own ID to lose. */
-function remapDesign(design: ItemDesign, next: Replace): ItemDesign {
+function remapDesign(design: ItemDesign, next: IdReplacement): ItemDesign {
   if (design.kind !== 'cabinet') return { ...design, id: next(design.id) }
   return {
     ...design,

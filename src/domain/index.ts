@@ -200,7 +200,7 @@ export type {
   DrawingLayer,
   LayerSetting,
 } from './project'
-export { remapIds, type IdAllocator } from './remapIds'
+export { remapEntities, remapIds, type IdAllocator, type IdReplacement } from './remapIds'
 export { ACKNOWLEDGEMENT_NOTE_MAX_LENGTH, warningKey } from './warnings'
 export {
   MAX_OUTLINE_RECTS,
