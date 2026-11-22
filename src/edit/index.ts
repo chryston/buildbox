@@ -12,7 +12,7 @@
  * It is dark until #48 puts history in front of it and #49 builds Intents from UI events.
  */
 export { applyIntent, applyPatches, previewIntent } from './apply'
-export { createProject, type CreateProjectArgs } from './create'
+export { CREATE_PROJECT_ID_COUNT, createProject, type CreateProjectArgs } from './create'
 export { DEFAULT_WALL_THICKNESS_MM, LEGACY_DEFAULT_SETTINGS, newWallDefaults } from './defaults'
 export {
   type AddAccessory,

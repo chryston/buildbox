@@ -176,7 +176,27 @@ export type {
   WallJunctionEnd,
   WallRefLine,
 } from './project'
-export { RENOVATION_DISPLAYS, designOptionsOf, viewDesignOptionId, viewRenovationDisplay } from './project'
+export {
+  DEFAULT_DRAWING_LAYERS,
+  DEFAULT_LAYER_SETTING,
+  NEW_LAYER_COLOR,
+  RENOVATION_DISPLAYS,
+  UNLAYERED_LAYER_KEY,
+  designOptionsOf,
+  drawingLayerById,
+  drawingLayersOf,
+  entityLayerId,
+  viewActiveLayerId,
+  viewDesignOptionId,
+  viewLayerOrder,
+  viewLayerSettingOverride,
+  viewRenovationDisplay,
+  viewSnapToHidden,
+} from './project'
+export type {
+  DrawingLayer,
+  LayerSetting,
+} from './project'
 export { remapIds, type IdAllocator } from './remapIds'
 export { ACKNOWLEDGEMENT_NOTE_MAX_LENGTH, warningKey } from './warnings'
 export {

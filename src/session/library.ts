@@ -16,7 +16,7 @@
  *   the Library only asks the registry whether it is blocked.
  */
 import { remapIds } from '../domain'
-import { createProject as buildProject } from '../edit'
+import { CREATE_PROJECT_ID_COUNT, createProject as buildProject } from '../edit'
 import type { LibraryRecord, PersistenceError, Ports, Result } from '../persistence'
 import { copyNameFor } from './restore'
 import type { ClockPort, IdSource } from './ports'
@@ -123,7 +123,7 @@ export function createLibraryStore(deps: LibraryDeps): LibraryStore {
     refresh,
 
     async createProject(name: string): Promise<Result<string, PersistenceError>> {
-      const project = buildProject({ ids: ids(6), now: clock.now(), name })
+      const project = buildProject({ ids: ids(CREATE_PROJECT_ID_COUNT), now: clock.now(), name })
       const committed = await ports.projects.commit(
         { project, revision: NEW_PROJECT_REVISION, savedAt: clock.now() },
         null,

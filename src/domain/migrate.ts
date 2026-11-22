@@ -13,6 +13,7 @@
 import { FF_RENOVATION, type ValidationProblem } from '../lib'
 import type { IdAllocator } from './remapIds'
 import type { Floor, PlanView, Project } from './project'
+import { DEFAULT_DRAWING_LAYERS } from './project'
 import { validateProject } from './validate'
 
 /**
@@ -235,7 +236,7 @@ export function migrateV6toV7(data: unknown): unknown {
 }
 
 /**
- * v7 → v8 (#69, #70): Design Options, and the two saved-view settings that look through one.
+ * v7 → v8 (#69, #70, #71): Design Options, and the saved-view settings that look through one.
  *
  * `designOptions: []` is the only change to the containers, and an older file simply has none —
  * which is also how a migrated Project behaves: no Options means the Existing Model is the whole
@@ -243,16 +244,25 @@ export function migrateV6toV7(data: unknown): unknown {
  * looks at that model (#70 §1): `designOptionId: null` and `renovationDisplay: 'existing'`, which
  * is the way every view already looked — the Existing Model, and nothing of anyone's Option.
  *
- * Nothing else moves, no ID is spent and no clock is read, because both additions are new
- * containers and new fields rather than a change to one, and every Existing entity keeps the
- * fields it had.
+ * #71 adds the Drawing Layers to the same step, because the flag has not come off yet and one
+ * preview version is allowed to carry two model changes; #73 splits the golden evidence. A Project
+ * that arrives without a `drawingLayers` array gains the three defaults — `Structure`, `Services`,
+ * `Furniture` — and every Wall, Opening and Room in the Existing Model and in every Design Option is
+ * filed on `Structure`, every Placed Item on `Furniture`, which is the grouping the user would get
+ * by hand. Each saved view says it overrides nothing, follows the Project order, has no Active Layer
+ * beyond `Structure` and does not snap to hidden content. This is the one part of the step that
+ * spends IDs — three of them, from the allocator the chain was handed (#42 §3).
+ *
+ * A Project that already carries the array keeps it exactly as it is, empty included: an empty array
+ * is a Project whose content is all Unlayered, and re-adding the three defaults would invent layers
+ * somebody deleted. Nothing else moves and no clock is read.
  *
  * Registered only in a `VITE_FF_RENOVATION` build (#69 §1, architecture §11). The production schema
  * version stays 7, so a Project written by a preview build is refused by production as
  * `newer-schema` rather than opened without its Options — and `#73` turns the flag on, makes this
  * the eighth golden step, and deletes the gate.
  */
-export function migrateV7toV8(data: unknown): unknown {
+export function migrateV7toV8(data: unknown, allocateId: IdAllocator): unknown {
   if (data === null || typeof data !== 'object' || Array.isArray(data)) return data
   const record = data as Record<string, unknown>
   const views: readonly unknown[] | null = Array.isArray(record.views) ? record.views : null
@@ -263,14 +273,117 @@ export function migrateV7toV8(data: unknown): unknown {
     typeof view === 'object' &&
     !Array.isArray(view) &&
     ((view as Record<string, unknown>).designOptionId === undefined ||
-      (view as Record<string, unknown>).renovationDisplay === undefined)
+      (view as Record<string, unknown>).renovationDisplay === undefined ||
+      (view as Record<string, unknown>).layerSettings === undefined ||
+      (view as Record<string, unknown>).layerOrder === undefined ||
+      (view as Record<string, unknown>).activeLayerId === undefined ||
+      (view as Record<string, unknown>).snapToHiddenContent === undefined)
   const hasOptions = Array.isArray(record.designOptions)
-  if (hasOptions && (views === null || !views.some(needsView))) return data
+  // The layers (#71 §1): a Project that already carries the array has them, whatever is in it — an
+  // empty array is a Project whose content is all Unlayered, and re-adding the three defaults to it
+  // would invent layers the user deleted.
+  const needsLayers = FF_RENOVATION && !Array.isArray(record.drawingLayers)
+  if (hasOptions && !needsLayers && (views === null || !views.some(needsView))) return data
   const next: Record<string, unknown> = { ...record }
   if (!hasOptions) next.designOptions = []
-  if (views !== null)
-    next.views = views.map((view) => (needsView(view) ? { ...view, designOptionId: null, renovationDisplay: 'existing' } : view))
+  // The three layers come first, because the view defaults below name one of them and every entity
+  // in the model is filed on one of them.
+  const layers = needsLayers ? newDrawingLayers(allocateId) : null
+  if (layers !== null) next.drawingLayers = layers
+  if (views !== null) next.views = views.map((view) => (needsView(view) ? completedView(view, layers ?? asLayers(record.drawingLayers)) : view))
+  if (layers !== null) fileExistingContent(next, layers)
   return next
+}
+
+/** A `drawingLayers` value read as records, ignoring anything the shape does not describe. */
+function asLayers(value: unknown): { id: string; name: string }[] {
+  if (!Array.isArray(value)) return []
+  const layers: { id: string; name: string }[] = []
+  for (const entry of value) {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) continue
+    const id = (entry as Record<string, unknown>).id
+    const name = (entry as Record<string, unknown>).name
+    if (typeof id === 'string' && typeof name === 'string') layers.push({ id, name })
+  }
+  return layers
+}
+
+/**
+ * The three default layers, in the Project layer order — back to front, so `Structure` sits behind
+ * `Services` and `Furniture` (#71 §1).
+ *
+ * The IDs are the caller's to give: a migrator never invents one (#42 §3), which is why this step
+ * takes the allocator the chain was started with and spends exactly three.
+ */
+function newDrawingLayers(allocateId: IdAllocator): { id: string; name: string; color: string }[] {
+  const ids = allocateId(DEFAULT_DRAWING_LAYERS.length)
+  return DEFAULT_DRAWING_LAYERS.map((layer, index) => ({ id: ids[index]!, name: layer.name, color: layer.color }))
+}
+
+/**
+ * One saved view with the four settings it was written without, each of which says what the view
+ * already did: no overrides of its own, the Project's layer order, nothing Active, no snapping to
+ * hidden content.
+ *
+ * The Active Layer is `Structure` where the Project has a layer by that name — Walls, Openings and
+ * Rooms are created on it (#71 §2), so a migrated Project keeps drawing new work the way it always
+ * did — and Unlayered otherwise, which is what a Project with no layers has to say.
+ */
+function completedView(view: Record<string, unknown>, layers: readonly { id: string; name: string }[]): Record<string, unknown> {
+  const structure = layers.find((layer) => layer.name === 'Structure') ?? null
+  return {
+    designOptionId: null,
+    renovationDisplay: 'existing',
+    layerSettings: {},
+    layerOrder: null,
+    activeLayerId: structure?.id ?? null,
+    snapToHiddenContent: false,
+    ...view,
+  }
+}
+
+/**
+ * File the content a Project already holds onto the layers it is named for (#71 §1): Walls, Openings
+ * and Rooms on `Structure`, Placed Items on `Furniture`, in the Existing Model and in every Design
+ * Option's proposed work alike.
+ *
+ * `Services` starts empty — it is the layer the user puts the things they add later on — and an
+ * entity that already carries the field keeps what it has, so the step is idempotent. The subtype
+ * rule is by layer NAME, the same rule creation follows, because a Project whose user renamed
+ * `Structure` to `Shell` still has its Walls filed on the layer they were drawn on rather than a
+ * fresh one called `Structure`.
+ */
+function fileExistingContent(next: Record<string, unknown>, layers: readonly { id: string; name: string }[]): void {
+  const byName = (name: string): string | null => layers.find((layer) => layer.name === name)?.id ?? null
+  const structure = byName('Structure')
+  const furniture = byName('Furniture')
+  /** One model's five collections, filing each record that has no layer of its own yet. */
+  const fileModel = (model: unknown): void => {
+    if (model === null || typeof model !== 'object' || Array.isArray(model)) return
+    const container = model as Record<string, unknown>
+    for (const key of ['walls', 'openings', 'rooms'] as const) fileCollection(container[key], structure)
+    fileCollection(container.placedItems, furniture)
+  }
+  fileModel(next.existingModel)
+  if (Array.isArray(next.designOptions)) {
+    for (const option of next.designOptions) {
+      if (option === null || typeof option !== 'object' || Array.isArray(option)) continue
+      fileModel((option as Record<string, unknown>).proposed)
+    }
+  }
+}
+
+/** Every record of one collection, given the layer its kind starts on. */
+function fileCollection(value: unknown, layerId: string | null): void {
+  if (!Array.isArray(value)) return
+  for (const entry of value) {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) continue
+    const record = entry as Record<string, unknown>
+    if (record.drawingLayerId !== undefined) continue
+    // A Project with no `Structure` layer — the user deleted it before this build ever saw the
+    // file — leaves its content Unlayered rather than inventing a layer to hold it.
+    record.drawingLayerId = layerId
+  }
 }
 
 export type MigrateError =

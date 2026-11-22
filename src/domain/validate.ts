@@ -36,7 +36,7 @@ import { footprintProblems } from './footprint'
 import { nameKey } from './floorNames'
 import { fitProblem, openingNoun } from './openings'
 import { roomFaceRelation, roomOutlineProblems, roomOverlaps, roomSegmentOf, roomSegments } from './rooms'
-import { RENOVATION_DISPLAYS } from './project'
+import { RENOVATION_DISPLAYS, UNLAYERED_LAYER_KEY } from './project'
 import type { DisplayUnit, EntityId, ItemFootprint, OpeningKind, Project, Room, RoomOutline, RoomWallFaceRef, WallEnd, WallJustification, WallRefLine } from './project'
 import type { WallSide } from '../geometry'
 import { ACKNOWLEDGEMENT_NOTE_MAX_LENGTH, warningKey } from './warnings'
@@ -94,12 +94,16 @@ const ACCESSORY_TYPES = ['door', 'drawer-front', 'pull', 'hinge'] as const
 
 // The field lists of §2, one per object level. `unknown-field` is reported against
 // anything else the input carries at that level.
-const PROJECT_FIELDS = ['id', 'meta', 'preferences', 'floors', 'views', 'itemDesigns', 'existingModel', 'designOptions', 'warningAcknowledgements']
+const PROJECT_FIELDS = ['id', 'meta', 'preferences', 'floors', 'views', 'drawingLayers', 'itemDesigns', 'existingModel', 'designOptions', 'warningAcknowledgements']
 const META_FIELDS = ['name', 'address']
 const PREFERENCES_FIELDS = ['displayUnit', 'displayPrecision', 'defaultWallHeight']
 const FLOOR_FIELDS = ['id', 'name', 'planImage', 'limits', 'defaultWallHeight']
 const FLOOR_LIMITS_FIELDS = ['lowerMm', 'upperMm']
-const PLAN_VIEW_FIELDS = ['id', 'kind', 'floorId', 'name', 'isDefault', 'showPlanImage', 'designOptionId', 'renovationDisplay']
+const PLAN_VIEW_FIELDS = ['id', 'kind', 'floorId', 'name', 'isDefault', 'showPlanImage', 'designOptionId', 'renovationDisplay', 'layerSettings', 'layerOrder', 'activeLayerId', 'snapToHiddenContent']
+/** One Drawing Layer (#71 §1): an immutable ID, an editable name and a Project default colour. */
+const DRAWING_LAYER_FIELDS = ['id', 'name', 'color']
+/** What one saved view says about one layer (#71 §3); `color` is the only field that may be absent. */
+const LAYER_SETTING_FIELDS = ['visible', 'selectable', 'editable', 'color']
 const PLAN_IMAGE_FIELDS = ['assetHash', 'mediaType', 'widthPx', 'heightPx', 'pixelsPerMm']
 const CABINET_DESIGN_FIELDS = ['id', 'kind', 'name', 'construction']
 const GENERIC_DESIGN_FIELDS = [
@@ -136,7 +140,7 @@ const DESIGN_OPTION_FIELDS = ['id', 'name', 'proposed', 'demolishedIds']
 const PROPOSED_MODEL_FIELDS = ['walls', 'wallJunctions', 'openings', 'rooms', 'placedItems']
 /** A Room's Edges are referenced to a Wall face on one of the reference line's two sides (#67 §1). */
 const ROOM_FACE_SIDES = ['left', 'right']
-const ROOM_FIELDS = ['id', 'floorId', 'name', 'outline', 'wallFaceRefs', 'predecessorIds']
+const ROOM_FIELDS = ['id', 'floorId', 'name', 'outline', 'wallFaceRefs', 'predecessorIds', 'drawingLayerId']
 const PRESET_ROOM_OUTLINE_FIELDS = ['kind', 'preset', 'centre', 'orientationDeg', 'segmentIds']
 const PATH_ROOM_OUTLINE_FIELDS = ['kind', 'path', 'segmentIds']
 const ROOM_FACE_REF_FIELDS = ['segmentId', 'wallId', 'side']
@@ -157,6 +161,7 @@ const OPENING_FIELDS = [
   'swing',
   'hingeSide',
   'predecessorIds',
+  'drawingLayerId',
 ]
 /** The three kinds of Opening (#65 §1). */
 const OPENING_KINDS = ['door', 'window', 'removed_section']
@@ -175,13 +180,14 @@ const WALL_FIELDS = [
   'baseElevation',
   'height',
   'predecessorIds',
+  'drawingLayerId',
 ]
 /** The union's four members: a straight line uses three of them, an arc all four (#64 §1). */
 const WALL_LINE_FIELDS = ['kind', 'start', 'end', 'through']
 const WALL_JUNCTION_FIELDS = ['id', 'floorId', 'ends', 'host', 'predecessorIds']
 const WALL_JUNCTION_END_FIELDS = ['wallId', 'end']
 const WALL_HOST_FIELDS = ['wallId', 'at']
-const PLACED_ITEM_FIELDS = ['id', 'itemDesignId', 'floorId', 'translation', 'rotationDeg', 'baseElevation', 'predecessorIds']
+const PLACED_ITEM_FIELDS = ['id', 'itemDesignId', 'floorId', 'translation', 'rotationDeg', 'baseElevation', 'predecessorIds', 'drawingLayerId']
 const ACKNOWLEDGEMENT_FIELDS = [
   'id',
   'warningType',
@@ -455,6 +461,10 @@ interface IdIndex {
   proposedWallIds: Set<string>
   /** Every Design Option ID, which is what an acknowledgement may name (#69 §4). */
   optionIds: Set<string>
+  /** Every Drawing Layer ID (#71 §1), which is what an entity, a view setting and an order name. */
+  layerIds: Set<string>
+  /** Each layer ID to the path of its first occurrence: layers are their own ID namespace. */
+  layerFirst: Map<string, string>
 }
 
 function indexIds(root: Rec): IdIndex {
@@ -465,6 +475,8 @@ function indexIds(root: Rec): IdIndex {
   const proposedIds = new Set<string>()
   const proposedWallIds = new Set<string>()
   const optionIds = new Set<string>()
+  const layerIds = new Set<string>()
+  const layerFirst = new Map<string, string>()
   const claim = (value: unknown, path: string): void => {
     if (typeof value === 'string' && !first.has(value)) first.set(value, path)
   }
@@ -522,6 +534,20 @@ function indexIds(root: Rec): IdIndex {
     })
   }
 
+  // Drawing Layer IDs (#71 §1) are unique among the layers, and are **not** claimed into the
+  // project-wide `first` map: a layer is not an entity, it is never referenced by a Wall end or a
+  // demolition record, and a Project that happened to name a layer with an entity's ID would be
+  // refused for a collision that means nothing. What is shared is the direction of the check —
+  // every `drawingLayerId` answers to this set.
+  if (Array.isArray(root.drawingLayers)) {
+    root.drawingLayers.forEach((layer, i) => {
+      if (!isRecord(layer) || typeof layer.id !== 'string') return
+      const at = childPath(childPath('drawingLayers', i), 'id')
+      if (!layerFirst.has(layer.id)) layerFirst.set(layer.id, at)
+      layerIds.add(layer.id)
+    })
+  }
+
   if (Array.isArray(root.warningAcknowledgements)) {
     root.warningAcknowledgements.forEach((acknowledgement, i) => {
       if (isRecord(acknowledgement)) {
@@ -530,7 +556,7 @@ function indexIds(root: Rec): IdIndex {
     })
   }
 
-  return { first, designIds, floorIds, existingIds, proposedIds, proposedWallIds, optionIds }
+  return { first, designIds, floorIds, existingIds, proposedIds, proposedWallIds, optionIds, layerIds, layerFirst }
 }
 
 /** Rule 5: reported on every occurrence after the first, naming the first path. */
@@ -620,6 +646,25 @@ function checkPredecessorIds(raw: unknown, path: string, index: IdIndex, scope: 
   })
   const sorted = [...order].sort(compareCodePoints)
   if (order.some((id, i) => id !== sorted[i])) add(at, BAD_FORMAT, 'Expected the predecessors sorted, the way the model stores them.')
+}
+
+/**
+ * The Drawing Layer a drawable entity belongs to (#71 §1).
+ *
+ * Three shapes, all valid: absent (an entity written before the capability), `null` (Unlayered, the
+ * bucket the user put it back in) and an ID that names a layer of this Project. What is refused is
+ * the fourth — an ID of a layer that was deleted, which would draw an entity that belongs to no row
+ * of the Layers list and could never be reached again to be moved.
+ *
+ * The same check runs on every proposed entity of every Design Option, because a layer is a Project
+ * concept: deleting one clears it from the Existing Model and from all the Options at once.
+ */
+function checkDrawingLayerId(value: unknown, path: string, what: string, index: IdIndex, add: Add): void {
+  if (value === undefined || value === null) return
+  const at = childPath(path, 'drawingLayerId')
+  const id = checkEntityId(value, at, what, add)
+  if (id === null || index.layerIds.has(id)) return
+  add(at, DANGLING_REFERENCE, `Expected ${what} to name a Drawing Layer of this Project — no Drawing Layer has this ID.`)
 }
 
 // --- The v1 shapes, in the order project.ts declares them ----------------------
@@ -762,6 +807,132 @@ function validateFloors(raw: unknown, path: string, index: IdIndex, add: Add): v
   floors.forEach((floor, i) => validateFloor(floor, childPath(path, i), index, names, add))
 }
 
+/**
+ * The Project's Drawing Layers (#71 §1), in the Project layer order.
+ *
+ * A Project with no layers at all is valid — that is what a Project written before #71 reads as,
+ * with everything Unlayered — so this function checks what is there and never insists on a minimum.
+ * Names are free text and are not unique: two layers may both be called `Services`, and the Layers
+ * list tells them apart by colour and by the entities on them.
+ */
+function validateDrawingLayers(raw: unknown, path: string, index: IdIndex, add: Add): void {
+  if (raw === undefined) return
+  const layers = checkArray(raw, path, 'the Drawing Layers', add)
+  if (layers === null) return
+  layers.forEach((layer, i) => {
+    const at = childPath(path, i)
+    if (!isRecord(layer)) {
+      add(at, WRONG_TYPE, 'Expected a Drawing Layer.')
+      return
+    }
+    const idPath = childPath(at, 'id')
+    const id = checkEntityId(layer.id, idPath, 'the Drawing Layer ID', add)
+    if (id !== null) {
+      // Layers are their own ID namespace (#71 §1): unique among the layers, and not compared with
+      // entity IDs, which address a different kind of thing.
+      const first = index.layerFirst.get(id)
+      if (first !== undefined && first !== idPath) {
+        add(idPath, DUPLICATE_ID, `Expected a Drawing Layer ID to be unique in this Project — ${first} already uses it.`)
+      }
+      // The reserved key of Unlayered is a key in `layerSettings`, never a layer's ID: a layer that
+      // took it would answer to the same key twice and could not be told apart from Unlayered.
+      if (id === UNLAYERED_LAYER_KEY) {
+        add(idPath, BAD_ID, `Expected a Drawing Layer not to use "${UNLAYERED_LAYER_KEY}" — that ID belongs to Unlayered content.`)
+      }
+    }
+    checkFilledText(layer.name, childPath(at, 'name'), 'the Drawing Layer name', add)
+    const color = checkText(layer.color, childPath(at, 'color'), 'the Drawing Layer colour', add)
+    if (color !== null && !COLOR.test(color)) {
+      add(childPath(at, 'color'), BAD_FORMAT, 'Expected the Drawing Layer colour as #rrggbb in lowercase hex.')
+    }
+    checkUnknownFields(layer, at, DRAWING_LAYER_FIELDS, add)
+  })
+}
+
+/**
+ * What one saved view says about each layer (#71 §3), keyed by layer ID plus `unlayered`.
+ *
+ * A key that names no layer is refused rather than ignored: it is a setting for a layer that was
+ * deleted, and `layer.delete` removes these keys from every view precisely so that none is left
+ * behind holding a switch nobody can reach.
+ */
+function validateViewLayerSettings(raw: unknown, path: string, index: IdIndex, add: Add): void {
+  if (raw === undefined) return
+  const at = childPath(path, 'layerSettings')
+  if (!isRecord(raw)) {
+    add(at, WRONG_TYPE, 'Expected the layer settings of a Plan View as a list keyed by layer.')
+    return
+  }
+  for (const key of Object.keys(raw).sort()) {
+    const entryPath = childPath(at, key)
+    if (key !== UNLAYERED_LAYER_KEY && !index.layerIds.has(key)) {
+      add(
+        entryPath,
+        DANGLING_REFERENCE,
+        `Expected each layer setting to name a Drawing Layer of this Project or "${UNLAYERED_LAYER_KEY}" — no Drawing Layer has this ID.`,
+      )
+      continue
+    }
+    const setting = raw[key]
+    if (!isRecord(setting)) {
+      add(entryPath, WRONG_TYPE, 'Expected the setting for one layer as its visibility, selectability and editability.')
+      continue
+    }
+    // All three switches are required once a view says anything about a layer: a half-written
+    // setting would leave the other two to a default the file does not state.
+    checkBoolean(setting.visible, childPath(entryPath, 'visible'), 'whether this layer is visible in this Plan View', add)
+    checkBoolean(setting.selectable, childPath(entryPath, 'selectable'), 'whether this layer is selectable in this Plan View', add)
+    checkBoolean(setting.editable, childPath(entryPath, 'editable'), 'whether this layer is editable in this Plan View', add)
+    if (setting.color !== undefined) {
+      const color = checkText(setting.color, childPath(entryPath, 'color'), 'the layer colour override', add)
+      if (color !== null && !COLOR.test(color)) {
+        add(childPath(entryPath, 'color'), BAD_FORMAT, 'Expected the layer colour override as #rrggbb in lowercase hex.')
+      }
+    }
+    checkUnknownFields(setting, entryPath, LAYER_SETTING_FIELDS, add)
+  }
+}
+
+/**
+ * A view's own layer order (#71 §3): a complete order over every layer plus Unlayered, each exactly
+ * once, or `null` for `Use Project layer order`.
+ *
+ * Complete rather than partial on purpose. A partial order would leave a layer with no place in the
+ * list, and a layer with no place cannot be shown, hidden or made Active from the list — so a layer
+ * added after the override was written is refused here and repaired by `view.setLayerOrder`, which
+ * rewrites the whole array.
+ */
+function validateViewLayerOrder(raw: unknown, path: string, index: IdIndex, add: Add): void {
+  if (raw === undefined || raw === null) return
+  const at = childPath(path, 'layerOrder')
+  const keys = checkArray(raw, at, 'the layer order of a Plan View', add)
+  if (keys === null) return
+  const seen = new Set<string>()
+  const named = new Set<string>()
+  keys.forEach((value, i) => {
+    const here = childPath(at, i)
+    const key = checkText(value, here, 'a layer in the layer order', add)
+    if (key === null) return
+    if (key !== UNLAYERED_LAYER_KEY && !index.layerIds.has(key)) {
+      add(here, DANGLING_REFERENCE, 'Expected the layer order of a Plan View to name a Drawing Layer of this Project or Unlayered.')
+      return
+    }
+    if (seen.has(key)) {
+      add(here, DUPLICATE_MEMBER, `Expected each layer once in the layer order — this order already lists "${key}".`)
+      return
+    }
+    seen.add(key)
+    if (key !== UNLAYERED_LAYER_KEY) named.add(key)
+  })
+  if (!seen.has(UNLAYERED_LAYER_KEY)) {
+    add(at, MISSING, `Expected the layer order of a Plan View to list Unlayered too — it is a row of the list like any layer.`)
+  }
+  for (const id of index.layerIds) {
+    if (named.has(id)) continue
+    add(at, MISSING, `Expected the layer order of a Plan View to cover every Drawing Layer — it leaves out the layer "${id}".`)
+  }
+}
+
 function validatePlanView(
   raw: unknown,
   path: string,
@@ -825,6 +996,24 @@ function validatePlanView(
     }
   }
   checkOptionalOneOf(raw.renovationDisplay, childPath(path, 'renovationDisplay'), 'the Plan View Renovation Display', RENOVATION_DISPLAYS, add)
+
+  // The Drawing Layer settings of this view (#71 §3). Every one of the four is optional in the type
+  // and every one of them is checked against the Project's layers, because a saved view is the one
+  // place a layer setting can outlive the layer it was written for.
+  validateViewLayerSettings(raw.layerSettings, path, index, add)
+  validateViewLayerOrder(raw.layerOrder, path, index, add)
+  if (raw.activeLayerId !== undefined && raw.activeLayerId !== null) {
+    const activePath = childPath(path, 'activeLayerId')
+    const activeId = checkEntityId(raw.activeLayerId, activePath, 'the Active Layer', add)
+    if (activeId !== null && !index.layerIds.has(activeId)) {
+      add(
+        activePath,
+        DANGLING_REFERENCE,
+        'Expected the Active Layer of a Plan View to be a Drawing Layer of this Project — no Drawing Layer has this ID.',
+      )
+    }
+  }
+  checkOptionalBoolean(raw.snapToHiddenContent, childPath(path, 'snapToHiddenContent'), 'whether this view snaps to hidden content', add)
 
   checkUnknownFields(raw, path, PLAN_VIEW_FIELDS, add)
 }
@@ -1405,6 +1594,7 @@ function validatePlacedItem(raw: unknown, path: string, index: IdIndex, scope: M
   // Negative is valid: a Placed Item can hang below the Floor Datum (#25).
   checkNumber(raw.baseElevation, childPath(path, 'baseElevation'), 'the Placed Item height above the Floor Datum', add)
   checkPredecessorIds(raw.predecessorIds, path, index, scope, add)
+  checkDrawingLayerId(raw.drawingLayerId, path, 'the Placed Item Drawing Layer', index, add)
   checkUnknownFields(raw, path, PLACED_ITEM_FIELDS, add)
 }
 
@@ -1515,6 +1705,7 @@ function validateWall(
   checkNumber(raw.baseElevation, childPath(path, 'baseElevation'), 'the Wall height above the Floor Datum', add)
   checkPositive(raw.height, childPath(path, 'height'), 'the Wall height', add)
   checkPredecessorIds(raw.predecessorIds, path, index, scope, add)
+  checkDrawingLayerId(raw.drawingLayerId, path, 'the Wall Drawing Layer', index, add)
   checkUnknownFields(raw, path, WALL_FIELDS, add)
   if (id === null || floorId === null || line === null || ref === null) return null
   const thickness = raw.thickness
@@ -2112,6 +2303,7 @@ function validateOpenings(
     }
 
     checkPredecessorIds(rawOpening.predecessorIds, at, index, scope, add)
+    checkDrawingLayerId(rawOpening.drawingLayerId, at, 'the Opening Drawing Layer', index, add)
     checkUnknownFields(rawOpening, at, OPENING_FIELDS, add)
     if (host === null || kind === null || start === null || width === null || width <= 0 || floorId === null) return
     const usable = intervalsOf(floorId).get(host.id)
@@ -2205,6 +2397,7 @@ function validateRooms(
       : []
     if (mine) {
       checkPredecessorIds(rawRoom.predecessorIds, at, index, scope, add)
+      checkDrawingLayerId(rawRoom.drawingLayerId, at, 'the Room Drawing Layer', index, add)
       checkUnknownFields(rawRoom, at, ROOM_FIELDS, add)
     }
     if (id !== null && floorId !== null && name !== null && outline !== null) {
@@ -2565,6 +2758,7 @@ export function validateProject(value: unknown, checks: ValidationScope | null =
   validatePreferences(value.preferences, childPath(ROOT_PATH, 'preferences'), add)
   validateFloors(value.floors, childPath(ROOT_PATH, 'floors'), index, add)
   validateViews(value.views, childPath(ROOT_PATH, 'views'), index, add)
+  validateDrawingLayers(value.drawingLayers, childPath(ROOT_PATH, 'drawingLayers'), index, add)
   validateItemDesigns(value.itemDesigns, childPath(ROOT_PATH, 'itemDesigns'), index, displayFormatOf(value), checks, add)
   const existing = validateExistingModel(
     value.existingModel,

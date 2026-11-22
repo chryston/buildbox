@@ -315,12 +315,23 @@ export function gateCommits(ports: Ports): GatedPorts {
 }
 
 /**
- * A New Project with the six IDs `edit.createProject` spends, named by the test, so two
- * Projects in one suite have IDs the assertions can read (#42 §3).
+ * A New Project with the IDs `edit.createProject` spends, named by the test, so two
+ * Projects in one suite have IDs the assertions can read (#42 §3). The last three are the
+ * Drawing Layers a flagged build writes (#71 §1); a flag-off build spends six and ignores them.
  */
 export function testProject(id: string, name = 'Kitchen'): Project {
   return createProject({
-    ids: [id, `${id}-floor`, `${id}-view`, `${id}-design`, `${id}-place`, `${id}-root`],
+    ids: [
+      id,
+      `${id}-floor`,
+      `${id}-view`,
+      `${id}-design`,
+      `${id}-place`,
+      `${id}-root`,
+      `${id}-layer-structure`,
+      `${id}-layer-services`,
+      `${id}-layer-furniture`,
+    ],
     now: TEST_NOW,
     name,
   })
