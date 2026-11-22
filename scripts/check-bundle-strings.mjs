@@ -16,7 +16,24 @@ import process from 'node:process'
 const outDir = process.argv[2] ?? 'dist'
 // `floor-plan.svg` is the file name the removed `Export SVG` button produced (#61 criterion 8).
 // It is forbidden here so the old path cannot come back as a helper nobody thought to delete.
-const FORBIDDEN = ['.buildbox.json', '-floor-plan.json', 'floor-plan.svg', 'VITE_FF_PROJECTS_V2', '__PROJECTS_V2__']
+const FORBIDDEN = [
+  '.buildbox.json',
+  '-floor-plan.json',
+  'floor-plan.svg',
+  'VITE_FF_PROJECTS_V2',
+  '__PROJECTS_V2__',
+  // #69 criterion 13: the renovation Intents are registered from one module, and that module is
+  // reachable only through `FF_RENOVATION`. A flag-off build that still carries the marker string
+  // has shipped the renovation catalogue to production, which is the thing the flag exists to
+  // prevent. A flagged build is allowed to carry it, so the check is skipped when the flag is on.
+  ...(process.env['VITE_FF_RENOVATION'] === 'true' ? [] : ['__renovation_intents__']),
+  // The same rule for the words: the renovation dialogs and the `Design Options` settings section
+  // are dark, so a flag-off bundle that still carries their copy has shipped a surface nobody can
+  // open. Two sentences prove it — one the delete review says, one the move review asks.
+  ...(process.env['VITE_FF_RENOVATION'] === 'true'
+    ? []
+    : ['Nothing in the Existing Model changes.', 'Move to a Design Option']),
+]
 // Only the files that could contain application code: an image or a font cannot.
 const SCANNED = new Set(['.js', '.mjs', '.css', '.html', '.json', '.svg', '.txt', '.map'])
 

@@ -18,11 +18,17 @@ export interface ProjectSettingsDialogProps {
   /** The Project's `Default wall height` (#64 §16), in millimetres. */
   wallHeight: number
   onSave: (unit: DisplayUnit, precision: number, wallHeight: number) => void
+  /**
+   * Whatever else the Project keeps as settings (#69 §15). The dialog holds no opinion about it and
+   * no word of it: a section brings its own copy and dispatches its own Intents, so a dark surface
+   * is passed in from a flagged branch rather than written into this file.
+   */
+  children?: ReactNode
   onClose: () => void
 }
 
 export function ProjectSettingsDialog(props: ProjectSettingsDialogProps): ReactNode {
-  const { unit, precision, wallHeight, onSave, onClose } = props
+  const { unit, precision, wallHeight, onSave, children, onClose } = props
   const [nextUnit, setNextUnit] = useState<DisplayUnit>(unit)
   const [nextPrecision, setNextPrecision] = useState(precision)
   const [nextWallHeight, setNextWallHeight] = useState(wallHeight)
@@ -71,6 +77,7 @@ export function ProjectSettingsDialog(props: ProjectSettingsDialogProps): ReactN
           value={nextWallHeight}
           onChange={(event) => setNextWallHeight(Math.round(Number(event.target.value)))}
         />
+        {children}
         <div className="bb-workspace-dialog-actions">
           <button
             type="button"

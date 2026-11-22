@@ -27,6 +27,10 @@ export {
   type CalibratePlan,
   chainJunctionCount,
   type ClearPlan,
+  type CorrectExistingModel,
+  type CorrectionEffect,
+  type CorrectionOptionReview,
+  type CorrectionReview,
   type CreateOpening,
   type CreateRoom,
   type CreateWallChain,
@@ -34,6 +38,10 @@ export {
   type DeleteOpening,
   type DeleteWall,
   type DetachRoomFace,
+  type DeleteDesignOptionReview,
+  type DemolitionDependency,
+  type DemolitionReview,
+  type DeleteWallReview,
   type DependencyReview,
   type DesignIntent,
   type DistributeEvenly,
@@ -51,7 +59,10 @@ export {
   type IntentType,
   type Locator,
   type MergeWalls,
+  type MoveOptionReview,
   type MovePlanPlacement,
+  type MoveToDesignOption,
+  type MoveToOptionReview,
   type OffsetWall,
   type OpeningIntent,
   type PayloadOf,
@@ -66,6 +77,10 @@ export {
   type RemovePlanObject,
   type RemovePlanTemplate,
   type RemoveUnit,
+  type ReplaceEdit,
+  type ReplaceInOption,
+  type RestoreInOption,
+  type RestoreReview,
   type RenameProject,
   type RenameOpening,
   type RenameUnit,
@@ -99,6 +114,6 @@ export {
   type WallEndTarget,
   type WallIntent,
 } from './intents'
-export { INTENT_LABELS } from './labels'
+export { INTENT_LABELS, intentLabel } from './labels'
 export { CUSTOM_PLAN_ENTRY, PLAN_CATALOGUE, type PlanCatalogueEntry } from './planCatalogue'
 export { INTENT_TYPES } from './registry'

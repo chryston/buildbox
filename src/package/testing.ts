@@ -314,6 +314,29 @@ export function roomsFixtureProject(): Project {
 }
 
 /**
+ * The record the v8 file was written from: the v7 Project plus the container that step added.
+ *
+ * The Option carries no work of its own. A golden fixture is bytes this build must reproduce exactly
+ * and a flag-off build must refuse on purpose, and what v8 adds is the container — `designOptions`,
+ * which a Project written before #69 does not have at all — not any particular demolition inside it
+ * (#69 §1). The scene with real Options in it is `fixtures/e2e/preview-seed/renovation-36.json`.
+ */
+export function renovationFixtureProject(): Project {
+  const project = roomsFixtureProject()
+  return {
+    ...project,
+    designOptions: [
+      {
+        id: 'option-1',
+        name: 'Open plan',
+        proposed: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [] },
+        demolishedIds: [],
+      },
+    ],
+  }
+}
+
+/**
  * The same fixture as the v1 and v2 golden files store it: an Item Footprint was a kind, a
  * width and a depth until v3 restated it as a preset (#58).
  *

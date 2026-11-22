@@ -75,6 +75,8 @@ export interface SelectionInspectorProps {
   onOpenDetail: () => void
   onDelete: () => void
   onTransfer: () => void
+  /** The `Move to a Design Option…` action (#69 §13), mounted by a flagged build only. */
+  renovationAction?: ReactNode
 }
 
 export function SelectionInspector(props: SelectionInspectorProps): ReactNode {
@@ -183,7 +185,7 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
   const {
     item, bounds, design, unit, precision, canTransfer, preview, pickingOrigin,
     onSetPosition, onSetRotation, onEditDesign, onPreviewOrigin, onApplyPreview,
-    onCancelPreview, onTogglePick, onFork, onOpenDetail, onDelete, onTransfer,
+    onCancelPreview, onTogglePick, onFork, onOpenDetail, onDelete, onTransfer, renovationAction,
   } = props
   const isCabinet = design === null || design.kind === 'cabinet'
   const pending = preview !== null && preview.itemDesignId === item.designId ? preview : null
@@ -271,6 +273,7 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
           {STRINGS.transferToFloor}
         </button>
       </div>
+      {renovationAction}
       <div style={{ marginTop: 12 }}>
         <button
           type="button"

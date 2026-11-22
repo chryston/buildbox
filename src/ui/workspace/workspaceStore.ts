@@ -156,6 +156,19 @@ export interface ShapeDraftState {
   readonly draft: ShapeDraft
 }
 
+/**
+ * Which renovation dialog is on screen, or `null` for none (#69 §9, §13).
+ *
+ * This is the seam #70 opens: `Mark demolition` asks for the `Demolish W-3?` review by putting the
+ * Wall here, exactly as `openItemDetail` asks for the Item Detail View. The dialog itself is a
+ * dark surface — it is reached only from a flagged branch — so the request is a piece of UI-session
+ * state, never undoable (#26), and carries ids only: no word of it belongs to the store.
+ */
+export type RenovationDialog =
+  | { readonly kind: 'demolish'; readonly entityId: string; readonly designOptionId: string }
+  | { readonly kind: 'move'; readonly entityIds: readonly string[] }
+  | null
+
 export interface WorkspaceState {
   activeTool: WorkspaceTool
   /** The selected Placed Item, or `null`. Selection is UI state, never Project data. */
@@ -214,6 +227,8 @@ export interface WorkspaceState {
   activeViewByFloor: Record<string, string>
   /** Whether this Project's open Floor and views have been read from the cache yet. */
   activeHydrated: boolean
+  /** The renovation dialog on screen, if any (#69 §9, §13). */
+  renovationDialog: RenovationDialog
 }
 
 export interface WorkspaceActions {
@@ -254,6 +269,15 @@ export interface WorkspaceActions {
   setActiveView(floorId: string, viewId: string): void
   /** The cache's answer for this Project: which Floor was open, and the views on each. */
   hydrateActive(floorId: string | null, viewsByFloor: Record<string, string>): void
+  /**
+   * Ask for the `Demolish W-3?` review of one Existing entity, on behalf of one Design Option
+   * (#69 §9). What the review says is read from the Intent's own preview, never stored here.
+   */
+  openDemolishDialog(entityId: string, designOptionId: string): void
+  /** Ask for `Move to a Design Option?` of the selected Existing entities (#69 §13). */
+  openMoveToOptionDialog(entityIds: readonly string[]): void
+  /** Put the renovation dialog away. Nothing was written, which is the whole point of Cancel. */
+  closeRenovationDialog(): void
   /** Another Project opened: its placements are not this one's to select. */
   reset(): void
 }
@@ -293,6 +317,7 @@ const INITIAL: WorkspaceState = {
   activeFloorId: null,
   activeViewByFloor: {},
   activeHydrated: false,
+  renovationDialog: null,
 }
 
 /**
@@ -415,6 +440,10 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
       activeViewByFloor: { ...viewsByFloor, ...state.activeViewByFloor },
       activeHydrated: true,
     })),
+  openDemolishDialog: (entityId, designOptionId) =>
+    set({ renovationDialog: { kind: 'demolish', entityId, designOptionId } }),
+  openMoveToOptionDialog: (entityIds) => set({ renovationDialog: { kind: 'move', entityIds } }),
+  closeRenovationDialog: () => set({ renovationDialog: null }),
   reset: () => set({ ...INITIAL }),
 }))
 

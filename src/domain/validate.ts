@@ -36,7 +36,7 @@ import { footprintProblems } from './footprint'
 import { nameKey } from './floorNames'
 import { fitProblem, openingNoun } from './openings'
 import { roomFaceRelation, roomOutlineProblems, roomOverlaps, roomSegmentOf, roomSegments } from './rooms'
-import type { DisplayUnit, ItemFootprint, OpeningKind, Project, Room, RoomOutline, RoomWallFaceRef, WallEnd, WallJustification, WallRefLine } from './project'
+import type { DisplayUnit, EntityId, ItemFootprint, OpeningKind, Project, Room, RoomOutline, RoomWallFaceRef, WallEnd, WallJustification, WallRefLine } from './project'
 import type { WallSide } from '../geometry'
 import { ACKNOWLEDGEMENT_NOTE_MAX_LENGTH, warningKey } from './warnings'
 
@@ -93,7 +93,7 @@ const ACCESSORY_TYPES = ['door', 'drawer-front', 'pull', 'hinge'] as const
 
 // The field lists of §2, one per object level. `unknown-field` is reported against
 // anything else the input carries at that level.
-const PROJECT_FIELDS = ['id', 'meta', 'preferences', 'floors', 'views', 'itemDesigns', 'existingModel', 'warningAcknowledgements']
+const PROJECT_FIELDS = ['id', 'meta', 'preferences', 'floors', 'views', 'itemDesigns', 'existingModel', 'designOptions', 'warningAcknowledgements']
 const META_FIELDS = ['name', 'address']
 const PREFERENCES_FIELDS = ['displayUnit', 'displayPrecision', 'defaultWallHeight']
 const FLOOR_FIELDS = ['id', 'name', 'planImage', 'limits', 'defaultWallHeight']
@@ -129,14 +129,20 @@ const SEGMENT_FIELDS: Record<string, readonly string[]> = {
 const SEGMENT_KINDS = ['line', 'arc', 'ellipticalArc'] as const
 const POINT_FIELDS = ['x', 'y']
 const EXISTING_MODEL_FIELDS = ['placedItems', 'walls', 'wallJunctions', 'openings', 'rooms']
+/** A Design Option is a delta over the Existing Model, never a copy of it (#69 §2). */
+const DESIGN_OPTION_FIELDS = ['id', 'name', 'proposed', 'demolishedIds']
+/** The five collections of one Option's proposed work, in the shape the Existing Model uses. */
+const PROPOSED_MODEL_FIELDS = ['walls', 'wallJunctions', 'openings', 'rooms', 'placedItems']
 /** A Room's Edges are referenced to a Wall face on one of the reference line's two sides (#67 §1). */
 const ROOM_FACE_SIDES = ['left', 'right']
-const ROOM_FIELDS = ['id', 'floorId', 'name', 'outline', 'wallFaceRefs']
+const ROOM_FIELDS = ['id', 'floorId', 'name', 'outline', 'wallFaceRefs', 'predecessorIds']
 const PRESET_ROOM_OUTLINE_FIELDS = ['kind', 'preset', 'centre', 'orientationDeg', 'segmentIds']
 const PATH_ROOM_OUTLINE_FIELDS = ['kind', 'path', 'segmentIds']
 const ROOM_FACE_REF_FIELDS = ['segmentId', 'wallId', 'side']
 /** A Room name this long is a mistake, not a name; the UI caps the field at the same number. */
 const ROOM_NAME_MAX_LENGTH = 80
+/** A Design Option name this long is a mistake, not a name; the rename field caps at the same. */
+const DESIGN_OPTION_NAME_MAX_LENGTH = 60
 const OPENING_FIELDS = [
   'id',
   'floorId',
@@ -149,6 +155,7 @@ const OPENING_FIELDS = [
   'head',
   'swing',
   'hingeSide',
+  'predecessorIds',
 ]
 /** The three kinds of Opening (#65 §1). */
 const OPENING_KINDS = ['door', 'window', 'removed_section']
@@ -166,13 +173,14 @@ const WALL_FIELDS = [
   'constructionLabel',
   'baseElevation',
   'height',
+  'predecessorIds',
 ]
 /** The union's four members: a straight line uses three of them, an arc all four (#64 §1). */
 const WALL_LINE_FIELDS = ['kind', 'start', 'end', 'through']
-const WALL_JUNCTION_FIELDS = ['id', 'floorId', 'ends', 'host']
+const WALL_JUNCTION_FIELDS = ['id', 'floorId', 'ends', 'host', 'predecessorIds']
 const WALL_JUNCTION_END_FIELDS = ['wallId', 'end']
 const WALL_HOST_FIELDS = ['wallId', 'at']
-const PLACED_ITEM_FIELDS = ['id', 'itemDesignId', 'floorId', 'translation', 'rotationDeg', 'baseElevation']
+const PLACED_ITEM_FIELDS = ['id', 'itemDesignId', 'floorId', 'translation', 'rotationDeg', 'baseElevation', 'predecessorIds']
 const ACKNOWLEDGEMENT_FIELDS = [
   'id',
   'warningType',
@@ -199,6 +207,30 @@ const ACCESSORY_FIELDS = ['id', 'type', 'label']
 
 type Rec = Record<string, unknown>
 type Add = (path: string, code: string, message: string) => void
+
+/**
+ * The entities one validation pass is asked to check (#69 §8).
+ *
+ * Whole-document validation is what loading and importing a Project do, and what every test gets
+ * when it calls `validateProject` with no second argument. One Edit Transaction may not cost that:
+ * architecture §4 scopes validation to what the transaction touched, so `applyIntent` hands the
+ * validator the records it wrote plus every record that names one of them. Cross-references still
+ * resolve, because the ID index, the Wall map, the Junction shapes, the Room outlines and the
+ * overlap pool are built over the whole document either way — a scoped pass reports a dangling
+ * reference just as readily, it simply does not re-derive the geometry of a record nothing touched.
+ */
+export interface ValidationScope {
+  readonly entities: ReadonlySet<string>
+}
+
+type Checks = ValidationScope | null
+
+/**
+ * Whether this pass must check `raw`. `null` checks everything; a record the pass cannot identify
+ * is always checked, because only a record with an ID can be proven untouched.
+ */
+const inScope = (checks: Checks, raw: unknown): boolean =>
+  checks === null || !isRecord(raw) || typeof raw.id !== 'string' || raw.id === '' || checks.entities.has(raw.id)
 
 const isRecord = (value: unknown): value is Rec =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -414,14 +446,37 @@ interface IdIndex {
   first: Map<string, string>
   designIds: Set<string>
   floorIds: Set<string>
+  /** Every entity ID of the Existing Model — the only thing a demolition record may name (#69 §4). */
+  existingIds: Set<string>
+  /** Every entity ID any Design Option proposes, for the message that says which kind it found. */
+  proposedIds: Set<string>
+  /** The subset of those that are Walls, which is what a Wall reference resolves against. */
+  proposedWallIds: Set<string>
+  /** Every Design Option ID, which is what an acknowledgement may name (#69 §4). */
+  optionIds: Set<string>
 }
 
 function indexIds(root: Rec): IdIndex {
   const first = new Map<string, string>()
   const designIds = new Set<string>()
   const floorIds = new Set<string>()
+  const existingIds = new Set<string>()
+  const proposedIds = new Set<string>()
+  const proposedWallIds = new Set<string>()
+  const optionIds = new Set<string>()
   const claim = (value: unknown, path: string): void => {
     if (typeof value === 'string' && !first.has(value)) first.set(value, path)
+  }
+  /** One collection of entities, claimed into `first` and, when given, into ownership sets. */
+  const claimIn = (owner: Rec | undefined, key: string, parent: string, into: readonly Set<string>[] = []): void => {
+    const list = owner?.[key]
+    if (!Array.isArray(list)) return
+    const at = childPath(parent, key)
+    list.forEach((entry, i) => {
+      if (!isRecord(entry) || typeof entry.id !== 'string') return
+      claim(entry.id, childPath(childPath(at, i), 'id'))
+      for (const set of into) set.add(entry.id)
+    })
   }
 
   claim(root.id, childPath(ROOT_PATH, 'id'))
@@ -446,39 +501,24 @@ function indexIds(root: Rec): IdIndex {
       if (typeof design.id === 'string') designIds.add(design.id)
     })
   }
-  if (isRecord(root.existingModel) && Array.isArray(root.existingModel.placedItems)) {
-    const items = childPath('existingModel', 'placedItems')
-    root.existingModel.placedItems.forEach((item, i) => {
-      if (!isRecord(item)) return
-      claim(item.id, childPath(childPath(items, i), 'id'))
-    })
-  }
+  // Entity IDs are unique project-wide, Design Option entities included (#69 §3): two Options
+  // sharing an ID would make a demolition record and a predecessor reference ambiguous. What is
+  // per-model instead is the `ref` label, which is why `validateWalls` is handed a fresh map.
   if (isRecord(root.existingModel)) {
     const model = root.existingModel
-    if (Array.isArray(model.walls)) {
-      const walls = childPath('existingModel', 'walls')
-      model.walls.forEach((wall, i) => {
-        if (isRecord(wall)) claim(wall.id, childPath(childPath(walls, i), 'id'))
-      })
-    }
-    if (Array.isArray(model.wallJunctions)) {
-      const junctions = childPath('existingModel', 'wallJunctions')
-      model.wallJunctions.forEach((junction, i) => {
-        if (isRecord(junction)) claim(junction.id, childPath(childPath(junctions, i), 'id'))
-      })
-    }
-    if (Array.isArray(model.openings)) {
-      const openings = childPath('existingModel', 'openings')
-      model.openings.forEach((opening, i) => {
-        if (isRecord(opening)) claim(opening.id, childPath(childPath(openings, i), 'id'))
-      })
-    }
-    if (Array.isArray(model.rooms)) {
-      const rooms = childPath('existingModel', 'rooms')
-      model.rooms.forEach((room, i) => {
-        if (isRecord(room)) claim(room.id, childPath(childPath(rooms, i), 'id'))
-      })
-    }
+    for (const key of EXISTING_MODEL_FIELDS) claimIn(model, key, 'existingModel', [existingIds])
+  }
+  if (Array.isArray(root.designOptions)) {
+    root.designOptions.forEach((option, i) => {
+      if (!isRecord(option)) return
+      claim(option.id, childPath(childPath('designOptions', i), 'id'))
+      if (typeof option.id === 'string') optionIds.add(option.id)
+      if (!isRecord(option.proposed)) return
+      const proposedPath = childPath(childPath('designOptions', i), 'proposed')
+      for (const key of PROPOSED_MODEL_FIELDS) {
+        claimIn(option.proposed, key, proposedPath, key === 'walls' ? [proposedWallIds, proposedIds] : [proposedIds])
+      }
+    })
   }
 
   if (Array.isArray(root.warningAcknowledgements)) {
@@ -489,7 +529,7 @@ function indexIds(root: Rec): IdIndex {
     })
   }
 
-  return { first, designIds, floorIds }
+  return { first, designIds, floorIds, existingIds, proposedIds, proposedWallIds, optionIds }
 }
 
 /** Rule 5: reported on every occurrence after the first, naming the first path. */
@@ -498,6 +538,87 @@ function claimId(id: string, path: string, what: string, index: IdIndex, add: Ad
   if (first !== undefined && first !== path) {
     add(path, DUPLICATE_ID, `Expected ${what} to be unique in this Project — ${first} already uses it.`)
   }
+}
+
+// --- Who owns the model being validated (#69) ---------------------------------------
+
+/**
+ * Which model the references of the entity being validated resolve against (#69 §3, §4).
+ *
+ * The validator has always answered "does this reference name something?" against the Existing
+ * Model, because the Existing Model was the only model. A Design Option is a delta, so its
+ * references answer against the **effective** model — the Existing Model minus what this Option
+ * demolishes, plus this Option's own work — and the difference has to be visible in the checks
+ * rather than assumed: the same Wall ID is a valid host in one Option, a reference into another
+ * Option's work in the next sentence, and a reference to something being demolished in the third.
+ */
+interface ModelScope {
+  /** `null` for the Existing Model; the Option's ID (or its path) while one is in force. */
+  optionId: string | null
+  /** The Existing entities this Option removes. */
+  demolished: ReadonlySet<string>
+  /** Every entity ID any Option proposes, so a message can say which kind of thing was found. */
+  proposedIds: ReadonlySet<string>
+  /** The proposed Walls of *this* Option, which is the only set a reference may resolve to. */
+  proposedWallIds: ReadonlySet<string>
+}
+
+const NO_IDS: ReadonlySet<string> = new Set<string>()
+
+const EXISTING_SCOPE: ModelScope = { optionId: null, demolished: NO_IDS, proposedIds: NO_IDS, proposedWallIds: NO_IDS }
+
+/**
+ * The provenance chain of a proposed entity, and its absence on an Existing one (#69 §3).
+ *
+ * The field is optional in the TypeScript type because one `Wall` interface serves both roles, so
+ * the two rules that tell the roles apart live here: an Existing entity must not carry it, and a
+ * proposed one must — empty for work invented from nothing. Each predecessor then has to be a real
+ * entity that this Option is entitled to call a predecessor: its own (a replace inside the Option),
+ * or an Existing one this Option demolishes or replaces, which is what makes a renovation quantity
+ * answer "like-for-like" instead of guessing.
+ */
+function checkPredecessorIds(raw: unknown, path: string, index: IdIndex, scope: ModelScope, add: Add): void {
+  const at = childPath(path, 'predecessorIds')
+  if (scope.optionId === null) {
+    if (raw !== undefined) add(at, UNKNOWN_FIELD, 'Expected no predecessor of an Existing Model entity — the Existing Model is where provenance starts.')
+    return
+  }
+  if (raw === undefined) {
+    add(at, MISSING, 'Missing the predecessors of a proposed entity — an empty list for work invented from nothing.')
+    return
+  }
+  const items = checkArray(raw, at, 'the predecessors', add)
+  if (items === null) return
+  const seen = new Set<string>()
+  const order: string[] = []
+  items.forEach((value, i) => {
+    const here = childPath(at, i)
+    const id = checkEntityId(value, here, 'a predecessor', add)
+    if (id === null) return
+    if (seen.has(id)) {
+      add(here, DUPLICATE_ID, 'Expected each predecessor once.')
+      return
+    }
+    seen.add(id)
+    order.push(id)
+    if (scope.proposedWallIds.has(id)) {
+      add(here, DANGLING_REFERENCE, 'Expected a predecessor to be an Existing Model entity — a successor goes back to the entity that was there, never to another proposed one.')
+      return
+    }
+    if (index.proposedIds.has(id)) {
+      add(here, DANGLING_REFERENCE, 'Expected a predecessor to belong to this Design Option or the Existing Model — this one is proposed work of another Option.')
+      return
+    }
+    if (!index.existingIds.has(id)) {
+      add(here, DANGLING_REFERENCE, `Expected a predecessor to be an entity of this Project — no entity has ID ${id}.`)
+      return
+    }
+    if (!scope.demolished.has(id)) {
+      add(here, DANGLING_REFERENCE, 'Expected a predecessor to be an entity this Option demolishes or replaces — this one still stands as it is.')
+    }
+  })
+  const sorted = [...order].sort(compareCodePoints)
+  if (order.some((id, i) => id !== sorted[i])) add(at, BAD_FORMAT, 'Expected the predecessors sorted, the way the model stores them.')
 }
 
 // --- The v1 shapes, in the order project.ts declares them ----------------------
@@ -1212,13 +1333,25 @@ function validateItemDesign(raw: unknown, path: string, index: IdIndex, format: 
   }
 }
 
-function validateItemDesigns(raw: unknown, path: string, index: IdIndex, format: DisplayFormat, add: Add): void {
+function validateItemDesigns(
+  raw: unknown,
+  path: string,
+  index: IdIndex,
+  format: DisplayFormat,
+  checks: Checks,
+  add: Add,
+): void {
   const designs = checkArray(raw, path, 'the Item Designs', add)
   if (designs === null) return
-  designs.forEach((design, i) => validateItemDesign(design, childPath(path, i), index, format, add))
+  designs.forEach((design, i) => {
+    // A Design's ID is claimed over the whole document by `indexIds`, so skipping an untouched
+    // Design cannot hide a duplicate (#69 §8).
+    if (!inScope(checks, design)) return
+    validateItemDesign(design, childPath(path, i), index, format, add)
+  })
 }
 
-function validatePlacedItem(raw: unknown, path: string, index: IdIndex, add: Add): void {
+function validatePlacedItem(raw: unknown, path: string, index: IdIndex, scope: ModelScope, add: Add): void {
   if (!isRecord(raw)) {
     add(path, WRONG_TYPE, 'Expected a Placed Item.')
     return
@@ -1250,6 +1383,7 @@ function validatePlacedItem(raw: unknown, path: string, index: IdIndex, add: Add
   )
   // Negative is valid: a Placed Item can hang below the Floor Datum (#25).
   checkNumber(raw.baseElevation, childPath(path, 'baseElevation'), 'the Placed Item height above the Floor Datum', add)
+  checkPredecessorIds(raw.predecessorIds, path, index, scope, add)
   checkUnknownFields(raw, path, PLACED_ITEM_FIELDS, add)
 }
 
@@ -1321,6 +1455,7 @@ function validateWall(
   path: string,
   index: IdIndex,
   refs: Map<string, string>,
+  scope: ModelScope,
   add: Add,
 ): WallShape | null {
   if (!isRecord(raw)) {
@@ -1358,6 +1493,7 @@ function validateWall(
   // Negative is valid: a Wall can start below the Floor Datum, the way a Placed Item can (#25).
   checkNumber(raw.baseElevation, childPath(path, 'baseElevation'), 'the Wall height above the Floor Datum', add)
   checkPositive(raw.height, childPath(path, 'height'), 'the Wall height', add)
+  checkPredecessorIds(raw.predecessorIds, path, index, scope, add)
   checkUnknownFields(raw, path, WALL_FIELDS, add)
   if (id === null || floorId === null || line === null || ref === null) return null
   const thickness = raw.thickness
@@ -1375,9 +1511,50 @@ interface JunctionMember {
 /** The point of the Wall this member end holds, on the reference line. */
 const memberPoint = (member: JunctionMember): Pt => (member.end === 'start' ? member.wall.line.start : member.wall.line.end)
 
+/**
+ * Why a Wall reference found nothing, in the words #69 §4 asks for.
+ *
+ * A Wall that is simply absent keeps the message it has always had. Two absences are worth naming
+ * separately, because the fix is different each time: a Wall another Option proposes is a reference
+ * that crossed an Option boundary, and a Wall this Option demolishes is a reference to something the
+ * same transaction is removing — the case the demolition review reports as `Detach or re-host W-7
+ * first.`
+ */
+function missingWallMessage(wallId: string, index: IdIndex, scope: ModelScope, fallback: string): string {
+  if (index.proposedWallIds.has(wallId) && !scope.proposedWallIds.has(wallId)) {
+    return scope.optionId === null
+      ? 'Expected the Wall to be an Existing Model Wall — this one is proposed work of a Design Option.'
+      : 'Expected the Wall to be one this Design Option proposes or the Existing Model carries — another Design Option proposes it.'
+  }
+  if (scope.optionId !== null && scope.demolished.has(wallId)) {
+    return 'Expected the Wall not to be one this Design Option demolishes — detach or re-host it first.'
+  }
+  return fallback
+}
+
+/** The key one Wall end is claimed under: one end, one Junction (#64 §2). */
+function endKey(wallId: string, end: WallEnd): string {
+  return `${wallId}\u0000${end}`
+}
+
+/**
+ * The Wall ends a set of Junctions already claims, in the shape `validateWallJunctions` takes.
+ * A Design Option's Junctions are validated against the **effective** model, so the pass over one
+ * starts from the ends the standing Existing Junctions have taken (#69 §4).
+ */
+function joinedEndsOf(junctions: readonly JunctionShape[]): Map<string, string> {
+  const joined = new Map<string, string>()
+  for (const junction of junctions)
+    for (const end of junction.ends)
+      joined.set(endKey(end.wallId, end.end), `existingModel.wallJunctions[${junction.id}]`)
+  return joined
+}
+
 function validateJunctionMember(
   raw: unknown,
   path: string,
+  index: IdIndex,
+  scope: ModelScope,
   walls: Map<string, WallShape>,
   floorId: string | null,
   taken: Map<string, string>,
@@ -1395,13 +1572,17 @@ function validateJunctionMember(
   if (wallId === null || end === null) return null
   const wall = walls.get(wallId)
   if (wall === undefined) {
-    add(wallPath, DANGLING_REFERENCE, 'Wall Junction refers to a Wall that is not in this Project.')
+    add(
+      wallPath,
+      DANGLING_REFERENCE,
+      missingWallMessage(wallId, index, scope, 'Wall Junction refers to a Wall that is not in this Project.'),
+    )
     return null
   }
   if (floorId !== null && wall.floorId !== floorId) {
     add(wallPath, DANGLING_REFERENCE, 'Wall Junction joins a Wall that stands on a different Floor from the Junction.')
   }
-  const key = `${wallId}\u0000${end}`
+  const key = endKey(wallId, end)
   const first = taken.get(key)
   if (first !== undefined) {
     add(
@@ -1418,6 +1599,8 @@ function validateJunctionMember(
 function validateJunctionHost(
   raw: unknown,
   path: string,
+  index: IdIndex,
+  scope: ModelScope,
   walls: Map<string, WallShape>,
   floorId: string | null,
   add: Add,
@@ -1434,7 +1617,11 @@ function validateJunctionHost(
   if (wallId === null || at === null) return null
   const wall = walls.get(wallId)
   if (wall === undefined) {
-    add(wallPath, DANGLING_REFERENCE, 'Wall Junction attaches to a Wall that is not in this Project.')
+    add(
+      wallPath,
+      DANGLING_REFERENCE,
+      missingWallMessage(wallId, index, scope, 'Wall Junction attaches to a Wall that is not in this Project.'),
+    )
     return null
   }
   if (floorId !== null && wall.floorId !== floorId) {
@@ -1457,14 +1644,21 @@ function validateWallJunctions(
   raw: unknown,
   path: string,
   index: IdIndex,
+  scope: ModelScope,
   walls: Map<string, WallShape>,
+  checks: Checks,
   add: Add,
+  // The Wall ends already joined. One Wall end takes one Junction across the **effective** model,
+  // so the pass over a Design Option starts from the ends the Existing Model has taken — otherwise
+  // an Option's Junction could join an end that is joined already, and the two Junctions would
+  // disagree about where that end is.
+  joined = new Map<string, string>(),
 ): JunctionShape[] {
   const junctions = checkArray(raw, path, 'the Wall Junctions', add)
   const shapes: JunctionShape[] = []
   if (junctions === null) return shapes
   // One Wall end, one Junction: the topology a Wall network is built on (#64 §2).
-  const taken = new Map<string, string>()
+  const taken = joined
   junctions.forEach((rawJunction, i) => {
     const at = childPath(path, i)
     if (!isRecord(rawJunction)) {
@@ -1486,12 +1680,24 @@ function validateWallJunctions(
     const members: JunctionMember[] = []
     if (ends !== null) {
       ends.forEach((member, j) => {
-        const found = validateJunctionMember(member, childPath(endsPath, j), walls, floorId, taken, add)
+        const found = validateJunctionMember(member, childPath(endsPath, j), index, scope, walls, floorId, taken, add)
         if (found !== null) members.push(found)
       })
     }
-    const host = validateJunctionHost(rawJunction.host, childPath(at, 'host'), walls, floorId, add)
+    const host = validateJunctionHost(rawJunction.host, childPath(at, 'host'), index, scope, walls, floorId, add)
+    checkPredecessorIds(rawJunction.predecessorIds, at, index, scope, add)
     checkUnknownFields(rawJunction, at, WALL_JUNCTION_FIELDS, add)
+    // A Junction of a Design Option exists to hold that Option's own work in place (#69 §4). One
+    // joining only Existing Walls records a join the Existing Model already makes; one joining a
+    // Wall the Option demolishes is the state the demolition review blocks on, and is caught by
+    // the member and host checks above. A Wall the Option proposes hosting another Wall's end is
+    // the Option's own work held in place too, so the host counts as a member here.
+    const joinsProposed =
+      members.some((member) => scope.proposedWallIds.has(member.wall.id)) ||
+      (host !== null && scope.proposedWallIds.has(host.wall.id))
+    if (scope.optionId !== null && members.length > 0 && !joinsProposed) {
+      add(endsPath, DANGLING_REFERENCE, 'Expected a Design Option Wall Junction to join at least one Wall this Option proposes.')
+    }
     // The shape `joinWalls` takes, kept for the Opening fit rule: an Opening's usable
     // interval is read off the same clean-up that draws the band (#65 §3).
     if (id !== null && floorId !== null) {
@@ -1502,6 +1708,12 @@ function validateWallJunctions(
         ...(host === null ? {} : { host: { wallId: host.wall.id, at: host.at } }),
       })
     }
+
+    // Everything below is this Junction's own geometry: its ends meeting at one point, or sitting
+    // on the host at the distance it gives. An untouched Junction still contributes its shape above,
+    // which is what the Opening fit rule reads, so skipping the measurement changes nothing any
+    // other record is checked against (#69 §8).
+    if (!inScope(checks, rawJunction)) return
 
     const count = ends?.length ?? 0
     if (host === null) {
@@ -1537,30 +1749,225 @@ function validateWallJunctions(
   return shapes
 }
 
-function validateExistingModel(raw: unknown, path: string, index: IdIndex, format: DisplayFormat, add: Add): void {
+/** What the Existing Model pass leaves behind for the Design Option passes (#69). */
+interface ExistingPass {
+  /** Every Existing Wall that read cleanly, by ID. */
+  walls: Map<string, WallShape>
+  /** Every Existing Junction that read cleanly, in the shape `joinWalls` takes. */
+  junctions: JunctionShape[]
+  /** The `ref` labels the Existing Model uses, which every Option inherits as its starting set. */
+  refs: Map<string, string>
+  /** Every Existing Room that read cleanly, with the path its overlap problem would land on. */
+  rooms: { room: Room; at: string }[]
+}
+
+const EMPTY_PASS: ExistingPass = { walls: new Map(), junctions: [], refs: new Map(), rooms: [] }
+
+function validateExistingModel(
+  raw: unknown,
+  path: string,
+  index: IdIndex,
+  format: DisplayFormat,
+  checks: Checks,
+  add: Add,
+): ExistingPass {
   if (raw === undefined) {
     add(path, MISSING, 'Missing the Existing Model.')
-    return
+    return EMPTY_PASS
   }
   if (!isRecord(raw)) {
     add(path, WRONG_TYPE, 'Expected the Existing Model.')
-    return
+    return EMPTY_PASS
   }
   const itemsPath = childPath(path, 'placedItems')
   const placedItems = checkArray(raw.placedItems, itemsPath, 'the Existing Model Placed Items', add)
   if (placedItems !== null) {
-    placedItems.forEach((item, i) => validatePlacedItem(item, childPath(itemsPath, i), index, add))
+    placedItems.forEach((item, i) => {
+      if (!inScope(checks, item)) return
+      validatePlacedItem(item, childPath(itemsPath, i), index, EXISTING_SCOPE, add)
+    })
   }
   // Walls are validated before their Junctions, which need the Walls' shapes to check that
   // the ends they name exist, stand on their Floor, and actually meet (#64 §2). Openings
   // come last: they need both, because their usable interval is the tidied band (#65 §3).
-  const walls = validateWalls(raw.walls, childPath(path, 'walls'), index, add)
-  const junctions = validateWallJunctions(raw.wallJunctions, childPath(path, 'wallJunctions'), index, walls, add)
-  validateOpenings(raw.openings, childPath(path, 'openings'), index, walls, junctions, add)
+  // Every Wall is validated even out of scope: the map the three passes below resolve against
+  // is built here, and skipping one would invent a dangling reference (#69 §8).
+  const refs = new Map<string, string>()
+  const walls = validateWalls(raw.walls, childPath(path, 'walls'), index, refs, EXISTING_SCOPE, add)
+  const junctions = validateWallJunctions(
+    raw.wallJunctions,
+    childPath(path, 'wallJunctions'),
+    index,
+    EXISTING_SCOPE,
+    walls,
+    checks,
+    add,
+  )
+  validateOpenings(raw.openings, childPath(path, 'openings'), index, EXISTING_SCOPE, walls, junctions, checks, add)
   // Rooms come last: a Wall face reference is checked against the Wall's tidied face, so it
   // needs the same Wall map the Openings needed (#67 §1).
-  validateRooms(raw.rooms, childPath(path, 'rooms'), index, walls, format, add)
+  const rooms = validateRooms(raw.rooms, childPath(path, 'rooms'), index, EXISTING_SCOPE, walls, format, checks, add)
   checkUnknownFields(raw, path, EXISTING_MODEL_FIELDS, add)
+  return { walls, junctions, refs, rooms }
+}
+
+/**
+ * Every Design Option of the Project (#69 §2, §3, §4).
+ *
+ * An Option is validated as a *delta*, which means every one of its references is resolved against
+ * the **effective** model — the Existing Model minus what this Option demolishes, plus this Option's
+ * own work — and not against the Option on its own. That is the whole content of "options own
+ * deltas over one shared Existing Model": a proposed Opening's fit, a Junction's join and a Room's
+ * face reference are all read off the same tidied Walls the drawing will show in this Option.
+ *
+ * Absent is valid and means the S7 shape: a Project with no Options behaves exactly as it did before
+ * this file grew a fourth pass.
+ */
+function validateDesignOptions(
+  raw: unknown,
+  path: string,
+  index: IdIndex,
+  format: DisplayFormat,
+  existing: ExistingPass,
+  checks: Checks,
+  add: Add,
+): void {
+  if (raw === undefined) return
+  const options = checkArray(raw, path, 'the Design Options', add)
+  if (options === null) return
+  // Two Options called `Option A` are two Options the list cannot offer a choice between, so the
+  // name is unique the way a Floor name is: trimmed, case-folded, Unicode-normalised.
+  const names = new Map<string, string>()
+  options.forEach((rawOption, i) => {
+    const at = childPath(path, i)
+    if (!isRecord(rawOption)) {
+      add(at, WRONG_TYPE, 'Expected a Design Option.')
+      return
+    }
+    const idPath = childPath(at, 'id')
+    const optionId = checkEntityId(rawOption.id, idPath, 'the Design Option ID', add)
+    if (optionId !== null) claimId(optionId, idPath, 'the Design Option ID', index, add)
+
+    const namePath = childPath(at, 'name')
+    const name = checkFilledText(rawOption.name, namePath, 'the Design Option name', add)
+    if (name !== null) {
+      if (name.length > DESIGN_OPTION_NAME_MAX_LENGTH) {
+        add(namePath, OUT_OF_RANGE, `Expected the Design Option name to be at most ${DESIGN_OPTION_NAME_MAX_LENGTH} characters — it is ${name.length}.`)
+      }
+      const key = nameKey(name)
+      const first = names.get(key)
+      if (first !== undefined) {
+        add(namePath, DUPLICATE_NAME, `Expected each Design Option to have its own name — ${first} is already called ${name.trim()}.`)
+      } else {
+        names.set(key, name)
+      }
+    }
+
+    // The demolition records: sorted, unique, and each one naming an entity of the Existing Model
+    // and nothing else. A record naming a proposed entity would delete work that exists only in one
+    // alternative, which is the state #69 §4 refuses outright.
+    const demolished = new Set<string>()
+    const order: string[] = []
+    const demPath = childPath(at, 'demolishedIds')
+    const records = checkArray(rawOption.demolishedIds, demPath, 'the demolition records', add)
+    if (records !== null) {
+      records.forEach((value, j) => {
+        const here = childPath(demPath, j)
+        const id = checkEntityId(value, here, 'a demolition record', add)
+        if (id === null) return
+        if (demolished.has(id)) {
+          add(here, DUPLICATE_ID, 'Expected each demolition record once in one Design Option.')
+          return
+        }
+        demolished.add(id)
+        order.push(id)
+        if (!index.existingIds.has(id)) {
+          add(
+            here,
+            DANGLING_REFERENCE,
+            index.proposedIds.has(id)
+              ? 'Expected a demolition record to name an Existing Model entity — this one is proposed work of a Design Option.'
+              : `Expected a demolition record to name an entity of this Project — no entity has ID ${id}.`,
+          )
+        }
+      })
+      const sorted = [...order].sort(compareCodePoints)
+      if (order.some((id, j) => id !== sorted[j])) {
+        add(demPath, BAD_FORMAT, 'Expected the demolition records sorted, the way the model stores them.')
+      }
+    }
+
+    const proposedPath = childPath(at, 'proposed')
+    if (!isRecord(rawOption.proposed)) {
+      add(proposedPath, rawOption.proposed === undefined ? MISSING : WRONG_TYPE, 'Expected the proposed model.')
+      checkUnknownFields(rawOption, at, DESIGN_OPTION_FIELDS, add)
+      return
+    }
+    const proposed = rawOption.proposed
+    // The Option's own IDs, read before anything is validated: a Junction may name a Wall declared
+    // after it, and "is this Wall ours?" has to be answerable while the array is still being walked.
+    const proposedIds = new Set<string>()
+    const proposedWallIds = new Set<string>()
+    for (const key of PROPOSED_MODEL_FIELDS) {
+      const list = proposed[key]
+      if (!Array.isArray(list)) continue
+      for (const entry of list) {
+        if (!isRecord(entry) || typeof entry.id !== 'string') continue
+        proposedIds.add(entry.id)
+        if (key === 'walls') proposedWallIds.add(entry.id)
+      }
+    }
+    // An unparseable Option ID is still an Option: the scope only asks whether one is in force.
+    const scope: ModelScope = { optionId: optionId ?? at, demolished, proposedIds, proposedWallIds }
+    // The Option's own records are the only ones this pass could have been asked about, and reading
+    // their IDs is a walk of strings: an Option that nothing touched and no changed record names is
+    // skipped whole, which is where the rest of the reference Project's Option cost was (#69 §8).
+    // Its ID, its name and its demolition records were checked above either way.
+    if (checks !== null && !checks.entities.has(optionId ?? '') && ![...proposedIds].some((id) => checks.entities.has(id))) return
+
+    const optionWalls = validateWalls(proposed.walls, childPath(proposedPath, 'walls'), index, new Map(existing.refs), scope, add)
+    const walls = new Map<string, WallShape>()
+    for (const [id, wall] of existing.walls) {
+      if (!demolished.has(id)) walls.set(id, wall)
+    }
+    for (const [id, wall] of optionWalls) walls.set(id, wall)
+    // The Junctions of the effective model: the Existing ones whose Walls all still stand in this
+    // Option, then the Option's own. A join that involved a demolished Wall goes with it, which is
+    // what lengthens the usable interval of a retained neighbour (#69 §4).
+    const standing = existing.junctions.filter(
+      (junction) =>
+        !junction.ends.some((end) => demolished.has(end.wallId)) &&
+        !(junction.host !== undefined && demolished.has(junction.host.wallId)),
+    )
+    const junctions = [
+      ...standing,
+      ...validateWallJunctions(
+        proposed.wallJunctions,
+        childPath(proposedPath, 'wallJunctions'),
+        index,
+        scope,
+        walls,
+        // Past the guard above, this Option is one the pass was asked about: everything inside it
+        // is checked, in full, whatever the scope.
+        null,
+        add,
+        joinedEndsOf(standing),
+      ),
+    ]
+    validateOpenings(proposed.openings, childPath(proposedPath, 'openings'), index, scope, walls, junctions, null, add)
+    const optionRooms = validateRooms(proposed.rooms, childPath(proposedPath, 'rooms'), index, scope, walls, format, null, add)
+    const itemsPath = childPath(proposedPath, 'placedItems')
+    const placedItems = checkArray(proposed.placedItems, itemsPath, 'the proposed Placed Items', add)
+    if (placedItems !== null) {
+      placedItems.forEach((item, j) => validatePlacedItem(item, childPath(itemsPath, j), index, scope, add))
+    }
+    checkUnknownFields(proposed, proposedPath, PROPOSED_MODEL_FIELDS, add)
+    checkUnknownFields(rawOption, at, DESIGN_OPTION_FIELDS, add)
+
+    // Overlap is a property of the effective model, so it is checked across both collections —
+    // Existing first, so the Room reported on is the one this Option introduced.
+    checkRoomOverlaps([...existing.rooms.filter((entry) => !demolished.has(entry.room.id)), ...optionRooms], add)
+  })
 }
 
 /**
@@ -1576,8 +1983,10 @@ function validateOpenings(
   raw: unknown,
   path: string,
   index: IdIndex,
+  scope: ModelScope,
   walls: Map<string, WallShape>,
   junctions: readonly JunctionShape[],
+  checks: Checks,
   add: Add,
 ): void {
   const items = checkArray(raw, path, 'the Openings', add)
@@ -1615,6 +2024,10 @@ function validateOpenings(
     const idPath = childPath(at, 'id')
     const id = checkEntityId(rawOpening.id, idPath, 'the Opening ID', add)
     if (id !== null) claimId(id, idPath, 'the Opening ID', index, add)
+    // The rest of this record is its own fit, which reads the tidied band of every Wall on the
+    // Floor: the one thing in this file worth skipping for an Opening nothing touched (#69 §8).
+    // Its ID is claimed over the whole document by `indexIds`, so a duplicate still surfaces.
+    if (!inScope(checks, rawOpening)) return
 
     const floorPath = childPath(at, 'floorId')
     const floorId = checkText(rawOpening.floorId, floorPath, 'the Floor this Opening is on', add)
@@ -1630,7 +2043,11 @@ function validateOpenings(
     if (hostId !== null) {
       host = walls.get(hostId) ?? null
       if (host === null) {
-        add(hostPath, DANGLING_REFERENCE, 'Opening refers to a Wall that is not in this Project.')
+        add(
+          hostPath,
+          DANGLING_REFERENCE,
+          missingWallMessage(hostId, index, scope, 'Opening refers to a Wall that is not in this Project.'),
+        )
       } else if (floorId !== null && host.floorId !== floorId) {
         add(hostPath, DANGLING_REFERENCE, 'Opening and the Wall it is cut into stand on different Floors.')
         host = null
@@ -1673,6 +2090,7 @@ function validateOpenings(
       if (hasHinge) add(hingePath, UNKNOWN_FIELD, `Expected a ${noun} to carry no door fields.`)
     }
 
+    checkPredecessorIds(rawOpening.predecessorIds, at, index, scope, add)
     checkUnknownFields(rawOpening, at, OPENING_FIELDS, add)
     if (host === null || kind === null || start === null || width === null || width <= 0 || floorId === null) return
     const usable = intervalsOf(floorId).get(host.id)
@@ -1694,13 +2112,12 @@ function validateOpenings(
 }
 
 /** Every Wall in the collection that read cleanly, by ID, plus the `ref`s already used. */
-function validateWalls(raw: unknown, path: string, index: IdIndex, add: Add): Map<string, WallShape> {
+function validateWalls(raw: unknown, path: string, index: IdIndex, refs: Map<string, string>, scope: ModelScope, add: Add): Map<string, WallShape> {
   const walls = new Map<string, WallShape>()
-  const refs = new Map<string, string>()
   const items = checkArray(raw, path, 'the Walls', add)
   if (items === null) return walls
   items.forEach((wall, i) => {
-    const shape = validateWall(wall, childPath(path, i), index, refs, add)
+    const shape = validateWall(wall, childPath(path, i), index, refs, scope, add)
     if (shape !== null) walls.set(shape.id, shape)
   })
   return walls
@@ -1726,13 +2143,15 @@ function validateRooms(
   raw: unknown,
   path: string,
   index: IdIndex,
+  scope: ModelScope,
   walls: Map<string, WallShape>,
   format: DisplayFormat,
+  checks: Checks,
   add: Add,
-): void {
+): { room: Room; at: string }[] {
   const items = checkArray(raw, path, 'the Rooms', add)
-  if (items === null) return
   const placed: { room: Room; at: string }[] = []
+  if (items === null) return placed
   items.forEach((rawRoom, i) => {
     const at = childPath(path, i)
     if (!isRecord(rawRoom)) {
@@ -1755,16 +2174,34 @@ function validateRooms(
       add(namePath, OUT_OF_RANGE, `Expected the Room name to be at most ${ROOM_NAME_MAX_LENGTH} characters — it is ${name.length}.`)
     }
 
+    // The outline is validated for every Room, in scope or not: it costs microseconds and it is
+    // what the overlap pass below compares against, so a proposed Room is still tested against an
+    // Existing one neither this transaction nor its referrers touched (#69 §8).
     const outline = validateRoomOutline(rawRoom.outline, childPath(at, 'outline'), format, add)
-    const wallFaceRefs = validateRoomFaceRefs(rawRoom.wallFaceRefs, childPath(at, 'wallFaceRefs'), outline, walls, floorId, add)
-    checkUnknownFields(rawRoom, at, ROOM_FIELDS, add)
+    const mine = inScope(checks, rawRoom)
+    const wallFaceRefs = mine
+      ? validateRoomFaceRefs(rawRoom.wallFaceRefs, childPath(at, 'wallFaceRefs'), outline, index, scope, walls, floorId, add)
+      : []
+    if (mine) {
+      checkPredecessorIds(rawRoom.predecessorIds, at, index, scope, add)
+      checkUnknownFields(rawRoom, at, ROOM_FIELDS, add)
+    }
     if (id !== null && floorId !== null && name !== null && outline !== null) {
       placed.push({ room: { id, floorId, name, outline, wallFaceRefs }, at })
     }
   })
+  return placed
+}
 
-  // One pass per Floor that carries more than one Room: overlap is symmetric, so the pair is
-  // reported once, on the outline of the Room that came second.
+/**
+ * One pass per Floor that carries more than one Room: overlap is symmetric, so the pair is
+ * reported once, on the outline of the Room that came second.
+ *
+ * This is a separate function because a Design Option's Rooms are only half the story (#69 §4):
+ * a proposed Room that overlaps one the Existing Model already has is a defect of the effective
+ * model, and neither pass can see it on its own.
+ */
+function checkRoomOverlaps(placed: readonly { room: Room; at: string }[], add: Add): void {
   const byFloor = new Map<string, { room: Room; at: string }[]>()
   for (const entry of placed) {
     const list = byFloor.get(entry.room.floorId)
@@ -1867,6 +2304,8 @@ function validateRoomFaceRefs(
   raw: unknown,
   path: string,
   outline: RoomOutline | null,
+  index: IdIndex,
+  scope: ModelScope,
   walls: Map<string, WallShape>,
   floorId: string | null,
   add: Add,
@@ -1908,7 +2347,11 @@ function validateRoomFaceRefs(
 
     const wall = walls.get(wallId)
     if (wall === undefined) {
-      add(wallPath, DANGLING_REFERENCE, `Expected the referenced Wall to be a Wall of this Project — no Wall has ID ${wallId}.`)
+      add(
+        wallPath,
+        DANGLING_REFERENCE,
+        missingWallMessage(wallId, index, scope, `Expected the referenced Wall to be a Wall of this Project — no Wall has ID ${wallId}.`),
+      )
       return
     }
     if (floorId !== null && wall.floorId !== floorId) {
@@ -1942,14 +2385,16 @@ function validateRoomFaceRefs(
  *    decision about a thing that does not exist. `edit` prunes those inside the same Edit
  *    Transaction as the deletion (#66 §7), so one that arrives in a file was written by
  *    something else.
- *  - **A `designOptionId` that is not `null`.** Design Options do not exist yet (#83), so
- *    there is nothing such an ID could name. Refusing it now is what lets the stored records
- *    of every Project written before Options ship stay valid when they arrive.
+ *  - **An unknown `designOptionId`.** `null` is the Existing Option; a non-null ID names one
+ *    Design Option of this Project (#69 §4). An ID that names nothing is a record of a decision
+ *    about a thing that does not exist — the same reason the subject rule below refuses an
+ *    unknown subject — and it would also make the key unmatchable, because the engine builds
+ *    its key from the Option it is currently deriving.
  *
  * The key itself is `domain`'s `warningKey`, the same function the engine calls: two spellings
  * of one key is a warning that reads `Seen ✓` in one place and open in another.
  */
-function validateAcknowledgements(raw: unknown, path: string, index: IdIndex, add: Add): void {
+function validateAcknowledgements(raw: unknown, path: string, index: IdIndex, optionIds: ReadonlySet<string>, add: Add): void {
   const items = checkArray(raw, path, 'the warning acknowledgements', add)
   if (items === null) return
   const keys = new Map<string, string>()
@@ -1962,6 +2407,7 @@ function validateAcknowledgements(raw: unknown, path: string, index: IdIndex, ad
     const idPath = childPath(here, 'id')
     const id = checkEntityId(item.id, idPath, 'the acknowledgement ID', add)
     if (id !== null) claimId(id, idPath, 'the acknowledgement ID', index, add)
+    let ackOption: EntityId | null = null
 
     const typePath = childPath(here, 'warningType')
     const warningType = checkFilledText(item.warningType, typePath, 'the warning type', add)
@@ -1994,14 +2440,19 @@ function validateAcknowledgements(raw: unknown, path: string, index: IdIndex, ad
       }
     }
 
-    // `null` is the Existing Option and the only value until #83 gives a Project Design
-    // Options; a text ID here names something this schema has no collection for.
-    if (item.designOptionId !== null) {
-      add(
-        childPath(here, 'designOptionId'),
-        item.designOptionId === undefined ? MISSING : DANGLING_REFERENCE,
-        'Expected the Design Option of an acknowledgement to be null until Design Options exist.',
-      )
+    // `null` is the Existing Option: the warning is acknowledged for the Project as it stands, in
+    // every Design Option. A non-null ID names one Option (#69 §4), so it has to name one that
+    // exists — an acknowledgement of a warning inside an Option that was deleted is a record of a
+    // decision about a thing that does not exist, which is what the subject rule above refuses too.
+    const optionPath = childPath(here, 'designOptionId')
+    if (item.designOptionId === undefined) {
+      add(optionPath, MISSING, 'Missing the Design Option of an acknowledgement — null for the Existing Model.')
+    } else if (item.designOptionId !== null) {
+      const optionId = checkEntityId(item.designOptionId, optionPath, 'the acknowledgement Design Option ID', add)
+      if (optionId !== null) {
+        if (optionIds.has(optionId)) ackOption = optionId
+        else add(optionPath, DANGLING_REFERENCE, 'Expected the Design Option of an acknowledgement to be a Design Option of this Project.')
+      }
     }
 
     const signature = checkFilledText(item.signature, childPath(here, 'signature'), 'the measurement signature', add)
@@ -2026,7 +2477,7 @@ function validateAcknowledgements(raw: unknown, path: string, index: IdIndex, ad
     checkUnknownFields(item, here, ACKNOWLEDGEMENT_FIELDS, add)
 
     if (warningType !== null && subjects !== null) {
-      const key = warningKey(warningType, ids, null)
+      const key = warningKey(warningType, ids, ackOption)
       const first = keys.get(key)
       if (first !== undefined) {
         add(here, DUPLICATE_ID, `Expected one acknowledgement per warning — ${first} already acknowledges this one.`)
@@ -2061,12 +2512,16 @@ function displayFormatOf(value: Rec): DisplayFormat {
 /**
  * Validate an unknown value as a current-schema {@link Project}.
  *
- * On success the *same object reference* comes back typed as `Project`: nothing is
- * copied, rebuilt or defaulted, so a caller can hand the result straight to `immer` or
- * hash it and get the bytes it was given. On failure every broken invariant is listed,
- * in the order described at the top of this file.
+ * On success the *same object reference* comes back typed as `Project`: nothing is copied, rebuilt
+ * or defaulted, so a caller can hand the result straight to `immer` or hash it and get the bytes it
+ * was given. On failure every broken invariant is listed, in the order described at the top of this
+ * file.
+ *
+ * With no `checks` the whole document is validated, which is what loading, importing and every test
+ * do. `applyIntent` passes a {@link ValidationScope} instead, because a Transaction may not cost a
+ * whole re-read of a Project (#69 §8).
  */
-export function validateProject(value: unknown): ValidateProjectResult {
+export function validateProject(value: unknown, checks: ValidationScope | null = null): ValidateProjectResult {
   // The same reference, kept un-narrowed: validation proves the shape, it never rebuilds
   // the value, so a valid Project comes back as the exact object that was handed in.
   const source: unknown = value
@@ -2089,9 +2544,29 @@ export function validateProject(value: unknown): ValidateProjectResult {
   validatePreferences(value.preferences, childPath(ROOT_PATH, 'preferences'), add)
   validateFloors(value.floors, childPath(ROOT_PATH, 'floors'), index, add)
   validateViews(value.views, childPath(ROOT_PATH, 'views'), index, add)
-  validateItemDesigns(value.itemDesigns, childPath(ROOT_PATH, 'itemDesigns'), index, displayFormatOf(value), add)
-  validateExistingModel(value.existingModel, childPath(ROOT_PATH, 'existingModel'), index, displayFormatOf(value), add)
-  validateAcknowledgements(value.warningAcknowledgements, childPath(ROOT_PATH, 'warningAcknowledgements'), index, add)
+  validateItemDesigns(value.itemDesigns, childPath(ROOT_PATH, 'itemDesigns'), index, displayFormatOf(value), checks, add)
+  const existing = validateExistingModel(
+    value.existingModel,
+    childPath(ROOT_PATH, 'existingModel'),
+    index,
+    displayFormatOf(value),
+    checks,
+    add,
+  )
+  // The Existing Model's own Rooms first, so a Project with no Design Options reports exactly the
+  // problems it reported before this pass existed, in the same order. Every Room outline is in the
+  // pool, scoped pass or not, so an overlap is never missed because one side was untouched.
+  checkRoomOverlaps(existing.rooms, add)
+  validateDesignOptions(
+    value.designOptions,
+    childPath(ROOT_PATH, 'designOptions'),
+    index,
+    displayFormatOf(value),
+    existing,
+    checks,
+    add,
+  )
+  validateAcknowledgements(value.warningAcknowledgements, childPath(ROOT_PATH, 'warningAcknowledgements'), index, index.optionIds, add)
   checkUnknownFields(value, ROOT_PATH, PROJECT_FIELDS, add)
 
   return problems.length === 0 ? { ok: true, project: source as Project } : { ok: false, problems }

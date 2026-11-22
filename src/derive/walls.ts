@@ -25,6 +25,7 @@ import type { ClosedPath, JoinJunction, JoinWall, Pt, Segment, WallSide } from '
 import type { EntityId, Project } from '../domain'
 import type { WallFaceSource } from './snapCandidates'
 import { faceRoomNames } from './rooms'
+import { effectiveModel } from './effectiveModel'
 
 /** One tidied face, with the key that names it (#64 §6). */
 export interface DerivedFace {
@@ -88,14 +89,15 @@ const joinRefs = (refs: readonly string[]): string => {
 /**
  * The tidied Walls, faces, corners and lengths of one Floor (#64 §6).
  *
- * Pure: the same Project and Floor always give a byte-identical answer, and a Floor with no
- * Walls gives an empty result rather than `undefined`. The Design Option is part of the cache
- * key and not of the answer: Walls belong to the Existing Model until #69 gives them Option
- * ownership, so two Options of one Floor derive the same Walls today.
+ * Pure: the same Project, Floor and Design Option always give a byte-identical answer, and a Floor
+ * with no Walls gives an empty result rather than `undefined`. The Walls of the Option that is
+ * standing are what is tidied: a Wall this Option demolishes is not drawn as a Wall and takes part
+ * in no join, which is the standing set of #69 §5 rather than the whole Existing Model.
  */
-export const deriveWalls = (project: Project, floorId: EntityId): FloorWalls => {
-  const stored = project.existingModel.walls.filter((wall) => wall.floorId === floorId)
-  const junctions = project.existingModel.wallJunctions.filter((junction) => junction.floorId === floorId)
+export const deriveWalls = (project: Project, floorId: EntityId, optionId: EntityId | null = null): FloorWalls => {
+  const model = effectiveModel(project, floorId, optionId)
+  const stored = model.standingWalls
+  const junctions = model.standingWallJunctions
   const refOf = new Map(stored.map((wall) => [wall.id, wall.ref]))
   const joined = joinWalls(
     stored.map((wall): JoinWall => ({
@@ -182,7 +184,7 @@ export const deriveWalls = (project: Project, floorId: EntityId): FloorWalls => 
   // Wall (#67 §9). A face bordering no Room keeps the plain wording, which is the truth about it.
   const faceNames = faceRoomNames(
     walls.map((wall) => [...wall.faces]).flat(),
-    project.existingModel.rooms.filter((room) => room.floorId === floorId),
+    model.standingRooms,
   )
   const snapSources: WallFaceSource[] = walls.map((wall) => ({
     id: wall.id,

@@ -8,10 +8,10 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
-import type { DependencyReview } from '../../../edit'
+import type { DeleteWallReview } from '../../../edit'
 import { DeleteWallReviewDialog } from './DeleteWallReviewDialog'
 
-const review = (over: Partial<DependencyReview> = {}): DependencyReview => ({
+const review = (over: Partial<DeleteWallReview> = {}): DeleteWallReview => ({
   kind: 'delete-wall',
   wallId: 'w3',
   wallRef: 'W-3',

@@ -1,4 +1,5 @@
-import { defineConfig, configDefaults } from 'vitest/config'
+import { defineConfig, configDefaults, type UserConfig } from 'vitest/config'
+import { loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { readFileSync } from 'node:fs'
 
@@ -80,10 +81,24 @@ const BROWSER_INCLUDE = ['src/persistence/indexeddb/**/*.browser.test.ts']
 const QUOTA_INCLUDE = ['src/persistence/indexeddb/quota.browser.test.ts']
 // The workspace layout tests (#55) measure real bounding boxes, which jsdom cannot give.
 const LAYOUT_BROWSER_INCLUDE = ['src/ui/**/*.browser.test.{ts,tsx}']
+// #69 ships dark: `VITE_FF_RENOVATION` decides at config-read time whether the renovation suites
+// exist at all. Vitest fills `import.meta.env` once, when it reads this file, so one run has one
+// flag value and a flagged suite cannot be a project of the flag-off run — `npm test` never looks
+// for files it has no flag to read, and `npm run test:renovation` is the run that does.
+const FF_RENOVATION = process.env['VITE_FF_RENOVATION'] === 'true'
+const RENOVATION_INCLUDE = ['src/**/*.renovation.test.{ts,tsx}']
+// The two renovation suites are split the way `pure` and `dom` are: a `.tsx` suite needs a DOM, and
+// a `.ts` one must not be handed one — a model test run under jsdom is a model test that cannot see
+// `document`, and a component test run under Node is a crash.
+const RENOVATION_NODE_INCLUDE = ['src/**/*.renovation.test.ts']
+const RENOVATION_DOM_INCLUDE = ['src/**/*.renovation.test.tsx']
+// The #69 benches measure a model a flag-off build does not carry, so the flag-off `npm run bench`
+// never looks for them; `npm run bench:renovation` is the run that does.
+const RENOVATION_BENCH_EXCLUDE = FF_RENOVATION ? [] : ['src/**/renovation*.bench.ts']
 
 const SHARED_EXCLUDE = ['e2e/**', ...configDefaults.exclude]
 
-export default defineConfig({
+const config: UserConfig = {
   base: '/buildbox/',
   define: { __BUILDBOX_VERSION__: JSON.stringify(BUILDBOX_VERSION) },
   plugins: [react()],
@@ -120,7 +135,10 @@ export default defineConfig({
           name: 'pure',
           environment: 'node',
           include: [...PURE_INCLUDE, ...NODE_ONLY_INCLUDE],
-          exclude: [...PURE_EXCLUDE, ...SHARED_EXCLUDE],
+          exclude: [...PURE_EXCLUDE, ...RENOVATION_INCLUDE, ...RENOVATION_BENCH_EXCLUDE, ...SHARED_EXCLUDE],
+          // `vitest bench` reads this list, not `exclude`, so the flag-off bench pass needs the
+          // same pattern twice: a flag-off build does not carry the model these benches measure.
+          benchmark: { exclude: ['**/node_modules/**', ...RENOVATION_BENCH_EXCLUDE] },
           setupFiles: ['src/test/pure-setup.ts'],
         },
       },
@@ -130,10 +148,37 @@ export default defineConfig({
           name: 'dom',
           environment: 'jsdom',
           include: ['src/**/*.test.{ts,tsx}'],
-          exclude: [...PURE_INCLUDE, ...NODE_ONLY_INCLUDE, ...PURE_EXCLUDE, ...LAYOUT_BROWSER_INCLUDE, ...SHARED_EXCLUDE],
+          exclude: [...PURE_INCLUDE, ...NODE_ONLY_INCLUDE, ...PURE_EXCLUDE, ...RENOVATION_INCLUDE, ...LAYOUT_BROWSER_INCLUDE, ...SHARED_EXCLUDE],
           setupFiles: ['./src/test/setup.ts'],
         },
       },
+      // The renovation model's own suites (#69), under Node like `pure` and jsdom like `dom`.
+      // Present only in a run made with the flag set, so a flag-off `npm test` neither runs nor
+      // misses them.
+      ...(FF_RENOVATION
+        ? [
+            {
+              extends: true as const,
+              test: {
+                name: 'renovation',
+                environment: 'node',
+                include: RENOVATION_NODE_INCLUDE,
+                exclude: [...SHARED_EXCLUDE],
+                setupFiles: ['src/test/pure-setup.ts'],
+              },
+            },
+            {
+              extends: true as const,
+              test: {
+                name: 'renovation-dom',
+                environment: 'jsdom',
+                include: RENOVATION_DOM_INCLUDE,
+                exclude: [...SHARED_EXCLUDE],
+                setupFiles: ['./src/test/setup.ts'],
+              },
+            },
+          ]
+        : []),
       {
         // The adapter over `fake-indexeddb` (#46): a Node host, an injected `IDBFactory`
         // per test, no DOM globals — which is why it takes no setup file at all.
@@ -198,4 +243,23 @@ export default defineConfig({
       },
     ],
   },
+}
+
+// The renovation flag reaches client code through `define`, not `import.meta.env` (#69).
+//
+// `src/lib/flags.ts` is inside the `lib` barrel, which `domain` imports for its banned words, which
+// the Playwright support modules import from raw Node — and outside a Vite build `import.meta.env`
+// is absent, so reading a property off it threw while the spec file was still being loaded, and
+// every smoke spec went down with it. `process.env.VITE_FF_RENOVATION` is undefined there instead,
+// which is the same answer a flag-off build gives. The bundler replaces this `define` entry with a
+// string literal, so a flag-off build still folds every `if (FF_RENOVATION)` branch away — the
+// claim `scripts/check-bundle-strings.mjs` greps for. `loadEnv` is what makes the mode's `.env`
+// file the source, so `--mode renovation` (see `.env.renovation`) turns both this and
+// `src/app/channel.ts`'s preview-database decision on together.
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), 'VITE_')
+  return {
+    ...config,
+    define: { ...config.define, 'process.env.VITE_FF_RENOVATION': JSON.stringify(env.VITE_FF_RENOVATION ?? 'false') },
+  }
 })

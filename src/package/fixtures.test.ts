@@ -11,7 +11,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { canonicalJsonBytes, sha256Hex } from '../lib'
+import { canonicalJsonBytes, FF_RENOVATION, sha256Hex } from '../lib'
 import type { PlanView, Project } from '../domain'
 import { encodeProject } from './encode'
 import { stageImport } from './import'
@@ -25,11 +25,12 @@ import {
   legacyFixtureRecord,
   openingsFixtureProject,
   roomsFixtureProject,
+  renovationFixtureProject,
 } from './testing'
 
 const ASSET_ENTRY = `assets/${FIXTURE_PLAN_IMAGE_HASH}.png`
 
-type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6' | 'v7'
+type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6' | 'v7' | 'v8'
 
 const fixtureDir = (version: FixtureVersion): URL => new URL(`../../fixtures/package/${version}/`, import.meta.url)
 const readFrom = (version: FixtureVersion) => (relative: string): Uint8Array =>
@@ -42,6 +43,7 @@ const readV4 = readFrom('v4')
 const readV5 = readFrom('v5')
 const readV6 = readFrom('v6')
 const readV7 = readFrom('v7')
+const readV8 = readFrom('v8')
 
 const ARCHIVE_V1 = readV1('reference.buildbox')
 const ARCHIVE_V2 = readV2('reference.buildbox')
@@ -56,6 +58,9 @@ const ARCHIVE_V6 = readV6('acknowledgements.buildbox')
 // The v7 file is named for what the step added, as v5's and v6's were: it is the first Backup
 // whose Project carries a Room (#67).
 const ARCHIVE_V7 = readV7('rooms.buildbox')
+// The v8 file is named for what the step added, as v5's, v6's and v7's were: it is the first Backup
+// whose Project carries a Design Option, and the first written by a preview build (#69).
+const ARCHIVE_V8 = readV8('renovation.buildbox')
 const ASSET_BYTES = readV2(ASSET_ENTRY)
 
 /** The one Plan Image every fixture carries, served the way the export serves it. */
@@ -92,6 +97,17 @@ function v1StagedAsViews(): Project {
 }
 
 const canonicalOf = (record: unknown): string => new TextDecoder().decode(canonicalJsonBytes(record))
+
+/**
+ * What this build's current schema asks of a Project that has no Design Option of its own (#69).
+ *
+ * In a `VITE_FF_RENOVATION` build the current schema is v8, so every Backup below stages into a
+ * Project carrying an empty `designOptions` — the one thing `migrateV7toV8` adds, and the same thing
+ * a v7 Project gains the moment it is opened — and the v7 file is no longer the top of the chain.
+ * A flag-off build stages exactly the record each file holds, which is what these expectations were
+ * written against.
+ */
+const atCurrentSchema = (project: Project): Project => (FF_RENOVATION ? { ...project, designOptions: [] } : project)
 
 const manifestOf = async (canonical: string, domainSchemaVersion: number) => ({
   format: 'buildbox-project',
@@ -155,7 +171,7 @@ describe('the committed v1 Backup', () => {
   it('stages into the current Project, with one default Plan View per Floor (#56)', async () => {
     const result = await stageImport(ARCHIVE_V1, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
-    expect(result.staged.project).toEqual(v1StagedAsViews())
+    expect(result.staged.project).toEqual(atCurrentSchema(v1StagedAsViews()))
     expect(result.staged.migratedFrom).toBe(1)
     expect(result.staged.manifest.entries.map((entry) => entry.path)).toEqual(['project.json', ASSET_ENTRY])
     expect([...result.staged.assets.keys()]).toEqual([FIXTURE_PLAN_IMAGE_HASH])
@@ -184,7 +200,7 @@ describe('the committed v2 Backup (#56)', () => {
   it('stages into the current Project, restating every footprint (#58)', async () => {
     const result = await stageImport(ARCHIVE_V2, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
-    expect(result.staged.project).toEqual(fixtureProject())
+    expect(result.staged.project).toEqual(atCurrentSchema(fixtureProject()))
     // v2 is no longer the current schema: staging it runs the one step #58 added.
     expect(result.staged.migratedFrom).toBe(2)
   })
@@ -209,7 +225,7 @@ describe('the committed v3 Backup (#58)', () => {
   it('stages into the current Project, gaining the Wall fields (#64)', async () => {
     const result = await stageImport(ARCHIVE_V3, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
-    expect(result.staged.project).toEqual(fixtureProject())
+    expect(result.staged.project).toEqual(atCurrentSchema(fixtureProject()))
     // v3 is no longer the current schema: staging it runs the one step #64 added.
     expect(result.staged.migratedFrom).toBe(3)
   })
@@ -241,7 +257,7 @@ describe('the committed v4 Backup (#64)', () => {
   it('stages into the current Project, gaining the empty Opening collection (#65)', async () => {
     const result = await stageImport(ARCHIVE_V4, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
-    expect(result.staged.project).toEqual(fixtureProject())
+    expect(result.staged.project).toEqual(atCurrentSchema(fixtureProject()))
     expect(result.staged.migratedFrom).toBe(4)
   })
 
@@ -276,7 +292,7 @@ describe('the committed v5 Backup (#65)', () => {
   it('stages into the current Project, with an empty Acknowledgement list', async () => {
     const result = await stageImport(ARCHIVE_V5, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
-    expect(result.staged.project).toEqual(openingsFixtureProject())
+    expect(result.staged.project).toEqual(atCurrentSchema(openingsFixtureProject()))
     expect(result.staged.migratedFrom).toBe(5)
   })
 
@@ -306,7 +322,7 @@ describe('the committed v6 Backup (#66)', () => {
   it('stages into the current Project, gaining the empty Room collection (#67)', async () => {
     const result = await stageImport(ARCHIVE_V6, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
-    expect(result.staged.project).toEqual(acknowledgementsFixtureProject())
+    expect(result.staged.project).toEqual(atCurrentSchema(acknowledgementsFixtureProject()))
     // v6 is no longer the current schema: staging it runs the one step #67 added.
     expect(result.staged.migratedFrom).toBe(6)
   })
@@ -345,14 +361,19 @@ describe('the committed v6 Backup (#66)', () => {
 })
 
 describe('the committed v7 Backup (#67)', () => {
-  it('stages into the Project it was written from, unmigrated', async () => {
+  it('stages into the Project it was written from', async () => {
     const result = await stageImport(ARCHIVE_V7, { acceptPreview: false, allocateId: allocateIds() })
-    if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
-    expect(result.staged.project).toEqual(roomsFixtureProject())
-    expect(result.staged.migratedFrom).toBeNull()
+    if (!result.ok) throw new Error(`${result.problem.code}: ${result.problem}`)
+    expect(result.staged.project).toEqual(atCurrentSchema(roomsFixtureProject()))
+    // v7 is the current schema of a production build, so a flag-off run stages it with no step at
+    // all; a preview build is one version ahead, and the step it runs is the empty Option list.
+    expect(result.staged.migratedFrom).toBe(FF_RENOVATION ? 7 : null)
   })
 
-  it('is re-encoded byte for byte by this build', async () => {
+  // A preview build writes v8 and marks the Package `preview: true`, so re-encoding the committed
+  // v7 file produces different bytes there by design — what a preview build writes is the v8
+  // Backup's own business below. Byte for byte is the property of the build that writes v7.
+  it.skipIf(FF_RENOVATION)('is re-encoded byte for byte by this build', async () => {
     expect(await encodeProject(roomsFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V7)
     const canonical = canonicalOf(roomsFixtureProject())
     expect(new TextDecoder().decode(readV7('project.json'))).toBe(`${canonical}\n`)
@@ -376,5 +397,50 @@ describe('the committed v7 Backup (#67)', () => {
     expect(record.existingModel.rooms[1]?.wallFaceRefs).toEqual([{ segmentId: 'edge-study-1', wallId: 'wall-1', side: 'right' }])
     // The v6 record beside it has no Room collection at all — the step in one comparison.
     expect(v6FixtureRecord().existingModel).not.toHaveProperty('rooms')
+  })
+})
+
+// The eighth golden step exists only in a `VITE_FF_RENOVATION` build, with the schema version and
+// the migrator that read it (#69 §1, architecture §11). A flag-off run neither runs nor misses it:
+// the file is on disk either way, and refusing to open it is that build's correct behaviour, which
+// the last case below is the one place that asserts it from the outside.
+describe.skipIf(!FF_RENOVATION)('the committed v8 Backup (#69)', () => {
+  it('stages into the Project it was written from, unmigrated', async () => {
+    const result = await stageImport(ARCHIVE_V8, { acceptPreview: true, allocateId: allocateIds() })
+    if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
+    expect(result.staged.project).toEqual(renovationFixtureProject())
+    expect(result.staged.migratedFrom).toBeNull()
+  })
+
+  it('is a preview package, which a build that does not accept previews refuses', async () => {
+    const result = await stageImport(ARCHIVE_V8, { acceptPreview: false, allocateId: allocateIds() })
+    if (result.ok) throw new Error('a preview package staged without being accepted as one')
+    expect(result.problem.code).toBe('preview-package')
+  })
+
+  it('is re-encoded byte for byte by this build', async () => {
+    expect(await encodeProject(renovationFixtureProject(), assetSource, { ...FIXTURE_BUILD, preview: true })).toEqual(ARCHIVE_V8)
+    const canonical = canonicalOf(renovationFixtureProject())
+    expect(new TextDecoder().decode(readV8('project.json'))).toBe(`${canonical}\n`)
+  })
+
+  it('is described by a manifest that names domain schema v8 and says it is a preview', async () => {
+    const staged = await stageImport(ARCHIVE_V8, { acceptPreview: true, allocateId: allocateIds() })
+    if (!staged.ok) throw new Error('the fixture must stage')
+    expect(staged.staged.manifest).toEqual({
+      ...(await manifestOf(canonicalOf(renovationFixtureProject()), 8)),
+      preview: true,
+    })
+  })
+
+  it('carries one Design Option with work of its own to do, which is what the step was for', () => {
+    const record = renovationFixtureProject()
+    expect(record.designOptions?.map((option) => option.name)).toEqual(['Open plan'])
+    // The v7 record beside it has no Design Option container at all — the step in one comparison.
+    expect(roomsFixtureProject()).not.toHaveProperty('designOptions')
+  })
+
+  it('carries the same asset, byte for byte', () => {
+    expect(readV8(ASSET_ENTRY)).toEqual(ASSET_BYTES)
   })
 })

@@ -13,11 +13,11 @@
  */
 import { useEffect } from 'react'
 import type { ReactNode } from 'react'
-import type { DependencyReview } from '../../../edit'
+import type { DeleteWallReview } from '../../../edit'
 import { STRINGS } from '../../strings'
 
 export interface DeleteWallReviewDialogProps {
-  review: DependencyReview
+  review: DeleteWallReview
   onConfirm: () => void
   onCancel: () => void
 }

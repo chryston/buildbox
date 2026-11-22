@@ -3,9 +3,13 @@
  * has a single place to read. Labels are short verb phrases — they show in the undo/redo
  * tooltip, where "Undo Change cabinet size" has to read as one sentence.
  */
-import type { IntentType } from './intents'
+import { FF_RENOVATION } from '../lib'
+import type { IntentType, S7IntentType } from './intents'
+import { RENOVATION_EDIT_INTENT_LABELS } from './handlers/renovationEdits'
+import { CORRECTION_INTENT_LABELS } from './handlers/correctionHandlers'
+import { RENOVATION_INTENT_LABELS } from './handlers/renovationHandlers'
 
-/** The default label per Intent type, verbatim from the #47 catalogue. */
+/** The default label per S7 Intent type, verbatim from the #47 catalogue. */
 export const INTENT_LABELS = {
   'project.rename': 'Rename Project',
   'project.setPreferences': 'Change display settings',
@@ -82,4 +86,24 @@ export const INTENT_LABELS = {
   'view.setShowPlanImage': 'Show plan image',
   'warning.acknowledge': 'Acknowledge warning',
   'warning.editNote': 'Edit warning note',
-} as const satisfies Record<IntentType, string>
+} as const satisfies Record<S7IntentType, string>
+
+/**
+ * The default label of any Intent the catalogue can answer (#69 §2).
+ *
+ * The renovation half is read under the same flag as its handlers: with the flag off the guard
+ * folds away, the import of `./handlers/renovationHandlers` becomes dead, and a released bundle
+ * carries neither those labels nor the code that would return them. Reaching this function with
+ * a renovation type in a flag-off build answers with the type itself — an Intent nothing
+ * registered can be, so the answer is never shown.
+ */
+const RENOVATION_LABELS: Partial<Record<IntentType, string>> = FF_RENOVATION
+  ? { ...RENOVATION_INTENT_LABELS, ...RENOVATION_EDIT_INTENT_LABELS, ...CORRECTION_INTENT_LABELS }
+  : {}
+
+export function intentLabel(type: IntentType): string {
+  const known = INTENT_LABELS as Partial<Record<IntentType, string>>
+  const s7 = known[type]
+  if (s7 !== undefined) return s7
+  return RENOVATION_LABELS[type] ?? type
+}

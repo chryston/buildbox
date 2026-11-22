@@ -47,6 +47,32 @@ jobs:
             playwright-report/
             test-results/
 
+  # The Design Options spec on Firefox (#69 criterion 13), against the same flag-on build CI
+  # smokes on Chromium: the script builds with `.env.renovation`, so this job needs no build step
+  # either. Nightly rather than required, like the rest of the second and third engines.
+  e2e-renovation-firefox:
+    name: e2e-renovation-firefox
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: install
+        run: npm ci
+      - name: browser
+        run: npx playwright install --with-deps firefox
+      - name: e2e (renovation flag on)
+        run: npm run test:e2e:renovation -- --project=renovation-firefox
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results-renovation-firefox
+          path: |
+            playwright-report/
+            test-results/
+
   # The same sweep over the IndexedDB adapter's contract suite (#46): the persistence
   # browser project runs against the engine named in `BB_BROWSER`, straight from source,
   # so it needs no build step. The quota case is Chromium-only and skips itself here.

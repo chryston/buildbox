@@ -23,14 +23,18 @@ import type {
   GlobalSettings,
   ItemFootprint,
   HingeSide,
+  Opening,
   OpeningDependency,
   OpeningKind,
   OpeningSwing,
   PlanImage,
   Point2,
   PathRoomOutline,
+  PlacedItem,
   PresetRoomOutline,
   Project,
+  Room,
+  Wall,
   WallClassification,
   WallFaceSide,
   WallJustification,
@@ -38,10 +42,21 @@ import type {
 } from '../domain'
 import { roomOutlinePath } from '../domain'
 import type { KeepFixed, Pt } from '../geometry'
+import { FF_RENOVATION } from '../lib'
 import type { ValidationProblem } from '../lib'
+import { RENOVATION_EDIT_INTENT_ID_ORDER } from './handlers/renovationEdits'
+import { CORRECTION_INTENT_ID_ORDER } from './handlers/correctionHandlers'
+import { RENOVATION_INTENT_ID_ORDER } from './handlers/renovationHandlers'
 
-/** Every Intent type in the #47 catalogue, one per current store action. */
-export type IntentType =
+/**
+ * Every Intent type the released catalogue answers (#47), one per current store action.
+ *
+ * This is the S7 set, kept apart from #69's renovation set because the two are registered
+ * under different conditions: the handlers, labels and ID orders of `RenovationIntentType`
+ * exist only in a `VITE_FF_RENOVATION=true` build, so a production bundle does not carry the
+ * strings at all. The types are one union either way — a type is not a byte.
+ */
+export type S7IntentType =
   | 'project.rename'
   | 'project.setPreferences'
   | 'cabinet.updateSettings'
@@ -117,6 +132,35 @@ export type IntentType =
   | 'view.setShowPlanImage'
   | 'warning.acknowledge'
   | 'warning.editNote'
+
+/** The Intents #69 registers only while `VITE_FF_RENOVATION` is on. */
+export type RenovationIntentType =
+  | 'designOption.create'
+  | 'designOption.rename'
+  | 'designOption.delete'
+  | 'renovation.placeOpening'
+  | 'renovation.knockThrough'
+  | 'renovation.demolish'
+  | 'renovation.replace'
+  | 'renovation.restore'
+  | 'renovation.correctExistingModel'
+  | 'renovation.moveToDesignOption'
+
+/** Every Intent type the catalogue can answer: the S7 set, plus the renovation set in a flagged build. */
+export type IntentType = S7IntentType | RenovationIntentType
+
+/**
+ * Which container an element edit writes into (#69 §7).
+ *
+ * Every Wall, Opening, Room and Placed Item edit takes one, and the S7 handlers do not read it
+ * yet: the container choice is a parameter of the existing Intents rather than a second family of
+ * them, so `#70`'s active Option is what turns `wall.setThickness` into an edit of proposed work.
+ * `null` — and no `target` at all — is the Existing Model, which is every edit a build without the
+ * flag can make.
+ */
+export interface IntentTarget {
+  target?: { designOptionId: EntityId | null }
+}
 
 /** The payload each Intent type carries. */
 export interface RenameProject {
@@ -683,6 +727,126 @@ export interface EditWarningNote {
   note: string
 }
 
+/**
+ * `New Design Option` (#69 §2): one Option, named, holding nothing. It starts as a copy of
+ * nothing — the Existing Model is what every Option starts from, so an Option with no records
+ * is not an empty Project but the whole of the model.
+ */
+export interface CreateDesignOption {
+  name: string
+}
+
+/** `Rename`: the name moves and every record stays where it was (#69 §2). */
+export interface RenameDesignOption {
+  optionId: EntityId
+  name: string
+}
+
+/** `Delete`: the Option, its records and its acknowledgements — and nothing else (#69 §2). */
+export interface DeleteDesignOption {
+  optionId: EntityId
+}
+
+/**
+ * Cut a new door or window into a Wall **from inside an Option** (#69 §7 row 1). The same fields
+ * `opening.create` takes, plus the Option the proposed Opening belongs to: the host is read from
+ * what stands in that Option and is never replaced by this Intent.
+ */
+export interface PlaceOpeningInOption {
+  floorId: EntityId
+  hostWallId: EntityId
+  kind: OpeningKind
+  label: string
+  start: number
+  width: number
+  sill: number
+  head: number
+  swing?: OpeningSwing
+  hingeSide?: HingeSide
+  /** Always an Option: this Intent has no Existing-Model form, which is `opening.create`. */
+  target: { designOptionId: EntityId }
+}
+
+/**
+ * Knock through part of a wall (#69 §7 row 2): a proposed `removed_section` with sill 0 and head
+ * at the host's height, so the gap is the whole of the Wall's Vertical Extent.
+ */
+export interface KnockThroughInOption {
+  floorId: EntityId
+  hostWallId: EntityId
+  label: string
+  start: number
+  width: number
+  target: { designOptionId: EntityId }
+}
+
+/**
+ * Mark demolition (#69 §7 rows 3–4): one demolition record per entity, in one Edit Transaction.
+ *
+ * A Wall takes the Openings its dependency review listed back with it — the answer the user
+ * confirmed — and an answer that no longer matches what the Project now says is refused.
+ */
+export interface DemolishInOption {
+  entityId: EntityId
+  /** The dependants the review listed, in the order it listed them. */
+  dependants?: EntityId[]
+  target: { designOptionId: EntityId }
+}
+
+/**
+ * The fields a successor carries instead of its predecessor's. Everything the edit leaves out is
+ * copied, so a replace changes the dimensions the user typed rather than the whole record (#69 §7).
+ */
+export type ReplaceEdit =
+  | Partial<Omit<Wall, 'id' | 'ref' | 'floorId' | 'predecessorIds'>>
+  | Partial<Omit<Opening, 'id' | 'floorId' | 'hostWallId' | 'predecessorIds'>>
+  | Partial<Omit<Room, 'id' | 'floorId' | 'predecessorIds'>>
+  | Partial<Omit<PlacedItem, 'id' | 'floorId' | 'predecessorIds'>>
+
+/**
+ * Replace (dimensions) and Replace (identity): the entity comes down and a successor takes its
+ * place carrying the edit, named after its predecessor with a prime on the end (#69 §3, §7). The
+ * Openings cut into a replaced Wall are carried onto the successor the same way, and the joins that
+ * still land on the new geometry are carried as this Option's own Junctions.
+ */
+export interface ReplaceInOption {
+  entityId: EntityId
+  edit: ReplaceEdit
+  target: { designOptionId: EntityId }
+}
+
+/**
+ * Restore: put back what stands here (#69 §9). The demolition record goes, and so does everything
+ * this Option built out of the entity — its successors, the copies carried onto them, the Junctions
+ * and Rooms that followed — which is why the preview lists what is deleted before it is agreed to.
+ */
+export interface RestoreInOption {
+  entityId: EntityId
+  target: { designOptionId: EntityId }
+}
+
+/**
+ * Correct the Existing Model (#69 §12): the baseline edit the user asked for, wrapped so it is
+ * previewed against every Design Option and committed as one Edit Transaction.
+ *
+ * The wrapper carries no field of its own beyond the inner Intent — which is any Existing Model edit
+ * the catalogue knows — because the correction is defined by what it wraps, not by a second list of
+ * every editable thing.
+ */
+export interface CorrectExistingModel {
+  inner: Intent
+}
+
+/**
+ * Move to a Design Option (#69 §13): baseline data that was surveyed by mistake becomes the target
+ * Option's own work. The IDs are kept, so nothing that refers to these entities has to be rewritten;
+ * no demolition record is written anywhere, because nothing comes down.
+ */
+export interface MoveToDesignOption {
+  entityIds: EntityId[]
+  targetOptionId: EntityId
+}
+
 /** `type → payload`, the one place the catalogue's shape is written down. */
 export interface IntentPayloads {
   'project.rename': RenameProject
@@ -705,11 +869,11 @@ export interface IntentPayloads {
   'cabinet.setSplitRatio': SetSplitRatio
   'cabinet.addAccessory': AddAccessory
   'cabinet.removeAccessory': RemoveAccessory
-  'plan.addObject': AddPlanObject
-  'plan.placeDesign': PlacePlanDesign
-  'plan.movePlacement': MovePlanPlacement
-  'plan.rotatePlacement': RotatePlanPlacement
-  'plan.removeObject': RemovePlanObject
+  'plan.addObject': AddPlanObject & IntentTarget
+  'plan.placeDesign': PlacePlanDesign & IntentTarget
+  'plan.movePlacement': MovePlanPlacement & IntentTarget
+  'plan.rotatePlacement': RotatePlanPlacement & IntentTarget
+  'plan.removeObject': RemovePlanObject & IntentTarget
   'plan.addTemplate': AddPlanTemplate
   'plan.removeTemplate': RemovePlanTemplate
   'plan.setImage': SetPlanImage
@@ -718,31 +882,31 @@ export interface IntentPayloads {
   'plan.clear': ClearPlan
   'plan.copyToFloor': CopyPlanObjectsToFloor
   'plan.moveToFloor': MovePlanObjectsToFloor
-  'wall.createChain': CreateWallChain
-  'wall.dragJunction': DragWallJunction
-  'wall.dragEndpoint': DragWallEndpoint
-  'wall.dragBody': DragWallBody
-  'wall.setLength': SetWallLength
-  'wall.setDirection': SetWallDirection
-  'wall.setArc': SetWallArc
-  'wall.setThickness': SetWallThickness
-  'wall.offset': OffsetWall
-  'wall.split': SplitWall
-  'wall.merge': MergeWalls
-  'wall.delete': DeleteWall
-  'room.create': CreateRoom
-  'room.rename': RenameRoom
-  'room.setOutline': SetRoomOutline
-  'room.attachFace': AttachRoomFace
-  'room.detachFace': DetachRoomFace
-  'room.placeShelter': PlaceHouseholdShelter
-  'opening.create': CreateOpening
-  'opening.setStart': SetOpeningStart
-  'opening.setWidth': SetOpeningWidth
-  'opening.flipHinge': FlipOpeningHinge
-  'opening.flipSwing': FlipOpeningSwing
-  'opening.rename': RenameOpening
-  'opening.delete': DeleteOpening
+  'wall.createChain': CreateWallChain & IntentTarget
+  'wall.dragJunction': DragWallJunction & IntentTarget
+  'wall.dragEndpoint': DragWallEndpoint & IntentTarget
+  'wall.dragBody': DragWallBody & IntentTarget
+  'wall.setLength': SetWallLength & IntentTarget
+  'wall.setDirection': SetWallDirection & IntentTarget
+  'wall.setArc': SetWallArc & IntentTarget
+  'wall.setThickness': SetWallThickness & IntentTarget
+  'wall.offset': OffsetWall & IntentTarget
+  'wall.split': SplitWall & IntentTarget
+  'wall.merge': MergeWalls & IntentTarget
+  'wall.delete': DeleteWall & IntentTarget
+  'room.create': CreateRoom & IntentTarget
+  'room.rename': RenameRoom & IntentTarget
+  'room.setOutline': SetRoomOutline & IntentTarget
+  'room.attachFace': AttachRoomFace & IntentTarget
+  'room.detachFace': DetachRoomFace & IntentTarget
+  'room.placeShelter': PlaceHouseholdShelter & IntentTarget
+  'opening.create': CreateOpening & IntentTarget
+  'opening.setStart': SetOpeningStart & IntentTarget
+  'opening.setWidth': SetOpeningWidth & IntentTarget
+  'opening.flipHinge': FlipOpeningHinge & IntentTarget
+  'opening.flipSwing': FlipOpeningSwing & IntentTarget
+  'opening.rename': RenameOpening & IntentTarget
+  'opening.delete': DeleteOpening & IntentTarget
   'design.update': UpdateItemDesign
   'design.setFootprint': SetItemDesignFootprint
   'design.setOrigin': SetItemDesignOrigin
@@ -760,6 +924,16 @@ export interface IntentPayloads {
   'view.setShowPlanImage': SetPlanViewShowsPlanImage
   'warning.acknowledge': AcknowledgeWarning
   'warning.editNote': EditWarningNote
+  'designOption.create': CreateDesignOption
+  'designOption.rename': RenameDesignOption
+  'designOption.delete': DeleteDesignOption
+  'renovation.placeOpening': PlaceOpeningInOption
+  'renovation.knockThrough': KnockThroughInOption
+  'renovation.demolish': DemolishInOption
+  'renovation.replace': ReplaceInOption
+  'renovation.restore': RestoreInOption
+  'renovation.correctExistingModel': CorrectExistingModel
+  'renovation.moveToDesignOption': MoveToDesignOption
 }
 
 export type PayloadOf<T extends IntentType = IntentType> = IntentPayloads[T]
@@ -803,10 +977,13 @@ export type ViewIntent = Intent<Extract<IntentType, `view.${string}`>>
 export type WarningIntent = Intent<Extract<IntentType, `warning.${string}`>>
 
 /**
- * The IDs each Intent consumes, in order — the contract between the caller that
+ * The IDs each S7 Intent consumes, in order — the contract between the caller that
  * allocates and the handler that spends. An empty list means the Intent needs no ID.
+ *
+ * The renovation set carries its own table beside its handlers, so a build without the flag
+ * does not read a contract it cannot answer.
  */
-export const INTENT_ID_ORDER: Record<IntentType, readonly string[]> = {
+export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
   'project.rename': [],
   'project.setPreferences': [],
   'cabinet.updateSettings': [],
@@ -885,6 +1062,15 @@ export const INTENT_ID_ORDER: Record<IntentType, readonly string[]> = {
 }
 
 /**
+ * The lookup `intentIdCount` reads: the S7 table, plus the renovation one in a build that
+ * registers those handlers. With the flag off the ternary folds to the S7 table alone and the
+ * import of the renovation module becomes dead, so a released bundle carries neither table.
+ */
+const ID_ORDER_BY_TYPE: Partial<Record<IntentType, readonly string[]>> = FF_RENOVATION
+  ? { ...INTENT_ID_ORDER, ...RENOVATION_INTENT_ID_ORDER, ...RENOVATION_EDIT_INTENT_ID_ORDER, ...CORRECTION_INTENT_ID_ORDER }
+  : INTENT_ID_ORDER
+
+/**
  * How many IDs an Intent spends. An entry ending in `…` stands for a count that depends on
  * the payload: a split turns one space into two and adds one board, so it spends two
  * however that tree is shaped, while duplicating a Floor spends one ID per copied Placed
@@ -927,8 +1113,15 @@ export function roomSegmentCount(outline: RoomOutlineShape): number {
 /** The IDs `room.placeShelter` spends: Room, door, 4 Walls, 4 junctions, 4 Edges (#67 §17). */
 export const SHELTER_ID_COUNT = 14
 
+/**
+ * How many carries a `renovation.replace` is given IDs for. How many Openings, Junctions and Rooms
+ * a replace carries belongs to the Project rather than to the payload, so the caller is handed a
+ * generous number and a replace that needs more is refused with `missing-ids`.
+ */
+export const REPLACE_CARRY_ID_COUNT = 20
+
 export function intentIdCount(type: IntentType, payload?: PayloadOf): number {
-  const order = INTENT_ID_ORDER[type]
+  const order = ID_ORDER_BY_TYPE[type] ?? []
   if (order[order.length - 1]?.endsWith('…') !== true) return order.length
   const fixed = order.length - 1
   if (payload === undefined) return fixed + VARIADIC_ID_COUNT
@@ -949,6 +1142,14 @@ export function intentIdCount(type: IntentType, payload?: PayloadOf): number {
       // One Room, one door, four Walls, four junctions and the four Edges of the shelter's
       // Rectangle outline — fixed numbers, because the pack entry is fixed.
       return SHELTER_ID_COUNT
+    case 'renovation.replace':
+      return fixed + REPLACE_CARRY_ID_COUNT
+    case 'renovation.correctExistingModel': {
+      // A correction spends exactly what the edit it wraps spends: it creates nothing of its own,
+      // and an Option's aligned successor is re-run with no IDs at all (#69 §12).
+      const inner = (payload as CorrectExistingModel).inner
+      return intentIdCount(inner.type, inner.payload)
+    }
     default:
       return fixed + VARIADIC_ID_COUNT
   }
@@ -1006,6 +1207,11 @@ export type RejectionCode =
   | 'invalid-opening'
   /** A Room proposal that overlaps another Room, or a Wall edit a referenced Room edge cannot follow (#67 §7, §12). */
   | 'room-blocked'
+  /** A Design Option the Project cannot hold: a name another Option already answers to (#69 §2). */
+  | 'option-blocked'
+  /** Two Walls of the Existing Model, which no renovation merges: the baseline is the record every
+   * option is drawn against, so this is a correction of it (#69 §11). */
+  | 'baseline-correction-required'
 
 /**
  * What an Intent takes with it, listed before it runs (#20 §4, #65 §8).
@@ -1014,7 +1220,7 @@ export type RejectionCode =
  * Intent, and the handler re-checks them. One shape for every review the catalogue has, so
  * a second dialog framework is never needed.
  */
-export interface DependencyReview {
+export interface DeleteWallReview {
   /** Which review this is, so the dialog knows how to word its buttons. */
   readonly kind: 'delete-wall'
   readonly wallId: EntityId
@@ -1025,6 +1231,139 @@ export interface DependencyReview {
   /** `Delete W-3 and its openings?` — the question the dialog asks. */
   readonly message: string
 }
+
+/**
+ * `Delete <Option>?` (#69 §2, criterion 9): what the Option holds, so the dialog can name the
+ * counts before the user loses them. Deleting an Option removes its own records and its
+ * acknowledgements and nothing else — the Existing Model and every other Option come through
+ * byte-identical — and one undo brings the whole Option back.
+ */
+export interface DeleteDesignOptionReview {
+  readonly kind: 'delete-design-option'
+  readonly optionId: EntityId
+  readonly optionName: string
+  /** How many records of each kind the Option owns. */
+  readonly counts: {
+    readonly walls: number
+    readonly wallJunctions: number
+    readonly openings: number
+    readonly rooms: number
+    readonly placedItems: number
+    /** Existing entities this Option removes, which go back to standing when it is deleted. */
+    readonly demolished: number
+    readonly acknowledgements: number
+  }
+  readonly message: string
+}
+
+/** One thing a demolition takes with it, named the way the dialog names it. */
+export interface DemolitionDependency {
+  readonly id: EntityId
+  /** `Door 1`. */
+  readonly label: string
+}
+
+/**
+ * `Demolish W-3?` (#69 §8): what goes with the Wall, and what stands in the way. `blockers` empty
+ * is what lets the dialog's confirm action answer at all; `applyIntent` re-runs the same question
+ * and refuses an answer the Project has moved on from with `dependency-changed`.
+ */
+export interface DemolitionReview {
+  readonly kind: 'demolish'
+  readonly entityId: EntityId
+  /** `W-3` — the subject of the question. */
+  readonly entityRef: string
+  /** Every Existing Opening that goes with the Wall, in the order the dialog lists them. */
+  readonly willDemolish: readonly DemolitionDependency[]
+  /** One sentence each: why the confirm action is disabled. */
+  readonly blockers: readonly string[]
+  /** `Demolish W-3?` */
+  readonly message: string
+}
+
+/**
+ * `Restore W-3?` (#69 §9): the successors that come down with the restoration, and the demolition
+ * records that stay because a merge successor named another entity too.
+ */
+export interface RestoreReview {
+  readonly kind: 'restore'
+  readonly entityId: EntityId
+  /** `W-3` — the entity that stands again. */
+  readonly entityRef: string
+  /** Every proposed record this Option loses, in the order the warning lists them. */
+  readonly deletes: readonly DemolitionDependency[]
+  /** Existing entities that stay demolished, because a merge successor named them as well. */
+  readonly keeps: readonly DemolitionDependency[]
+  /** `Restore W-3?` */
+  readonly message: string
+}
+
+/**
+ * What one Design Option would do with a correction (#69 §12). The four answers are the whole of
+ * the rule: an Option that keeps the entity, an Option that takes it down, and the two kinds of
+ * successor — one still standing where the survey put it, which follows the correction, and one the
+ * user has given geometry of its own, which does not.
+ */
+export type CorrectionEffect = 'retains' | 'demolishes' | 'demolishes; successor stays aligned' | 'demolishes; successor keeps its own geometry'
+
+/** One Option's line of a correction preview. */
+export interface CorrectionOptionReview {
+  readonly optionId: EntityId
+  readonly optionName: string
+  readonly effect: CorrectionEffect
+  /** The Option's own work that moves with the correction: successors, joins, Openings, Room edges. */
+  readonly dependants: readonly DemolitionDependency[]
+  /** One sentence each, naming this Option: why the correction is refused outright. */
+  readonly blockers: readonly string[]
+}
+
+/**
+ * `Correct Existing Model: W-2` (#69 §12): one line per Option, in option order, so the dialog can
+ * show what every alternative does before the baseline moves.
+ */
+export interface CorrectionReview {
+  readonly kind: 'correct-existing-model'
+  readonly entityId: EntityId
+  /** `W-2` — the entity the correction is about. */
+  readonly entityRef: string
+  readonly options: readonly CorrectionOptionReview[]
+  /** `Correct Existing Model: W-2` — the label of the Edit Transaction this writes. */
+  readonly message: string
+}
+
+/** One Option's line of a move preview (#69 §13). */
+export interface MoveOptionReview {
+  readonly optionId: EntityId
+  readonly optionName: string
+  /** The demolition records this Option drops, because the entity is no longer Existing work. */
+  readonly removesDemolitions: readonly DemolitionDependency[]
+  /** The Rooms of this Option whose Edge referenced a Wall that is moving. */
+  readonly detaches: readonly string[]
+  readonly blockers: readonly string[]
+}
+
+/**
+ * `Move 2 items to Option A?` (#69 §13): what leaves the Existing Model, and what each Option
+ * notices when it does.
+ */
+export interface MoveToOptionReview {
+  readonly kind: 'move-to-design-option'
+  readonly targetOptionId: EntityId
+  readonly targetOptionName: string
+  /** Every entity that becomes Proposed, with the entities taken along with it. */
+  readonly moves: readonly DemolitionDependency[]
+  readonly options: readonly MoveOptionReview[]
+  readonly message: string
+}
+
+/** What an Intent would take with it, per review family. */
+export type DependencyReview =
+  | DeleteWallReview
+  | DeleteDesignOptionReview
+  | DemolitionReview
+  | RestoreReview
+  | CorrectionReview
+  | MoveToOptionReview
 
 export interface Applied {
   ok: true

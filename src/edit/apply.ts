@@ -2,7 +2,7 @@
  * Applying an Intent (#47, #20 §4).
  *
  * One pass, four steps: find the handler, run it on an immer draft while recording patches,
- * validate the whole Project that came out, and answer `Applied` or `Rejection`. Nothing is
+ * validate what those patches touched (#69 §8), and answer `Applied` or `Rejection`. Nothing is
  * written to the caller's Project — `applyIntent` is a pure function from
  * `(project, intent)` to the next Project, which is why #48's history can replay it, #49's
  * autosave can debounce it, and a test can call it without a store at all.
@@ -15,7 +15,9 @@ import { applyPatches as applyImmerPatches, enablePatches, produceWithPatches, s
 import type { Patch } from 'immer'
 import { validateProject } from '../domain'
 import type { Project } from '../domain'
-import { problem } from '../lib'
+import { designOptionsOf } from '../domain'
+import { FF_RENOVATION, problem } from '../lib'
+import { validationScopeFor } from './validationScope'
 import type { Applied, DependencyReview, Intent, IntentType, Locator, Rejection, RejectionCode } from './intents'
 import { IntentRejection } from './handlers/support'
 import { pruneStaleAcknowledgements } from './handlers/warningHandlers'
@@ -73,7 +75,34 @@ export function applyIntent(project: Project, intent: Intent): Applied | Rejecti
     throw error
   }
 
-  const result = validateProject(next)
+  // What the finished Project owes the rules a handler could not check from inside the draft
+  // (#65 §7): the plain result, not a proxy, so a sweep of the Floor costs what it reads.
+  try {
+    handler.after?.(project, next)
+  } catch (error) {
+    if (error instanceof IntentRejection) return { ok: false, code: error.code, problems: error.problems }
+    throw error
+  }
+
+  // Once a Project carries a Design Option, the Existing Model is the baseline every alternative is
+  // drawn against, so changing it is a command of its own: `renovation.correctExistingModel`, which
+  // previews the edit against every Option and commits it or nothing (#69 §12). The question is
+  // where the edits landed, not which Intent was sent, so nothing the catalogue gains later can
+  // slip past this.
+  if (
+    FF_RENOVATION &&
+    designOptionsOf(project).length > 0 &&
+    intent.type !== 'renovation.correctExistingModel' &&
+    patches.some((patch) => patch.path[0] === 'existingModel')
+  ) {
+    return rejected(
+      'baseline-correction-required',
+      'existingModel',
+      'Design Options are drawn against this baseline, so this edit changes the record they all share. Correct the existing model to make it.',
+    )
+  }
+
+  const result = validateProject(next, validationScopeFor(patches, project, next))
   if (!result.ok) return { ok: false, code: 'invalid-project', problems: result.problems }
   if (patches.length === 0) {
     return rejected('no-change', 'type', `${intent.type} left the Project exactly as it was.`)

@@ -13,7 +13,7 @@
 import { act, render } from '@testing-library/react'
 import { useEffect } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { INTENT_LABELS, intentIdCount, previewIntent } from '../../edit'
+import { intentIdCount, intentLabel, previewIntent } from '../../edit'
 import type { Intent, IntentType, PayloadOf } from '../../edit'
 import { createMemoryAdapter } from '../../persistence'
 import { openProject } from '../../session'
@@ -33,7 +33,7 @@ const testIntents: IntentBuilder = {
     return ({
       type,
       payload,
-      label: INTENT_LABELS[type],
+      label: intentLabel(type),
       ids: Array.from({ length: intentIdCount(type) }, () => `test-${(issued += 1)}`),
       now: TEST_NOW,
     }) as Intent

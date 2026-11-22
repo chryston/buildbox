@@ -79,3 +79,20 @@ that the field is required everywhere after the step, including in the strict va
 which is the only way a hand-edited or newer-schema file can be caught. A migrator is a
 historical record, so the number is a frozen constant in `migrate.ts` rather than a live read
 of the pack; `src/domain/migrate.test.ts` pins it to the pack entry it came from.
+
+## What v8 holds (#69, dark)
+
+One thing: `Project.designOptions`, the empty collection of Design Options — each one a name, the
+proposed work it adds, and the IDs of the Existing entities it removes. Every entity type also
+gained the optional `predecessorIds`, the provenance chain that tells a proposed entity which
+Existing one it replaces.
+
+`migrateV7toV8` adds `designOptions: []` and spends no IDs, so a Project with no Options derives,
+draws and exports exactly as it did at v7.
+
+**This is the one version the flag decides.** `DOMAIN_SCHEMA_VERSION` is `8` only in a build with
+`VITE_FF_RENOVATION=true`, and `migrateV7toV8` is registered only there. Production stays at v7,
+which means a preview-written Project arrives in a production build as "saved by a newer BuildBox"
+rather than opening with its Design Options silently dropped — the failure mode #20 §5 exists to
+prevent. The trade is that a preview database cannot be opened by a flag-off build at all, which is
+why the flag is set at build time for the whole preview deployment and never per Project.

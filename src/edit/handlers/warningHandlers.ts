@@ -12,7 +12,7 @@
  * acknowledgement safe to keep: a record of a decision about a Wall that no longer exists
  * would outlive the warning it was about, and nothing would ever show it again.
  */
-import { warningKey } from '../../domain'
+import { designOptionsOf, warningKey } from '../../domain'
 import type { EntityId, Project } from '../../domain'
 import type { Intent, Locator } from '../intents'
 import type { Handler, IntentHandler } from './context'
@@ -119,11 +119,23 @@ const liveEntityIds = (project: Project): Set<EntityId> => {
   project.floors.forEach((floor) => ids.add(floor.id))
   project.views.forEach((view) => ids.add(view.id))
   project.itemDesigns.forEach((design) => ids.add(design.id))
-  const { walls, wallJunctions, openings, placedItems } = project.existingModel
+  const { walls, wallJunctions, openings, rooms, placedItems } = project.existingModel
   walls.forEach((wall) => ids.add(wall.id))
   wallJunctions.forEach((junction) => ids.add(junction.id))
   openings.forEach((opening) => ids.add(opening.id))
+  rooms.forEach((room) => ids.add(room.id))
   placedItems.forEach((placement) => ids.add(placement.id))
+  // A proposed record is as live as the existing one it stands for: #69 keys acknowledgements by
+  // Option, so a decision about a warning inside Option A would be pruned by the next Intent
+  // otherwise — and deleting that Option removes its own acknowledgements in its handler, not here.
+  designOptionsOf(project).forEach((option) => {
+    const proposed = option.proposed
+    proposed.walls.forEach((wall) => ids.add(wall.id))
+    proposed.wallJunctions.forEach((junction) => ids.add(junction.id))
+    proposed.openings.forEach((opening) => ids.add(opening.id))
+    proposed.rooms.forEach((room) => ids.add(room.id))
+    proposed.placedItems.forEach((placement) => ids.add(placement.id))
+  })
   return ids
 }
 

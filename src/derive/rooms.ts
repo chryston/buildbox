@@ -24,6 +24,7 @@ import type { EntityId, Project, Room, RoomOutline, RoomSegment, Wall } from '..
 import { roomArea, roomBounds, roomLabelAnchor, roomOutlineAfterSlide, roomOutlinePath, roomPerimeter, roomSegments } from '../domain'
 import { effectiveFloor } from './effective'
 import type { Rect } from './effective'
+import { effectiveModel } from './effectiveModel'
 import type { DerivedFace, FloorWalls } from './walls'
 
 /** The overlap area below which a footprint and a Room count as not overlapping at all (#67 §16). */
@@ -181,9 +182,9 @@ export const roomMembershipOf = (footprint: ClosedPath, rooms: readonly Measurab
 }
 
 /** Everything #67 derives about one Floor's Rooms. */
-export function deriveRooms(project: Project, floorId: EntityId): FloorRooms {
-  const rooms = derivedRoomsOf(project.existingModel.rooms.filter((room) => room.floorId === floorId))
-  const derived = effectiveFloor(project, 0, floorId, null)
+export function deriveRooms(project: Project, floorId: EntityId, optionId: EntityId | null = null): FloorRooms {
+  const rooms = derivedRoomsOf(effectiveModel(project, floorId, optionId).standingRooms)
+  const derived = effectiveFloor(project, 0, floorId, optionId)
 
   let box: Rect | null = null
   for (const room of rooms) box = box === null ? room.bounds : unionBounds(box, room.bounds)

@@ -12,7 +12,7 @@
  * short of another creates nothing. Nothing here infers a join from proximity.
  */
 import type { EntityId, Project, Wall, WallEnd, WallJunction, WallJunctionEnd, WallRefLine } from '../../domain'
-import { openingDependencies } from '../../domain'
+import { designOptionsOf, openingDependencies } from '../../domain'
 import {
   DEG,
   TOLERANCE_MM,
@@ -28,11 +28,12 @@ import {
   refTangentDeg,
 } from '../../geometry'
 import { chainJunctionCount, wallEndKey } from '../intents'
-import type { CreateWallChain, DependencyReview, Locator, WallEndTarget, WallIntent } from '../intents'
+import type { CreateWallChain, DependencyReview, Intent, IntentTarget, Locator, MergeWalls, WallEndTarget, WallIntent } from '../intents'
+import { FF_RENOVATION } from '../../lib'
 import type { Handler, IntentHandler } from './context'
-import { refuse, spendIds } from './support'
+import { containerOf, effectiveView, isInOption, proposedProvenance, refuse, spendIds } from './support'
 import { faceRefsOn, followWallFaces, refuseReferencedWall } from './roomSupport'
-import { requireOpeningsFit } from './openingSupport'
+import { openingsStillFit, requireOpeningsFit } from './openingSupport'
 
 const wallPath = (wallId: EntityId): string => `existingModel.walls[${wallId}]`
 const junctionPath = (junctionId: EntityId): string => `existingModel.wallJunctions[${junctionId}]`
@@ -151,7 +152,7 @@ const addMember = (group: Group, member: WallJunctionEnd): void => {
  * both its faces: it is never split.
  */
 const createChain: Handler<'wall.createChain'> = (ctx) => {
-  const payload = ctx.intent.payload as CreateWallChain
+  const payload = ctx.intent.payload as CreateWallChain & IntentTarget
   const { floorId, walls, starts, ends } = payload
   if (walls.length === 0 || starts.length !== walls.length || ends.length !== walls.length) {
     refuse('invalid-wall', 'existingModel.walls', 'A chained draw carries one target for each end of every segment.')
@@ -161,12 +162,17 @@ const createChain: Handler<'wall.createChain'> = (ctx) => {
   }
   const spent = spendIds(ctx.intent.ids, walls.length + chainJunctionCount(payload), 'wall.createChain')
   const wallIds = spent.slice(0, walls.length)
+  // A Wall drawn inside a Design Option is proposed work: the same checks, the same writes, into
+  // that Option's container, read against what stands in that Option (#69 §7).
+  const container = containerOf(ctx.draft, payload.target?.designOptionId)
+  const inOption = isInOption(container, ctx.draft)
+  const view = effectiveView(ctx.project, floorId, payload.target?.designOptionId)
 
   const groups = new Map<string, Group>()
   let firstRef = 0
   {
     let highest = 0
-    for (const wall of ctx.project.existingModel.walls) {
+    for (const wall of view.existingModel.walls) {
       const digits = /\d+/.exec(wall.ref)
       if (digits !== null) highest = Math.max(highest, Number(digits[0]))
     }
@@ -203,11 +209,11 @@ const createChain: Handler<'wall.createChain'> = (ctx) => {
         }
         addMember(group, { wallId: wallIds[target.index] as string, end: target.end })
       } else if (target.kind === 'wall') {
-        requireWall(ctx.project, target.wallId)
+        requireWall(view, target.wallId)
         addMember(group, { wallId: target.wallId, end: target.end })
         // Joining an end that is already joined adds this Wall to that Junction rather than
         // making a second one at the same point.
-        const joined = junctionOf(ctx.project, target.wallId, target.end)
+        const joined = junctionOf(view, target.wallId, target.end)
         if (joined !== undefined) {
           groups.delete(key)
           const carried = groups.get(joined.id) ?? group
@@ -215,7 +221,7 @@ const createChain: Handler<'wall.createChain'> = (ctx) => {
           groups.set(joined.id, carried)
         }
       } else if (target.kind === 'host') {
-        const host = requireWall(ctx.project, target.wallId)
+        const host = requireWall(view, target.wallId)
         const source = drawn[index] as Wall
         const at = refParamAt(host.line, endOf(source.line, end))
         if (at <= 0 || at >= refLength(host.line)) {
@@ -243,13 +249,14 @@ const createChain: Handler<'wall.createChain'> = (ctx) => {
     ...(wall.constructionLabel === undefined ? {} : { constructionLabel: wall.constructionLabel }),
     baseElevation: wall.baseElevation,
     height: wall.height,
+    ...proposedProvenance(inOption),
   }))
-  ctx.draft.existingModel.walls.push(...created)
+  container.walls.push(...created)
 
   const junctionIds = spent.slice(walls.length)
   let next = 0
   for (const [key, group] of groups) {
-    const existing = ctx.draft.existingModel.wallJunctions.find((junction) => junction.id === key)
+    const existing = container.wallJunctions.find((junction) => junction.id === key)
     if (existing !== undefined) {
       for (const member of group.members) {
         if (!existing.ends.some((other) => other.wallId === member.wallId && other.end === member.end)) {
@@ -264,22 +271,41 @@ const createChain: Handler<'wall.createChain'> = (ctx) => {
     if (group.members.length < 2 && group.host === undefined) {
       refuse('invalid-wall', 'existingModel.walls', 'A junction has to join two ends, or attach to a wall.')
     }
-    ctx.draft.existingModel.wallJunctions.push({
+    container.wallJunctions.push({
       id,
       floorId,
       ends: group.members,
       ...(group.host === undefined ? {} : { host: { ...group.host } }),
+      ...proposedProvenance(inOption),
     })
   }
 }
 
 // --- Moving ------------------------------------------------------------------
 
-/** Move one Wall's end to an exact point, leaving the rest of its line alone. */
-const moveEnd = (project: Project, member: WallJunctionEnd, at: { x: number; y: number }): void => {
+/**
+ * Move one Wall's end to an exact point, leaving the rest of its line alone.
+ *
+ * Junctions standing *on* that Wall are measured along it, so the line moving takes them with it:
+ * each is re-measured from the member end it holds, exactly as `dragBody` re-measures the Junctions
+ * of the Wall it drags (#64 §10). Without this a neighbour that stretched to stay joined leaves its
+ * own hosted Junctions pointing at a distance that no longer describes it. `skip` names a Junction
+ * whose host the caller has already placed.
+ */
+const moveEnd = (project: Project, member: WallJunctionEnd, at: { x: number; y: number }, skip?: EntityId): void => {
   const wall = project.existingModel.walls.find((candidate) => candidate.id === member.wallId)
   if (wall === undefined) return
   wall.line = withEnd(wall.line, member.end, at)
+  for (const junction of project.existingModel.wallJunctions) {
+    if (junction.host?.wallId !== wall.id || junction.id === skip) continue
+    const attached = junction.ends[0]
+    if (attached === undefined) continue
+    const attachedWall = project.existingModel.walls.find((candidate) => candidate.id === attached.wallId)
+    if (attachedWall === undefined) continue
+    const length = refLength(wall.line)
+    const at = Math.min(length - TOLERANCE_MM, Math.max(TOLERANCE_MM, refParamAt(wall.line, endOf(attachedWall.line, attached.end))))
+    junction.host = { wallId: wall.id, at }
+  }
 }
 
 /**
@@ -304,7 +330,7 @@ const dragJunction: Handler<'wall.dragJunction'> = (ctx) => {
   const clamped = Math.min(length - TOLERANCE_MM, Math.max(TOLERANCE_MM, moved))
   const point = refPointAt(host.line, clamped)
   requireJunction(ctx.draft, junctionId).host = { wallId: host.id, at: clamped }
-  for (const member of junction.ends) moveEnd(ctx.draft, member, point)
+  for (const member of junction.ends) moveEnd(ctx.draft, member, point, junctionId)
 }
 
 /** Drag one free end. An end that joins another Wall moves by dragging its Junction. */
@@ -561,14 +587,34 @@ const mergedLine = (first: Wall, second: Wall): WallRefLine | null => {
  */
 const mergeWalls: Handler<'wall.merge'> = (ctx) => {
   const [firstId, secondId] = ctx.intent.payload.wallIds
-  const first = requireWall(ctx.project, firstId)
-  const second = requireWall(ctx.project, secondId)
+  const target = (ctx.intent.payload as MergeWalls & IntentTarget).target
+  // #69 §11: two Walls this option drew are its own work, and merge where they stand. Two Walls of
+  // the survey are not its work to merge — while the Project carries a Design Option, the baseline
+  // is the record every option is drawn against, and changing it is a correction, not a renovation.
+  const container = containerOf(ctx.draft, target?.designOptionId)
+  const inOption = isInOption(container, ctx.draft)
+  if (FF_RENOVATION && !inOption && designOptionsOf(ctx.project).length > 0) {
+    refuse(
+      'baseline-correction-required',
+      wallPath(secondId),
+      'These are the survey’s walls, and every option is drawn against them. Merge walls this option drew, or correct the existing model.',
+    )
+  }
+  const view = effectiveView(ctx.project, null, target?.designOptionId)
+  if (FF_RENOVATION && inOption) {
+    for (const id of [firstId, secondId]) {
+      if (container.walls.some((wall) => wall.id === id)) continue
+      refuse('merge-mismatch', wallPath(id), 'An option merges the walls it drew, not the walls the survey recorded.')
+    }
+  }
+  const first = requireWall(view, firstId)
+  const second = requireWall(view, secondId)
   // Merging takes one of the two out of the drawing, so a Room standing on either of them has
   // to be moved off first (#67 §12).
   for (const wall of [first, second]) {
-    if (faceRefsOn(ctx.project, wall.id).length > 0) refuseReferencedWall(ctx.project, wall)
+    if (faceRefsOn(view, wall.id).length > 0) refuseReferencedWall(view, wall)
   }
-  const shared = ctx.project.existingModel.wallJunctions.find(
+  const shared = view.existingModel.wallJunctions.find(
     (junction) =>
       junction.host === undefined &&
       junction.ends.length === 2 &&
@@ -586,9 +632,9 @@ const mergeWalls: Handler<'wall.merge'> = (ctx) => {
   const joinedFirst = shared.ends.find((member) => member.wallId === firstId)!.end
   const joinedSecond = shared.ends.find((member) => member.wallId === secondId)!.end
   const farFirst: WallEnd = joinedFirst === 'start' ? 'end' : 'start'
-  const kept = ctx.draft.existingModel.walls.find((candidate) => candidate.id === firstId)!
+  const kept = container.walls.find((candidate) => candidate.id === firstId)!
   kept.line = line
-  for (const junction of ctx.draft.existingModel.wallJunctions) {
+  for (const junction of container.wallJunctions) {
     if (junction.id === shared.id) continue
     if (junction.host !== undefined && junction.host.wallId === secondId) {
       junction.host = { wallId: firstId, at: refParamAt(line, refPointAt(second.line, junction.host.at)) }
@@ -601,10 +647,13 @@ const mergeWalls: Handler<'wall.merge'> = (ctx) => {
   // Both pieces' Openings move to the Wall that survives. Both are moved, not just the
   // second: the merged line starts at whichever piece reaches further back, so the survivor's
   // own Openings shift by the same amount the other's do.
-  rehostOpenings(ctx.draft.existingModel.openings, first, firstId, line)
-  rehostOpenings(ctx.draft.existingModel.openings, second, firstId, line)
-  ctx.draft.existingModel.wallJunctions = ctx.draft.existingModel.wallJunctions.filter((junction) => junction.id !== shared.id)
-  ctx.draft.existingModel.walls = ctx.draft.existingModel.walls.filter((wall) => wall.id !== secondId)
+  rehostOpenings(container.openings, first, firstId, line)
+  rehostOpenings(container.openings, second, firstId, line)
+  container.wallJunctions = container.wallJunctions.filter((junction) => junction.id !== shared.id)
+  container.walls = container.walls.filter((wall) => wall.id !== secondId)
+  // The merged Wall is longer than either piece and both pieces' Openings moved onto it: the fit
+  // check the wrapper runs against the Existing Model, run against what this option stands on.
+  if (inOption) requireOpeningsFit(effectiveView(ctx.draft, first.floorId, target?.designOptionId))
 }
 
 /** Both pieces' Openings, read at the same point of the longer line (#65 §7). */
@@ -701,7 +750,12 @@ const planLocator = (floorId: EntityId | null): Locator => ({
 })
 
 const wallFloor = (project: Project, wallId: EntityId): EntityId | null =>
-  project.existingModel.walls.find((wall) => wall.id === wallId)?.floorId ?? null
+  project.existingModel.walls.find((wall) => wall.id === wallId)?.floorId ??
+  // A Wall this option drew is on a Floor too, and undo has to be able to find its way back to it.
+  designOptionsOf(project)
+    .flatMap((option) => option.proposed.walls)
+    .find((wall) => wall.id === wallId)?.floorId ??
+  null
 
 const junctionFloor = (project: Project, junctionId: EntityId): EntityId | null =>
   project.existingModel.wallJunctions.find((junction) => junction.id === junctionId)?.floorId ?? null
@@ -725,21 +779,26 @@ type WallHandlers = { [T in WallIntent['type']]: IntentHandler<T> }
 const withOpeningsChecked = <T extends WallIntent['type']>(run: Handler<T>): Handler<T> => (ctx) => {
   run(ctx)
   followWallFaces(ctx.project, ctx.draft)
-  requireOpeningsFit(ctx.draft)
 }
+
+/** Every Wall edit that can move a host's ends, with the fit check owed on the finished Project. */
+const wallHandler = <T extends WallIntent['type']>(
+  run: Handler<T>,
+  locate: (project: Project, intent: Intent<T>) => Locator,
+): IntentHandler<T> => ({ run: withOpeningsChecked(run), locate, after: openingsStillFit })
 
 export const WALL_HANDLERS: WallHandlers = {
   'wall.createChain': { run: createChain, locate: (_project, intent) => planLocator(intent.payload.floorId) },
-  'wall.dragJunction': { run: withOpeningsChecked(dragJunction), locate: (project, intent) => planLocator(junctionFloor(project, intent.payload.junctionId)) },
-  'wall.dragEndpoint': { run: withOpeningsChecked(dragEndpoint), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.dragBody': { run: withOpeningsChecked(dragBody), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.setLength': { run: withOpeningsChecked(setLength), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.setDirection': { run: withOpeningsChecked(setDirection), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.setArc': { run: withOpeningsChecked(setArc), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.setThickness': { run: withOpeningsChecked(setThickness), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.offset': { run: withOpeningsChecked(offsetWall), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.split': { run: withOpeningsChecked(splitWall), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)) },
-  'wall.merge': { run: withOpeningsChecked(mergeWalls), locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallIds[0])) },
+  'wall.dragJunction': wallHandler(dragJunction, (project, intent) => planLocator(junctionFloor(project, intent.payload.junctionId))),
+  'wall.dragEndpoint': wallHandler(dragEndpoint, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
+  'wall.dragBody': wallHandler(dragBody, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
+  'wall.setLength': wallHandler(setLength, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
+  'wall.setDirection': wallHandler(setDirection, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
+  'wall.setArc': wallHandler(setArc, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
+  'wall.setThickness': wallHandler(setThickness, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
+  'wall.offset': wallHandler(offsetWall, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
+  'wall.split': wallHandler(splitWall, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
+  'wall.merge': wallHandler(mergeWalls, (project, intent) => planLocator(wallFloor(project, intent.payload.wallIds[0]))),
   'wall.delete': {
     run: deleteWall,
     locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)),

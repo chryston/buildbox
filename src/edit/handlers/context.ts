@@ -39,4 +39,11 @@ export interface IntentHandler<T extends IntentType> {
    * Project is refused rather than trusted.
    */
   readonly review?: (project: Project, intent: Intent<T>) => DependencyReview | null
+  /**
+   * What has to hold of the finished Project before it is committed (#65 §7). It runs on the plain
+   * result rather than on the draft: reading a draft through Immer copies every record the read
+   * touches, and a check that sweeps a Floor would pay for that copy on every record (#69 §8). A
+   * rejection thrown here refuses the Transaction exactly as one thrown by `run` does.
+   */
+  readonly after?: (before: Project, after: Project) => void
 }

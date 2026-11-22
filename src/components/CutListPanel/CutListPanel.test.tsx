@@ -6,14 +6,22 @@ import { quantities } from '../../derive'
 import type { QuantityScope } from '../../derive'
 import { CUT_LIST_TABLE, writeCsv } from '../../export'
 import { parseCsv } from '../../export/testing'
+import { migrateProject } from '../../domain'
 import type { Project } from '../../domain'
 import CutListPanel from './CutListPanel'
 
-// The fixture envelope is `{ domainSchemaVersion, project }`; unwrapping it is what `derive`'s
-// own fixture reader does. Read as raw text because a jsdom module has no URL to resolve:
-// `derive`'s `basicProject()` calls `fileURLToPath(import.meta.url)`, and here that throws.
-const envelope: { project: Project } = JSON.parse(projectFixture)
-const project = envelope.project
+// The fixture envelope is `{ domainSchemaVersion, project }`, and it is migrated the way `derive`'s
+// own fixture reader migrates it (#42 §5): a derivation is tested against the data the app holds,
+// not against whatever shape the file happens to be saved in — and a v1 file has no Openings or
+// Rooms at all, which the effective model of #69 §5 reads like anything else. Read as raw text
+// because a jsdom module has no URL to resolve: `derive`'s `basicProject()` calls
+// `fileURLToPath(import.meta.url)`, and here that throws.
+const envelope: { domainSchemaVersion: number; project: unknown } = JSON.parse(projectFixture)
+let issued = 0
+const migrated = migrateProject(envelope.project, envelope.domainSchemaVersion, (count) =>
+  Array.from({ length: count }, () => `view-${String((issued += 1))}`))
+if (!migrated.ok) throw new Error(migrated.error.message)
+const project: Project = migrated.project
 
 /** The scope the Sidebar shows: the first Floor, the Existing Model, every layer. */
 const scope: QuantityScope = {

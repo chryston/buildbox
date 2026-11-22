@@ -50,10 +50,25 @@ const IMAGE_POOL = [
 let issuedIds = 0
 const allocator = (): (() => string) => () => `gen-${String(++issuedIds)}`
 
-/** A deterministic stand-in for the UI's ID source; each run gets its own. */
-function idSource(): (count?: number) => string[] {
-  let issued = 0
+/** A deterministic stand-in for the UI's ID source; each run gets its own, starting past `past`. */
+function idSource(past = 0): (count?: number) => string[] {
+  let issued = past
   return (count = 1) => Array.from({ length: count }, () => `prop-${String(++issued)}`)
+}
+
+/**
+ * The highest `prop-N` a Project already holds.
+ *
+ * A sequence allocates from its own source, and a source that starts at `prop-1` re-issues IDs the
+ * Project it starts from is already using — which the validator is right to refuse, and which the
+ * renovation flag made visible because a v8 `createProject` hands one more `prop-N` to the Project's
+ * first Design Option (#69). The app never behaves like this: it allocates from the session's store,
+ * which has seen every ID in the file.
+ */
+const highestIssuedId = (project: Project): number => {
+  let highest = 0
+  for (const found of JSON.stringify(project).matchAll(/prop-(\d+)/g)) highest = Math.max(highest, Number(found[1]))
+  return highest
 }
 
 /** `mulberry32`: the whole sequence is a function of one seed, so a failure reproduces. */
@@ -895,7 +910,7 @@ function randomIntent(g: Gen): Intent | null {
 const seen = new Map<IntentType, { applied: number; refused: number }>()
 
 function runSequence(start: Project, seed: number, steps: number): Project {
-  const g: Gen = { rand: random(seed), project: start, ids: idSource() }
+  const g: Gen = { rand: random(seed), project: start, ids: idSource(highestIssuedId(start)) }
   let current = start
   for (let step = 0; step < steps; step++) {
     g.project = current

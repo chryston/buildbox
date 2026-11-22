@@ -23,12 +23,12 @@ import { describe, expect, it } from 'vitest'
 import { getPresetPack } from '../domain'
 import { BANNED_WORDS, bannedWordsIn, mentionsWord } from '../lib'
 import { EXPORT_WORDS, TABLES } from '../export'
-import { STRINGS, WARNING_COPY } from '../ui'
+import { RENOVATION_STRINGS, STRINGS, WARNING_COPY } from '../ui'
 
 const srcRoot = fileURLToPath(new URL('../../src', import.meta.url))
 
 /** The tables the words are held in, scanned as values below rather than as source. */
-const TABLES_SHIPPED = ['ui/strings/index.ts', 'export/strings.ts', 'export/csv/tables.ts']
+const TABLES_SHIPPED = ['ui/strings/index.ts', 'ui/strings/renovation.ts', 'export/strings.ts', 'export/csv/tables.ts']
 
 /**
  * The source the backstop reads.
@@ -84,6 +84,9 @@ function literalsOf(source: string, path: string): Array<[string, string]> {
 const shipped: Array<[string, string]> = [
   ...stringsOf(STRINGS, 'ui/strings'),
   ...stringsOf(WARNING_COPY, 'ui/strings/warning'),
+  // #69: the dark surface's copy is scanned with the rest. It ships only in a flagged build, but a
+  // banned word is banned in a dialog nobody has switched on yet too.
+  ...stringsOf(RENOVATION_STRINGS, 'ui/strings/renovation'),
   ...stringsOf(EXPORT_WORDS, 'export/strings'),
   // #68 criterion 8: the CI scan covers every header and every enum code, because both are words
   // a reader's spreadsheet filters on and neither is anything the user typed.

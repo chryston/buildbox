@@ -71,14 +71,15 @@ export interface DeriveCache {
    */
   warnings(project: Project, revision: number, floorId: EntityId, optionId: EntityId | null): FloorWarnings
   /**
-   * The Rooms of one Floor, measured, and how its Placed Items sit in them (#67 §3).
+   * The Rooms of one Floor, measured, and how its Placed Items sit in them (#67 §3, #69 §5).
    *
    * The Plan View labels every Room on screen and the Rooms panel lists them, both on every
    * render; the area, perimeter and label anchor of an Outline are analytic and the membership
-   * of every item against every Room is a pair of loops apiece. Rooms belong to the Existing
-   * Model, so there is no Design Option in the key — the same slot discipline as the Walls.
+   * of every item against every Room is a pair of loops apiece. The Option is in the key because
+   * it is in the answer: a Room this Option demolishes is not measured and not a Room an item is
+   * standing in, so two Options of one Floor are two entries and never one.
    */
-  rooms(project: Project, revision: number, floorId: EntityId): FloorRooms
+  rooms(project: Project, revision: number, floorId: EntityId, optionId: EntityId | null): FloorRooms
 }
 
 interface Entry {
@@ -160,10 +161,10 @@ export function createDeriveCache(opts: { maxEntries?: number } = {}): DeriveCac
     quantities: (project, revision, floorId, optionId) =>
       remember('quantities', tokenOf(project), revision, floorId, optionId, () => quantitiesForFloor(project, floorId, optionId)),
     walls: (project, revision, floorId, optionId) =>
-      remember('walls', tokenOf(project), revision, floorId, optionId, () => deriveWalls(project, floorId)),
+      remember('walls', tokenOf(project), revision, floorId, optionId, () => deriveWalls(project, floorId, optionId)),
     warnings: (project, revision, floorId, optionId) =>
       remember('warnings', tokenOf(project), revision, floorId, optionId, () => deriveWarnings(project, floorId, optionId)),
-    rooms: (project, revision, floorId) =>
-      remember('rooms', tokenOf(project), revision, floorId, null, () => deriveRooms(project, floorId)),
+    rooms: (project, revision, floorId, optionId) =>
+      remember('rooms', tokenOf(project), revision, floorId, optionId, () => deriveRooms(project, floorId, optionId)),
   }
 }

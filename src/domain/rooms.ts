@@ -151,18 +151,41 @@ export interface RoomOverlap {
 }
 
 /**
+ * Whether two axis-aligned boxes can enclose area in common.
+ *
+ * The clipper behind `overlap` is a general curve engine and costs tens of microseconds a pair;
+ * a box test costs nanoseconds, and it can only ever answer "no" when the answer really is no,
+ * because outlines lying outside each other's boxes cannot meet. Geometry rejects edge pairs the
+ * same way (`segmentBounds`, #54 §9 bench), and the boxes are exact for arcs — the extrema an arc
+ * turns through are included — so a curved outline is never rejected early. Boxes that touch along
+ * an edge enclose nothing, which is why the comparison is strict.
+ */
+const boxesMayMeet = (a: Bounds, b: Bounds): boolean => a.minX < b.maxX && b.minX < a.maxX && a.minY < b.maxY && b.minY < a.maxY
+
+/**
  * Every positive-area pair among `rooms`, in the order the list gives them.
  *
  * A shared collinear edge and a point contact enclose nothing, so they come back as nothing:
  * two Rooms that tile a Floor are a normal drawing, not a defect (#67 §2).
+ *
+ * One path evaluation and one box per Room rather than two of each per pair, and a pair is only
+ * clipped when the boxes overlap: the loop is quadratic, and the reference Project's 90 Rooms are
+ * 4 005 pairs, which is where #69 §8's validation time was living.
  */
 export function roomOverlaps(rooms: readonly Room[]): RoomOverlap[] {
   const found: RoomOverlap[] = []
-  for (let i = 0; i < rooms.length; i += 1) {
-    for (let j = i + 1; j < rooms.length; j += 1) {
-      const shared = overlap(roomOutlinePath(rooms[i].outline), roomOutlinePath(rooms[j].outline))
+  const shapes = rooms.map((room) => {
+    const path = roomOutlinePath(room.outline)
+    return { path, box: bounds(path) }
+  })
+  for (let i = 0; i < shapes.length; i += 1) {
+    for (let j = i + 1; j < shapes.length; j += 1) {
+      const first = shapes[i]!
+      const second = shapes[j]!
+      if (!boxesMayMeet(first.box, second.box)) continue
+      const shared = overlap(first.path, second.path)
       if (shared.kind === 'positive' && shared.area > MIN_ROOM_OVERLAP_MM2) {
-        found.push({ first: rooms[i].id, second: rooms[j].id, area: shared.area, region: shared.region })
+        found.push({ first: rooms[i]!.id, second: rooms[j]!.id, area: shared.area, region: shared.region })
       }
     }
   }
@@ -178,8 +201,12 @@ export function roomOverlaps(rooms: readonly Room[]): RoomOverlap[] {
  */
 export function roomOverlapWith(roomId: EntityId, proposed: RoomOutline, others: readonly Room[]): RoomOverlap[] {
   const found: RoomOverlap[] = []
+  const path = roomOutlinePath(proposed)
+  const box = bounds(path)
   for (const other of others) {
-    const shared = overlap(roomOutlinePath(proposed), roomOutlinePath(other.outline))
+    const otherPath = roomOutlinePath(other.outline)
+    if (!boxesMayMeet(box, bounds(otherPath))) continue
+    const shared = overlap(path, otherPath)
     if (shared.kind === 'positive' && shared.area > MIN_ROOM_OVERLAP_MM2) {
       found.push({ first: roomId, second: other.id, area: shared.area, region: shared.region })
     }

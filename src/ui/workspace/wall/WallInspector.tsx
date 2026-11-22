@@ -40,6 +40,8 @@ export interface WallInspectorProps {
    * the refused Intent answers with; nothing when the Wall may be deleted.
    */
   deleteBlocked: string | null
+  /** The renovation action for this Wall (#69 §13), when there is an Option to move it to. */
+  renovationAction?: ReactNode
 }
 
 /** Grouped thousands, as the issue writes a height: `2,600 mm`. */
@@ -70,7 +72,7 @@ function Row(props: { testId: string; label: string; value: string }): ReactNode
 export function WallInspector(props: WallInspectorProps): ReactNode {
   const {
     wall, derived, mergeableWith, unit, precision,
-    onSetLength, onSetRadius, onSetThickness, onOffset, onSplit, onMerge, onDelete, deleteBlocked,
+    onSetLength, onSetRadius, onSetThickness, onOffset, onSplit, onMerge, onDelete, deleteBlocked, renovationAction,
   } = props
   const [offsetText, setOffsetText] = useState('')
   const [offsetSide, setOffsetSide] = useState<'left' | 'right'>('left')
@@ -161,6 +163,7 @@ export function WallInspector(props: WallInspectorProps): ReactNode {
           </button>
         </div>
       </ToolbarMenu>
+      {renovationAction}
       <div className="flex items-center gap-2">
         <button type="button" data-testid="wall-split" className="bb-workspace-tool-button" onClick={onSplit}>
           {STRINGS.wallSplit}

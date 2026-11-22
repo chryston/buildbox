@@ -56,6 +56,8 @@ export interface OpeningInspectorProps {
   onFlipSwing: () => void
   onSelectHost: () => void
   onDelete: () => void
+  /** The renovation action for this Opening (#69 §13), when there is an Option to move it to. */
+  renovationAction?: ReactNode
 }
 
 function Row(props: { testId: string; label: string; value: string }): ReactNode {
@@ -70,7 +72,7 @@ function Row(props: { testId: string; label: string; value: string }): ReactNode
 export function OpeningInspector(props: OpeningInspectorProps): ReactNode {
   const {
     opening, host, end, hostLength, unit, precision,
-    onRename, onSetWidth, onSetStart, onFlipHinge, onFlipSwing, onSelectHost, onDelete,
+    onRename, onSetWidth, onSetStart, onFlipHinge, onFlipSwing, onSelectHost, onDelete, renovationAction,
   } = props
   const [labelText, setLabelText] = useState(opening.label)
   const [from, setFrom] = useState<'start' | 'end'>('start')
@@ -193,6 +195,7 @@ export function OpeningInspector(props: OpeningInspectorProps): ReactNode {
       <span className="bb-workspace-unit-suffix" data-testid="opening-inspector-readout">
         {readoutMm(shown, unit, precision)}
       </span>
+      {renovationAction}
       <button
         type="button"
         className="bb-workspace-tool-button"

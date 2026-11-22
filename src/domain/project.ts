@@ -54,6 +54,15 @@ export interface Project {
   itemDesigns: ItemDesign[]
   existingModel: ExistingModel
   /**
+   * The Design Options of this Project (#69 §2), in the order the list offers them.
+   *
+   * Optional rather than an always-present array so that a Project written before this capability
+   * — every Project in every Backup taken until now — stays valid in a build that has the flag off:
+   * the validator never defaults a field, and a flag-off build must keep reading what it wrote.
+   * `designOptionsOf` is the accessor; the v7 → v8 migrator adds the empty array.
+   */
+  designOptions?: DesignOption[]
+  /**
    * Every acknowledgement of a warning, in the order the user made them (#66 §5).
    *
    * Canonical and in Backups: an acknowledgement is a decision about the model, not a
@@ -243,6 +252,59 @@ export interface ExistingModel {
 }
 
 /**
+ * The IDs of the entities this one came out of (#69 §3).
+ *
+ * Empty for work invented from nothing; one entry for a replace, a like-for-like renovation or a
+ * move into a Design Option; several for a split or a merge, which is why it is a list and not a
+ * single ID. It is what makes a renovation quantity answer "new work" or "like-for-like replacement"
+ * rather than guessing from geometry, and it is what the drawing's provenance marker reads.
+ *
+ * Present only on a proposed entity: an Existing Model entity has no predecessor by definition, and
+ * the validator refuses the field there so that the two roles cannot be confused.
+ */
+export type PredecessorIds = EntityId[]
+
+/** The five collections one Design Option proposes, in the shape `ExistingModel` uses (#69 §2). */
+export interface ProposedModel {
+  walls: Wall[]
+  wallJunctions: WallJunction[]
+  openings: Opening[]
+  rooms: Room[]
+  placedItems: PlacedItem[]
+}
+
+/**
+ * One alternative for the same Existing Model (#69 §2).
+ *
+ * A Design Option owns a **delta**, never a copy: `proposed` holds only the entities this Option
+ * introduces and `demolishedIds` only the Existing entities it removes. Everything else is shared,
+ * which is what "options are alternatives over one shared Existing Model" means in the data — and
+ * what makes an Existing Model correction a single transaction that every Option sees, rather than
+ * N edits that could disagree.
+ */
+export interface DesignOption {
+  id: EntityId
+  /** Non-empty, at most 60 characters, unique within the Project up to trim and case. */
+  name: string
+  /** The work this Option introduces, and only that. */
+  proposed: ProposedModel
+  /**
+   * The IDs of the Existing Model entities this Option removes, sorted.
+   *
+   * Existing entities only: a record naming a proposed entity would delete work that exists in one
+   * alternative and not in another. Removing an Option's own work is an edit to `proposed`.
+   */
+  demolishedIds: EntityId[]
+}
+
+/**
+ * The Design Options of a Project, which a Project written before #69 does not carry.
+ *
+ * Every consumer reads through this rather than the field, so "no Options" has one spelling.
+ */
+export const designOptionsOf = (project: Project): DesignOption[] => project.designOptions ?? []
+
+/**
  * Which face of a Wall a Room edge is referenced to (#67 §1).
  *
  * `left` and `right` are the reference line's own sides and are data only, exactly as a
@@ -314,6 +376,8 @@ export interface Room {
   outline: RoomOutline
   /** Every Edge of this outline that is referenced to a Wall face, in no particular order. */
   wallFaceRefs: RoomWallFaceRef[]
+  /** The Room this one came out of (#69 §3, §10); absent on an Existing Model Room. */
+  predecessorIds?: PredecessorIds
 }
 
 /** What an Opening is: an absence in one Wall, not a thing standing in a Room (#65). */
@@ -362,6 +426,8 @@ export interface Opening {
   swing?: OpeningSwing
   /** Hinged doors only; absent when `swing` is `'sliding'`. */
   hingeSide?: HingeSide
+  /** The Opening this one came out of (#69 §3); absent on an Existing Model Opening. */
+  predecessorIds?: PredecessorIds
 }
 
 /** Where the reference line sits within the thickness, relative to its own direction (#64). */
@@ -413,6 +479,8 @@ export interface Wall {
   baseElevation: number
   /** Millimetres. A constant Vertical Extent; the editing UI arrives in #74. */
   height: number
+  /** The Wall this one came out of (#69 §3); absent on an Existing Model Wall. */
+  predecessorIds?: PredecessorIds
 }
 
 /**
@@ -430,6 +498,8 @@ export interface WallJunction {
   ends: WallJunctionEnd[]
   /** The hosted form: the Wall this Junction attaches to, and where along it. */
   host?: { wallId: EntityId; at: number }
+  /** The Junction this one came out of (#69 §3); absent on an Existing Model Junction. */
+  predecessorIds?: PredecessorIds
 }
 
 /** One member end of a Junction, and the Wall end it holds. */
@@ -449,6 +519,8 @@ export interface PlacedItem {
   rotationDeg: number
   /** Millimetres above the Floor Datum; negative is valid (#25). */
   baseElevation: number
+  /** The Placement this one came out of (#69 §3); absent on an Existing Model Placement. */
+  predecessorIds?: PredecessorIds
 }
 
 /**

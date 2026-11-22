@@ -16,6 +16,7 @@ import {
   type Migrator,
   type Project,
 } from './index'
+import { FF_RENOVATION } from '../lib'
 
 /** Sequential IDs, so a test can say which entity the migrator named with which. */
 function allocator(prefix = 'view'): IdAllocator {
@@ -69,9 +70,35 @@ function v1Project(): Record<string, unknown> {
   return record
 }
 
+/**
+ * What the chain adds past the step under test.
+ *
+ * `migrateProject` runs to this build's current schema, and in a `VITE_FF_RENOVATION` build that is
+ * one step past v7: the empty Design Option collection (#69). Every "the step touched nothing else"
+ * assertion below compares against the record the step started from, so each has to allow for that
+ * one addition — otherwise the test asserts which version the schema is at rather than what the step
+ * does.
+ */
+const pastTheStep = (record: unknown): unknown =>
+  FF_RENOVATION ? { ...(record as Record<string, unknown>), designOptions: [] } : record
+
 describe('DOMAIN_SCHEMA_VERSION', () => {
-  it('is 7, one step above the version #66 shipped', () => {
-    expect(DOMAIN_SCHEMA_VERSION).toBe(7)
+  it('is the version this build writes', () => {
+    // #69: v8 exists only where the renovation flag is on, so the flag decides the number, and the
+    // two values together are the whole migration story — a preview-written Project arrives in a
+    // production build as "saved by a newer BuildBox" rather than opening without its Options.
+    expect(DOMAIN_SCHEMA_VERSION).toBe(FF_RENOVATION ? 8 : 7)
+  })
+
+  it('refuses a v8 Project in a build that has no renovation', () => {
+    if (FF_RENOVATION) return
+    const result = migrateProject(validProject(), 8, allocator())
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error.kind).toBe('newer-schema')
+    if (result.error.kind !== 'newer-schema') return
+    expect(result.error.supported).toBe(7)
+    expect(result.error.message).toContain('saved by a newer BuildBox')
   })
 })
 
@@ -171,7 +198,7 @@ describe('migrateProject — the envelope version (#14)', () => {
     expect(result.migratedFrom).toBe(2)
     // The step is not the identity: a v2 rectangle becomes a Rectangle preset, and the
     // geometry it draws is unchanged. `validProject()` has no Item Designs to rewrite.
-    expect(result.project).toEqual(project)
+    expect(result.project).toEqual(pastTheStep(project))
     // The chain always works on a copy, so the caller keeps its own value.
     expect(result.project).not.toBe(project)
   })
@@ -391,7 +418,7 @@ describe('migrateV3toV4 — a Project gains its Walls (#64)', () => {
 
     // Nothing else moved: put the v3 shape back and the Project is the record again.
     const prior = v3Record() as Record<string, unknown>
-    expect({ ...result.project, ...prior }).toEqual(prior)
+    expect({ ...result.project, ...prior }).toEqual(pastTheStep(prior))
   })
 
   it('takes the height from the preset pack entry it was read from', () => {
@@ -460,7 +487,7 @@ describe('migrateV4toV5 — a Project gains its Openings (#65)', () => {
     expect(result.project.existingModel.walls).toEqual(validProject().existingModel.walls)
 
     const prior = v4Record() as Record<string, unknown>
-    expect({ ...result.project, ...prior }).toEqual(prior)
+    expect({ ...result.project, ...prior }).toEqual(pastTheStep(prior))
   })
 
   it('leaves a v5 Project exactly as it found it', () => {
@@ -522,7 +549,7 @@ describe('migrateV6toV7 — a Project gains its Rooms (#67)', () => {
     expect(result.project.existingModel.openings).toEqual(validProject().existingModel.openings)
 
     const prior = v6Record() as Record<string, unknown>
-    expect({ ...result.project, ...prior }).toEqual(prior)
+    expect({ ...result.project, ...prior }).toEqual(pastTheStep(prior))
   })
 
   it('leaves a v7 Project exactly as it found it', () => {
@@ -561,7 +588,7 @@ describe('migrateV6toV7 — a Project gains its Rooms (#67)', () => {
     const result = migrateProject(carried, 6, allocator())
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.project).toEqual(carried)
+    expect(result.project).toEqual(pastTheStep(carried))
   })
 
   it('adds Rooms to a record whose Existing Model is not a record at all, without crashing', () => {

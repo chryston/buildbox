@@ -20,6 +20,7 @@
 import { designFootprintSize, designHeight } from '../../domain'
 import type { EntityId, ItemDesign, Project } from '../../domain'
 import type { OptionColumns, RenovationState } from './scope'
+import { effectiveModel } from '../effectiveModel'
 
 /**
  * One row of the Item List, keyed as `ITEMS_TABLE` declares its columns.
@@ -45,9 +46,10 @@ export type ItemListRow = {
 /**
  * The Item List rows of one Floor under one Design Option.
  *
- * `option` is the two Design Option columns; the Existing Model alone is two empty strings. The
- * Renovation State is `existing` throughout v1.0, because the only content the domain holds is
- * the Existing Model's (#32 introduces the rest).
+ * `option` is the two Design Option columns; the Existing Model alone is two empty strings, which
+ * is also how the Option is named away — an empty column has no Option behind it (#69 §5). A row
+ * carries the Renovation State of the Placed Items it counts, so the three bases one Option
+ * proposes are a `Proposed 3` row beside the `Existing 5` one and never summed into it (#62 §7).
  *
  * Rows come out in placement order — the order the Project stores them — because the sort that
  * makes a file is the caller's, and it is a rule about the table rather than about one Floor.
@@ -60,20 +62,24 @@ export function itemListRowsForFloor(
   const floor = project.floors.find((candidate) => candidate.id === floorId)
   if (floor === undefined) return []
   const designs = new Map<EntityId, ItemDesign>(project.itemDesigns.map((design) => [design.id, design]))
-  const counts = new Map<EntityId, number>()
-  for (const placed of project.existingModel.placedItems) {
-    if (placed.floorId !== floorId) continue
+  const optionId = option.designOptionId === '' ? null : option.designOptionId
+  const counts = new Map<string, { itemDesignId: EntityId; renovationState: RenovationState; count: number }>()
+  for (const { entity: placed, renovationState } of effectiveModel(project, floorId, optionId).placedItems) {
+    if (renovationState === 'demolition') continue
     if (!designs.has(placed.itemDesignId)) continue
-    counts.set(placed.itemDesignId, (counts.get(placed.itemDesignId) ?? 0) + 1)
+    const key = `${placed.itemDesignId}\u0000${renovationState}`
+    const seen = counts.get(key)
+    if (seen === undefined) counts.set(key, { itemDesignId: placed.itemDesignId, renovationState, count: 1 })
+    else seen.count += 1
   }
 
   const rows: ItemListRow[] = []
-  for (const [itemDesignId, count] of counts) {
+  for (const { itemDesignId, renovationState, count } of counts.values()) {
     const design = designs.get(itemDesignId)!
     const { width, depth } = designFootprintSize(design)
     rows.push({
       ...option,
-      renovationState: 'existing',
+      renovationState,
       floorId: floor.id,
       floor: floor.name,
       itemDesignId,
