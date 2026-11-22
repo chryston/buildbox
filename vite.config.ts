@@ -1,4 +1,5 @@
-import { defineConfig, configDefaults } from 'vitest/config'
+import { defineConfig, configDefaults, type UserConfig } from 'vitest/config'
+import { loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { readFileSync } from 'node:fs'
 
@@ -97,7 +98,7 @@ const RENOVATION_BENCH_EXCLUDE = FF_RENOVATION ? [] : ['src/**/renovation*.bench
 
 const SHARED_EXCLUDE = ['e2e/**', ...configDefaults.exclude]
 
-export default defineConfig({
+const config: UserConfig = {
   base: '/buildbox/',
   define: { __BUILDBOX_VERSION__: JSON.stringify(BUILDBOX_VERSION) },
   plugins: [react()],
@@ -242,4 +243,23 @@ export default defineConfig({
       },
     ],
   },
+}
+
+// The renovation flag reaches client code through `define`, not `import.meta.env` (#69).
+//
+// `src/lib/flags.ts` is inside the `lib` barrel, which `domain` imports for its banned words, which
+// the Playwright support modules import from raw Node — and outside a Vite build `import.meta.env`
+// is absent, so reading a property off it threw while the spec file was still being loaded, and
+// every smoke spec went down with it. `process.env.VITE_FF_RENOVATION` is undefined there instead,
+// which is the same answer a flag-off build gives. The bundler replaces this `define` entry with a
+// string literal, so a flag-off build still folds every `if (FF_RENOVATION)` branch away — the
+// claim `scripts/check-bundle-strings.mjs` greps for. `loadEnv` is what makes the mode's `.env`
+// file the source, so `--mode renovation` (see `.env.renovation`) turns both this and
+// `src/app/channel.ts`'s preview-database decision on together.
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), 'VITE_')
+  return {
+    ...config,
+    define: { ...config.define, 'process.env.VITE_FF_RENOVATION': JSON.stringify(env.VITE_FF_RENOVATION ?? 'false') },
+  }
 })
