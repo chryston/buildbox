@@ -14,7 +14,7 @@
  * is edited by `wall.setThickness` and not by a second family of handlers that fork on which
  * container a record lives in.
  */
-import { designOptionsOf } from '../../domain'
+import { designOptionsOf, nameKey } from '../../domain'
 import type { DesignOption, EntityId, Project } from '../../domain'
 import type { DeleteDesignOptionReview, Locator, RenovationIntentType } from '../intents'
 import type { Handler, IntentHandler } from './context'
@@ -52,16 +52,39 @@ const emptyProposed = (): DesignOption['proposed'] => ({
   placedItems: [],
 })
 
-const optionNamed = (project: Project, name: string, except?: EntityId): DesignOption | undefined =>
-  designOptionsOf(project).find((option) => option.name === name && option.id !== except)
+/**
+ * An Option's name is unique the way a Floor's is — trimmed, case-folded, Unicode-normalised —
+ * because it is the same `nameKey` the validator folds with (#69 §4). Two Options called `Option A`
+ * and `option a` are two cards a person cannot tell apart on a Saved View.
+ */
+const optionNamed = (project: Project, name: string, except?: EntityId): DesignOption | undefined => {
+  const key = nameKey(name)
+  return designOptionsOf(project).find((option) => option.id !== except && nameKey(option.name) === key)
+}
+
+/** The longest name the validator accepts for an Option (`validate.ts`'s own bound). */
+const OPTION_NAME_MAX_LENGTH = 60
+
+/**
+ * The words a name that cannot be used answers with, or `null` when it can. The three rules are the
+ * validator's (#69 §4): filled, at most sixty characters, one per Project. A Project that would not
+ * validate is never written, so refusing here is refusing earlier and in plainer words.
+ */
+function optionNameProblem(project: Project, name: string, except: EntityId | undefined): string | null {
+  if (name.trim() === '') return 'A Design Option needs a name.'
+  if (name.trim().length > OPTION_NAME_MAX_LENGTH)
+    return `A Design Option name is at most ${OPTION_NAME_MAX_LENGTH} characters.`
+  const taken = optionNamed(project, name, except)
+  return taken === undefined ? null : `An option called "${taken.name.trim()}" already exists.`
+}
 
 /** An Option is a Project-level thing: no Floor, no View, nothing to select. */
 const optionLocator = (): Locator => ({ floorId: null, viewId: null, view: 'plan', itemDesignIds: [], placedItemIds: [] })
 
 const createOption: Handler<'designOption.create'> = (ctx) => {
-  const { name } = ctx.intent.payload
-  if (optionNamed(ctx.project, name) !== undefined)
-    refuse('option-blocked', 'designOptions', `There is already a Design Option called ${name}.`)
+  const name = ctx.intent.payload.name.trim()
+  const problem = optionNameProblem(ctx.project, name, undefined)
+  if (problem !== null) refuse('option-blocked', 'designOptions', problem)
   const [optionId] = spendIds(ctx.intent.ids, 1, ctx.intent.type)
   if (ctx.draft.designOptions === undefined) ctx.draft.designOptions = []
   // A new Option holds nothing, which is not an empty Project: the Existing Model is what every
@@ -70,11 +93,12 @@ const createOption: Handler<'designOption.create'> = (ctx) => {
 }
 
 const renameOption: Handler<'designOption.rename'> = (ctx) => {
-  const { optionId, name } = ctx.intent.payload
+  const { optionId } = ctx.intent.payload
+  const name = ctx.intent.payload.name.trim()
   const option = ctx.draft.designOptions?.find((entry) => entry.id === optionId)
   if (option === undefined) refuse('unknown-target', 'designOptions', `There is no Design Option ${optionId} to rename.`)
-  if (optionNamed(ctx.project, name, optionId) !== undefined)
-    refuse('option-blocked', 'designOptions', `There is already a Design Option called ${name}.`)
+  const problem = optionNameProblem(ctx.project, name, optionId)
+  if (problem !== null) refuse('option-blocked', 'designOptions', problem)
   // Only the name moves. Every record keeps the Option id it is owned by, so nothing carried with
   // the Option is rewritten and no Comment or reference is left pointing at a gone ID.
   option.name = name

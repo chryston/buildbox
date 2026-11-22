@@ -18,10 +18,13 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { DeleteDesignOptionReview, IntentType, PayloadOf } from '../../../edit'
 import type { DesignOption } from '../../../domain'
-import { designOptionsOf } from '../../../domain'
+import { designOptionsOf, nameKey } from '../../../domain'
 import { RENOVATION_STRINGS } from '../../strings/renovation'
 import { useWorkspaceDispatch, useWorkspaceProject, useWorkspaceRoot } from '../WorkspaceRoot'
 import { DeleteDesignOptionDialog } from './DeleteDesignOptionDialog'
+
+/** The longest name `edit` and the validator accept for an Option (#69 §4). */
+const OPTION_NAME_MAX_LENGTH = 60
 
 /** The plain words for a name this Project cannot hold, or `null` when it may have it. */
 export function designOptionNameProblem(
@@ -31,8 +34,12 @@ export function designOptionNameProblem(
 ): string | null {
   const trimmed = name.trim()
   if (trimmed === '') return RENOVATION_STRINGS.designOptionNameRequired
-  if (options.some((option) => option.name === trimmed && option.id !== optionId))
-    return RENOVATION_STRINGS.designOptionNameTaken(trimmed)
+  if (trimmed.length > OPTION_NAME_MAX_LENGTH) return RENOVATION_STRINGS.designOptionNameTooLong
+  // The same fold the validator makes: an Option called `Option A` blocks `option a` too, because
+  // both are the words a person reads off a card and cannot tell apart.
+  const key = nameKey(trimmed)
+  const taken = options.find((option) => option.id !== optionId && nameKey(option.name) === key)
+  if (taken !== undefined) return RENOVATION_STRINGS.designOptionNameTaken(taken.name.trim())
   return null
 }
 
@@ -42,14 +49,14 @@ export function designOptionNameProblem(
  * which is rare enough to count rather than to invent a second naming scheme for.
  */
 export function nextDesignOptionName(options: readonly DesignOption[]): string {
-  const taken = new Set(options.map((option) => option.name))
+  const taken = new Set(options.map((option) => nameKey(option.name)))
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
   for (const letter of letters) {
     const name = RENOVATION_STRINGS.designOptionSuggested(letter)
-    if (!taken.has(name)) return name
+    if (!taken.has(nameKey(name))) return name
   }
   let index = letters.length + 1
-  while (taken.has(RENOVATION_STRINGS.designOptionSuggested(String(index)))) index += 1
+  while (taken.has(nameKey(RENOVATION_STRINGS.designOptionSuggested(String(index))))) index += 1
   return RENOVATION_STRINGS.designOptionSuggested(String(index))
 }
 

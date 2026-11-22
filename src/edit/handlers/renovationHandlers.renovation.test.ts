@@ -71,7 +71,16 @@ describe('designOption.create', () => {
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.code).toBe('option-blocked')
-    expect(result.problems[0]?.message).toBe('There is already a Design Option called Option A.')
+    expect(result.problems[0]?.message).toBe('An option called "Option A" already exists.')
+    // The fold is the validator's (#69 §4): `option a` is the same name to a person reading a card.
+    const folded = applyIntent(project(), intent('designOption.create', { name: '  option a  ' }, ['opt-c']))
+    expect(folded.ok).toBe(false)
+    if (folded.ok) return
+    expect(folded.problems[0]?.message).toBe('An option called "Option A" already exists.')
+    const blank = applyIntent(project(), intent('designOption.create', { name: '   ' }, ['opt-c']))
+    expect(blank.ok).toBe(false)
+    if (blank.ok) return
+    expect(blank.problems[0]?.message).toBe('A Design Option needs a name.')
   })
 })
 
@@ -93,15 +102,26 @@ describe('designOption.rename', () => {
   })
 
   it('blocks a name another Option answers to, and an unknown Option', () => {
-    const taken = applyIntent(project(), intent('designOption.rename', { optionId: 'option-b', name: 'Option A' }))
+    const taken = applyIntent(project(), intent('designOption.rename', { optionId: 'option-b', name: 'option a' }))
     expect(taken.ok).toBe(false)
     if (taken.ok) return
     expect(taken.code).toBe('option-blocked')
-    expect(taken.problems[0]?.message).toBe('There is already a Design Option called Option A.')
+    expect(taken.problems[0]?.message).toBe('An option called "Option A" already exists.')
+    const long = applyIntent(project(), intent('designOption.rename', { optionId: 'option-b', name: 'x'.repeat(61) }))
+    expect(long.ok).toBe(false)
+    if (long.ok) return
+    expect(long.problems[0]?.message).toBe('A Design Option name is at most 60 characters.')
     const gone = applyIntent(project(), intent('designOption.rename', { optionId: 'option-z', name: 'Third' }))
     expect(gone.ok).toBe(false)
     if (gone.ok) return
     expect(gone.code).toBe('unknown-target')
+  })
+
+  it('trims the name it is given, the way a Floor rename does', () => {
+    const result = applyIntent(project(), intent('designOption.rename', { optionId: 'option-b', name: '  Open plan  ' }))
+    if (!result.ok) throw new Error(JSON.stringify(result.problems))
+    expect(result.project.designOptions?.[1]?.name).toBe('Open plan')
+    expect(validateProject(result.project).ok).toBe(true)
   })
 })
 

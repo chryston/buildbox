@@ -121,7 +121,7 @@ describe('the Design Options section', () => {
     await user.keyboard('{Enter}')
 
     expect(await screen.findByTestId(`design-option-name-error-${optionB}`)).toHaveTextContent(
-      'There is already a Design Option called Option A.',
+      'An option called "Option A" already exists.',
     )
     expect(names()).toEqual(['Option A', 'Option B'])
   })

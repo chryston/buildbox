@@ -22,7 +22,8 @@ export const RENOVATION_STRINGS = {
   designOptionAdd: '+ New Design Option',
   designOptionDelete: 'Delete…',
   designOptionNameRequired: 'A Design Option needs a name.',
-  designOptionNameTaken: (name: string): string => `There is already a Design Option called ${name}.`,
+  designOptionNameTaken: (name: string): string => `An option called "${name}" already exists.`,
+  designOptionNameTooLong: 'A Design Option name is at most 60 characters.',
   designOptionSuggested: (label: string): string => `Option ${label}`,
   designOptionNone: 'No Design Options yet. Each one is the Existing Model with its own work drawn on it.',
 
