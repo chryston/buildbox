@@ -11,7 +11,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { EntityId, ProposedModel } from '../../../domain'
+import type { EntityId, ItemDesign, ProposedModel } from '../../../domain'
 import type { CopySet, PasteReview } from '../../../edit'
 import { LAYER_NEUTRAL_COLOR } from './layersTheme'
 import { PasteFromOtherProjectDialog } from './PasteFromOtherProjectDialog'
@@ -53,18 +53,25 @@ const review = (over: Partial<PasteReview> = {}): PasteReview => ({
   ...over,
 })
 
-/** The copy behind the review: one Wall on `Demolition`, which is the ref the row has to name. */
+/**
+ * The copy behind the review: a Wall, an Opening and a Room on `Demolition`, and a Placed Item on
+ * `New joinery` reading an Item Design of its own — the four kinds, so the row is shown naming each
+ * the way the inspector names it and never by the ID underneath.
+ */
 const copySet = (): CopySet => ({
   sourceProjectId: FITOUT as EntityId,
   sourceProjectName: 'Unit 4 Fitout',
   entities: {
     walls: [{ id: 'wall-7', ref: 'W-7', drawingLayerId: L1 }] as unknown as ProposedModel['walls'],
     wallJunctions: [],
-    openings: [],
-    rooms: [],
-    placedItems: [],
+    openings: [{ id: 'opening-3', label: 'Window 3', drawingLayerId: L1 }] as unknown as ProposedModel['openings'],
+    rooms: [{ id: 'room-2', name: 'Kitchen', drawingLayerId: L1 }] as unknown as ProposedModel['rooms'],
+    placedItems: [
+      { id: 'placed-9', itemDesignId: 'design-pantry', drawingLayerId: L2 },
+      { id: 'placed-10', itemDesignId: 'design-gone', drawingLayerId: L2 },
+    ] as unknown as ProposedModel['placedItems'],
   },
-  itemDesigns: [],
+  itemDesigns: [{ id: 'design-pantry', name: 'Tall pantry' } as unknown as ItemDesign],
   layers: [],
   demolishedCount: 0,
   notes: [],
@@ -110,8 +117,10 @@ describe('the question the paste asks (#72 criteria 2, 3)', () => {
 
   it('lists the copy’s own refs against the layer each stood on', () => {
     open()
-    expect(screen.getByTestId(`paste-row-items-${L1}`).textContent).toBe('W-7')
-    expect(screen.getByTestId(`paste-row-items-${L2}`).textContent).toBe('')
+    // A Wall by its ref, an Opening by its label, a Room by its name, a Placed Item by the Item
+    // Design it reads — and the ID only where there is no name left to read.
+    expect(screen.getByTestId(`paste-row-items-${L1}`).textContent).toBe('W-7, Window 3, Kitchen')
+    expect(screen.getByTestId(`paste-row-items-${L2}`).textContent).toBe('Tall pantry, placed-10')
   })
 
   it('offers the name match and never takes it', () => {

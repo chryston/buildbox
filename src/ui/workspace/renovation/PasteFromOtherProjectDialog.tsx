@@ -54,20 +54,24 @@ const decodeTarget = (value: string): PasteLayerTarget | null => {
   return { kind: 'existing', layerId: value.slice('existing:'.length) }
 }
 
-/** A record seen far enough to say which of the copy's layers it stood on and what it is called. */
-interface Filed {
-  readonly id: EntityId
-  readonly drawingLayerId?: EntityId | null
-  readonly ref?: string
-}
-
-/** The refs of the records the copy brings that stood on `layerId` — the row's own list. */
+/**
+ * The records the copy brings that stood on `layerId`, each named the way the inspector names it: a
+ * Wall by its `W-1` ref, an Opening by its label, a Room by its name, a Placed Item by the Item
+ * Design it reads. A row of raw IDs is not a review a person can answer, so the ID is the last
+ * resort and not the rule.
+ */
 function refsOn(copySet: CopySet, layerId: EntityId): string[] {
   const { walls, openings, rooms, placedItems } = copySet.entities
-  // The four collections share only these three fields, and the copy is read, never narrowed by
-  // hand: what is asked of each record is what every one of them carries.
-  const records = [...walls, ...openings, ...rooms, ...placedItems] as readonly Filed[]
-  return records.filter((record) => (record.drawingLayerId ?? null) === layerId).map((record) => record.ref ?? record.id)
+  const onLayer = <T extends { drawingLayerId?: EntityId | null }>(rows: readonly T[]): readonly T[] =>
+    rows.filter((row) => (row.drawingLayerId ?? null) === layerId)
+  const designName = (itemDesignId: EntityId): string | undefined =>
+    copySet.itemDesigns.find((design) => design.id === itemDesignId)?.name
+  return [
+    ...onLayer(walls).map((wall) => wall.ref),
+    ...onLayer(openings).map((opening) => opening.label),
+    ...onLayer(rooms).map((room) => room.name),
+    ...onLayer(placedItems).map((item) => designName(item.itemDesignId) ?? item.id),
+  ]
 }
 
 export function PasteFromOtherProjectDialog(props: PasteDialogProps): ReactNode {
@@ -98,7 +102,7 @@ export function PasteFromOtherProjectDialog(props: PasteDialogProps): ReactNode 
         role="dialog"
         aria-modal="true"
         aria-label={RENOVATION_STRINGS.pasteTitle(review.sourceProjectName)}
-        className="bb-workspace-dialog"
+        className="bb-workspace-dialog bb-paste-dialog"
       >
         <h2 data-testid="paste-dialog-title">{RENOVATION_STRINGS.pasteTitle(review.sourceProjectName)}</h2>
         <p data-testid="paste-dialog-intro">
@@ -120,7 +124,7 @@ export function PasteFromOtherProjectDialog(props: PasteDialogProps): ReactNode 
             {RENOVATION_STRINGS.pasteExistingDanger}
           </p>
         )}
-        <table className="bb-workspace-table" data-testid="paste-dialog-rows">
+        <table className="bb-paste-rows" data-testid="paste-dialog-rows">
           <thead>
             <tr>
               <th>{RENOVATION_STRINGS.pasteColSource}</th>

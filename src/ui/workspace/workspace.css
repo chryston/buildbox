@@ -1311,6 +1311,23 @@
   color: var(--bb-danger-text);
 }
 
+/* #72: the mapping review is a table, not a question over two buttons — 340px cannot hold a source
+ * layer, the records it brought, an answer wide enough to read `Furniture (name match)` to the end,
+ * and the one-click button beside it. So this dialog is a wide one, the table fills it, and the select
+ * is never narrower than its longest answer. */
+.bb-paste-dialog {
+  width: 560px;
+  max-width: calc(100vw - 48px);
+}
+
+.bb-paste-rows {
+  width: 100%;
+}
+
+.bb-paste-rows select {
+  min-width: max-content;
+}
+
 /* #70 §5: the inspector's renovation block, in the rail under the card. The badge is the State's own
    colour — the same three tokens the swatches and the canvas use, so one State never looks like
    another in two places. The rows are a definition list because they are exactly that: two labels
