@@ -14,7 +14,7 @@
  * is edited by `wall.setThickness` and not by a second family of handlers that fork on which
  * container a record lives in.
  */
-import { designOptionsOf, nameKey } from '../../domain'
+import { designOptionsOf, nameKey, viewDesignOptionId } from '../../domain'
 import type { DesignOption, EntityId, Project } from '../../domain'
 import type { DeleteDesignOptionReview, Locator, RenovationIntentType } from '../intents'
 import type { Handler, IntentHandler } from './context'
@@ -27,14 +27,20 @@ import { refuse, spendIds } from './support'
  */
 export const RENOVATION_MARKER = '__renovation_intents__'
 
-/** The Option half of the renovation set; the edit table lives in `./renovationEdits`. */
-type OptionIntentType = Extract<RenovationIntentType, `designOption.${string}`>
+/**
+ * The Option half of the renovation set, plus the two saved-view settings of #70 §1. The edit table
+ * lives in `./renovationEdits`, and the correction wrapper in `./correctionHandlers`.
+ */
+type OptionIntentType = Extract<RenovationIntentType, `designOption.${string}` | 'view.setDesignOption' | 'view.setRenovationDisplay'>
 
 /** The IDs each renovation Intent spends, in order — the same contract `INTENT_ID_ORDER` states. */
 export const RENOVATION_INTENT_ID_ORDER: { [T in OptionIntentType]: readonly string[] } = {
   'designOption.create': ['optionId'],
   'designOption.rename': [],
   'designOption.delete': [],
+  // Both saved-view settings write one field of a view that already exists (#70 §1).
+  'view.setDesignOption': [],
+  'view.setRenovationDisplay': [],
 }
 
 /** The default label per renovation Intent, kept out of `../labels` for the same reason. */
@@ -42,6 +48,12 @@ export const RENOVATION_INTENT_LABELS: { [T in OptionIntentType]: string } = {
   'designOption.create': 'New Design Option',
   'designOption.rename': 'Rename Design Option',
   'designOption.delete': 'Delete Design Option',
+  // The two below are the base of a longer label: the card that sends them appends what was chosen
+  // — `Set Design Option: Option A · Open kitchen`, `Set Design Option: none`,
+  // `Set Renovation Display: Combined` (#70 §2) — because the Option's name is Project data and the
+  // Display's is `ui/strings` copy, neither of which this table may hold.
+  'view.setDesignOption': 'Set Design Option',
+  'view.setRenovationDisplay': 'Set Renovation Display',
 }
 
 const emptyProposed = (): DesignOption['proposed'] => ({
@@ -109,6 +121,9 @@ function reviewDeleteOption(project: Project, optionId: EntityId): DeleteDesignO
   const option = designOptionsOf(project).find((entry) => entry.id === optionId)
   if (option === undefined) return null
   const proposed = option.proposed
+  // The saved views looking through it are named here and nulled by the handler below — the same
+  // list, read once, so the dialog cannot promise a count the transaction does not deliver.
+  const viewNames = project.views.filter((view) => viewDesignOptionId(view) === optionId).map((view) => view.name)
   return {
     kind: 'delete-design-option',
     optionId,
@@ -121,7 +136,9 @@ function reviewDeleteOption(project: Project, optionId: EntityId): DeleteDesignO
       placedItems: proposed.placedItems.length,
       demolished: option.demolishedIds.length,
       acknowledgements: project.warningAcknowledgements.filter((record) => record.designOptionId === optionId).length,
+      views: viewNames.length,
     },
+    viewNames,
     message: `Delete ${option.name} and everything it proposes?`,
   }
 }
@@ -141,6 +158,71 @@ const deleteOption: Handler<'designOption.delete'> = (ctx) => {
   for (let at = records.length - 1; at >= 0; at -= 1) {
     if (records[at]!.designOptionId === optionId) records.splice(at, 1)
   }
+  // And every saved view that was looking through it looks at the Existing Model from now on
+  // (#70 §1, criterion 11) — same transaction, so one undo brings the Option back *with* the
+  // references, and no view is ever left naming an Option that no longer exists. A view that never
+  // named it is not written at all, so its bytes are untouched.
+  for (const view of ctx.draft.views) {
+    if (viewDesignOptionId(view) === optionId) view.designOptionId = null
+  }
+}
+
+/**
+ * The saved view whose setting is being changed. A view is addressed by id alone, because a Plan
+ * View is a Project-level record that names its Floor (#56).
+ */
+function requireView(draft: Project, viewId: EntityId) {
+  const view = draft.views.find((candidate) => candidate.id === viewId)
+  if (view === undefined) refuse('unknown-target', `views[${viewId}]`, `There is no saved view ${viewId} to change.`)
+  return view
+}
+
+/**
+ * Which Design Option this saved view looks through (#70 §1) — one undoable setting, and the
+ * Display is left alone. `null` is a choice, not an absence: it is `— no Design Option —`, the
+ * Existing Model on its own.
+ *
+ * Naming an Option this Project does not have is refused here rather than left to the validator,
+ * so the answer is one sentence about the Option instead of a schema complaint about the view.
+ */
+const setViewDesignOption: Handler<'view.setDesignOption'> = (ctx) => {
+  const { viewId, designOptionId } = ctx.intent.payload
+  const view = requireView(ctx.draft, viewId)
+  if (designOptionId !== null && designOptionsOf(ctx.draft).every((option) => option.id !== designOptionId)) {
+    refuse('unknown-target', 'designOptions', `There is no Design Option ${designOptionId} to look through.`)
+  }
+  view.designOptionId = designOptionId
+}
+
+/**
+ * Which Renovation Display this saved view draws (#70 §1) — one undoable setting, and the Option is
+ * left alone. Switching from Proposed to Combined is not two steps, and switching Option is not a
+ * way of switching Display.
+ *
+ * A Display that needs an Option this view does not have is accepted on purpose: that pairing is
+ * the error state §6 draws, and the user has to be able to walk into it by choosing Combined from
+ * the card and then reading the banner.
+ */
+const setViewRenovationDisplay: Handler<'view.setRenovationDisplay'> = (ctx) => {
+  const { viewId, renovationDisplay } = ctx.intent.payload
+  const view = requireView(ctx.draft, viewId)
+  view.renovationDisplay = renovationDisplay
+}
+
+/**
+ * A saved-view setting navigates to the view it changed (#70 §9): undoing `Set Renovation Display`
+ * has to land the user back on the view whose Display it put right, which is what makes the undo
+ * of a card click legible. The navigation is the Locator's answer, never a history step of its own.
+ */
+function viewSettingLocator(project: Project, intent: { payload: { viewId: EntityId } }): Locator {
+  const view = project.views.find((candidate) => candidate.id === intent.payload.viewId)
+  return {
+    floorId: view?.floorId ?? null,
+    viewId: intent.payload.viewId,
+    view: 'plan',
+    itemDesignIds: [],
+    placedItemIds: [],
+  }
 }
 
 /** The renovation half of the catalogue, as one gated spread. */
@@ -152,4 +234,6 @@ export const RENOVATION_HANDLERS: { [T in OptionIntentType]: IntentHandler<T> } 
     locate: optionLocator,
     review: (project, intent) => reviewDeleteOption(project, intent.payload.optionId),
   },
+  'view.setDesignOption': { run: setViewDesignOption, locate: viewSettingLocator },
+  'view.setRenovationDisplay': { run: setViewRenovationDisplay, locate: viewSettingLocator },
 }

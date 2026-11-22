@@ -33,6 +33,7 @@ import type {
   PlacedItem,
   PresetRoomOutline,
   Project,
+  RenovationDisplay,
   Room,
   Wall,
   WallClassification,
@@ -133,7 +134,13 @@ export type S7IntentType =
   | 'warning.acknowledge'
   | 'warning.editNote'
 
-/** The Intents #69 registers only while `VITE_FF_RENOVATION` is on. */
+/**
+ * The Intents #69 registers only while `VITE_FF_RENOVATION` is on.
+ *
+ * The last two are the saved-view settings of #70 §1. They are renovation Intents rather than S7
+ * ones because the thing they change only exists in a renovation build — and because a Display
+ * switch is a command the user takes back as one step, which is what an Intent is for.
+ */
 export type RenovationIntentType =
   | 'designOption.create'
   | 'designOption.rename'
@@ -145,6 +152,8 @@ export type RenovationIntentType =
   | 'renovation.restore'
   | 'renovation.correctExistingModel'
   | 'renovation.moveToDesignOption'
+  | 'view.setDesignOption'
+  | 'view.setRenovationDisplay'
 
 /** Every Intent type the catalogue can answer: the S7 set, plus the renovation set in a flagged build. */
 export type IntentType = S7IntentType | RenovationIntentType
@@ -447,6 +456,14 @@ export interface DuplicateFloor {
 export interface CreatePlanView {
   floorId: EntityId
   name: string
+  /**
+   * The view this one was made from (#70 §1). A new Plan View copies the Design Option and the
+   * Renovation Display of the view the user was looking at, because "New view" means "the same
+   * thing, differently" — a view that arrives back at the Existing Model makes the user re-aim it
+   * before they can see what they duplicated. Absent, or a view that no longer exists, is the
+   * Floor's default view; with no default either, the Existing Model on the Existing Display.
+   */
+  fromViewId?: EntityId
 }
 export interface RenamePlanView {
   viewId: EntityId
@@ -847,6 +864,24 @@ export interface MoveToDesignOption {
   targetOptionId: EntityId
 }
 
+/**
+ * Which Design Option this saved view looks through (#70 §1).
+ *
+ * `null` is the Existing Model alone, and it is a thing the user chooses — the first card in the
+ * Option section — not a missing value. The Display is untouched: the two settings are two commands
+ * and two undo steps, because switching Option and switching Display are different questions.
+ */
+export interface SetViewDesignOption {
+  viewId: EntityId
+  designOptionId: EntityId | null
+}
+
+/** Which Renovation Display this saved view draws (#70 §1). */
+export interface SetViewRenovationDisplay {
+  viewId: EntityId
+  renovationDisplay: RenovationDisplay
+}
+
 /** `type → payload`, the one place the catalogue's shape is written down. */
 export interface IntentPayloads {
   'project.rename': RenameProject
@@ -934,6 +969,8 @@ export interface IntentPayloads {
   'renovation.restore': RestoreInOption
   'renovation.correctExistingModel': CorrectExistingModel
   'renovation.moveToDesignOption': MoveToDesignOption
+  'view.setDesignOption': SetViewDesignOption
+  'view.setRenovationDisplay': SetViewRenovationDisplay
 }
 
 export type PayloadOf<T extends IntentType = IntentType> = IntentPayloads[T]
@@ -973,7 +1010,13 @@ export type RoomIntent = Intent<Extract<IntentType, `room.${string}`>>
 export type OpeningIntent = Intent<Extract<IntentType, `opening.${string}`>>
 export type DesignIntent = Intent<Extract<IntentType, `design.${string}`>>
 export type FloorIntent = Intent<Extract<IntentType, `floor.${string}`>>
-export type ViewIntent = Intent<Extract<IntentType, `view.${string}`>>
+/**
+ * The saved-view Intents the ungated `./handlers/floorHandlers` map is complete for. `S7IntentType`
+ * and not `IntentType`, because `view.setDesignOption` and `view.setRenovationDisplay` (#70 §1) are
+ * registered behind the flag in `./handlers/renovationHandlers` — the same reason `designOption.*`
+ * is absent from `DesignIntent`.
+ */
+export type ViewIntent = Intent<Extract<S7IntentType, `view.${string}`>>
 export type WarningIntent = Intent<Extract<IntentType, `warning.${string}`>>
 
 /**
@@ -1252,7 +1295,15 @@ export interface DeleteDesignOptionReview {
     /** Existing entities this Option removes, which go back to standing when it is deleted. */
     readonly demolished: number
     readonly acknowledgements: number
+    /**
+     * How many saved views were looking through this Option (#70 §1). Deleting the Option sets each
+     * of them to no Design Option in the same transaction, so the dialog says so before the user
+     * loses the Option they may have been looking at.
+     */
+    readonly views: number
   }
+  /** The affected saved views, by name, in Project order — the rows the dialog lists. */
+  readonly viewNames: readonly string[]
   readonly message: string
 }
 
