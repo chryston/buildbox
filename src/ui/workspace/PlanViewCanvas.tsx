@@ -18,13 +18,15 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
-import { affineApply, affineInvert, resolveSnap } from '../../derive'
+import { affineApply, affineInvert, FF_RENOVATION, resolveSnap } from '../../derive'
 import type { DerivedFloor, FloorRooms, FloorWalls, RenovationState, SnapCandidate, SnapKind } from '../../derive'
 import type { DisplayUnit, Point2 } from '../../domain'
 import { footprintPath } from '../../domain'
 import {
   LAYER_ORDER,
   displayRects,
+  candidatesAtPoint,
+  drawOrderOf,
   drawPlanView,
   drawPlacement,
   drawRooms,
@@ -38,7 +40,6 @@ import {
 } from '../../drawing'
 import type { BadgeSubject, DisplayLayer, DisplayList, OpeningPreview, PlanPreview, RenovationOutline, RoomProposal, Sizing, WallOpenings } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
-import { candidatesAtPoint, drawOrderOf } from './selection/cycleCandidates'
 import { OverlapCycleList } from './renovation/OverlapCycleList'
 import { cycleOrder, nextCycle, reachableCandidates } from './selection/overlapCycle'
 import type { CycleCandidate, CycleState } from './selection/overlapCycle'
@@ -714,7 +715,11 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
           </>
         )}
       </svg>
-      {renovation !== null && renovation.cycle !== null && renovation.cycle !== undefined && (renovation.cycleCandidates ?? []).length > 1 && (
+      {FF_RENOVATION &&
+        renovation !== null &&
+        renovation.cycle !== null &&
+        renovation.cycle !== undefined &&
+        (renovation.cycleCandidates ?? []).length > 1 && (
         // More than one candidate under the pointer: the list says so beside it, inside the canvas
         // bounds (#70 criterion 16).
         <OverlapCycleList

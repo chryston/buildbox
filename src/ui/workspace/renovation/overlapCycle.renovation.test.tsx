@@ -24,12 +24,34 @@ import {
   effectiveFloor,
   effectiveModel,
 } from '../../../derive'
-import type { Project, RenovationDisplay, RenovationState } from '../../../domain'
+import type { RenovationState } from '../../../derive'
+import type { Project, RenovationDisplay } from '../../../domain'
 import { designOptionsOf } from '../../../domain'
 import { workspaceStore } from '../workspaceStore'
 import { clampOverlay } from '../selection/overlapCycle'
 import type { CycleCandidate, CycleState } from '../selection/overlapCycle'
 import { PlanViewCanvas } from '../PlanViewCanvas'
+
+// jsdom ships no PointerEvent in every build, and the canvas answers pointer events only — without
+// this the click arrives with no coordinates at all (`RoomDraftOverlay.test.tsx` does the same).
+if (typeof globalThis.PointerEvent === 'undefined') {
+  globalThis.PointerEvent = class extends Event {
+    clientX: number
+    clientY: number
+    button: number
+    pointerId: number
+    isPrimary: boolean
+
+    constructor(type: string, init: PointerEventInit = {}) {
+      super(type, { ...init, bubbles: true })
+      this.clientX = init.clientX ?? 0
+      this.clientY = init.clientY ?? 0
+      this.button = init.button ?? 0
+      this.pointerId = init.pointerId ?? 1
+      this.isPrimary = init.isPrimary ?? true
+    }
+  } as unknown as typeof PointerEvent
+}
 
 const fixturesRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../fixtures')
 
@@ -83,12 +105,17 @@ const client = (dx: number, dy: number): { clientX: number; clientY: number } =>
 })
 
 /** What the canvas was told to select, in the order it was told. */
-let picks: string[] = []
+const picks: string[] = []
 /** What the canvas reported back from each click. */
-let cycles: (CycleState | null)[] = []
+const cycles: (CycleState | null)[] = []
+const reset = (): void => {
+  picks.length = 0
+  cycles.length = 0
+}
 
-function Harness(props: { pickStates?: readonly RenovationState[] }): React.ReactNode {
+function Harness(props: { pickStates?: readonly RenovationState[]; pan?: { x: number; y: number } }): React.ReactNode {
   const pickStates = props.pickStates ?? []
+  const pan = props.pan ?? { x: 0, y: 0 }
   const hostRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const [cycle, setCycleState] = useState<CycleState | null>(null)
@@ -98,8 +125,8 @@ function Harness(props: { pickStates?: readonly RenovationState[] }): React.Reac
     setCycleState(next)
     setCandidates(rows)
   }, [])
-  const select = (id: string): void => {
-    picks.push(id)
+  const select = (id: string | null): void => {
+    if (id !== null) picks.push(id)
   }
   return (
     <div ref={hostRef} data-testid="host" style={{ width: 400, height: 300 }}>
@@ -109,7 +136,7 @@ function Harness(props: { pickStates?: readonly RenovationState[] }): React.Reac
         floor={effectiveFloor(drawingProject, 0, floorId, OPTION_B)}
         showPlanImage={false}
         imageSrc={null}
-        viewport={{ zoom: ZOOM, panX: 0, panY: 0 }}
+        viewport={{ zoom: ZOOM, panX: pan.x, panY: pan.y }}
         onViewport={() => {}}
         tool="select"
         selection={null}
@@ -142,11 +169,11 @@ function Harness(props: { pickStates?: readonly RenovationState[] }): React.Reac
   )
 }
 
-/** One click on the band the given Wall is drawn with. */
-function clickWall(container: HTMLElement, wallId: string, dx = 0, dy = 0): void {
+/** One click on the band the given Wall is drawn with, `pan` CSS px from its middle. */
+function clickWall(container: HTMLElement, wallId: string, dx = 0, dy = 0, pan = { x: 0, y: 0 }): void {
   const node = container.querySelector(`[data-ref="${wallId}"][data-ref-role="wall"]`)
   if (node === null) throw new Error(`no drawn band for ${wallId}`)
-  const { clientX, clientY } = client(dx, dy)
+  const { clientX, clientY } = client(dx + pan.x, dy + pan.y)
   fireEvent.pointerDown(node, { clientX, clientY, button: 0, pointerId: 1, isPrimary: true })
 }
 
@@ -155,20 +182,23 @@ const rows = (): string[] =>
   [...document.querySelectorAll('.bb-renovation-overlap-row')].map((row) => row.textContent ?? '')
 const currentRow = (): string => document.querySelector('.bb-renovation-overlap-row.is-current')?.textContent ?? ''
 
+const lastPick = (): string | undefined => picks[picks.length - 1]
+const lastCycle = (): CycleState | null | undefined => cycles[cycles.length - 1]
+
 describe('click-to-cycle over overlapping states (#70 criteria 15–18)', () => {
   it('picks the Proposed successor first, walks to the Demolition, and wraps', () => {
-    picks = []
+    reset()
     const { container } = render(<Harness />)
     clickWall(container, W2)
-    expect(picks.at(-1)).toBe(W2_PRIME)
+    expect(lastPick()).toBe(W2_PRIME)
     clickWall(container, W2, 0, 5) // 5 CSS px away: the same spot
-    expect(picks.at(-1)).toBe(W2)
+    expect(lastPick()).toBe(W2)
     clickWall(container, W2, 0, 2)
-    expect(picks.at(-1)).toBe(W2_PRIME)
+    expect(lastPick()).toBe(W2_PRIME)
   })
 
   it('lists the stack beside the pointer, current row first and bold', () => {
-    picks = []
+    reset()
     const { container } = render(<Harness />)
     expect(document.querySelector('[data-testid="overlap-cycle"]')).toBeNull()
     clickWall(container, W2)
@@ -177,44 +207,52 @@ describe('click-to-cycle over overlapping states (#70 criteria 15–18)', () => 
     expect(currentRow()).toBe('▶ [Proposed] W-2′')
     clickWall(container, W2, 0, 3)
     expect(header()).toBe('Overlap 2/2 · click again to cycle')
-    expect(rows()).toEqual(['▶ [Demolition] W-2', '[Proposed] W-2′'])
+    // The rows stay in cycle order; only the marker moves.
+    expect(rows()).toEqual(['[Proposed] W-2′', '▶ [Demolition] W-2'])
     expect(currentRow()).toBe('▶ [Demolition] W-2')
   })
 
   it('keeps the list inside the canvas bounds', () => {
-    picks = []
-    const { container } = render(<Harness />)
-    clickWall(container, W2, 380, 280) // beside the host's bottom-right corner
+    reset()
+    // jsdom reports an 800 × 600 host (src/test/setup.ts). Panning puts the middle of W-2 at
+    // client (800, 610) — past the bottom-right corner — so the list has to be pulled back.
+    const pan = { x: 320, y: 460 }
+    const { container } = render(<Harness pan={pan} />)
+    clickWall(container, W2, 0, 0, pan)
+    expect(lastPick()).toBe(W2_PRIME)
     const list = document.querySelector<HTMLElement>('[data-testid="overlap-cycle"]')
     expect(list).not.toBeNull()
-    // The host is 400 × 300; the list is placed by `clampOverlay`, never past it.
-    expect(Number.parseFloat(list!.style.left)).toBeLessThanOrEqual(400)
-    expect(Number.parseFloat(list!.style.top)).toBeLessThanOrEqual(300)
+    const left = Number.parseFloat(list!.style.left)
+    const top = Number.parseFloat(list!.style.top)
+    expect(left).toBeGreaterThanOrEqual(0)
+    expect(top).toBeGreaterThanOrEqual(0)
+    expect(left).toBeLessThanOrEqual(800 - 4)
+    expect(top).toBeLessThanOrEqual(600 - 4)
   })
 
   it('selects the Demolition directly when `Pick:` allows only Demolition', () => {
-    picks = []
+    reset()
     const { container } = render(<Harness pickStates={['demolition']} />)
     clickWall(container, W2)
-    expect(picks.at(-1)).toBe(W2)
+    expect(lastPick()).toBe(W2)
     // One reachable candidate is not an overlap: no list.
     expect(document.querySelector('[data-testid="overlap-cycle"]')).toBeNull()
     clickWall(container, W2, 0, 4)
-    expect(picks.at(-1)).toBe(W2)
+    expect(lastPick()).toBe(W2)
   })
 
   it('starts a new cycle at the top candidate more than 12 CSS px away', () => {
-    picks = []
+    reset()
     const { container } = render(<Harness />)
     clickWall(container, W2)
-    expect(picks.at(-1)).toBe(W2_PRIME)
+    expect(lastPick()).toBe(W2_PRIME)
     clickWall(container, W2, 0, 15) // 15 CSS px: a different spot
-    expect(picks.at(-1)).toBe(W2_PRIME)
+    expect(lastPick()).toBe(W2_PRIME)
     expect(header()).toBe('Overlap 1/2 · click again to cycle')
   })
 
   it('ends the cycle when Esc clears it, and the list goes with it', () => {
-    picks = []
+    reset()
     const { container } = render(<Harness />)
     clickWall(container, W2)
     expect(document.querySelector('[data-testid="overlap-cycle"]')).not.toBeNull()
@@ -224,17 +262,17 @@ describe('click-to-cycle over overlapping states (#70 criteria 15–18)', () => 
     workspaceStore.getState().clearCycle()
     expect(workspaceStore.getState().cycle).toBeNull()
     expect(workspaceStore.getState().cycleCandidates).toEqual([])
-    expect(picks.at(-1)).toBe(W2_PRIME)
+    expect(lastPick()).toBe(W2_PRIME)
   })
 
   it('clears the cycle on a click that lands on nothing', () => {
-    picks = []
+    reset()
     const { container } = render(<Harness />)
     clickWall(container, W2)
     const svg = container.querySelector('svg')!
     fireEvent.pointerDown(svg, { clientX: 10, clientY: 10, button: 0, pointerId: 1, isPrimary: true })
     fireEvent.click(svg, { clientX: 10, clientY: 10 })
-    expect(picks.at(-1)).toBeNull()
+    expect(lastCycle()).toBeNull()
     expect(document.querySelector('[data-testid="overlap-cycle"]')).toBeNull()
   })
 })

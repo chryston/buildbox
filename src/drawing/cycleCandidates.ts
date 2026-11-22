@@ -14,11 +14,21 @@
  * the pointer on screen. `drawOrder` is the layer the entity is painted in, so the cycle's "top
  * first" is the canvas's own paint order rather than a second opinion of it.
  */
-import { windingNumber } from '../../../geometry'
-import type { ClosedPath, Pt } from '../../../geometry'
-import { LAYER_ORDER } from '../../../drawing'
-import type { RenovationState } from '../../../derive'
-import type { CycleCandidate } from './overlapCycle'
+import { windingNumber } from '../geometry'
+import type { ClosedPath, Pt } from '../geometry'
+import { LAYER_ORDER } from './types'
+import type { RenovationState } from '../derive'
+
+/**
+ * One candidate as the drawing sees it: what was painted, its Renovation State, and where in the
+ * paint order it sits. `ui`'s `overlapCycle` walks this shape; it is defined here so the drawing
+ * never has to know about the cycle.
+ */
+export interface DrawnCandidate {
+  readonly entityId: string
+  readonly renovationState: RenovationState
+  readonly drawOrder: number
+}
 
 /** One thing the canvas drew, in the shape it drew it in. */
 export interface DrawnEntity {
@@ -49,12 +59,12 @@ function candidate(
   renovationState: RenovationState,
   layer: (typeof LAYER_ORDER)[number],
   index: number,
-): CycleCandidate {
+): DrawnCandidate {
   return { entityId, renovationState, drawOrder: layerRank(layer) * 1000 + index }
 }
 
 function gather(
-  found: CycleCandidate[],
+  found: DrawnCandidate[],
   entities: readonly DrawnEntity[],
   layer: (typeof LAYER_ORDER)[number],
   states: ReadonlyMap<string, RenovationState>,
@@ -71,8 +81,8 @@ function gather(
  * Two candidates in the same layer and State keep the order they were drawn in, so the list is
  * stable across a re-derive.
  */
-export function candidatesAtPoint(at: Pt, drawn: DrawnEntities): CycleCandidate[] {
-  const found: CycleCandidate[] = []
+export function candidatesAtPoint(at: Pt, drawn: DrawnEntities): DrawnCandidate[] {
+  const found: DrawnCandidate[] = []
   gather(found, drawn.walls, 'walls', drawn.states, (wall) => inside(at, wall.outline))
   gather(found, drawn.placements, 'placed-items', drawn.states, (item) => inside(at, item.outline))
   gather(found, drawn.rooms, 'rooms', drawn.states, (room) => inside(at, room.outline))
