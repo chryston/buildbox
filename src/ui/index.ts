@@ -65,6 +65,9 @@ export {
 // #70 §2: the renovation block of the saved-view card, and the one Display-name and Display-colour
 // table the rail, the mode bar and the legend read.
 export { RenovationViewSection } from './workspace/renovation/RenovationViewSection'
+// #71 §3, §5: the Layers list and the delete review.
+export { RenovationLayers, layerSettingWord, type LayerSettingPatch } from './workspace/renovation/RenovationLayers'
+export { DeleteLayerDialog } from './workspace/renovation/DeleteLayerDialog'
 export { RenovationModeBar } from './workspace/renovation/RenovationModeBar'
 export { RenovationErrorBanner } from './workspace/renovation/RenovationErrorBanner'
 export { RenovationToolStrip } from './workspace/renovation/RenovationToolStrip'

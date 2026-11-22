@@ -44,6 +44,7 @@ import type { DemolitionDependency, DemolitionReview, Locator, RenovationIntentT
 import type { Handler, IntentHandler } from './context'
 import { requireDoorFields, requireFit, requireOpeningsFit } from './openingSupport'
 import { checkRoomProposal, edgeName, faceCanCarry, slideOntoFace } from './roomSupport'
+import { creationLayerField } from './creationLayer'
 import { effectiveView, refuse, spendIds } from './support'
 import type { CorrectionIntentType } from './correctionHandlers'
 
@@ -122,7 +123,7 @@ interface CutShape {
 interface CutContext {
   readonly project: Project
   readonly draft: Project
-  readonly intent: { readonly type: string; readonly ids: readonly string[]; readonly payload: { readonly floorId: EntityId; readonly hostWallId: EntityId; readonly target: { readonly designOptionId: EntityId } } }
+  readonly intent: { readonly type: string; readonly ids: readonly string[]; readonly payload: { readonly floorId: EntityId; readonly hostWallId: EntityId; readonly target: { readonly designOptionId: EntityId; readonly viewId?: EntityId | null } } }
 }
 
 /** A proposed Opening cut into a Wall that stands in this Option (#69 §7 rows 1–2). */
@@ -155,6 +156,9 @@ function placeProposedOpening(ctx: CutContext, shape: CutShape): void {
     head: shape.head,
     ...(shape.swing === undefined ? {} : { swing: shape.swing }),
     ...(shape.hingeSide === undefined ? {} : { hingeSide: shape.hingeSide }),
+    // A proposed Opening is built fabric like the Wall it is cut into, so it follows the same
+    // creation rule as `opening.create` — and a read-only layer refuses the cut (#71 §2).
+    ...creationLayerField(ctx.project, target.viewId, 'fabric'),
     // Brand-new proposed work came out of nothing, which is an empty provenance and not a missing
     // one (#69 §3).
     predecessorIds: [],

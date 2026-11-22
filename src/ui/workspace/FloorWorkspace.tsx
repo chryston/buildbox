@@ -17,12 +17,12 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, FF_RENOVATION } from '../../derive'
-import type { DisplayModel, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, FF_RENOVATION, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, snapCandidateAllowed } from '../../derive'
+import type { DisplayModel, LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings } from '../../drawing'
 import type { BadgeSubject, OpeningPreview, RoomProposal } from '../../drawing'
 import type { Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
-import { designOptionsOf, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay } from '../../domain'
+import { designOptionsOf, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
@@ -74,6 +74,7 @@ import { WorkspaceShell } from './WorkspaceShell'
 import { ToolbarMenu, ToolbarMenuItem, WorkspaceToolbar } from './WorkspaceToolbar'
 import type { ToolbarGroup } from './WorkspaceToolbar'
 import { PlanViewCanvas } from './PlanViewCanvas'
+import type { LayerGates } from './PlanViewCanvas'
 import { SavedViewCard } from './SavedViewCard'
 import { SelectionInspector } from './SelectionInspector'
 import type { DesignEdit } from './SelectionInspector'
@@ -91,6 +92,8 @@ import {
   RenovationOverlays,
   RenovationToolStrip,
   RenovationViewSection,
+  RenovationLayers,
+  layerSettingWord,
   DISPLAY_LABELS,
   DISPLAY_STATES,
   RenovationInspector,
@@ -100,11 +103,12 @@ import {
   openForcedChoiceDialog,
   openCorrectExistingDialog,
   openRestoreDialog,
+  openDeleteLayerDialog,
   baselineEditLocked,
   subjectOfIntent,
   successorOf,
 } from './renovation'
-import type { RenovationInspectorAction, RenovationInspectorLink, RenovationInspectorTarget, RenovationToolId } from './renovation'
+import type { RenovationInspectorAction, RenovationInspectorLayer, RenovationInspectorLink, RenovationInspectorTarget, RenovationToolId, LayerSettingPatch } from './renovation'
 import { RENOVATION_STRINGS } from '../strings/renovation'
 import { FIELDS_UNLOCKED, FieldsLockedContext } from './fieldsLock'
 import type { FieldsLock } from './fieldsLock'
@@ -357,7 +361,7 @@ export function FloorWorkspace(): ReactNode {
       }
   /** The Outlines a draft snaps to, so a Room can be drawn corner-to-corner with its neighbour. */
   const roomSnapGeometry = useMemo(
-    () => (floorRooms === null ? [] : floorRooms.rooms.map((room) => ({ path: room.path, name: room.name }))),
+    () => (floorRooms === null ? [] : floorRooms.rooms.map((room) => ({ path: room.path, name: room.name, ownerId: room.id }))),
     [floorRooms],
   )
   /**
@@ -701,7 +705,15 @@ export function FloorWorkspace(): ReactNode {
       }
     }
     const result = dispatch(intent)
-    if (!FF_RENOVATION || result.ok || result.code !== 'baseline-correction-required') return
+    if (!FF_RENOVATION || result.ok) return
+    if (result.code === 'layer-blocked') {
+      // New content had nowhere it was allowed to go (#71 §2): the tool's own press is undone, the
+      // revision never moved, and the notice says which layer stood in the way and what would move it.
+      const problem = result.problems[0]
+      if (problem !== undefined) showHiddenToolNotice(problem.message)
+      return
+    }
+    if (result.code !== 'baseline-correction-required') return
     const entityId = subjectOfIntent(intent)
     if (renovationOptionId === null) return
     if (renovationDisplayNow === 'existing') {
@@ -1477,6 +1489,127 @@ export function FloorWorkspace(): ReactNode {
     else showHiddenToolNotice(next)
   }
 
+  /**
+   * Which Drawing Layer each entity of the model this view draws stands on (#71 §4). One lookup
+   * serves the canvas gates and the snap gate, which must agree: an entity the canvas will not let be
+   * picked is the same entity a tool must not snap to.
+   */
+  const entityLayerKey = useMemo(() => {
+    if (!FF_RENOVATION || floorId === null) return null
+    const model = effectiveModel(project, floorId, renovationOptionId)
+    const layerOf = new Map<string, string>()
+    for (const { entity } of model.walls) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
+    for (const { entity } of model.openings) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
+    for (const { entity } of model.rooms) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
+    for (const { entity } of model.placedItems) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
+    return layerOf
+  }, [project, floorId, renovationOptionId])
+
+  /**
+   * The Drawing Layer gates of this view (#71 §4), one answer per entity, composed from `derive`'s
+   * pure rules over the model the canvas is drawing. The canvas may not read the domain, so the
+   * entity → layer lookup happens here and the canvas is handed four booleans, a colour, an order and
+   * a name.
+   *
+   * `displayIncluded` is `true` because the Display's own subset is already applied by `states`: the
+   * layer gate is the second of the two, and `layerAccessOf` intersects them.
+   */
+  const layerGates: LayerGates | null = useMemo(() => {
+    if (!FF_RENOVATION || view === null || entityLayerKey === null) return null
+    const keyOf = (id: string): string => entityLayerKey.get(id) ?? UNLAYERED_LAYER_KEY
+    const access = (id: string): LayerAccess => layerAccessOf(project, view, keyOf(id), { displayIncluded: true })
+    const order = effectiveLayerOrder(project, view)
+    return {
+      drawn: (id) => access(id).drawn,
+      pickable: (id) => access(id).pickable,
+      modifiable: (id) => access(id).modifiable,
+      // The colour that paints content is the one this view was given — `Colour in this view` — and
+      // not the Project default, because the default is a swatch that names the row while the
+      // Renovation Display's own palette (#70) is what paints the drawing. A view that says "draw
+      // Structure in this colour" is a deliberate act, and it is the one that repaints.
+      colorOf: (id) => viewLayerSettingOverride(view, keyOf(id))?.color ?? null,
+      orderOf: (id) => order.indexOf(keyOf(id)),
+      readOnlyLayerOf: (id) =>
+        access(id).modifiable ? null : drawingLayerById(project, keyOf(id))?.name ?? RENOVATION_STRINGS.layerUnlayered,
+      onRefusal: (name) => showHiddenToolNotice(RENOVATION_STRINGS.layerReadOnlyNotice(name)),
+    }
+  }, [project, view, entityLayerKey, showHiddenToolNotice])
+
+  /**
+   * Whether one entity's geometry may be snapped to in this view (#71 criterion 12): hidden or
+   * non-selectable content is not a target, and `Snap to hidden content` is the one switch that puts
+   * it back. Picking stays impossible either way — that answer is `layerAccessOf`'s, above.
+   */
+  const snapLayerAllowed = useMemo(() => {
+    if (!FF_RENOVATION || view === null || entityLayerKey === null) return undefined
+    return (ownerId: string): boolean =>
+      snapCandidateAllowed(project, view, entityLayerKey.get(ownerId) ?? UNLAYERED_LAYER_KEY)
+  }, [project, view, entityLayerKey])
+
+  /** The entity the inspector is showing, whichever picker named it (#70 §5, #71 §5). */
+  const inspectedEntityId = wallSelection ?? openingSelection ?? roomSelection ?? selection
+
+  /**
+   * The inspector's `Layer` row (#71 §5): every layer in Project order, then `Unlayered`, with this
+   * entity's own layer current.
+   *
+   * The row is disabled when the entity's layer is read-only in this view — the same promise that
+   * takes the handles off the canvas, read from the layer's own switch rather than from the Display's
+   * edit rules, because `Editable` is a statement about this layer and not about the Display.
+   */
+  const inspectorLayer: RenovationInspectorLayer | null = useMemo(() => {
+    if (!FF_RENOVATION || view === null || inspectedEntityId === null) return null
+    const key = entityLayerKey?.get(inspectedEntityId) ?? UNLAYERED_LAYER_KEY
+    return {
+      current: key === UNLAYERED_LAYER_KEY ? null : key,
+      options: [
+        ...drawingLayersOf(project).map((each) => ({ id: each.id as string | null, name: each.name })),
+        { id: null, name: RENOVATION_STRINGS.layerUnlayered },
+      ],
+      readOnlyLayer: effectiveLayerSetting(project, view, key).editable
+        ? null
+        : drawingLayerById(project, key)?.name ?? RENOVATION_STRINGS.layerUnlayered,
+    }
+  }, [project, view, entityLayerKey, inspectedEntityId])
+
+  /** Whether the inspected entity stands on a read-only layer: its fields are shown and disabled (#71 criterion 11). */
+  const inspectedReadOnly = (inspectorLayer?.readOnlyLayer ?? null) !== null
+
+  /**
+   * One Edit Transaction: file the inspected entity under another layer (`null` is `Unlayered`).
+   *
+   * It changes presentation only. An Existing Model entity keeps its renovation ownership — the
+   * record is still the survey's, whichever layer it is drawn on — so this is never a baseline
+   * correction and never opens a protected-edit dialog (#71 §5).
+   */
+  const moveInspectedEntityToLayer = (layerId: string | null): void => {
+    if (inspectedEntityId === null) return
+    const name = layerId === null ? RENOVATION_STRINGS.layerUnlayered : drawingLayerById(project, layerId)?.name ?? layerId
+    sendLabelled('entity.setLayer', { entityId: inspectedEntityId, layerId }, RENOVATION_STRINGS.entitySetLayerLabel(name))
+  }
+
+  /**
+   * The strip's suffix for a warning whose subject this view does not draw (#71 §7, criterion 9).
+   *
+   * The row stays because the warning is a fact about the model, not about this view's drawing; the
+   * words say why the thing it warns about is nowhere on screen. `Locate` is untouched — it still
+   * selects the subject, and it never changes a layer's visibility to make a warning visible.
+   */
+  const warningLayerSuffix = useMemo(() => {
+    if (!FF_RENOVATION || view === null || entityLayerKey === null) return undefined
+    return (warning: Warning): string => {
+      const hidden = warning.subjects
+        .map((subject) => entityLayerKey.get(subject.id) ?? UNLAYERED_LAYER_KEY)
+        .find((key) => !effectiveLayerSetting(project, view, key).visible)
+      if (hidden === undefined) return ''
+      // The sentence above it ends in a full stop, and the suffix the issue writes begins with a
+      // middot — without a space between them the strip reads `…is outside.· Furniture hidden…`.
+      return ` ${RENOVATION_STRINGS.warningHiddenSuffix(
+        drawingLayerById(project, hidden)?.name ?? RENOVATION_STRINGS.layerUnlayered,
+      )}`
+    }
+  }, [project, view, entityLayerKey])
+
   // ---- the inspector's renovation block (#70 §5)
   /**
    * What the inspector prints about the selection. The lookup covers the open Option's own work as
@@ -1573,7 +1706,9 @@ export function FloorWorkspace(): ReactNode {
    */
   const fieldsLock: FieldsLock = baselineLocked
     ? { locked: true, notice: RENOVATION_STRINGS.correctLocked }
-    : FIELDS_UNLOCKED
+    : FF_RENOVATION && inspectedReadOnly
+      ? { locked: true, notice: RENOVATION_STRINGS.layerReadOnlyNotice(inspectorLayer?.readOnlyLayer ?? '') }
+      : FIELDS_UNLOCKED
 
   const runRenovationAction = (action: RenovationInspectorAction): void => {
     const id = wallSelection ?? openingSelection ?? roomSelection ?? selection
@@ -1791,12 +1926,99 @@ export function FloorWorkspace(): ReactNode {
                       RENOVATION_STRINGS.setRenovationDisplay(displayLabel(renovationDisplay)),
                     )
                   }}
+                  layers={
+                    <RenovationLayers
+                      project={project}
+                      view={view}
+                      // `+` is one transaction whose undo reads `New layer: New layer`; the id comes
+                      // back so the row opens with its name focused (#71 §3).
+                      onAddLayer={() => {
+                        const intent = services.intent.build(
+                          'layer.add',
+                          { name: RENOVATION_STRINGS.layerNewName, color: NEW_LAYER_COLOR },
+                          RENOVATION_STRINGS.layerAddLabel(RENOVATION_STRINGS.layerNewName),
+                        )
+                        void sendIntent(intent)
+                        return intent.ids[0] ?? null
+                      }}
+                      onRenameLayer={(layerId, name) =>
+                        sendLabelled('layer.rename', { layerId, name }, RENOVATION_STRINGS.layerRenameLabel(name))
+                      }
+                      onSetProjectColor={(layerId, color) =>
+                        sendLabelled(
+                          'layer.setColor',
+                          { layerId, color },
+                          RENOVATION_STRINGS.layerSetColorLabel(drawingLayerById(project, layerId)?.name ?? ''),
+                        )
+                      }
+                      onMoveProject={(layerId, direction) =>
+                        sendLabelled(
+                          'layer.move',
+                          { layerId, direction },
+                          RENOVATION_STRINGS.layerMoveLabel(
+                            drawingLayerById(project, layerId)?.name ?? '',
+                            direction === 'forward' ? RENOVATION_STRINGS.layerEdgeFront : RENOVATION_STRINGS.layerEdgeBack,
+                          ),
+                        )
+                      }
+                      onDeleteLayer={(layerId) => openDeleteLayerDialog(layerId, view?.id ?? null)}
+                      onSetSetting={(layerKey, setting: LayerSettingPatch) => {
+                        if (view === null) return
+                        sendLabelled(
+                          'view.setLayerSetting',
+                          { viewId: view.id, layerKey, setting },
+                          RENOVATION_STRINGS.layerSettingLabel(
+                            drawingLayerById(project, layerKey)?.name ?? RENOVATION_STRINGS.layerUnlayered,
+                            layerSettingWord(setting),
+                          ),
+                        )
+                      }}
+                      onSetViewOrder={(layerOrder, movedLayerId) => {
+                        if (view === null) return
+                        sendLabelled(
+                          'view.setLayerOrder',
+                          { viewId: view.id, layerOrder },
+                          RENOVATION_STRINGS.layerOrderLabel(
+                            drawingLayerById(project, movedLayerId)?.name ?? RENOVATION_STRINGS.layerUnlayered,
+                          ),
+                        )
+                      }}
+                      onUseProjectOrder={() => {
+                        if (view === null) return
+                        sendLabelled(
+                          'view.setLayerOrder',
+                          { viewId: view.id, layerOrder: null },
+                          RENOVATION_STRINGS.layerOrderLabel(view.name),
+                        )
+                      }}
+                      onSetActiveLayer={(layerId) => {
+                        if (view === null) return
+                        sendLabelled(
+                          'view.setActiveLayer',
+                          { viewId: view.id, layerId },
+                          RENOVATION_STRINGS.layerActiveLabel(
+                            drawingLayerById(project, layerId)?.name ?? RENOVATION_STRINGS.layerUnlayered,
+                          ),
+                        )
+                      }}
+                      onSetSnapToHidden={(snapToHidden) => {
+                        if (view === null) return
+                        sendLabelled(
+                          'view.setSnapToHidden',
+                          { viewId: view.id, snapToHidden },
+                          RENOVATION_STRINGS.layerSnapLabel(snapToHidden ? RENOVATION_STRINGS.layerOn : RENOVATION_STRINGS.layerOff),
+                        )
+                      }}
+                    />
+                  }
                   onExport={() => setIsExporting(true)}
                 />
                   <RenovationInspector
                     target={renovationTarget}
                     display={renovationDisplayNow}
                     hasDesignOption={designOptionsOf(project).length > 0}
+                    layer={inspectorLayer}
+                    onLayerChange={moveInspectedEntityToLayer}
                     onAction={runRenovationAction}
                     onSelectEntity={selectRenovationEntity}
                   />
@@ -1972,6 +2194,7 @@ export function FloorWorkspace(): ReactNode {
                       nameOf: nameOfEntity,
                     }
               }
+              layerGates={layerGates}
               selectedWallId={wallSelection}
               rooms={floorRooms}
               selectedRoomId={roomSelection}
@@ -2011,6 +2234,7 @@ export function FloorWorkspace(): ReactNode {
                 <WallDraftOverlay
                   viewport={viewport}
                   floorWalls={floorWalls}
+                  snapAllowed={snapLayerAllowed}
                   draft={wallDraft ?? emptyWallDraft()}
                   onDraft={setWallDraft}
                   onCancel={() => {
@@ -2041,6 +2265,7 @@ export function FloorWorkspace(): ReactNode {
                   viewport={viewport}
                   floorWalls={floorWalls}
                   roomGeometry={roomSnapGeometry}
+                  snapAllowed={snapLayerAllowed}
                   tool={drawTool}
                   toolLabel={DRAW_TOOLS.find((definition) => definition.id === drawTool)!.label}
                   draft={roomDraft}
@@ -2137,6 +2362,7 @@ export function FloorWorkspace(): ReactNode {
                   onAcknowledge={acknowledgeWarning}
                   onEditNote={editWarningNote}
                   focus={warningFocus}
+                  suffix={warningLayerSuffix}
                 />
               )}
             </>

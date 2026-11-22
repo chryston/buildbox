@@ -13,6 +13,7 @@ import { CABINET_HANDLERS } from './handlers/cabinetHandlers'
 import { CORRECTION_HANDLERS } from './handlers/correctionHandlers'
 import { DESIGN_HANDLERS } from './handlers/designHandlers'
 import { FLOOR_HANDLERS, PLAN_FLOOR_HANDLERS, VIEW_HANDLERS } from './handlers/floorHandlers'
+import { LAYER_HANDLERS } from './handlers/layerHandlers'
 import { OPENING_HANDLERS } from './handlers/openingHandlers'
 import { PLAN_HANDLERS } from './handlers/planHandlers'
 import { PROJECT_HANDLERS } from './handlers/projectHandlers'
@@ -50,6 +51,7 @@ export const INTENT_HANDLERS: { [T in S7IntentType]: IntentHandler<T> } & {
   ...(FF_RENOVATION ? RENOVATION_HANDLERS : {}),
   ...(FF_RENOVATION ? RENOVATION_EDIT_HANDLERS : {}),
   ...(FF_RENOVATION ? CORRECTION_HANDLERS : {}),
+  ...(FF_RENOVATION ? LAYER_HANDLERS : {}),
 }
 
 /** Every Intent type the catalogue answers — the list #48's undo menu and #66 read. */

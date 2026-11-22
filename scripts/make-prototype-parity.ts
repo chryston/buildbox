@@ -178,7 +178,17 @@ async function generate(
 
   for (const fixture of fixtures) {
     const project: Project = createProject({
-      ids: [fixture.id, `${fixture.id}-floor`, `${fixture.id}-design`, `${fixture.id}-place`, `${fixture.id}-root`],
+      ids: [
+        fixture.id,
+        `${fixture.id}-floor`,
+        `${fixture.id}-view`,
+        `${fixture.id}-design`,
+        `${fixture.id}-place`,
+        `${fixture.id}-root`,
+        `${fixture.id}-layer-structure`,
+        `${fixture.id}-layer-services`,
+        `${fixture.id}-layer-furniture`,
+      ],
       name: fixture.name,
     })
     project.meta.address = fixture.address

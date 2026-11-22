@@ -48,6 +48,7 @@ import type { ValidationProblem } from '../lib'
 import { RENOVATION_EDIT_INTENT_ID_ORDER } from './handlers/renovationEdits'
 import { CORRECTION_INTENT_ID_ORDER } from './handlers/correctionHandlers'
 import { RENOVATION_INTENT_ID_ORDER } from './handlers/renovationHandlers'
+import { LAYER_INTENT_ID_ORDER } from './handlers/layerHandlers'
 
 /**
  * Every Intent type the released catalogue answers (#47), one per current store action.
@@ -154,6 +155,16 @@ export type RenovationIntentType =
   | 'renovation.moveToDesignOption'
   | 'view.setDesignOption'
   | 'view.setRenovationDisplay'
+  | 'layer.add'
+  | 'layer.rename'
+  | 'layer.setColor'
+  | 'layer.move'
+  | 'layer.delete'
+  | 'view.setLayerSetting'
+  | 'view.setLayerOrder'
+  | 'view.setActiveLayer'
+  | 'view.setSnapToHidden'
+  | 'entity.setLayer'
 
 /** Every Intent type the catalogue can answer: the S7 set, plus the renovation set in a flagged build. */
 export type IntentType = S7IntentType | RenovationIntentType
@@ -168,7 +179,16 @@ export type IntentType = S7IntentType | RenovationIntentType
  * flag can make.
  */
 export interface IntentTarget {
-  target?: { designOptionId: EntityId | null }
+  target?: {
+    designOptionId: EntityId | null
+    /**
+     * The saved view the tool was used in, which is what decides the Drawing Layer new content lands
+     * on and whether that layer may be edited here at all (#71 §2). Absent means no saved view is in
+     * play — a Project-level surface, or a caller that predates layers — and the layer's Project
+     * defaults apply: new content still goes to its default layer, and nothing is refused.
+     */
+    viewId?: EntityId | null
+  }
 }
 
 /** The payload each Intent type carries. */
@@ -781,7 +801,7 @@ export interface PlaceOpeningInOption {
   swing?: OpeningSwing
   hingeSide?: HingeSide
   /** Always an Option: this Intent has no Existing-Model form, which is `opening.create`. */
-  target: { designOptionId: EntityId }
+  target: { designOptionId: EntityId; viewId?: EntityId | null }
 }
 
 /**
@@ -794,7 +814,7 @@ export interface KnockThroughInOption {
   label: string
   start: number
   width: number
-  target: { designOptionId: EntityId }
+  target: { designOptionId: EntityId; viewId?: EntityId | null }
 }
 
 /**
@@ -880,6 +900,110 @@ export interface SetViewDesignOption {
 export interface SetViewRenovationDisplay {
   viewId: EntityId
   renovationDisplay: RenovationDisplay
+}
+
+/**
+ * A new Drawing Layer (#71 §2).
+ *
+ * One ID is spent, and the layer joins the Project order at the front — the end of the array, which
+ * is the end a person sees at the top of the list. The colour arrives with the name because the
+ * swatch is part of the same row the user is filling in, and a layer created with no colour would
+ * have to be given one before it could be recognised on the canvas.
+ */
+export interface AddDrawingLayer {
+  name: string
+  color: string
+}
+
+/** Rename a Drawing Layer (#71 §2). The colour is left alone. */
+export interface RenameDrawingLayer {
+  layerId: EntityId
+  name: string
+}
+
+/** Change a Drawing Layer's colour (#71 §2). The name is left alone. */
+export interface SetDrawingLayerColor {
+  layerId: EntityId
+  color: string
+}
+
+/**
+ * One step in the Project layer order (#71 §2).
+ *
+ * `forward` moves a layer toward the front — later in the array, drawn on top — and `back` toward
+ * the rear. A layer already at the end cannot go further, which is refused rather than silently
+ * doing nothing, because the row the user dragged has to say why it snapped back.
+ */
+export interface MoveDrawingLayer {
+  layerId: EntityId
+  direction: 'forward' | 'back'
+}
+
+/**
+ * Delete a Drawing Layer (#71 §5).
+ *
+ * `viewId` is the view the dialog is standing in, and it is only there to answer one question of the
+ * review — whether the content this delete un-files will still be visible afterwards, which depends
+ * on whether the Unlayered row is visible *here*. It changes nothing about what the delete does.
+ */
+export interface DeleteDrawingLayer {
+  layerId: EntityId
+  viewId: EntityId | null
+}
+
+/**
+ * One view's override of one layer's setting (#71 §3).
+ *
+ * A field set to `null` hands that one answer back to the Project default, and a view that ends up
+ * matching the default on all four holds no override at all — the key is dropped, so a view that was
+ * toggled back to the way it started is byte-identical to a view that was never touched.
+ */
+export interface SetViewLayerSetting {
+  viewId: EntityId
+  /** A layer's ID, or `unlayered` for the row that holds content with no layer of its own. */
+  layerKey: string
+  setting: {
+    visible?: boolean | null
+    selectable?: boolean | null
+    editable?: boolean | null
+    color?: string | null
+  }
+}
+
+/**
+ * This view's own layer order (#71 §3), or `null` to follow the Project's.
+ *
+ * The whole array, never one move: a partial order could not say where a layer added later sits, and
+ * two views disagreeing about half a list is a worse surprise than two views disagreeing about all
+ * of it.
+ */
+export interface SetViewLayerOrder {
+  viewId: EntityId
+  layerOrder: readonly EntityId[] | null
+}
+
+/** The layer new content lands on in this view (#71 §4), or `null` for Unlayered. */
+export interface SetViewActiveLayer {
+  viewId: EntityId
+  layerId: EntityId | null
+}
+
+/** Whether this view may snap to content it is not drawing (#71 §3). */
+export interface SetViewSnapToHidden {
+  viewId: EntityId
+  snapToHidden: boolean
+}
+
+/**
+ * Which layer one record sits on (#71 §5), or `null` to take it off every one.
+ *
+ * This is presentation, not a change to the record: which layer a Wall is filed on decides whether
+ * it is drawn, pickable and editable in a given view, and never what the Wall is. That is why an
+ * Existing record can be re-filed while Design Options exist without the correction dialog (#71 §5).
+ */
+export interface SetEntityLayer {
+  entityId: EntityId
+  layerId: EntityId | null
 }
 
 /** `type → payload`, the one place the catalogue's shape is written down. */
@@ -971,6 +1095,16 @@ export interface IntentPayloads {
   'renovation.moveToDesignOption': MoveToDesignOption
   'view.setDesignOption': SetViewDesignOption
   'view.setRenovationDisplay': SetViewRenovationDisplay
+  'layer.add': AddDrawingLayer
+  'layer.rename': RenameDrawingLayer
+  'layer.setColor': SetDrawingLayerColor
+  'layer.move': MoveDrawingLayer
+  'layer.delete': DeleteDrawingLayer
+  'view.setLayerSetting': SetViewLayerSetting
+  'view.setLayerOrder': SetViewLayerOrder
+  'view.setActiveLayer': SetViewActiveLayer
+  'view.setSnapToHidden': SetViewSnapToHidden
+  'entity.setLayer': SetEntityLayer & IntentTarget
 }
 
 export type PayloadOf<T extends IntentType = IntentType> = IntentPayloads[T]
@@ -1110,7 +1244,7 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
  * import of the renovation module becomes dead, so a released bundle carries neither table.
  */
 const ID_ORDER_BY_TYPE: Partial<Record<IntentType, readonly string[]>> = FF_RENOVATION
-  ? { ...INTENT_ID_ORDER, ...RENOVATION_INTENT_ID_ORDER, ...RENOVATION_EDIT_INTENT_ID_ORDER, ...CORRECTION_INTENT_ID_ORDER }
+  ? { ...INTENT_ID_ORDER, ...RENOVATION_INTENT_ID_ORDER, ...RENOVATION_EDIT_INTENT_ID_ORDER, ...CORRECTION_INTENT_ID_ORDER, ...LAYER_INTENT_ID_ORDER }
   : INTENT_ID_ORDER
 
 /**
@@ -1255,6 +1389,9 @@ export type RejectionCode =
   /** Two Walls of the Existing Model, which no renovation merges: the baseline is the record every
    * option is drawn against, so this is a correction of it (#69 §11). */
   | 'baseline-correction-required'
+  /** A Drawing Layer this view will not accept: it is read-only here, or it is not a layer the
+   * Project has (#71 §4, §5). */
+  | 'layer-blocked'
 
 /**
  * What an Intent takes with it, listed before it runs (#20 §4, #65 §8).
@@ -1304,6 +1441,44 @@ export interface DeleteDesignOptionReview {
   }
   /** The affected saved views, by name, in Project order — the rows the dialog lists. */
   readonly viewNames: readonly string[]
+  readonly message: string
+}
+
+/**
+ * `Delete <Layer>?` (#71 §5): what the layer holds, and what the delete does to it.
+ *
+ * Nothing is destroyed. Every record on the layer is un-filed — it comes back `Unlayered` — and every
+ * view's override and order entry for the layer is dropped, so one undo puts the layer, its members
+ * and each view's settings back together. What the dialog has to say is therefore about *visibility*:
+ * content that was on a visible layer is about to be governed by the Unlayered row instead, and if
+ * that row is hidden here the content simply disappears from this view.
+ */
+export interface DeleteLayerReview {
+  readonly kind: 'delete-layer'
+  readonly layerId: EntityId
+  readonly layerName: string
+  readonly counts: {
+    /** Model records on the layer — Walls, Openings, Rooms and Placed Items together. */
+    readonly model: number
+    /**
+     * Annotations on the layer. Always zero today: annotations are #72, and the row exists so the
+     * dialog already has the line when they arrive rather than changing what a delete promises.
+     */
+    readonly annotations: number
+    /** How many saved views hold an override or an order of their own that this drops. */
+    readonly overrides: number
+  }
+  /** The affected saved views, by name, in Project order. */
+  readonly viewNames: readonly string[]
+  /** The first eight records that will come back Unlayered, labelled as the canvas labels them. */
+  readonly members: readonly DemolitionDependency[]
+  /** Whether anything at all is on the layer, which is the case the dialog keeps short. */
+  readonly unused: boolean
+  /**
+   * Whether the Unlayered row is hidden in the view the dialog is standing in — the difference
+   * between "it moves to Unlayered" and "it stops being drawn here".
+   */
+  readonly unlayeredHidden: boolean
   readonly message: string
 }
 
@@ -1411,6 +1586,7 @@ export interface MoveToOptionReview {
 export type DependencyReview =
   | DeleteWallReview
   | DeleteDesignOptionReview
+  | DeleteLayerReview
   | DemolitionReview
   | RestoreReview
   | CorrectionReview

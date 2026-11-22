@@ -87,6 +87,41 @@ const FORBIDDEN = [
         // so the needles are the two sentences only that dialog says.
         'Removes the demolition record in',
         'Also deletes successor(s):',
+        // #71 §2, §5, §8: the Drawing Layer surface. `Unlayered` is already said by the export
+        // scope's layer list (#70), so the needles are the undo labels the rows compose and the
+        // sentences only the layer list, its delete dialog and the read-only refusal say.
+        'New layer: ',
+        'Rename layer: ',
+        'Set layer colour: ',
+        'Reorder layer: ',
+        'Delete layer: ',
+        'Set active layer: ',
+        'Move to layer: ',
+        'A layer needs a name.',
+        'A layer colour is six hex digits',
+        'is already at the front',
+        'The order has to name every layer',
+        'On this layer:',
+        'will become Unlayered',
+        'Nothing is on it.',
+        'The Unlayered row is hidden in this view',
+        'is read-only in this view',
+        // #71 §3, §5: the Layers list in the saved-view card and the review behind `Delete…`.
+        // `Layers`, `Unlayered`, `Active` and `Delete` are short words a flag-off surface could say by
+        // accident, so the needles are the row's and the table's own sentences.
+        'Layers (front first)',
+        'No Drawing Layers. All content is Unlayered.',
+        'Colour in this view',
+        'Project default colour',
+        'Use Project layer order',
+        'Snap to hidden content',
+        'View style override',
+        'Becomes Unlayered',
+        'lose their own settings',
+        'stops being drawn here',
+        'hidden in this view — warning still applies',
+        'Read-only in this view: inspect only.',
+        'Unused. Nothing else changes.',
       ]),
 ]
 // Only the files that could contain application code: an image or a font cannot.

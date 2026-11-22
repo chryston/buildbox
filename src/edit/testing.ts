@@ -13,7 +13,7 @@ import { migrateProject } from '../domain'
 import type { Project } from '../domain'
 import { canonicalJson } from '../lib'
 import { applyIntent, applyPatches } from './apply'
-import { createProject } from './create'
+import { CREATE_PROJECT_ID_COUNT, createProject } from './create'
 import { intentLabel } from './labels'
 import type { Applied, Intent, IntentType, PayloadOf, Rejection, RejectionCode } from './intents'
 
@@ -40,9 +40,9 @@ export function basicProject(): Project {
   return result.project
 }
 
-/** The Project "New Project" makes, with the five IDs `createProject` spends. */
+/** The Project "New Project" makes, with the IDs `createProject` spends. */
 export function newProject(name = 'Kitchen'): Project {
-  return createProject({ ids: idSource('new')(6), now: NOW, name })
+  return createProject({ ids: idSource('new')(CREATE_PROJECT_ID_COUNT), now: NOW, name })
 }
 
 /** A Project whose one cabinet has a shelf, so tree Intents have a space to point at. */

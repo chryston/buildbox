@@ -37,6 +37,12 @@ export interface SnapGeometry {
   readonly path: ClosedPath
   /** Plain words for the indicator: `Kitchen`, `Base 600`. */
   readonly name: string
+  /**
+   * The entity this geometry belongs to — the Room whose Outline it is, the Placed Item whose
+   * Footprint it repeats (#71 criterion 12). Absent means nobody's: a draft edge or the Floor itself
+   * is on no layer, so no layer setting can take it away.
+   */
+  readonly ownerId?: string
 }
 
 /**
@@ -73,6 +79,12 @@ export interface SnapSourceInput {
   readonly gridSpacingMm: number
   readonly angleIncrementDeg: number
   readonly enabled: ReadonlySet<SnapKind>
+  /**
+   * Whether one entity's geometry may be snapped to, answered by the owning entity's id
+   * (#71 criterion 12). Absent means everything may — the flag-off answer, and the answer of a
+   * Project with no Drawing Layers.
+   */
+  readonly allowed?: (ownerId: string) => boolean
 }
 
 /** True when `at` is not already in `seen` within the topology tolerance; `seen` grows. */
@@ -175,7 +187,13 @@ const nearestOnFace = (face: { from: Pt; to: Pt; segment: Segment }, cursor: Pt)
  * `resolveSnap` is what decides between them.
  */
 export const snapCandidates = (input: SnapSourceInput): SnapCandidate[] => {
-  const { geometry, walls, cursor, from, draft, gridSpacingMm, angleIncrementDeg, enabled } = input
+  const { cursor, from, draft, gridSpacingMm, angleIncrementDeg, enabled, allowed } = input
+  // #71 criterion 12: content this view has hidden or made non-selectable is not a snap target, and
+  // `Snap to hidden content` is the one switch that puts it back. Picking it is still impossible —
+  // that answer comes from `layerAccessOf`, not from here — so a tool can aim at a Wall it cannot
+  // then click. Geometry with no owner is nobody's layer and stays a target.
+  const geometry = input.geometry.filter((one) => one.ownerId === undefined || allowed?.(one.ownerId) !== false)
+  const walls = input.walls?.filter((one) => allowed?.(one.id) !== false)
   const out: SnapCandidate[] = []
 
   if (enabled.has('endpoint')) {

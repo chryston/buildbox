@@ -215,8 +215,10 @@ describe('the saved-view card', () => {
     expect(screen.getByTestId('display-existing')).toHaveAttribute('data-active', 'true')
   })
 
-  it('reserves the Layers slot and the Paste position without rendering either, and exports on demand', async () => {
+  it('renders the Layers slot empty when the caller builds no list, leaves the Paste position empty, and exports on demand', async () => {
     await renderCard()
+    // The card holds the slot; the caller inside the flagged branch decides what stands in it. No
+    // list passed in is what a flag-off build renders, and #71's own tests mount the real one.
     expect(screen.getByTestId('renovation-layers-slot')).toBeEmptyDOMElement()
     expect(screen.getByTestId('renovation-paste-slot')).toBeEmptyDOMElement()
     expect(screen.getByTestId('renovation-view-section')).not.toHaveTextContent(/Paste/i)

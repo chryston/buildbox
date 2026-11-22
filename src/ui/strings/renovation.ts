@@ -204,6 +204,112 @@ export const RENOVATION_STRINGS = {
   notExisting: (ref: string, state: string): string =>
     `${ref} is ${state} — only Existing Model entities can be demolished`,
 
+  // ---- the Drawing Layers (#71 §2, §5, §8)
+  // The undo label is the row's own words plus what was chosen, the way `Set Design Option: Option A`
+  // reads (#70 §2): a history entry has to say which layer, because "Rename layer" four times deep is
+  // no help at all. The layer's name is Project data, so it arrives as an argument.
+  layerAddLabel: (name: string): string => `New layer: ${name}`,
+  layerRenameLabel: (name: string): string => `Rename layer: ${name}`,
+  layerSetColorLabel: (name: string): string => `Set layer colour: ${name}`,
+  layerMoveLabel: (name: string, edge: string): string => `Reorder layer: ${name} → ${edge}`,
+  layerDeleteLabel: (name: string): string => `Delete layer: ${name}`,
+  layerSettingLabel: (name: string, state: string): string => `Set layer: ${name} — ${state}`,
+  layerOrderLabel: (name: string): string => `Reorder layers: ${name}`,
+  layerActiveLabel: (name: string): string => `Set active layer: ${name}`,
+  layerSnapLabel: (state: string): string => `Snap to hidden content: ${state}`,
+  entitySetLayerLabel: (name: string): string => `Move to layer: ${name}`,
+  /** The row that holds content with no layer of its own. One word, said the same way everywhere. */
+  layerUnlayered: 'Unlayered',
+  /** Which end a `Reorder Layer` moved a layer to, in the label's `→ <end>`. */
+  layerEdgeFront: 'front',
+  layerEdgeBack: 'back',
+  /** The three states of a layer's own row, as the label names them. */
+  layerStateVisible: 'visible',
+  layerStateHidden: 'hidden',
+  layerStateSelectable: 'selectable',
+  layerStateNotSelectable: 'not selectable',
+  layerStateEditable: 'editable',
+  layerStateNotEditable: 'read-only',
+  layerStateColour: 'colour',
+  layerStateDefault: 'follow the Project',
+  /** The one word for whether this view may snap to content it is not drawing. */
+  layerOn: 'On',
+  layerOff: 'Off',
+  // `Delete Services?` — the question is the review's own sentence, so only the rows beside it are copy.
+  deleteLayerModel: (n: number): string => count(n, 'Model entity', 'Model entities'),
+  deleteLayerAnnotations: (n: number): string => count(n, 'Annotation', 'Annotations'),
+  deleteLayerOverrides: (n: number): string => count(n, 'saved view', 'saved views'),
+  deleteLayerOnIt: 'On this layer:',
+  deleteLayerMore: (n: number): string => `and ${n} more`,
+  /** The consequence the dialog cannot leave out: where the content goes, and whether it is seen. */
+  deleteLayerBecomes: 'The content becomes Unlayered and stays drawn.',
+  deleteLayerHidden: 'The Unlayered row is currently HIDDEN in this view, so this content stops being drawn here.',
+  deleteLayerConfirm: 'Delete layer',
+  // The three columns are read as one sentence per row — `Model entities · 12 · become Unlayered` —
+  // and the row that answers with a consequence of its own is the one about saved views.
+  deleteLayerColumnDependency: 'Dependency',
+  deleteLayerColumnCount: 'Count',
+  deleteLayerColumnResult: 'Result',
+  deleteLayerResultUnlayered: 'Becomes Unlayered',
+  deleteLayerResultOverrides: (n: number): string => `${n} ${n === 1 ? 'loses' : 'lose'} their own settings`,
+  /** The way out that changes nothing, said as what it does (#71 §5). */
+  deleteLayerCancel: 'Cancel — change nothing',
+  /** A press that wanted to edit content this view has made read-only (#71 §4, criterion 11). */
+  layerReadOnlyNotice: (layer: string): string => `${layer} is read-only in this view — inspect only`,
+  /** The inspector's row that moves content between layers (#71 §5). One word, like `Owner` above it. */
+  inspectorLayer: 'Layer',
+  /**
+   * The line the inspector prints while the selected content stands on a read-only layer (#71 §4,
+   * criterion 11). It says both halves of read-only: what the view will not do, and what it still
+   * will — inspecting is not a consolation prize, it is the point of leaving the layer drawn.
+   */
+  inspectorReadOnly: '[RO] Read-only in this view: inspect only.',
+  /**
+   * The suffix on a warning-strip row whose subject this view does not draw (#71 §7, criterion 9).
+   * The row stays because the warning is a fact about the model, not about this view's drawing; the
+   * suffix says why the thing it warns about is nowhere to be seen.
+   */
+  warningHiddenSuffix: (layer: string): string => `· ${layer} hidden in this view — warning still applies`,
+
+  // ---- the Layers list itself (#71 §3)
+  // `Layers (front first)` is the header because the list is drawn in the order content is drawn,
+  // not the order the array stores: the top row is the one on top of the drawing.
+  layersHeader: 'Layers (front first)',
+  /** The name a layer made by `+` starts with, and the accessible name of the `+` button. */
+  layerNewName: 'New layer',
+  layerSelectable: 'Selectable',
+  layerEditable: 'Editable',
+  layerActive: 'Active',
+  layerColourInView: 'Colour in this view',
+  layerReset: 'reset',
+  layerViewOrder: 'View order',
+  layerForward: 'forward',
+  layerBack: 'back',
+  layerProjectSection: 'Project:',
+  layerProjectColour: 'Project default colour',
+  layerDelete: 'Delete…',
+  layersNone: 'No Drawing Layers. All content is Unlayered.',
+  layerSnapToHidden: 'Snap to hidden content',
+  layerUseProjectOrder: 'Use Project layer order',
+  /** The three markers, each of which says why a row does not answer the way its switches read. */
+  layerMarkNotSelectable: 'Not selectable',
+  layerMarkReadOnly: 'Read-only',
+  layerMarkOverride: 'View style override',
+  // A row's controls are named with the layer in them: `Hide Furniture in this view`, because the
+  // list has a dozen checkboxes and `Hide` on its own is a question.
+  layerShow: (name: string): string => `Show ${name} in this view`,
+  layerHide: (name: string): string => `Hide ${name} in this view`,
+  layerRenameAria: (name: string): string => `Rename ${name}`,
+  layerProjectColourAria: (name: string): string => `Project default colour for ${name}`,
+  layerViewColourAria: (name: string): string => `Colour for ${name} in this view`,
+  layerMoveUpAria: (name: string): string => `Move ${name} toward the front in the Project layer order`,
+  layerMoveDownAria: (name: string): string => `Move ${name} toward the back in the Project layer order`,
+  layerViewOrderUpAria: (name: string): string => `Move ${name} toward the front in this view`,
+  layerViewOrderDownAria: (name: string): string => `Move ${name} toward the back in this view`,
+  layerExpandAria: (name: string): string => `Show the settings for ${name}`,
+  layerCollapseAria: (name: string): string => `Hide the settings for ${name}`,
+  layerActiveAria: (name: string): string => `Draw new content on ${name} in this view`,
+
   // ---- the buttons every one of them ends with
   cancel: 'Cancel',
 } as const

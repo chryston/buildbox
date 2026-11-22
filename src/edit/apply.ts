@@ -44,6 +44,21 @@ function rejected(code: RejectionCode, path: string, message: string): Rejection
 }
 
 /**
+ * Whether one patch only moves a record between Drawing Layers (#71 §5).
+ *
+ * Layer membership is presentation: it decides whether the record is drawn, pickable and editable in
+ * a given view, and never what the record is. Re-filing a baseline Wall onto another layer therefore
+ * changes nothing the Options disagree about, and does not belong behind the correction dialog.
+ *
+ * Read off the patch path rather than the Intent type, the same way the guard above is: an Intent
+ * that re-files as a side effect — `layer.delete` un-filing every member, `floor.duplicate` carrying
+ * a copy's layer with it — is exempt on the same terms, and an Intent that edits the Wall *and*
+ * re-files it still trips the guard on its other patches.
+ */
+const isLayerReassignment = (patch: Patch): boolean =>
+  FF_RENOVATION && patch.path[patch.path.length - 1] === 'drawingLayerId'
+
+/**
  * Run one Intent against a Project.
  *
  * `Applied` carries the next Project, the patches that got there, the inverse patches that
@@ -93,7 +108,7 @@ export function applyIntent(project: Project, intent: Intent): Applied | Rejecti
     FF_RENOVATION &&
     designOptionsOf(project).length > 0 &&
     intent.type !== 'renovation.correctExistingModel' &&
-    patches.some((patch) => patch.path[0] === 'existingModel')
+    patches.some((patch) => patch.path[0] === 'existingModel' && !isLayerReassignment(patch))
   ) {
     return rejected(
       'baseline-correction-required',

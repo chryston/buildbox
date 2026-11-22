@@ -21,6 +21,7 @@
  */
 import type { ClosedPath, Preset, WallSide } from '../geometry'
 import type { CabinetNode, GlobalSettings } from './cabinetPayload'
+import { nameKey } from './floorNames'
 
 /**
  * An opaque entity ID (#42 §3): 1–128 UTF-16 code units, no leading or trailing
@@ -51,6 +52,20 @@ export interface Project {
    * with a Floor.
    */
   views: PlanView[]
+  /**
+   * The Drawing Layers of this Project (#71 §1), in the Project layer order: back to front, so the
+   * last entry is the front-most layer and the Layers list — which reads front first — renders this
+   * array reversed.
+   *
+   * Optional rather than an always-present array, for the same reason `designOptions` is: a Project
+   * written before this capability stays valid in a build with the flag off, and the validator never
+   * defaults a field. `drawingLayersOf` is the accessor, and a Project with no layers at all is a
+   * legal one — everything in it is Unlayered, which is what a Project written before #71 reads as.
+   *
+   * Unlayered is not a member: it is the absence of a layer, it is always present in the list, and
+   * it cannot be renamed, recoloured, reordered away or deleted.
+   */
+  drawingLayers?: DrawingLayer[]
   itemDesigns: ItemDesign[]
   existingModel: ExistingModel
   /**
@@ -132,6 +147,138 @@ export const RENOVATION_DISPLAYS = ['existing', 'demolition', 'proposed', 'combi
 export type RenovationDisplay = (typeof RENOVATION_DISPLAYS)[number]
 
 /**
+ * The reserved key of Unlayered content (#71 §1) — the bucket every entity starts in and the row
+ * the Layers list always shows, first, whatever the order.
+ *
+ * It is a key and never an ID: no layer owns it, so it cannot be renamed, recoloured, reordered
+ * away or deleted, and a saved view may hold a setting for it (`Unlayered uses its own per-view
+ * visibility`). A layer whose ID happened to read `unlayered` would shadow that key in
+ * `layerSettings`, which is why the validator refuses the ID outright.
+ */
+export const UNLAYERED_LAYER_KEY = 'unlayered'
+
+/**
+ * One Drawing Layer (#71 §1): a named, coloured group of drawable entities, held by the Project and
+ * ordered back to front.
+ *
+ * `color` is the Project default — the per-view override lives on the view, not here, because a
+ * layer has one default colour and many views.
+ */
+export interface DrawingLayer {
+  /** Immutable and unique among the Project's layers. */
+  id: EntityId
+  /** Free text, and not unique: two layers may be called `Services`. */
+  name: string
+  /** The Project default colour, `#rrggbb` lowercase. */
+  color: string
+}
+
+/**
+ * What one saved view says about one layer (#71 §3): the three switches, and the colour the rows
+ * and markers draw in that view.
+ *
+ * Every field is an override of a default rather than a copy of one — a view that says nothing
+ * shows the layer as its Project entry describes it — so `color` is absent when there is no
+ * override, and the effective colour is the layer's own (`Unlayered` has none, and draws in the
+ * neutral token colour).
+ */
+export interface LayerSetting {
+  visible: boolean
+  selectable: boolean
+  editable: boolean
+  /** `#rrggbb` lowercase; absent is the layer's Project colour. */
+  color?: string
+}
+
+/** What a view says about a layer it holds no setting for: shown, pickable, editable. */
+export const DEFAULT_LAYER_SETTING: Readonly<LayerSetting> = Object.freeze({
+  visible: true,
+  selectable: true,
+  editable: true,
+})
+
+/**
+ * The kind of thing a creation tool is about to make, which is the only question #71 §2's default
+ * table answers. It is the one place a layer *name* is load-bearing, and the only place the three
+ * default names are written: `Structure`, `Services` and `Furniture` are ordinary layers a person
+ * may rename or delete, so a creation tool looks for the name and never for an ID or a reserved row.
+ */
+export type CreationSubtype = 'fabric' | 'service' | 'item'
+
+/**
+ * Which of the three default layers each subtype belongs to (#71 §2). Walls, Openings, Rooms and
+ * any other built fabric are `fabric` — a Room is surveyed fabric like the Walls around it, which is
+ * the decision this issue owns. `service` is the row Service Runs and Risers will use when they
+ * exist; nothing creates one yet.
+ */
+export const DEFAULT_LAYER_NAMES: Record<CreationSubtype, string> = {
+  fabric: 'Structure',
+  service: 'Services',
+  item: 'Furniture',
+}
+
+/**
+ * The three layers a new Project starts with (#71 §1), back to front, with the names and colours
+ * the issue names.
+ *
+ * They are data rather than copy: the names are user-editable text stored in the Project, and the
+ * colours are stored too, so a Project may rename `Services` to `Electrical` and keep the entities
+ * that were placed on it. Creation resolves a subtype's default layer by NAME for that reason —
+ * deleting `Services` and making a new layer called `Services` brings the rule back.
+ */
+export const DEFAULT_DRAWING_LAYERS: readonly { name: string; color: string }[] = Object.freeze([
+  { name: DEFAULT_LAYER_NAMES.fabric, color: '#b9b9c2' },
+  { name: DEFAULT_LAYER_NAMES.service, color: '#5fb3ff' },
+  { name: DEFAULT_LAYER_NAMES.item, color: '#e3a857' },
+])
+
+/** The colour a layer made by `New layer` starts with (#71 §5). */
+export const NEW_LAYER_COLOR = '#9ad48a'
+
+/** The Project's layers in the Project layer order — back to front. A Project with none is legal. */
+export const drawingLayersOf = (project: Project): DrawingLayer[] => project.drawingLayers ?? []
+
+/** The layer an ID names, or `null` when the Project no longer holds it. */
+export const drawingLayerById = (project: Project, id: EntityId | null | undefined): DrawingLayer | null =>
+  id === null || id === undefined
+    ? null
+    : drawingLayersOf(project).find((layer) => layer.id === id) ?? null
+
+/**
+ * The layer a creation tool's subtype default names (#71 §2), or `null` when no layer carries it.
+ *
+ * Names are compared the way every uniqueness rule compares them, so `structure` finds `Structure`.
+ * Two layers may carry the same name — uniqueness is not a layer rule — and the back-to-front order
+ * decides: the one drawn furthest forward wins, because that is the row a person would point at.
+ */
+export function drawingLayerByName(project: Project, name: string): DrawingLayer | null {
+  const key = nameKey(name)
+  const layers = drawingLayersOf(project)
+  for (let index = layers.length - 1; index >= 0; index -= 1) {
+    const layer = layers[index]
+    if (layer !== undefined && nameKey(layer.name) === key) return layer
+  }
+  return null
+}
+
+/** The setting a saved view holds for one layer key, or `undefined` when it says nothing about it. */
+export const viewLayerSettingOverride = (view: PlanView, key: string): LayerSetting | undefined =>
+  view.layerSettings?.[key]
+
+/** The view's own layer order, or `null` for `Use Project layer order`. */
+export const viewLayerOrder = (view: PlanView): EntityId[] | null => view.layerOrder ?? null
+
+/** The layer new content of no subtype default lands on; `null` is Unlayered. */
+export const viewActiveLayerId = (view: PlanView): EntityId | null => view.activeLayerId ?? null
+
+/** Whether hidden content still offers snap targets in this view; absent is `false`. */
+export const viewSnapToHidden = (view: PlanView): boolean => view.snapToHiddenContent ?? false
+
+/** The layer a drawable entity belongs to; `null` is Unlayered, which is what an entity written before #71 is. */
+export const entityLayerId = (entity: { drawingLayerId?: EntityId | null }): EntityId | null =>
+  entity.drawingLayerId ?? null
+
+/**
  * A saved way of looking at exactly one Floor (#56). A Plan View holds no Placed Item, no
  * Plan Image and no geometry of its own — it is a viewer, so deleting one deletes nothing
  * but the view. `isDefault` marks the view that came with the Floor: every Floor has
@@ -164,6 +311,33 @@ export interface PlanView {
   designOptionId?: EntityId | null
   /** The Renovation Display this view draws; absent is `'existing'`. */
   renovationDisplay?: RenovationDisplay
+  /**
+   * What this view says about each layer (#71 §3), keyed by layer ID plus the reserved
+   * `unlayered` key.
+   *
+   * Sparse on purpose: a key appears when the view says something the Project default does not, and
+   * a layer with no key is shown, pickable and editable in its Project colour. Deleting a layer
+   * removes its key from every view, so a key here always names a layer the Project still has.
+   */
+  layerSettings?: Record<string, LayerSetting>
+  /**
+   * This view's own layer order, front to back, covering every layer plus `unlayered` exactly once
+   * — or `null` for `Use Project layer order`, which is the default and the common case.
+   *
+   * The override is a full order rather than a delta, so a layer added after it was written has no
+   * place in it; the validator refuses that, and `view.setLayerOrder` rewrites the whole array.
+   */
+  layerOrder?: EntityId[] | null
+  /**
+   * The Active Layer of this view (#71 §2): the layer new content of no subtype default is created
+   * on. `null` is Unlayered, which is what a view written before #71 holds.
+   */
+  activeLayerId?: EntityId | null
+  /**
+   * `Snap to hidden content` (#71 §4): hidden or non-selectable content still offers snap targets.
+   * Absent is `false`, and it is a per-view setting like everything else on this record.
+   */
+  snapToHiddenContent?: boolean
 }
 
 /** The Design Option of a saved view, which a view written before #70 does not carry. */
@@ -414,6 +588,13 @@ export interface Room {
   wallFaceRefs: RoomWallFaceRef[]
   /** The Room this one came out of (#69 §3, §10); absent on an Existing Model Room. */
   predecessorIds?: PredecessorIds
+  /**
+   * The Drawing Layer this Room belongs to (#71 §1); `null` is Unlayered, and absent is `null`.
+   *
+   * Presentation, never meaning: it changes which rows draw, in what order and whether they may be
+   * picked here — not the Room's Renovation State, its Quantities or its warnings.
+   */
+  drawingLayerId?: EntityId | null
 }
 
 /** What an Opening is: an absence in one Wall, not a thing standing in a Room (#65). */
@@ -464,6 +645,14 @@ export interface Opening {
   hingeSide?: HingeSide
   /** The Opening this one came out of (#69 §3); absent on an Existing Model Opening. */
   predecessorIds?: PredecessorIds
+  /**
+   * The Drawing Layer this Opening belongs to (#71 §1); `null` is Unlayered, and absent is `null`.
+   *
+   * It follows its host Wall by default rather than by rule: a new Opening is created on Structure
+   * like the Wall it is cut into, and hiding Structure hides both. Nothing derives one from the
+   * other, because the user may put an Opening anywhere.
+   */
+  drawingLayerId?: EntityId | null
 }
 
 /** Where the reference line sits within the thickness, relative to its own direction (#64). */
@@ -517,6 +706,14 @@ export interface Wall {
   height: number
   /** The Wall this one came out of (#69 §3); absent on an Existing Model Wall. */
   predecessorIds?: PredecessorIds
+  /**
+   * The Drawing Layer this Wall belongs to (#71 §1); `null` is Unlayered, and absent is `null`.
+   *
+   * Presentation, never meaning: it changes which rows draw, in what order and whether they may be
+   * picked here — not the Wall's Renovation State, its Quantities or its warnings. A successor
+   * inherits it from its predecessor, because a replacement of a Services pipe is still Services.
+   */
+  drawingLayerId?: EntityId | null
 }
 
 /**
@@ -557,6 +754,14 @@ export interface PlacedItem {
   baseElevation: number
   /** The Placement this one came out of (#69 §3); absent on an Existing Model Placement. */
   predecessorIds?: PredecessorIds
+  /**
+   * The Drawing Layer this Placement belongs to (#71 §1); `null` is Unlayered, and absent is `null`.
+   *
+   * It is the Placement's own, not its Item Design's: one Cabinet Design may stand on `Kitchen` in
+   * one view of the model and on `Furniture` in another Project, and a Design is shared by many
+   * Placements.
+   */
+  drawingLayerId?: EntityId | null
 }
 
 /**

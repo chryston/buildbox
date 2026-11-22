@@ -86,6 +86,8 @@ export interface WallDraftOverlayProps {
   /** The tool options changed: the next Wall inherits them; nothing already drawn moves. */
   onOptions: (defaults: WallToolDefaults) => void
   snapKinds: ReadonlySet<SnapKind>
+  /** Whether one entity's geometry may be snapped to here (#71 criterion 12); absent means everything may. */
+  snapAllowed?: (ownerId: string) => boolean
   gridSpacingMm: number
   angleIncrementDeg: number
   unit: DisplayUnit
@@ -128,7 +130,7 @@ const draftSegmentOf = (segment: WallDraftSegment): readonly Segment[] => {
 export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
   const {
     viewport, floorWalls, draft, onDraft, onCancel, onFinish, floorId, defaults, onOptions,
-    snapKinds, gridSpacingMm, angleIncrementDeg, unit, precision,
+    snapKinds, snapAllowed, gridSpacingMm, angleIncrementDeg, unit, precision,
   } = props
   const layerRef = useRef<HTMLDivElement>(null)
   const press = useRef<{ x: number; y: number } | null>(null)
@@ -153,10 +155,20 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
     }
   }, [viewport])
 
+  /**
+   * The Walls this draft may reach (#71 criterion 12): a Wall this view has hidden or made
+   * non-selectable is neither a snap target nor a join — the tool cannot attach a new Wall to content
+   * the view has put out of reach, and `Snap to hidden content` is the switch that puts it back.
+   */
+  const snapSources = useMemo(
+    () => (snapAllowed === undefined ? floorWalls.snapSources : floorWalls.snapSources.filter((source) => snapAllowed(source.id))),
+    [floorWalls, snapAllowed],
+  )
+
   /** The points that ARE corners of the tidied outline, including the free caps. */
   const cornerPoints = useMemo(
-    () => floorWalls.snapSources.flatMap((source) => source.corners.map((corner) => corner.point)),
-    [floorWalls],
+    () => snapSources.flatMap((source) => source.corners.map((corner) => corner.point)),
+    [snapSources],
   )
 
   /** The point a click would place, what it would join, and the words that say so. */
@@ -171,7 +183,7 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
     const nearCorner = cornerPoints.some((point) => distance(point, cursor) <= reach)
     const candidates = snapCandidates({
       geometry: [],
-      walls: floorWalls.snapSources,
+      walls: snapSources,
       cursor,
       from: last?.end ?? null,
       draft: last === undefined ? [] : draftSegmentOf(last),
@@ -187,9 +199,9 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
     // 1/zoom millimetres: the resolver wants millimetres per pixel, and handing it the zoom made
     // the reach 12 mm at 12× and 1 mm at 0.5× — the very defect criterion 5 names.
     const snap = resolveSnap(offered, cursor, 1 / viewport.zoom, snapKinds)
-    if (snap === null) return { at: cursor, target: wallTargetAt(cursor, floorWalls.snapSources), label: null }
-    return { at: snap.point, target: wallTargetAt(snap.point, floorWalls.snapSources), label: snap.target.label }
-  }, [draft, floorWalls, cornerPoints, gridSpacingMm, angleIncrementDeg, snapKinds, viewport.zoom])
+    if (snap === null) return { at: cursor, target: wallTargetAt(cursor, snapSources), label: null }
+    return { at: snap.point, target: wallTargetAt(snap.point, snapSources), label: snap.target.label }
+  }, [draft, snapSources, cornerPoints, gridSpacingMm, angleIncrementDeg, snapKinds, viewport.zoom])
 
   const onPointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>): void => {
     // The pointer over the row or the bar is not aiming at the canvas. Moving the rubber band
