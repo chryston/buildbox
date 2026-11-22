@@ -55,6 +55,8 @@ export interface RoomDraftOverlayProps {
   /** The tool's own word — `Line`, `Arc`, `Elliptical arc` — for the hint. */
   toolLabel: string
   snapKinds: ReadonlySet<SnapKind>
+  /** Whether one entity's geometry may be snapped to here (#71 criterion 12); absent means everything may. */
+  snapAllowed?: (ownerId: string) => boolean
   gridSpacingMm: number
   angleIncrementDeg: number
   unit: DisplayUnit
@@ -95,7 +97,7 @@ function draftPathData(draft: PathDraft): string {
 export function RoomDraftOverlay(props: RoomDraftOverlayProps): ReactNode {
   const {
     viewport, floorWalls, roomGeometry, tool, draft, onDraft, onCancel, onClose, overlap,
-    toolLabel, snapKinds, gridSpacingMm, angleIncrementDeg, unit, precision,
+    toolLabel, snapKinds, snapAllowed, gridSpacingMm, angleIncrementDeg, unit, precision,
   } = props
   const layerRef = useRef<HTMLDivElement>(null)
   const press = useRef<{ x: number; y: number } | null>(null)
@@ -125,10 +127,11 @@ export function RoomDraftOverlay(props: RoomDraftOverlayProps): ReactNode {
       gridSpacingMm,
       angleIncrementDeg,
       enabled: snapKinds,
+      allowed: snapAllowed,
     }), cursor, 1 / viewport.zoom, snapKinds)
     if (snap === null) return { at: cursor, label: null }
     return { at: snap.point, label: snap.target.label }
-  }, [draft, floorWalls, roomGeometry, gridSpacingMm, angleIncrementDeg, snapKinds, viewport.zoom])
+  }, [draft, floorWalls, roomGeometry, gridSpacingMm, angleIncrementDeg, snapKinds, snapAllowed, viewport.zoom])
 
   /**
    * `Close` is live from three vertices up — fewer would not be a loop — and never while the

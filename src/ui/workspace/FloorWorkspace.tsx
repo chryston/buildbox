@@ -17,7 +17,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, FF_RENOVATION, layerAccessOf, effectiveLayerOrder } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, FF_RENOVATION, layerAccessOf, effectiveLayerOrder, snapCandidateAllowed } from '../../derive'
 import type { DisplayModel, LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings } from '../../drawing'
 import type { BadgeSubject, OpeningPreview, RoomProposal } from '../../drawing'
@@ -361,7 +361,7 @@ export function FloorWorkspace(): ReactNode {
       }
   /** The Outlines a draft snaps to, so a Room can be drawn corner-to-corner with its neighbour. */
   const roomSnapGeometry = useMemo(
-    () => (floorRooms === null ? [] : floorRooms.rooms.map((room) => ({ path: room.path, name: room.name }))),
+    () => (floorRooms === null ? [] : floorRooms.rooms.map((room) => ({ path: room.path, name: room.name, ownerId: room.id }))),
     [floorRooms],
   )
   /**
@@ -1482,6 +1482,22 @@ export function FloorWorkspace(): ReactNode {
   }
 
   /**
+   * Which Drawing Layer each entity of the model this view draws stands on (#71 §4). One lookup
+   * serves the canvas gates and the snap gate, which must agree: an entity the canvas will not let be
+   * picked is the same entity a tool must not snap to.
+   */
+  const entityLayerKey = useMemo(() => {
+    if (!FF_RENOVATION || floorId === null) return null
+    const model = effectiveModel(project, floorId, renovationOptionId)
+    const layerOf = new Map<string, string>()
+    for (const { entity } of model.walls) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
+    for (const { entity } of model.openings) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
+    for (const { entity } of model.rooms) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
+    for (const { entity } of model.placedItems) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
+    return layerOf
+  }, [project, floorId, renovationOptionId])
+
+  /**
    * The Drawing Layer gates of this view (#71 §4), one answer per entity, composed from `derive`'s
    * pure rules over the model the canvas is drawing. The canvas may not read the domain, so the
    * entity → layer lookup happens here and the canvas is handed four booleans, a colour, an order and
@@ -1491,14 +1507,8 @@ export function FloorWorkspace(): ReactNode {
    * layer gate is the second of the two, and `layerAccessOf` intersects them.
    */
   const layerGates: LayerGates | null = useMemo(() => {
-    if (!FF_RENOVATION || view === null || floorId === null) return null
-    const model = effectiveModel(project, floorId, renovationOptionId)
-    const layerOf = new Map<string, string>()
-    for (const { entity } of model.walls) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
-    for (const { entity } of model.openings) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
-    for (const { entity } of model.rooms) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
-    for (const { entity } of model.placedItems) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
-    const keyOf = (id: string): string => layerOf.get(id) ?? UNLAYERED_LAYER_KEY
+    if (!FF_RENOVATION || view === null || entityLayerKey === null) return null
+    const keyOf = (id: string): string => entityLayerKey.get(id) ?? UNLAYERED_LAYER_KEY
     const access = (id: string): LayerAccess => layerAccessOf(project, view, keyOf(id), { displayIncluded: true })
     const order = effectiveLayerOrder(project, view)
     return {
@@ -1515,7 +1525,18 @@ export function FloorWorkspace(): ReactNode {
         access(id).modifiable ? null : drawingLayerById(project, keyOf(id))?.name ?? RENOVATION_STRINGS.layerUnlayered,
       onRefusal: (name) => showHiddenToolNotice(RENOVATION_STRINGS.layerReadOnlyNotice(name)),
     }
-  }, [project, view, floorId, renovationOptionId, showHiddenToolNotice])
+  }, [project, view, entityLayerKey, showHiddenToolNotice])
+
+  /**
+   * Whether one entity's geometry may be snapped to in this view (#71 criterion 12): hidden or
+   * non-selectable content is not a target, and `Snap to hidden content` is the one switch that puts
+   * it back. Picking stays impossible either way — that answer is `layerAccessOf`'s, above.
+   */
+  const snapLayerAllowed = useMemo(() => {
+    if (!FF_RENOVATION || view === null || entityLayerKey === null) return undefined
+    return (ownerId: string): boolean =>
+      snapCandidateAllowed(project, view, entityLayerKey.get(ownerId) ?? UNLAYERED_LAYER_KEY)
+  }, [project, view, entityLayerKey])
 
   // ---- the inspector's renovation block (#70 §5)
   /**
@@ -2137,6 +2158,7 @@ export function FloorWorkspace(): ReactNode {
                 <WallDraftOverlay
                   viewport={viewport}
                   floorWalls={floorWalls}
+                  snapAllowed={snapLayerAllowed}
                   draft={wallDraft ?? emptyWallDraft()}
                   onDraft={setWallDraft}
                   onCancel={() => {
@@ -2167,6 +2189,7 @@ export function FloorWorkspace(): ReactNode {
                   viewport={viewport}
                   floorWalls={floorWalls}
                   roomGeometry={roomSnapGeometry}
+                  snapAllowed={snapLayerAllowed}
                   tool={drawTool}
                   toolLabel={DRAW_TOOLS.find((definition) => definition.id === drawTool)!.label}
                   draft={roomDraft}

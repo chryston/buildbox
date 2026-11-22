@@ -68,11 +68,12 @@ type Callbacks = {
   onFinish?: (chain: WallChainDraft) => void
   onCancel?: () => void
   onOptions?: (defaults: WallToolDefaults) => void
+  snapAllowed?: (ownerId: string) => boolean
 }
 
 /** The draft lives in the caller, exactly as the Floor workspace keeps it (#64 §12). */
 function Harness(props: Callbacks): ReactNode {
-  const { onFinish = () => undefined, onCancel = () => undefined, onOptions = () => undefined } = props
+  const { onFinish = () => undefined, onCancel = () => undefined, onOptions = () => undefined, snapAllowed } = props
   const [draft, setDraft] = useState<WallDraft>(() => emptyWallDraft())
   return (
     <WallDraftOverlay
@@ -86,6 +87,7 @@ function Harness(props: Callbacks): ReactNode {
       defaults={DEFAULTS}
       onOptions={onOptions}
       snapKinds={SNAP_KINDS}
+      snapAllowed={snapAllowed}
       gridSpacingMm={0}
       angleIncrementDeg={0}
       unit="mm"
@@ -119,6 +121,25 @@ describe('WallDraftOverlay', () => {
     expect(indicator()?.textContent).toBe('Attach to W-3')
     hoverAt({ x: 500, y: 900 })
     expect(indicator()).toBeNull()
+  })
+
+  it('will not snap to a Wall this view will not let be picked (#71 criterion 12)', () => {
+    // Structure is hidden in this view, so its faces are not snap targets: the same pointer that
+    // joined `W-1` a moment ago now draws a free segment, and the join is never named.
+    render(<Harness snapAllowed={() => false} />)
+    hoverAt({ x: 4000, y: -50 })
+    expect(indicator()).toBeNull()
+    hoverAt({ x: 3000, y: 1950 })
+    expect(indicator()).toBeNull()
+  })
+
+  it('snaps to the Walls it may still reach, and no further (#71 criterion 12)', () => {
+    // One Wall excluded, the rest reachable: the gate is per entity, not a blanket switch.
+    render(<Harness snapAllowed={(ownerId) => ownerId !== 'w1' && ownerId !== 'w2'} />)
+    hoverAt({ x: 4000, y: -50 })
+    expect(indicator()).toBeNull()
+    hoverAt({ x: 3000, y: 1950 })
+    expect(indicator()?.textContent).toBe('Attach to W-3')
   })
 
   it('never speaks of sides or a centreline', () => {

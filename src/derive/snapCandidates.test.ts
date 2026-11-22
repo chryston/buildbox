@@ -226,3 +226,36 @@ describe('the Snaps ▾ rows', () => {
     expect(found.has('grid')).toBe(true)
   })
 })
+
+describe('the layer gate on the snap sources (#71 criterion 12)', () => {
+  const owned: SnapGeometry = { ...kitchen, ownerId: 'room-kitchen' }
+  const hall: SnapGeometry = { path: kitchenFixture(), name: 'Hall', ownerId: 'room-hall' }
+  const wall: WallFaceSource = {
+    id: 'w1',
+    label: 'W-1 · face',
+    corners: [{ point: pt(4000, -50), label: 'Join to end of W-1' }],
+    faces: [{ from: pt(0, 0), to: pt(4000, 0), segment: { kind: 'line', to: pt(4000, 0) } }],
+  }
+
+  it('is answered per entity: the hidden Room goes, the other stays', () => {
+    const found = offered([owned, hall], pt(0, 0), { allowed: (ownerId: string): boolean => ownerId !== 'room-kitchen' })
+    expect(found.some((candidate) => candidate.label.includes('Kitchen'))).toBe(false)
+    expect(found.some((candidate) => candidate.label.includes('Hall'))).toBe(true)
+    const gated = offered([owned, hall], pt(0, 0), { allowed: (): boolean => false })
+    expect(gated.some((candidate) => candidate.label.includes('Kitchen'))).toBe(false)
+    expect(gated.some((candidate) => candidate.label.includes('Hall'))).toBe(false)
+  })
+
+  it('takes a hidden Wall’s faces and face corners off the offer too', () => {
+    const open = offered([], pt(4000, -50), { walls: [wall] })
+    expect(open.some((candidate) => candidate.label.includes('W-1'))).toBe(true)
+    const gated = offered([], pt(4000, -50), { walls: [wall], allowed: (): boolean => false })
+    expect(gated.some((candidate) => candidate.label.includes('W-1'))).toBe(false)
+  })
+
+  it('leaves geometry that belongs to no entity alone', () => {
+    // A draft edge and the Floor itself are on no layer, so no layer setting can take them away.
+    const found = offered([kitchen], pt(0, 0), { allowed: (): boolean => false })
+    expect(found.some((candidate) => candidate.label.includes('Kitchen'))).toBe(true)
+  })
+})
