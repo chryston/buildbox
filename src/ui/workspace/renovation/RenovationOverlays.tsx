@@ -40,6 +40,9 @@ function refusalOf(result: DispatchResult): string {
 /** The Intents that move a record rather than resize or rename it. */
 const MOVEMENT = /\.(drag|move|offset|split)|rotatePlacement|movePlacement/
 
+/** The Intents that bring a record the Project did not have. */
+const ARRIVALS = /\.create$|^wall\.createChain$|^plan\.(addObject|addTemplate|placeDesign|copyToFloor)$|^room\.placeShelter$/
+
 /**
  * §7b's `<change>` word, from what the pending Intent does. The four words are the issue's; anything
  * that is neither a removal, an arrival nor a move is a change of some kind, and says so.
@@ -47,7 +50,7 @@ const MOVEMENT = /\.(drag|move|offset|split)|rotatePlacement|movePlacement/
 function changeWordOf(intentType: string): string {
   if (intentType.endsWith('.delete') || intentType === 'plan.removeObject' || intentType === 'plan.clear')
     return RENOVATION_STRINGS.changeRemoved
-  if (intentType.endsWith('.create') || intentType === 'plan.addObject') return RENOVATION_STRINGS.changeAppear
+  if (ARRIVALS.test(intentType)) return RENOVATION_STRINGS.changeAppear
   if (MOVEMENT.test(intentType)) return RENOVATION_STRINGS.changeMove
   return RENOVATION_STRINGS.changeChange
 }

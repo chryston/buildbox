@@ -22,7 +22,7 @@ import type { UserEvent } from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import type { Project } from '../domain'
-import { PLAN_IMAGE_ACCEPT, WorkspaceProvider, workspaceStore, type WorkspaceServices } from '../ui'
+import { PLAN_IMAGE_ACCEPT, planItemsForFloor, WorkspaceProvider, workspaceStore, type WorkspaceServices } from '../ui'
 import type { Viewport, ViewportCache } from '../ui'
 import { openTestView, renderWithBindings as render, TEST_EXPORT_PORT, type TestView } from '../ui/legacy/testing'
 
@@ -206,6 +206,57 @@ describe('a baseline record in Existing display (#70 criterion 23)', () => {
     selectWall()
     expect(screen.getByTestId('wall-inspector-ref')).toHaveTextContent('W-6')
     expect(revision()).toBe(before)
+  })
+})
+
+describe('a survey edit of the baseline in Existing display (#70 §7e)', () => {
+  it('asks what every Option will see before a baseline Wall is removed', async () => {
+    const user = userEvent.setup()
+    await renderWorkspace(existingViewProject())
+    selectWall()
+    const before = revision()
+    const walls = view.project().existingModel.walls.length
+
+    await user.click(screen.getByTestId('wall-delete'))
+    // The delete keeps its own review of what falls with the Wall; the correction question is what
+    // the refused answer adds.
+    await user.click(screen.getByTestId('delete-wall-review-confirm'))
+
+    const dialog = await screen.findByTestId('correct-existing-dialog')
+    expect(dialog).toHaveTextContent('will see W-6 be removed:')
+    expect(screen.getByTestId('correct-existing-option-option-a')).toHaveTextContent(
+      'Option A · Open kitchen — retains it as Existing',
+    )
+    expect(screen.getByTestId('correct-existing-option-option-b')).toHaveTextContent('Option B · Widened opening')
+    expect(revision()).toBe(before)
+    expect(view.project().existingModel.walls).toHaveLength(walls)
+
+    await user.click(screen.getByTestId('correct-existing-confirm'))
+    await waitFor(() => expect(revision()).toBe(before + 1))
+    expect(view.project().existingModel.walls).toHaveLength(walls - 1)
+    expect(view.session.getSnapshot().history?.undoLabel).toBe('Correct Existing Model: W-6')
+  })
+
+  it('names a record the survey tool just drew, rather than the id it was given', async () => {
+    const user = userEvent.setup()
+    await renderWorkspace(existingViewProject())
+    const before = revision()
+
+    await user.click(screen.getByTestId('add-item-menu'))
+    await user.click(screen.getByTestId('add-sofa-2'))
+
+    // The new Placed Item has no reference before the correction lands, so the dialog names it by
+    // the label the finished Project gives it — and asks before anything is written.
+    const dialog = await screen.findByTestId('correct-existing-dialog')
+    expect(dialog).toHaveTextContent('will see Sofa 2-seater appear:')
+    expect(dialog).not.toHaveTextContent('will see item-')
+    expect(revision()).toBe(before)
+
+    await user.click(screen.getByTestId('correct-existing-confirm'))
+    await waitFor(() => expect(revision()).toBe(before + 1))
+    const placed = planItemsForFloor(view.project(), 'seed-001').filter((each) => each.label === 'Sofa 2-seater')
+    expect(placed).toHaveLength(1)
+    expect(view.session.getSnapshot().history?.undoLabel).toBe('Correct Existing Model: Sofa 2-seater')
   })
 })
 

@@ -517,12 +517,13 @@ const correctExistingModel: Handler<'renovation.correctExistingModel'> = (ctx) =
 /** How each Option would see this correction, in option order (#69 §12). */
 function correctionReview(project: Project, inner: Intent, ids: string[]): CorrectionReview | null {
   const blocks: Block[] = []
-  const seen: { subjects: Subject[] } = { subjects: [] }
+  const seen: { subjects: Subject[]; produced: Project | null } = { subjects: [], produced: null }
   try {
     const [produced] = produceWithPatches(project, (draft) => {
       seen.subjects = runCorrection(project, draft as unknown as Project, inner, ids, (block) => blocks.push(block))
       return draft
     })
+    seen.produced = produced
     // The same check the commit will run, so a preview never promises a correction the commit refuses.
     openingsStillFit(project, produced)
   } catch (error) {
@@ -543,7 +544,11 @@ function correctionReview(project: Project, inner: Intent, ids: string[]): Corre
   // A move drags the Walls joined to it as well; the transaction is named for the thing the user
   // pointed at, which is the one the wrapped Intent carries in its payload.
   const entityId = namedSubject(inner, subjects)
-  const entityRef = labelOf(project, entityId)
+  // A survey tool drawing something new has no label for it before the fact — the record does not
+  // exist yet — so the name the dialog and the transaction carry is the one the finished Project
+  // gives it: `W-7`, not the id the Intent invented (#70 §7e).
+  const named = labelOf(project, entityId)
+  const entityRef = named === entityId ? labelOf(seen.produced ?? project, entityId) : named
   return { kind: 'correct-existing-model', entityId, entityRef, options, message: correctionLabel(entityRef) }
 }
 

@@ -184,7 +184,7 @@ export type RenovationDialog =
     readonly optionId: string
   }
   /** §7b: the same pending edit, on its way to the danger dialog. */
-  | { readonly kind: 'correct-existing'; readonly intent: Intent; readonly entityId: string }
+  | { readonly kind: 'correct-existing'; readonly intent: Intent; readonly entityId: string | null }
   /**
    * §7d: `Restore W-2?` — the person is about to take a demolition record out of one Design Option,
    * and the Option's own successors may stand on it. Ids only: the review is read from the preview.
@@ -336,7 +336,7 @@ export interface WorkspaceActions {
   /** Ask what an Existing-entity edit from another Display was meant to be (#70 §7a). */
   openForcedChoiceDialog(intent: Intent, entityId: string, display: RenovationDisplay, optionId: string): void
   /** Ask the §7b danger question about the same pending edit. */
-  openCorrectExistingDialog(intent: Intent, entityId: string): void
+  openCorrectExistingDialog(intent: Intent, entityId: string | null): void
   /** Ask `Restore <ref>?` before a demolition record leaves one Design Option (#70 §7d). */
   openRestoreDialog(entityId: string, designOptionId: string): void
   /** §7c: hand one Existing entity its handles and fields back, for one pending correction. */

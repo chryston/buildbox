@@ -703,16 +703,20 @@ export function FloorWorkspace(): ReactNode {
     const result = dispatch(intent)
     if (!FF_RENOVATION || result.ok || result.code !== 'baseline-correction-required') return
     const entityId = subjectOfIntent(intent)
-    if (entityId === null || renovationOptionId === null) return
+    if (renovationOptionId === null) return
     if (renovationDisplayNow === 'existing') {
-      // The Existing display is where a survey edit is meant, so an edit refused there is the one
-      // this build cannot answer alone: the person unlocked this entity, and the question the answer
-      // owes is what the correction does to every Design Option (#70 §7b, §7c). An entity nobody
-      // unlocked never produces this Intent — its handles and fields were shut.
-      if (correctionUnlocked !== entityId) return
+      // The Existing display is where a survey edit is meant, so a refusal there is never noise about
+      // a stray drag: it is the one edit this build cannot answer alone, whether the person unlocked
+      // the record's fields (§7c), pressed `Delete` on it, or drew a new record with a survey tool.
+      // The answer owed is what the change does to every Design Option (#70 §7b, §7e) — and a tool
+      // that has not drawn the record yet gives the refusal no subject to name.
       openCorrectExistingDialog(intent, entityId)
       return
     }
+    // A refusal in a Design Option's own display is the forced choice: replace the record with a
+    // Design Option entity, or correct the Existing Model. Both answers need the entity that was
+    // refused, so a refusal naming none has no choice to offer.
+    if (entityId === null) return
     openForcedChoiceDialog(intent, entityId, renovationDisplayNow, renovationOptionId)
   }
   const send = <T extends IntentType>(type: T, payload: PayloadOf<T>): void => {

@@ -72,7 +72,7 @@ export const openForcedChoiceDialog = (
 }
 
 /** Ask the §7b danger question about the same pending edit. */
-export const openCorrectExistingDialog = (intent: Intent, entityId: string): void => {
+export const openCorrectExistingDialog = (intent: Intent, entityId: string | null): void => {
   workspaceStore.getState().openCorrectExistingDialog(intent, entityId)
 }
 
