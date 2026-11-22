@@ -96,9 +96,19 @@ describe('Design → Project', () => {
     expect(project.meta).toEqual({ name: 'Kitchen Wall' })
     expect(project.preferences).toEqual({ displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 })
     expect(project.floors).toEqual([{ id: 'new-1', name: 'Floor 1', planImage: null }])
-    // The one Floor comes with the one Plan View that shows it (#56).
+    // The one Floor comes with the one Plan View that shows it (#56), looking at the Existing
+    // Model through no Design Option on the Existing Display (#70 §1).
     expect(project.views).toEqual([
-      { id: 'new-2', kind: 'plan', floorId: 'new-1', name: 'Floor 1', isDefault: true, showPlanImage: true },
+      {
+        id: 'new-2',
+        kind: 'plan',
+        floorId: 'new-1',
+        name: 'Floor 1',
+        isDefault: true,
+        showPlanImage: true,
+        designOptionId: null,
+        renovationDisplay: 'existing',
+      },
     ])
   })
 

@@ -6,6 +6,8 @@ import {
   migrateProject,
   migrateV7toV8,
   validateProject,
+  viewDesignOptionId,
+  viewRenovationDisplay,
   type IdAllocator,
 } from './index'
 import roomsFixture from '../../fixtures/domain/v7/rooms.json?raw'
@@ -26,18 +28,25 @@ function v7Project(): Record<string, unknown> {
   return structuredClone(envelope.project)
 }
 
-describe('migrateV7toV8 — the Design Option collection (#69)', () => {
+describe('migrateV7toV8 — Design Options and the saved-view settings (#69, #70)', () => {
   it('is the one step this build registers above v7', () => {
     expect(DOMAIN_SCHEMA_VERSION).toBe(8)
     expect(MIGRATORS).toHaveLength(7)
   })
 
-  it('adds an empty Design Option collection and nothing else', () => {
+  it('adds an empty Design Option collection and the two settings on every view, and nothing else', () => {
     const data = v7Project()
     const before = structuredClone(data)
     const result = migrateV7toV8(data) as Record<string, unknown>
     expect(result.designOptions).toEqual([])
+    // Every view now says which Option it looks through and which Display it draws — and both
+    // answers are the way the view already behaved (#70 §1).
+    expect(result.views).toEqual((before.views as Record<string, unknown>[]).map((view) => ({ ...view, designOptionId: null, renovationDisplay: 'existing' })))
     delete result.designOptions
+    for (const view of result.views as Record<string, unknown>[]) {
+      delete view.designOptionId
+      delete view.renovationDisplay
+    }
     expect(result).toEqual(before)
     expect(data).toEqual(before)
   })
@@ -51,6 +60,20 @@ describe('migrateV7toV8 — the Design Option collection (#69)', () => {
     expect(migrateV7toV8(once)).toBe(once)
   })
 
+  it('fills the settings a view is missing without touching the ones it carries', () => {
+    const v8 = migrateV7toV8(v7Project()) as Record<string, unknown>
+    const views = structuredClone(v8.views) as Record<string, unknown>[]
+    // A hand-written v8 file whose second view lost its Display: the step repairs that view and
+    // leaves the Option the first view is looking through alone.
+    views[0] = { ...views[0]!, designOptionId: 'option-a', renovationDisplay: 'combined' }
+    delete views[1]!.renovationDisplay
+    const repaired = migrateV7toV8({ ...v8, views }) as Record<string, unknown>
+    const after = repaired.views as Record<string, unknown>[]
+    expect(after[0]).toEqual({ ...views[0] })
+    expect(after[1]).toMatchObject({ renovationDisplay: 'existing' })
+    expect(repaired.designOptions).toEqual([])
+  })
+
   it('leaves a value that is not a record alone', () => {
     expect(migrateV7toV8(null)).toBe(null)
     expect(migrateV7toV8([1, 2])).toEqual([1, 2])
@@ -58,12 +81,16 @@ describe('migrateV7toV8 — the Design Option collection (#69)', () => {
   })
 })
 
-describe('the v8 chain end to end (#69)', () => {
-  it('reads a v7 Project and hands back a valid one with no Options', () => {
+describe('the v8 chain end to end (#69, #70)', () => {
+  it('reads a v7 Project and hands back a valid one with no Options and Existing views', () => {
     const result = migrateProject(v7Project(), 7, noIds)
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.project.designOptions).toEqual([])
+    for (const view of result.project.views) {
+      expect(viewDesignOptionId(view)).toBe(null)
+      expect(viewRenovationDisplay(view)).toBe('existing')
+    }
     expect(validateProject(result.project).ok).toBe(true)
   })
 

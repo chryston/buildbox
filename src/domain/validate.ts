@@ -36,6 +36,7 @@ import { footprintProblems } from './footprint'
 import { nameKey } from './floorNames'
 import { fitProblem, openingNoun } from './openings'
 import { roomFaceRelation, roomOutlineProblems, roomOverlaps, roomSegmentOf, roomSegments } from './rooms'
+import { RENOVATION_DISPLAYS } from './project'
 import type { DisplayUnit, EntityId, ItemFootprint, OpeningKind, Project, Room, RoomOutline, RoomWallFaceRef, WallEnd, WallJustification, WallRefLine } from './project'
 import type { WallSide } from '../geometry'
 import { ACKNOWLEDGEMENT_NOTE_MAX_LENGTH, warningKey } from './warnings'
@@ -98,7 +99,7 @@ const META_FIELDS = ['name', 'address']
 const PREFERENCES_FIELDS = ['displayUnit', 'displayPrecision', 'defaultWallHeight']
 const FLOOR_FIELDS = ['id', 'name', 'planImage', 'limits', 'defaultWallHeight']
 const FLOOR_LIMITS_FIELDS = ['lowerMm', 'upperMm']
-const PLAN_VIEW_FIELDS = ['id', 'kind', 'floorId', 'name', 'isDefault', 'showPlanImage']
+const PLAN_VIEW_FIELDS = ['id', 'kind', 'floorId', 'name', 'isDefault', 'showPlanImage', 'designOptionId', 'renovationDisplay']
 const PLAN_IMAGE_FIELDS = ['assetHash', 'mediaType', 'widthPx', 'heightPx', 'pixelsPerMm']
 const CABINET_DESIGN_FIELDS = ['id', 'kind', 'name', 'construction']
 const GENERIC_DESIGN_FIELDS = [
@@ -805,6 +806,26 @@ function validatePlanView(
 
   checkBoolean(raw.isDefault, childPath(path, 'isDefault'), 'whether this is the default Plan View of the Floor', add)
   checkBoolean(raw.showPlanImage, childPath(path, 'showPlanImage'), 'whether this Plan View draws the Plan Image', add)
+
+  // The Design Option this view looks through (#70 §1). An absent field is a view written before
+  // the capability, and `null` is the Existing Model alone — both valid, and valid for **every**
+  // Display: a Demolition, Proposed or Combined view with no Option is the error state §6 draws on
+  // the canvas, not an import error, so this field and the Display below are never checked against
+  // each other. What is refused is a name this Project does not have: a view pointing at a deleted
+  // Option would draw a canvas that promises an Option nobody can choose.
+  if (raw.designOptionId !== undefined && raw.designOptionId !== null) {
+    const optionPath = childPath(path, 'designOptionId')
+    const optionId = checkEntityId(raw.designOptionId, optionPath, 'the Plan View Design Option ID', add)
+    if (optionId !== null && !index.optionIds.has(optionId)) {
+      add(
+        optionPath,
+        DANGLING_REFERENCE,
+        'Expected the Design Option of a Plan View to be a Design Option of this Project — no Design Option has this ID.',
+      )
+    }
+  }
+  checkOptionalOneOf(raw.renovationDisplay, childPath(path, 'renovationDisplay'), 'the Plan View Renovation Display', RENOVATION_DISPLAYS, add)
+
   checkUnknownFields(raw, path, PLAN_VIEW_FIELDS, add)
 }
 

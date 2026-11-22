@@ -73,7 +73,7 @@ describe('nextFloorName', () => {
 })
 
 describe('defaultPlanView', () => {
-  it('is the Floor, seen: named after it, showing its Plan Image', () => {
+  it('is the Floor, seen: named after it, showing its Plan Image, looking at the Existing Model', () => {
     const [target] = projectWith(['Mezzanine']).floors
     if (target === undefined) throw new Error('expected a Floor')
     expect(defaultPlanView('view-9', target)).toEqual({
@@ -83,7 +83,19 @@ describe('defaultPlanView', () => {
       name: 'Mezzanine',
       isDefault: true,
       showPlanImage: true,
+      // A Floor that has just arrived has no Design Option to look through and nothing to show
+      // but what stands today (#70 §1).
+      designOptionId: null,
+      renovationDisplay: 'existing',
     })
+  })
+
+  it('carries the Option and Display it is handed, which is how floor.duplicate keeps them', () => {
+    const [target] = projectWith(['Mezzanine']).floors
+    if (target === undefined) throw new Error('expected a Floor')
+    const copied = defaultPlanView('view-9', target, { designOptionId: 'option-a', renovationDisplay: 'combined' })
+    expect(copied.designOptionId).toBe('option-a')
+    expect(copied.renovationDisplay).toBe('combined')
   })
 })
 

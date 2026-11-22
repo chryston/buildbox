@@ -80,15 +80,27 @@ which is the only way a hand-edited or newer-schema file can be caught. A migrat
 historical record, so the number is a frozen constant in `migrate.ts` rather than a live read
 of the pack; `src/domain/migrate.test.ts` pins it to the pack entry it came from.
 
-## What v8 holds (#69, dark)
+## What v8 holds (#69, #70, dark)
 
-One thing: `Project.designOptions`, the empty collection of Design Options — each one a name, the
-proposed work it adds, and the IDs of the Existing entities it removes. Every entity type also
-gained the optional `predecessorIds`, the provenance chain that tells a proposed entity which
-Existing one it replaces.
+Two things, both additions:
 
-`migrateV7toV8` adds `designOptions: []` and spends no IDs, so a Project with no Options derives,
-draws and exports exactly as it did at v7.
+* `Project.designOptions`, the empty collection of Design Options — each one a name, the
+  proposed work it adds, and the IDs of the Existing entities it removes. Every entity type also
+  gained the optional `predecessorIds`, the provenance chain that tells a proposed entity which
+  Existing one it replaces.
+* `designOptionId` and `renovationDisplay` on every saved Plan View (#70 §1) — the Design Option
+  the view looks through and the Renovation Display it draws.
+
+`migrateV7toV8` adds `designOptions: []` and writes `designOptionId: null` /
+`renovationDisplay: "existing"` on every view, and spends no IDs, so a Project with no Walls and no
+Options derives, draws and exports exactly as it did at v7: no Options means the Existing Model is
+the whole model, and `null` / `existing` is the way every view already looked at it.
+
+Both view fields are optional in the TypeScript type and validated when present, never defaulted:
+a view written before the capability has to stay readable in a build with the flag off, and the
+strict validator refuses a `designOptionId` that names no Option and a `renovationDisplay` outside
+the four. A `null` Option under any Display is **valid** persisted state — that pairing is the
+error state #70 §6 draws on the canvas, not an import error.
 
 **This is the one version the flag decides.** `DOMAIN_SCHEMA_VERSION` is `8` only in a build with
 `VITE_FF_RENOVATION=true`, and `migrateV7toV8` is registered only there. Production stays at v7,

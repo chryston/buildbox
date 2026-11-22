@@ -235,12 +235,17 @@ export function migrateV6toV7(data: unknown): unknown {
 }
 
 /**
- * v7 → v8 (#69): Design Options.
+ * v7 → v8 (#69, #70): Design Options, and the two saved-view settings that look through one.
  *
- * `designOptions: []` is the only change, and an older file simply has none — which is also how a
- * migrated Project behaves: no Options means the Existing Model is the whole model, exactly as it
- * was in S7. Nothing else moves, no ID is spent and no clock is read, because a Design Option is a
- * new container rather than a change to one, and every Existing entity keeps the fields it had.
+ * `designOptions: []` is the only change to the containers, and an older file simply has none —
+ * which is also how a migrated Project behaves: no Options means the Existing Model is the whole
+ * model, exactly as it was in S7. Every saved view then gains the pair of fields that say how it
+ * looks at that model (#70 §1): `designOptionId: null` and `renovationDisplay: 'existing'`, which
+ * is the way every view already looked — the Existing Model, and nothing of anyone's Option.
+ *
+ * Nothing else moves, no ID is spent and no clock is read, because both additions are new
+ * containers and new fields rather than a change to one, and every Existing entity keeps the
+ * fields it had.
  *
  * Registered only in a `VITE_FF_RENOVATION` build (#69 §1, architecture §11). The production schema
  * version stays 7, so a Project written by a preview build is refused by production as
@@ -250,8 +255,22 @@ export function migrateV6toV7(data: unknown): unknown {
 export function migrateV7toV8(data: unknown): unknown {
   if (data === null || typeof data !== 'object' || Array.isArray(data)) return data
   const record = data as Record<string, unknown>
-  if (Array.isArray(record.designOptions)) return data
-  return { ...record, designOptions: [] }
+  const views: readonly unknown[] | null = Array.isArray(record.views) ? record.views : null
+  // A view that already carries both fields is carried over untouched, so the step is idempotent
+  // and a v8 file comes back as the same object it arrived as.
+  const needsView = (view: unknown): view is Record<string, unknown> =>
+    view !== null &&
+    typeof view === 'object' &&
+    !Array.isArray(view) &&
+    ((view as Record<string, unknown>).designOptionId === undefined ||
+      (view as Record<string, unknown>).renovationDisplay === undefined)
+  const hasOptions = Array.isArray(record.designOptions)
+  if (hasOptions && (views === null || !views.some(needsView))) return data
+  const next: Record<string, unknown> = { ...record }
+  if (!hasOptions) next.designOptions = []
+  if (views !== null)
+    next.views = views.map((view) => (needsView(view) ? { ...view, designOptionId: null, renovationDisplay: 'existing' } : view))
+  return next
 }
 
 export type MigrateError =

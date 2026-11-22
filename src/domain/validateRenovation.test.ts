@@ -486,3 +486,87 @@ describe('one Wall end, one Junction — read across the effective model (#69 §
     expect(problemsOf(value)).toEqual([])
   })
 })
+
+/**
+ * The saved-view settings of #70 §1, checked strictly.
+ *
+ * The rule that shapes all of these: the Design Option and the Renovation Display are checked
+ * **independently**. A view with no Option and a Demolition Display is a thing the user can be
+ * looking at — the Option was deleted from under them, and §6 draws that on the canvas — so it is
+ * valid persisted state. What is refused is a view that names an Option this Project does not have,
+ * and a Display outside the four.
+ */
+describe('the saved-view settings of strict import (#70 §1)', () => {
+  function views(value: Rec): Rec[] {
+    return value.views as Rec[]
+  }
+
+  it('accepts a view that carries neither field, which is every view written before #70', () => {
+    expect(problemsOf(base())).toEqual([])
+  })
+
+  it('accepts a view that looks at the Existing Model through no Option on any Display', () => {
+    for (const display of ['existing', 'demolition', 'proposed', 'combined']) {
+      const value = base()
+      views(value)[1] = { ...views(value)[1]!, designOptionId: null, renovationDisplay: display }
+      expect(problemsOf(value)).toEqual([])
+    }
+  })
+
+  it('accepts a view that names a Design Option of this Project', () => {
+    const value = withOptions(base(), optionOf())
+    views(value)[1] = { ...views(value)[1]!, designOptionId: 'option-a', renovationDisplay: 'combined' }
+    expect(problemsOf(value)).toEqual([])
+  })
+
+  it('refuses a view naming a Design Option this Project does not have', () => {
+    const value = withOptions(base(), optionOf())
+    views(value)[1] = { ...views(value)[1]!, designOptionId: 'option-gone' }
+    expectProblems(value, [{ path: 'views[1].designOptionId', code: 'dangling-reference' }])
+  })
+
+  it('refuses a Design Option reference even when the Project has no Options at all', () => {
+    const value = base()
+    views(value)[0] = { ...views(value)[0]!, designOptionId: 'option-a' }
+    expectProblems(value, [{ path: 'views[0].designOptionId', code: 'dangling-reference' }])
+  })
+
+  it('refuses a Display outside the four, and says which four', () => {
+    const value = base()
+    views(value)[1] = { ...views(value)[1]!, renovationDisplay: 'phase-2' }
+    const result = validateProject(value)
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.problems.map(({ path, code }) => ({ path, code }))).toEqual([
+      { path: 'views[1].renovationDisplay', code: 'not-one-of' },
+    ])
+    expect(result.problems[0]!.message).toContain('existing, demolition, proposed, combined')
+  })
+
+  it('refuses a Display that is not a word at all', () => {
+    const value = base()
+    views(value)[0] = { ...views(value)[0]!, renovationDisplay: 2 }
+    expectProblems(value, [{ path: 'views[0].renovationDisplay', code: 'wrong-type' }])
+  })
+
+  it('refuses a Design Option that is neither an ID nor null', () => {
+    const value = withOptions(base(), optionOf())
+    views(value)[0] = { ...views(value)[0]!, designOptionId: 7 }
+    expectProblems(value, [{ path: 'views[0].designOptionId', code: 'wrong-type' }])
+  })
+
+  it('reports both halves of one bad view, because neither explains the other', () => {
+    const value = withOptions(base(), optionOf())
+    views(value)[0] = { ...views(value)[0]!, designOptionId: 'option-gone', renovationDisplay: 'phase-2' }
+    expectProblems(value, [
+      { path: 'views[0].designOptionId', code: 'dangling-reference' },
+      { path: 'views[0].renovationDisplay', code: 'not-one-of' },
+    ])
+  })
+
+  it('refuses a field this build does not know, so a typo is never read as a Display', () => {
+    const value = base()
+    views(value)[0] = { ...views(value)[0]!, renovationDispaly: 'combined' }
+    expectProblems(value, [{ path: 'views[0].renovationDispaly', code: 'unknown-field' }])
+  })
+})

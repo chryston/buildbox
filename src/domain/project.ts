@@ -119,10 +119,29 @@ export interface FloorLimits {
 }
 
 /**
+ * The four Renovation Displays (#18, #70 §1), in the order the card lays them out:
+ * Existing and Demolition across the top row, Proposed and Combined underneath.
+ *
+ * A Display says which Renovation States the view draws — it is not a Drawing Layer, not a
+ * "phase" and not a mode tab, and the words are never interchangeable. Which State each one
+ * shows is `derive`'s rule (`displayStateOf`), so the four names here are the only vocabulary.
+ */
+export const RENOVATION_DISPLAYS = ['existing', 'demolition', 'proposed', 'combined'] as const
+
+/** One Renovation Display, as a saved view records it. */
+export type RenovationDisplay = (typeof RENOVATION_DISPLAYS)[number]
+
+/**
  * A saved way of looking at exactly one Floor (#56). A Plan View holds no Placed Item, no
  * Plan Image and no geometry of its own — it is a viewer, so deleting one deletes nothing
  * but the view. `isDefault` marks the view that came with the Floor: every Floor has
  * exactly one, and it goes with the Floor rather than counting as a dependant.
+ *
+ * The two renovation fields are optional in the type for the same reason `designOptions` is
+ * (#69): a view written before this capability — every Project, and every Backup taken until
+ * now — has to stay readable in a build with the flag off, and the validator never defaults a
+ * field. `viewDesignOptionId` and `viewRenovationDisplay` are the accessors, and the v7 → v8
+ * migrator writes both on every view.
  */
 export interface PlanView {
   id: EntityId
@@ -134,7 +153,24 @@ export interface PlanView {
   isDefault: boolean
   /** Whether this view draws the Floor's Plan Image. */
   showPlanImage: boolean
+  /**
+   * The Design Option this view looks through, or `null` for the Existing Model alone.
+   *
+   * `null` is not an error: it is what a view of a Project with no Options holds, and what a
+   * view is left holding when its Option is deleted (#70 §1). A Demolition, Proposed or
+   * Combined view with no Option is valid persisted state — the error state §6 draws — so the
+   * Display and this field are checked independently, never as a pair.
+   */
+  designOptionId?: EntityId | null
+  /** The Renovation Display this view draws; absent is `'existing'`. */
+  renovationDisplay?: RenovationDisplay
 }
+
+/** The Design Option of a saved view, which a view written before #70 does not carry. */
+export const viewDesignOptionId = (view: PlanView): EntityId | null => view.designOptionId ?? null
+
+/** The Renovation Display of a saved view, which a view written before #70 does not carry. */
+export const viewRenovationDisplay = (view: PlanView): RenovationDisplay => view.renovationDisplay ?? 'existing'
 
 /**
  * The Plan Image record (#20 §3). It has no ID of its own: a Floor owns zero or one, so
