@@ -22,7 +22,7 @@ export default defineConfig({
   // `design-options.spec.ts` asks for a `VITE_FF_RENOVATION` build, which none of these engines is
   // served: `npm run test:e2e:renovation` runs it against its own preview server, from
   // `playwright.renovation.config.ts`.
-  testIgnore: ['**/design-options.spec.ts', '**/renovation-displays.spec.ts', '**/renovation-layers.spec.ts'],
+  testIgnore: ['**/design-options.spec.ts', '**/renovation-displays.spec.ts', '**/renovation-layers.spec.ts', '**/renovation-paste.spec.ts'],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
