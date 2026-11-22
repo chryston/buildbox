@@ -283,4 +283,19 @@
   --bb-workspace-toolbar-height: 44px;
   --bb-workspace-rail-width: 300px;
   --bb-workspace-notes-width: 380px;
+
+  /* Renovation Displays (#70 §3): one border + tint pair per Display. The mode bar is a tinted
+     band with a 3px bottom border in the border colour, the 2x2 Display cards swatch it, and the
+     canvas legend dots wear it — so a Display is recognisable in all three places by one colour
+     decision. Existing is neutral because it is the baseline, not a state of change; Demolition
+     reuses the destructive red and Proposed the success green, because that is what they say about
+     an entity; Combined is the accent blue, the only one of the four that is a mixture. */
+  --bb-renovation-existing-border: #9a9aa4;
+  --bb-renovation-existing-tint: #1f1f22;
+  --bb-renovation-demolition-border: #ff575d;
+  --bb-renovation-demolition-tint: #2a1a1c;
+  --bb-renovation-proposed-border: #49c77c;
+  --bb-renovation-proposed-tint: #16261c;
+  --bb-renovation-combined-border: #3b9eff;
+  --bb-renovation-combined-tint: #152232;
 }
