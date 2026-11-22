@@ -11,7 +11,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { canonicalJsonBytes, sha256Hex } from '../lib'
+import { canonicalJsonBytes, FF_RENOVATION, sha256Hex } from '../lib'
 import type { PlanView, Project } from '../domain'
 import { encodeProject } from './encode'
 import { stageImport } from './import'
@@ -25,11 +25,12 @@ import {
   legacyFixtureRecord,
   openingsFixtureProject,
   roomsFixtureProject,
+  renovationFixtureProject,
 } from './testing'
 
 const ASSET_ENTRY = `assets/${FIXTURE_PLAN_IMAGE_HASH}.png`
 
-type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6' | 'v7'
+type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6' | 'v7' | 'v8'
 
 const fixtureDir = (version: FixtureVersion): URL => new URL(`../../fixtures/package/${version}/`, import.meta.url)
 const readFrom = (version: FixtureVersion) => (relative: string): Uint8Array =>
@@ -42,6 +43,7 @@ const readV4 = readFrom('v4')
 const readV5 = readFrom('v5')
 const readV6 = readFrom('v6')
 const readV7 = readFrom('v7')
+const readV8 = readFrom('v8')
 
 const ARCHIVE_V1 = readV1('reference.buildbox')
 const ARCHIVE_V2 = readV2('reference.buildbox')
@@ -56,6 +58,9 @@ const ARCHIVE_V6 = readV6('acknowledgements.buildbox')
 // The v7 file is named for what the step added, as v5's and v6's were: it is the first Backup
 // whose Project carries a Room (#67).
 const ARCHIVE_V7 = readV7('rooms.buildbox')
+// The v8 file is named for what the step added, as v5's, v6's and v7's were: it is the first Backup
+// whose Project carries a Design Option, and the first written by a preview build (#69).
+const ARCHIVE_V8 = readV8('renovation.buildbox')
 const ASSET_BYTES = readV2(ASSET_ENTRY)
 
 /** The one Plan Image every fixture carries, served the way the export serves it. */
@@ -376,5 +381,50 @@ describe('the committed v7 Backup (#67)', () => {
     expect(record.existingModel.rooms[1]?.wallFaceRefs).toEqual([{ segmentId: 'edge-study-1', wallId: 'wall-1', side: 'right' }])
     // The v6 record beside it has no Room collection at all — the step in one comparison.
     expect(v6FixtureRecord().existingModel).not.toHaveProperty('rooms')
+  })
+})
+
+// The eighth golden step exists only in a `VITE_FF_RENOVATION` build, with the schema version and
+// the migrator that read it (#69 §1, architecture §11). A flag-off run neither runs nor misses it:
+// the file is on disk either way, and refusing to open it is that build's correct behaviour, which
+// the last case below is the one place that asserts it from the outside.
+describe.skipIf(!FF_RENOVATION)('the committed v8 Backup (#69)', () => {
+  it('stages into the Project it was written from, unmigrated', async () => {
+    const result = await stageImport(ARCHIVE_V8, { acceptPreview: true, allocateId: allocateIds() })
+    if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
+    expect(result.staged.project).toEqual(renovationFixtureProject())
+    expect(result.staged.migratedFrom).toBeNull()
+  })
+
+  it('is a preview package, which a build that does not accept previews refuses', async () => {
+    const result = await stageImport(ARCHIVE_V8, { acceptPreview: false, allocateId: allocateIds() })
+    if (result.ok) throw new Error('a preview package staged without being accepted as one')
+    expect(result.problem.code).toBe('preview-package')
+  })
+
+  it('is re-encoded byte for byte by this build', async () => {
+    expect(await encodeProject(renovationFixtureProject(), assetSource, { ...FIXTURE_BUILD, preview: true })).toEqual(ARCHIVE_V8)
+    const canonical = canonicalOf(renovationFixtureProject())
+    expect(new TextDecoder().decode(readV8('project.json'))).toBe(`${canonical}\n`)
+  })
+
+  it('is described by a manifest that names domain schema v8 and says it is a preview', async () => {
+    const staged = await stageImport(ARCHIVE_V8, { acceptPreview: true, allocateId: allocateIds() })
+    if (!staged.ok) throw new Error('the fixture must stage')
+    expect(staged.staged.manifest).toEqual({
+      ...(await manifestOf(canonicalOf(renovationFixtureProject()), 8)),
+      preview: true,
+    })
+  })
+
+  it('carries one Design Option with work of its own to do, which is what the step was for', () => {
+    const record = renovationFixtureProject()
+    expect(record.designOptions?.map((option) => option.name)).toEqual(['Open plan'])
+    // The v7 record beside it has no Design Option container at all — the step in one comparison.
+    expect(roomsFixtureProject()).not.toHaveProperty('designOptions')
+  })
+
+  it('carries the same asset, byte for byte', () => {
+    expect(readV8(ASSET_ENTRY)).toEqual(ASSET_BYTES)
   })
 })
