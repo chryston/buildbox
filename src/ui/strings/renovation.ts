@@ -108,6 +108,14 @@ export const RENOVATION_STRINGS = {
    */
   needsOption: (display: string): string =>
     `${display} display needs an active Design Option. Nothing is drawn from options; editing tools are disabled.`,
+  /**
+   * The same refusal on the Export dialog (#73 §3), in its words: the view's name first, because a
+   * Drawing Set can hold four views and the person has to know which one to open. The dialog offers
+   * `Open view` beside it; the Lists tab stays enabled, because its scope is chosen and never
+   * inherited. `export`'s `needsActiveOption` is the predicate that decides when it is said.
+   */
+  exportNeedsOption: (viewName: string, display: string): string =>
+    `${viewName}: ${display} display needs an active Design Option.`,
   showExisting: 'Show Existing',
 
   // ---- the undo tooltip of a saved-view setting (#70 §2)
