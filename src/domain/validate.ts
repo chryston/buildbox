@@ -463,8 +463,6 @@ interface IdIndex {
   optionIds: Set<string>
   /** Every Drawing Layer ID (#71 §1), which is what an entity, a view setting and an order name. */
   layerIds: Set<string>
-  /** Each layer ID to the path of its first occurrence: layers are their own ID namespace. */
-  layerFirst: Map<string, string>
 }
 
 function indexIds(root: Rec): IdIndex {
@@ -476,7 +474,6 @@ function indexIds(root: Rec): IdIndex {
   const proposedWallIds = new Set<string>()
   const optionIds = new Set<string>()
   const layerIds = new Set<string>()
-  const layerFirst = new Map<string, string>()
   const claim = (value: unknown, path: string): void => {
     if (typeof value === 'string' && !first.has(value)) first.set(value, path)
   }
@@ -534,16 +531,16 @@ function indexIds(root: Rec): IdIndex {
     })
   }
 
-  // Drawing Layer IDs (#71 §1) are unique among the layers, and are **not** claimed into the
-  // project-wide `first` map: a layer is not an entity, it is never referenced by a Wall end or a
-  // demolition record, and a Project that happened to name a layer with an entity's ID would be
-  // refused for a collision that means nothing. What is shared is the direction of the check —
-  // every `drawingLayerId` answers to this set.
+  // Drawing Layer IDs (#71 §1).
+  // Layer IDs are project-wide unique like everything else — a layer that borrows a Wall's ID makes
+  // the file ambiguous about which one a "select by id" means — but they are looked up through
+  // their own set, because a layer is not an entity: it is never referenced by a Wall end or a
+  // demolition record, and every `drawingLayerId` answers to `layerIds` alone.
   if (Array.isArray(root.drawingLayers)) {
     root.drawingLayers.forEach((layer, i) => {
       if (!isRecord(layer) || typeof layer.id !== 'string') return
       const at = childPath(childPath('drawingLayers', i), 'id')
-      if (!layerFirst.has(layer.id)) layerFirst.set(layer.id, at)
+      claim(layer.id, at)
       layerIds.add(layer.id)
     })
   }
@@ -556,7 +553,7 @@ function indexIds(root: Rec): IdIndex {
     })
   }
 
-  return { first, designIds, floorIds, existingIds, proposedIds, proposedWallIds, optionIds, layerIds, layerFirst }
+  return { first, designIds, floorIds, existingIds, proposedIds, proposedWallIds, optionIds, layerIds }
 }
 
 /** Rule 5: reported on every occurrence after the first, naming the first path. */
@@ -828,9 +825,9 @@ function validateDrawingLayers(raw: unknown, path: string, index: IdIndex, add: 
     const idPath = childPath(at, 'id')
     const id = checkEntityId(layer.id, idPath, 'the Drawing Layer ID', add)
     if (id !== null) {
-      // Layers are their own ID namespace (#71 §1): unique among the layers, and not compared with
-      // entity IDs, which address a different kind of thing.
-      const first = index.layerFirst.get(id)
+      // Layer IDs are unique in the whole Project (#71 §1), the same rule every other ID follows:
+      // a layer that borrows a Wall's ID leaves the file ambiguous about which one is meant.
+      const first = index.first.get(id)
       if (first !== undefined && first !== idPath) {
         add(idPath, DUPLICATE_ID, `Expected a Drawing Layer ID to be unique in this Project — ${first} already uses it.`)
       }
