@@ -793,7 +793,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
         {matrix !== undefined && (
           <>
             <DisplayListSvg
-              list={withWalls}
+              list={painted}
               sizing={sizing}
               matrix={matrix}
               textSpace="screen"
