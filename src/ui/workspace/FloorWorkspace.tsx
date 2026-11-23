@@ -3047,7 +3047,13 @@ export function FloorWorkspace(): ReactNode {
          * deleting anything: the view stays in the Project, and `Show alone` on the Plan pane is the
          * same answer from the other side.
          */
-        split={{
+        split={
+          elevationView === null || elevationSceneValue === null || elevationDrawing === null
+            // With no Elevation View open there is nothing to split: the Plan View is the whole
+            // centre, exactly as it was before the split existed, with no header row above it
+            // taking height the picture is fitted to.
+            ? null
+            : {
           ratio: splitRatio,
           onRatio: setSplitRatio,
           alone: paneAlone,

@@ -99,8 +99,9 @@ describe('Elevation Views in the split workspace', () => {
 
   it('shows one pane and the empty card while the Floor has no views', async () => {
     await renderWorkspace()
-    // Criterion 1: with nothing to look at there is one pane, and no rule to drag.
-    expect(screen.getByTestId('split-pane-plan')).toBeInTheDocument()
+    // Criterion 1: with nothing to look at there is no split at all — the Plan View is the whole
+    // centre, as it was before the split existed — and so no rule to drag either.
+    expect(screen.queryByTestId('split-pane-plan')).toBeNull()
     expect(screen.queryByTestId('split-divider')).toBeNull()
     // Criterion 8: the card says what is missing and where to go next.
     const empty = screen.getByTestId('elevation-empty')
@@ -183,8 +184,9 @@ describe('Elevation Views in the split workspace', () => {
     await user.click(screen.getByTestId('elevation-delete'))
     await user.click(await screen.findByTestId('delete-elevation-view-confirm'))
     await waitFor(() => expect(view.project().elevationViews).toHaveLength(0))
-    // The pane goes away with it, and the Plan is alone again — nothing was deleted but the view.
-    expect(await screen.findByTestId('split-pane-plan')).toBeInTheDocument()
+    // The pane goes away with it, and the split with it: the Plan View is the whole centre again,
+    // exactly as it was before the view existed, and nothing else was deleted.
+    expect(screen.queryByTestId('split-pane-plan')).toBeNull()
     expect(screen.queryByTestId('split-divider')).toBeNull()
     expect(view.project().existingModel.walls.length).toBeGreaterThanOrEqual(0)
   })
