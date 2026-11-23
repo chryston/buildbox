@@ -46,15 +46,21 @@ const SUMP = placedId('Sump box')
 
 type Pt = { x: number, y: number }
 
-/** One click at a Floor point, through the Plan View's own transform. */
-async function clickMm(page: Page, mm: Pt, offset: Pt = { x: 0, y: 0 }): Promise<void> {
+/** Where a Floor point is on the screen, through the Plan View's own transform. */
+async function at(page: Page, mm: Pt): Promise<Pt> {
   const canvas = floorPlanCanvas(page)
   const box = await canvas.boundingBox()
   const matrix = /matrix\(([^,]+),0,0,[^,]+,([^,]+),([^)]+)\)/
     .exec(await canvas.locator('g').first().getAttribute('transform') ?? '')
   if (box === null || matrix === null) throw new Error('the Plan View has no scene to click in')
   const zoom = Number(matrix[1])
-  await page.mouse.click(box.x + mm.x * zoom + Number(matrix[2]) + offset.x, box.y + mm.y * zoom + Number(matrix[3]) + offset.y)
+  return { x: box.x + mm.x * zoom + Number(matrix[2]), y: box.y + mm.y * zoom + Number(matrix[3]) }
+}
+
+/** One click at a Floor point, through the Plan View's own transform. */
+async function clickMm(page: Page, mm: Pt, offset: Pt = { x: 0, y: 0 }): Promise<void> {
+  const p = await at(page, mm)
+  await page.mouse.click(p.x + offset.x, p.y + offset.y)
 }
 
 /** Both cabinets stand on the same 600 × 500 footprint centred on this point. */
@@ -77,6 +83,9 @@ test.describe('the Plan View Range', () => {
     await expect(page.locator(`[data-testid="placed-object-${BASE}"] path`).first()).toHaveCSS('stroke-dasharray', 'none')
     await expect(page.locator(`[data-testid="placed-object-${WALL_CAB}"] path`).first()).not.toHaveCSS('stroke-dasharray', 'none')
     await expect(page.locator(`[data-testid="placed-object-${SUMP}"] path`).first()).toHaveCSS('opacity', '0.28')
+    // The card is in a rail that runs past the fold; the range section is the subject, so it is
+    // brought into view the way a person scrolls to it.
+    await page.getByTestId('plan-view-range-section').scrollIntoViewIfNeeded()
     await waitForFonts(page)
     await waitForStablePaint(page.getByTestId('plan-view-range-section'))
     await expect(page).toHaveScreenshot('plan-range-card-and-canvas.png')
@@ -84,6 +93,15 @@ test.describe('the Plan View Range', () => {
 
   test('the second click inside a shared footprint stands at 2 of 2', async ({ page }) => {
     await openRangePlan(page)
+    // The two cabinets sit low in the fitted scene, and the list hangs below the point it was
+    // called at — so the scene is slid up first, the way a person does it, with the Pan tool.
+    const here = await at(page, STACK)
+    await page.getByTestId('tool-pan').click()
+    await page.mouse.move(here.x, here.y)
+    await page.mouse.down()
+    await page.mouse.move(here.x, here.y - 260, { steps: 6 })
+    await page.mouse.up()
+    await page.getByTestId('tool-select').click()
     await clickMm(page, STACK)
     await clickMm(page, STACK, { x: 4, y: 4 })
     await expect(page.getByTestId('overlap-header')).toContainText('2/2')
@@ -99,6 +117,7 @@ test.describe('the Plan View Range', () => {
     await page.keyboard.press('Escape')
     await expect(page.getByTestId('placed-extent')).toBeVisible()
     await expect(page.getByTestId('placed-extent-height-line')).toContainText('from Item Design Base cabinet')
+    await page.getByTestId('placed-extent').scrollIntoViewIfNeeded()
     await waitForFonts(page)
     await waitForStablePaint(page.getByTestId('placed-extent'))
     await expect(page).toHaveScreenshot('plan-range-placed-extent.png')
