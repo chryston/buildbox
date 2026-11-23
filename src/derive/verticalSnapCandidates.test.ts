@@ -16,7 +16,7 @@
 import { describe, expect, it } from 'vitest'
 import * as fc from 'fast-check'
 import type { ElevationView, Project } from '../domain'
-import { viewRenovationDisplay } from '../domain'
+import { getPresetPack, viewRenovationDisplay } from '../domain'
 import type { VerticalSnapCandidate, VerticalSnapKind } from '../geometry'
 import { verticalSnap, verticalTolerance } from '../geometry'
 import { displayModel, effectiveModel, verticalSnapCandidates } from './index'
@@ -33,6 +33,9 @@ const kitchen = (): ElevationView => {
 
 const kinds = (found: readonly VerticalSnapCandidate[]): Set<VerticalSnapKind> => new Set(found.map((candidate) => candidate.kind))
 const labelled = (found: readonly VerticalSnapCandidate[], label: string): VerticalSnapCandidate[] => found.filter((candidate) => candidate.label === label)
+/** The shipped pack's own name, which every mounting label carries (#75 criterion 25). */
+const PACK = getPresetPack('hdb-bto-typical').name
+const fromPack = (name: string): string => `${name} (${PACK})`
 const entityIds = (found: readonly VerticalSnapCandidate[]): Set<string> => new Set(found.filter((candidate) => candidate.kind === 'entity').map((candidate) => candidate.id))
 
 /** The same view with its own settings changed — the way an Intent would, without importing `edit`. */
@@ -60,19 +63,39 @@ describe('verticalSnapCandidates (#75 criteria 19–21)', () => {
     expect(entityIds(found)).toEqual(new Set(['pr-017', 'pr-018', 'pr-019', 'pr-020', 'pr-021', 'pr-005', 'pr-011', 'pr-014', 'pr-016', 'el-002']))
   })
 
-  it('offers the preset pack’s heights under the pack’s own names', () => {
+  it('offers the preset pack’s heights under the pack’s own names (#75 criterion 25)', () => {
     const found = verticalSnapCandidates({ project, view: kitchen() })
     const mounting = found.filter((candidate) => candidate.kind === 'mounting')
     expect(mounting.length).toBeGreaterThan(10)
-    expect(labelled(mounting, 'Ceiling height').map((candidate) => candidate.mm)).toEqual([2600])
+    // Every one of them says which pack the number came from, so two packs cannot offer the same
+    // word at two heights and leave the user guessing.
+    expect(mounting.every((candidate) => candidate.label.endsWith(` (${PACK})`))).toBe(true)
+    expect(labelled(mounting, fromPack('Ceiling height')).map((candidate) => candidate.mm)).toEqual([2600])
     // An alternative is the same thing at another size, so it is a height of its own.
-    expect(labelled(mounting, 'Clear height to slab').map((candidate) => candidate.mm)).toEqual([2625])
-    expect(labelled(mounting, 'Under a false ceiling').map((candidate) => candidate.mm)).toEqual([2400])
-    const sills = mounting.filter((candidate) => candidate.label.endsWith(' sill'))
+    expect(labelled(mounting, fromPack('Clear height to slab')).map((candidate) => candidate.mm)).toEqual([2625])
+    expect(labelled(mounting, fromPack('Under a false ceiling')).map((candidate) => candidate.mm)).toEqual([2400])
+    const sills = mounting.filter((candidate) => candidate.label.includes(' sill ('))
     expect(sills.length).toBeGreaterThan(0)
     expect(sills.every((candidate) => candidate.mm > 0 && candidate.mm < 2600)).toBe(true)
     expect(mounting.every((candidate) => candidate.label.trim().length > 0)).toBe(true)
     expect(new Set(mounting.map((candidate) => candidate.id)).size).toBe(mounting.length)
+  })
+
+  it('names a Placement the way the rest of the product names it (#75 criteria 21, 23)', () => {
+    const found = verticalSnapCandidates({ project, view: kitchen() })
+    // Two of one Design on the Floor: the guide tells them apart, because the tables and the
+    // Warnings List already do.
+    expect(labelled(found, 'Top of Base cabinet #1').map((candidate) => candidate.mm)).toEqual([860])
+    expect(labelled(found, 'Top of Base cabinet #2').map((candidate) => candidate.mm)).toEqual([860])
+    expect(labelled(found, 'Base of Base cabinet')).toEqual([])
+    // Renaming the Design renames both, which is what makes a shared prefix land the cycle.
+    const renamed = {
+      ...project,
+      itemDesigns: project.itemDesigns.map((design) => (design.id === 'pr-004' ? { ...design, name: 'Tall unit' } : design)),
+    }
+    const labels = verticalSnapCandidates({ project: renamed, view: kitchen() }).map((candidate) => candidate.label)
+    expect(labels).toContain('Top of Tall unit #1')
+    expect(labels).toContain('Top of Tall unit #2')
   })
 
   it('leaves out the kinds the panel’s rows have switched off', () => {
@@ -95,7 +118,7 @@ describe('verticalSnapCandidates (#75 criteria 19–21)', () => {
     expect(labelled(found, 'Base of Sump box')).toEqual([])
     // The Floor’s own heights and the pack’s heights belong to no layer, so hiding one keeps them.
     expect(labelled(found, 'Floor Datum')).toHaveLength(1)
-    expect(labelled(found, 'Ceiling height')).toHaveLength(1)
+    expect(labelled(found, fromPack('Ceiling height'))).toHaveLength(1)
 
     const snapping = withSettings(hidden, { snapToHiddenContent: true })
     expect(entityIds(verticalSnapCandidates({ project, view: snapping }))).toEqual(entityIds(verticalSnapCandidates({ project, view: kitchen() })))

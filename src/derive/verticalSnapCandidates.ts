@@ -24,8 +24,9 @@
  * the shelter is left out — it is a fixed whole-flat element whose door is already a door entry.
  */
 import type { ElevationView, EntityId, Project } from '../domain'
-import { UNLAYERED_LAYER_KEY, designHeight, listPresetEntries, viewDesignOptionId, viewRenovationDisplay } from '../domain'
+import { UNLAYERED_LAYER_KEY, designHeight, getPresetPack, listPresetEntries, viewDesignOptionId, viewRenovationDisplay } from '../domain'
 import type { VerticalSnapCandidate, VerticalSnapKind } from '../geometry'
+import { derivePlacement, placementLabels } from './effective'
 import { effectiveModel } from './effectiveModel'
 import { entityLayerKeys, snapCandidateAllowed } from './drawingLayers'
 import { displayModel } from './renovationDisplay'
@@ -110,18 +111,31 @@ export function verticalSnapCandidates(input: VerticalSnapInput): VerticalSnapCa
     for (const { entity } of display.walls) edges(entity.id, `Base of ${entity.ref}`, `Top of ${entity.ref}`, entity.baseElevation, entity.baseElevation + entity.height)
     // An Opening's ends are a sill and a head, which is what the rest of the product calls them.
     for (const { entity } of display.openings) edges(entity.id, `Sill of ${entity.label}`, `Head of ${entity.label}`, entity.sill, entity.head)
+    const names = placementLabels(
+      display.placedItems.flatMap(({ entity }) => {
+        const design = project.itemDesigns.find((candidate) => candidate.id === entity.itemDesignId)
+        return design === undefined ? [] : [derivePlacement(design, entity)]
+      }),
+    )
     for (const { entity } of display.placedItems) {
       const design = project.itemDesigns.find((candidate) => candidate.id === entity.itemDesignId)
       if (design === undefined) continue
-      edges(entity.id, `Base of ${design.name}`, `Top of ${design.name}`, entity.baseElevation, entity.baseElevation + designHeight(design))
+      // The instance label, not the Design's name: two of one Design on a Floor are `Base cabinet #1`
+      // and `#2` everywhere else in the product, and a guide that named both the same way would leave
+      // the user unable to tell which one a drag is about to stop at (#75 criterion 21).
+      const name = names.get(entity.id) ?? design.name
+      edges(entity.id, `Base of ${name}`, `Top of ${name}`, entity.baseElevation, entity.baseElevation + designHeight(design))
     }
   }
 
   if (enabled.has('mounting')) {
-    // The pack's own names, so the guide says `Kitchen window sill` and not a number the user has to
-    // have memorised. An alternative is the same thing at another size, so it is offered too.
+    // The pack's own names, so the guide says `Standard window sill (HDB BTO typical)` and not a
+    // number the user has to have memorised, and names the pack the number came from — two packs
+    // could otherwise offer the same word at two heights (#75 criterion 25). An alternative is the
+    // same thing at another size, so it is offered too, under its own name.
+    const pack = getPresetPack(PRESET_PACK_ID).name
     const offer = (id: string, name: string, mm: number): void => {
-      out.push({ id, mm, kind: 'mounting', label: name })
+      out.push({ id, mm, kind: 'mounting', label: `${name} (${pack})` })
     }
     for (const entry of listPresetEntries(PRESET_PACK_ID, 'window')) {
       offer(entry.id, `${entry.name} sill`, entry.values.sill)
