@@ -3,8 +3,8 @@
  * from, and the meta the fixture was written with. Importable from `*.test.ts` only
  * (`eslint.config.js` boundaries), and never from `app`.
  */
-import { rectangleFootprint } from '../domain'
-import type { CabinetNode, EntityId, GlobalSettings, Project } from '../domain'
+import { DEFAULT_DRAWING_LAYERS, NEW_LAYER_COLOR, rectangleFootprint, UNLAYERED_LAYER_KEY } from '../domain'
+import type { CabinetNode, DrawingLayer, EntityId, GlobalSettings, PlacedItem, PlanView, Project } from '../domain'
 
 /**
  * The IDs `stageImport` hands a domain migration that has to name something new — the
@@ -314,25 +314,93 @@ export function roomsFixtureProject(): Project {
 }
 
 /**
- * The record the v8 file was written from: the v7 Project plus the container that step added.
+ * The record the v8 file was written from: the v7 Project plus everything the eighth schema added.
  *
- * The Option carries no work of its own. A golden fixture is bytes this build must reproduce exactly
- * and a flag-off build must refuse on purpose, and what v8 adds is the container — `designOptions`,
- * which a Project written before #69 does not have at all — not any particular demolition inside it
- * (#69 §1). The scene with real Options in it is `fixtures/e2e/preview-seed/renovation-36.json`.
+ * #73 criterion 14 decides the shape, so that one file is the whole feature in bytes: two Design
+ * Options, one of which replaces an Existing Placed Item — it demolishes `place-1` and proposes
+ * `place-4` in its place — and one of which only demolishes a Wall; the three default Drawing
+ * Layers plus one a person made, with the model's content filed on them the way the step files it;
+ * and two saved views, one that says nothing about any layer and one that overrides visibility,
+ * editability, colour, the layer order, the Active Layer and snapping to hidden content, and looks
+ * at the world through an Option. A golden fixture is bytes this build must reproduce exactly and an
+ * older build must refuse on purpose, so every field the bump added appears here and none is empty
+ * by accident.
  */
 export function renovationFixtureProject(): Project {
   const project = roomsFixtureProject()
+  const [structure, services, furniture] = DEFAULT_DRAWING_LAYERS.map((layer, index) => ({
+    id: `layer-${String(index + 1)}`,
+    name: layer.name,
+    color: layer.color,
+  }))
+  // A layer the user made, holding one Placed Item: proof that a Project's layers are not the three
+  // it started with, and that a view can hide a layer the migrator never invented.
+  const finishes: DrawingLayer = { id: 'layer-4', name: 'Finishes', color: NEW_LAYER_COLOR }
+  const filed = <T extends { id: string }>(entries: readonly T[], layerId: string): T[] =>
+    entries.map((entry) => ({ ...entry, drawingLayerId: layerId }))
+  const placed = project.existingModel.placedItems.map((item, index) => ({
+    ...item,
+    drawingLayerId: index === project.existingModel.placedItems.length - 1 ? finishes.id : furniture!.id,
+  }))
+  const demolished = project.existingModel.placedItems[1]!
+  const replacement: PlacedItem = {
+    ...demolished,
+    id: 'place-4',
+    drawingLayerId: furniture!.id,
+    // The lineage the Display reads: this item is not new work beside the old one, it is what the
+    // old one became, which is the difference between a replace and a demolition (#70 §4).
+    predecessorIds: [demolished.id],
+    translation: { x: demolished.translation.x + 400, y: demolished.translation.y },
+  }
   return {
     ...project,
+    drawingLayers: [structure!, services!, furniture!, finishes],
+    existingModel: {
+      ...project.existingModel,
+      placedItems: placed,
+      walls: filed(project.existingModel.walls, structure!.id),
+      openings: filed(project.existingModel.openings, structure!.id),
+      rooms: filed(project.existingModel.rooms, structure!.id),
+    },
     designOptions: [
       {
         id: 'option-1',
         name: 'Open plan',
+        proposed: { placedItems: [replacement], walls: [], wallJunctions: [], openings: [], rooms: [] },
+        demolishedIds: [demolished.id],
+      },
+      {
+        id: 'option-2',
+        name: 'Store wall',
         proposed: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [] },
-        demolishedIds: [],
+        demolishedIds: ['wall-2'],
       },
     ],
+    views: project.views.map((view): PlanView =>
+      view.id === 'view-0'
+        ? {
+            ...view,
+            designOptionId: null,
+            renovationDisplay: 'existing' as const,
+            layerSettings: {},
+            layerOrder: null,
+            activeLayerId: structure!.id,
+            snapToHiddenContent: false,
+          }
+        : {
+            ...view,
+            designOptionId: 'option-1',
+            renovationDisplay: 'combined' as const,
+            layerSettings: {
+              [finishes.id]: { visible: false, selectable: false, editable: false, color: '#3f7fa6' },
+              [furniture!.id]: { visible: true, selectable: true, editable: false },
+              [UNLAYERED_LAYER_KEY]: { visible: false, selectable: false, editable: false },
+            },
+            layerOrder: [finishes.id, furniture!.id, services!.id, structure!.id, UNLAYERED_LAYER_KEY],
+            activeLayerId: finishes.id,
+            snapToHiddenContent: true,
+          },
+    ),
   }
 }
 

@@ -433,11 +433,49 @@ describe.skipIf(!FF_RENOVATION)('the committed v8 Backup (#69)', () => {
     })
   })
 
-  it('carries one Design Option with work of its own to do, which is what the step was for', () => {
+  it('carries the whole feature in bytes: two Options, a replace, a demolition, four layers, two views', () => {
     const record = renovationFixtureProject()
-    expect(record.designOptions?.map((option) => option.name)).toEqual(['Open plan'])
-    // The v7 record beside it has no Design Option container at all — the step in one comparison.
+    expect(record.designOptions?.map((option) => option.name)).toEqual(['Open plan', 'Store wall'])
+    // A replace demolishes an Existing Placed Item and proposes its successor; a demolition only
+    // demolishes. A Demolition sheet says something different about each, so the fixture holds one.
+    const [replace, demolition] = record.designOptions!
+    expect(replace!.demolishedIds).toEqual(['place-1'])
+    expect(replace!.proposed.placedItems.map((item) => [item.id, item.predecessorIds])).toEqual([['place-4', ['place-1']]])
+    expect(demolition!.demolishedIds).toEqual(['wall-2'])
+    expect(demolition!.proposed.placedItems).toEqual([])
+    // The three layers every Project starts with, plus one a person made, with the content filed.
+    expect(record.drawingLayers?.map((layer) => layer.name)).toEqual(['Structure', 'Services', 'Furniture', 'Finishes'])
+    expect(record.existingModel.walls.map((wall) => wall.drawingLayerId)).toEqual(['layer-1', 'layer-1'])
+    expect(record.existingModel.rooms.map((room) => room.drawingLayerId)).toEqual(['layer-1', 'layer-1'])
+    expect(record.existingModel.placedItems.map((item) => item.drawingLayerId)).toEqual([
+      'layer-3',
+      'layer-3',
+      'layer-3',
+      'layer-4',
+    ])
+    // One view says nothing about any layer and looks at the Existing Model; the other overrides
+    // every field the eighth schema gave a view and looks at the world through an Option.
+    const [zero, overridden] = record.views
+    expect([
+      zero!.designOptionId,
+      zero!.renovationDisplay,
+      zero!.layerSettings,
+      zero!.layerOrder,
+      zero!.activeLayerId,
+      zero!.snapToHiddenContent,
+    ]).toEqual([null, 'existing', {}, null, 'layer-1', false])
+    expect(Object.keys(overridden!.layerSettings!).sort()).toEqual(['layer-3', 'layer-4', 'unlayered'])
+    expect([
+      overridden!.designOptionId,
+      overridden!.renovationDisplay,
+      overridden!.layerOrder,
+      overridden!.activeLayerId,
+      overridden!.snapToHiddenContent,
+    ]).toEqual(['option-1', 'combined', ['layer-4', 'layer-3', 'layer-2', 'layer-1', 'unlayered'], 'layer-4', true])
+    expect(overridden!.layerSettings!['layer-4']).toEqual({ visible: false, selectable: false, editable: false, color: '#3f7fa6' })
+    // The v7 record beside it has none of this — the step in one comparison.
     expect(roomsFixtureProject()).not.toHaveProperty('designOptions')
+    expect(roomsFixtureProject()).not.toHaveProperty('drawingLayers')
   })
 
   it('carries the same asset, byte for byte', () => {
