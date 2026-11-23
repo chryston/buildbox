@@ -260,7 +260,9 @@ export const ExportDialog = ({
   const blocked =
     selected.length === 0
       ? STRINGS.exportNeedViews
-      : blockedView !== null
+      : // The flag, not merely `blockedView`: a runtime ternary would leave the renovation sentence in
+        // a flag-off bundle, and that copy is what the bundle scan looks for (#69 criterion 13).
+        FF_RENOVATION && blockedView !== null
         ? RENOVATION_STRINGS.exportNeedsOption(blockedView.viewName, displayLabel(blockedView.display))
         : !fit && typeof recipe.scale === 'number'
           ? STRINGS.exportScaleNoFit(recipe.scale)
