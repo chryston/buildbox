@@ -16,7 +16,7 @@
 import type { Affine } from '../derive'
 import { mmText as n } from './format'
 import { commandsToPath } from './path'
-import { STYLES, resolveSize } from './styles'
+import { STYLES, rangeStyle, resolveSize } from './styles'
 import type {
   DisplayItem,
   DisplayList,
@@ -185,7 +185,9 @@ function rectOf(
 }
 
 function pathNode(item: Extract<DisplayItem, { kind: 'path' }>, o: SvgOptions, ref?: Ref): SvgNode {
-  const style = STYLES[emphasised(item.style, ref, o.emphasis)]
+  // #74 §3: the range's mark is applied to the row, not to the key — the row's `:selected` and
+  // `:hovered` variants are still the row the emphasis found.
+  const style = rangeStyle(item.paint, STYLES[emphasised(item.style, ref, o.emphasis)], 'path')
   const rect = rectOf(item.segments, item.closed)
   const attrs: [string, string][] = [...refAttrs(item.ref, o.includeRefs)]
   if (rect !== null) attrs.push(['x', n(rect.x)], ['y', n(rect.y)], ['width', n(rect.w)], ['height', n(rect.h)])
@@ -208,7 +210,7 @@ function pathNode(item: Extract<DisplayItem, { kind: 'path' }>, o: SvgOptions, r
 }
 
 function textNode(item: Extract<DisplayItem, { kind: 'text' }>, o: SvgOptions, ref?: Ref): SvgNode {
-  const style = STYLES[emphasised(item.style, ref, o.emphasis)]
+  const style = rangeStyle(item.paint, STYLES[emphasised(item.style, ref, o.emphasis)], 'text')
   if (style.size === undefined) {
     // A text row with no size is a bug in the table, not a thing a caller can recover from:
     // the alternative is a `<text>` the browser sizes from its own default, silently mislaid

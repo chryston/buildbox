@@ -12,7 +12,7 @@
  * thing looks like*, and is the same on a screen and on paper; `SIZE_ROLES` is *how big is
  * this*, and is the one place that knows a screen has pixels and a sheet has a scale.
  */
-import type { ResolvedSize, SizeRole, SizeRow, SizeSpec, Sizing, Style, StyleKey } from './types'
+import type { RangePaint, ResolvedSize, SizeRole, SizeRow, SizeSpec, Sizing, Style, StyleKey } from './types'
 
 /**
  * The one font stack, named once so every `<text>` is measured and drawn in the same face.
@@ -88,6 +88,11 @@ export const SIZE_ROLES: Record<SizeRole, SizeRow> = {
   // whole Wall rather than marking two jamb lines.
   'renovation-dash': { screen: { mm: 90 }, paper: { mm: 2 } },
   'renovation-gap': { screen: { mm: 60 }, paper: { mm: 1.4 } },
+  // The Above-range dash (#74 §3): the outline of a cabinet the section plane is standing under
+  // has to be readable as a shape through the dashes alone, so it is a touch longer than a
+  // renovation's. The paper column is the renovation's, because a sheet reads it the same way.
+  'range-dash': { screen: { mm: 60 }, paper: { mm: 2 } },
+  'range-gap': { screen: { mm: 40 }, paper: { mm: 1.4 } },
   // The halo sits this far outside the outline — three device pixels on a screen, whatever the
   // zoom, and a hairline's worth of ink on paper.
   'renovation-halo-gap': { screen: { px: 3 }, paper: { mm: 0.6 } },
@@ -406,6 +411,51 @@ export const STYLES: Record<StyleKey, Style> = {
   // The optional model grid, off by default. Light enough that a pencil dimension over it is
   // still readable, dark enough that a phone photograph of the sheet keeps it.
   'sheet-grid': { stroke: 'var(--bb-border-card)', strokeWidth: 'sheet-rule', hit: 'none', opacity: 0.5 },
+}
+
+/**
+ * The one strength a Below-range entity is drawn at (#74 §3).
+ *
+ * One number for every kind — Wall, Opening, footprint and each of their labels — because the
+ * promise is that `faded` is one reading across the drawing and not five. It is a number and not
+ * a custom property because `Style.opacity` is a number, and the two renderers multiply it into
+ * their own paint rather than reading a stylesheet: this table is the only place both can reach.
+ * The value is the one Variant A drew with (`abdc3cd`, `.rs-below`).
+ */
+export const RANGE_FADED_OPACITY = 0.28
+
+/**
+ * The row one item is drawn with, once the Plan View Range has had its say (#74 §3).
+ *
+ * `undefined` means In range, and In range is the normal graphics — the row, unchanged. `faded`
+ * is the one opacity token, on the words as much as on the shape they name. `outline` takes the
+ * fill out and dashes the stroke; the stroke keeps its colour, because a `Services` layer drawn
+ * in a colour of its own is still one thing when the section plane passes under it — and a label
+ * is already drawn in that colour, so the words follow the line they belong to without being
+ * touched.
+ *
+ * A row whose fill is `transparent` is a hit shape and not ink: `room-hit`, `opening-hit` and
+ * `cabinet-unit-hit` are drawn so the pointer has something to land on. Taking their fill away
+ * would take the entity out of the pick set, and #74 §3 refuses that — a range never hides a
+ * thing and never changes what a click can reach — so those rows come back untouched.
+ *
+ * A row that is already dashed keeps its own dash: a removed section or a demolition outline is
+ * dashed for a reason of its own, and the range's dash would only overwrite it.
+ */
+export function rangeStyle(
+  paint: RangePaint | undefined,
+  style: Style,
+  kind: 'path' | 'text',
+): Style {
+  if (paint === undefined) return style
+  if (paint === 'faded') return { ...style, opacity: RANGE_FADED_OPACITY }
+  // A label needs nothing done to it to be "the dashed-style colour": every text row on a Plan View
+  // paints its glyphs in the entity's own colour (`plan-label`'s fill is `item`), and that is the
+  // colour the outline it belongs to is stroked in. Taking the fill out, as a path's does, would
+  // simply erase the word.
+  if (kind === 'text') return style
+  if (style.fill === 'transparent') return style
+  return { ...style, fill: 'none', dash: style.dash ?? ['range-dash', 'range-gap'] }
 }
 
 /** The style one key names; the table is exhaustive over `StyleKey`, so this never fails. */

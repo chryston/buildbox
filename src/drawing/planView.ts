@@ -17,6 +17,7 @@ import type { EntityId } from '../domain'
 import { bounds as boundsOf } from '../geometry'
 import type { ClosedPath, Pt, Transform } from '../geometry'
 import { layoutText, measureRect } from './font/layoutText'
+import { placeLabels } from './labels'
 import { pathToCommands, rectCommands } from './path'
 import { resolveSize } from './styles'
 import type {
@@ -25,6 +26,7 @@ import type {
   DisplayList,
   DrawOptions,
   MissingGlyph,
+  OmittedLabel,
   PathCommand,
   Rect,
 } from './types'
@@ -89,9 +91,30 @@ export function drawPlanView(
     }],
   }))
 
-  const labelItems: DisplayItem[] = drawn.map((f) => {
-    const size = resolveSize('plan-label', sizing)
-    const layout = layoutText(f.placement.label, size.mm)
+  // #74 §3: an Item's name sits on the Item until another name has taken that box. Then it moves
+  // to the next candidate position along its own footprint, and failing that it is left out of the
+  // picture and carried to a hover instead — a name written over a name reads as neither.
+  //
+  // One call for the whole Floor, because the only thing an Item's name has to avoid is another
+  // Item's name, and the order the names are drawn in is the order they get to keep their place.
+  // The box handed to the placer is `measureRect`'s own, so the box avoided is the box drawn.
+  const labelSize = resolveSize('plan-label', sizing).mm
+  const layouts = drawn.map((f) => layoutText(f.placement.label, labelSize))
+  const labelBoxes = placeLabels({
+    obstacles: [],
+    labels: drawn.map((f, i) => ({
+      id: f.placement.id,
+      anchor: f.labelAt,
+      w: layouts[i].width,
+      h: layouts[i].ascent + layouts[i].descent,
+      entity: f.world,
+      atHome: true,
+    })),
+  })
+  const labelItems: DisplayItem[] = []
+  const omittedLabels: OmittedLabel[] = []
+  drawn.forEach((f, i) => {
+    const layout = layouts[i]
     if (layout.missing.length > 0) {
       missingGlyphs.push({
         ref: { id: f.placement.id, role: 'item-label' },
@@ -99,11 +122,20 @@ export function drawPlanView(
         chars: layout.missing,
       })
     }
-    return {
+    const box = labelBoxes[i]
+    if (box === null) {
+      omittedLabels.push({
+        ref: { id: f.placement.id, role: 'item-label' },
+        text: f.placement.label,
+        at: f.labelAt,
+      })
+      return
+    }
+    labelItems.push({
       kind: 'text' as const,
       ref: { id: f.placement.id, role: 'item-label' },
       text: f.placement.label,
-      at: f.labelAt,
+      at: { x: box.x + box.w / 2, y: box.y + box.h / 2 },
       anchor: 'middle' as const,
       baseline: 'middle' as const,
       rotationDeg: 0,
@@ -111,7 +143,7 @@ export function drawPlanView(
       style: 'plan-label' as const,
       color: f.placement.color,
       layout,
-    }
+    })
   })
 
   const layers: DisplayLayer[] = []
@@ -144,7 +176,13 @@ export function drawPlanView(
   if (d.bounds !== null) box = unionRect(box, d.bounds)
   box = unionText(box, labelItems)
 
-  return { space: 'floor', bounds: box, layers, missingGlyphs }
+  return {
+    space: 'floor',
+    bounds: box,
+    layers,
+    missingGlyphs,
+    ...(omittedLabels.length === 0 ? {} : { omittedLabels }),
+  }
 }
 
 /**

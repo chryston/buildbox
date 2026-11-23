@@ -21,8 +21,10 @@ export type {
   DrawOptions,
   LayerKey,
   MissingGlyph,
+  OmittedLabel,
   Paint,
   PathCommand,
+  RangePaint,
   Rect,
   Ref,
   ResolvedSize,
@@ -36,7 +38,7 @@ export type {
   TextBaseline,
   TextRole,
 } from './types'
-export { FONT_STACK, SIZE_ROLES, STYLES, resolveSize, resolveStyle } from './styles'
+export { FONT_STACK, RANGE_FADED_OPACITY, SIZE_ROLES, STYLES, rangeStyle, resolveSize, resolveStyle } from './styles'
 export { commandsToPath, lineCommands, pathToCommands, rectCommands, roundedRectCommands } from './path'
 export { serializeSvg, toSvgTree } from './svg'
 export type { Emphasis, SvgNode, SvgOptions } from './svg'
@@ -63,4 +65,4 @@ export type { BadgeOptions, BadgeSubject } from './badges'
 export { drawItemDetail } from './itemDetail'
 export type { ItemDetailOptions, ItemDetailView } from './itemDetail'
 export { drawFloorView } from './floorView'
-export type { FloorView, FloorViewEntities, FloorViewOptions, LayerGates } from './floorView'
+export type { FloorView, FloorViewEntities, FloorViewOptions, LayerGates, RangeGates } from './floorView'
