@@ -52,7 +52,10 @@ import { DeleteWallReviewDialog } from './wall/DeleteWallReviewDialog'
 import { emptyOpeningDraft, openingAim } from './opening/openingDraft'
 import type { OpeningAim, OpeningDraft } from './opening/openingDraft'
 import { DEFAULT_OPENING_PRESET_ID, openingPresetRow, resolveOpeningPreset } from './opening/openingPresets'
-import { readoutMm } from './displayUnits'
+import { formatMm, readoutMm } from './displayUnits'
+import { VerticalExtentRows } from './VerticalExtentFields'
+import type { ExtentNumberFormat } from './verticalExtentFields'
+import { openingExtentView, placementExtentView, wallExtentView } from './verticalExtentFields'
 import { WallInspector } from './wall/WallInspector'
 import { RoomInspector } from './rooms/RoomInspector'
 import { RoomDraftOverlay } from './rooms/RoomDraftOverlay'
@@ -965,6 +968,22 @@ export function FloorWorkspace(): ReactNode {
   const selectedDesign = selected === null
     ? null
     : project.itemDesigns.find((design) => design.id === selected.designId) ?? null
+
+  /**
+   * The selected placement's own record (#74 §5): `PlanItemView` carries what the plan draws, and the
+   * Vertical Extent rows need the `baseMm` the record holds. The Effective Model is read, so a
+   * Proposed placement gets the same rows as an Existing one.
+   */
+  const selectedPlacement = useMemo(() => {
+    if (selection === null || floorId === null) return null
+    const found = effectiveModel(project, floorId, renovationOptionId).placedItems
+      .find(({ entity }) => entity.id === selection)
+    return found?.entity ?? null
+  }, [project, floorId, renovationOptionId, selection])
+
+  /** The extent boxes are typed in the Project's display unit, like every other length field. */
+  const extentFormat: ExtentNumberFormat = (mm) =>
+    formatMm(mm, project.preferences.displayUnit, project.preferences.displayPrecision)
 
   /** Where the Item Origin stands: what a drag and `Position X` / `Position Y` both mean. */
   const setPosition = (x: number, y: number): void => {
@@ -2176,6 +2195,22 @@ export function FloorWorkspace(): ReactNode {
                 onFlipSwing={() => send('opening.flipSwing', { openingId: selectedOpening.opening.id })}
                 onSelectHost={() => selectWall(selectedOpening.opening.hostWallId)}
                 renovationAction={renovationAction(selectedOpening.opening.id)}
+                extent={
+                  view === null
+                    ? undefined
+                    : <VerticalExtentRows
+                        view={openingExtentView(selectedOpening.opening, view.planViewRange, extentFormat)}
+                        unit={project.preferences.displayUnit}
+                        testId="opening"
+                        onCommit={(field, valueMm) => {
+                          send('opening.setVerticalExtent', {
+                            openingId: selectedOpening.opening.id,
+                            field,
+                            value: valueMm,
+                          })
+                        }}
+                      />
+                }
                 onDelete={() => {
                   send('opening.delete', { openingId: selectedOpening.opening.id })
                   selectOpening(null)
@@ -2204,7 +2239,36 @@ export function FloorWorkspace(): ReactNode {
             onApplyPreview={applyPreview}
             onCancelPreview={cancelPreview}
             onTogglePick={() => setPickingOrigin(!pickingOrigin)}
-            onFork={() => setForkOpen(true)}
+            extent={
+              selected === null || selectedDesign === null || selectedPlacement === null || view === null
+                ? undefined
+                : <VerticalExtentRows
+                    view={placementExtentView(
+                      selectedDesign,
+                      selectedPlacement,
+                      selected.placementCount,
+                      view.planViewRange,
+                      extentFormat,
+                    )}
+                    unit={project.preferences.displayUnit}
+                    testId="placed"
+                    onCommit={(field, valueMm) => {
+                      // A Placed Item has no Height box: the number is the Item Design's (#74 §7).
+                      if (selection === null || field === 'height') return
+                      send('plan.setPlacementVerticalExtent', { placedItemId: selection, field, value: valueMm })
+                    }}
+                    fork={
+                      <button
+                        type="button"
+                        data-testid="fork-design"
+                        className="bb-workspace-tool-button"
+                        onClick={() => setForkOpen(true)}
+                      >
+                        {STRINGS.forkDesign}
+                      </button>
+                    }
+                  />
+            }
             onOpenDetail={openDetail}
             onTransfer={() => setTransferOpen(true)}
             onDelete={() => {
@@ -2232,6 +2296,18 @@ export function FloorWorkspace(): ReactNode {
                 onDelete={() => deleteWall(selectedWall.wall.id)}
                 deleteBlocked={roomDeleteBlockFor(project, selectedWall.wall)}
                 renovationAction={renovationAction(selectedWall.wall.id)}
+                extent={
+                  view === null
+                    ? undefined
+                    : <VerticalExtentRows
+                        view={wallExtentView(selectedWall.wall, view.planViewRange, extentFormat)}
+                        unit={project.preferences.displayUnit}
+                        testId="wall"
+                        onCommit={(field, valueMm) => {
+                          send('wall.setVerticalExtent', { wallId: selectedWall.wall.id, field, value: valueMm })
+                        }}
+                      />
+                }
               />
           }
           </FieldsLockedContext.Provider>
