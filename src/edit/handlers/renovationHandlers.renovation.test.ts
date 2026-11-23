@@ -4,6 +4,7 @@
  * that no handler holds is answered by `applyIntent` with the rejection any unknown type gets.
  */
 import { describe, expect, it } from 'vitest'
+import { currentSchemaOf } from '../../domain/testing'
 import roomsFixture from '../../../fixtures/domain/v7/rooms.json?raw'
 import type { Acknowledgement, DesignOption, Project } from '../../domain'
 import { validateProject } from '../../domain'
@@ -11,7 +12,7 @@ import { canonicalJson } from '../../lib'
 import { applyIntent, applyPatches, intentIdCount, intentLabel, previewIntent } from '../index'
 import { intent } from '../testing'
 
-const envelope = JSON.parse(roomsFixture) as { project: Project }
+const envelope = { project: currentSchemaOf((JSON.parse(roomsFixture) as { project: unknown }).project, 7) }
 
 const option = (id: string, name: string): DesignOption => ({
   id,

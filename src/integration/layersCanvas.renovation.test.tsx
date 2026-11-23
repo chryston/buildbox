@@ -7,7 +7,7 @@
  * pick, and `FloorWorkspace`'s gates — so the only honest witness is the real workspace drawing the
  * real fixture.
  *
- * `fixtures/domain/v8/layers.json` supplies the three positions the criteria name: `Floor 1` says
+ * `fixtures/domain/v9/layers.json` supplies the three positions the criteria name: `Floor 1` says
  * nothing about any layer, `Option A · Proposed` hides Furniture and recolours Structure, and
  * `Option B · Combined` makes Structure read-only. Where a criterion needs the opposite of what a
  * view stores, the test changes it through the Layers list — the same control a person uses — rather
@@ -46,7 +46,7 @@ const WALL = 'seed-wall-002'
 const WARDROBE = 'fp-wardrobe'
 
 function sceneProject(): Project {
-  const text = readFileSync(join(fixturesRoot, 'domain', 'v8', 'layers.json'), 'utf8')
+  const text = readFileSync(join(fixturesRoot, 'domain', 'v9', 'layers.json'), 'utf8')
   return structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project)
 }
 

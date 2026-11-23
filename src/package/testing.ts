@@ -441,3 +441,24 @@ export function legacyFixtureRecord(): unknown {
 function legacyFootprint(width: number, depth: number): { kind: 'rectangle'; width: number; depth: number } {
   return { kind: 'rectangle', width, depth }
 }
+
+/**
+ * The renovation fixture at the ninth schema (#74), with each Plan View's Vertical Range spelled out.
+ *
+ * The plain view keeps the range its Floor implies — from the Floor structural level up to just
+ * below the ceiling — and the Option view has been pulled down to counter height, which is what the
+ * field is for: the same world, drawn from a shorter stick. This is the Backup this build writes, so
+ * the two ranges are the bytes the round-trip is judged against, and the pair shows that a range
+ * belongs to the view and not to the Project.
+ */
+export function planRangeFixtureProject(): Project {
+  const project = renovationFixtureProject()
+  const [plain, option] = project.views
+  return {
+    ...project,
+    views: [
+      { ...plain!, planViewRange: { lowerMm: 0, upperMm: 2600 } },
+      { ...option!, planViewRange: { lowerMm: 900, upperMm: 1200 } },
+    ],
+  }
+}

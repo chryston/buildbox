@@ -14,7 +14,7 @@
  * layer answers.
  */
 import { describe, expect, it } from 'vitest'
-import layersFixture from '../../fixtures/domain/v8/layers.json?raw'
+import layersFixture from '../../fixtures/domain/v9/layers.json?raw'
 import type { DesignOption, EntityId, Project } from '../domain'
 import { validateProject } from '../domain'
 import { canonicalJson } from '../lib'

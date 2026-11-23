@@ -5,7 +5,7 @@
  * Placed Items CSV taken from a view that hides the `Furniture` layer still holds every one of those
  * Placed Items — with the dialog saying how many it included that the view hides.
  *
- * The scene is `fixtures/domain/v8/export.json`, the export tests' own kitchen, installed as
+ * The scene is `fixtures/domain/v9/export.json`, the export tests' own kitchen, installed as
  * `fixtures/e2e/preview-seed/renovation-export.json` by `scripts/make-renovation-export-seed.ts`:
  * two Design Options, three Drawing Layers, four Placed Items filed on `Furniture`, and the view
  * `Ground Floor · Plan · Demolition`, which hides that layer.

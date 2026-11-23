@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url'
 import { act, render, screen, waitFor, type RenderResult } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { currentSchemaOf } from '../domain/testing'
 import type { ReactNode } from 'react'
 import type { PayloadOf } from '../edit'
 import type { Project } from '../domain'
@@ -42,7 +43,7 @@ function sceneProject(withOptions = true): Project {
   const seed = JSON.parse(
     readFileSync(join(fixturesRoot, 'e2e', 'preview-seed', 'renovation-36.json'), 'utf8'),
   ) as { projects: { data: Project }[] }
-  const project = structuredClone(seed.projects[0]!.data)
+  const project = currentSchemaOf(seed.projects[0]!.data, 8)
   if (!withOptions) project.designOptions = []
   return project
 }

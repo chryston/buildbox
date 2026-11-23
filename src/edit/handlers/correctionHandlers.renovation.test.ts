@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { currentSchemaOf } from '../../domain/testing'
 import type { DesignOption, Project } from '../../domain'
 import { designOptionsOf } from '../../domain'
 import { canonicalJson } from '../../lib'
@@ -39,7 +40,7 @@ const BASE_UNIT = 'seed-002'
 const A = 'option-a'
 const B = 'option-b'
 
-const project = (): Project => structuredClone(seed.projects[0]!.data)
+const project = (): Project => currentSchemaOf(seed.projects[0]!.data, 8)
 
 function optionOf(source: Project, id: string): DesignOption {
   const found = designOptionsOf(source).find((entry) => entry.id === id)

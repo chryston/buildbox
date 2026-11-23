@@ -9,7 +9,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import renovationFixture from '../../fixtures/domain/v8/renovation-views.json?raw'
+import renovationFixture from '../../fixtures/domain/v9/renovation-views.json?raw'
 import type { Project } from '../domain'
 import { canonicalJson } from '../lib'
 import { exportFiles } from './index'

@@ -1125,3 +1125,22 @@ export function currentSchemaOf(record: unknown, fromVersion: number): Project {
   if (!result.ok) throw new Error(`the fixture must migrate: ${result.error.message}`)
   return result.project
 }
+
+/**
+ * An older record with only its Plan Views completed, and nothing else touched.
+ *
+ * A test that edits the Drawing Layer list itself — emptying it, renaming the default away — cannot
+ * come in through `currentSchemaOf`, which would file the record's content on the three default
+ * layers the eighth step grows. It wants the older Project exactly as it was written plus the one
+ * field a Plan View has gained since: the range it draws at, defaulted from the Floor it shows.
+ */
+export function withPlanViewRanges(project: Project): Project {
+  const limits = new Map(project.floors.map((floor) => [floor.id, floor.limits]))
+  return {
+    ...project,
+    views: project.views.map((view) => ({
+      ...view,
+      planViewRange: view.planViewRange ?? defaultPlanViewRange(limits.get(view.floorId)),
+    })),
+  }
+}

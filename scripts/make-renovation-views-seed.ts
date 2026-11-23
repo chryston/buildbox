@@ -1,5 +1,5 @@
 /**
- * Generate `fixtures/domain/v8/renovation-views.json` and its e2e twin
+ * Generate `fixtures/domain/v9/renovation-views.json` and its e2e twin
  * `fixtures/e2e/preview-seed/renovation-views.json` (#70 criterion 7).
  *
  * The scene the four Renovation Displays are tested against. It starts from the committed
@@ -40,7 +40,7 @@ import type { AssetRecord, NewAsset, ProjectRecord } from '../src/persistence'
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const SOURCE = resolve(repoRoot, 'fixtures/e2e/preview-seed/renovation-36.json')
 const OUT = resolve(repoRoot, 'fixtures/e2e/preview-seed/renovation-views.json')
-const DOMAIN_OUT = resolve(repoRoot, 'fixtures/domain/v8/renovation-views.json')
+const DOMAIN_OUT = resolve(repoRoot, 'fixtures/domain/v9/renovation-views.json')
 
 const NOW = '2026-01-01T09:30:00+08:00'
 const OPTION_A = 'option-a'
@@ -290,7 +290,7 @@ const fixture = {
 mkdirSync(dirname(OUT), { recursive: true })
 writeFileSync(OUT, `${JSON.stringify(fixture, null, 2)}\n`)
 mkdirSync(dirname(DOMAIN_OUT), { recursive: true })
-writeFileSync(DOMAIN_OUT, `${canonicalJson({ domainSchemaVersion: 8, project: current })}\n`)
+writeFileSync(DOMAIN_OUT, `${canonicalJson({ domainSchemaVersion: 9, project: current })}\n`)
 
 console.log(
   `make-renovation-views-seed: ${OUT}\n` +

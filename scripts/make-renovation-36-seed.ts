@@ -36,7 +36,7 @@ import type { AssetRecord, NewAsset, ProjectRecord } from '../src/persistence'
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const SOURCE = resolve(repoRoot, 'fixtures/e2e/preview-seed/legacy-v3.json')
 const OUT = resolve(repoRoot, 'fixtures/e2e/preview-seed/renovation-36.json')
-const DOMAIN_OUT = resolve(repoRoot, 'fixtures/domain/v8/renovation.json')
+const DOMAIN_OUT = resolve(repoRoot, 'fixtures/domain/v9/renovation.json')
 
 /** 10,240 × 7,680 mm at the scale `legacy-v3.json` calibrates its scan to. */
 const PIXELS_PER_MM = 0.025
@@ -355,7 +355,7 @@ writeFileSync(OUT, `${JSON.stringify(fixture, null, 2)}\n`)
 // written in the canonical form every file in that folder is written in (README, "How it was
 // produced") — keys sorted, no whitespace, one trailing newline.
 mkdirSync(dirname(DOMAIN_OUT), { recursive: true })
-writeFileSync(DOMAIN_OUT, `${canonicalJson({ domainSchemaVersion: 8, project: current })}\n`)
+writeFileSync(DOMAIN_OUT, `${canonicalJson({ domainSchemaVersion: 9, project: current })}\n`)
 
 console.log(
   `make-renovation-36-seed: ${OUT}\n` +

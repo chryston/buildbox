@@ -22,6 +22,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
+import { currentSchemaOf } from '../../domain/testing'
 import type { Project } from '../../domain'
 import { UNLAYERED_LAYER_KEY, validateProject } from '../../domain'
 import { canonicalJson } from '../../lib'
@@ -33,7 +34,7 @@ const seed = JSON.parse(
   readFileSync(join(fixturesRoot, 'e2e', 'preview-seed', 'renovation-36.json'), 'utf8'),
 ) as { projects: { data: Project }[] }
 
-const base = seed.projects[0].data
+const base = currentSchemaOf(seed.projects[0].data, 8)
 
 /** Names the sweep may hand a layer; distinct, so a fresh name is never a duplicate of another. */
 const NAMES = Array.from({ length: 24 }, (_, index) => `Layer ${index + 1}`)

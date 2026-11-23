@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { canonicalJsonBytes, sha256Hex } from '../lib'
 import { DEFAULT_DRAWING_LAYERS, DOMAIN_SCHEMA_VERSION, MIGRATORS, type PlanView, type Project } from '../domain'
+import { withPlanViewRanges } from '../domain/testing'
 import { encodeProject } from './encode'
 import { migrateDomainProject, stageImport } from './import'
 import {
@@ -24,13 +25,14 @@ import {
   fixtureProject,
   legacyFixtureRecord,
   openingsFixtureProject,
+  planRangeFixtureProject,
   roomsFixtureProject,
   renovationFixtureProject,
 } from './testing'
 
 const ASSET_ENTRY = `assets/${FIXTURE_PLAN_IMAGE_HASH}.png`
 
-type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6' | 'v7' | 'v8'
+type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6' | 'v7' | 'v8' | 'v9'
 
 const fixtureDir = (version: FixtureVersion): URL => new URL(`../../fixtures/package/${version}/`, import.meta.url)
 const readFrom = (version: FixtureVersion) => (relative: string): Uint8Array =>
@@ -44,6 +46,7 @@ const readV5 = readFrom('v5')
 const readV6 = readFrom('v6')
 const readV7 = readFrom('v7')
 const readV8 = readFrom('v8')
+const readV9 = readFrom('v9')
 
 const ARCHIVE_V1 = readV1('reference.buildbox')
 const ARCHIVE_V2 = readV2('reference.buildbox')
@@ -61,6 +64,9 @@ const ARCHIVE_V7 = readV7('rooms.buildbox')
 // The v8 file is named for what the step added, as v5's, v6's and v7's were: it is the first Backup
 // whose Project carries a Design Option, and the first written by a preview build (#69).
 const ARCHIVE_V8 = readV8('renovation.buildbox')
+// The v9 file is named for what the step added, as the three before it were: it is the first Backup
+// whose Plan Views each carry a Vertical Range (#74).
+const ARCHIVE_V9 = readV9('plan-range.buildbox')
 const ASSET_BYTES = readV2(ASSET_ENTRY)
 
 /** The one Plan Image every fixture carries, served the way the export serves it. */
@@ -433,24 +439,29 @@ describe('the committed v7 Backup (#67)', () => {
 // Backup is, and the last case below is the one place that asserts from the outside what a build
 // one schema behind answers when it is handed it.
 describe('the committed v8 Backup (#69)', () => {
-  it('stages into the Project it was written from, unmigrated', async () => {
+  it('stages into the Project it was written from, read forward one step (#74)', async () => {
     const result = await stageImport(ARCHIVE_V8, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
-    expect(result.staged.project).toEqual(renovationFixtureProject())
-    expect(result.staged.migratedFrom).toBeNull()
+    // The scene comes through untouched. The only thing the ninth step adds is the range each view
+    // draws at, taken from the Floor it shows — and this fixture's Floor carries no limits, so both
+    // views get the Project-wide default of a Floor structural level to just below the ceiling.
+    expect(result.staged.project).toEqual(withPlanViewRanges(renovationFixtureProject()))
+    expect(result.staged.migratedFrom).toBe(8)
   })
 
   // Criterion 14: a BuildBox that stops at v7 has no eighth step to read this with, and #20 §5 says
   // what it owes the person — "saved by a newer BuildBox", before a single field is touched.
   it('is refused by a build one schema behind as saved by a newer BuildBox', () => {
     const record = JSON.parse(new TextDecoder().decode(readV8('project.json'))) as unknown
-    const v7Reader = migrateDomainProject(record, DOMAIN_SCHEMA_VERSION, MIGRATORS.slice(0, 7), 7, allocateIds())
+    const v7Reader = migrateDomainProject(record, 8, MIGRATORS.slice(0, 7), 7, allocateIds())
     if (v7Reader.ok) throw new Error('a build at schema v7 read a v8 Project')
     expect(v7Reader.problem).toEqual({ code: 'newer-schema', detail: { detected: 8, supported: 7 } })
   })
 
-  it('is re-encoded byte for byte by this build', async () => {
-    expect(await encodeProject(renovationFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V8)
+  it('keeps the canonical record it was written from, which this build no longer writes', () => {
+    // Being re-encoded byte for byte is the property of the Backup at the current schema — the v9
+    // file below. What a superseded file owes forever is that its own bytes are the canonical form
+    // of the Project they were written from, so the step above is the only thing between them.
     const canonical = canonicalOf(renovationFixtureProject())
     expect(new TextDecoder().decode(readV8('project.json'))).toBe(`${canonical}\n`)
   })
@@ -508,5 +519,50 @@ describe('the committed v8 Backup (#69)', () => {
 
   it('carries the same asset, byte for byte', () => {
     expect(readV8(ASSET_ENTRY)).toEqual(ASSET_BYTES)
+  })
+})
+
+// Criterion 14, the ninth schema (#74): the Backup this build writes, and what a build one schema
+// behind says when it is handed it.
+describe('the committed v9 Backup (#74)', () => {
+  it('stages into the Project it was written from, unmigrated', async () => {
+    const result = await stageImport(ARCHIVE_V9, { acceptPreview: false, allocateId: allocateIds() })
+    if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
+    expect(result.staged.project).toEqual(planRangeFixtureProject())
+    expect(result.staged.migratedFrom).toBeNull()
+  })
+
+  it('is re-encoded byte for byte by this build', async () => {
+    expect(await encodeProject(planRangeFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V9)
+    expect(new TextDecoder().decode(readV9('project.json'))).toBe(`${canonicalOf(planRangeFixtureProject())}\n`)
+  })
+
+  it('is described by a manifest that names domain schema v9', async () => {
+    const staged = await stageImport(ARCHIVE_V9, { acceptPreview: false, allocateId: allocateIds() })
+    if (!staged.ok) throw new Error('the fixture must stage')
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOf(planRangeFixtureProject()), 9))
+  })
+
+  // Criterion 14: a BuildBox that stops at v8 has no ninth step to read this with.
+  it('is refused by a build one schema behind as saved by a newer BuildBox', () => {
+    const record = JSON.parse(new TextDecoder().decode(readV9('project.json'))) as unknown
+    const v8Reader = migrateDomainProject(record, 9, MIGRATORS.slice(0, 8), 8, allocateIds())
+    if (v8Reader.ok) throw new Error('a build at schema v8 read a v9 Project')
+    expect(v8Reader.problem).toEqual({ code: 'newer-schema', detail: { detected: 9, supported: 8 } })
+  })
+
+  it('holds a Vertical Range on every Plan View, and two different ones', () => {
+    expect(planRangeFixtureProject().views.map((view) => view.planViewRange)).toEqual([
+      { lowerMm: 0, upperMm: 2600 },
+      { lowerMm: 900, upperMm: 1200 },
+    ])
+    // The v8 record beside it has none on either view — the step in one comparison.
+    const prior = JSON.parse(new TextDecoder().decode(readV8('project.json'))) as { views: object[] }
+    expect(prior.views).toHaveLength(2)
+    for (const view of prior.views) expect(view).not.toHaveProperty('planViewRange')
+  })
+
+  it('carries the same asset, byte for byte', () => {
+    expect(readV9(ASSET_ENTRY)).toEqual(ASSET_BYTES)
   })
 })

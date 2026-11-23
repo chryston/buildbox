@@ -1,7 +1,7 @@
 /**
  * The Export scene as a preview seed (#73).
  *
- * `fixtures/domain/v8/export.json` is the scene the export tests read: the renovation-views kitchen
+ * `fixtures/domain/v9/export.json` is the scene the export tests read: the renovation-views kitchen
  * with two Design Options, three Drawing Layers, four Placed Items filed on `Furniture`, and a view
  * `Ground Floor · Plan · Demolition` that hides the `Furniture` layer. The browser tier cannot read
  * that file — a preview build opens its own database and nothing else (#53) — so the scene has to
@@ -30,7 +30,7 @@ function fail(message: string): never {
 }
 
 const scene = JSON.parse(readFileSync(SCENE, 'utf8')) as { domainSchemaVersion: number; project: Project }
-if (scene.domainSchemaVersion !== 8) fail('the scene fixture is not a v8 Project')
+if (scene.domainSchemaVersion !== 9) fail('the scene fixture is not a v9 Project')
 if ((scene.project.drawingLayers ?? []).length === 0) fail('the scene fixture carries no Drawing Layers')
 const hidden = scene.project.views.find((view) =>
   Object.values(view.layerSettings ?? {}).some((setting) => setting.visible === false),
@@ -50,7 +50,7 @@ if (first === undefined) fail('the envelope seed holds no Project')
 if (first.id !== scene.project.id) {
   fail(`the envelope's first record is "${first.id}", the scene is "${scene.project.id}"`)
 }
-if (first.schemaVersion !== 8) fail(`the envelope's first record is schema v${first.schemaVersion}`)
+if (first.schemaVersion !== 9) fail(`the envelope's first record is schema v${first.schemaVersion}`)
 
 const fixture = {
   dbName: envelope.dbName,

@@ -1,5 +1,5 @@
 /**
- * Generate `fixtures/domain/v8/layers.json` and `layers-zero.json` (#71 criterion 3).
+ * Generate `fixtures/domain/v9/layers.json` and `layers-zero.json` (#71 criterion 3).
  *
  * Both files are the same Floor as `renovation-views.json` — Walls W-1…W-6, `Door 1`, the Kitchen,
  * the Bedroom, the two Options and the four saved views — reached through the Intents the editor
@@ -31,9 +31,9 @@ import type { EntityId, Project } from '../src/domain'
 import { canonicalJson } from '../src/lib'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const SOURCE = resolve(repoRoot, 'fixtures/domain/v8/renovation-views.json')
-const OUT = resolve(repoRoot, 'fixtures/domain/v8/layers.json')
-const ZERO_OUT = resolve(repoRoot, 'fixtures/domain/v8/layers-zero.json')
+const SOURCE = resolve(repoRoot, 'fixtures/domain/v9/renovation-views.json')
+const OUT = resolve(repoRoot, 'fixtures/domain/v9/layers.json')
+const ZERO_OUT = resolve(repoRoot, 'fixtures/domain/v9/layers-zero.json')
 
 const NOW = '2026-01-01T10:15:00+08:00'
 /** The issue's §2 default colours. */
@@ -53,7 +53,7 @@ let nextId = 0
 const newIds = (count: number): string[] => Array.from({ length: count }, () => `layers-${String(++nextId).padStart(3, '0')}`)
 
 const envelope = JSON.parse(readFileSync(SOURCE, 'utf8')) as { domainSchemaVersion: number; project: Project }
-if (envelope.domainSchemaVersion !== 8) fail('the source fixture is not a v8 Project')
+if (envelope.domainSchemaVersion !== 9) fail('the source fixture is not a v9 Project')
 
 /** One Intent, with the IDs it spends minted the way the app mints them. */
 function apply<T extends IntentType>(project: Project, type: T, payload: PayloadOf<T>, ids: string[] = []): Project {
@@ -156,7 +156,7 @@ for (const [name, project] of [['layers.json', current], ['layers-zero.json', ze
 
 const write = (path: string, project: Project): void => {
   mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(path, `${canonicalJson({ domainSchemaVersion: 8, project })}\n`)
+  writeFileSync(path, `${canonicalJson({ domainSchemaVersion: 9, project })}\n`)
 }
 write(OUT, current)
 write(ZERO_OUT, zero)

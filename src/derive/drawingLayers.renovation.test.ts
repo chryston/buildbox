@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import * as fc from 'fast-check'
-import renovationFixture from '../../fixtures/domain/v8/renovation-views.json?raw'
+import renovationFixture from '../../fixtures/domain/v9/renovation-views.json?raw'
 import type { DrawingLayer, LayerSetting, PlanView, Project, Wall } from '../domain'
 import { entityLayerId, UNLAYERED_LAYER_KEY } from '../domain'
 import { canonicalJson } from '../lib'

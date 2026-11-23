@@ -259,7 +259,7 @@ const counts = (option: DesignOption): string =>
   )} proposed`
 
 mkdirSync(dirname(OUT), { recursive: true })
-writeFileSync(OUT, `${canonicalJson({ domainSchemaVersion: 8, project })}\n`)
+writeFileSync(OUT, `${canonicalJson({ domainSchemaVersion: 9, project })}\n`)
 
 console.log(
   `make-renovation-reference: ${OUT}\n` +

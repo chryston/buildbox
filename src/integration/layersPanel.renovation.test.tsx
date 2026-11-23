@@ -7,7 +7,7 @@
  * assert the props; only this mount can assert that a click became exactly one labelled transaction
  * in the session's history and that the other three saved views of the same Project did not move.
  *
- * The fixture is `fixtures/domain/v8/layers.json`: three layers stored back-to-front as Services,
+ * The fixture is `fixtures/domain/v9/layers.json`: three layers stored back-to-front as Services,
  * Furniture, Structure, and four saved views — `Floor 1` with nothing said about any of them,
  * `Option A · Proposed` with Furniture hidden and Structure recoloured, `Option A · Demolition` with
  * an order of its own, `Option B · Combined` with Structure read-only and `Snap to hidden content`
@@ -38,7 +38,7 @@ const SERVICES = 'layers-002'
 const STRUCTURE = 'layers-003'
 
 function sceneProject(): Project {
-  const text = readFileSync(join(fixturesRoot, 'domain', 'v8', 'layers.json'), 'utf8')
+  const text = readFileSync(join(fixturesRoot, 'domain', 'v9', 'layers.json'), 'utf8')
   return structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project)
 }
 

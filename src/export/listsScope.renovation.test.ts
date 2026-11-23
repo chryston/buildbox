@@ -7,7 +7,7 @@
  * be the worst kind of surprise — so the snapshot is compared with itself across the call.
  */
 import { describe, expect, it } from 'vitest'
-import renovationFixture from '../../fixtures/domain/v8/renovation-views.json?raw'
+import renovationFixture from '../../fixtures/domain/v9/renovation-views.json?raw'
 import { warningMessages } from '../derive'
 import type { QuantityScope } from '../derive'
 import type { Project } from '../domain'

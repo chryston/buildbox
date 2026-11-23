@@ -48,7 +48,7 @@ const GPO = 'seed-item-028'
 const DINING_CHAIR = 'fp-sofa'
 
 const readProject = (name: string): Project => {
-  const text = readFileSync(join(fixturesRoot, 'domain', 'v8', name), 'utf8')
+  const text = readFileSync(join(fixturesRoot, 'domain', 'v9', name), 'utf8')
   return structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project)
 }
 

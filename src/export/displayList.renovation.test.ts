@@ -20,7 +20,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import renovationFixture from '../../fixtures/domain/v8/renovation-views.json?raw'
+import renovationFixture from '../../fixtures/domain/v9/renovation-views.json?raw'
 import type { PlanView, Project } from '../domain'
 import {
   deriveRooms,
