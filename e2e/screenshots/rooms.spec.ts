@@ -75,6 +75,10 @@ test('a Room selected and an Outline refused', async ({ page }) => {
   await clickMm(page, { x: 9000, y: 2500 })
   await clickMm(page, { x: 8000, y: 3500 })
   await clickMm(page, { x: 6500, y: 2500 })
+  // Park the pointer off the canvas: the draft reads the live pointer (the chip, and the
+  // provisional corner the overlap is measured with), and where a click leaves it differs per
+  // runner (#138). With no pointer the draft is only its committed corners.
+  await page.mouse.move(5, 5)
 
   await expect(page.getByTestId('room-draft-blocked')).toContainText('Overlaps Bedroom by')
   await expect(page.getByTestId('room-draft-close')).toBeDisabled()
