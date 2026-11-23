@@ -154,11 +154,15 @@ describe('Elevation Views in the split workspace', () => {
 
     // The card edits the open view, which is still the first one until the picker says otherwise.
     await user.clear(screen.getByTestId('elevation-name-field'))
-    await user.type(screen.getByTestId('elevation-name-field'), 'Kitchen{Enter}')
-    // The name is refused and nothing is written (#75 §3): the second view keeps its own name and
-    // the first one is untouched.
+    // The open view is the first one, so the name already taken by the other is `Hall`.
+    await user.type(screen.getByTestId('elevation-name-field'), 'Hall{Enter}')
+    // The name is refused where it was typed, and nothing is written (#75 §3).
+    expect(await screen.findByTestId('elevation-name-field-error')).toHaveTextContent('Hall')
     expect(view.project().elevationViews?.map((entry) => entry.name)).toEqual(['Kitchen', 'Hall'])
+    // Backing out of the field with Escape puts the view's own name back and takes the sentence away.
+    await user.type(screen.getByTestId('elevation-name-field'), '{Escape}')
     expect(screen.getByTestId('elevation-name-field')).toHaveValue('Kitchen')
+    expect(screen.queryByTestId('elevation-name-field-error')).toBeNull()
   })
 
   it('asks before deleting, sends nothing on Cancel and the view on Delete', async () => {
@@ -261,6 +265,22 @@ describe('Elevation Views in the split workspace', () => {
     expect(view.project().elevationViews ?? []).toHaveLength(0)
     // The tool is put down too, so the crosshair cursor does not outlive the draft.
     expect(screen.getByTestId('tool-select')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('gives the line two endpoint handles and sends nothing a pointer cannot place', async () => {
+    await renderWorkspace()
+    const id = await createView('Kitchen')
+    await screen.findByTestId(`split-pane-${id}`)
+    // Criterion 6: the endpoints are handles, not decoration — one at each end of the line.
+    expect(screen.getByTestId(`elevation-endpoint-start-${id}`)).toBeInTheDocument()
+    expect(screen.getByTestId(`elevation-endpoint-end-${id}`)).toBeInTheDocument()
+
+    // jsdom implements no `getScreenCTM`, so a drag has no Floor millimetres to answer with and must
+    // write nothing rather than guess. The gesture itself is e2e's, where the matrix is real.
+    fireEvent.pointerDown(screen.getByTestId(`elevation-endpoint-end-${id}`), { clientX: 400, clientY: 200 })
+    fireEvent.pointerMove(window, { clientX: 460, clientY: 240 })
+    fireEvent.pointerUp(window, { clientX: 460, clientY: 240 })
+    expect(view.project().elevationViews?.[0]?.line).toEqual(LINE)
   })
 
   it('offers the tool in every Renovation Display and gates it on calibration', async () => {

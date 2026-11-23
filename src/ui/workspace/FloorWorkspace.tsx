@@ -15,7 +15,7 @@
  * owners of it (#25): every selector below takes the Floor id, so nothing drawn, snapped or
  * selected can cross a Floor boundary.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates } from '../../derive'
 import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
@@ -82,11 +82,12 @@ import { SavedViewCard } from './SavedViewCard'
 // a view line, and the confirm that removes one.
 import { ElevationPane, elevationPaneTitle } from './ElevationPane'
 import { ElevationViewCard } from './ElevationViewCard'
+import { elevationLineProblem } from './ElevationDefinitionSection'
 import { DeleteElevationViewDialog } from './DeleteElevationViewDialog'
 import { ElevationDraftOverlay } from './elevation/ElevationDraftOverlay'
 import type { ElevationDraftResult } from './elevation/ElevationDraftOverlay'
 import type { ElevationDraft } from './elevation/elevationDraft'
-import { depthDrag, elevationArrowPath, elevationLabelAt, elevationPrismPoints, emptyElevationDraft, farEdgeHandle } from './elevation/elevationDraft'
+import { clampPointToCanvas, depthDrag, elevationArrowPath, elevationLabelAt, elevationPrismPoints, emptyElevationDraft, farEdgeHandle } from './elevation/elevationDraft'
 import { PlanViewRangeSection, rangeGaugeScale } from './PlanViewRangeSection'
 import type { RangeGaugeScale } from './PlanViewRangeSection'
 import { SelectionInspector } from './SelectionInspector'
@@ -2019,14 +2020,95 @@ export function FloorWorkspace(): ReactNode {
   const [depthDragId, setDepthDragId] = useState<string | null>(null)
   /** The depth a far-edge drag is showing mid-gesture; the document still holds the old one. */
   const [previewDepth, setPreviewDepth] = useState<{ viewId: string; depth: number } | null>(null)
+  /** The line an endpoint drag is showing mid-gesture, for the same reason. */
+  const [previewLine, setPreviewLine] = useState<{ viewId: string; line: ElevationView['line'] } | null>(null)
+
+  /**
+   * The canvas's own box, measured as the layout changes.
+   *
+   * Two things need it and nothing else does: a label that would otherwise slide off the edge of the
+   * screen has to be pulled back inside it, and a drag whose pointer reaches the edge has to pan the
+   * plan under the hand. Both read it in Floor millimetres through the viewport, so the answer is the
+   * same at `Fit` and at 400%.
+   */
+  const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 })
+  useLayoutEffect(() => {
+    const el = hostRef.current
+    if (el === null) return
+    const measure = (): void => {
+      const rect = el.getBoundingClientRect()
+      setCanvasSize({ width: rect.width, height: rect.height })
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  /** A point pulled inside the visible canvas, so a name never disappears off the edge (#75 §3). */
+  const clampToCanvas = (at: Pt): Pt =>
+    viewport === undefined
+      ? at
+      : clampPointToCanvas(at, viewport, canvasSize.width, canvasSize.height, 48)
+
+  /** How close to the edge a drag has to come before the plan starts moving under the pointer. */
+  const AUTO_PAN_EDGE_PX = 28
+
+  /**
+   * Pan the plan when a marker drag's pointer reaches the canvas edge (#75 §3).
+   *
+   * The step is proportional to how far past the threshold the pointer is, so easing up to the edge
+   * nudges and pushing hard across it runs. It writes the store directly, because the gesture reads
+   * the viewport back on the next move and a render's copy would be a frame behind.
+   */
+  const autoPanToward = (clientX: number, clientY: number): void => {
+    const el = hostRef.current
+    const key = viewKey
+    const current = key === null ? undefined : workspaceStore.getState().viewports[key]
+    if (el === null || key === null || current === undefined) return
+    const rect = el.getBoundingClientRect()
+    const near = AUTO_PAN_EDGE_PX
+    const step = (over: number): number => Math.max(-near, Math.min(near, over))
+    const dx = clientX < rect.left + near
+      ? step(near - (clientX - rect.left))
+      : clientX > rect.right - near
+        ? -step(near - (rect.right - clientX))
+        : 0
+    const dy = clientY < rect.top + near
+      ? step(near - (clientY - rect.top))
+      : clientY > rect.bottom - near
+        ? -step(near - (rect.bottom - clientY))
+        : 0
+    if (dx === 0 && dy === 0) return
+    const next = { ...current, panX: current.panX + dx, panY: current.panY + dy }
+    setViewport(next)
+  }
 
   /** A client point in Floor millimetres, through the canvas's own matrix — the one truth about zoom. */
   const floorPointAt = (clientX: number, clientY: number): Pt | null => {
     const svg = svgRef.current
     const ctm = svg?.getScreenCTM() ?? null
-    if (svg === null || ctm === null) return null
+    // No matrix, or no platform that offers one, and there is no honest answer to give: a gesture
+    // that cannot say where its pointer sits on the Floor writes nothing rather than guesses.
+    if (svg === null || ctm === null || typeof DOMPoint === 'undefined') return null
     const point = new DOMPoint(clientX, clientY).matrixTransform(ctm.inverse())
     return { x: point.x, y: point.y }
+  }
+
+  /** The three window listeners one marker gesture needs, taken off again on release or cancel. */
+  const onMarkerMove = (
+    move: (event: PointerEvent) => void,
+    finish: (event: PointerEvent) => void,
+  ): (() => void) => {
+    const cancel = (event: PointerEvent): void => finish(event)
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', finish)
+    window.addEventListener('pointercancel', cancel)
+    return () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', finish)
+      window.removeEventListener('pointercancel', cancel)
+    }
   }
 
   /**
@@ -2045,22 +2127,66 @@ export function FloorWorkspace(): ReactNode {
       return mm === null ? null : depthDrag({ start: entry.line.start, end: entry.line.end, side: entry.side }, mm)
     }
     const move = (moveEvent: PointerEvent): void => {
+      autoPanToward(moveEvent.clientX, moveEvent.clientY)
       const next = at(moveEvent)
       if (next !== null) setPreviewDepth({ viewId, depth: next })
     }
     const finish = (upEvent: PointerEvent): void => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', finish)
-      window.removeEventListener('pointercancel', finish)
+      off()
       setDepthDragId(null)
       setPreviewDepth(null)
       const next = at(upEvent)
       if (next === null || Math.abs(next - entry.depth) < 0.5) return
       send('elevationView.edit', { viewId, depth: Math.round(next) })
     }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', finish)
-    window.addEventListener('pointercancel', finish)
+    const off = onMarkerMove(move, finish)
+  }
+
+  /**
+   * One gesture on an endpoint, one Intent (#75 §3): the line follows the pointer and the whole line is
+   * written on release — never half of it, which is what a field-by-field write would do. A line whose
+   * ends have met is refused here exactly as the number boxes refuse it, so a drag cannot put the
+   * document into a state the card would then reject.
+   */
+  const beginEndpointDrag = (
+    viewId: string,
+    corner: 'start' | 'end',
+    event: ReactPointerEvent<SVGElement>,
+  ): void => {
+    event.stopPropagation()
+    const entry = elevationViews.find((each) => each.id === viewId)
+    if (entry === undefined) return
+    const original = entry.line
+    setDepthDragId(`${viewId}:${corner}`)
+    const at = (point: { clientX: number; clientY: number }): ElevationView['line'] | null => {
+      const mm = floorPointAt(point.clientX, point.clientY)
+      if (mm === null) return null
+      const next: ElevationView['line'] = {
+        start: corner === 'start' ? { x: mm.x, y: mm.y } : original.start,
+        end: corner === 'end' ? { x: mm.x, y: mm.y } : original.end,
+      }
+      return elevationLineProblem(next) === null ? next : null
+    }
+    const move = (moveEvent: PointerEvent): void => {
+      autoPanToward(moveEvent.clientX, moveEvent.clientY)
+      const next = at(moveEvent)
+      if (next !== null) setPreviewLine({ viewId, line: next })
+    }
+    const finish = (upEvent: PointerEvent): void => {
+      off()
+      setDepthDragId(null)
+      setPreviewLine(null)
+      const next = at(upEvent)
+      if (next === null) return
+      const same = next.start.x === original.start.x && next.start.y === original.start.y
+        && next.end.x === original.end.x && next.end.y === original.end.y
+      if (same) return
+      send('elevationView.edit', { viewId, line: {
+        start: { x: Math.round(next.start.x), y: Math.round(next.start.y) },
+        end: { x: Math.round(next.end.x), y: Math.round(next.end.y) },
+      } })
+    }
+    const off = onMarkerMove(move, finish)
   }
 
   const planElevationMarkers: ReactNode =
@@ -2069,10 +2195,12 @@ export function FloorWorkspace(): ReactNode {
         {elevationViews.map((entry) => {
           const open = entry.id === elevationView?.id
           const depth = previewDepth?.viewId === entry.id ? previewDepth.depth : entry.depth
-          const prism = elevationPrismPoints(entry.line.start, entry.line.end, entry.side, depth)
-          const label = elevationLabelAt(entry.line.start, entry.line.end, entry.side, depth)
-          const handle = farEdgeHandle(entry.line.start, entry.line.end, entry.side, depth)
+          const line = previewLine?.viewId === entry.id ? previewLine.line : entry.line
+          const prism = elevationPrismPoints(line.start, line.end, entry.side, depth)
+          const label = clampToCanvas(elevationLabelAt(line.start, line.end, entry.side, depth))
+          const handle = farEdgeHandle(line.start, line.end, entry.side, depth)
           const hairline = 1.5 / viewport.zoom
+          const endpoint = 4 / viewport.zoom
           return (
             <g key={entry.id} data-testid={`elevation-marker-${entry.id}`} data-open={open ? 'true' : 'false'}>
               {open && prism.length === 4 && (
@@ -2089,16 +2217,16 @@ export function FloorWorkspace(): ReactNode {
               )}
               <line
                 data-testid={`elevation-line-${entry.id}`}
-                x1={entry.line.start.x}
-                y1={entry.line.start.y}
-                x2={entry.line.end.x}
-                y2={entry.line.end.y}
+                x1={line.start.x}
+                y1={line.start.y}
+                x2={line.end.x}
+                y2={line.end.y}
                 stroke="var(--bb-accent)"
                 strokeWidth={open ? hairline * 1.6 : hairline}
               />
               <path
                 data-testid={`elevation-arrow-${entry.id}`}
-                d={elevationArrowPath(entry.line.start, entry.line.end, entry.side, depth, depth * 0.45)}
+                d={elevationArrowPath(line.start, line.end, entry.side, depth, depth * 0.45)}
                 fill="none"
                 stroke="var(--bb-accent)"
                 strokeWidth={hairline}
@@ -2114,6 +2242,21 @@ export function FloorWorkspace(): ReactNode {
               >
                 {entry.name}
               </text>
+              {(['start', 'end'] as const).map((corner) => (
+                <rect
+                  key={corner}
+                  data-testid={`elevation-endpoint-${corner}-${entry.id}`}
+                  x={line[corner].x - endpoint}
+                  y={line[corner].y - endpoint}
+                  width={endpoint * 2}
+                  height={endpoint * 2}
+                  fill="var(--bb-accent)"
+                  stroke="var(--bb-bg-app)"
+                  strokeWidth={hairline}
+                  style={{ cursor: depthDragId === `${entry.id}:${corner}` ? 'grabbing' : 'grab' }}
+                  onPointerDown={(event) => beginEndpointDrag(entry.id, corner, event)}
+                />
+              ))}
               {open && handle !== null && (
                 <circle
                   data-testid={`elevation-depth-handle-${entry.id}`}

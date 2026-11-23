@@ -148,3 +148,53 @@ export function farEdgeHandle(start: Pt, end: Pt, side: ElevationViewSide, depth
 export function depthDrag(draft: { start: Pt; end: Pt; side: ElevationViewSide }, at: Pt): number {
   return distanceFromLine(draft.start, draft.end, at)
 }
+
+/** The part of the Floor a canvas is showing, in Floor millimetres. */
+export interface CanvasBounds {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+/**
+ * The visible rectangle of a canvas, given its size in CSS pixels and the viewport drawn in it.
+ *
+ * `null` when there is nothing to answer with: no size yet (the host has not been measured), or a
+ * canvas so small that the two margins overlap and there is no inside left — a point asked to stay in
+ * an empty box is better left where it was.
+ */
+export function canvasBounds(
+  viewport: { zoom: number, panX: number, panY: number },
+  widthPx: number,
+  heightPx: number,
+  marginPx: number,
+): CanvasBounds | null {
+  if (widthPx <= 0 || heightPx <= 0) return null
+  const margin = marginPx / viewport.zoom
+  const left = -viewport.panX / viewport.zoom + margin
+  const top = -viewport.panY / viewport.zoom + margin
+  const right = (widthPx - viewport.panX) / viewport.zoom - margin
+  const bottom = (heightPx - viewport.panY) / viewport.zoom - margin
+  return right > left && bottom > top ? { left, top, right, bottom } : null
+}
+
+/**
+ * A point pulled inside the visible canvas (#75 §3): a view's name and its far-edge handle have to
+ * stay on screen when the view itself runs off the edge, and the margin is given in screen pixels so
+ * the keep-out band is the same size at `Fit` and at 400%.
+ */
+export function clampPointToCanvas(
+  at: Pt,
+  viewport: { zoom: number, panX: number, panY: number },
+  widthPx: number,
+  heightPx: number,
+  marginPx: number,
+): Pt {
+  const box = canvasBounds(viewport, widthPx, heightPx, marginPx)
+  if (box === null) return at
+  return {
+    x: Math.min(Math.max(at.x, box.left), box.right),
+    y: Math.min(Math.max(at.y, box.top), box.bottom),
+  }
+}
