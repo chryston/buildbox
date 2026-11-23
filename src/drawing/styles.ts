@@ -430,9 +430,9 @@ export const RANGE_FADED_OPACITY = 0.28
  * `undefined` means In range, and In range is the normal graphics — the row, unchanged. `faded`
  * is the one opacity token, on the words as much as on the shape they name. `outline` takes the
  * fill out and dashes the stroke; the stroke keeps its colour, because a `Services` layer drawn
- * in a colour of its own is still one thing when the section plane passes under it, and a label's
- * glyphs then take that same colour — the words follow the line they belong to, which is what
- * makes an Above-range cabinet readable as the same cabinet its name names.
+ * in a colour of its own is still one thing when the section plane passes under it — and a label
+ * is already drawn in that colour, so the words follow the line they belong to without being
+ * touched.
  *
  * A row whose fill is `transparent` is a hit shape and not ink: `room-hit`, `opening-hit` and
  * `cabinet-unit-hit` are drawn so the pointer has something to land on. Taking their fill away
@@ -449,7 +449,11 @@ export function rangeStyle(
 ): Style {
   if (paint === undefined) return style
   if (paint === 'faded') return { ...style, opacity: RANGE_FADED_OPACITY }
-  if (kind === 'text') return { ...style, fill: style.stroke ?? style.fill }
+  // A label needs nothing done to it to be "the dashed-style colour": every text row on a Plan View
+  // paints its glyphs in the entity's own colour (`plan-label`'s fill is `item`), and that is the
+  // colour the outline it belongs to is stroked in. Taking the fill out, as a path's does, would
+  // simply erase the word.
+  if (kind === 'text') return style
   if (style.fill === 'transparent') return style
   return { ...style, fill: 'none', dash: style.dash ?? ['range-dash', 'range-gap'] }
 }
