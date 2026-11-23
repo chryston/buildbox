@@ -23,7 +23,7 @@ import {
   nameKey,
   savedViewsOf,
 } from '../../domain'
-import type { DrawingLayer, EntityId, PlanView, Project, ProposedModel, SavedViewSettings } from '../../domain'
+import type { DrawingLayer, EntityId, Project, ProposedModel, SavedViewSettings } from '../../domain'
 import type { DeleteLayerReview, Locator, RenovationIntentType } from '../intents'
 import type { Handler, IntentHandler } from './context'
 import { containerOf, findDesign, refuse, savedViewPath, spendIds } from './support'
