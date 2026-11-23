@@ -31,7 +31,7 @@ import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 're
 import type { ElevationView, Point2, RenovationDisplay } from '../../domain'
 import { elevationFrameOf } from '../../derive'
 import type { ElevationScene } from '../../derive'
-import type { DisplayList, Sizing } from '../../drawing'
+import type { DisplayList, Rect, Sizing } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
 import { STRINGS } from '../strings'
 import { RENOVATION_STRINGS } from '../strings/renovation'
@@ -57,6 +57,12 @@ export interface ElevationPaneProps {
   view: ElevationView
   scene: ElevationScene
   list: DisplayList
+  /**
+   * The drawing area in millimetres, from `drawElevationView`: the content's own box, which excludes
+   * the words that stand off it. `Fit` centres this and reserves the words in pixels, because their
+   * size is a screen constant and the extent's millimetres are not.
+   */
+  area: Rect
   /**
    * The height the drawing's `y = 0` stands at, from `drawElevationView`: the pane's own y grows
    * downward from it, so every gesture that reads a pointer back as a height converts through it.
@@ -110,7 +116,7 @@ export function elevationArrowDeg(view: ElevationView): number {
 /** What the pane is looking at, as the split's CSS and the browser suite need to name it. */
 export function ElevationPane(props: ElevationPaneProps): ReactNode {
   const {
-    view, scene, list, topMm, sizing, optionName, display, selectedIds, onPick,
+    view, scene, list, area, topMm, sizing, optionName, display, selectedIds, onPick,
     viewport, onViewport, hostRef, resolveAsset, dragCandidates = null, onVerticalExtent,
   } = props
   const svgRef = useRef<SVGSVGElement>(null)
@@ -138,12 +144,35 @@ export function ElevationPane(props: ElevationPaneProps): ReactNode {
   }, [hostRef])
 
   // No remembered viewport for this view: fit the drawing once the host has a size, exactly as the Plan
-  // canvas fits a Floor.
+  // canvas fits a Floor. What gets fitted is the drawing AREA, and the words that stand off it — the
+  // ruler's numbers to the left, the Datum labels above and below — are reserved in pixels. They have
+  // to be: their size is a screen constant, so in millimetres they grow with the picture, and a fit
+  // that trusted the extent's millimetres (measured at whatever zoom the list was drawn at) slides the
+  // whole picture left, crops the numbers at the pane's edge, and leaves the spare room over on the
+  // right where nothing needs it.
   useEffect(() => {
     if (viewport !== null || hostSize.width <= 0 || hostSize.height <= 0) return
-    const fitted = fitViewport(hostSize.width, hostSize.height, list.bounds.w, list.bounds.h)
-    onViewport({ zoom: clampZoom(fitted.zoom), panX: fitted.panX, panY: fitted.panY })
-  }, [viewport, hostSize, list, onViewport])
+    const { bounds } = list
+    // The pane is a screen surface; a paper sizing has no pixels to reserve, and none to get wrong.
+    const px = sizing.kind === 'screen' ? sizing.pxPerMm : 1
+    const over = {
+      left: Math.max(0, area.x - bounds.x) * px,
+      right: Math.max(0, bounds.x + bounds.w - (area.x + area.w)) * px,
+      top: Math.max(0, area.y - bounds.y) * px,
+      bottom: Math.max(0, bounds.y + bounds.h - (area.y + area.h)) * px,
+    }
+    const fitted = fitViewport(
+      hostSize.width - over.left - over.right,
+      hostSize.height - over.top - over.bottom,
+      area.w,
+      area.h,
+    )
+    onViewport({
+      zoom: clampZoom(fitted.zoom),
+      panX: fitted.panX - area.x * fitted.zoom + over.left,
+      panY: fitted.panY - area.y * fitted.zoom + over.top,
+    })
+  }, [viewport, hostSize, list, area, sizing, onViewport])
 
   // The wheel needs a non-passive listener to keep the page from scrolling, and it goes on the host
   // rather than the `<svg>` so an overlay above the canvas cannot swallow it (#64 §12).

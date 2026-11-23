@@ -3099,6 +3099,7 @@ export function FloorWorkspace(): ReactNode {
                         view={elevationView}
                         scene={elevationSceneValue}
                         list={elevationDrawing.list.list}
+                        area={elevationDrawing.list.area}
                         topMm={elevationDrawing.list.topMm}
                         sizing={elevationDrawing.sizing}
                         optionName={

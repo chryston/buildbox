@@ -214,6 +214,18 @@ test.describe('Elevation Views in the split workspace', () => {
     expect(glyph.height).toBeLessThan(60)
     const face = (await rowOf(page, WALL).first().boundingBox())!
     expect(await inkShare(page, face)).toBeGreaterThan(0.5)
+    // Nothing the pane drew is cropped by the pane. The ruler's words stand off the drawing's left
+    // edge, so they are the first thing a fit that centres the drawing's size rather than its box
+    // slides out of sight — and a cropped number is a drawing that lies about a height.
+    const paneBox = (await page.getByTestId('elevation-pane').boundingBox())!
+    const words = await page.locator('[data-testid="elevation-canvas"] text').all()
+    expect(words.length).toBeGreaterThan(0)
+    for (const word of words) {
+      const box = (await word.boundingBox())!
+      const text = await word.textContent() ?? ''
+      expect(box.x, text).toBeGreaterThanOrEqual(paneBox.x)
+      expect(box.x + box.width, text).toBeLessThanOrEqual(paneBox.x + paneBox.width)
+    }
   })
 
   test('selecting in either pane selects in both (#75 criterion 11)', async ({ page }) => {

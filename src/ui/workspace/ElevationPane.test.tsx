@@ -56,6 +56,7 @@ const BASE = {
   scene,
   list,
   topMm: drawing.topMm,
+  area: drawing.area,
   sizing: SIZING,
   optionName: null,
   display: 'existing',
