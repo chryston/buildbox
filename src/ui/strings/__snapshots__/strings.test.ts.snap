@@ -358,6 +358,7 @@ exports[`the copy > is the whole vocabulary of the interface 1`] = `
   "planViewNameField": "Plan View name",
   "planViewNameRequired": "Give this Plan View a name",
   "planViewNameTaken": [Function],
+  "planViewRangeLegend": "In range: solid · Above range: dashed · Below range: faded. This range belongs to this Plan View only.",
   "position": "Position",
   "positionAtEnd": "At the end",
   "positionAtTop": "At the top",

@@ -30,7 +30,7 @@ import {
   drawWarningBadges,
   displayRects,
 } from '../../drawing'
-import type { BadgeSubject, DisplayList, LayerGates, OpeningPreview, PlanPreview, RoomProposal, Sizing, WallOpenings } from '../../drawing'
+import type { BadgeSubject, DisplayList, LayerGates, OpeningPreview, PlanPreview, RangeGates, RoomProposal, Sizing, WallOpenings } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
 import { OverlapCycleList } from './renovation/OverlapCycleList'
 import { cycleOrder, nextCycle, reachableCandidates } from './selection/overlapCycle'
@@ -142,6 +142,15 @@ export interface PlanViewCanvasProps {
    * canvas whose gates rode on the Display would silently stop gating one.
    */
   layerGates?: LayerGates | null
+  /**
+   * This saved view's Plan View Range (#74 §3), answered per entity by the caller. Absent means the
+   * drawing is not a Plan View's, or the range is the whole world: everything is drawn normally.
+   *
+   * Like `layerGates`, and for the same reason, this is a prop of its own: the range is a property of
+   * the view, not of the Design Option, and it changes only how a thing is drawn and where it paints
+   * inside its own band — never whether it is drawn, and never what a click can reach.
+   */
+  rangeGates?: RangeGates | null
   /** The selected Wall: drawn with a heavier line and its end handles (#64 §15). */
   selectedWallId?: string | null
   /** A Wall band was clicked; the selection moves to it (#64 §15). */
@@ -211,7 +220,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     tool, selection, onSelect, onCursorChange, onCanvasClick, dragPreview, onDragPreview, onMoveItem, onRotateItem,
     editLocked = false,
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
-    angleSnap, overlay, htmlOverlay, walls, renovation = null, layerGates = null, selectedWallId = null, onSelectWall,
+    angleSnap, overlay, htmlOverlay, walls, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
     openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
     rooms = null, selectedRoomId = null, onSelectRoom, roomProposal = null,
     warningSubjects = [], onSelectWarningBadge,
@@ -490,6 +499,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       sizing,
       renovation: states === null ? null : { states },
       layers,
+      range: rangeGates,
       showPlanImage,
       preview,
       selectedWallId,

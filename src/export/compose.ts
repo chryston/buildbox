@@ -33,6 +33,7 @@ import {
   effectiveFloor,
   effectiveItemDetail,
   effectiveModel,
+  rangeClasses,
 } from '../derive'
 import type { RenovationState } from '../derive'
 import { viewDesignOptionId, viewRenovationDisplay } from '../domain'
@@ -120,6 +121,16 @@ function rawDrawing(
     const states = composition.optionId === null
       ? null
       : displayStates(displayModel(effectiveModel(project, floorId, composition.optionId), viewRenovationDisplay(planView)))
+    // #74 §3: the sheet carries the range of the Plan View it was composed from, because a drawing on
+    // paper that quietly redashed every cabinet the section plane passes under would be a different
+    // drawing from the one on the screen. The classification reads the Existing Model — the same one
+    // the Openings above are resolved against — and the scaling of the geometry below cannot change
+    // it, because the answer is keyed by entity.
+    const classes = rangeClasses(
+      effectiveModel(project, floorId, composition.optionId),
+      project.itemDesigns,
+      planView.planViewRange,
+    )
     const { list } = drawFloorView(
       {
         floor: scaleDerivedFloor(effectiveFloor(drawn, revision, floorId, composition.optionId), shrink),
@@ -139,6 +150,7 @@ function rawDrawing(
         showPlanImage: planView.showPlanImage,
         renovation: states === null ? null : { states },
         layers: composition.gates,
+        range: { classOf: (id) => classes.get(id) ?? 'in' },
         formatRoomLabel: roomLabel,
       },
     )

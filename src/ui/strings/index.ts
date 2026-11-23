@@ -628,6 +628,9 @@ export const STRINGS = {
   showPlanImage: 'Show Plan Image',
   calibrateEllipsis: 'Calibrate…',
   fit: 'Fit',
+  /** The one line that says what the drawing's marks mean (#74 §3), worded exactly as resolved. */
+  planViewRangeLegend:
+    'In range: solid · Above range: dashed · Below range: faded. This range belongs to this Plan View only.',
   // The Duplicate Floor dialog (#64 §17).
   duplicateItemFallback: 'Item',
   floorCopyName: (name: string): string => `${name} copy`,

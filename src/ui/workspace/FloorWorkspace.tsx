@@ -17,10 +17,10 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, snapCandidateAllowed } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, rangeClasses, snapCandidateAllowed } from '../../derive'
 import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings } from '../../drawing'
-import type { BadgeSubject, LayerGates, OpeningPreview, RoomProposal } from '../../drawing'
+import type { BadgeSubject, LayerGates, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
 import type { Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
 import { designOptionsOf, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride } from '../../domain'
 import type { SessionAsset } from '../../session'
@@ -1551,6 +1551,23 @@ export function FloorWorkspace(): ReactNode {
   }, [project, view, entityLayerKey, showHiddenToolNotice])
 
   /**
+   * This view's Plan View Range, answered per entity (#74 §3): the same classification the cycle
+   * orders by and the inspector reads, computed once here because the canvas may not read the domain.
+   *
+   * An entity absent from the map is In range — the kinds with no Vertical Extent, a Room and an
+   * Annotation, are absent by construction — so the drawing's own default and this answer agree.
+   */
+  const rangeGates: RangeGates | null = useMemo(() => {
+    if (view === null || floorId === null) return null
+    const classes = rangeClasses(
+      effectiveModel(project, floorId, renovationOptionId),
+      project.itemDesigns,
+      view.planViewRange,
+    )
+    return { classOf: (id) => classes.get(id) ?? 'in' }
+  }, [project, view, floorId, renovationOptionId])
+
+  /**
    * Whether one entity's geometry may be snapped to in this view (#71 criterion 12): hidden or
    * non-selectable content is not a target, and `Snap to hidden content` is the one switch that puts
    * it back. Picking stays impossible either way — that answer is `layerAccessOf`'s, above.
@@ -2230,6 +2247,7 @@ export function FloorWorkspace(): ReactNode {
                     }
               }
               layerGates={layerGates}
+              rangeGates={rangeGates}
               selectedWallId={wallSelection}
               rooms={floorRooms}
               selectedRoomId={roomSelection}
