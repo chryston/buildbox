@@ -8,8 +8,7 @@
  * The scene is `fixtures/domain/v8/export.json`, the export tests' own kitchen, installed as
  * `fixtures/e2e/preview-seed/renovation-export.json` by `scripts/make-renovation-export-seed.ts`:
  * two Design Options, three Drawing Layers, four Placed Items filed on `Furniture`, and the view
- * `Ground Floor · Plan · Demolition`, which hides that layer. It runs only against a
- * `VITE_FF_RENOVATION` build (`npm run test:e2e:renovation`).
+ * `Ground Floor · Plan · Demolition`, which hides that layer.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'

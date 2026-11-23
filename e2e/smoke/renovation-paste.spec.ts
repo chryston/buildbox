@@ -15,7 +15,7 @@
  * a name match to be offered and the other has nothing to answer with but a new layer.
  *
  * The workspace has one selection, not a set, so each Copy takes one record; the multi-record copy
- * is exercised at the edit layer. It runs only against a `VITE_FF_RENOVATION` build.
+ * is exercised at the edit layer.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'

@@ -90,10 +90,9 @@ other files use. The step adds one Project field, `designOptions`, and this is t
 carries a non-empty pair of them: `Option A` and `Option B`, each proposing nothing, beside six
 Walls, three Openings, two Rooms and one Placed Item.
 
-v8 is dark. `DOMAIN_SCHEMA_VERSION` is 8 only in a `VITE_FF_RENOVATION=true` build, so
-`src/domain/fixtures.test.ts` reads this folder only when the flag is on and stops at v7 otherwise.
-The file stays on disk either way — the golden of a schema on its way in is not deleted because a
-flag is off — and when `#73` turns the flag on it becomes the version's golden unchanged.
+v8 is the current schema. `DOMAIN_SCHEMA_VERSION` is 8 in every build since #73 turned the
+renovation model on, so `src/domain/fixtures.test.ts` reads this folder to the end and holds this
+file as the version's golden.
 
 `v8/renovation-views.json` is the same Project with the renovation work in it, drawn by
 `scripts/make-renovation-views-seed.ts` through the Intents the app dispatches, and carried by

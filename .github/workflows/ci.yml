@@ -49,10 +49,6 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: test
         run: npm test
-      - name: test (renovation flag on)
-        # #69 ships dark, and one Vitest run carries one flag value, so the suites that exercise a
-        # Design Option are a second run rather than a second project of the first.
-        run: npm run test:renovation
       - name: build
         run: npm run build
       - uses: actions/upload-artifact@v4
@@ -89,34 +85,6 @@ jobs:
             playwright-report/
             test-results/
 
-  # The dark feature's smoke tier (#69 criterion 13). `test:e2e:renovation` builds with
-  # `.env.renovation` itself — the flag is baked in at build time, so there is no separate build
-  # step and no chance of serving a `dist` that cannot answer the spec — and serves it on its own
-  # port. Firefox runs the same spec nightly, the way the flag-off set is split.
-  e2e-renovation:
-    name: e2e-renovation
-    needs: verify
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - name: install
-        run: npm ci
-      - name: browser
-        run: npx playwright install --with-deps chromium
-      - name: e2e (renovation flag on)
-        run: npm run test:e2e:renovation -- --project=renovation-chromium
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: playwright-results-renovation
-          path: |
-            playwright-report/
-            test-results/
-
   # Screenshot baselines in the pinned Playwright container (#39, #20 §9.5, §13.15).
   # Add "CI / screenshots" to the branch's required status checks. fetch-depth: 0 so the
   # prototype commits the comparison helper renders are reachable; the runner image already
@@ -141,28 +109,6 @@ jobs:
           name: screenshots
           path: test-results/
 
-  # The dark feature's baselines (#70): the same pinned container and the same zero-tolerance diff,
-  # on a build made with `.env.renovation` — a flag-off artifact draws no mode bar, no Display card
-  # and no overlay, so these scenes have nothing to be photographed by.
-  screenshots-renovation:
-    name: screenshots-renovation
-    needs: verify
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: screenshots (renovation flag on)
-        run: npm run test:screenshots:renovation
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: screenshots-renovation
-          path: test-results/
-
   # Baselines move only in a PR that says so (#39 §4). Add "CI / screenshot-guard" to the
   # required status checks: it passes trivially when no baseline changed, and fails when one
   # did and the update-snapshots label is missing.
@@ -179,7 +125,7 @@ jobs:
           BASE_REF: origin/${{ github.base_ref }}
           HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'update-snapshots') }}
         run: |
-          changed=$(git diff --name-only "${BASE_REF}"...HEAD -- 'e2e/screenshots/__snapshots__/**' 'e2e/screenshots-renovation/__snapshots__/**')
+          changed=$(git diff --name-only "${BASE_REF}"...HEAD -- 'e2e/screenshots/__snapshots__/**')
           if [ -n "${changed}" ] && [ "${HAS_LABEL}" != 'true' ]; then
             echo "::error::Screenshot baselines changed without the update-snapshots label"
             echo "Changed baselines:"

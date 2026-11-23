@@ -125,9 +125,9 @@ splits the golden evidence per issue, and writes the release note. The consequen
 a Project written by a preview build before #71 and after #69 still validates and still opens,
 because everything #71 adds is either defaulted by the step or optional.
 
-**This is the one version the flag decides.** `DOMAIN_SCHEMA_VERSION` is `8` only in a build with
-`VITE_FF_RENOVATION=true`, and `migrateV7toV8` is registered only there. Production stays at v7,
-which means a preview-written Project arrives in a production build as "saved by a newer BuildBox"
-rather than opening with its Design Options silently dropped — the failure mode #20 §5 exists to
-prevent. The trade is that a preview database cannot be opened by a flag-off build at all, which is
-why the flag is set at build time for the whole preview deployment and never per Project.
+**This version was once decided by a flag; it is not any more.** Since #73 `DOMAIN_SCHEMA_VERSION`
+is `8` in every build and `migrateV7toV8` is registered unconditionally, so a v1–v7 Backup stages
+into a Project that carries its Design Options, Renovation Displays and Drawing Layers. The
+consequence for a reader is the ordinary one for a schema step: a Backup written by this version
+opens in no older build, which answers "saved by a newer BuildBox" — the failure mode #20 §5 exists
+to name. Nothing about the step itself changed when the flag went away.

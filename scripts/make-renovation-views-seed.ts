@@ -25,7 +25,7 @@
  *
  * It runs only with the flag on, because the file it writes is a v8 Project:
  *
- *   VITE_FF_RENOVATION=true npx vite-node scripts/make-renovation-views-seed.ts
+ *   npx vite-node scripts/make-renovation-views-seed.ts
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
@@ -35,7 +35,7 @@ import type { IntentType, PayloadOf } from '../src/edit'
 import { effectiveModel } from '../src/derive'
 import { validateProject } from '../src/domain'
 import type { Project } from '../src/domain'
-import { canonicalJson, FF_RENOVATION } from '../src/lib'
+import { canonicalJson } from '../src/lib'
 import { createMemoryAdapter } from '../src/persistence'
 import type { AssetRecord, NewAsset, ProjectRecord } from '../src/persistence'
 
@@ -55,7 +55,6 @@ function fail(message: string): never {
   process.exit(1)
 }
 
-if (!FF_RENOVATION) fail('VITE_FF_RENOVATION is off, so this build cannot write a Project that holds Design Options')
 
 let nextId = 0
 const newIds = (prefix: string, count: number): string[] =>

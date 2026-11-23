@@ -10,9 +10,7 @@
  *
  * The scene is the `renovation-views` seed: Walls W-1…W-6, `Option A · Open kitchen` demolishing W-2
  * and Base 600 #1 and proposing Base 600 #1′ plus an Island, `Option B · Widened opening` replacing
- * W-2 with W-2′ on the same footprint. It runs only against a `VITE_FF_RENOVATION` build
- * (`npm run test:e2e:renovation`), which is also the only build that opens the database it is seeded
- * into.
+ * W-2 with W-2′ on the same footprint. The scene is seeded into the database the app opens.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'

@@ -15,8 +15,7 @@
  * rasteriser, sheet, title block, hatch and font included.
  *
  * The clock is frozen because the title block prints the day the export ran, and the fonts are
- * awaited because both the dialog and the sheet are text. Flag-on artifact only
- * (`npm run test:screenshots:renovation`): a flag-off build draws none of this.
+ * awaited because both the dialog and the sheet are text.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'

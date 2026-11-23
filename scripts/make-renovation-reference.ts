@@ -23,7 +23,7 @@
  *
  * It runs only with the flag on, because the Project it writes carries Design Options:
  *
- *   VITE_FF_RENOVATION=true npx vite-node scripts/make-renovation-reference.ts
+ *   npx vite-node scripts/make-renovation-reference.ts
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
@@ -35,14 +35,13 @@ import { migrateProject, validateProject } from '../src/domain'
 import type { DesignOption, Opening, Project, Room, Wall, WallJunction } from '../src/domain'
 import { designOptionsOf } from '../src/domain'
 import { pt } from '../src/geometry'
-import { canonicalJson, FF_RENOVATION } from '../src/lib'
+import { canonicalJson } from '../src/lib'
 import type { RoomOutlineShape } from '../src/edit'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const SOURCE = resolve(repoRoot, 'fixtures/domain/v1/reference-project.json')
 const OUT = resolve(repoRoot, 'fixtures/bench/renovation-reference.json')
 
-if (!FF_RENOVATION) throw new Error('run me with VITE_FF_RENOVATION=true: the Project I write carries Design Options')
 
 const RAILS = 75
 const RAIL_GAP = 4_000

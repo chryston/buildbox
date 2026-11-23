@@ -15,9 +15,8 @@
  *     the delete itself leaves the Existing Model alone and can be undone (criterion 15).
  *
  * The scene arrives in the seed (`scripts/make-renovation-36-seed.ts`): Walls W-1…W-6, a Kitchen
- * and a Bedroom, ten Placed Items, and two Options standing empty. This spec runs only against a
- * `VITE_FF_RENOVATION` build — `npm run test:e2e:renovation` — because no other build carries the
- * section at all, and a flag-off build refuses the v8 seed the scene is stored in.
+ * and a Bedroom, ten Placed Items, and two Options standing empty. The scene is stored in a v8
+ * seed, which is what every build of this version writes.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'

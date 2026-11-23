@@ -10,8 +10,7 @@
  * result — the pasted record standing on the drawing, selected, its Layer row reading `Furniture`.
  *
  * The scene is the paste pair (`fixtures/e2e/preview-seed/paste-pair.json`, `scripts/make-paste-seed.ts`):
- * `Unit 4 Fitout`, where the copy is made, and `14 Elm St`, where it is answered. Flag-on artifact
- * only (`npm run test:screenshots:renovation`).
+ * `Unit 4 Fitout`, where the copy is made, and `14 Elm St`, where it is answered.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'

@@ -10,7 +10,7 @@
  *
  * The scenes are the layers twin of the renovation-views kitchen (`fixtures/e2e/preview-seed/
  * renovation-layers.json`), except the empty state, which is the same kitchen before any layer was
- * made. Flag-on artifact only (`npm run test:screenshots:renovation`).
+ * made.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'

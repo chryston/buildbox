@@ -11,7 +11,6 @@
  * renovation-layers.json`, from `scripts/make-renovation-layers-seed.ts`): `Structure` under the
  * Walls, Opening and Rooms, `Furniture` under every Placed Item, `Services` empty, and four saved
  * views — `Floor 1` says nothing about any layer, `Option B · Combined` has made Structure read-only.
- * It runs only against a `VITE_FF_RENOVATION` build (`npm run test:e2e:renovation`).
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'

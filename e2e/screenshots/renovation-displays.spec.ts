@@ -11,8 +11,6 @@
  * relationship between the mode bar, the rail, the tool strip and the drawing, and a defect in that
  * layout is invisible in a canvas-only crop. Two things are masked — the save status, whose words
  * follow the autosave, and the `Pick:` chips, whose pressed state follows the pointer.
- *
- * Flag-on artifact only (`npm run test:screenshots:renovation`): a flag-off build draws none of this.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
