@@ -88,6 +88,13 @@ test.describe('the Plan View Range', () => {
     await expect(page.getByTestId('range-upper-field')).toHaveValue('1200')
     await expect(page.getByTestId('range-stop-lower-label')).toHaveText('Lower 0')
     await expect(page.getByTestId('range-stop-upper-label')).toHaveText('Upper 1200')
+    // The column the two stops stand in is the scene's own heights, not the range: its ticks run
+    // from the Floor Datum up past the 2 600 the Walls stop at, and the sunk Sump box is below the
+    // first of them.
+    const tickMm = (await page.locator('[data-testid^="range-tick-"]').allTextContents())
+      .map((text) => Number(text.replace(/[^0-9-]/g, '')))
+    expect(Math.min(...tickMm)).toBeLessThanOrEqual(0)
+    expect(Math.max(...tickMm)).toBeGreaterThanOrEqual(2500)
 
     // In range is the normal graphics: solid ink, full strength.
     await expect(ink(page, BASE)).not.toHaveCSS('fill', 'none')

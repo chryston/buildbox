@@ -561,7 +561,9 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
    * caller selects what was clicked, exactly as it did before.
    */
   function cyclePick(clickedId: string, clientX: number, clientY: number): string | null {
-    if (renovation === null || tool !== 'select' || renovation.onCycle === undefined) return null
+    // `Pick on canvas` owns the click while it is armed: the press answers that question and is
+    // never a step of a cycle, however long the stack under the pointer (#70 §8, #74 §6).
+    if (renovation === null || tool !== 'select' || pickingOrigin || renovation.onCycle === undefined) return null
     const at = toFloor(clientX, clientY)
     const host = hostRef.current
     if (at === null || host === null || states === null) return null
