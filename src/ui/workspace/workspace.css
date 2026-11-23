@@ -1464,3 +1464,14 @@
   color: var(--bb-text-muted);
   line-height: 1.45;
 }
+
+/* The Export dialog's two renovation groups (#73 §1, §2): their labels are sentences and Layer
+   names, and inline flow let a checkbox wrap away from its words — the third Design Option radio
+   ended a line while its words started the next. One choice per row, control and words together.
+   Both groups exist only in this dialog, so nothing else takes the rule. */
+.bb-export-chips label,
+.bb-export-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
