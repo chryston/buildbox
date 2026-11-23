@@ -48,6 +48,8 @@ function testWorkspaceServices(): WorkspaceServices {
     },
     readActive: async () => null,
     writeActive: () => {},
+    readPane: async () => null,
+    writePane: () => {},
   }
   return {
     intent: view.services.intent,

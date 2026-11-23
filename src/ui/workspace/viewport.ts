@@ -26,6 +26,22 @@ export interface ActiveViewState {
 }
 
 /**
+ * How the workspace's two panes were last arranged (#75 §2, behaviour 2).
+ *
+ * View state exactly like the viewport and the active view: the split someone dragged, the Elevation
+ * View they had open on this Floor, and whether one pane was shown alone. None of it is Project data,
+ * none of it is in a Backup or in history, and losing it costs one drag.
+ */
+export interface PaneState {
+  /** The Plan pane's share of the host width, 0..1. */
+  ratio: number
+  /** The last Elevation View open on each Floor, keyed by Floor id. */
+  elevationByFloor: Record<string, string>
+  /** Which pane was shown alone, or `null` for both. */
+  alone: 'plan' | 'elevation' | null
+}
+
+/**
  * The device-local view-state cache, read and written through the `PrefsRepository` port
  * by `app` (#20 §4, conflict 15.7). Disposable: #56 switched view keys to `view:<viewId>`
  * and the old `plan:<floorId>` entries are simply never read again, so this port has no
@@ -36,6 +52,8 @@ export interface ViewportCache {
   write(viewKey: string, viewport: Viewport): void
   readActive(): Promise<ActiveViewState | null>
   writeActive(state: ActiveViewState): void
+  readPane(): Promise<PaneState | null>
+  writePane(state: PaneState): void
 }
 
 export const ZOOM_MIN = 0.1

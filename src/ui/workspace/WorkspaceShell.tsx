@@ -10,6 +10,8 @@
  * below — the canvas host is never resized by either.
  */
 import type { ReactNode, RefObject } from 'react'
+import type { SplitPanesProps } from './SplitPanes'
+import { SplitPanes } from './SplitPanes'
 import './workspace.css'
 
 export interface WorkspaceShellProps {
@@ -41,11 +43,31 @@ export interface WorkspaceShellProps {
   railOpen: boolean
   /** The canvas host element, so `Fit` can measure it without owning its layout. */
   canvasHostRef?: RefObject<HTMLDivElement | null>
+  /**
+   * The split workspace (#75 §2): the two panes and the rule between them, rendered inside the canvas
+   * host in place of the bare canvas. The shell keeps composing the Plan pane's body out of `canvas`,
+   * `draftBar` and `warningStrip`, because where those three sit is the shell's business; which pane
+   * is open, how wide each is, and what closes one is the workspace's. Absent leaves the #55 layout —
+   * one canvas filling the host — exactly as it was.
+   */
+  split?: SplitPanesProps | null
   children?: never
 }
 
 export function WorkspaceShell(props: WorkspaceShellProps): ReactNode {
-  const { header, toolbar, renovationBar, renovationLegend, viewCard, inspector, canvas, draftBar, warningStrip, notes, railOpen, canvasHostRef } = props
+  const { header, toolbar, renovationBar, renovationLegend, viewCard, inspector, canvas, draftBar, warningStrip, notes, railOpen, canvasHostRef, split } = props
+  /** What the Plan pane shows: the canvas, with the two bars anchored to it and not to the split. */
+  const planBody = (
+    <>
+      {canvas}
+      {draftBar !== undefined && draftBar !== null && (
+        <div className="bb-workspace-draft-bar" data-testid="workspace-draft-bar">{draftBar}</div>
+      )}
+      {warningStrip !== undefined && warningStrip !== null && (
+        <div className="bb-workspace-warning-strip" data-testid="workspace-warning-strip">{warningStrip}</div>
+      )}
+    </>
+  )
   return (
     <div className="bb-workspace" data-testid="floor-workspace">
       <header className="bb-workspace-header">{header}</header>
@@ -57,12 +79,10 @@ export function WorkspaceShell(props: WorkspaceShellProps): ReactNode {
           {inspector}
         </aside>
         <div className="bb-workspace-canvas-host" data-testid="workspace-canvas-host" ref={canvasHostRef} tabIndex={-1}>
-          {canvas}
-          {draftBar !== undefined && draftBar !== null && (
-            <div className="bb-workspace-draft-bar" data-testid="workspace-draft-bar">{draftBar}</div>
-          )}
-          {warningStrip !== undefined && warningStrip !== null && (
-            <div className="bb-workspace-warning-strip" data-testid="workspace-warning-strip">{warningStrip}</div>
+          {split !== undefined && split !== null ? (
+            <SplitPanes {...split} plan={{ ...split.plan, body: planBody }} />
+          ) : (
+            planBody
           )}
         </div>
         {notes !== null && notes !== undefined && notes !== false && (

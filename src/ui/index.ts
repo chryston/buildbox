@@ -36,7 +36,7 @@ export {
   openCorrectExistingDialog,
   openRestoreDialog,
 } from './workspace/renovation'
-export type { ActiveViewState, Viewport, ViewportCache } from './workspace'
+export type { ActiveViewState, PaneState, Viewport, ViewportCache } from './workspace'
 // #70's two pure halves: the tool table the contextual strip reads, and the overlap cycle the canvas
 // selection walks. Both are copy-free and store-free, so they are testable without a canvas and the
 // strip and the inspector can be written against them later. `cycleOrder` is exported because #74

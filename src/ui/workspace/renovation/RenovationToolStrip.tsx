@@ -41,6 +41,7 @@ const TOOL_LABELS: { [T in RenovationToolId]: string } = {
   opening: STRINGS.toolOpening,
   room: STRINGS.room,
   placeItem: RENOVATION_STRINGS.toolPlaceItem,
+  elevation: STRINGS.newElevationView,
 }
 
 /** The strip's own shortcut per row. No workspace tool shortcut exists today, so these are new keys. */
@@ -52,6 +53,7 @@ const TOOL_KEYS: { [T in RenovationToolId]: string } = {
   opening: 'o',
   room: 'm',
   placeItem: 'i',
+  elevation: 'e',
 }
 
 /**
@@ -66,6 +68,7 @@ const ROW_OF_TOOL: { [T in WorkspaceTool]: RenovationToolId | null } = {
   line: 'room',
   arc: 'room',
   ellipticalArc: 'room',
+  elevation: 'elevation',
   pan: null,
 }
 

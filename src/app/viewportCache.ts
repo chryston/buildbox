@@ -11,10 +11,11 @@
  * a `Fit`, which is the whole of the damage a disposable cache can do.
  */
 import type { PrefsRepository } from '../persistence'
-import type { ActiveViewState, ViewportCache } from '../ui'
+import type { ActiveViewState, PaneState, ViewportCache } from '../ui'
 
 export function createViewportCache(prefs: PrefsRepository, projectId: string): ViewportCache {
   const activeKey = `activeView:${projectId}` as const
+  const paneKey = `paneState:${projectId}` as const
   return {
     async read(viewKey) {
       const found = await prefs.get(`viewState:${projectId}:${viewKey}`)
@@ -33,6 +34,17 @@ export function createViewportCache(prefs: PrefsRepository, projectId: string): 
     },
     writeActive(state: ActiveViewState) {
       void prefs.set(activeKey, state)
+    },
+    // #75: the split workspace's own arrangement, under its own key and on the same terms as
+    // everything else here — a refused write costs the next reload one drag of the divider.
+    async readPane() {
+      const found = await prefs.get(paneKey)
+      return found.ok && found.value !== undefined
+        ? { ratio: found.value.ratio, elevationByFloor: found.value.elevationByFloor, alone: found.value.alone }
+        : null
+    },
+    writePane(state: PaneState) {
+      void prefs.set(paneKey, state)
     },
   }
 }

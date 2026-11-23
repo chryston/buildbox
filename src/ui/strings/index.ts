@@ -662,6 +662,52 @@ export const STRINGS = {
   /** The one line that says what the drawing's marks mean (#74 §3), worded exactly as resolved. */
   planViewRangeLegend:
     'In range: solid · Above range: dashed · Below range: faded. This range belongs to this Plan View only.',
+  // The split workspace and the Elevation View card (#75 §2, §3). The words are the glossary's:
+  // an Elevation View, a view line, a Vertical Extent — never the words this feature is written to
+  // avoid, which #75 criterion 16 scans for.
+  elevationView: 'Elevation View',
+  planViews: 'Plan Views',
+  elevationViews: 'Elevation Views',
+  showAlone: 'Show alone',
+  closePane: 'Close',
+  /** The divider's accessible name: what it does, not what it is drawn as. */
+  splitDivider: 'Change the split between the two panes',
+  deleteElevationViewEllipsis: 'Delete Elevation View…',
+  /** The confirm button repeats the question's own words without the ellipsis that asked it. */
+  deleteElevationView: 'Delete Elevation View',
+  /** The confirm sentence, worded exactly as #75 §3 states it. */
+  deleteElevationViewConfirm: (name: string): string =>
+    `Delete “${name}”? Its saved settings are removed; no model content changes.`,
+  elevationDirection: 'Direction',
+  flipDirection: 'Flip which side of the view line this Elevation View stands on',
+  elevationStartX: 'Start X',
+  elevationStartY: 'Start Y',
+  elevationEndX: 'End X',
+  elevationEndY: 'End Y',
+  newElevationView: 'New Elevation View',
+  elevationPickStart: 'Click where the view line starts.',
+  elevationPickEnd: 'Click where the view line ends.',
+  elevationSetDepth: 'Move to the side the view stands on and click, or type a depth and press Enter.',
+  elevationNameRequired: 'Give this Elevation View a name',
+  elevationNameTaken: (name: string): string =>
+    `Another Elevation View on this Floor is already called ${name}`,
+  elevationDepthProblem: 'A depth has to be more than 0',
+  elevationLineProblem: 'A view line needs two different ends',
+  /** The picker's own entry for "none yet", so the select never sits blank. */
+  noElevationViews: 'No Elevation Views yet',
+  elevationPicker: 'Elevation View',
+  elevationViewNameField: 'Elevation View name',
+  /** The hint says what the name is for — a label on sheets — before it says what it must not do. */
+  elevationViewNameHint: 'Names this view on sheets and in lists.',
+  elevationNoneTitle: 'No Elevation View is open',
+  elevationNoneBody: 'An Elevation View is a saved way of looking at this Floor from one side.',
+  elevationNoneHint: 'Choose the side on the Plan View, then click, or type a depth and press Enter.',
+  /** The three states of the pane control, named by the pane each one leaves on screen. */
+  showPlanAlone: 'Plan only',
+  showElevationAlone: 'Elevation only',
+  showBothPanes: 'Both panes',
+  /** The divider's own hint: what dragging it does, and what it never does. */
+  elevationDragHint: 'Drag the divider, or use the arrow keys. Nothing here is saved to the Project.',
   // The Duplicate Floor dialog (#64 §17).
   duplicateItemFallback: 'Item',
   floorCopyName: (name: string): string => `${name} copy`,

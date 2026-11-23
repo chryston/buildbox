@@ -25,7 +25,7 @@ import type { Viewport } from './viewport'
  * The Floor workspace does not offer them yet — a Custom Path has no Room target until #67 —
  * so only the Item Design editor renders them, and they are still gated by the same rule.
  */
-export type WorkspaceTool = 'select' | 'pan' | 'wall' | 'opening' | 'line' | 'arc' | 'ellipticalArc'
+export type WorkspaceTool = 'select' | 'pan' | 'wall' | 'opening' | 'line' | 'arc' | 'ellipticalArc' | 'elevation'
 
 /**
  * The live drag: the Item being moved and where its Item Origin is going, in Floor
@@ -262,6 +262,18 @@ export interface WorkspaceState {
   activeViewByFloor: Record<string, string>
   /** Whether this Project's open Floor and views have been read from the cache yet. */
   activeHydrated: boolean
+  /**
+   * The last Elevation View open on each Floor, keyed by Floor id (#75 §2). A pointer like the Plan
+   * View above it, and with the same rule: the view itself lives in the document, this only remembers
+   * which one this device was looking at.
+   */
+  activeElevationByFloor: Record<string, string>
+  /** The Plan pane's share of the canvas host, 0..1 (#75 §2 behaviour 2). */
+  splitRatio: number
+  /** Which pane is shown alone, or `null` for both side by side (#75 §2 behaviour 4). */
+  paneAlone: 'plan' | 'elevation' | null
+  /** Whether this Project's pane arrangement has been read from the cache yet. */
+  paneHydrated: boolean
   /** The renovation dialog on screen, if any (#69 §9, §13). */
   renovationDialog: RenovationDialog
   /**
@@ -338,6 +350,14 @@ export interface WorkspaceActions {
   setActiveView(floorId: string, viewId: string): void
   /** The cache's answer for this Project: which Floor was open, and the views on each. */
   hydrateActive(floorId: string | null, viewsByFloor: Record<string, string>): void
+  /** Open an Elevation View on the Floor already open; `null` closes the pane's content (#75 §3). */
+  setActiveElevation(floorId: string, viewId: string | null): void
+  /** The divider's answer, in shares of the canvas host (#75 §2 behaviour 1). */
+  setSplitRatio(ratio: number): void
+  /** `Show alone` / both panes (#75 §2 behaviour 4). */
+  setPaneAlone(alone: 'plan' | 'elevation' | null): void
+  /** The cache's answer for this Project's panes, read once. */
+  hydratePane(state: { ratio: number; elevationByFloor: Record<string, string>; alone: 'plan' | 'elevation' | null }): void
   /**
    * Ask for the `Demolish W-3?` review of one Existing entity, on behalf of one Design Option
    * (#69 §9). What the review says is read from the Intent's own preview, never stored here.
@@ -413,6 +433,12 @@ const INITIAL: WorkspaceState = {
   activeFloorId: null,
   activeViewByFloor: {},
   activeHydrated: false,
+  activeElevationByFloor: {},
+  // Half and half, because that is the arrangement a person who has never dragged anything is
+  // looking at, and #75 §2 asks for the two panes to start equal rather than one favoured.
+  splitRatio: 0.5,
+  paneAlone: null,
+  paneHydrated: false,
   renovationDialog: null,
   correctionUnlocked: null,
   pickStates: [],
@@ -550,6 +576,26 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
       activeFloorId: state.activeFloorId ?? activeFloorId,
       activeViewByFloor: { ...viewsByFloor, ...state.activeViewByFloor },
       activeHydrated: true,
+    })),
+  setActiveElevation: (floorId, viewId) =>
+    set((state) => {
+      const rest = { ...state.activeElevationByFloor }
+      // Closing a view leaves no stale pointer behind, so the next Floor opened on this one starts
+      // with the empty pane rather than a view that is no longer there.
+      if (viewId === null) delete rest[floorId]
+      else rest[floorId] = viewId
+      return { activeElevationByFloor: rest }
+    }),
+  setSplitRatio: (ratio) => set({ splitRatio: ratio }),
+  setPaneAlone: (paneAlone) => set({ paneAlone }),
+  hydratePane: (pane) =>
+    set((state) => ({
+      // The cache answers only what it holds: a Floor nobody opened an Elevation View on keeps its
+      // empty pane, and a ratio the person has since dragged is theirs, not the cache's.
+      activeElevationByFloor: { ...pane.elevationByFloor, ...state.activeElevationByFloor },
+      splitRatio: state.paneHydrated ? state.splitRatio : pane.ratio,
+      paneAlone: state.paneHydrated ? state.paneAlone : pane.alone,
+      paneHydrated: true,
     })),
   openDemolishDialog: (entityId, designOptionId) =>
     set({ renovationDialog: { kind: 'demolish', entityId, designOptionId } }),

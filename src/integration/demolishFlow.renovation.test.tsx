@@ -58,7 +58,7 @@ function servicesFor(view: TestView): WorkspaceServices {
     readPlanImage: () => Promise.reject(new Error('jsdom models no file reader')),
     planImageAccept: PLAN_IMAGE_ACCEPT,
     planCatalogue: [],
-    viewportCache: { read: async () => undefined, write: () => {}, readActive: async () => null, writeActive: () => {} },
+    viewportCache: { read: async () => undefined, write: () => {}, readActive: async () => null, writeActive: () => {}, readPane: async () => null, writePane: () => {} },
     exportDrawings: TEST_EXPORT_PORT,
   }
 }
