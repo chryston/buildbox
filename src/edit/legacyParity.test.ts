@@ -97,6 +97,12 @@ const EXTRA_INTENTS = [
   'view.rename',
   'view.delete',
   'view.setShowPlanImage',
+  // #74 §4, §5: the vertical half of the model. The legacy app had no elevation on anything — every
+  // Wall stood on the floor at the storey height — so there was no action to move, edit or raise.
+  'plan.setPlacementVerticalExtent',
+  'wall.setVerticalExtent',
+  'opening.setVerticalExtent',
+  'view.setPlanViewRange',
   // #58: the Item Design editor restates a footprint wholesale; no legacy action did.
   'design.setFootprint',
   // #64: Walls have no legacy equivalent at all — the old store kept no wall geometry — so the

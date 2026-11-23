@@ -371,6 +371,17 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
       translation: { x: real(g, -500, 6000), y: real(g, -500, 6000) },
     })
   },
+  // #74 §5: both fields move the item, and neither writes a height — a Placed Item has no field to
+  // write one to, which is what the "never contains height" sweep over the model checks.
+  (g) => {
+    const placed = pick(g, placements(g))
+    if (placed === undefined) return null
+    return intent('plan.setPlacementVerticalExtent', {
+      placedItemId: placed.id,
+      field: pick(g, ['base', 'top'] as const)!,
+      value: real(g, -500, 4000),
+    })
+  },
   (g) => {
     const placed = pick(g, placements(g))
     if (placed === undefined) return null
@@ -503,6 +514,13 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
   (g) => {
     const view = pick(g, g.project.views)
     return view === undefined ? null : intent('view.setShowPlanImage', { viewId: view.id, showPlanImage: bool(g) })
+  },
+  // #74 §4: one saved view's range, which touches no entity at all.
+  (g) => {
+    const view = pick(g, g.project.views)
+    if (view === undefined) return null
+    const lowerMm = real(g, -500, 1000)
+    return intent('view.setPlanViewRange', { viewId: view.id, lowerMm, upperMm: lowerMm + real(g, 100, 3000) })
   },
   (g) => {
     const floor = pick(g, floorsWithImage(g))
@@ -637,6 +655,17 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
     const wall = pick(g, wallList(g))
     return wall === undefined ? null : intent('wall.setThickness', { wallId: wall.id, thickness: pick(g, [60, 100, 150, 200])! })
   },
+  // #74 §5: the elevation pair, which moves no reference-line point — so no Wall-fit check runs and
+  // no hosted Opening can be squeezed out by it.
+  (g) => {
+    const wall = pick(g, wallList(g))
+    if (wall === undefined) return null
+    return intent('wall.setVerticalExtent', {
+      wallId: wall.id,
+      field: pick(g, ['base', 'height', 'top'] as const)!,
+      value: real(g, -200, 3000),
+    })
+  },
   (g) => {
     const wall = pick(g, wallList(g))
     return wall === undefined
@@ -743,6 +772,16 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
       openingId: opening.id,
       width,
       ...(bool(g) ? { start: Math.max(0, opening.start + real(g, -200, 200)) } : {}),
+    })
+  },
+  // #74 §5: the sill and head, which never move the Opening along its host or change the host.
+  (g) => {
+    const opening = pick(g, openingList(g))
+    if (opening === undefined) return null
+    return intent('opening.setVerticalExtent', {
+      openingId: opening.id,
+      field: pick(g, ['base', 'height', 'top'] as const)!,
+      value: real(g, 0, 2600),
     })
   },
   (g) => {

@@ -29,6 +29,27 @@ export function parseToMm(value: number, unit: DisplayUnit): number {
 }
 
 /**
+ * A number being typed, converted to exact millimetres — or `null`, which is the field's
+ * `Enter a number.` (#74 §4, §5).
+ *
+ * The parse starts at the string rather than at a `Number` the caller has already guessed at, because
+ * what a field holds is a string and what gets stored has to be the number in the box. `2.16` at `m`
+ * is 2160 mm: `2.16 * 1000` is 2159.9999999999995 in binary floating point, and a Vertical Extent
+ * stored like that sits a five-hundred-thousandth of a millimetre away from the value the person
+ * typed, which is enough to make a boundary stop miss (#74 §5 criterion 16). The nanometre rounding
+ * `parseToMm` already does is what lands it on 2160 exactly.
+ *
+ * A blank, a stray word, `Infinity` and an exponent are all the same answer — nothing is sent and the
+ * field says so. A group separator is not accepted either, for the reason `readoutMm` gives: a field
+ * parses what it holds, and a comma is a character a caret cannot sit between.
+ */
+export function parseMmInput(text: string, unit: DisplayUnit): number | null {
+  const trimmed = text.trim()
+  if (!/^[+-]?(\d+(\.\d*)?|\.\d+)$/.test(trimmed)) return null
+  return parseToMm(Number(trimmed), unit)
+}
+
+/**
  * An area, always in square metres to two decimals (#58 §4).
  *
  * The one measurement on screen that does not follow the Project's display unit: a Project
