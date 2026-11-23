@@ -16,6 +16,19 @@ import { defaultPlanViewRange } from './planViewRange'
 /** The comparison key every uniqueness rule uses. */
 export const nameKey = (name: string): string => name.trim().normalize('NFC').toLowerCase()
 
+/** The character no ID or name can hold, so it separates the halves of a key unambiguously. */
+const KEY_SEPARATOR = String.fromCharCode(0)
+
+/**
+ * The key that says "this Floor already has a view called this" (#56, #75 §1).
+ *
+ * A view's name is unique among the views of one Floor and nothing else, so the Floor is half the key.
+ * The separator splits the halves because an ID may hold any character a name may hold, and the pair has
+ * to be unambiguous: `a` + `b` is never the key of `ab` + `` or `a` + `bc`.
+ */
+export const viewNameKey = (floorId: EntityId | null | undefined, name: string): string =>
+  `${floorId ?? ''}${KEY_SEPARATOR}${nameKey(name)}`
+
 /** Whether another Floor already answers to `name`, ignoring case. */
 export function floorNameTaken(project: Project, name: string, exceptFloorId: EntityId | null = null): boolean {
   const key = nameKey(name)

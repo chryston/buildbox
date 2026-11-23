@@ -1,7 +1,7 @@
 /**
  * The layers scene fixture (#71 criteria 1–3).
  *
- * `fixtures/domain/v9/layers.json` is the Project the Layers list is built and tested against, and
+ * `fixtures/domain/v10/layers.json` is the Project the Layers list is built and tested against, and
  * `layers-zero.json` is the same Project after every layer has been deleted. This holds the
  * **committed bytes** — not the generator's in-memory Project — to the issue's scene, the way
  * `renovationViewsScene.renovation.test.ts` does for #70: the day a generator changes, the fixture
@@ -37,7 +37,7 @@ interface Envelope {
 }
 
 const read = (name: string): { text: string; project: Project } => {
-  const text = readFileSync(join(fixturesRoot, 'domain', 'v9', name), 'utf8')
+  const text = readFileSync(join(fixturesRoot, 'domain', 'v10', name), 'utf8')
   return { text, project: (JSON.parse(text) as Envelope).project }
 }
 

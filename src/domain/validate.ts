@@ -31,9 +31,10 @@ import {
 import type { ClosedPath, CornerRadii, JoinJunction, JoinWall, Preset, Pt, Segment, UsableInterval } from '../geometry'
 import { ROOT_PATH, childPath, compareCodePoints, problem, type ValidationProblem } from '../lib'
 import { MAX_TREE_DEPTH } from './cabinetPayload'
+import { ELEVATION_VIEW_SIDES } from './elevationView'
 import { formatGeometryProblem, type DisplayFormat } from './formatGeometryProblem'
 import { footprintProblems } from './footprint'
-import { nameKey } from './floorNames'
+import { nameKey, viewNameKey } from './floorNames'
 import { fitProblem, openingNoun } from './openings'
 import { roomFaceRelation, roomOutlineProblems, roomOverlaps, roomSegmentOf, roomSegments } from './rooms'
 import { RENOVATION_DISPLAYS, UNLAYERED_LAYER_KEY } from './project'
@@ -94,13 +95,17 @@ const ACCESSORY_TYPES = ['door', 'drawer-front', 'pull', 'hinge'] as const
 
 // The field lists of §2, one per object level. `unknown-field` is reported against
 // anything else the input carries at that level.
-const PROJECT_FIELDS = ['id', 'meta', 'preferences', 'floors', 'views', 'drawingLayers', 'itemDesigns', 'existingModel', 'designOptions', 'warningAcknowledgements']
+const PROJECT_FIELDS = ['id', 'meta', 'preferences', 'floors', 'views', 'elevationViews', 'drawingLayers', 'itemDesigns', 'existingModel', 'designOptions', 'warningAcknowledgements']
 const META_FIELDS = ['name', 'address']
 const PREFERENCES_FIELDS = ['displayUnit', 'displayPrecision', 'defaultWallHeight']
 const FLOOR_FIELDS = ['id', 'name', 'planImage', 'limits', 'defaultWallHeight']
 const FLOOR_LIMITS_FIELDS = ['lowerMm', 'upperMm']
 const PLAN_VIEW_RANGE_FIELDS = ['lowerMm', 'upperMm']
 const PLAN_VIEW_FIELDS = ['id', 'kind', 'floorId', 'name', 'isDefault', 'showPlanImage', 'planViewRange', 'designOptionId', 'renovationDisplay', 'layerSettings', 'layerOrder', 'activeLayerId', 'snapToHiddenContent']
+/** The one kind an Elevation View may claim (#75 §1); `plan` belongs to {@link PLAN_VIEW_FIELDS}. */
+const ELEVATION_VIEW_KINDS = ['elevation'] as const
+const ELEVATION_VIEW_FIELDS = ['id', 'kind', 'floorId', 'name', 'line', 'side', 'depth', 'designOptionId', 'renovationDisplay', 'layerSettings', 'layerOrder', 'activeLayerId', 'snapToHiddenContent']
+const ELEVATION_VIEW_LINE_FIELDS = ['start', 'end']
 /** One Drawing Layer (#71 §1): an immutable ID, an editable name and a Project default colour. */
 const DRAWING_LAYER_FIELDS = ['id', 'name', 'color']
 /** What one saved view says about one layer (#71 §3); `color` is the only field that may be absent. */
@@ -505,6 +510,14 @@ function indexIds(root: Rec): IdIndex {
       claim(view.id, childPath(childPath('views', i), 'id'))
     })
   }
+  // An Elevation View holds an ID of the same kind as every other entity (#75 §1): it borrows no
+  // number, so a view that took a Wall's ID would leave the file ambiguous about which one is meant.
+  if (Array.isArray(root.elevationViews)) {
+    root.elevationViews.forEach((view, i) => {
+      if (!isRecord(view)) return
+      claim(view.id, childPath(childPath('elevationViews', i), 'id'))
+    })
+  }
   if (Array.isArray(root.itemDesigns)) {
     root.itemDesigns.forEach((design, i) => {
       if (!isRecord(design)) return
@@ -854,11 +867,11 @@ function validateDrawingLayers(raw: unknown, path: string, index: IdIndex, add: 
  * deleted, and `layer.delete` removes these keys from every view precisely so that none is left
  * behind holding a switch nobody can reach.
  */
-function validateViewLayerSettings(raw: unknown, path: string, index: IdIndex, add: Add): void {
+function validateViewLayerSettings(raw: unknown, path: string, index: IdIndex, add: Add, words: SavedViewWords): void {
   if (raw === undefined) return
   const at = childPath(path, 'layerSettings')
   if (!isRecord(raw)) {
-    add(at, WRONG_TYPE, 'Expected the layer settings of a Plan View as a list keyed by layer.')
+    add(at, WRONG_TYPE, `Expected the layer settings of ${words.a} as a list keyed by layer.`)
     return
   }
   for (const key of Object.keys(raw).sort()) {
@@ -878,9 +891,9 @@ function validateViewLayerSettings(raw: unknown, path: string, index: IdIndex, a
     }
     // All three switches are required once a view says anything about a layer: a half-written
     // setting would leave the other two to a default the file does not state.
-    checkBoolean(setting.visible, childPath(entryPath, 'visible'), 'whether this layer is visible in this Plan View', add)
-    checkBoolean(setting.selectable, childPath(entryPath, 'selectable'), 'whether this layer is selectable in this Plan View', add)
-    checkBoolean(setting.editable, childPath(entryPath, 'editable'), 'whether this layer is editable in this Plan View', add)
+    checkBoolean(setting.visible, childPath(entryPath, 'visible'), `whether this layer is visible in ${words.this}`, add)
+    checkBoolean(setting.selectable, childPath(entryPath, 'selectable'), `whether this layer is selectable in ${words.this}`, add)
+    checkBoolean(setting.editable, childPath(entryPath, 'editable'), `whether this layer is editable in ${words.this}`, add)
     if (setting.color !== undefined) {
       const color = checkText(setting.color, childPath(entryPath, 'color'), 'the layer colour override', add)
       if (color !== null && !COLOR.test(color)) {
@@ -900,10 +913,10 @@ function validateViewLayerSettings(raw: unknown, path: string, index: IdIndex, a
  * added after the override was written is refused here and repaired by `view.setLayerOrder`, which
  * rewrites the whole array.
  */
-function validateViewLayerOrder(raw: unknown, path: string, index: IdIndex, add: Add): void {
+function validateViewLayerOrder(raw: unknown, path: string, index: IdIndex, add: Add, words: SavedViewWords): void {
   if (raw === undefined || raw === null) return
   const at = childPath(path, 'layerOrder')
-  const keys = checkArray(raw, at, 'the layer order of a Plan View', add)
+  const keys = checkArray(raw, at, `the layer order of ${words.a}`, add)
   if (keys === null) return
   const seen = new Set<string>()
   const named = new Set<string>()
@@ -912,7 +925,7 @@ function validateViewLayerOrder(raw: unknown, path: string, index: IdIndex, add:
     const key = checkText(value, here, 'a layer in the layer order', add)
     if (key === null) return
     if (key !== UNLAYERED_LAYER_KEY && !index.layerIds.has(key)) {
-      add(here, DANGLING_REFERENCE, 'Expected the layer order of a Plan View to name a Drawing Layer of this Project or Unlayered.')
+      add(here, DANGLING_REFERENCE, `Expected the layer order of ${words.a} to name a Drawing Layer of this Project or Unlayered.`)
       return
     }
     if (seen.has(key)) {
@@ -923,11 +936,11 @@ function validateViewLayerOrder(raw: unknown, path: string, index: IdIndex, add:
     if (key !== UNLAYERED_LAYER_KEY) named.add(key)
   })
   if (!seen.has(UNLAYERED_LAYER_KEY)) {
-    add(at, MISSING, `Expected the layer order of a Plan View to list Unlayered too — it is a row of the list like any layer.`)
+    add(at, MISSING, `Expected the layer order of ${words.a} to list Unlayered too — it is a row of the list like any layer.`)
   }
   for (const id of index.layerIds) {
     if (named.has(id)) continue
-    add(at, MISSING, `Expected the layer order of a Plan View to cover every Drawing Layer — it leaves out the layer "${id}".`)
+    add(at, MISSING, `Expected the layer order of ${words.a} to cover every Drawing Layer — it leaves out the layer "${id}".`)
   }
 }
 
@@ -953,6 +966,72 @@ function validatePlanViewRange(raw: unknown, path: string, add: Add): void {
     )
   }
   checkUnknownFields(raw, path, PLAN_VIEW_RANGE_FIELDS, add)
+}
+
+/**
+ * The words a saved-view problem uses for the kind of view it was found on (#75 §1).
+ *
+ * The settings below are checked by one function for both kinds, so the sentence that reports them
+ * has to be built from the kind rather than hard-coded to one of them. The Plan View wording is the
+ * one every older test already reads.
+ */
+const SAVED_VIEW_WORDS = {
+  plan: { name: 'Plan View', a: 'a Plan View', this: 'this Plan View' },
+  elevation: { name: 'Elevation View', a: 'an Elevation View', this: 'this Elevation View' },
+} as const
+
+type SavedViewWords = (typeof SAVED_VIEW_WORDS)[keyof typeof SAVED_VIEW_WORDS]
+
+/**
+ * The settings every saved view carries, whichever kind it is (#69 §2, #70 §1, #71 §3, #75 §1).
+ *
+ * One function for both kinds because the fields are one interface ({@link SavedViewSettings}) and
+ * every rule about them is the same rule: an Elevation View that names a deleted Design Option or
+ * leaves a layer out of its own order is as broken as a Plan View that does, and for the same reason.
+ */
+function validateSavedViewSettings(
+  raw: Rec,
+  path: string,
+  index: IdIndex,
+  add: Add,
+  words: SavedViewWords,
+): void {
+  // The Design Option this view looks through (#70 §1). An absent field is a view written before
+  // the capability, and `null` is the Existing Model alone — both valid, and valid for **every**
+  // Display: a Demolition, Proposed or Combined view with no Option is the error state §6 draws on
+  // the canvas, not an import error, so this field and the Display below are never checked against
+  // each other. What is refused is a name this Project does not have: a view pointing at a deleted
+  // Option would draw a canvas that promises an Option nobody can choose.
+  if (raw.designOptionId !== undefined && raw.designOptionId !== null) {
+    const optionPath = childPath(path, 'designOptionId')
+    const optionId = checkEntityId(raw.designOptionId, optionPath, `the ${words.name} Design Option ID`, add)
+    if (optionId !== null && !index.optionIds.has(optionId)) {
+      add(
+        optionPath,
+        DANGLING_REFERENCE,
+        `Expected the Design Option of ${words.a} to be a Design Option of this Project — no Design Option has this ID.`,
+      )
+    }
+  }
+  checkOptionalOneOf(raw.renovationDisplay, childPath(path, 'renovationDisplay'), `the ${words.name} Renovation Display`, RENOVATION_DISPLAYS, add)
+
+  // The Drawing Layer settings of this view (#71 §3). Every one of the four is optional in the type
+  // and every one of them is checked against the Project's layers, because a saved view is the one
+  // place a layer setting can outlive the layer it was written for.
+  validateViewLayerSettings(raw.layerSettings, path, index, add, words)
+  validateViewLayerOrder(raw.layerOrder, path, index, add, words)
+  if (raw.activeLayerId !== undefined && raw.activeLayerId !== null) {
+    const activePath = childPath(path, 'activeLayerId')
+    const activeId = checkEntityId(raw.activeLayerId, activePath, 'the Active Layer', add)
+    if (activeId !== null && !index.layerIds.has(activeId)) {
+      add(
+        activePath,
+        DANGLING_REFERENCE,
+        `Expected the Active Layer of ${words.a} to be a Drawing Layer of this Project — no Drawing Layer has this ID.`,
+      )
+    }
+  }
+  checkOptionalBoolean(raw.snapToHiddenContent, childPath(path, 'snapToHiddenContent'), 'whether this view snaps to hidden content', add)
 }
 
 function validatePlanView(
@@ -986,7 +1065,7 @@ function validatePlanView(
     // Unique among the views of one Floor, ignoring case (#56): "Kitchen" and "kitchen"
     // are the same choice twice. The Floor is part of the key because two Floors may each
     // have a view called "Plan".
-    const key = `${floorId ?? ''}\u0000${nameKey(name)}`
+    const key = viewNameKey(floorId, name)
     const first = names.get(key)
     if (first === undefined) names.set(key, namePath)
     else
@@ -1009,42 +1088,8 @@ function validatePlanView(
     validatePlanViewRange(raw.planViewRange, childPath(path, 'planViewRange'), add)
   }
 
-  // The Design Option this view looks through (#70 §1). An absent field is a view written before
-  // the capability, and `null` is the Existing Model alone — both valid, and valid for **every**
-  // Display: a Demolition, Proposed or Combined view with no Option is the error state §6 draws on
-  // the canvas, not an import error, so this field and the Display below are never checked against
-  // each other. What is refused is a name this Project does not have: a view pointing at a deleted
-  // Option would draw a canvas that promises an Option nobody can choose.
-  if (raw.designOptionId !== undefined && raw.designOptionId !== null) {
-    const optionPath = childPath(path, 'designOptionId')
-    const optionId = checkEntityId(raw.designOptionId, optionPath, 'the Plan View Design Option ID', add)
-    if (optionId !== null && !index.optionIds.has(optionId)) {
-      add(
-        optionPath,
-        DANGLING_REFERENCE,
-        'Expected the Design Option of a Plan View to be a Design Option of this Project — no Design Option has this ID.',
-      )
-    }
-  }
-  checkOptionalOneOf(raw.renovationDisplay, childPath(path, 'renovationDisplay'), 'the Plan View Renovation Display', RENOVATION_DISPLAYS, add)
-
-  // The Drawing Layer settings of this view (#71 §3). Every one of the four is optional in the type
-  // and every one of them is checked against the Project's layers, because a saved view is the one
-  // place a layer setting can outlive the layer it was written for.
-  validateViewLayerSettings(raw.layerSettings, path, index, add)
-  validateViewLayerOrder(raw.layerOrder, path, index, add)
-  if (raw.activeLayerId !== undefined && raw.activeLayerId !== null) {
-    const activePath = childPath(path, 'activeLayerId')
-    const activeId = checkEntityId(raw.activeLayerId, activePath, 'the Active Layer', add)
-    if (activeId !== null && !index.layerIds.has(activeId)) {
-      add(
-        activePath,
-        DANGLING_REFERENCE,
-        'Expected the Active Layer of a Plan View to be a Drawing Layer of this Project — no Drawing Layer has this ID.',
-      )
-    }
-  }
-  checkOptionalBoolean(raw.snapToHiddenContent, childPath(path, 'snapToHiddenContent'), 'whether this view snaps to hidden content', add)
+  // The Option, the Display and the four layer settings, shared with an Elevation View (#75 §1).
+  validateSavedViewSettings(raw, path, index, add, SAVED_VIEW_WORDS.plan)
 
   checkUnknownFields(raw, path, PLAN_VIEW_FIELDS, add)
 }
@@ -1090,6 +1135,142 @@ function validateViews(raw: unknown, path: string, index: IdIndex, add: Add): vo
       )
     }
   })
+}
+
+// --- The Elevation Views (#75 §1) ------------------------------------------------
+
+/**
+ * One end of a view line: a finite `x` and `y` in the Floor's local millimetres.
+ *
+ * The two numbers are checked as numbers and nothing more — a view line may sit anywhere on the
+ * Floor, including outside the Walls, because the tool clicks where the user points and the prism is
+ * allowed to reach past the room.
+ */
+function validateElevationViewPoint(raw: unknown, path: string, what: string, add: Add): void {
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, `Expected ${what} as an object.`)
+    return
+  }
+  checkNumber(raw.x, childPath(path, 'x'), `${what} x in millimetres`, add)
+  checkNumber(raw.y, childPath(path, 'y'), `${what} y in millimetres`, add)
+  checkUnknownFields(raw, path, POINT_FIELDS, add)
+}
+
+/**
+ * The view line (#75 §1): two ends, and a length.
+ *
+ * A line whose ends are the same place is refused rather than clamped: it bounds no band, so nothing
+ * is inside the prism and every entity projects onto one point. Any angle is otherwise allowed — the
+ * line is never forced parallel to a plan axis, which is one of the prototype defects #75 exists to
+ * fix.
+ */
+function validateElevationViewLine(raw: unknown, path: string, add: Add): void {
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected the view line as an object.')
+    return
+  }
+  validateElevationViewPoint(raw.start, childPath(path, 'start'), 'the view line start', add)
+  validateElevationViewPoint(raw.end, childPath(path, 'end'), 'the view line end', add)
+  if (isRecord(raw.start) && isRecord(raw.end)) {
+    const { x: sx, y: sy } = raw.start
+    const { x: ex, y: ey } = raw.end
+    if (
+      typeof sx === 'number' && typeof sy === 'number' &&
+      typeof ex === 'number' && typeof ey === 'number' &&
+      Number.isFinite(sx) && Number.isFinite(sy) && Number.isFinite(ex) && Number.isFinite(ey) &&
+      sx === ex && sy === ey
+    ) {
+      add(
+        childPath(path, 'end'),
+        OUT_OF_RANGE,
+        'Expected the view line to have some length — its two ends are the same place.',
+      )
+    }
+  }
+  checkUnknownFields(raw, path, ELEVATION_VIEW_LINE_FIELDS, add)
+}
+
+/**
+ * One Elevation View (#75 §1): a line, a side, a depth, a name, and the settings every saved view
+ * carries.
+ *
+ * Every problem the issue lists is refused here: a line of no length, a depth of zero or less, a
+ * Floor that does not exist, a name this Floor's Elevation Views already use, and every saved-view
+ * problem the Plan View half checks through the same function.
+ */
+function validateElevationView(
+  raw: unknown,
+  path: string,
+  index: IdIndex,
+  names: Map<string, string>,
+  add: Add,
+): void {
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected an Elevation View.')
+    return
+  }
+  const idPath = childPath(path, 'id')
+  const id = checkEntityId(raw.id, idPath, 'the Elevation View ID', add)
+  if (id !== null) claimId(id, idPath, 'the Elevation View ID', index, add)
+
+  checkOneOf(raw.kind, childPath(path, 'kind'), 'the Elevation View kind', ELEVATION_VIEW_KINDS, add)
+  const floorId = checkEntityId(raw.floorId, childPath(path, 'floorId'), 'the Elevation View Floor ID', add)
+  if (floorId !== null && !index.floorIds.has(floorId)) {
+    add(
+      childPath(path, 'floorId'),
+      DANGLING_REFERENCE,
+      'Expected an Elevation View to look along a Floor in this Project — no Floor has this ID.',
+    )
+  }
+
+  const namePath = childPath(path, 'name')
+  const name = checkFilledText(raw.name, namePath, 'the Elevation View name', add)
+  if (name !== null) {
+    // Unique among the Elevation Views of one Floor, ignoring case — the rule #56 sets for Plan
+    // Views, applied to the second kind. The Floor is part of the key because two Floors may each
+    // have a view called `Elevation 1`, and a Plan View and an Elevation View of one Floor may share
+    // a name because the picker lists the two kinds as separate groups (#75 §3).
+    const key = viewNameKey(floorId, name)
+    const first = names.get(key)
+    if (first === undefined) names.set(key, namePath)
+    else
+      add(
+        namePath,
+        DUPLICATE_NAME,
+        `Expected an Elevation View name this Floor does not already use — ${first} already has this one.`,
+      )
+  }
+
+  if (raw.line === undefined) {
+    add(childPath(path, 'line'), MISSING, 'Missing the view line — every Elevation View says where it stands.')
+  } else {
+    validateElevationViewLine(raw.line, childPath(path, 'line'), add)
+  }
+  checkOneOf(raw.side, childPath(path, 'side'), 'the Elevation View side', ELEVATION_VIEW_SIDES, add)
+  // A depth of zero would draw a band with no room in it, and a negative one would look the other
+  // way along a normal the arrow does not point in (#75 §1).
+  checkPositive(raw.depth, childPath(path, 'depth'), 'the Elevation View depth in millimetres', add)
+
+  validateSavedViewSettings(raw, path, index, add, SAVED_VIEW_WORDS.elevation)
+
+  checkUnknownFields(raw, path, ELEVATION_VIEW_FIELDS, add)
+}
+
+/**
+ * The saved Elevation Views (#75 §1). An absent field is a Project written before the capability and
+ * is valid — the v9 → v10 migrator adds the empty array, and `elevationViewsOf` is the read — so this
+ * checks what is there and never defaults what is not.
+ *
+ * Unlike Plan Views there is no default to carry: an Elevation View is always one the user made, so
+ * every record in this list is a dependant of its Floor and `floor.delete` asks for them to be
+ * deleted first.
+ */
+function validateElevationViews(raw: unknown, path: string, index: IdIndex, add: Add): void {
+  if (raw === undefined) return
+  const views = checkArray(raw, path, 'the Elevation Views', add)
+  if (views === null) return
+  const names = new Map<string, string>()
+  views.forEach((view, i) => validateElevationView(view, childPath(path, i), index, names, add))
 }
 
 // --- The cabinet payload ------------------------------------------------------
@@ -2789,6 +2970,7 @@ export function validateProject(value: unknown, checks: ValidationScope | null =
   validatePreferences(value.preferences, childPath(ROOT_PATH, 'preferences'), add)
   validateFloors(value.floors, childPath(ROOT_PATH, 'floors'), index, add)
   validateViews(value.views, childPath(ROOT_PATH, 'views'), index, add)
+  validateElevationViews(value.elevationViews, childPath(ROOT_PATH, 'elevationViews'), index, add)
   validateDrawingLayers(value.drawingLayers, childPath(ROOT_PATH, 'drawingLayers'), index, add)
   validateItemDesigns(value.itemDesigns, childPath(ROOT_PATH, 'itemDesigns'), index, displayFormatOf(value), checks, add)
   const existing = validateExistingModel(

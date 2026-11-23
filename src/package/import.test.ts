@@ -4,7 +4,7 @@
  * the offending record — never a message that carries user content.
  */
 import { describe, expect, it } from 'vitest'
-import { withPlanViewRanges } from '../domain/testing'
+import { withElevationViews, withPlanViewRanges } from '../domain/testing'
 import { sha256Hex, unzipEntries, zipEntries, type ZipLimits } from '../lib'
 import type { Migrator, Project } from '../domain'
 import { DOMAIN_SCHEMA_VERSION } from '../domain'
@@ -23,7 +23,7 @@ const ASSET_ENTRY = `assets/${ASSET_HASH}.png`
 
 /** The fixture Project, with its Plan Image pointed at {@link ASSET}. */
 function projectWithAsset(assetHash: string): Project {
-  const project = withPlanViewRanges(fixtureProject())
+  const project = withElevationViews(withPlanViewRanges(fixtureProject()))
   return {
     ...project,
     floors: [
@@ -114,7 +114,7 @@ describe('stageImport: a well-formed Backup', () => {
   })
 
   it('accepts a Project with no Plan Image and no assets', async () => {
-    const source = withPlanViewRanges(fixtureProject())
+    const source = withElevationViews(withPlanViewRanges(fixtureProject()))
     const bare: Project = {
       ...source,
       floors: [{ ...source.floors[0]!, planImage: null }, source.floors[1]!],

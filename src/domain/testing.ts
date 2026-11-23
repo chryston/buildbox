@@ -1144,3 +1144,14 @@ export function withPlanViewRanges(project: Project): Project {
     })),
   }
 }
+
+/**
+ * An older record with the Elevation View list it predates added, and nothing else touched (#75 §1).
+ *
+ * The tenth step writes one empty array on the way in, so a test that compares a whole Project read
+ * from a pre-v10 record has to say the same thing the step says. An Elevation View is always one a
+ * person made, so the array is empty: the step invents no view, and neither does this.
+ */
+export function withElevationViews(project: Project): Project {
+  return { ...project, elevationViews: project.elevationViews ?? [] }
+}

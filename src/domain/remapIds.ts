@@ -17,7 +17,7 @@
  * The walk order is fixed and stated in full, because it is the contract between the
  * collection and the rebuild the way `INTENT_ID_ORDER` is between caller and handler
  * (#20 §4): `project.id`, then the Floors in array order, then the Plan Views in array
- * order, then each Item Design in array
+ * order, then the Elevation Views in array order (#75 §1), then each Item Design in array
  * order followed — for a cabinet — by its tree in pre-order (a space, then its dividers,
  * then its accessories, then its left subtree, then its right), then the Placed Items in
  * array order, then the Walls in array order, then the Wall Junctions in array order
@@ -33,6 +33,7 @@
  * corrupt the copy rather than rename it.
  */
 import type { CabinetNode } from './cabinetPayload'
+import { elevationViewsOf } from './project'
 import type { EntityId, ItemDesign, Project, ProposedModel } from './project'
 
 /** Fresh IDs, `count` at a time (#42 §3: domain never mints one). */
@@ -77,6 +78,19 @@ export function remapIds(project: Project, newId: EntityId, allocate: IdAllocato
     id: newId,
     floors: project.floors.map((floor) => ({ ...floor, id: next(floor.id) })),
     views: project.views.map((view) => ({ ...view, id: next(view.id), floorId: next(view.floorId) })),
+    // An Elevation View is a saved view of the same kind (#75 §1): its own ID and the Floor it looks
+    // along are both rewritten, and the line it stands on is a measurement, not a reference. A Project
+    // that carries no list at all — every Project written before #75 — comes back carrying no list,
+    // because a copy that invents a field is not the same Project under different IDs.
+    ...(project.elevationViews === undefined
+      ? {}
+      : {
+          elevationViews: elevationViewsOf(project).map((view) => ({
+            ...view,
+            id: next(view.id),
+            floorId: next(view.floorId),
+          })),
+        }),
     itemDesigns: project.itemDesigns.map((design) => remapDesign(design, next)),
     existingModel: { ...project.existingModel, ...remapEntities(project.existingModel, next) },
     // An acknowledgement names its subjects by ID (#66), so a copy that did not rewrite them
@@ -143,6 +157,7 @@ function entityIds(project: Project): EntityId[] {
   const ids: EntityId[] = [project.id]
   for (const floor of project.floors) ids.push(floor.id)
   for (const view of project.views) ids.push(view.id)
+  for (const view of elevationViewsOf(project)) ids.push(view.id)
   for (const design of project.itemDesigns) {
     ids.push(design.id)
     if (design.kind === 'cabinet') collectSpace(design.construction.root, ids)

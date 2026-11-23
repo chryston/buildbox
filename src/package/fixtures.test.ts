@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { canonicalJsonBytes, sha256Hex } from '../lib'
 import { DEFAULT_DRAWING_LAYERS, MIGRATORS, type PlanView, type Project } from '../domain'
-import { withPlanViewRanges } from '../domain/testing'
+import { withElevationViews, withPlanViewRanges } from '../domain/testing'
 import { encodeProject } from './encode'
 import { migrateDomainProject, stageImport } from './import'
 import {
@@ -123,6 +123,7 @@ function atCurrentSchema(project: Project, spent = 0): Project {
   return {
     ...project,
     designOptions: [],
+    elevationViews: [],
     drawingLayers: DEFAULT_DRAWING_LAYERS.map((layer, index) => ({ id: layerId(index), name: layer.name, color: layer.color })),
     existingModel: {
       ...project.existingModel,
@@ -445,7 +446,7 @@ describe('the committed v8 Backup (#69)', () => {
     // The scene comes through untouched. The only thing the ninth step adds is the range each view
     // draws at, taken from the Floor it shows — and this fixture's Floor carries no limits, so both
     // views get the Project-wide default of a Floor structural level to just below the ceiling.
-    expect(result.staged.project).toEqual(withPlanViewRanges(renovationFixtureProject()))
+    expect(result.staged.project).toEqual(withElevationViews(withPlanViewRanges(renovationFixtureProject())))
     expect(result.staged.migratedFrom).toBe(8)
   })
 
@@ -522,19 +523,23 @@ describe('the committed v8 Backup (#69)', () => {
   })
 })
 
-// Criterion 14, the ninth schema (#74): the Backup this build writes, and what a build one schema
-// behind says when it is handed it.
+// Criterion 14, the ninth schema (#74): what this build says when it is handed a Backup written one
+// schema behind. It is no longer the Backup this build writes — the tenth schema is (#75) — so it
+// stages *migrated*, which is the compatibility path the file exists to prove.
 describe('the committed v9 Backup (#74)', () => {
-  it('stages into the Project it was written from, unmigrated', async () => {
+  it('stages into the Project it was written from, read forward one step (#75)', async () => {
     const result = await stageImport(ARCHIVE_V9, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
-    expect(result.staged.project).toEqual(planRangeFixtureProject())
-    expect(result.staged.migratedFrom).toBeNull()
+    expect(result.staged.project).toEqual(withElevationViews(planRangeFixtureProject()))
+    expect(result.staged.migratedFrom).toBe(9)
   })
 
-  it('is re-encoded byte for byte by this build', async () => {
-    expect(await encodeProject(planRangeFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V9)
+  it('holds the bytes it was written with, and this build writes the tenth schema', async () => {
+    // The file on disk is the golden and is never rewritten; what this build encodes is a v10
+    // Project, so the byte-for-byte round trip belongs to the v10 fixture below.
     expect(new TextDecoder().decode(readV9('project.json'))).toBe(`${canonicalOf(planRangeFixtureProject())}\n`)
+    const encoded = await encodeProject(planRangeFixtureProject(), assetSource, FIXTURE_BUILD)
+    expect(encoded).not.toBe(ARCHIVE_V9)
   })
 
   it('is described by a manifest that names domain schema v9', async () => {

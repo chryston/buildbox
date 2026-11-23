@@ -65,7 +65,12 @@ describe('domain fixtures (#42 §6)', () => {
     const floors = result.project.floors
     const defaults = result.project.views.filter((view: PlanView) => view.isDefault)
     expect(defaults).toHaveLength(floors.length)
-    for (const floor of floors) {
+    // Everything the older file already said survives. The Item Designs keep their ids,
+    // names and heights; only the footprint is restated, which is the whole step (#58).
+    type Identified = { id: string; name: string; height?: number }
+    type PriorFloor = { limits?: unknown }
+    const prior = envelope.project as { floors: PriorFloor[]; existingModel: unknown; itemDesigns: Identified[] }
+    floors.forEach((floor, i) => {
       const own = result.project.views.filter((view) => view.floorId === floor.id)
       // Every Floor ends with exactly one default view: the one the file already had, or the one the
       // chain invented for it. Only an invented one is named after the Floor — a file that had
@@ -77,13 +82,11 @@ describe('domain fixtures (#42 §6)', () => {
           expect.objectContaining({ floorId: floor.id, name: floor.name, showPlanImage: true, kind: 'plan' }),
         )
       }
-      // A v1 Floor had no limits, and inventing some would be inventing geometry.
-      expect(floor).not.toHaveProperty('limits')
-    }
-    // Everything the older file already said survives. The Item Designs keep their ids,
-    // names and heights; only the footprint is restated, which is the whole step (#58).
-    type Identified = { id: string; name: string; height?: number }
-    const prior = envelope.project as { floors: unknown; existingModel: unknown; itemDesigns: Identified[] }
+      // A v1 Floor had no limits, and inventing some would be inventing geometry. What the chain never
+      // does is add a limit to a Floor that arrived without one; a Floor that declared its own — the v9
+      // scene does (#75) — keeps exactly what it declared, which the equality below says.
+      if (prior.floors[i]?.limits === undefined) expect(floor).not.toHaveProperty('limits')
+    })
     const identity = (designs: Identified[]) =>
       designs.map((design) => ({ id: design.id, name: design.name, height: design.height }))
     expect(result.project.floors).toEqual(prior.floors)

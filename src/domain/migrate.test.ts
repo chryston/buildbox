@@ -71,8 +71,9 @@ function v1Project(): Record<string, unknown> {
 
 /**
  * The additions the chain has to make on the way to this build's schema — the empty Design Option
- * list, the Drawing Layers, the filing of the content on them, and the four view fields (#69, #71,
- * #73) — taken back out, so a step's own work can be compared with the record it started from.
+ * list, the Drawing Layers, the filing of the content on them, the four view fields (#69, #71, #73)
+ * and the empty Elevation View list (#75) — taken back out, so a step's own work can be compared with
+ * the record it started from.
  *
  * Every record these tests feed in predates v8, so nothing stripped here was ever in the input.
  */
@@ -83,7 +84,7 @@ function withoutTheStep(project: unknown): unknown {
   }
   const unfiled = (entries: unknown): unknown =>
     Array.isArray(entries) ? entries.map((entry) => drop(entry, 'drawingLayerId')) : entries
-  const record = drop(project, 'designOptions', 'drawingLayers') as Record<string, unknown>
+  const record = drop(project, 'designOptions', 'drawingLayers', 'elevationViews') as Record<string, unknown>
   const model = record.existingModel
   const views = record.views
   return {
@@ -103,9 +104,9 @@ function withoutTheStep(project: unknown): unknown {
 
 describe('DOMAIN_SCHEMA_VERSION', () => {
   it('is the version this build writes', () => {
-    // v8 is production: the renovation model shipped, so the number the chain ends at and the number
-    // this build writes are the same one (#73).
-    expect(DOMAIN_SCHEMA_VERSION).toBe(9)
+    // v10 is production: the Elevation View shipped, so the number the chain ends at and the number
+    // this build writes are the same one (#73, #75).
+    expect(DOMAIN_SCHEMA_VERSION).toBe(10)
   })
 })
 

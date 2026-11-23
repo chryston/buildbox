@@ -2,7 +2,7 @@
  * The renovation-views scene fixture (#70 criterion 7).
  *
  * `fixtures/e2e/preview-seed/renovation-views.json` is the scene the four Renovation Displays are
- * tested against, and `fixtures/domain/v9/renovation-views.json` is the same Project as a domain
+ * tested against, and `fixtures/domain/v10/renovation-views.json` is the same Project as a domain
  * golden. This holds the committed bytes — not the generator's in-memory Project — to the issue's
  * scene, and then reads each of the four Displays off it, because criterion 7 is a sentence about
  * what a Display *draws*, and the only honest place to read that is the derived display model the
@@ -177,11 +177,11 @@ describe('the renovation-views scene (#70 criterion 7)', () => {
     expect(named('Option B · Combined').renovationDisplay).toBe('combined')
   })
 
-  it('is the same Project as the v9 domain golden', () => {
+  it('is the same Project as the v10 domain golden', () => {
     const golden = JSON.parse(
-      readFileSync(join(fixturesRoot, 'domain', 'v9', 'renovation-views.json'), 'utf8'),
+      readFileSync(join(fixturesRoot, 'domain', 'v10', 'renovation-views.json'), 'utf8'),
     ) as { domainSchemaVersion: number; project: Project }
-    expect(golden.domainSchemaVersion).toBe(9)
+    expect(golden.domainSchemaVersion).toBe(10)
     expect(validateProject(golden.project).ok).toBe(true)
     expect(golden.project).toEqual(project)
   })

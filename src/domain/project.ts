@@ -21,6 +21,7 @@
  */
 import type { ClosedPath, Preset, WallSide } from '../geometry'
 import type { CabinetNode, GlobalSettings } from './cabinetPayload'
+import type { ElevationView } from './elevationView'
 import { nameKey } from './floorNames'
 import type { PlanViewRange } from './planViewRange'
 
@@ -53,6 +54,19 @@ export interface Project {
    * with a Floor.
    */
   views: PlanView[]
+  /**
+   * The saved Elevation Views (#75 §1), in the order the saved-view picker lists them.
+   *
+   * One flat array holding views of every Floor, exactly as {@link Project.views} is one, rather than
+   * a list filed inside each Floor: an Elevation View names its Floor the way a Plan View does, so the
+   * lookup that addresses a saved view by ID alone — the saved-view card, an undo, a Backup — reads one
+   * array per kind instead of walking Floors.
+   *
+   * Optional rather than an always-present array for the same reason `designOptions` is: a Project
+   * written before this capability stays valid without the field, and the validator never defaults one.
+   * `elevationViewsOf` is the accessor, and the v9 → v10 migrator adds the empty array.
+   */
+  elevationViews?: ElevationView[]
   /**
    * The Drawing Layers of this Project (#71 §1), in the Project layer order: back to front, so the
    * last entry is the front-most layer and the Layers list — which reads front first — renders this
@@ -262,54 +276,36 @@ export function drawingLayerByName(project: Project, name: string): DrawingLayer
 }
 
 /** The setting a saved view holds for one layer key, or `undefined` when it says nothing about it. */
-export const viewLayerSettingOverride = (view: PlanView, key: string): LayerSetting | undefined =>
+export const viewLayerSettingOverride = (view: SavedViewSettings, key: string): LayerSetting | undefined =>
   view.layerSettings?.[key]
 
 /** The view's own layer order, or `null` for `Use Project layer order`. */
-export const viewLayerOrder = (view: PlanView): EntityId[] | null => view.layerOrder ?? null
+export const viewLayerOrder = (view: SavedViewSettings): EntityId[] | null => view.layerOrder ?? null
 
 /** The layer new content of no subtype default lands on; `null` is Unlayered. */
-export const viewActiveLayerId = (view: PlanView): EntityId | null => view.activeLayerId ?? null
+export const viewActiveLayerId = (view: SavedViewSettings): EntityId | null => view.activeLayerId ?? null
 
 /** Whether hidden content still offers snap targets in this view; absent is `false`. */
-export const viewSnapToHidden = (view: PlanView): boolean => view.snapToHiddenContent ?? false
+export const viewSnapToHidden = (view: SavedViewSettings): boolean => view.snapToHiddenContent ?? false
 
 /** The layer a drawable entity belongs to; `null` is Unlayered, which is what an entity written before #71 is. */
 export const entityLayerId = (entity: { drawingLayerId?: EntityId | null }): EntityId | null =>
   entity.drawingLayerId ?? null
 
 /**
- * A saved way of looking at exactly one Floor (#56). A Plan View holds no Placed Item, no
- * Plan Image and no geometry of its own — it is a viewer, so deleting one deletes nothing
- * but the view. `isDefault` marks the view that came with the Floor: every Floor has
- * exactly one, and it goes with the Floor rather than counting as a dependant.
+ * The settings every saved view carries, whichever kind of view it is (#69 §2, #70 §1, #71 §3).
  *
- * The two renovation fields are optional in the type for the same reason `designOptions` is
- * (#69): a view written before this capability — every Project, and every Backup taken until
- * now — has to stay readable without them, and the validator never defaults a
- * field. `viewDesignOptionId` and `viewRenovationDisplay` are the accessors, and the v7 → v8
- * migrator writes both on every view.
+ * Pulled out of `PlanView` when #75 added a second kind of saved view: an Elevation View looks
+ * through the same Design Option, draws the same Renovation Display, files its layers the same way
+ * and snaps to hidden content the same way, so these six fields are one interface both kinds extend
+ * rather than a second copy of the same six that can drift from the first.
+ *
+ * Every one is optional in the type for the same reason `designOptions` is: a view written before the
+ * capability — every Project, and every Backup taken until it existed — has to stay readable without
+ * it, and the validator never defaults a field. The accessors below are the reads, and each is typed
+ * against this interface so it answers for either kind of view.
  */
-export interface PlanView {
-  id: EntityId
-  kind: 'plan'
-  /** A Plan View is a viewer of exactly one Floor. */
-  floorId: EntityId
-  /** Unique among the views of that Floor, ignoring case. */
-  name: string
-  isDefault: boolean
-  /** Whether this view draws the Floor's Plan Image. */
-  showPlanImage: boolean
-  /**
-   * The height this view draws at (#74 §1).
-   *
-   * Required, not optional: a Plan View without a range would be a view that hides things by
-   * accident, and #74 §1 refuses that reading. The v8 → v9 migrator gives every view that
-   * predates it the range its Floor's limits say — the Floor's lower limit, or 0 when it has
-   * none, up to its upper limit, or 2 600 when it has none — which is the whole storey, and so
-   * the whole storey is what every existing Plan View keeps drawing.
-   */
-  planViewRange: PlanViewRange
+export interface SavedViewSettings {
   /**
    * The Design Option this view looks through, or `null` for the Existing Model alone.
    *
@@ -350,11 +346,71 @@ export interface PlanView {
   snapToHiddenContent?: boolean
 }
 
+/**
+ * A saved way of looking at exactly one Floor (#56). A Plan View holds no Placed Item, no
+ * Plan Image and no geometry of its own — it is a viewer, so deleting one deletes nothing
+ * but the view. `isDefault` marks the view that came with the Floor: every Floor has
+ * exactly one, and it goes with the Floor rather than counting as a dependant.
+ *
+ * What it shares with an Elevation View — the Option, the Display and the four layer settings — is
+ * {@link SavedViewSettings}, which both kinds extend rather than restate.
+ */
+export interface PlanView extends SavedViewSettings {
+  id: EntityId
+  kind: 'plan'
+  /** A Plan View is a viewer of exactly one Floor. */
+  floorId: EntityId
+  /** Unique among the views of that Floor, ignoring case. */
+  name: string
+  isDefault: boolean
+  /** Whether this view draws the Floor's Plan Image. */
+  showPlanImage: boolean
+  /**
+   * The height this view draws at (#74 §1).
+   *
+   * Required, not optional: a Plan View without a range would be a view that hides things by
+   * accident, and #74 §1 refuses that reading. The v8 → v9 migrator gives every view that
+   * predates it the range its Floor's limits say — the Floor's lower limit, or 0 when it has
+   * none, up to its upper limit, or 2 600 when it has none — which is the whole storey, and so
+   * the whole storey is what every existing Plan View keeps drawing.
+   *
+   * A Plan View's own field, and not a saved-view setting: an Elevation View has no height it cuts
+   * at, because it looks along the storey rather than across it (#75 §1).
+   */
+  planViewRange: PlanViewRange
+}
+
+/** Either kind of saved view, discriminated by `kind` (#75 §1). */
+export type SavedView = PlanView | ElevationView
+
+/**
+ * The Elevation Views of a Project, which a Project written before #75 does not carry.
+ *
+ * Every consumer reads through this rather than the field, so "no Elevation Views" has one spelling.
+ */
+export const elevationViewsOf = (project: Project): ElevationView[] => project.elevationViews ?? []
+
+/**
+ * Every saved view of a Project, Plan Views first and then Elevation Views (#75 §3).
+ *
+ * The read behind "the saved view with this ID", which is how the saved-view card, an undo and a
+ * Backup all address one: a view is named by ID alone, and an ID is unique across both collections.
+ * The array is a fresh one, so a caller that replaces a whole collection assigns it to the field;
+ * a caller that edits a record in place edits the Project's own record, which is the same object.
+ */
+export const savedViewsOf = (project: Project): SavedView[] => [...project.views, ...elevationViewsOf(project)]
+
+/** The saved view an ID names, of either kind, or `null` when no view holds it. */
+export const savedViewById = (project: Project, id: EntityId | null | undefined): SavedView | null =>
+  id === null || id === undefined
+    ? null
+    : savedViewsOf(project).find((view) => view.id === id) ?? null
+
 /** The Design Option of a saved view, which a view written before #70 does not carry. */
-export const viewDesignOptionId = (view: PlanView): EntityId | null => view.designOptionId ?? null
+export const viewDesignOptionId = (view: SavedViewSettings): EntityId | null => view.designOptionId ?? null
 
 /** The Renovation Display of a saved view, which a view written before #70 does not carry. */
-export const viewRenovationDisplay = (view: PlanView): RenovationDisplay => view.renovationDisplay ?? 'existing'
+export const viewRenovationDisplay = (view: SavedViewSettings): RenovationDisplay => view.renovationDisplay ?? 'existing'
 
 /**
  * The Plan Image record (#20 §3). It has no ID of its own: a Floor owns zero or one, so
