@@ -14,9 +14,18 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { ExportDialog } from './ExportDialog'
 import { viewKey } from './port'
-import type { ExportPort, ExportRunOutcome, ExportableView, ListsOptions } from './port'
+import type { BlockedView, ExportPort, ExportRunOutcome, ExportableView, ListsOptions } from './port'
 import type { QuantityScope } from '../../../derive'
-import type { ExportFailure, ExportProgress, ListsRecipe, ListsSummary, Recipe, RecipeViewRef } from '../../../export'
+import type {
+  DrawingLayerChip,
+  ExportFailure,
+  ExportProgress,
+  ListsRecipe,
+  ListsSummary,
+  Recipe,
+  RecipeViewRef,
+  RecordedComposition,
+} from '../../../export'
 
 const ORIGIN: RecipeViewRef = { kind: 'plan', viewId: 'v-1' }
 const OTHER: RecipeViewRef = { kind: 'plan', viewId: 'v-2' }
@@ -42,13 +51,29 @@ interface Fake {
   progress(progress: ExportProgress): void
 }
 
-/** Two Floors and no Design Option, which is what every Project this build has is. */
+/** Two Floors, no Design Option and no Drawing Layers, which is what every Project this build has is. */
 const LISTS_FLOORS: ListsOptions = {
   floors: [
     { id: 'floor-1', label: 'Ground floor' },
     { id: 'floor-2', label: 'Mezzanine' },
   ],
   designOptions: [],
+  layers: [],
+  defaultScope: {
+    floorIds: ['floor-1', 'floor-2'],
+    designOptionIds: 'existing-only',
+    renovationStates: ['existing', 'demolition', 'proposed'],
+    drawingLayers: 'all',
+  },
+}
+
+/** The same Project with Drawing Layers, which is what makes the Lists Layer group exist (#73). */
+const LISTS_LAYERED: ListsOptions = {
+  ...LISTS_FLOORS,
+  layers: [
+    { id: 'layer-a', label: 'Furniture' },
+    { id: 'unlayered', label: 'Unlayered' },
+  ],
 }
 
 const ITEM_SUMMARY: ListsSummary = {
@@ -67,6 +92,12 @@ function fakePort(options?: {
   rememberedLists?: ListsRecipe | null
   /** What the scope's warning count is, as `derive` would have answered it. */
   warnings?: number
+  /** The Drawing Layers the originating view offers (#73 §1). */
+  chips?: readonly DrawingLayerChip[]
+  /** What the composition block is told the sheet will say. */
+  composition?: RecordedComposition | null
+  /** The view whose Display blocks the Drawing export, if one does (#73 §3). */
+  blocked?: BlockedView | null
 }): Fake {
   const runs: Recipe[] = []
   const remembered: Recipe[] = []
@@ -116,7 +147,10 @@ function fakePort(options?: {
           resolveRun = () => resolve(outcome)
         })
       },
-      listsOptions: () => options?.listsOptions ?? LISTS_FLOORS,
+      listsOptions: () => Promise.resolve(options?.listsOptions ?? LISTS_FLOORS),
+      drawingLayers: () => Promise.resolve(options?.chips ?? []),
+      composition: () => Promise.resolve(options?.composition ?? null),
+      blocking: () => Promise.resolve(options?.blocked ?? null),
       summariseLists: (scope) => {
         scopes.push(scope)
         return Promise.resolve(listsSummary)
@@ -155,6 +189,14 @@ async function open(
   // paint. Awaiting the button settles them inside `act` rather than in the middle of the next
   // assertion.
   await screen.findByTestId('export-run')
+  // The Drawing tab also asks the port for its chips, the composition, the Option names and whether
+  // a view blocks the export. All four answer a macrotask later, and they must answer inside `act`
+  // rather than in the middle of the next test's assertions.
+  await act(async () => {
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0)
+    })
+  })
 }
 
 const RECIPE = (overrides: Partial<Recipe> = {}): Recipe => ({
@@ -264,6 +306,13 @@ describe('the Export dialog', () => {
     const { port } = fakePort()
     await open(port)
     fireEvent.click(screen.getByTestId(`export-view-${viewKey(ORIGIN)}`))
+    // Unchecking the view sends a fresh blocking question to the port; settle it here rather than
+    // letting it answer in the middle of the next test.
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 0)
+      })
+    })
     expect(screen.getByTestId('export-blocked')).toHaveTextContent('Choose at least one view to export.')
     expect(screen.getByTestId('export-run')).toBeDisabled()
   })
@@ -499,7 +548,7 @@ describe('the Lists tab', () => {
    * for the State and Layer controls to do. They go grey beside a note that says why.
    */
   it('disables the State and Layer controls when the Warnings List is the only table', async () => {
-    const fake = fakePort({ listsSummary: { ...ITEM_SUMMARY, cutListCapable: true } })
+    const fake = fakePort({ listsOptions: LISTS_LAYERED, listsSummary: { ...ITEM_SUMMARY, cutListCapable: true } })
     await open(fake.port)
     await openLists()
     expect(screen.queryByTestId('export-lists-warnings-ignore-scope')).toBeNull()
@@ -516,7 +565,8 @@ describe('the Lists tab', () => {
     expect(disabled('export-lists-state-existing')).toBe(true)
     expect(disabled('export-lists-state-demolition')).toBe(true)
     expect(disabled('export-lists-state-proposed')).toBe(true)
-    expect(disabled('export-lists-layers')).toBe(true)
+    expect(disabled('export-lists-layer-layer-a')).toBe(true)
+    expect(disabled('export-lists-layer-unlayered')).toBe(true)
     // Floors are exactly what that table *is* scoped by, so they stay live. The Design Option select
     // is disabled for a reason of its own — no Project has a second option until #73 — which is not
     // this notice's doing and does not change with the table set.
@@ -531,7 +581,7 @@ describe('the Lists tab', () => {
 
   /** Scope 9: combined with anything else the controls stay live — for the tables that need them. */
   it('leaves the State and Layer controls alone when the Warnings List shares the recipe', async () => {
-    const fake = fakePort({ listsSummary: { ...ITEM_SUMMARY, cutListCapable: true } })
+    const fake = fakePort({ listsOptions: LISTS_LAYERED, listsSummary: { ...ITEM_SUMMARY, cutListCapable: true } })
     await open(fake.port)
     await openLists()
 
@@ -540,7 +590,8 @@ describe('the Lists tab', () => {
 
     expect(screen.queryByTestId('export-lists-warnings-ignore-scope')).toBeNull()
     expect(disabled('export-lists-state-existing')).toBe(false)
-    expect(disabled('export-lists-layers')).toBe(false)
+    expect(disabled('export-lists-layer-layer-a')).toBe(false)
+    expect(checked('export-lists-layer-layer-a')).toBe(true)
     expect(checked('export-lists-table-warnings')).toBe(true)
     expect(checked('export-lists-table-items')).toBe(true)
   })

@@ -19,7 +19,7 @@ import { openProject, type ProjectSession } from '../../session'
 import { createTestDeps, flush, seedProject, testProject } from '../../session/testing'
 import { createIntentFactory } from '../../app'
 import { PLAN_IMAGE_ACCEPT, WorkspaceProvider, workspaceStore } from '../index'
-import type { WorkspaceServices, ExportPort } from '../index'
+import type { WorkspaceServices, ExportPort, ListsOptions } from '../index'
 import { LegacyViewRoot } from './LegacyViewRoot'
 import { uiStore } from './uiStore'
 import type { AssetUrlSource, SessionViewServices } from './sessionBindings'
@@ -100,6 +100,19 @@ export async function openTestView(project: Project = testProject('p-1')): Promi
  * workspace the app renders. A port with no views, no recipe and no run is the smallest thing
  * that satisfies that, and it fails loudly if a test ever presses Export expecting a file.
  */
+/** The Lists choices an empty Project offers: nothing to scope by, so the Existing Model alone. */
+const TEST_LISTS_OPTIONS: ListsOptions = {
+  floors: [],
+  designOptions: [],
+  layers: [],
+  defaultScope: {
+    floorIds: [],
+    designOptionIds: 'existing-only',
+    renovationStates: ['existing', 'demolition', 'proposed'],
+    drawingLayers: 'all',
+  },
+}
+
 export const TEST_EXPORT_PORT: ExportPort = {
   views: () => [],
   measure: async () => ({ bounds: null }),
@@ -107,7 +120,10 @@ export const TEST_EXPORT_PORT: ExportPort = {
   recall: async () => null,
   remember: () => {},
   run: () => Promise.reject(new Error('jsdom runs no export')),
-  listsOptions: () => ({ floors: [], designOptions: [] }),
+  listsOptions: async () => TEST_LISTS_OPTIONS,
+  drawingLayers: async () => [],
+  composition: async () => null,
+  blocking: async () => null,
   summariseLists: async () => ({
     statement: '',
     rows: { items: 0, 'cut-list': 0, rooms: 0, walls: 0, openings: 0, 'placed-items': 0, warnings: 0 },

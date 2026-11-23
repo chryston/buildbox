@@ -2437,6 +2437,7 @@ export function FloorWorkspace(): ReactNode {
           precision={project.preferences.displayPrecision}
           unsavedChanges={session.getSnapshot().save.kind !== 'saved'}
           port={services.exportDrawings}
+          onOpenView={openView}
           onClose={() => {
             setIsExporting(false)
           }}

@@ -14,7 +14,7 @@
  * here writes: the Project is read, the view is read, and the gates are a closure over a lookup.
  */
 import type { LayerGates } from '../drawing'
-import { FF_RENOVATION, UNLAYERED_LAYER, effectiveLayerOrder, entityLayerKeys, layerAccessOf } from '../derive'
+import { FF_RENOVATION, UNLAYERED_LAYER, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, layerAccessOf } from '../derive'
 import type { EntityId, PlanView, Project } from '../domain'
 import { UNLAYERED_LAYER_KEY, drawingLayerById, viewDesignOptionId, viewLayerSettingOverride, viewRenovationDisplay } from '../domain'
 import type { CompositionColorOverride, CompositionLayer, DrawingToggles, RecordedComposition } from './types'
@@ -88,4 +88,27 @@ export function drawingComposition(
     },
     optionId,
   }
+}
+
+/** One layer as the Export dialog's chip: what it is called, and whether the view shows it. */
+export interface DrawingLayerChip {
+  readonly id: EntityId
+  readonly name: string
+  readonly visible: boolean
+}
+
+/**
+ * The chips the Drawing tab offers, in the order the sheet paints them.
+ *
+ * The saved view's own visibility is what a chip starts on, and `Unlayered` is a chip like any
+ * other — it is the layer the Project files unfiled things on, and hiding it hides real content
+ * (#71 §2). The `Notes overlay` chip is not here: it has nothing to overlay until #80 and #81 land,
+ * so the dialog renders it disabled and this list stays the Project's own.
+ */
+export function drawingLayerChips(project: Project, view: PlanView | null): readonly DrawingLayerChip[] {
+  return effectiveLayerOrder(project, view).map((key) => ({
+    id: key,
+    name: layerName(project, key),
+    visible: effectiveLayerSetting(project, view, key).visible,
+  }))
 }

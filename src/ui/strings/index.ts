@@ -445,13 +445,17 @@ export const STRINGS = {
   exportListWarnings: 'Warnings List',
   /** Why the State and Layer controls go grey: that table is scoped by Floor and option only. */
   exportListsWarningsIgnoreScope: 'Warnings ignore layers and states.',
+  /**
+   * Above the scope controls (#73 §2): a table is scoped by what is ticked here and never by what
+   * the saved view happens to hide, which is the one thing a person is most likely to assume.
+   */
+  exportListsScopeExplicit: 'Data exports never inherit view hiding. Scope is explicit:',
   /** The Cut List checkbox is absent rather disabled when nothing in scope has parts to cut. */
   exportListsNoCabinets: 'No cabinet designs in this scope',
   exportListsFloors: 'Floors',
   exportListsDesignOption: 'Design Option',
   exportListsExistingOnly: 'Existing only',
   exportListsStates: 'Renovation States',
-  exportListsAllLayers: 'All layers incl. Unlayered',
   /** Beside each table: the rows it holds. `0 rows` is criterion 5's notice, in the same words. */
   exportListsRows: (count: number): string => `${count} ${count === 1 ? 'row' : 'rows'}`,
   /** A bare CSV has nowhere to put the Project, the revision or the recipe (export contract §9). */

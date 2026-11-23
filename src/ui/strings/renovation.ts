@@ -118,6 +118,45 @@ export const RENOVATION_STRINGS = {
     `${viewName}: ${display} display needs an active Design Option.`,
   showExisting: 'Show Existing',
 
+  // ---- the Export dialog's Drawing tab (#73 §1)
+  /** The chips' group, named the way the Layers panel names the same thing. */
+  exportLayersGroup: 'Drawing Layers',
+  /**
+   * Above the chips, in the issue's words: the toggles start from the saved view and are temporary,
+   * and the view they came from is named so a person knows which one they are not changing.
+   */
+  exportLayersStart: (viewName: string): string =>
+    `Starts from the saved view. Toggles here are temporary and don't change “${viewName}”.`,
+  /** The chip that has nothing to overlay yet (#80, #81). */
+  exportNotesOverlay: 'Notes overlay',
+  /** The collapsible's heading line, verbatim: what is in there is why a repeat export is the same file. */
+  exportCompositionHeading: 'Recorded composition (repeat export is deterministic):',
+  exportCompositionView: 'View',
+  exportCompositionOption: 'Design Option',
+  exportCompositionDisplay: 'Display',
+  exportCompositionLayerOrder: 'Layer order (back to front)',
+  exportCompositionIncluded: 'Included layers',
+  exportCompositionColors: 'Colour overrides',
+  exportCompositionNotes: 'Notes overlay',
+  /** The value for “nothing”: an empty list and `Existing only` both read as an absence. */
+  exportCompositionNone: 'none',
+  exportCompositionOn: 'on',
+  exportCompositionOff: 'off',
+  /** The one-click fix beside the blocking sentence: open the view, choose an Option, come back. */
+  exportOpenView: 'Open view',
+
+  // ---- the Export dialog's Lists tab: the Option and Layer controls (#73 §2)
+  exportListsThisOption: (name: string): string => `This option: ${name}`,
+  exportListsChooseOptions: 'Choose options…',
+  /** The third radio: the Existing Model on its own, which leaves `design_option` empty. */
+  exportListsExistingModelOnly: 'Existing Model only',
+  exportListsGroupLayers: 'Drawing Layers',
+  /**
+   * The informational notice (#73 §2): these rows are in the file and the view was hiding them. It
+   * never blocks, and its disclosure lists each one named the way the table names it.
+   */
+  exportListsHiddenInView: (n: number): string => `${n} items included that are hidden in this view`,
+
   // ---- the undo tooltip of a saved-view setting (#70 §2)
   // The catalogue's default label (`Set Design Option`, `Set Renovation Display`) cannot name what
   // was chosen: the Option's name is Project data and the Display's is copy. So the card composes

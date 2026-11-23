@@ -75,6 +75,7 @@ export { DISPLAY_ORDER, DISPLAY_ROLES, DISPLAY_STATES, displayLabel } from './wo
 export { ExportDialog, UNIT_LABEL, type ExportDialogProps } from './workspace/export/ExportDialog'
 export {
   viewKey,
+  type BlockedView,
   type ExportMeasurement,
   type ExportPort,
   type ListsOptions,

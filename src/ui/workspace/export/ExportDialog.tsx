@@ -19,11 +19,22 @@
 import { useEffect, useState } from 'react'
 import { Modal } from '../../library/Modal'
 import { STRINGS } from '../../strings'
+import { RENOVATION_STRINGS } from '../../strings/renovation'
+import { displayLabel } from '../renovation/displayTheme'
 import { fitCheck, suggestionsFor } from '../../../export'
-import type { ExportProgress, Orientation, Recipe, RecipeViewRef, ScaleDenominator } from '../../../export'
+import type {
+  DrawingLayerChip,
+  ExportProgress,
+  Orientation,
+  Recipe,
+  RecipeViewRef,
+  RecordedComposition,
+  ScaleDenominator,
+} from '../../../export'
+import { FF_RENOVATION } from '../../../derive'
 import { ListsPanel } from './ListsPanel'
 import { viewKey } from './port'
-import type { ExportPort, ExportRunOutcome } from './port'
+import type { BlockedView, ExportPort, ExportRunOutcome } from './port'
 import type { Rect } from '../../../derive'
 import type { DisplayUnit } from '../../../domain'
 import type { ReactNode } from 'react'
@@ -44,6 +55,11 @@ function unionOf(a: Rect | null, b: Rect): Rect {
   }
 }
 
+/** The layers of a composition on one line, in the order the sheet paints them. */
+function layerNames(rows: readonly { readonly name: string }[]): string {
+  return rows.length === 0 ? RENOVATION_STRINGS.exportCompositionNone : rows.map((row) => row.name).join(', ')
+}
+
 const FORMATS = ['svg', 'png', 'pdf'] as const
 const PAGE_SIZES = ['A4', 'A3'] as const
 const ORIENTATIONS = ['auto', 'portrait', 'landscape'] as const
@@ -58,6 +74,12 @@ export interface ExportDialogProps {
   /** True while the session holds changes that did not save (criterion 13). */
   unsavedChanges: boolean
   port: ExportPort
+  /**
+   * The one-click fix for the blocking error (#73 §3): open the view that needs an Option, so the
+   * person can choose one and come back. Absent where the dialog has no workspace to move — an
+   * Item Detail View, which can never be blocked anyway.
+   */
+  onOpenView?(viewId: string): void
   onClose(): void
 }
 
@@ -67,6 +89,7 @@ export const ExportDialog = ({
   precision,
   unsavedChanges,
   port,
+  onOpenView,
   onClose,
 }: ExportDialogProps): ReactNode => {
   const key = viewKey(origin)
@@ -150,6 +173,76 @@ export const ExportDialog = ({
     }
   }, [port, selection])
 
+  // ---- the Drawing tab's temporary layer toggles and the composition they record (#73 §1)
+  //
+  // The chips start from the saved view's own visibility and live in `recipe.views[].toggles`,
+  // which `export` reads and nothing else does: the saved view, the revision and the next dialog
+  // are untouched by them. The composition is asked for rather than composed here because it is
+  // the same object the file's metadata will carry — the block shows what the export will say.
+  const [chips, setChips] = useState<readonly DrawingLayerChip[]>([])
+  useEffect(() => {
+    let alive = true
+    void port.drawingLayers(origin).then((next) => {
+      if (alive) setChips(next)
+    })
+    return () => {
+      alive = false
+    }
+  }, [port, origin])
+
+  const originRef = selected.find((held) => viewKey(held) === key)
+  const toggles = originRef?.kind === 'plan' ? originRef.toggles : undefined
+  const visible = toggles?.layers ?? chips.filter((chip) => chip.visible).map((chip) => chip.id)
+  const toggleChip = (layerId: string): void => {
+    const next = visible.includes(layerId) ? visible.filter((each) => each !== layerId) : [...visible, layerId]
+    patch({
+      views: recipe.views.map((held) =>
+        viewKey(held) === key && held.kind === 'plan' ? { ...held, toggles: { ...toggles, layers: next } } : held,
+      ),
+    })
+  }
+
+  const togglesKey = JSON.stringify(toggles ?? null)
+  const [composition, setComposition] = useState<RecordedComposition | null>(null)
+  useEffect(() => {
+    let alive = true
+    void port.composition(origin, toggles ?? {}).then((next) => {
+      if (alive) setComposition(next)
+    })
+    return () => {
+      alive = false
+    }
+    // The toggles are keyed by their own text: every chip replaces the object.
+  }, [port, origin, togglesKey])
+
+  // The Option names are Project data, so the composition block reads them from the same place the
+  // Lists tab does rather than printing an ID a customer cannot match to anything.
+  const [optionNames, setOptionNames] = useState<Record<string, string>>({})
+  useEffect(() => {
+    let alive = true
+    void port.listsOptions(origin).then((next) => {
+      if (alive) setOptionNames(Object.fromEntries(next.designOptions.map((each) => [each.id, each.label])))
+    })
+    return () => {
+      alive = false
+    }
+  }, [port, origin])
+
+  // The one blocking error #73 §3 adds: a Display with no Option to display. It is asked for, not
+  // derived here, because the predicate is `export`'s and the dialog has no view to test.
+  const [blockedView, setBlockedView] = useState<BlockedView | null>(null)
+  useEffect(() => {
+    let alive = true
+    void port.blocking(selected).then((next) => {
+      if (alive) setBlockedView(next)
+    })
+    return () => {
+      alive = false
+    }
+    // The selection is keyed by its own text, not by the array every other control replaces.
+  }, [port, selection])
+
+
   const empty = selected.length > 0 && bounds === null
 
   // `auto` means either edge may lead, so the drawing fits if either orientation would hold it.
@@ -167,9 +260,11 @@ export const ExportDialog = ({
   const blocked =
     selected.length === 0
       ? STRINGS.exportNeedViews
-      : !fit && typeof recipe.scale === 'number'
-        ? STRINGS.exportScaleNoFit(recipe.scale)
-        : null
+      : blockedView !== null
+        ? RENOVATION_STRINGS.exportNeedsOption(blockedView.viewName, displayLabel(blockedView.display))
+        : !fit && typeof recipe.scale === 'number'
+          ? STRINGS.exportScaleNoFit(recipe.scale)
+          : null
   const warnings = port.unacknowledgedWarnings()
   const glyphs = outcome?.kind === 'downloaded' ? outcome.missingGlyphs : []
 
@@ -245,6 +340,78 @@ export const ExportDialog = ({
             </ul>
             {isPdf && selected.length > 0 && <p className="helper">{STRINGS.exportPdfSingleView}</p>}
           </fieldset>
+
+          {FF_RENOVATION && chips.length > 0 && (
+            <fieldset disabled={busy || originRef === undefined}>
+              <legend>{RENOVATION_STRINGS.exportLayersGroup}</legend>
+              <p className="helper" data-testid="export-layers-start">
+                {RENOVATION_STRINGS.exportLayersStart(views.find((each) => viewKey(each.ref) === key)?.label ?? '')}
+              </p>
+              <div className="bb-export-chips" data-testid="export-layer-chips">
+                {chips.map((chip) => (
+                  <label key={chip.id}>
+                    <input
+                      type="checkbox"
+                      data-testid={`export-layer-${chip.id}`}
+                      checked={visible.includes(chip.id)}
+                      onChange={() => {
+                        toggleChip(chip.id)
+                      }}
+                    />
+                    <span>{chip.name}</span>
+                  </label>
+                ))}
+                {/* Nothing to overlay until #80 and #81 land, so the chip is there and cannot be moved. */}
+                <label>
+                  <input type="checkbox" data-testid="export-layer-notes" checked={false} disabled />
+                  <span>{RENOVATION_STRINGS.exportNotesOverlay}</span>
+                </label>
+              </div>
+              {composition !== null && (
+                <details data-testid="export-composition">
+                  <summary>{RENOVATION_STRINGS.exportCompositionHeading}</summary>
+                  <dl className="bb-export-composition">
+                    <div>
+                      <dt>{RENOVATION_STRINGS.exportCompositionView}</dt>
+                      <dd>{composition.view_name}</dd>
+                    </div>
+                    <div>
+                      <dt>{RENOVATION_STRINGS.exportCompositionOption}</dt>
+                      <dd>
+                        {composition.design_option_id === null
+                          ? RENOVATION_STRINGS.exportCompositionNone
+                          : (optionNames[composition.design_option_id] ?? composition.design_option_id)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>{RENOVATION_STRINGS.exportCompositionDisplay}</dt>
+                      <dd>{displayLabel(composition.renovation_display)}</dd>
+                    </div>
+                    <div>
+                      <dt>{RENOVATION_STRINGS.exportCompositionLayerOrder}</dt>
+                      <dd>{layerNames(composition.layer_order)}</dd>
+                    </div>
+                    <div>
+                      <dt>{RENOVATION_STRINGS.exportCompositionIncluded}</dt>
+                      <dd>{layerNames(composition.included_layers)}</dd>
+                    </div>
+                    <div>
+                      <dt>{RENOVATION_STRINGS.exportCompositionColors}</dt>
+                      <dd>{layerNames(composition.color_overrides)}</dd>
+                    </div>
+                    <div>
+                      <dt>{RENOVATION_STRINGS.exportCompositionNotes}</dt>
+                      <dd>
+                        {composition.notes.overlay
+                          ? RENOVATION_STRINGS.exportCompositionOn
+                          : RENOVATION_STRINGS.exportCompositionOff}
+                      </dd>
+                    </div>
+                  </dl>
+                </details>
+              )}
+            </fieldset>
+          )}
 
           <fieldset disabled={busy}>
             <legend>{STRINGS.exportGroupFiles}</legend>
@@ -402,6 +569,20 @@ export const ExportDialog = ({
                       {` (${fix.page}, ${fix.orientation})`}
                     </button>
                   ))}
+                </>
+              )}
+              {FF_RENOVATION && blockedView !== null && onOpenView !== undefined && (
+                <>
+                  {' '}
+                  <button
+                    type="button"
+                    data-testid="export-open-view"
+                    onClick={() => {
+                      onOpenView(blockedView.viewId)
+                    }}
+                  >
+                    {RENOVATION_STRINGS.exportOpenView}
+                  </button>
                 </>
               )}
             </p>
