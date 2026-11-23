@@ -8,7 +8,7 @@
  * select changes; and an Option that cannot take the move says so before the press rather than
  * refusing after it.
  *
- * Dark in a flag-off build, so it runs only in the `renovation-dom` project.
+ * It runs in the browser project, where the panel and its overlays are reachable.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'

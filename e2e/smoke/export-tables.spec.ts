@@ -164,12 +164,17 @@ test('the five tables come back as one archive whose manifest hashes every entry
     STRINGS.exportListsWarningsIgnoreScope,
   )
   await expect(page.getByTestId('export-lists-state-existing')).toBeDisabled()
-  await expect(page.getByTestId('export-lists-layers')).toBeDisabled()
+  // The Layer group is a wrapper, not a control, so what is inert is what it holds: every layer
+  // checkbox in it.
+  const layerBoxes = page.getByTestId('export-lists-layers').locator('input')
+  expect(await layerBoxes.count()).toBeGreaterThan(0)
+  for (const box of await layerBoxes.all()) await expect(box).toBeDisabled()
   await expect(page.getByTestId(`export-lists-floor-${FLOOR_ONE}`)).toBeEnabled()
   // Combined again, they are live: the Warnings rows ignore them either way, the others need them.
   await page.getByTestId('export-lists-table-rooms').click()
   await expect(page.getByTestId('export-lists-warnings-ignore-scope')).toHaveCount(0)
   await expect(page.getByTestId('export-lists-state-existing')).toBeEnabled()
+  for (const box of await layerBoxes.all()) await expect(box).toBeEnabled()
   // All five, and only the five, whatever order the boxes were ticked in.
   await chooseFive(page)
 
@@ -223,15 +228,23 @@ test('the five tables come back as one archive whose manifest hashes every entry
   const items = csvRows(Buffer.from(entries[`${SLUG}_placed-items_${day}.csv`]!))
   expect(items.some((one) => one[16] === 'crosses' && one[14] === '' && one[15] === '')).toBe(true)
   expect(items.some((one) => one[15] === 'Kitchen')).toBe(true)
-  // Criterion 3: every element row carries the S7 defaults in the columns #73 will fill.
+  // Criterion 3: the two columns #73 filled are filled. The scene predates Drawing Layers, so
+  // opening it minted three and filed every record — the ids are the app's own and cannot be
+  // predicted, but what they say is checkable: one id names one layer, and no Placed Item is left
+  // Unlayered.
+  const filedOn = new Map<string, string>()
   for (const one of items.slice(1)) {
     expect(one[3]).toBe('')
     expect(one[4]).toBe('')
     expect(one[5]).toBe('existing')
-    expect(one[6]).toBe('')
-    expect(one[7]).toBe('Unlayered')
+    expect(one[6], 'every Placed Item carries the layer it is filed on').not.toBe('')
+    expect(one[7]).not.toBe('Unlayered')
+    const named = filedOn.get(one[6])
+    if (named !== undefined) expect(one[7]).toBe(named)
+    filedOn.set(one[6], one[7])
     expect(one[17]).toBe('')
   }
+  expect(new Set(filedOn.values()).size).toBe(filedOn.size)
 
   // The Warnings List: unacknowledged first, the acknowledged one last and carrying its note.
   const warnings = csvRows(Buffer.from(entries[`${SLUG}_warnings_${day}.csv`]!))
@@ -269,7 +282,7 @@ test('an empty Floor says 0 rows beside every table and writes five headers', as
 
   // Only the new Floor is in scope: the sentence says its name, not `All Floors`.
   await page.getByTestId(`export-lists-floor-${FLOOR_ONE}`).click()
-  await expect(page.getByTestId('export-lists-statement')).toContainText(SCOPE.existingOnly)
+  await expect(page.getByTestId('export-lists-statement')).toContainText(SCOPE.existingModelOnly)
   await expect(page.getByTestId('export-lists-statement')).not.toContainText(SCOPE.allFloors)
   await expect(page.getByTestId(`export-lists-floor-${spare}`)).toBeChecked()
   for (const id of FIVE) await expect(page.getByTestId(`export-lists-rows-${id}`)).toHaveText('0 rows')

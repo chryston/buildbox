@@ -35,21 +35,11 @@ const projectName = renovationSeed.library.find((record) => record.id === renova
 /** The Sofa, surveyed into the Existing Model by the seed and the thing the move takes away. */
 const SOFA = 'fp-sofa'
 
-/**
- * The database this build opens, and not the one the other smoke specs seed.
- *
- * A build with any `VITE_FF_*` on is a preview build, and a preview build never opens the database
- * real work lives in (#53, architecture §11) — that is what keeps preview work out of it. The seed
- * therefore has to land in `buildbox-preview`, or the Library this build reads is the empty one and
- * the Project card the test is waiting for was never in it. `src/app/channel.ts` owns the name.
- */
-const PREVIEW_DB_NAME = 'buildbox-preview'
-
 const rows = (page: Page): Locator => page.locator('[data-testid^="design-option-row-"]')
 const nameErrors = (page: Page): Locator => page.locator('[data-testid^="design-option-name-error-"]')
 
 async function openRenovationPlan(page: Page): Promise<void> {
-  await seedPreviewDb(page, { ...renovationSeed, dbName: PREVIEW_DB_NAME })
+  await seedPreviewDb(page, renovationSeed)
   await page.goto('./', { waitUntil: 'networkidle' })
   await openProjectFromLibrary(page, projectName)
   await expect(floorPlanCanvas(page)).toBeVisible()

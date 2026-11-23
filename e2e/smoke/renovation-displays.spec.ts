@@ -26,9 +26,6 @@ const renovationSeed = JSON.parse(
 ) as PreviewSeed
 const projectName = renovationSeed.library.find((record) => record.id === renovationSeed.projects[0]!.id)!.name
 
-/** A preview build never opens the database real work lives in (#53); the seed has to land where it looks. */
-const PREVIEW_DB_NAME = 'buildbox-preview'
-
 const W_1 = 'seed-wall-002'
 const W_2 = 'seed-wall-003'
 const W_6 = 'seed-wall-013'
@@ -46,7 +43,7 @@ async function wallRefs(page: Page): Promise<string[]> {
 }
 
 async function openRenovationPlan(page: Page): Promise<void> {
-  await seedPreviewDb(page, { ...renovationSeed, dbName: PREVIEW_DB_NAME })
+  await seedPreviewDb(page, { ...renovationSeed})
   await page.goto('./', { waitUntil: 'networkidle' })
   await openProjectFromLibrary(page, projectName)
   await expect(floorPlanCanvas(page)).toBeVisible()

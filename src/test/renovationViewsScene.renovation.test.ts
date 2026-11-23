@@ -23,8 +23,6 @@
  * writes it. What this file cares about is that the validator accepts it and the four Displays treat
  * it like any other piece of an Option's own work.
  *
- * It runs in the `renovation` project (`npm run test:renovation`): a flag-off build has no v8, so
- * it could only misread these bytes.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'

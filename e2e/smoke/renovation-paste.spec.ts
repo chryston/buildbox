@@ -33,9 +33,6 @@ const nameOf = (id: string): string => pairSeed.library.find((record) => record.
 const FITOUT = nameOf('proj-paste-fitout')
 const ELM = nameOf('proj-paste-elm')
 
-/** A preview build never opens the database real work lives in (#53); the seed has to land where it looks. */
-const PREVIEW_DB_NAME = 'buildbox-preview'
-
 /** `Option A · Combined` of 14 Elm St — a Display a paste is allowed into. */
 const COMBINED = 'views-view-014'
 const FURNITURE = 'layers-001'
@@ -44,7 +41,7 @@ const TALL_PANTRY = 'seed-003'
 const GPO = 'seed-item-028'
 
 async function openPair(page: Page, projectName: string): Promise<void> {
-  await seedPreviewDb(page, { ...pairSeed, dbName: PREVIEW_DB_NAME })
+  await seedPreviewDb(page, { ...pairSeed})
   await page.goto('./', { waitUntil: 'networkidle' })
   await openProjectFromLibrary(page, projectName)
   await expect(floorPlanObjectIds(page)).resolves.not.toHaveLength(0)

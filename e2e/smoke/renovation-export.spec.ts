@@ -26,9 +26,6 @@ const exportSeed = JSON.parse(
 ) as PreviewSeed
 const projectName = exportSeed.library.find((record) => record.id === exportSeed.projects[0]!.id)!.name
 
-/** A preview build never opens the database real work lives in (#53); the seed has to land where it looks. */
-const PREVIEW_DB_NAME = 'buildbox-preview'
-
 const COMBINED = 'views-view-016'
 const FURNITURE_HIDDEN = 'export-009'
 const FURNITURE = 'export-001'
@@ -48,7 +45,7 @@ interface SheetMetadata {
 }
 
 async function openExportPlan(page: Page): Promise<void> {
-  await seedPreviewDb(page, { ...exportSeed, dbName: PREVIEW_DB_NAME })
+  await seedPreviewDb(page, { ...exportSeed})
   await page.goto('./', { waitUntil: 'networkidle' })
   await openProjectFromLibrary(page, projectName)
   await expect(floorPlanCanvas(page)).toBeVisible()

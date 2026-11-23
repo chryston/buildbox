@@ -8,7 +8,7 @@
  * and deleted by one Intent each, so undo of the last step is undo of that step alone, and the
  * Existing Model is never half-touched.
  *
- * The section is dark in a flag-off build, so it runs only in the `renovation-dom` project.
+ * The section runs in the browser project, where the Design Options panel is reachable.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'

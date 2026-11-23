@@ -4,8 +4,7 @@ import type { Acknowledgement, DesignOption, Project, Wall } from '../../domain'
 import roomsFixture from '../../../fixtures/domain/v7/rooms.json?raw'
 
 // Warnings run per Design Option (#69 §6): the producers see that Option's standing model, and an
-// acknowledgement is half-keyed by the Option it was made in. This file runs in the `renovation`
-// project (`npm run test:renovation`) because a build without the flag cannot read an Option.
+// acknowledgement is half-keyed by the Option it was made in.
 //
 // The base is the v7 rooms fixture, whose W-1 and W-2 cross at (2000, 0) with no Junction — the
 // one `wall_crossing` warning the fixture already carries an acknowledgement for, under no Option.

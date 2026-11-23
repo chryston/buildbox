@@ -20,9 +20,6 @@
  *                an active layer
  *   zero         no layers, nothing filed, no view with an override left, and no view naming a
  *                layer that is gone
- *
- * It runs in the `renovation` project: a flag-off build has no v8, so it could only misread these
- * bytes.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
