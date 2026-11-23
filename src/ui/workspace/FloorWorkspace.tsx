@@ -17,7 +17,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, enabledVerticalSnapKinds, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates, verticalSnapCandidates } from '../../derive'
 import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings, drawElevationView } from '../../drawing'
 import type { BadgeSubject, LayerGates, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
@@ -81,6 +81,7 @@ import { SavedViewCard } from './SavedViewCard'
 // #75: the split workspace's second pane, the card that names the view it draws, the tool that draws
 // a view line, and the confirm that removes one.
 import { ElevationPane, elevationPaneTitle } from './ElevationPane'
+import { ElevationSnapsMenu } from './elevation/ElevationSnapsMenu'
 import { ElevationViewCard } from './ElevationViewCard'
 import { elevationLineProblem } from './ElevationDefinitionSection'
 import { DeleteElevationViewDialog } from './DeleteElevationViewDialog'
@@ -208,6 +209,8 @@ export function FloorWorkspace(): ReactNode {
   const activeElevationByFloor = useWorkspace((state) => state.activeElevationByFloor)
   const setActiveElevation = useWorkspace((state) => state.setActiveElevation)
   const splitRatio = useWorkspace((state) => state.splitRatio)
+  /** The Elevation View's three `Snaps ▾` rows (#75 §7): UI-session, never saved, never undone. */
+  const verticalSnapSettings = useWorkspace((state) => state.verticalSnapSettings)
   const setSplitRatio = useWorkspace((state) => state.setSplitRatio)
   const paneAlone = useWorkspace((state) => state.paneAlone)
   const setPaneAlone = useWorkspace((state) => state.setPaneAlone)
@@ -1711,6 +1714,40 @@ export function FloorWorkspace(): ReactNode {
   )
 
   /**
+   * The heights a vertical drag in this pane may stop at (#75 §7), or null when there is no pane to
+   * drag in. The three `Snaps ▾` rows filter the families; the candidate source itself already applies
+   * the view's Design Option, Renovation Display, layer rules and `Snap to hidden content`, and leaves
+   * each entity's own id on its candidate so the dragged entity cannot be its own target.
+   */
+  const elevationSnapCandidates = useMemo(
+    () => (elevationView === null
+      ? null
+      : verticalSnapCandidates({
+        project,
+        view: elevationView,
+        enabled: enabledVerticalSnapKinds(verticalSnapSettings),
+      })),
+    [project, elevationView, verticalSnapSettings],
+  )
+
+  /**
+   * One finished vertical drag, as the one Intent that writes it (#75 §6, behaviour 11).
+   *
+   * The row's kind decides which of the three Intents the field belongs to; the field decides the
+   * value's meaning. Nothing else is written alongside it — no second Intent for the plan, no patch
+   * for the pane — because the plan, the elevation, the warnings and the inspector all read the same
+   * canonical entity, so one transaction and one render moves all four together.
+   */
+  const commitVerticalExtent = useCallback((field: 'base' | 'height' | 'top', value: number): void => {
+    const id = selection
+    const row = elevationSceneValue?.rows.find((entry) => entry.id === id) ?? null
+    if (row === null) return
+    if (row.kind === 'wall') send('wall.setVerticalExtent', { wallId: row.id, field, value })
+    else if (row.kind === 'opening') send('opening.setVerticalExtent', { openingId: row.id, field, value })
+    else send('plan.setPlacementVerticalExtent', { placedItemId: row.id, field: field === 'height' ? 'top' : field, value })
+  }, [selection, elevationSceneValue, send])
+
+  /**
    * The Elevation View's own layer answers (#71 §4): the view is a saved view like any Plan View, so
    * hiding Structure hides it in the Section too. Built the same way as `layerGates` above and for the
    * same reason — the Display's own subset is already applied by `elevationScene`, so the layer gate is
@@ -3031,14 +3068,18 @@ export function FloorWorkspace(): ReactNode {
               : {
                   id: elevationView.id,
                   header: (
-                    <span data-testid="split-title-elevation">
-                      {elevationPaneTitle(
-                        elevationView,
-                        designOptionsOf(project).find((option) => option.id === viewDesignOptionId(elevationView))
-                          ?.name ?? null,
-                        viewRenovationDisplay(elevationView),
-                      )}
-                    </span>
+                    <>
+                      <span data-testid="split-title-elevation">
+                        {elevationPaneTitle(
+                          elevationView,
+                          designOptionsOf(project).find((option) => option.id === viewDesignOptionId(elevationView))
+                            ?.name ?? null,
+                          viewRenovationDisplay(elevationView),
+                        )}
+                      </span>
+                      {/* The three vertical-snap rows, in this pane's own tool strip (#75 §7). */}
+                      <ElevationSnapsMenu />
+                    </>
                   ),
                   body: (
                     <div className="bb-elevation-pane" ref={elevationHostRef} data-testid="elevation-pane-host">
@@ -3056,6 +3097,8 @@ export function FloorWorkspace(): ReactNode {
                         onPick={(id) => workspaceStore.getState().select(id)}
                         viewport={elevationViewport}
                         onViewport={setElevationViewport}
+                        dragCandidates={elevationSnapCandidates}
+                        onVerticalExtent={commitVerticalExtent}
                         hostRef={elevationHostRef}
                         resolveAsset={(hash) =>
                           planImage !== null && planImage.assetHash === hash ? imageSrc : null

@@ -702,6 +702,16 @@ export const STRINGS = {
   elevationNoneTitle: 'No Elevation View is open',
   elevationNoneBody: 'An Elevation View is a saved way of looking at this Floor from one side.',
   elevationNoneHint: 'Choose the side on the Plan View, then click, or type a depth and press Enter.',
+  // The Elevation View's `Snaps ▾` (#75 §7): three rows, all on until switched off.
+  elevationSnapFloorHeights: 'Floor Datum & limits',
+  elevationSnapEntities: 'Tops & bottoms',
+  elevationSnapMounting: 'Mounting heights',
+  // The chip that follows a handle: the value being changed, its change, and the height when the
+  // drag changes the height too. `Δ` and `·` are the issue's own separators.
+  elevationChipBase: 'Base',
+  elevationChipTop: 'Top',
+  elevationChipHeight: 'Height',
+  elevationChipDelta: 'Δ',
   /** The three states of the pane control, named by the pane each one leaves on screen. */
   showPlanAlone: 'Plan only',
   showElevationAlone: 'Elevation only',

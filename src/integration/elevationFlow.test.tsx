@@ -283,6 +283,29 @@ describe('Elevation Views in the split workspace', () => {
     expect(view.project().elevationViews?.[0]?.line).toEqual(LINE)
   })
 
+  it('offers three vertical-snap rows, all on, and switches them without an Edit Transaction', async () => {
+    await renderWorkspace()
+    const id = await createView('Kitchen')
+    await screen.findByTestId(`split-pane-${id}`)
+
+    fireEvent.click(screen.getByTestId('elevation-snaps-toggle'))
+    const rows = ['elevation-snap-floor-heights', 'elevation-snap-entities', 'elevation-snap-mounting']
+    for (const testId of rows) {
+      const row = screen.getByTestId(testId)
+      // Criterion 19: three labelled toggles, each box inside its own label, all on by default.
+      expect(row.tagName).toBe('LABEL')
+      expect(row.querySelector('input')).toBeInstanceOf(HTMLInputElement)
+      expect((row.querySelector('input') as HTMLInputElement).checked).toBe(true)
+    }
+
+    const before = view.project()
+    fireEvent.click(screen.getByLabelText(STRINGS.elevationSnapMounting))
+    // Criterion 19: UI-session settings — not undoable and never in the Project, so the document the
+    // Backup would have to keep is the same object it was before the click.
+    expect(view.project()).toBe(before)
+    expect((screen.getByLabelText(STRINGS.elevationSnapMounting) as HTMLInputElement).checked).toBe(false)
+  })
+
   it('offers the tool in every Renovation Display and gates it on calibration', async () => {
     await renderWorkspace()
     const button = screen.getByTestId('tool-elevation')

@@ -68,6 +68,22 @@ export type SnapToggle =
  * the Project (#20 §7, #26). A snap writes coordinates and leaves no relationship behind, so
  * what is switched on today cannot change what a shape drawn last week means tomorrow.
  */
+/**
+ * The three `Snaps ▾` rows of an Elevation View (#75 §7).
+ *
+ * The same UI-session rule as the plan's nine: device-local, never undoable, never in a Backup and
+ * never in the Project. A vertical snap writes a number and keeps no link to what it was taken from,
+ * so what is switched on today cannot change what a height set last week means tomorrow.
+ */
+export interface VerticalSnapSettings {
+  /** The Floor Datum and the Floor's own limits. */
+  floorHeights: boolean
+  /** The bottoms and tops of the other entities this view shows. */
+  entities: boolean
+  /** The standard mounting heights the preset pack defines. */
+  presetHeights: boolean
+}
+
 export interface SnapSettings {
   grid: boolean
   /** 10 / 50 / 100 / 500 mm; 100 is the default the issue sets. */
@@ -229,6 +245,8 @@ export interface WorkspaceState {
   dragPreview: ItemDragPreview | null
   /** The nine `Snaps ▾` rows (#59 §5); `angle` is the same state the rotate handle reads (#57). */
   snapSettings: SnapSettings
+  /** The Elevation View's three vertical-snap rows (#75 §7), on by default. */
+  verticalSnapSettings: VerticalSnapSettings
   /** What the Edges tab has selected: one Edge, one vertex, or nothing (#59 §3, §4). */
   shapeSelection: ShapeSelection
   /**
@@ -325,6 +343,8 @@ export interface WorkspaceActions {
   setAngleSnap(enabled: boolean, incrementDeg?: number): void
   /** One `Snaps ▾` checkbox (#59 §5). UI-session state, never undoable (#26). */
   setSnapEnabled(toggle: SnapToggle, enabled: boolean): void
+  /** One row of the Elevation View's `Snaps ▾` (#75 §7): navigation of the same kind, never history. */
+  setVerticalSnapEnabled(row: keyof VerticalSnapSettings, enabled: boolean): void
   /** The `Grid` row's spacing select: 10 / 50 / 100 / 500 mm. */
   setGridSpacing(spacingMm: number): void
   /** What the Edges tab has selected. Choosing an Edge drops the vertex and the other way about. */
@@ -421,6 +441,7 @@ const INITIAL: WorkspaceState = {
     perpendicular: true,
     tangent: true,
   },
+  verticalSnapSettings: { floorHeights: true, entities: true, presetHeights: true },
   shapeSelection: null,
   designPreview: null,
   pickingOrigin: false,
@@ -514,6 +535,8 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
         },
       },
     })),
+  setVerticalSnapEnabled: (row, enabled) =>
+    set((state) => ({ verticalSnapSettings: { ...state.verticalSnapSettings, [row]: enabled } })),
   setSnapEnabled: (toggle, enabled) =>
     set((state) => {
       const snapSettings: SnapSettings = { ...state.snapSettings }

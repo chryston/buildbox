@@ -161,6 +161,9 @@ export {
   toValidationProblems,
   usableIntervals,
   validateLoop,
+  verticalBodySnap,
+  verticalSnap,
+  verticalTolerance,
   vertices,
 } from '../geometry'
 export type {
@@ -189,4 +192,9 @@ export type {
   SnapKind,
   UsableGap,
   UsableInterval,
+  VerticalBodySnap,
+  VerticalEdges,
+  VerticalSnap,
+  VerticalSnapCandidate,
+  VerticalSnapKind,
 } from '../geometry'

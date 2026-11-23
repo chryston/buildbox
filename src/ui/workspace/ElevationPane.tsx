@@ -37,6 +37,8 @@ import { STRINGS } from '../strings'
 import { RENOVATION_STRINGS } from '../strings/renovation'
 import { displayLabel } from './renovation/displayTheme'
 import { cycleOrder, isSameSpot } from './selection/overlapCycle'
+import type { VerticalSnapCandidate } from '../../derive'
+import { ElevationDragLayer } from './elevation/ElevationDragLayer'
 import type { CanvasPoint, CycleCandidate } from './selection/overlapCycle'
 import { clampZoom, fitViewport, zoomAround } from './viewport'
 import type { Viewport } from './viewport'
@@ -66,6 +68,14 @@ export interface ElevationPaneProps {
   onViewport(viewport: Viewport): void
   hostRef: RefObject<HTMLDivElement | null>
   resolveAsset: (hash: string) => string | null
+  /**
+   * The heights a vertical drag may stop at, or null for no handles at all (#75 §6, §7). The caller
+   * owns the `Snaps ▾` state and the view's own layer and Display rules, because the pane must not
+   * know what a Design Option is in order to draw a square.
+   */
+  dragCandidates?: readonly VerticalSnapCandidate[] | null
+  /** One finished drag, in the field of the canonical entity the caller's Intent writes. */
+  onVerticalExtent?: (field: 'base' | 'height' | 'top', value: number) => void
   children?: never
 }
 
@@ -95,7 +105,7 @@ export function elevationArrowDeg(view: ElevationView): number {
 export function ElevationPane(props: ElevationPaneProps): ReactNode {
   const {
     view, scene, list, sizing, optionName, display, selectedIds, onPick,
-    viewport, onViewport, hostRef, resolveAsset,
+    viewport, onViewport, hostRef, resolveAsset, dragCandidates = null, onVerticalExtent,
   } = props
   const svgRef = useRef<SVGSVGElement>(null)
   const panning = useRef(false)
@@ -238,6 +248,12 @@ export function ElevationPane(props: ElevationPaneProps): ReactNode {
     if (deselect) onPick(null)
   }, [onPick])
 
+  // The one selected entity this view actually draws. A selection the pane cannot see — an entity on
+  // another Floor, or one the Display hides — gets no handles, because there is no box to put them on.
+  const selectedRow = selectedIds.length === 1
+    ? scene.rows.find((row) => row.id === selectedIds[0]) ?? null
+    : null
+
   const zoom = viewport?.zoom ?? 1
   const panX = viewport?.panX ?? 0
   const panY = viewport?.panY ?? 0
@@ -271,6 +287,15 @@ export function ElevationPane(props: ElevationPaneProps): ReactNode {
             screen={{ pxPerUnit: zoom, panX, panY }}
             emphasis={{ selected: selectedIds.length === 0 ? undefined : new Set(selectedIds) }}
             resolveAsset={resolveAsset}
+          />
+        )}
+        {matrix !== undefined && viewport !== null && dragCandidates !== null && selectedRow !== null && (
+          <ElevationDragLayer
+            row={selectedRow}
+            viewport={viewport}
+            toDrawing={toDrawing}
+            candidates={dragCandidates}
+            onCommit={(field, value) => onVerticalExtent?.(field, value)}
           />
         )}
       </svg>
