@@ -574,6 +574,22 @@ export const STRINGS = {
     `${height} mm · from Item Design ${designName} · shared by ${placements} placement${placements === 1 ? '' : 's'}`,
   /** What this Plan View's Range says about the entity the fields belong to. */
   extentShownAs: (rangeClass: string): string => `Shown as: ${rangeClass}`,
+  // The Plan View Range control (#74 §4), in the saved-view card between the Renovation Display
+  // cards and the Layers list.
+  planViewRangeField: 'Plan View Range',
+  extentLower: 'Lower',
+  extentUpper: 'Upper',
+  /** The stop's own read-out: `Upper 1200`. The number is the Project's display-unit text, so the
+   * gauge says the same number the field beside it holds. */
+  extentStop: (label: string, value: string): string => `${label} ${value}`,
+  /** The two answers a Range field gives when what was typed cannot be a Range. They are the words
+   * the edit layer refuses with, so the box and a refused Intent say the same sentence. */
+  extentLowerNeedsUpper: 'Lower needs to be below Upper.',
+  extentEnterNumber: 'Enter a number.',
+  /** The two answers an Extent box gives when the number is a number but the Extent is not. Same
+   * words, same reason as above: the box refuses before anything is sent. */
+  extentHeightNeedsPositive: 'A height has to be more than 0 mm.',
+  extentTopNeedsBase: 'The top has to be above the base.',
   // The Floors dialog (#64 §16, §17).
   floorNameRequired: 'Give this Floor a name',
   floorNameTaken: (name: string): string => `Another Floor is already called ${name}`,

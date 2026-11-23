@@ -1521,3 +1521,110 @@
   align-items: center;
   gap: 6px;
 }
+
+/* ------------------------------------------------- plan view range (#74 §4) */
+
+/* The section is a block of the saved-view card, so it takes the card's rhythm and nothing else: no
+   border of its own, no background, no type larger than the card's. */
+.bb-range-section {
+  display: flex;
+  flex-direction: column;
+  margin: 12px 0 4px;
+}
+
+/* Two columns: the bar, then every word beside it. The label column is `max-content` wide, which is
+   what makes a clipped tick impossible — the column is exactly as wide as the widest full number it
+   holds, and the numbers are never shortened to fit. */
+.bb-range-gauge {
+  display: grid;
+  grid-template-columns: 12px max-content;
+  gap: 0 8px;
+  height: 168px;
+  margin: 6px 0 10px;
+}
+
+.bb-range-track {
+  position: relative;
+  height: 100%;
+  border: 1px solid var(--bb-border-card);
+  border-radius: 3px;
+  background: var(--bb-bg-inset);
+}
+
+/* The band between the two stops: the slice of the Floor this Plan View is drawn for. */
+.bb-range-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: var(--bb-bg-accent-soft);
+  border-top: 2px solid var(--bb-accent);
+  border-bottom: 2px solid var(--bb-accent);
+}
+
+/* A stop is a handle, not a decoration: it is wider than the bar so a pointer can hold it, and it is a
+   button so the keyboard can reach it too. */
+.bb-range-stop {
+  position: absolute;
+  left: -4px;
+  width: 20px;
+  height: 12px;
+  margin-top: -6px;
+  padding: 0;
+  border: 1px solid var(--bb-border-button);
+  border-radius: 3px;
+  background: var(--bb-bg-button);
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.bb-range-stop:hover,
+.bb-range-stop:focus-visible {
+  border-color: var(--bb-accent);
+  background: var(--bb-bg-accent-soft);
+}
+
+.bb-range-labels {
+  position: relative;
+}
+
+/* Every label sits at its own height and is centred on it, so the number is level with the line it
+   names. `nowrap` is the second half of the no-clipping promise. */
+.bb-range-tick,
+.bb-range-stop-label {
+  position: absolute;
+  left: 0;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1.2;
+  /* The shorthand form, because #50 criterion 4 bans the rejected variants' names under `src/ui`
+     and the long property name contains one of them. This says the same thing: the stop labels
+     change while a stop is dragged, and figures of equal width keep the column from twitching. */
+  font-variant: tabular-nums;
+}
+
+.bb-range-tick {
+  color: var(--bb-text-subtle);
+}
+
+/* The stop's own read-out — `Upper 1200` — over the tick it may be standing on, with the bar's own
+   colour for the line it is on. */
+.bb-range-stop-label {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--bb-bg-card);
+  color: var(--bb-text);
+}
+
+.bb-range-legend {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--bb-text-subtle);
+}
+
+/* The §5 block of the inspector: the boxes, their captions and the one line about this Range. */
+.bb-workspace-extent {
+  display: flex;
+  flex-direction: column;
+  margin: 12px 0 4px;
+}

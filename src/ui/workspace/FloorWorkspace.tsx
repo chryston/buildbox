@@ -75,6 +75,8 @@ import { ToolbarMenu, ToolbarMenuItem, WorkspaceToolbar } from './WorkspaceToolb
 import type { ToolbarGroup } from './WorkspaceToolbar'
 import { PlanViewCanvas } from './PlanViewCanvas'
 import { SavedViewCard } from './SavedViewCard'
+import { PlanViewRangeSection, rangeGaugeScale } from './PlanViewRangeSection'
+import type { RangeGaugeScale } from './PlanViewRangeSection'
 import { SelectionInspector } from './SelectionInspector'
 import type { DesignEdit } from './SelectionInspector'
 import { quarterTurn } from './rotateHandle'
@@ -1568,6 +1570,21 @@ export function FloorWorkspace(): ReactNode {
   }, [project, view, floorId, renovationOptionId])
 
   /**
+   * What the Range gauge has room for (#74 §4): the Floor Datum, this Floor's own limits, every
+   * entity's Vertical Extent and the Range itself, plus 5%. Measured over the same effective model the
+   * classes are counted over, so the gauge and the drawing never disagree about how tall the Floor is.
+   */
+  const rangeScale: RangeGaugeScale | null = useMemo(() => {
+    if (view === null || floor === null || floorId === null) return null
+    return rangeGaugeScale(
+      floor,
+      effectiveModel(project, floorId, renovationOptionId),
+      project.itemDesigns,
+      view.planViewRange,
+    )
+  }, [project, view, floor, floorId, renovationOptionId])
+
+  /**
    * Whether one entity's geometry may be snapped to in this view (#71 criterion 12): hidden or
    * non-selectable content is not a target, and `Snap to hidden content` is the one switch that puts
    * it back. Picking stays impossible either way — that answer is `layerAccessOf`'s, above.
@@ -1962,6 +1979,23 @@ export function FloorWorkspace(): ReactNode {
                       RENOVATION_STRINGS.setRenovationDisplay(displayLabel(renovationDisplay)),
                     )
                   }}
+                  // #74 §4: the Range of the Plan View being looked through. Its undo label is the
+                  // Intent's own — `Change Plan View Range` — because there is nothing else to name:
+                  // the transaction changes the view and no entity.
+                  range={
+                    view !== null && rangeScale !== null ? (
+                      <PlanViewRangeSection
+                        range={view.planViewRange}
+                        scale={rangeScale}
+                        unit={project.preferences.displayUnit}
+                        precision={project.preferences.displayPrecision}
+                        onCommit={(lowerMm, upperMm) => {
+                          if (view === null) return
+                          send('view.setPlanViewRange', { viewId: view.id, lowerMm, upperMm })
+                        }}
+                      />
+                    ) : undefined
+                  }
                   layers={
                     <RenovationLayers
                       project={project}

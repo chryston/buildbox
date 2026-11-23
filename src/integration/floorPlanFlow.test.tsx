@@ -131,7 +131,9 @@ describe('the Floor workspace', () => {
     // The Placed Item's own two rows and the read-only Shape tab's two size fields all carry the
     // unit suffix. The Shape tab's Position rows are gone: a read-only tab reports the shape,
     // not where it is (#58 §2), so the rail does not say `Position X` twice with two meanings.
-    expect(screen.getAllByText('(cm)')).toHaveLength(4)
+    // The card's two Plan View Range fields carry it too (#74 §4): a range is a length like any
+    // other, so it is shown in the unit the whole Project is being read in.
+    expect(screen.getAllByText('(cm)')).toHaveLength(6)
     const width = screen.getByTestId('shape-width')
     expect(width).not.toHaveValue(mmWidth)
     expect(width).not.toHaveValue('')

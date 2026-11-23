@@ -35,6 +35,12 @@ export interface RenovationViewSectionProps {
   onSetDesignOption(designOptionId: string | null): void
   onSetRenovationDisplay(display: RenovationDisplay): void
   /**
+   * The **Plan View Range** section (#74 §4), between the Display grid and the Layers list, where the
+   * issue places it. Like `layers`, this block decides only where it sits: the caller builds it, so a
+   * build with no Plan View active renders nothing here.
+   */
+  range?: ReactNode
+  /**
    * The Drawing Layers list (#71 §3), built by the caller inside the same flagged branch that renders
    * this block. It is a slot rather than a prop-per-control because the list is a section of its own
    * with a store hook of its own, and this block's job is to hold it in reading order: which saved
@@ -47,7 +53,7 @@ export interface RenovationViewSectionProps {
 }
 
 export function RenovationViewSection(props: RenovationViewSectionProps): ReactNode {
-  const { view, options, onSetDesignOption, onSetRenovationDisplay, layers, paste, onExport } = props
+  const { view, options, onSetDesignOption, onSetRenovationDisplay, range, layers, paste, onExport } = props
   if (view === null) return null
   const activeOption = viewDesignOptionId(view)
   const activeDisplay = viewRenovationDisplay(view)
@@ -102,6 +108,10 @@ export function RenovationViewSection(props: RenovationViewSectionProps): ReactN
           )
         })}
       </div>
+
+      {/* #74's Plan View Range, in the position §4 names: under the Display it draws with, above the
+          Layers that hide it. */}
+      {range}
 
       {/* #71's Drawing Layers list, in the position the slot was reserved for. A flag-off build
           renders nothing here because the caller never builds it — not a placeholder, not a stub. */}
