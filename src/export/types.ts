@@ -8,7 +8,7 @@
  */
 
 import type { QuantityScope } from '../derive'
-import type { DisplayUnit, EntityId, Project, RenovationDisplay } from '../domain'
+import type { DisplayUnit, EntityId, Point2, Project, RenovationDisplay } from '../domain'
 import type { TableId } from './csv/tables'
 
 /** The three formats #61 writes. One export writes one of them. */
@@ -83,6 +83,21 @@ export interface RecordedComposition {
   readonly included_layers: readonly CompositionLayer[]
   readonly color_overrides: readonly CompositionColorOverride[]
   readonly notes: CompositionNotes
+  /**
+   * What an Elevation sheet was aimed at (#75 criterion 15): the name the view carried and the three
+   * fields that say where the viewer stood. A Plan View's drawing is bounded by the Floor it shows,
+   * so nothing more needs recording; an Elevation View is a sideways look through one finite prism,
+   * and a sheet whose line had since moved would otherwise be unexplainable.
+   */
+  readonly elevation?: RecordedElevation
+}
+
+/** The Elevation definition as the metadata spells it. */
+export interface RecordedElevation {
+  readonly name: string
+  readonly line: { readonly start: Point2; readonly end: Point2 }
+  readonly side: 'left' | 'right'
+  readonly depth: number
 }
 
 /**
@@ -93,9 +108,14 @@ export interface RecordedComposition {
  * `kind: 'plan'` views only, so there is no ID to name one by. The optional `viewId` on that
  * arm is where a saved Item Detail View would hang when the domain grows one, which is why it is
  * optional rather than absent (S8, S10).
+ *
+ * An Elevation View is named by its saved view like a Plan View is. What it is aimed at — the line,
+ * the side, the depth — is not part of the choice but of the drawing, and is recorded on the sheet
+ * (#75 criterion 15), so the recipe needs the ID and nothing else.
  */
 export type RecipeViewRef =
   | { readonly kind: 'plan'; readonly viewId: string; readonly toggles?: DrawingToggles }
+  | { readonly kind: 'elevation'; readonly viewId: string }
   | { readonly kind: 'item-detail'; readonly itemDesignId: string; readonly viewId?: string }
 
 /**

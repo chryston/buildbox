@@ -41,6 +41,18 @@ export interface ElevationViewOptions {
   selectedId?: string | null
   /** The ruler's step in millimetres; 500 is the one a room's height reads in without crowding. */
   rulerStepMm?: number
+  /**
+   * The drawing's own scale: `1` on a screen, `1 / 50` on a 1:50 sheet (#61 §2).
+   *
+   * A Plan View's geometry is shrunk before it is drawn, because its input is a whole derived Floor
+   * and the sheet needs the same shrink everywhere at once. An Elevation View's input is one small
+   * frame, and shrinking it would shrink the heights the ruler and the Datum lines have to *name* —
+   * a sheet whose ruler read `52` where the room measures 2600 is the mistake a reader cannot catch
+   * with a tape. So the coordinates go down here and the words stay up, through `formatHeight`.
+   */
+  scale?: number
+  /** How a height is written: millimetres by default, the recipe's unit and precision on a sheet. */
+  formatHeight?: (mm: number) => string
 }
 
 /** The assembled list, and the rows as they were actually painted. */
@@ -70,10 +82,10 @@ const LABEL_MM = 4
 const KIND_RANK: Record<ElevationRow['kind'], number> = { wall: 0, opening: 1, item: 2 }
 
 /** The rectangle one row covers, in the drawing's own millimetres. */
-const boxOf = (row: ElevationRow, xOf: (s: number) => number): Rect => {
+const boxOf = (row: ElevationRow, xOf: (s: number) => number, zOf: (z: number) => number): Rect => {
   const left = Math.min(xOf(row.sMin), xOf(row.sMax))
   const right = Math.max(xOf(row.sMin), xOf(row.sMax))
-  return { x: left, y: Math.min(row.zMin, row.zMax), w: right - left, h: Math.abs(row.zMax - row.zMin) }
+  return { x: left, y: Math.min(zOf(row.zMin), zOf(row.zMax)), w: right - left, h: Math.abs(zOf(row.zMax) - zOf(row.zMin)) }
 }
 
 const outlineOf = (box: Rect): PathCommand[] => [
@@ -133,9 +145,12 @@ function heightLine(
 export function drawElevationView(scene: ElevationScene, options: ElevationViewOptions): ElevationDrawing {
   const { sizing, layers = null, selectedId = null } = options
   const step = options.rulerStepMm ?? 500
+  const k = options.scale ?? 1
+  const height = options.formatHeight ?? mmText
   // A viewer looking along `n` has their right hand at (n.y, −n.x): on the left that is −u, so the
   // drawing is mirrored and the view line's own start is on the right.
-  const xOf = (s: number): number => (scene.frame.side === 'left' ? scene.length - s : s)
+  const xOf = (s: number): number => k * (scene.frame.side === 'left' ? scene.length - s : s)
+  const zOf = (z: number): number => k * z
 
   const painted = scene.rows
     .filter((row) => layers === null || layers.drawn(row.id))
@@ -150,7 +165,7 @@ export function drawElevationView(scene: ElevationScene, options: ElevationViewO
 
   const content: DisplayItem[] = []
   for (const row of painted) {
-    const box = boxOf(row, xOf)
+    const box = boxOf(row, xOf, zOf)
     const ref = { id: row.id, role: row.kind === 'opening' ? 'wall-opening' : row.kind === 'item' ? 'placed-item' : 'wall' }
     // A Drawing Layer's own colour wins over the entity's, exactly as it does in a Plan View: the
     // layer says what the drawing is *about*, and the entity's colour is what it would otherwise be.
@@ -171,31 +186,31 @@ export function drawElevationView(scene: ElevationScene, options: ElevationViewO
   // The drawn area: the view line's own length across, and every height the rows and the Floor's own
   // heights reach, so a ruler tick or a Datum line is never drawn outside the picture.
   const limits = scene.floor?.limits
+  const lower = limits?.lowerMm ?? null
+  const upper = limits?.upperMm ?? null
   const heights = [0, ...painted.flatMap((row) => [row.zMin, row.zMax])]
-  if ((limits?.lowerMm ?? null) !== null) heights.push(limits!.lowerMm!)
-  if ((limits?.upperMm ?? null) !== null) heights.push(limits!.upperMm!)
-  const zLow = Math.min(...heights)
-  const zHigh = Math.max(...heights)
-  const area: Rect = { x: 0, y: zLow, w: scene.length, h: zHigh - zLow }
+  if (lower !== null) heights.push(lower)
+  if (upper !== null) heights.push(upper)
+  const lowMm = Math.min(...heights)
+  const highMm = Math.max(...heights)
+  const zLow = zOf(lowMm)
+  const zHigh = zOf(highMm)
+  const area: Rect = { x: 0, y: zLow, w: k * scene.length, h: zHigh - zLow }
 
   const labelSize = resolveSize('plan-label', sizing).mm
-  const datumSize = layoutText(mmText(0), labelSize)
+  const datumSize = layoutText(height(0), labelSize)
   const lines: DisplayItem[] = []
-  lines.push(...heightLine(0, `Floor Datum ${mmText(0)}`, 'elevation-datum', datumSize, area))
-  if ((limits?.upperMm ?? null) !== null) {
-    lines.push(...heightLine(limits!.upperMm!, `Upper limit ${mmText(limits!.upperMm!)}`, 'elevation-limit', datumSize, area))
-  }
-  if ((limits?.lowerMm ?? null) !== null) {
-    lines.push(...heightLine(limits!.lowerMm!, `Lower limit ${mmText(limits!.lowerMm!)}`, 'elevation-limit', datumSize, area))
-  }
+  lines.push(...heightLine(zOf(0), `Floor Datum ${height(0)}`, 'elevation-datum', datumSize, area))
+  if (upper !== null) lines.push(...heightLine(zOf(upper), `Upper limit ${height(upper)}`, 'elevation-limit', datumSize, area))
+  if (lower !== null) lines.push(...heightLine(zOf(lower), `Lower limit ${height(lower)}`, 'elevation-limit', datumSize, area))
 
   // The ruler, outside the drawing area on the left: its spine, its ticks and its words all stand at
   // x < 0, so no label of its own can ever land on content, whatever the content is.
   const rulerSize = resolveSize('plan-dimension', sizing).mm
   const spine = area.x - GUTTER_MM
   const stops: number[] = []
-  for (let z = Math.ceil(zLow / step) * step; z <= zHigh; z += step) stops.push(z)
-  const words = stops.map((z) => mmText(z))
+  for (let z = Math.ceil(lowMm / step) * step; z <= highMm; z += step) stops.push(z)
+  const words = stops.map((z) => height(z))
   // One column of words, all of them right-aligned against the ticks: measuring the widest once is
   // what keeps `2600` and `0` in one line instead of a ragged one.
   const widest = Math.max(0, ...words.map((word) => layoutText(word, rulerSize).width))
@@ -210,7 +225,8 @@ export function drawElevationView(scene: ElevationScene, options: ElevationViewO
       style: 'elevation-ruler',
     },
   ]
-  stops.forEach((z, index) => {
+  stops.forEach((stop, index) => {
+    const z = zOf(stop)
     ticks.push({
       kind: 'path',
       segments: [

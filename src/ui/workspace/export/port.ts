@@ -57,7 +57,8 @@ export interface ExportMeasurement {
 
 /** The stable key a recipe is remembered under: one per Project and saved view. */
 export function viewKey(ref: RecipeViewRef): string {
-  return ref.kind === 'plan' ? `plan:${ref.viewId}` : `item:${ref.itemDesignId}`
+  if (ref.kind === 'plan') return `plan:${ref.viewId}`
+  return ref.kind === 'elevation' ? `elevation:${ref.viewId}` : `item:${ref.itemDesignId}`
 }
 
 /** One Floor or Design Option the Lists tab can put in scope, named as the Project names it. */

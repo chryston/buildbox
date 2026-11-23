@@ -168,6 +168,9 @@ function labelOf(snapshot: ExportSnapshot, view: RecipeViewRef): string {
   if (view.kind === 'plan') {
     return snapshot.project.views.find((each) => each.id === view.viewId)?.name ?? view.viewId
   }
+  if (view.kind === 'elevation') {
+    return (snapshot.project.elevationViews ?? []).find((each) => each.id === view.viewId)?.name ?? view.viewId
+  }
   return snapshot.project.itemDesigns.find((each) => each.id === view.itemDesignId)?.name ?? view.itemDesignId
 }
 
@@ -190,7 +193,12 @@ function nameAll(
     drawingFileName(
       item.view.kind === 'plan'
         ? { project: snapshot.project.meta.name, floor: item.composed.subject, view: views[index]!, existing: true, date }
-        : { project: snapshot.project.meta.name, itemDesign: item.composed.subject, view: views[index]!, date },
+        : item.view.kind === 'elevation'
+          ? // `<project>_<floor>_<view>_<date>`: the Floor it looks across and the view's own name,
+            // which is what says the drawing is sideways. The `_existing_` marker belongs to a Plan
+            // View's existing-conditions drawing and says nothing an Elevation View adds.
+            { project: snapshot.project.meta.name, floor: item.composed.subject, view: views[index]!, date }
+          : { project: snapshot.project.meta.name, itemDesign: item.composed.subject, view: views[index]!, date },
       recipe.format,
     ),
   )
