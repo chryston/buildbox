@@ -11,7 +11,7 @@
  * that holds two of them cannot be renamed out of it.
  */
 import type { EntityId, Floor, PlanView, Project, RenovationDisplay } from './project'
-import { defaultPlanViewRange } from './project'
+import { defaultPlanViewRange } from './planViewRange'
 
 /** The comparison key every uniqueness rule uses. */
 export const nameKey = (name: string): string => name.trim().normalize('NFC').toLowerCase()

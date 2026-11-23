@@ -12,8 +12,10 @@
  */
 import type { ValidationProblem } from '../lib'
 import type { IdAllocator } from './remapIds'
-import type { Floor, PlanView, PlanViewRange, Project } from './project'
-import { DEFAULT_DRAWING_LAYERS, DEFAULT_PLAN_VIEW_RANGE, defaultPlanViewRange } from './project'
+import type { Floor, PlanView, Project } from './project'
+import { DEFAULT_DRAWING_LAYERS } from './project'
+import type { PlanViewRange } from './planViewRange'
+import { DEFAULT_PLAN_VIEW_RANGE, defaultPlanViewRange } from './planViewRange'
 import { validateProject } from './validate'
 
 /**
@@ -324,7 +326,7 @@ export function migrateV7toV8(data: unknown, allocateId: IdAllocator): unknown {
  * A view that already carries `planViewRange` is carried over untouched, so the step is idempotent
  * and a v9 file comes back as the same object it arrived as. Nothing else moves and no clock is read.
  */
-export function migrateV8toV9(data: unknown, _allocateId: IdAllocator): unknown {
+export function migrateV8toV9(data: unknown): unknown {
   if (data === null || typeof data !== 'object' || Array.isArray(data)) return data
   const record = data as Record<string, unknown>
   const views: readonly unknown[] | null = Array.isArray(record.views) ? record.views : null

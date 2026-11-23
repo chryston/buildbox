@@ -47,7 +47,7 @@ import type {
   WallJunction,
 } from './project'
 import { defaultOpeningLabel } from './openings'
-import { defaultPlanViewRange } from './project'
+import { defaultPlanViewRange } from './planViewRange'
 import { migrateProject } from './migrate'
 import type { EntityId } from './project'
 import { fitOpening, gapChord, usableIntervals } from '../geometry'

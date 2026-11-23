@@ -15,10 +15,10 @@
  * corner radii and the Wall junctions are measured with, so a person who sets the limit to where a
  * Wall's top exactly is does not get a Wall drawn twice.
  */
-import { designHeight } from '../domain/itemDesign'
+import { designHeight } from '../domain'
 import type { EntityId, ItemDesign, Opening, PlanViewRange, PlacedItem, Wall } from '../domain'
-import { interval, type Interval } from '../geometry/interval'
-import { TOLERANCE_MM } from '../geometry/types'
+import { interval, type Interval } from '../geometry'
+import { TOLERANCE_MM } from '../geometry'
 import type { EffectiveModel } from './effectiveModel'
 
 /** The three answers a Plan View Range gives about one entity. */

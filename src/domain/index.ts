@@ -154,7 +154,6 @@ export type {
   PlanImage,
   PlanImageMediaType,
   PlanView,
-  PlanViewRange,
   PlacedItem,
   Point2,
   PredecessorIds,
@@ -177,15 +176,15 @@ export type {
   WallJunctionEnd,
   WallRefLine,
 } from './project'
+export type { PlanViewRange } from './planViewRange'
+export { DEFAULT_PLAN_VIEW_RANGE, defaultPlanViewRange } from './planViewRange'
 export {
   DEFAULT_DRAWING_LAYERS,
   DEFAULT_LAYER_NAMES,
   DEFAULT_LAYER_SETTING,
-  DEFAULT_PLAN_VIEW_RANGE,
   NEW_LAYER_COLOR,
   RENOVATION_DISPLAYS,
   UNLAYERED_LAYER_KEY,
-  defaultPlanViewRange,
   designOptionsOf,
   drawingLayerById,
   drawingLayerByName,

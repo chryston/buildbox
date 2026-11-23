@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest'
 import * as fc from 'fast-check'
 import layersFixture from '../../fixtures/domain/v9/layers.json?raw'
 import type { ItemDesign, PlanViewRange, Project, Wall } from '../domain'
-import { designHeight } from '../domain/itemDesign'
+import { designHeight } from '../domain'
 import { effectiveModel } from './index'
 import { RANGE_RANK, openingExtent, placementExtent, rangeClass, rangeClasses, wallExtent } from './index'
 
