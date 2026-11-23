@@ -308,6 +308,7 @@ export function ElevationPane(props: ElevationPaneProps): ReactNode {
           <ElevationDragLayer
             row={selectedRow}
             viewport={viewport}
+            matrix={matrix}
             toDrawing={toDrawing}
             yOf={yOf}
             zOf={zOf}

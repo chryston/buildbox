@@ -32,6 +32,8 @@ const ROW: ElevationRow = {
 const WALL: ElevationRow = { ...ROW, id: 'W-1', kind: 'wall', name: 'W-1', zMin: 0, zMax: 2600 }
 
 const VIEWPORT = { zoom: 2, panX: 0, panY: 0 }
+/** The transform the pane gives its Display List, which the layer now rides too. */
+const MATRIX = `matrix(${VIEWPORT.zoom},0,0,${VIEWPORT.zoom},${VIEWPORT.panX},${VIEWPORT.panY})`
 
 /**
  * A pointer at (x, y) on the screen stands at (x, y) in the drawing, scaled by the zoom: the same
@@ -59,7 +61,7 @@ const setup = (row: ElevationRow = ROW, candidates: readonly VerticalSnapCandida
   render(
     <svg>
       <ElevationDragLayer
-        row={row} viewport={VIEWPORT} toDrawing={toDrawing} yOf={yOf} zOf={zOf}
+        row={row} viewport={VIEWPORT} matrix={MATRIX} toDrawing={toDrawing} yOf={yOf} zOf={zOf}
         candidates={candidates} onCommit={onCommit}
       />
     </svg>,
@@ -250,6 +252,7 @@ describe('the acquisition radius', () => {
         <ElevationDragLayer
           row={WALL}
           viewport={VIEWPORT}
+          matrix={MATRIX}
           toDrawing={toDrawing}
           yOf={yOf}
           zOf={zOf}
@@ -271,6 +274,7 @@ describe('the acquisition radius', () => {
         <ElevationDragLayer
           row={WALL}
           viewport={VIEWPORT}
+          matrix={MATRIX}
           toDrawing={toDrawing}
           yOf={yOf}
           zOf={zOf}

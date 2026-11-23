@@ -43,6 +43,12 @@ export interface ElevationDragLayerProps {
   row: ElevationRow
   viewport: Viewport
   /**
+   * The same transform the pane gives its Display List: everything this layer draws is in the
+   * drawing's own millimetres, so it has to ride the same matrix or it lands nowhere near the row it
+   * belongs to.
+   */
+  matrix: string
+  /**
    * A client point in the drawing's own millimetres. Its `y` is the drawing's, which grows downward from
    * the top of the picture; `zOf` turns it into a height above the Floor Datum.
    */
@@ -68,7 +74,7 @@ const handleZ = (kind: ElevationDragKind, edges: ElevationEdges): number =>
   kind === 'top' ? edges.top : kind === 'bottom' ? edges.bottom : (edges.top + edges.bottom) / 2
 
 export function ElevationDragLayer(props: ElevationDragLayerProps): ReactNode {
-  const { row, viewport, toDrawing, yOf, zOf, candidates, onCommit } = props
+  const { row, viewport, matrix, toDrawing, yOf, zOf, candidates, onCommit } = props
   const [drag, setDrag] = useState<{ kind: ElevationDragKind, edges: ElevationEdges, snap: VerticalSnap | null } | null>(null)
   const original = edgesOf(row)
   const zoom = viewport.zoom
@@ -150,7 +156,7 @@ export function ElevationDragLayer(props: ElevationDragLayerProps): ReactNode {
   const guide = drag?.snap ?? null
 
   return (
-    <g data-testid="elevation-drag-layer" data-row={row.id}>
+    <g data-testid="elevation-drag-layer" data-row={row.id} transform={matrix}>
       {drag !== null && (
         <>
           <rect

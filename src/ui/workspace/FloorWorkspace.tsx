@@ -1739,13 +1739,16 @@ export function FloorWorkspace(): ReactNode {
    * canonical entity, so one transaction and one render moves all four together.
    */
   const commitVerticalExtent = useCallback((field: 'base' | 'height' | 'top', value: number): void => {
-    const id = selection
+    // The same three selections the pane is shown: a Wall and an Opening are selected in their own
+    // slices, so reading only the Placed Item's would drop the commit for the two entities a vertical
+    // drag most often moves.
+    const id = selection ?? wallSelection ?? openingSelection
     const row = elevationSceneValue?.rows.find((entry) => entry.id === id) ?? null
     if (row === null) return
     if (row.kind === 'wall') send('wall.setVerticalExtent', { wallId: row.id, field, value })
     else if (row.kind === 'opening') send('opening.setVerticalExtent', { openingId: row.id, field, value })
     else send('plan.setPlacementVerticalExtent', { placedItemId: row.id, field: field === 'height' ? 'top' : field, value })
-  }, [selection, elevationSceneValue, send])
+  }, [selection, wallSelection, openingSelection, elevationSceneValue, send])
 
   /**
    * The Elevation View's own layer answers (#71 §4): the view is a saved view like any Plan View, so
@@ -3094,8 +3097,23 @@ export function FloorWorkspace(): ReactNode {
                             ?.name ?? null
                         }
                         display={viewRenovationDisplay(elevationView)}
-                        selectedIds={selection === null ? [] : [selection]}
-                        onPick={(id) => workspaceStore.getState().select(id)}
+                        selectedIds={[selection, wallSelection, openingSelection]
+                          .filter((id): id is string => id !== null)}
+                        // The same routing the Plan View gives a click: a Wall, an Opening and a Placed
+                        // Item are three different selections, and the inspector edits the one it is
+                        // told about. Picking a Wall here must select it there too, or criterion 11 is
+                        // only half true — the pane would hold a selection nothing else can see.
+                        onPick={(id) => {
+                          if (id === null) {
+                            select(null)
+                          } else if (project.existingModel.walls.some((wall) => wall.id === id)) {
+                            selectWall(id)
+                          } else if (project.existingModel.openings.some((opening) => opening.id === id)) {
+                            selectOpening(id)
+                          } else {
+                            select(id)
+                          }
+                        }}
                         viewport={elevationViewport}
                         onViewport={setElevationViewport}
                         dragCandidates={elevationSnapCandidates}

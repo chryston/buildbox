@@ -251,6 +251,18 @@ describe('the highlight', () => {
     expect(screen.getByTestId('elevation-pane').innerHTML).toContain('var(--bb-accent)')
   })
 
+  it('stands the drag layer on the same transform as the picture', () => {
+    open({ selectedIds: ['pr-017'], dragCandidates: [] })
+    // The layer draws its handles, ghost and guide in the drawing's own millimetres, so it has to ride
+    // the matrix the Display List rides. Left off the picture it sits at raw millimetre coordinates
+    // hundreds of pixels away, and the handles cannot be pressed at all — which no jsdom test can see,
+    // because jsdom lays nothing out.
+    const scene = document.querySelector('[data-testid="elevation-canvas"] g[transform^="matrix"]')
+    expect(scene).not.toBeNull()
+    expect(screen.getByTestId('elevation-drag-layer').getAttribute('transform'))
+      .toBe(scene!.getAttribute('transform'))
+  })
+
   it('carries the Display and the Option the picture was drawn for', () => {
     open({ display: 'combined', optionName: 'Kitchen remodel' })
     const pane = screen.getByTestId('elevation-pane')
