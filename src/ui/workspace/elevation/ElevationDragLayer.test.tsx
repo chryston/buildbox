@@ -37,6 +37,11 @@ const VIEWPORT = { zoom: 2, panX: 0, panY: 0 }
  * A pointer at (x, y) on the screen stands at (x, y) in the drawing, scaled by the zoom: the same
  * arithmetic the pane does, with the host's own box taken as the origin because jsdom has none.
  */
+/** The height the harness's drawing stands at: its y grows downward from here, as the real one's does. */
+const TOP_MM = 3000
+const yOf = (z: number): number => TOP_MM - z
+const zOf = (y: number): number => TOP_MM - y
+
 const toDrawing = (clientX: number, clientY: number): { x: number, y: number } => ({
   x: clientX / VIEWPORT.zoom,
   y: clientY / VIEWPORT.zoom,
@@ -53,7 +58,10 @@ const setup = (row: ElevationRow = ROW, candidates: readonly VerticalSnapCandida
   const onCommit = vi.fn()
   render(
     <svg>
-      <ElevationDragLayer row={row} viewport={VIEWPORT} toDrawing={toDrawing} candidates={candidates} onCommit={onCommit} />
+      <ElevationDragLayer
+        row={row} viewport={VIEWPORT} toDrawing={toDrawing} yOf={yOf} zOf={zOf}
+        candidates={candidates} onCommit={onCommit}
+      />
     </svg>,
   )
   return onCommit
@@ -65,14 +73,18 @@ const setup = (row: ElevationRow = ROW, candidates: readonly VerticalSnapCandida
  * jsdom has no `PointerEvent` and `fireEvent.pointerMove(window, { clientY })` quietly drops the
  * coordinates on a non-Element target, which would leave every drag here reading `NaN`. A constructed
  * `MouseEvent` under the pointer type name carries them, and the layer listens by type only.
+ *
+ * The height is turned into a client pixel through the drawing's own mapping, so every drag below is
+ * stated as the height it aims at — which is how the criteria state it — and the conversion the pane
+ * does is on the way.
  */
-const windowPointer = (type: string, mmY: number): void => {
-  fireEvent(window, new MouseEvent(type, { clientX: 400, clientY: mmY * VIEWPORT.zoom, bubbles: true }))
+const windowPointer = (type: string, heightMm: number): void => {
+  fireEvent(window, new MouseEvent(type, { clientX: 400, clientY: yOf(heightMm) * VIEWPORT.zoom, bubbles: true }))
 }
 
-/** The drag the issue describes: press a handle, move the pointer, let go. */
+/** The drag the issue describes: press a handle, move the pointer to a height, let go. */
 const drag = (handle: 'top' | 'bottom' | 'body', fromY: number, toY: number): void => {
-  fireEvent.pointerDown(screen.getByTestId(`elevation-handle-${handle}`), { clientX: 400, clientY: fromY * VIEWPORT.zoom })
+  fireEvent.pointerDown(screen.getByTestId(`elevation-handle-${handle}`), { clientX: 400, clientY: yOf(fromY) * VIEWPORT.zoom })
   windowPointer('pointermove', toY)
   windowPointer('pointerup', toY)
 }
@@ -158,7 +170,8 @@ describe('a snapped drag', () => {
     fireEvent.pointerDown(screen.getByTestId('elevation-handle-top'), { clientX: 400, clientY: 2600 * 2 })
     windowPointer('pointermove', 1052)
     const guide = screen.getByTestId('elevation-snap-guide')
-    expect(guide.getAttribute('y1')).toBe('1050')
+    // The guide lies on the target's height, which the drawing puts at its own y.
+    expect(guide.getAttribute('y1')).toBe(String(yOf(1050)))
     expect(screen.getByTestId('elevation-snap-label').textContent)
       .toBe('Window sill (HDB BTO typical) · 1050 mm')
     windowPointer('pointerup', 1052)
@@ -238,6 +251,8 @@ describe('the acquisition radius', () => {
           row={WALL}
           viewport={VIEWPORT}
           toDrawing={toDrawing}
+          yOf={yOf}
+          zOf={zOf}
           candidates={WALL_TOP}
           onCommit={near}
         />
@@ -257,6 +272,8 @@ describe('the acquisition radius', () => {
           row={WALL}
           viewport={VIEWPORT}
           toDrawing={toDrawing}
+          yOf={yOf}
+          zOf={zOf}
           candidates={WALL_TOP}
           onCommit={far}
         />

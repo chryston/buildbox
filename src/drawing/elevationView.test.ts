@@ -199,8 +199,9 @@ describe('drawElevationView: heights and the ruler (#75 criterion 14)', () => {
     const drawn = drawElevationView(elevationScene(withLower, view(withLower, 'el-004')), { sizing: SCREEN })
     expect(texts(drawn.list)).toContain('Lower limit -200')
     expect(paths(drawn.list, 'elevation-limit')).toHaveLength(2)
-    // The pit the Sump box stands in is inside the drawing, so the picture reaches below the Datum.
-    expect(drawn.area.y).toBeLessThan(0)
+    // The pit the Sump box stands in is inside the drawing, so the picture reaches below the Datum:
+    // it is taller than the height its top stands at.
+    expect(drawn.area.y + drawn.area.h).toBeGreaterThan(drawn.topMm)
   })
 
   it('stands the whole ruler outside the drawing area, on the left', () => {
@@ -220,8 +221,11 @@ describe('drawElevationView: heights and the ruler (#75 criterion 14)', () => {
     const drawn = drawElevationView(KITCHEN, { sizing: SCREEN })
     expect(drawn.area.x).toBe(0)
     expect(drawn.area.w).toBe(4000)
-    expect(drawn.area.y).toBe(-150)
-    expect(drawn.area.y + drawn.area.h).toBe(2600)
+    // The picture stands on nothing: its y = 0 is its highest height, the Upper limit at 2 600, and it
+    // reaches down past the Datum to the pit's floor at −150.
+    expect(drawn.topMm).toBe(2600)
+    expect(drawn.area.y).toBe(0)
+    expect(drawn.area.y + drawn.area.h).toBe(2750)
   })
 
   it('keeps every item inside the list’s own bounds', () => {

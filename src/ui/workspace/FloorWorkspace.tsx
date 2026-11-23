@@ -3087,6 +3087,7 @@ export function FloorWorkspace(): ReactNode {
                         view={elevationView}
                         scene={elevationSceneValue}
                         list={elevationDrawing.list.list}
+                        topMm={elevationDrawing.list.topMm}
                         sizing={elevationDrawing.sizing}
                         optionName={
                           designOptionsOf(project).find((option) => option.id === viewDesignOptionId(elevationView))

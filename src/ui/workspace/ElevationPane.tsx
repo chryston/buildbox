@@ -56,6 +56,11 @@ export interface ElevationPaneProps {
   view: ElevationView
   scene: ElevationScene
   list: DisplayList
+  /**
+   * The height the drawing's `y = 0` stands at, from `drawElevationView`: the pane's own y grows
+   * downward from it, so every gesture that reads a pointer back as a height converts through it.
+   */
+  topMm: number
   sizing: Sizing
   /** The Design Option's name, or null for "No Design Option". */
   optionName: string | null
@@ -104,7 +109,7 @@ export function elevationArrowDeg(view: ElevationView): number {
 /** What the pane is looking at, as the split's CSS and the browser suite need to name it. */
 export function ElevationPane(props: ElevationPaneProps): ReactNode {
   const {
-    view, scene, list, sizing, optionName, display, selectedIds, onPick,
+    view, scene, list, topMm, sizing, optionName, display, selectedIds, onPick,
     viewport, onViewport, hostRef, resolveAsset, dragCandidates = null, onVerticalExtent,
   } = props
   const svgRef = useRef<SVGSVGElement>(null)
@@ -174,6 +179,16 @@ export function ElevationPane(props: ElevationPaneProps): ReactNode {
   const xOf = (s: number): number => (scene.frame.side === 'left' ? scene.length - s : s)
 
   /**
+   * Floor-relative Z to the pane's y, and back.
+   *
+   * The drawing stands on its Datum — y grows downward from `topMm`, the highest height it holds — and
+   * the pane draws at the screen's scale of 1, so the two are one subtraction apart. Everything here
+   * that reads a pointer as a height, or puts a handle at one, goes through these two and nothing else.
+   */
+  const yOf = (z: number): number => topMm - z
+  const zOf = (y: number): number => topMm - y
+
+  /**
    * The rows the pointer is standing on, in the order a click walks them: nearest first.
    *
    * A row covers the band its entity projects to and the heights it stands at, so a click inside a
@@ -183,8 +198,8 @@ export function ElevationPane(props: ElevationPaneProps): ReactNode {
     const under = scene.rows.filter((row) => {
       const left = Math.min(xOf(row.sMin), xOf(row.sMax))
       const right = Math.max(xOf(row.sMin), xOf(row.sMax))
-      const low = Math.min(row.zMin, row.zMax)
-      const high = Math.max(row.zMin, row.zMax)
+      const low = Math.min(yOf(row.zMin), yOf(row.zMax))
+      const high = Math.max(yOf(row.zMin), yOf(row.zMax))
       return at.x >= left && at.x <= right && at.y >= low && at.y <= high
     })
     // An Elevation row carries no Renovation State of its own: `derive` has already drawn the Display's
@@ -294,6 +309,8 @@ export function ElevationPane(props: ElevationPaneProps): ReactNode {
             row={selectedRow}
             viewport={viewport}
             toDrawing={toDrawing}
+            yOf={yOf}
+            zOf={zOf}
             candidates={dragCandidates}
             onCommit={(field, value) => onVerticalExtent?.(field, value)}
           />

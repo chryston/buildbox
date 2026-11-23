@@ -69,6 +69,14 @@ export interface ElevationDrawing {
   readonly rows: readonly ElevationRow[]
   /** The drawn area in the drawing's own millimetres: `0 ≤ x ≤ length`, the projected heights in `y`. */
   readonly area: Rect
+  /**
+   * The height the drawing's `y = 0` stands at, in millimetres above the Floor Datum.
+   *
+   * The picture's y grows downward from here, so a canvas that reads a pointer back as a height — the
+   * handles, the drag, the snap — converts with `z = topMm − y / scale`. At the screen's scale of 1 that
+   * is a subtraction and nothing else.
+   */
+  readonly topMm: number
 }
 
 /** How far the ruler's spine stands off the drawing, and how far its ticks and words off the spine. */
@@ -110,7 +118,9 @@ function heightLine(
   layout: { width: number; ascent: number; descent: number },
   area: Rect,
 ): DisplayItem[] {
-  const at: Pt = { x: area.x + LABEL_MM, y: z + LABEL_MM + layout.ascent / 2 }
+  // The words stand just above the line they name: above is a smaller y, because the picture's y grows
+  // downward from its highest height.
+  const at: Pt = { x: area.x + LABEL_MM, y: z - LABEL_MM - layout.ascent / 2 }
   return [
     {
       kind: 'path',
@@ -150,7 +160,6 @@ export function drawElevationView(scene: ElevationScene, options: ElevationViewO
   // A viewer looking along `n` has their right hand at (n.y, −n.x): on the left that is −u, so the
   // drawing is mirrored and the view line's own start is on the right.
   const xOf = (s: number): number => k * (scene.frame.side === 'left' ? scene.length - s : s)
-  const zOf = (z: number): number => k * z
 
   const painted = scene.rows
     .filter((row) => layers === null || layers.drawn(row.id))
@@ -162,6 +171,28 @@ export function drawElevationView(scene: ElevationScene, options: ElevationViewO
         (layers === null ? 0 : layers.orderOf(a.id) - layers.orderOf(b.id)) ||
         (a.id < b.id ? -1 : 1),
     )
+
+  // Every height the picture holds: the Datum, the Floor's own limits, and the bottom and top of each
+  // row. Read first, because the vertical mapping is stated from the top of the picture.
+  const limits = scene.floor?.limits
+  const lower = limits?.lowerMm ?? null
+  const upper = limits?.upperMm ?? null
+  const heights = [0, ...painted.flatMap((row) => [row.zMin, row.zMax])]
+  if (lower !== null) heights.push(lower)
+  if (upper !== null) heights.push(upper)
+  const lowMm = Math.min(...heights)
+  const highMm = Math.max(...heights)
+
+  /**
+   * Floor-relative Z to the drawing's y.
+   *
+   * A Floor stands on its Datum and a reader looks up at it, so the highest height is at the top of the
+   * picture and y grows downward — the same way a Plan View's y is the Floor's y, and for the same
+   * reason: the Display List is drawn into a screen and onto a sheet, both of which have y going down.
+   * Measuring from `highMm` rather than negating Z keeps the list's own bounds at y = 0, which is what
+   * `fitViewport` and the sheet's frame both assume.
+   */
+  const zOf = (z: number): number => k * (highMm - z)
 
   const content: DisplayItem[] = []
   for (const row of painted) {
@@ -185,17 +216,7 @@ export function drawElevationView(scene: ElevationScene, options: ElevationViewO
 
   // The drawn area: the view line's own length across, and every height the rows and the Floor's own
   // heights reach, so a ruler tick or a Datum line is never drawn outside the picture.
-  const limits = scene.floor?.limits
-  const lower = limits?.lowerMm ?? null
-  const upper = limits?.upperMm ?? null
-  const heights = [0, ...painted.flatMap((row) => [row.zMin, row.zMax])]
-  if (lower !== null) heights.push(lower)
-  if (upper !== null) heights.push(upper)
-  const lowMm = Math.min(...heights)
-  const highMm = Math.max(...heights)
-  const zLow = zOf(lowMm)
-  const zHigh = zOf(highMm)
-  const area: Rect = { x: 0, y: zLow, w: k * scene.length, h: zHigh - zLow }
+  const area: Rect = { x: 0, y: zOf(highMm), w: k * scene.length, h: zOf(lowMm) - zOf(highMm) }
 
   const labelSize = resolveSize('plan-label', sizing).mm
   const datumSize = layoutText(height(0), labelSize)
@@ -218,8 +239,8 @@ export function drawElevationView(scene: ElevationScene, options: ElevationViewO
     {
       kind: 'path',
       segments: [
-        { k: 'M', to: { x: spine, y: zLow } },
-        { k: 'L', to: { x: spine, y: zHigh } },
+        { k: 'M', to: { x: spine, y: zOf(highMm) } },
+        { k: 'L', to: { x: spine, y: zOf(lowMm) } },
       ],
       closed: false,
       style: 'elevation-ruler',
@@ -285,5 +306,5 @@ export function drawElevationView(scene: ElevationScene, options: ElevationViewO
     layers: (['elevation-content', 'elevation-datum', 'elevation-ruler'] as const).map((key) => ({ key, items: bands.get(key) ?? [] })),
     missingGlyphs: [],
   }
-  return { list, rows: painted, area }
+  return { list, rows: painted, area, topMm: highMm }
 }

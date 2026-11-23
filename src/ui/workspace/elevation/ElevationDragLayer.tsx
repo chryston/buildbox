@@ -42,8 +42,15 @@ export interface ElevationDragLayerProps {
   /** The selected entity's row, or nothing when the selection is not something this view draws. */
   row: ElevationRow
   viewport: Viewport
-  /** A client point in the drawing's own millimetres, where y is the height above the Floor Datum. */
+  /**
+   * A client point in the drawing's own millimetres. Its `y` is the drawing's, which grows downward from
+   * the top of the picture; `zOf` turns it into a height above the Floor Datum.
+   */
   toDrawing: (clientX: number, clientY: number) => { x: number, y: number } | null
+  /** A height above the Floor Datum to the drawing's y: where a handle or a guide is put. */
+  yOf: (z: number) => number
+  /** The drawing's y back to a height above the Floor Datum: what the pointer is standing at. */
+  zOf: (y: number) => number
   /** The heights the drag may stop at, already filtered by `Snaps ▾` and by this view's own rules. */
   candidates: readonly VerticalSnapCandidate[]
   /** One finished drag: the field the canonical entity's Intent writes, and the value it writes. */
@@ -57,11 +64,11 @@ const edgesOf = (row: ElevationRow): ElevationEdges => ({
 })
 
 /** The height a handle sits at: the end it drags, or the middle of the body. */
-const handleY = (kind: ElevationDragKind, edges: ElevationEdges): number =>
+const handleZ = (kind: ElevationDragKind, edges: ElevationEdges): number =>
   kind === 'top' ? edges.top : kind === 'bottom' ? edges.bottom : (edges.top + edges.bottom) / 2
 
 export function ElevationDragLayer(props: ElevationDragLayerProps): ReactNode {
-  const { row, viewport, toDrawing, candidates, onCommit } = props
+  const { row, viewport, toDrawing, yOf, zOf, candidates, onCommit } = props
   const [drag, setDrag] = useState<{ kind: ElevationDragKind, edges: ElevationEdges, snap: VerticalSnap | null } | null>(null)
   const original = edgesOf(row)
   const zoom = viewport.zoom
@@ -98,8 +105,10 @@ export function ElevationDragLayer(props: ElevationDragLayerProps): ReactNode {
     const move = (moveEvent: PointerEvent): void => {
       const at = toDrawing(moveEvent.clientX, moveEvent.clientY)
       if (at === null) return
-      // Only the height is read; the pointer's horizontal position is discarded on purpose.
-      const moved = draggedEdges(kind, original, at.y - handleY(kind, original))
+      // Only the height is read; the pointer's horizontal position is discarded on purpose. The
+      // drawing's y becomes a height above the Floor Datum here and nowhere else, so every number the
+      // drag reasons about — its edges, its snaps, its commit, its chip — is a height.
+      const moved = draggedEdges(kind, original, zOf(at.y) - handleZ(kind, original))
       if (draggedEdgesAreInvalid(kind, moved)) return
       const tolerance = verticalTolerance(zoom)
       const snap = kind === 'body'
@@ -147,9 +156,9 @@ export function ElevationDragLayer(props: ElevationDragLayerProps): ReactNode {
           <rect
             data-testid="elevation-drag-ghost"
             x={left}
-            y={Math.min(shown.bottom, shown.top)}
+            y={yOf(shown.top)}
             width={right - left}
-            height={Math.abs(shown.top - shown.bottom)}
+            height={yOf(shown.bottom) - yOf(shown.top)}
             fill="var(--bb-accent)"
             fillOpacity={0.14}
             stroke="var(--bb-accent)"
@@ -161,9 +170,9 @@ export function ElevationDragLayer(props: ElevationDragLayerProps): ReactNode {
               <line
                 data-testid="elevation-snap-guide"
                 x1={-100_000}
-                y1={guide.mm}
+                y1={yOf(guide.mm)}
                 x2={100_000}
-                y2={guide.mm}
+                y2={yOf(guide.mm)}
                 stroke="var(--bb-accent)"
                 strokeWidth={hairline}
                 strokeDasharray={`${6 / zoom} ${4 / zoom}`}
@@ -171,7 +180,7 @@ export function ElevationDragLayer(props: ElevationDragLayerProps): ReactNode {
               <text
                 data-testid="elevation-snap-label"
                 x={left}
-                y={guide.mm - 6 / zoom}
+                y={yOf(guide.mm) - 6 / zoom}
                 fontSize={12 / zoom}
                 fill="var(--bb-accent)"
               >
@@ -186,7 +195,7 @@ export function ElevationDragLayer(props: ElevationDragLayerProps): ReactNode {
           key={kind}
           data-testid={`elevation-handle-${kind}`}
           x={kind === 'body' ? (left + right) / 2 - handle / 2 : right - handle / 2}
-          y={handleY(kind, shown) - handle / 2}
+          y={yOf(handleZ(kind, shown)) - handle / 2}
           width={handle}
           height={handle}
           fill="var(--bb-accent)"
@@ -200,7 +209,7 @@ export function ElevationDragLayer(props: ElevationDragLayerProps): ReactNode {
         <text
           data-testid="elevation-drag-chip"
           x={right + CHIP_OFFSET_PX / zoom}
-          y={handleY(drag.kind, shown)}
+          y={yOf(handleZ(drag.kind, shown))}
           fontSize={12 / zoom}
           dominantBaseline="middle"
           fill="var(--bb-accent)"

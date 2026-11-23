@@ -327,18 +327,21 @@ describe('Elevation Views in the split workspace', () => {
     const wall = view.project().existingModel.walls[0]!
     const lineBefore = JSON.stringify(wall.line)
 
-    // The pane draws y = z in Floor millimetres, so a viewport of 1:1 at the origin makes a client
-    // y the height it stands for. jsdom lays nothing out, so the canvas box reads as zeros and this
-    // is the whole mapping — which is what lets the gesture be driven by real pointer events here.
+    // The pane draws the Floor standing on its Datum: its y grows downward from the highest height it
+    // holds, which here is the Wall's own top at 2 600. At a 1:1 viewport at the origin a client y is a
+    // drawing y, so the height under the pointer is `2600 − y` — which is the whole mapping, and what
+    // lets the gesture be driven by real pointer events here. jsdom lays nothing out, so the canvas box
+    // reads as zeros and nothing else is subtracted.
     act(() => {
       workspaceStore.getState().setViewport(`elevation:${floorId}:Kitchen`, { zoom: 1, panX: 0, panY: 0 })
       workspaceStore.getState().select(wall.id)
     })
 
     act(() => {
-      fireEvent.pointerDown(screen.getByTestId('elevation-handle-bottom'), { clientX: 300, clientY: 0 })
-      fireEvent(window, new MouseEvent('pointermove', { clientX: 300, clientY: -640, bubbles: true }))
-      fireEvent(window, new MouseEvent('pointerup', { clientX: 300, clientY: -640, bubbles: true }))
+      // The base handle at 0 mm, then the pointer 640 mm below it: down the screen is down the Floor.
+      fireEvent.pointerDown(screen.getByTestId('elevation-handle-bottom'), { clientX: 300, clientY: 2600 })
+      fireEvent(window, new MouseEvent('pointermove', { clientX: 300, clientY: 3240, bubbles: true }))
+      fireEvent(window, new MouseEvent('pointerup', { clientX: 300, clientY: 3240, bubbles: true }))
     })
 
     await waitFor(() => expect(view.project().existingModel.walls[0]?.baseElevation).toBe(-640))

@@ -45,7 +45,8 @@ const view = views.find((candidate) => candidate.id === 'el-004')!
 const angled = views.find((candidate) => candidate.id === 'el-005')!
 const scene = elevationScene(project, view)
 const SIZING = { kind: 'screen', pxPerMm: 1 } as const
-const list = drawElevationView(scene, { sizing: SIZING }).list
+const drawing = drawElevationView(scene, { sizing: SIZING })
+const list = drawing.list
 
 /** One pixel to the millimetre at the window's origin: a client pixel *is* a drawing millimetre. */
 const VIEWPORT = { zoom: 1, panX: 0, panY: 0 }
@@ -54,6 +55,7 @@ const BASE = {
   view,
   scene,
   list,
+  topMm: drawing.topMm,
   sizing: SIZING,
   optionName: null,
   display: 'existing',
@@ -87,11 +89,16 @@ const pointer = (el: Element, type: string, x: number, y: number): void => {
   fireEvent(el, new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y }))
 }
 
-/** One click on the picture. */
-const click = (x: number, y: number): void => {
+/**
+ * One click on the picture, aimed at a height above the Floor Datum.
+ *
+ * The drawing stands on its Datum, so its y grows downward from `topMm` and the pane converts the same
+ * way: a click written as a height says what the criterion says, and the conversion is on the way.
+ */
+const click = (x: number, heightMm: number): void => {
   const canvas = screen.getByTestId('elevation-canvas')
-  pointer(canvas, 'pointerdown', x, y)
-  pointer(canvas, 'pointerup', x, y)
+  pointer(canvas, 'pointerdown', x, drawing.topMm - heightMm)
+  pointer(canvas, 'pointerup', x, drawing.topMm - heightMm)
 }
 
 const picks = (onPick: Mock): unknown[] => onPick.mock.calls.map((call) => call[0])
