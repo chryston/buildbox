@@ -108,9 +108,10 @@ const setWidth: Handler<'opening.setWidth'> = (ctx) => {
 }
 
 /**
- * One Vertical Extent box of an Opening (#74 §5). The record keeps `sill` and `head`, so the three
- * boxes are arithmetic on that pair: `base` moves both and keeps the difference between them, `height`
- * grows the head off the sill it keeps, `top` restates the head.
+ * One Vertical Extent box of an Opening (#74 §5). The record keeps `sill` and `head`, so the boxes are
+ * arithmetic on that pair: `base` moves both and keeps the difference between them, `height` grows the
+ * head off the sill it keeps, `top` restates the head, and `bottom` — the Elevation View's bottom
+ * handle (#75 §6) — restates the sill and holds the head.
  *
  * The host is never read and never written. An Opening stays in the Wall it was cut into however high
  * up it stands (#74 §5 criterion 15) — the elevation is not a position along the Wall, and nothing
@@ -119,11 +120,14 @@ const setWidth: Handler<'opening.setWidth'> = (ctx) => {
 const setVerticalExtent: Handler<'opening.setVerticalExtent'> = (ctx) => {
   const { openingId, field, value } = ctx.intent.payload
   const opening = requireOpening(ctx.project, openingId)
-  requireExtentValue(field, value, openingField(openingId, field === 'base' ? 'sill' : 'head'), opening.sill)
+  const isSill = field === 'base' || field === 'bottom'
+  requireExtentValue(field, value, openingField(openingId, isSill ? 'sill' : 'head'), opening.sill, opening.head)
   const written = editOpening(ctx.draft, openingId)
   if (field === 'base') {
     written.sill = value
     written.head = value + (opening.head - opening.sill)
+  } else if (field === 'bottom') {
+    written.sill = value
   } else if (field === 'height') {
     written.head = opening.sill + value
   } else {

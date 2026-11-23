@@ -308,7 +308,7 @@ describe('Elevation Views in the split workspace', () => {
     expect((screen.getByLabelText(STRINGS.elevationSnapMounting) as HTMLInputElement).checked).toBe(false)
   })
 
-  it('drags the base of a Wall in the pane, leaves its plan position alone, and undoes in one step', async () => {
+  it('drags the bottom handle of a Wall in the pane, holds its top, leaves its plan position alone, and undoes in one step', async () => {
     // A Wall standing on the view line's own band, 0 to 2600 mm.
     await view.dispatch('wall.createChain', {
       floorId: view.project().floors[0]?.id ?? '',
@@ -350,7 +350,9 @@ describe('Elevation Views in the split workspace', () => {
     // Criterion 10: a drag in an Elevation View changes vertical values and nothing else. Where the
     // Wall stands is the plan's, and the plan was never touched.
     expect(JSON.stringify(view.project().existingModel.walls[0]?.line)).toBe(lineBefore)
-    expect(view.project().existingModel.walls[0]?.height).toBe(2600)
+    // Criterion 17: the bottom handle resizes with the top fixed, so the Wall now stands 3 240 mm tall
+    // on a base of −640 — the same pair the chip read while the pointer moved.
+    expect(view.project().existingModel.walls[0]?.height).toBe(3240)
 
     // Criterion 11: one Edit Transaction, so one Undo puts the whole drag back.
     await act(async () => { view.session.undo() })

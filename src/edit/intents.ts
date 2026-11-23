@@ -328,15 +328,24 @@ export interface MovePlanPlacement {
   translation: Point2
 }
 /**
- * Which of the three Vertical Extent boxes was committed (#74 §5).
+ * Which Vertical Extent value was committed (#74 §5, #75 §6).
  *
- * One Intent carries the three fields rather than three Intents, because they are one control over
- * one pair of elevations and differ only in which two of the three numbers are held still — the
- * difference is one line of arithmetic in the handler, and a second and third Intent type would
- * multiply the labels, the ID order and the undo menu for no decision the user ever makes.
+ * One Intent carries the fields rather than one Intent each, because they are one control over one
+ * pair of elevations and differ only in which of the three numbers is held still — the difference is
+ * one line of arithmetic in the handler, and a second and third Intent type would multiply the
+ * labels, the ID order and the undo menu for no decision the user ever makes.
+ *
+ * `bottom` is the Elevation View's bottom handle, and the only field that writes two numbers: the
+ * base moves to `value` and the top holds, so the height is what changes. The inspector's `base` box
+ * is the other decision and carries its height along — a Window typed a new sill is the same Window
+ * lifted, not the same head re-silled — which is why the two are separate fields rather than one
+ * field with a flag on it.
  */
-export type VerticalExtentField = 'base' | 'height' | 'top'
-/** The fields a Placed Item has: it owns a base and no height, so there is no `height` box (#74 §5). */
+export type VerticalExtentField = 'base' | 'height' | 'top' | 'bottom'
+/**
+ * The fields a Placed Item has: it owns a base and no height of its own, so there is no `height` box
+ * to restate and no `bottom` handle to resize with (#74 §5, #75 §6 behaviour 10).
+ */
 export type PlacementVerticalExtentField = Extract<VerticalExtentField, 'base' | 'top'>
 /**
  * One Vertical Extent box of a Placed Item (#74 §5), in millimetres from the Floor Datum.
@@ -675,7 +684,8 @@ export interface SetWallThickness {
  * One Vertical Extent box of a Wall (#74 §5), in millimetres from the Floor Datum.
  *
  * `base` carries the height with it, `height` grows the top off the base it keeps, `top` holds the
- * base and restates the height. Nothing here moves the reference line, so no face, no Junction and
+ * base and restates the height, and `bottom` — the Elevation View's bottom handle — holds the top and
+ * restates the height. Nothing here moves the reference line, so no face, no Junction and
  * no hosted Opening shifts — which is why this Intent is not wrapped in the Wall-fit check every
  * geometry edit of #65 §7 pays.
  */
@@ -821,7 +831,8 @@ export interface SetOpeningWidth {
 
 /**
  * One Vertical Extent box of an Opening (#74 §5), in millimetres from the Floor Datum. `base` is the
- * sill and `top` the head, which are the two numbers the record already keeps.
+ * sill and `top` the head, which are the two numbers the record already keeps. `bottom` moves the sill
+ * and holds the head, which is the drag the Elevation View's bottom handle makes (#75 §6).
  *
  * The host is never part of this: an Opening stays in the Wall it was cut into however its elevation
  * moves (#74 §5), and the Wall it stands in is tall enough for the whole storey in every case the

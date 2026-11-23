@@ -204,15 +204,19 @@ test.describe('Elevation Views in the split workspace', () => {
     // every other height in the room that nothing takes the drag.
     await page.mouse.move(from.x, from.y + 300 * floor.pxPerMm * towards(floor.y, from.y), { steps: 8 })
     await expect(page.getByTestId('elevation-drag-chip')).toBeVisible()
-    // The sill moved to the number the drag itself reported while the pointer was down — the chip is
-    // the pane's own answer, so the assertion cannot drift from it — and the opening's height is the
-    // same 1 200 it was: a drag in an Elevation View changes vertical values and nothing else.
+    // The sill moved to the number the drag itself reported while the pointer was down, and so did the
+    // height: the chip promises both, the head holds, and the record keeps what the chip said — so the
+    // assertion reads the pane's own answer and cannot drift from it.
     const chip = (await page.getByTestId('elevation-drag-chip').textContent())!
     const promised = Number(/Base (-?\d+) mm/.exec(chip)![1])
+    const promisedHeight = Number(/Height (-?\d+) mm/.exec(chip)![1])
     await page.mouse.up()
     await expect(page.getByTestId('opening-extent-base')).toHaveValue(String(promised))
     expect(promised).toBeLessThan(900)
-    await expect(page.getByTestId('opening-extent-height')).toHaveValue('1200')
+    // Criterion 17: the bottom handle resizes with the head fixed, so the height is the head minus the
+    // new sill — not the 1 200 the opening was.
+    expect(promisedHeight).toBe(2100 - promised)
+    await expect(page.getByTestId('opening-extent-height')).toHaveValue(String(promisedHeight))
 
     await page.keyboard.press('Control+z')
     await expect(page.getByTestId('opening-extent-base')).toHaveValue('900')

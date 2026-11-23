@@ -30,7 +30,7 @@ import {
   elevationCommit,
   elevationHandleKinds,
 } from './elevationDrag'
-import type { ElevationDragKind, ElevationEdges } from './elevationDrag'
+import type { ElevationDragKind, ElevationEdges, ElevationExtentField } from './elevationDrag'
 
 /** A handle is 8 CSS px on the screen whatever the zoom, the same as the plan's endpoint handles. */
 const HANDLE_PX = 8
@@ -60,7 +60,7 @@ export interface ElevationDragLayerProps {
   /** The heights the drag may stop at, already filtered by `Snaps ▾` and by this view's own rules. */
   candidates: readonly VerticalSnapCandidate[]
   /** One finished drag: the field the canonical entity's Intent writes, and the value it writes. */
-  onCommit: (field: 'base' | 'height' | 'top', value: number) => void
+  onCommit: (field: ElevationExtentField, value: number) => void
 }
 
 /** The two edges a row presents, lowest first, because a row's `zMin` is not guaranteed to be the base. */

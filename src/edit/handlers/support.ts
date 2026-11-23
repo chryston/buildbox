@@ -129,14 +129,25 @@ export function requirePlacement(project: Project, placedItemId: EntityId): Plac
  * as one.
  *
  * `base` is checked only for being a number, because a Sump box stands at −150 mm and is right to:
- * the Floor Datum is a reference plane, not a floor to sit on. `height` has to be more than 0 and
- * `top` has to sit above the `base` the caller holds, since neither describes a band otherwise.
+ * the Floor Datum is a reference plane, not a floor to sit on. `height` has to be more than 0, `top`
+ * has to sit above the `base` the caller holds and `bottom` has to stay under the `top` it holds,
+ * since none of the three describes a band otherwise. A caller whose entity owns no top — a Placed
+ * Item, which has no `bottom` field to send — passes `null`.
  */
-export function requireExtentValue(field: VerticalExtentField, value: number, path: string, base: number | null): void {
+export function requireExtentValue(
+  field: VerticalExtentField,
+  value: number,
+  path: string,
+  base: number | null,
+  top: number | null,
+): void {
   if (!Number.isFinite(value)) refuse('invalid-extent', path, 'Enter a number.')
   if (field === 'height' && !(value > 0)) refuse('invalid-extent', path, 'A height has to be more than 0 mm.')
   if (field === 'top' && base !== null && !(value > base)) {
     refuse('invalid-extent', path, 'The top has to be above the base.')
+  }
+  if (field === 'bottom' && top !== null && !(value < top)) {
+    refuse('invalid-extent', path, 'The bottom has to be below the top.')
   }
 }
 

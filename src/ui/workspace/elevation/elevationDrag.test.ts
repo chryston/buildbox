@@ -36,9 +36,12 @@ describe('a drag on one handle', () => {
 })
 
 describe('the field a finished drag writes', () => {
-  it('writes the base for a move and for a bottom drag', () => {
+  it('writes the base for a move, and the bottom for a drag that holds the top', () => {
     expect(elevationCommit('body', 'wall', { bottom: 200, top: 1060 })).toEqual({ field: 'base', value: 200 })
-    expect(elevationCommit('bottom', 'wall', { bottom: -640, top: 860 })).toEqual({ field: 'base', value: -640 })
+    // A bottom drag resizes with the top fixed (#75 §6 behaviour 11), which is not the move the
+    // inspector's `base` box makes — the height is what changes, and the handler needs to know that.
+    expect(elevationCommit('bottom', 'wall', { bottom: -640, top: 860 })).toEqual({ field: 'bottom', value: -640 })
+    expect(elevationCommit('bottom', 'opening', { bottom: 550, top: 2100 })).toEqual({ field: 'bottom', value: 550 })
   })
 
   it('writes the height for a top drag on an entity that owns one', () => {
@@ -53,7 +56,7 @@ describe('the field a finished drag writes', () => {
   })
 
   it('rounds to the millimetre the document stores', () => {
-    expect(elevationCommit('bottom', 'wall', { bottom: 859.6, top: 1860 })).toEqual({ field: 'base', value: 860 })
+    expect(elevationCommit('bottom', 'wall', { bottom: 859.6, top: 1860 })).toEqual({ field: 'bottom', value: 860 })
   })
 })
 

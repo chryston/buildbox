@@ -39,6 +39,7 @@ import { displayLabel } from './renovation/displayTheme'
 import { cycleOrder, isSameSpot } from './selection/overlapCycle'
 import type { VerticalSnapCandidate } from '../../derive'
 import { ElevationDragLayer } from './elevation/ElevationDragLayer'
+import type { ElevationExtentField } from './elevation/elevationDrag'
 import type { CanvasPoint, CycleCandidate } from './selection/overlapCycle'
 import { clampZoom, fitViewport, zoomAround } from './viewport'
 import type { Viewport } from './viewport'
@@ -80,7 +81,7 @@ export interface ElevationPaneProps {
    */
   dragCandidates?: readonly VerticalSnapCandidate[] | null
   /** One finished drag, in the field of the canonical entity the caller's Intent writes. */
-  onVerticalExtent?: (field: 'base' | 'height' | 'top', value: number) => void
+  onVerticalExtent?: (field: ElevationExtentField, value: number) => void
   children?: never
 }
 

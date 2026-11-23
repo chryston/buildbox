@@ -1738,7 +1738,7 @@ export function FloorWorkspace(): ReactNode {
    * for the pane — because the plan, the elevation, the warnings and the inspector all read the same
    * canonical entity, so one transaction and one render moves all four together.
    */
-  const commitVerticalExtent = useCallback((field: 'base' | 'height' | 'top', value: number): void => {
+  const commitVerticalExtent = useCallback((field: 'base' | 'height' | 'top' | 'bottom', value: number): void => {
     // The same three selections the pane is shown: a Wall and an Opening are selected in their own
     // slices, so reading only the Placed Item's would drop the commit for the two entities a vertical
     // drag most often moves.
@@ -1747,7 +1747,10 @@ export function FloorWorkspace(): ReactNode {
     if (row === null) return
     if (row.kind === 'wall') send('wall.setVerticalExtent', { wallId: row.id, field, value })
     else if (row.kind === 'opening') send('opening.setVerticalExtent', { openingId: row.id, field, value })
-    else send('plan.setPlacementVerticalExtent', { placedItemId: row.id, field: field === 'height' ? 'top' : field, value })
+    // A Placed Item has no height of its own and no bottom handle, so the only fields that can reach
+    // this branch are `base` and `top` — `elevationHandleKinds` is what guarantees it — and the handler
+    // reads a `top` back as the base the design's height lands under.
+    else send('plan.setPlacementVerticalExtent', { placedItemId: row.id, field: field === 'base' ? 'base' : 'top', value })
   }, [selection, wallSelection, openingSelection, elevationSceneValue, send])
 
   /**

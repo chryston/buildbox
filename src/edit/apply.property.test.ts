@@ -662,7 +662,7 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
     if (wall === undefined) return null
     return intent('wall.setVerticalExtent', {
       wallId: wall.id,
-      field: pick(g, ['base', 'height', 'top'] as const)!,
+      field: pick(g, ['base', 'height', 'top', 'bottom'] as const)!,
       value: real(g, -200, 3000),
     })
   },
@@ -780,7 +780,7 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
     if (opening === undefined) return null
     return intent('opening.setVerticalExtent', {
       openingId: opening.id,
-      field: pick(g, ['base', 'height', 'top'] as const)!,
+      field: pick(g, ['base', 'height', 'top', 'bottom'] as const)!,
       value: real(g, 0, 2600),
     })
   },

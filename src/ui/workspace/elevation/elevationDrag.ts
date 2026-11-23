@@ -14,11 +14,11 @@ import type { ElevationRowKind } from '../../../derive'
 import { STRINGS } from '../../strings'
 
 /**
- * The three Vertical Extent fields, written here rather than imported: `edit` exports them only
- * through its Intent payload map, and the call site that builds the payload is where the type is
- * checked. A wider entry point for a three-word union would let any UI name any field.
+ * The Vertical Extent fields a drag can write, written here rather than imported: `edit` exports them
+ * only through its Intent payload map, and the call site that builds the payload is where the type is
+ * checked. A wider entry point for a four-word union would let any UI name any field.
  */
-export type ElevationExtentField = 'base' | 'height' | 'top'
+export type ElevationExtentField = 'base' | 'height' | 'top' | 'bottom'
 
 /** Which handle the hand is on, and so which edge of the extent follows it. */
 export type ElevationDragKind = 'top' | 'bottom' | 'body'
@@ -63,10 +63,12 @@ export function draggedEdgesAreInvalid(kind: ElevationDragKind, edges: Elevation
 /**
  * The Intent's field for a finished drag.
  *
- * `base` and `top` are the two ends; `height` is what a Wall or an Opening calls the distance between
- * them, and it is the field a resize changes when the fixed end is the bottom. A Placed Item owns no
- * height of its own — its Item Design does — so a move is written as its `top`, which is the field the
- * handler turns back into a base.
+ * Each handle writes the edge the hand is on and holds the other one, which is what the chip says it is
+ * doing: `top` restates the top, `bottom` restates the bottom, and the height follows from whichever end
+ * stayed put — `height` when the bottom held, `bottom` when the top did. A body drag moves both, so it
+ * writes `base` and the height is the same number it was. A Placed Item owns no height of its own — its
+ * Item Design does — so it has only the body handle, and a move is written as its `top`, which is the
+ * field the handler turns back into a base.
  */
 export function elevationCommit(
   kind: ElevationDragKind,
@@ -78,7 +80,7 @@ export function elevationCommit(
       ? { field: 'top', value: Math.round(edges.top) }
       : { field: 'base', value: Math.round(edges.bottom) }
   }
-  if (kind === 'bottom') return { field: 'base', value: Math.round(edges.bottom) }
+  if (kind === 'bottom') return { field: 'bottom', value: Math.round(edges.bottom) }
   // A top drag on an entity that owns its height changes the height; on one that does not, it changes
   // the top the handler will read back as a base.
   return rowKind === 'item'
