@@ -250,7 +250,7 @@ export function ElevationDraftOverlay(props: ElevationDraftOverlayProps): ReactN
           <label className="flex items-center gap-1">
             {STRINGS.depthMm}
             <input
-              data-testid="elevation-depth-field"
+              data-testid="elevation-draft-depth-field"
               className="bb-workspace-input w-24"
               type="number"
               autoFocus={typing}
