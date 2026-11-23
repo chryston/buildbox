@@ -559,6 +559,37 @@ export const STRINGS = {
   openingDraftFixedSize: 'Fixed size',
   openingDraftDistance: 'Distance from the highlighted end',
   openingCancelEsc: 'Cancel (Esc)',
+  // The Vertical Extent fields (#74 §5). `Base (sill)` carries both words on purpose: the glossary's
+  // `Base`, and the trade word the Opening's own read-out already uses.
+  extentBase: 'Base',
+  extentHeight: 'Height',
+  extentTop: 'Top',
+  extentBaseSill: 'Base (sill)',
+  /** Under a Placed Item's `Top`, because that is what typing there does: the item moves and the
+   * height stays where it belongs, with the Item Design. */
+  extentMovesItem: 'moves item',
+  /** `700 mm · from Item Design Wall cabinet · shared by 1 placement` — the height a Placed Item does
+   * not own, said together with who does own it and how many placements share it. */
+  extentHeightLine: (height: string, designName: string, placements: number): string =>
+    `${height} mm · from Item Design ${designName} · shared by ${placements} placement${placements === 1 ? '' : 's'}`,
+  /** What this Plan View's Range says about the entity the fields belong to. */
+  extentShownAs: (rangeClass: string): string => `Shown as: ${rangeClass}`,
+  // The Plan View Range control (#74 §4), in the saved-view card between the Renovation Display
+  // cards and the Layers list.
+  planViewRangeField: 'Plan View Range',
+  extentLower: 'Lower',
+  extentUpper: 'Upper',
+  /** The stop's own read-out: `Upper 1200`. The number is the Project's display-unit text, so the
+   * gauge says the same number the field beside it holds. */
+  extentStop: (label: string, value: string): string => `${label} ${value}`,
+  /** The two answers a Range field gives when what was typed cannot be a Range. They are the words
+   * the edit layer refuses with, so the box and a refused Intent say the same sentence. */
+  extentLowerNeedsUpper: 'Lower needs to be below Upper.',
+  extentEnterNumber: 'Enter a number.',
+  /** The two answers an Extent box gives when the number is a number but the Extent is not. Same
+   * words, same reason as above: the box refuses before anything is sent. */
+  extentHeightNeedsPositive: 'A height has to be more than 0 mm.',
+  extentTopNeedsBase: 'The top has to be above the base.',
   // The Floors dialog (#64 §16, §17).
   floorNameRequired: 'Give this Floor a name',
   floorNameTaken: (name: string): string => `Another Floor is already called ${name}`,
@@ -628,6 +659,9 @@ export const STRINGS = {
   showPlanImage: 'Show Plan Image',
   calibrateEllipsis: 'Calibrate…',
   fit: 'Fit',
+  /** The one line that says what the drawing's marks mean (#74 §3), worded exactly as resolved. */
+  planViewRangeLegend:
+    'In range: solid · Above range: dashed · Below range: faded. This range belongs to this Plan View only.',
   // The Duplicate Floor dialog (#64 §17).
   duplicateItemFallback: 'Item',
   floorCopyName: (name: string): string => `${name} copy`,

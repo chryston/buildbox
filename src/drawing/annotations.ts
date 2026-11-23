@@ -242,16 +242,18 @@ function boundsChip(
     missingGlyphs.push({ ref: { id: f.placement.id, role: 'floor-bounds-chip' }, text, chars: layout.missing })
   }
   const box = placeLabels({
-    footprint: f.world,
     obstacles,
     labels: [{
       id: CHIP_LABEL,
       anchor: { x: f.world.x + f.world.w / 2, y: f.world.y },
       w: text.length * resolveSize('plan-chip-char', sizing).mm,
       h: resolveSize('plan-chip-height', sizing).mm,
+      entity: f.world,
     }],
   })[0]
-  if (box === undefined) return null
+  // No room for the chip anywhere around the Item: it is left out rather than written over the
+  // dimension it would collide with (#74 §3).
+  if (box === null) return null
   const corner = resolveSize('plan-chip-corner', sizing).mm
   return {
     kind: 'group',

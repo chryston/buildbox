@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url'
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { currentSchemaOf } from '../domain/testing'
 import type { Project } from '../domain'
 import { designOptionsOf } from '../domain'
 import {
@@ -41,7 +42,7 @@ function sceneProject(): Project {
   const seed = JSON.parse(
     readFileSync(join(fixturesRoot, 'e2e', 'preview-seed', 'renovation-views.json'), 'utf8'),
   ) as { projects: { data: Project }[] }
-  return structuredClone(seed.projects[0]!.data)
+  return currentSchemaOf(seed.projects[0]!.data, 8)
 }
 
 const noAssets: WorkspaceServices['assetUrls'] = {

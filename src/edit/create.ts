@@ -8,7 +8,7 @@
  * Projects and a replayed one is the same.
  */
 import type { DrawingLayer, PlanView, Project } from '../domain'
-import { DEFAULT_DRAWING_LAYERS, DEFAULT_WALL_HEIGHT_MM } from '../domain'
+import { DEFAULT_DRAWING_LAYERS, DEFAULT_WALL_HEIGHT_MM, defaultPlanViewRange } from '../domain'
 import { LEGACY_DEFAULT_SETTINGS } from './defaults'
 import { spendIds } from './handlers/support'
 
@@ -50,6 +50,8 @@ export function createProject({ ids, name }: CreateProjectArgs): Project {
     name: 'Floor 1',
     isDefault: true,
     showPlanImage: true,
+    // A Floor with no limits of its own, so the whole storey as BuildBox assumes it (#74 behaviour 4).
+    planViewRange: defaultPlanViewRange(undefined),
     layerSettings: {},
     layerOrder: null,
     activeLayerId: structureId,

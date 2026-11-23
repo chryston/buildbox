@@ -20,6 +20,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { UserEvent } from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { currentSchemaOf } from '../domain/testing'
 import App from '../App'
 import type { Project } from '../domain'
 import { PLAN_IMAGE_ACCEPT, planItemsForFloor, WorkspaceProvider, workspaceStore, type WorkspaceServices } from '../ui'
@@ -36,7 +37,7 @@ function seedProject(): Project {
   const seed = JSON.parse(
     readFileSync(join(fixturesRoot, 'e2e', 'preview-seed', 'renovation-views.json'), 'utf8'),
   ) as { projects: { data: Project }[] }
-  return structuredClone(seed.projects[0]!.data)
+  return currentSchemaOf(seed.projects[0]!.data, 8)
 }
 
 /** The default view — the one the workspace opens on — bound to Option A in Existing display. */

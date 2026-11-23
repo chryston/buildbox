@@ -13,7 +13,7 @@
  * - **Reordering is not editing.** `floor.reorder` moves one array entry and touches no
  *   geometry, which is what criterion 2 measures byte for byte.
  */
-import { defaultPlanView, floorHasDependencies, nextFloorName, viewDesignOptionId, viewRenovationDisplay } from '../../domain'
+import { defaultPlanView, defaultPlanViewRange, floorHasDependencies, nextFloorName, viewDesignOptionId, viewRenovationDisplay } from '../../domain'
 import type { EntityId, Floor, PlanView, Project } from '../../domain'
 import type { FloorIntent, Locator, PlanIntent, TransferPlanObjectsToFloor, ViewIntent } from '../intents'
 import type { Handler, IntentHandler } from './context'
@@ -270,7 +270,7 @@ const moveToFloor: Handler<'plan.moveToFloor'> = (ctx) => {
  */
 const createPlanView: Handler<'view.create'> = (ctx) => {
   const { floorId, name, fromViewId } = ctx.intent.payload
-  requireFloor(ctx.project, floorId)
+  const floor = requireFloor(ctx.project, floorId)
   const [viewId] = spendIds(ctx.intent.ids, 1, ctx.intent.type)
   const source =
     ctx.project.views.find((candidate) => candidate.id === fromViewId) ?? defaultViewOf(ctx.project, floorId)
@@ -281,6 +281,10 @@ const createPlanView: Handler<'view.create'> = (ctx) => {
     name: name.trim(),
     isDefault: false,
     showPlanImage: true,
+    // A new view starts at the whole storey (#74 behaviour 4), not at the range of the view it was
+    // made from: the range is the one setting that says where you are looking *up* from, and a new
+    // view has not been aimed anywhere yet.
+    planViewRange: defaultPlanViewRange(floor.limits),
     designOptionId: source === undefined ? null : viewDesignOptionId(source),
     renovationDisplay: source === undefined ? 'existing' : viewRenovationDisplay(source),
   })
@@ -292,6 +296,27 @@ const renamePlanView: Handler<'view.rename'> = (ctx) => {
   const draftView = requireView(ctx.draft, viewId)
   const trimmed = name.trim()
   if (draftView.name !== trimmed) draftView.name = trimmed
+}
+
+/**
+ * The Plan View Range (#74 §4): two elevations on one saved view, and nothing else.
+ *
+ * This writes one field of one record in `views`. No entity moves, which is what lets an undo put the
+ * old range back and leave the model byte-identical (criterion 3), and what makes a range change
+ * unable to reopen a warning: warnings are derived from entities, and an entity that has not moved
+ * derives exactly the warning it derived before, acknowledged or not (#66).
+ *
+ * The two numbers are this view's own. Another Plan View of the same Floor keeps the range it was aimed
+ * with, because the range says where this view is looking up from and no other view is.
+ */
+const setPlanViewRange: Handler<'view.setPlanViewRange'> = (ctx) => {
+  const { viewId, lowerMm, upperMm } = ctx.intent.payload
+  requireView(ctx.project, viewId)
+  const draftView = requireView(ctx.draft, viewId)
+  const path = `${viewPath(viewId)}.planViewRange`
+  if (!Number.isFinite(lowerMm) || !Number.isFinite(upperMm)) refuse('invalid-extent', path, 'Enter a number.')
+  if (!(lowerMm < upperMm)) refuse('invalid-extent', path, 'Lower needs to be below Upper.')
+  draftView.planViewRange = { lowerMm, upperMm }
 }
 
 /**
@@ -407,6 +432,10 @@ export const VIEW_HANDLERS: { [T in ViewIntent['type']]: IntentHandler<T> } = {
   'view.delete': { run: deletePlanView, locate: (project, intent) => viewLocator(project, intent.payload.viewId) },
   'view.setShowPlanImage': {
     run: setPlanViewShowsPlanImage,
+    locate: (project, intent) => viewLocator(project, intent.payload.viewId),
+  },
+  'view.setPlanViewRange': {
+    run: setPlanViewRange,
     locate: (project, intent) => viewLocator(project, intent.payload.viewId),
   },
 }

@@ -7,7 +7,7 @@
  * the paper, and where.
  */
 import { describe, expect, it } from 'vitest'
-import renovationFixture from '../../fixtures/domain/v8/renovation-views.json?raw'
+import renovationFixture from '../../fixtures/domain/v9/renovation-views.json?raw'
 import type { Project } from '../domain'
 import { composeSheet } from './compose'
 import { DESIGN_OPTION, DISPLAY_NAME, RENOVATION_LEGEND, TITLE_BLOCK } from './strings'

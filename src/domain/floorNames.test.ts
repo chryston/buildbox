@@ -21,6 +21,7 @@ const projectWith = (floorNames: string[], viewNames: [floorId: string, name: st
       name,
       isDefault: false,
       showPlanImage: false,
+      planViewRange: { lowerMm: 0, upperMm: 2600 },
     })
   })
   return {
@@ -83,6 +84,7 @@ describe('defaultPlanView', () => {
       name: 'Mezzanine',
       isDefault: true,
       showPlanImage: true,
+      planViewRange: { lowerMm: 0, upperMm: 2600 },
       // A Floor that has just arrived has no Design Option to look through and nothing to show
       // but what stands today (#70 §1).
       designOptionId: null,

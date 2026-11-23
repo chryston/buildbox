@@ -8,6 +8,7 @@
  * (criterion 11).
  */
 import { describe, expect, it } from 'vitest'
+import { currentSchemaOf } from '../../domain/testing'
 import * as fc from 'fast-check'
 import roomsFixture from '../../../fixtures/domain/v7/rooms.json?raw'
 import type { DesignOption, PlanView, Project } from '../../domain'
@@ -17,7 +18,7 @@ import { applyIntent, applyPatches, intentLabel, previewIntent } from '../index'
 import type { Applied, Intent, IntentType, PayloadOf } from '../intents'
 import { intent } from '../testing'
 
-const envelope = JSON.parse(roomsFixture) as { project: Project }
+const envelope = { project: currentSchemaOf((JSON.parse(roomsFixture) as { project: unknown }).project, 7) }
 
 const option = (id: string, name: string): DesignOption => ({
   id,

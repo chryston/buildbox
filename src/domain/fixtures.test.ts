@@ -58,18 +58,25 @@ describe('domain fixtures (#42 §6)', () => {
 
   it.each(fixtures)('$path older than the current schema gains one default view per Floor', ({ path, text }) => {
     const envelope = envelopeOf(text)
-    if (envelope.domainSchemaVersion === DOMAIN_SCHEMA_VERSION) return
-    const result = migrateProject(envelope.project, envelope.domainSchemaVersion, allocator())
+    const from = envelope.domainSchemaVersion as number
+    if (from === DOMAIN_SCHEMA_VERSION) return
+    const result = migrateProject(envelope.project, from, allocator())
     if (!result.ok) throw new Error(`${path}: ${result.error.message}`)
     const floors = result.project.floors
     const defaults = result.project.views.filter((view: PlanView) => view.isDefault)
     expect(defaults).toHaveLength(floors.length)
     for (const floor of floors) {
       const own = result.project.views.filter((view) => view.floorId === floor.id)
-      // The Floor's own view, named after it, drawing its Plan Image — and nothing else.
-      expect(own.filter((view) => view.isDefault)).toEqual([
-        expect.objectContaining({ floorId: floor.id, name: floor.name, showPlanImage: true, kind: 'plan' }),
-      ])
+      // Every Floor ends with exactly one default view: the one the file already had, or the one the
+      // chain invented for it. Only an invented one is named after the Floor — a file that had
+      // renamed its own view keeps the name it chose.
+      const defaults = own.filter((view) => view.isDefault)
+      expect(defaults).toHaveLength(1)
+      for (const view of defaults.filter((each) => each.id.startsWith('fixture-view-'))) {
+        expect(view).toEqual(
+          expect.objectContaining({ floorId: floor.id, name: floor.name, showPlanImage: true, kind: 'plan' }),
+        )
+      }
       // A v1 Floor had no limits, and inventing some would be inventing geometry.
       expect(floor).not.toHaveProperty('limits')
     }
@@ -87,10 +94,14 @@ describe('domain fixtures (#42 §6)', () => {
     //
     // #73: the eighth step then files what it reads on the default layers — Walls, Openings and
     // Rooms on `Structure`, Placed Items on `Furniture` — so every entry carries the ID of the layer
-    // this run's allocator issued for it, read back off the migrated Project.
+    // this run's allocator issued for it, read back off the migrated Project. A source that is
+    // already at v8 has been filed once and is left exactly as it was, including the records a
+    // person put Unlayered, whose `drawingLayerId` is `null` and stays `null`.
     const layerId = (name: string): string => (result.project.drawingLayers ?? []).find((layer) => layer.name === name)!.id
     const filed = <T extends object>(entries: readonly T[] | undefined, name: string): T[] =>
-      (entries ?? []).map((entry) => ({ ...entry, drawingLayerId: layerId(name) }))
+      from >= 8
+        ? [...(entries ?? [])] as T[]
+        : (entries ?? []).map((entry) => ({ ...entry, drawingLayerId: layerId(name) }))
     const priorModel = prior.existingModel as Record<string, unknown>
     const entriesOf = (key: string): object[] => priorModel[key] as object[]
     expect(result.project.existingModel).toEqual({

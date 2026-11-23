@@ -86,7 +86,7 @@ function projectBuiltFrom(pack: PresetPack): Project {
     meta: { name: 'Flat' },
     preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 },
     floors: [{ id: 'floor-1', name: 'Home', planImage: null }],
-    views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Home', isDefault: true, showPlanImage: false }],
+    views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Home', isDefault: true, showPlanImage: false, planViewRange: { lowerMm: 0, upperMm: 2600 } }],
     itemDesigns: [wall, doorDesign],
     existingModel: {
       walls: [],

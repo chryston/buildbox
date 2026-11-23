@@ -69,7 +69,11 @@ describe('the export module under generated inputs', () => {
     await fc.assert(
       fc.asyncProperty(
         recipeArb,
-        fc.date({ min: new Date('2020-01-01T00:00:00.000Z'), max: new Date('2038-01-01T00:00:00.000Z') }),
+        fc.date({
+          min: new Date('2020-01-01T00:00:00.000Z'),
+          max: new Date('2038-01-01T00:00:00.000Z'),
+          noInvalidDate: true,
+        }),
         async (recipe, instant) => {
           const snapshot = { project, revision: 7 }
           const deps = depsFor(instant)

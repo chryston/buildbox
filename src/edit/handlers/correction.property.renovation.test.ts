@@ -14,6 +14,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
+import { currentSchemaOf } from '../../domain/testing'
 import type { Patch } from 'immer'
 import type { EntityId, Project } from '../../domain'
 import { designOptionsOf, validateProject } from '../../domain'
@@ -199,7 +200,7 @@ function build(current: Project, step: Step, optionIds: readonly string[]): Inte
 
 /** A Project with three Options: the reference Project of the issue's budgets. */
 function threeOptions(): Project {
-  const start = structuredClone(seed.projects[0]!.data)
+  const start = currentSchemaOf(seed.projects[0]!.data, 8)
   const created = applyIntent(start, intent('designOption.create', { name: 'Option C' }, ids(1)))
   if (!created.ok) throw new Error(JSON.stringify(created.problems))
   return created.project

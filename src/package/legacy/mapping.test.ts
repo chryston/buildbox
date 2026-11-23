@@ -108,6 +108,7 @@ describe('Design → Project', () => {
         showPlanImage: true,
         designOptionId: null,
         renovationDisplay: 'existing',
+        planViewRange: { lowerMm: 0, upperMm: 2600 },
       },
     ])
   })

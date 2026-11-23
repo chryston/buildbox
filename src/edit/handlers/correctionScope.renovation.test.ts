@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { currentSchemaOf } from '../../domain/testing'
 import type { DesignOption, Project } from '../../domain'
 import { designOptionsOf, validateProject } from '../../domain'
 import { applyIntent, previewIntent, type CorrectionReview, type Intent, type ReplaceEdit } from '../index'
@@ -31,7 +32,7 @@ const WINDOW_3 = 'seed-opening-016'
 const A = 'option-a'
 const B = 'option-b'
 
-const project = (): Project => structuredClone(seed.projects[0]!.data)
+const project = (): Project => currentSchemaOf(seed.projects[0]!.data, 8)
 
 const ids = (count: number): string[] => Array.from({ length: count }, (_entry, index) => `scope-id-${index}`)
 

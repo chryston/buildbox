@@ -29,6 +29,7 @@ const view = (id: string, floorId: string, name: string, isDefault = false): Pla
   name,
   isDefault,
   showPlanImage: true,
+  planViewRange: { lowerMm: 0, upperMm: 2600 },
 })
 
 const genericDesign = (over: Partial<GenericItemDesign> = {}): GenericItemDesign => ({
@@ -48,7 +49,7 @@ const project = (over: Partial<Project> = {}): Project => ({
   meta: { name: 'Home' },
   preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 },
   floors: [{ id: 'floor-1', name: 'Flat', planImage: null }],
-  views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Flat', isDefault: true, showPlanImage: true }],
+  views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Flat', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } }],
   itemDesigns: [genericDesign()],
   existingModel: {
     walls: [],
@@ -151,7 +152,7 @@ describe('planImageForView', () => {
   const withImage = (showPlanImage = true): Project => ({
     ...project(),
     floors: [{ id: 'floor-1', name: 'Flat', planImage: calibrated }],
-    views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Flat', isDefault: true, showPlanImage }],
+    views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Flat', isDefault: true, showPlanImage, planViewRange: { lowerMm: 0, upperMm: 2600 } }],
   })
   const viewOf = (p: Project): Project['views'][number] => p.views[0] as Project['views'][number]
 
@@ -240,8 +241,8 @@ describe('the device-local open view', () => {
   const two = project({
     floors: [{ id: 'floor-1', name: 'Flat', planImage: null }],
     views: [
-      { id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Flat', isDefault: true, showPlanImage: true },
-      { id: 'view-2', kind: 'plan', floorId: 'floor-1', name: 'Furniture', isDefault: false, showPlanImage: true },
+      { id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Flat', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } },
+      { id: 'view-2', kind: 'plan', floorId: 'floor-1', name: 'Furniture', isDefault: false, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } },
     ],
   })
 
@@ -267,9 +268,9 @@ describe('planViewsForFloor', () => {
         { id: 'floor-2', name: 'Loft', planImage: null },
       ],
       views: [
-        { id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Flat', isDefault: true, showPlanImage: true },
-        { id: 'view-2', kind: 'plan', floorId: 'floor-2', name: 'Loft', isDefault: true, showPlanImage: true },
-        { id: 'view-3', kind: 'plan', floorId: 'floor-1', name: 'Furniture', isDefault: false, showPlanImage: true },
+        { id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Flat', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } },
+        { id: 'view-2', kind: 'plan', floorId: 'floor-2', name: 'Loft', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } },
+        { id: 'view-3', kind: 'plan', floorId: 'floor-1', name: 'Furniture', isDefault: false, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } },
       ],
     })
     expect(planViewsForFloor(p, 'floor-1').map((each) => each.id)).toEqual(['view-1', 'view-3'])
@@ -282,8 +283,8 @@ describe('resolvePlanView', () => {
   const two = project({
     floors: [{ id: 'floor-1', name: 'Flat', planImage: null }],
     views: [
-      { id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Flat', isDefault: true, showPlanImage: true },
-      { id: 'view-2', kind: 'plan', floorId: 'floor-1', name: 'Furniture', isDefault: false, showPlanImage: true },
+      { id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Flat', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } },
+      { id: 'view-2', kind: 'plan', floorId: 'floor-1', name: 'Furniture', isDefault: false, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } },
     ],
   })
 

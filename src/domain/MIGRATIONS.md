@@ -124,6 +124,53 @@ them, split the golden evidence per issue, and wrote the release note below. The
 plainly: a Project written by a preview build before #71 and after #69 still validates and still
 opens, because everything #71 adds is either defaulted by the step or optional.
 
+## What v9 holds (#74)
+
+One thing, an addition to every saved Plan View:
+
+* `planViewRange`, the closed vertical interval `[lowerMm, upperMm]` in millimetres above the Floor
+  Datum that the view draws between — its **Vertical Range** (#74 §1). Both ends are required and
+  `lowerMm` is strictly below `upperMm`: a range is never missing and never unbounded, because a view
+  whose cut nobody can predict is a view whose drawing nobody can predict either.
+
+`migrateV8toV9` gives every existing view the range its own Floor already declares, and spends no
+IDs, reads no clock and touches no entity: the lower end is the Floor's `limits.lowerMm` and the
+upper end its `limits.upperMm`, and a Floor that declares only one of them, or neither, supplies 0
+below and 2 600 mm above — the whole storey, which is what every view has always shown. So a
+migrated Project draws the way it did: content standing between the Floor's own limits is In range
+and is styled exactly as before, and what the new styling now marks — a wall cabinet over the ceiling
+line, a sump under the Datum — is the content the feature exists to distinguish.
+
+Three edge cases, all of them the same fallback:
+
+* A view that already carries a `planViewRange` is carried over untouched, so the step is idempotent
+  and a v9 file comes back as the same object it arrived as.
+* A Floor whose limits do not rise — `lowerMm` at or above `upperMm`, which the validator allows as
+  equal — cannot give a range, because a range must rise. Such a Floor gives 0–2 600 rather than a
+  view the validator would reject.
+* A view whose `floorId` names no Floor is the same case seen from the other side, and gets the same
+  0–2 600. This is a broken Project either way; the step's job is to hand the validator something it
+  can complain about usefully rather than to invent a storey.
+
+The rule lives in `defaultPlanViewRange` (`domain/planViewRange.ts`) because the migrator and the
+"new Plan View" handler need exactly it, and a second copy of a default is a second rule. The strict
+validator refuses a view with no `planViewRange`, a limit that is not a finite number, and a range
+whose lower end is not below its upper one. Nothing else in the model changed: a Placed Item still
+stores no height of its own, because its Item Design has it, and the classification the range drives
+is derived on the way to the canvas and never written down.
+
+`scripts/make-v9-fixtures.ts` writes the v9 golden domain fixtures by reading each committed v8
+fixture through this step — which is what a real upgrade does — and `scripts/make-v9-package-fixture.ts`
+writes the committed v9 Backup `fixtures/package/v9/plan-range.buildbox` that
+`src/package/fixtures.test.ts` reads, re-encodes byte for byte and refuses with a chain that stops at
+v8.
+
+**A Backup made by this version cannot be opened by an older one.** It is domain schema v9, and a
+build that stops at v8 has no ninth step to read it with, so it answers **"saved by a newer
+BuildBox"** and writes nothing (#20 §5). Old Backups are unaffected: v1 through v8 still open, and
+the step that runs on the way in adds one pair of numbers per view and changes no measurement, no
+entity and no existing value.
+
 ## What this release means for a reader (#73)
 
 In plain words:

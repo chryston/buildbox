@@ -24,9 +24,9 @@ const project = (over: Partial<Project> = {}): Project => ({
   preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 },
   floors: [kitchen, loft],
   views: [
-    { id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Kitchen level', isDefault: true, showPlanImage: true },
-    { id: 'view-2', kind: 'plan', floorId: 'floor-1', name: 'Furniture', isDefault: false, showPlanImage: true },
-    { id: 'view-3', kind: 'plan', floorId: 'floor-2', name: 'Loft', isDefault: true, showPlanImage: true },
+    { id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Kitchen level', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } },
+    { id: 'view-2', kind: 'plan', floorId: 'floor-1', name: 'Furniture', isDefault: false, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } },
+    { id: 'view-3', kind: 'plan', floorId: 'floor-2', name: 'Loft', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } },
   ],
   itemDesigns: [],
   existingModel: {
@@ -76,7 +76,7 @@ describe('what is leaning on the Floor', () => {
     const empty: Project = {
       ...project(),
       floors: [loft],
-      views: [{ id: 'view-3', kind: 'plan', floorId: 'floor-2', name: 'Loft', isDefault: true, showPlanImage: true }],
+      views: [{ id: 'view-3', kind: 'plan', floorId: 'floor-2', name: 'Loft', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } }],
       existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [] },
     }
     const props = open(empty, loft)

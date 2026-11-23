@@ -84,7 +84,7 @@ export function projectFixture(planImageHash: string | null, id: string = PROJEC
       },
     ],
     views: [
-      { id: `${id}-view-1`, kind: 'plan', floorId: `${id}-floor-1`, name: 'Floor 1', isDefault: true, showPlanImage: true },
+      { id: `${id}-view-1`, kind: 'plan', floorId: `${id}-floor-1`, name: 'Floor 1', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } },
     ],
     itemDesigns: [
       {

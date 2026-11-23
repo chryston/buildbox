@@ -6,7 +6,7 @@
  * `applyIntent` consults, which is why these tests press the real `Delete…` in the real rail and read
  * the real table rather than handing the component a review of their own invention.
  *
- * The scene is `fixtures/domain/v8/layers.json` with content moved onto Services — four Existing
+ * The scene is `fixtures/domain/v9/layers.json` with content moved onto Services — four Existing
  * Walls and Option B's proposed record, five in all — and an override of its own in two saved views.
  * That is criterion 14's shape: counts `5`, `0`, `2`, both view names, and the line about the
  * Unlayered row, which is the one consequence a person would otherwise discover afterwards.
@@ -32,7 +32,7 @@ const SERVICES = 'layers-002'
 const FURNITURE = 'layers-001'
 
 function sceneProject(): Project {
-  const text = readFileSync(join(fixturesRoot, 'domain', 'v8', 'layers.json'), 'utf8')
+  const text = readFileSync(join(fixturesRoot, 'domain', 'v9', 'layers.json'), 'utf8')
   return structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project)
 }
 

@@ -1,7 +1,7 @@
 /**
  * The two Projects a cross-Project paste needs (#72 criterion 1).
  *
- * Both come out of `fixtures/domain/v8/layers.json` — the renovation-views kitchen with its three
+ * Both come out of `fixtures/domain/v9/layers.json` — the renovation-views kitchen with its three
  * Drawing Layers — reached through the Intents the editor dispatches, so each file is a transcript
  * rather than a hand-written object, and `validateProject` at the end proves both transcripts end
  * somewhere legal.
@@ -41,10 +41,10 @@ import type { EntityId, Project } from '../src/domain'
 import { canonicalJson } from '../src/lib'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const SCENE = resolve(repoRoot, 'fixtures/domain/v8/layers.json')
+const SCENE = resolve(repoRoot, 'fixtures/domain/v9/layers.json')
 const ENVELOPE = resolve(repoRoot, 'fixtures/e2e/preview-seed/renovation-layers.json')
-const FITOUT_OUT = resolve(repoRoot, 'fixtures/domain/v8/paste-fitout.json')
-const ELM_OUT = resolve(repoRoot, 'fixtures/domain/v8/paste-elm.json')
+const FITOUT_OUT = resolve(repoRoot, 'fixtures/domain/v9/paste-fitout.json')
+const ELM_OUT = resolve(repoRoot, 'fixtures/domain/v9/paste-elm.json')
 const PAIR_OUT = resolve(repoRoot, 'fixtures/e2e/preview-seed/paste-pair.json')
 
 const NOW = '2026-01-01T11:00:00+08:00'
@@ -68,7 +68,7 @@ function fail(message: string): never {
 
 
 const scene = JSON.parse(readFileSync(SCENE, 'utf8')) as { domainSchemaVersion: number; project: Project }
-if (scene.domainSchemaVersion !== 8) fail('the scene fixture is not a v8 Project')
+if (scene.domainSchemaVersion !== 9) fail('the scene fixture is not a v9 Project')
 if ((scene.project.drawingLayers ?? []).length === 0) fail('the scene fixture carries no Drawing Layers')
 
 /** One Intent, with the IDs it spends minted the way the app mints them. */
@@ -137,8 +137,8 @@ const write = (path: string, content: unknown): void => {
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, `${canonicalJson(content)}\n`)
 }
-write(FITOUT_OUT, { domainSchemaVersion: 8, project: fitout })
-write(ELM_OUT, { domainSchemaVersion: 8, project: elm })
+write(FITOUT_OUT, { domainSchemaVersion: 9, project: fitout })
+write(ELM_OUT, { domainSchemaVersion: 9, project: elm })
 
 // --- the pair, as the one database the preview build opens -------------------------------------
 
@@ -151,7 +151,7 @@ const envelope = JSON.parse(readFileSync(ENVELOPE, 'utf8')) as {
 }
 const record = envelope.projects[0] ?? fail('the envelope seed holds no Project')
 const row = envelope.library[0] ?? fail('the envelope seed holds no library row')
-if (record.schemaVersion !== 8) fail(`the envelope's first record is schema v${record.schemaVersion}`)
+if (record.schemaVersion !== 9) fail(`the envelope's first record is schema v${record.schemaVersion}`)
 
 write(PAIR_OUT, {
   dbName: envelope.dbName,

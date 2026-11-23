@@ -43,6 +43,8 @@ export interface WallInspectorProps {
   deleteBlocked: string | null
   /** The renovation action for this Wall (#69 §13), when there is an Option to move it to. */
   renovationAction?: ReactNode
+  /** The Vertical Extent block (#74 §5): `Base`, `Height`, `Top` and `Shown as:`. */
+  extent?: ReactNode
 }
 
 /** Grouped thousands, as the issue writes a height: `2,600 mm`. */
@@ -74,6 +76,7 @@ export function WallInspector(props: WallInspectorProps): ReactNode {
   const {
     wall, derived, mergeableWith, unit, precision,
     onSetLength, onSetRadius, onSetThickness, onOffset, onSplit, onMerge, onDelete, deleteBlocked, renovationAction,
+    extent,
   } = props
   const { locked, notice } = useFieldsLocked()
   const [offsetText, setOffsetText] = useState('')
@@ -169,6 +172,9 @@ export function WallInspector(props: WallInspectorProps): ReactNode {
           </button>
         </div>
       </ToolbarMenu>
+      {/* The Vertical Extent, before the actions: it is a measurement of this Wall, not a thing to do
+          to it (#74 §5). */}
+      {extent}
       {renovationAction}
       <div className="flex items-center gap-2">
         <button type="button" data-testid="wall-split" className="bb-workspace-tool-button" onClick={onSplit}>

@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { currentSchemaOf } from '../../domain/testing'
 import type { DesignOption, Project, RoomOutline, WallJunction } from '../../domain'
 import { designOptionsOf, roomBounds, validateProject } from '../../domain'
 import { canonicalJson } from '../../lib'
@@ -45,7 +46,7 @@ const A = 'option-a'
 const B = 'option-b'
 
 /** A fresh copy of the scene: no test may see another's writes. */
-const project = (): Project => structuredClone(seed.projects[0]!.data)
+const project = (): Project => currentSchemaOf(seed.projects[0]!.data, 8)
 function optionOf(source: Project, id: string): DesignOption {
   const found = designOptionsOf(source).find((entry) => entry.id === id)
   if (found === undefined) throw new Error(`the fixture holds no Design Option ${id}`)

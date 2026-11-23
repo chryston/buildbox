@@ -28,15 +28,30 @@ import {
   refTangentDeg,
 } from '../../geometry'
 import { chainJunctionCount, wallEndKey } from '../intents'
-import type { CreateWallChain, DependencyReview, Intent, IntentTarget, Locator, MergeWalls, WallEndTarget, WallIntent } from '../intents'
+import type { CreateWallChain, DependencyReview, Intent, IntentTarget, Locator, MergeWalls, VerticalExtentField, WallEndTarget, WallIntent } from '../intents'
 
 import type { Handler, IntentHandler } from './context'
 import { creationLayerField } from './creationLayer'
-import { containerOf, effectiveView, isInOption, nextWallRef, proposedProvenance, refuse, spendIds } from './support'
+import {
+  containerOf,
+  effectiveView,
+  isInOption,
+  nextWallRef,
+  proposedProvenance,
+  refuse,
+  requireExtentValue,
+  spendIds,
+} from './support'
 import { faceRefsOn, followWallFaces, refuseReferencedWall } from './roomSupport'
 import { openingsStillFit, requireOpeningsFit } from './openingSupport'
 
 const wallPath = (wallId: EntityId): string => `existingModel.walls[${wallId}]`
+/**
+ * The record field one Vertical Extent box writes (#74 §5). `Top` is not a field — a Wall keeps its
+ * base and its height, and the top is the sum — so the path names the field that actually changed.
+ */
+const wallField = (wallId: EntityId, field: VerticalExtentField): string =>
+  `${wallPath(wallId)}.${field === 'base' ? 'baseElevation' : 'height'}`
 const junctionPath = (junctionId: EntityId): string => `existingModel.wallJunctions[${junctionId}]`
 
 /** The Wall, or a rejection: every Wall Intent names one. */
@@ -434,6 +449,24 @@ const setThickness: Handler<'wall.setThickness'> = (ctx) => {
   wall.thickness = thickness
 }
 
+/**
+ * One Vertical Extent box of a Wall (#74 §5). The three boxes are one Intent over one pair of
+ * elevations, and each is one line of arithmetic on it: `base` carries the height with it, `height`
+ * grows the soffit off the base it keeps, `top` holds the base and restates the height.
+ *
+ * The reference line does not move, so no face, no Junction and no hosted Opening is affected. That is
+ * why this is registered plainly rather than through `wallHandler`: the Wall-fit check that wrapper
+ * adds exists for the edits that move the band an Opening is cut into, and there is nothing here for
+ * it to re-check.
+ */
+const setVerticalExtent: Handler<'wall.setVerticalExtent'> = (ctx) => {
+  const { wallId, field, value } = ctx.intent.payload
+  const wall = editWall(ctx.draft, wallId)
+  requireExtentValue(field, value, wallField(wallId, field), wall.baseElevation)
+  if (field === 'base') wall.baseElevation = value
+  else wall.height = field === 'height' ? value : value - wall.baseElevation
+}
+
 /** `Offset wall by … mm`: the reference line moves perpendicular, to the chosen side (#64 §10).
  * The side is read in the reference line's own direction, and a curve offsets concentrically —
  * the same normal `derive` offsets the faces by, so the line can reach a face. */
@@ -786,6 +819,10 @@ export const WALL_HANDLERS: WallHandlers = {
   'wall.setDirection': wallHandler(setDirection, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
   'wall.setArc': wallHandler(setArc, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
   'wall.setThickness': wallHandler(setThickness, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
+  'wall.setVerticalExtent': {
+    run: setVerticalExtent,
+    locate: (project, intent) => planLocator(wallFloor(project, intent.payload.wallId)),
+  },
   'wall.offset': wallHandler(offsetWall, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
   'wall.split': wallHandler(splitWall, (project, intent) => planLocator(wallFloor(project, intent.payload.wallId))),
   'wall.merge': wallHandler(mergeWalls, (project, intent) => planLocator(wallFloor(project, intent.payload.wallIds[0]))),

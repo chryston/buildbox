@@ -11,8 +11,9 @@
  * the e2e asserting a scene that no longer exists, which is worse than no e2e.
  */
 import { describe, expect, it } from 'vitest'
-import fitoutFixture from '../../fixtures/domain/v8/paste-fitout.json?raw'
-import elmFixture from '../../fixtures/domain/v8/paste-elm.json?raw'
+import { currentSchemaOf } from '../domain/testing'
+import fitoutFixture from '../../fixtures/domain/v9/paste-fitout.json?raw'
+import elmFixture from '../../fixtures/domain/v9/paste-elm.json?raw'
 import pairSeed from '../../fixtures/e2e/preview-seed/paste-pair.json?raw'
 import type { EntityId, Project } from '../domain'
 import { entityLayerId } from '../domain'
@@ -120,8 +121,8 @@ describe('the pair is the scene the browser tier drives (#72 criterion 1)', () =
   it('carries the same bytes the domain fixtures hold', () => {
     // The e2e and the domain tests read the same Project, or the e2e is testing a different scene
     // than the one the paste was reasoned about against.
-    expect(canonicalJson(pair.projects[0]!.data)).toBe(canonicalJson(fitout))
-    expect(canonicalJson(pair.projects[1]!.data)).toBe(canonicalJson(elm))
+    expect(currentSchemaOf(pair.projects[0]!.data, 8)).toEqual(fitout)
+    expect(currentSchemaOf(pair.projects[1]!.data, 8)).toEqual(elm)
     expect(pair.projects.every((record) => record.schemaVersion === 8)).toBe(true)
   })
 

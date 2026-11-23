@@ -1,5 +1,5 @@
 /**
- * Generate `fixtures/domain/v8/export.json` (#73 criteria 6 and 7).
+ * Generate `fixtures/domain/v9/export.json` (#73 criteria 6 and 7).
  *
  * The same Floor as `renovation-views.json` — Walls W-1…W-6, the Kitchen, the Bedroom, the two
  * Options — reached through the Intents the editor dispatches, so the fixture is a transcript and
@@ -34,8 +34,8 @@ import type { EntityId, Project } from '../src/domain'
 import { canonicalJson } from '../src/lib'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const SOURCE = resolve(repoRoot, 'fixtures/domain/v8/renovation-views.json')
-const OUT = resolve(repoRoot, 'fixtures/domain/v8/export.json')
+const SOURCE = resolve(repoRoot, 'fixtures/domain/v9/renovation-views.json')
+const OUT = resolve(repoRoot, 'fixtures/domain/v9/export.json')
 
 const NOW = '2026-01-01T10:15:00+08:00'
 /** The issue's §2 default colours. */
@@ -61,7 +61,7 @@ let nextId = 0
 const newIds = (count: number): string[] => Array.from({ length: count }, () => `export-${String(++nextId).padStart(3, '0')}`)
 
 const envelope = JSON.parse(readFileSync(SOURCE, 'utf8')) as { domainSchemaVersion: number; project: Project }
-if (envelope.domainSchemaVersion !== 8) fail('the source fixture is not a v8 Project')
+if (envelope.domainSchemaVersion !== 9) fail('the source fixture is not a v9 Project')
 
 /** One Intent, with the IDs it spends minted the way the app mints them. */
 function apply<T extends IntentType>(project: Project, type: T, payload: PayloadOf<T>, ids: string[] = []): Project {
@@ -152,7 +152,7 @@ const result = validateProject(current)
 if (!result.ok) fail(`export.json is not a valid Project: ${JSON.stringify(result.problems.slice(0, 3), null, 2)}`)
 
 mkdirSync(dirname(OUT), { recursive: true })
-writeFileSync(OUT, `${canonicalJson({ domainSchemaVersion: 8, project: current })}\n`)
+writeFileSync(OUT, `${canonicalJson({ domainSchemaVersion: 9, project: current })}\n`)
 
 const furnitureNames = current.existingModel.placedItems
   .filter((row) => row.drawingLayerId === FURNITURE)

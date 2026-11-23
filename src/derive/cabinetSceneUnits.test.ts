@@ -50,7 +50,7 @@ const project = (parts: Partial<Project>): Project => ({
   meta: { name: 'Test' },
   preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 },
   floors: [{ id: 'floor-1', name: 'Floor 1', planImage: null }],
-  views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Floor 1', isDefault: true, showPlanImage: true }],
+  views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Floor 1', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } }],
   itemDesigns: [],
   existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [] },
   warningAcknowledgements: [],

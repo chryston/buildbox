@@ -87,9 +87,11 @@ export function fixtureProject(): Project {
       { id: 'floor-1', name: 'Mezzanine', planImage: null },
     ],
     views: [
+      // The record these fixtures were written from is a v2 one: a Plan View of that schema had no
+      // range, and the file keeps the bytes it was written from, so the array is the shape it had.
       { id: 'view-0', kind: 'plan', floorId: 'floor-0', name: 'Floor 1', isDefault: true, showPlanImage: true },
       { id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Mezzanine', isDefault: true, showPlanImage: true },
-    ],
+    ] as unknown as PlanView[],
     itemDesigns: [
       { id: 'design-0', kind: 'cabinet', name: 'Base Cabinet', construction: { settings: SETTINGS, root: SPLIT_ROOT } },
       { id: 'design-1', kind: 'cabinet', name: 'Tall Larder', construction: { settings: SETTINGS, root: TALL_ROOT } },
@@ -438,4 +440,25 @@ export function legacyFixtureRecord(): unknown {
 /** An Item Footprint as the pre-v3 files wrote it. */
 function legacyFootprint(width: number, depth: number): { kind: 'rectangle'; width: number; depth: number } {
   return { kind: 'rectangle', width, depth }
+}
+
+/**
+ * The renovation fixture at the ninth schema (#74), with each Plan View's Vertical Range spelled out.
+ *
+ * The plain view keeps the range its Floor implies — from the Floor structural level up to just
+ * below the ceiling — and the Option view has been pulled down to counter height, which is what the
+ * field is for: the same world, drawn from a shorter stick. This is the Backup this build writes, so
+ * the two ranges are the bytes the round-trip is judged against, and the pair shows that a range
+ * belongs to the view and not to the Project.
+ */
+export function planRangeFixtureProject(): Project {
+  const project = renovationFixtureProject()
+  const [plain, option] = project.views
+  return {
+    ...project,
+    views: [
+      { ...plain!, planViewRange: { lowerMm: 0, upperMm: 2600 } },
+      { ...option!, planViewRange: { lowerMm: 900, upperMm: 1200 } },
+    ],
+  }
 }

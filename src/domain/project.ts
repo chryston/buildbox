@@ -22,6 +22,7 @@
 import type { ClosedPath, Preset, WallSide } from '../geometry'
 import type { CabinetNode, GlobalSettings } from './cabinetPayload'
 import { nameKey } from './floorNames'
+import type { PlanViewRange } from './planViewRange'
 
 /**
  * An opaque entity ID (#42 §3): 1–128 UTF-16 code units, no leading or trailing
@@ -299,6 +300,16 @@ export interface PlanView {
   isDefault: boolean
   /** Whether this view draws the Floor's Plan Image. */
   showPlanImage: boolean
+  /**
+   * The height this view draws at (#74 §1).
+   *
+   * Required, not optional: a Plan View without a range would be a view that hides things by
+   * accident, and #74 §1 refuses that reading. The v8 → v9 migrator gives every view that
+   * predates it the range its Floor's limits say — the Floor's lower limit, or 0 when it has
+   * none, up to its upper limit, or 2 600 when it has none — which is the whole storey, and so
+   * the whole storey is what every existing Plan View keeps drawing.
+   */
+  planViewRange: PlanViewRange
   /**
    * The Design Option this view looks through, or `null` for the Existing Model alone.
    *

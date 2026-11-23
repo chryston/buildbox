@@ -176,6 +176,8 @@ export type {
   WallJunctionEnd,
   WallRefLine,
 } from './project'
+export type { PlanViewRange } from './planViewRange'
+export { DEFAULT_PLAN_VIEW_RANGE, defaultPlanViewRange } from './planViewRange'
 export {
   DEFAULT_DRAWING_LAYERS,
   DEFAULT_LAYER_NAMES,

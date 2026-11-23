@@ -109,6 +109,12 @@ export interface DisplayListSvgProps {
   emphasis?: Emphasis
   resolveAsset: (hash: string) => string | null
   interactions?: DisplayListInteractions
+  /**
+   * The name to show on hover for an entity whose label the drawing left out (#74 §3), keyed by
+   * `Ref.id`. A label with nowhere to sit is dropped from the picture, not from the Floor: the
+   * browser's own tooltip is where a name goes when the canvas has no room for a second box.
+   */
+  hoverNames?: ReadonlyMap<string, string>
   /** Drawn inside the transformed group, after the last layer — the rotate handle, an overlay. */
   children?: ReactNode
 }
@@ -385,12 +391,19 @@ function renderNode(
   const children = node.text !== undefined
     ? node.text
     : (node.children ?? []).map((child, childIndex) => renderNode(child, childIndex, o))
-  return createElement(node.tag, { ...props, key: id === undefined ? `n${index}` : `${id}-${index}` }, children)
+  // A Placed Item whose name had nowhere to sit is still named, on hover, where a second box
+  // cannot collide with the first (#74 §3).
+  const hover = id !== undefined && role === 'placed-item' ? o.hoverNames?.get(id) : undefined
+  const body = hover === undefined
+    ? children
+    : [createElement('title', { key: 'hover-name' }, hover), ...(Array.isArray(children) ? children : [children])]
+  return createElement(node.tag, { ...props, key: id === undefined ? `n${index}` : `${id}-${index}` }, body)
 }
 
 interface RenderOptions {
   readonly interactions?: DisplayListInteractions
   readonly screen?: DisplayListSvgProps['screen']
+  readonly hoverNames?: DisplayListSvgProps['hoverNames']
 }
 
 /**
@@ -398,12 +411,12 @@ interface RenderOptions {
  * View — its words flat on the screen above it.
  */
 export function DisplayListSvg(props: DisplayListSvgProps): ReactNode {
-  const { list, sizing, matrix, textSpace, screen, emphasis, resolveAsset, interactions, children } = props
+  const { list, sizing, matrix, textSpace, screen, emphasis, resolveAsset, interactions, hoverNames, children } = props
   const layer = props.textLayer ?? 'with'
   const options = { sizing, includeRefs: true, emphasis, resolveAsset }
   const render = (keep: 'geometry' | 'text' | 'all', screenAttrs: DisplayListSvgProps['screen']): ReactNode =>
     (toSvgTree(splitList(list, keep), options).children ?? [])
-      .map((band, index) => renderNode(band, index, { interactions, screen: screenAttrs }))
+      .map((band, index) => renderNode(band, index, { interactions, screen: screenAttrs, hoverNames }))
   return (
     <>
       {layer !== 'only' && (

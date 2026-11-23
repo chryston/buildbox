@@ -29,7 +29,7 @@ function validProject(): Project {
     meta: { name: 'Maple Street Kitchen' },
     preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 },
     floors: [{ id: 'floor-0', name: 'Floor 1', planImage: null }],
-    views: [{ id: 'view-0', kind: 'plan', floorId: 'floor-0', name: 'Floor 1', isDefault: true, showPlanImage: true }],
+    views: [{ id: 'view-0', kind: 'plan', floorId: 'floor-0', name: 'Floor 1', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } }],
     itemDesigns: [
       {
         id: 'design-0',
@@ -105,7 +105,7 @@ describe('DOMAIN_SCHEMA_VERSION', () => {
   it('is the version this build writes', () => {
     // v8 is production: the renovation model shipped, so the number the chain ends at and the number
     // this build writes are the same one (#73).
-    expect(DOMAIN_SCHEMA_VERSION).toBe(8)
+    expect(DOMAIN_SCHEMA_VERSION).toBe(9)
   })
 })
 
@@ -192,7 +192,7 @@ describe('migrateProject — the envelope version (#14)', () => {
     if (!result.ok) return
     expect(result.migratedFrom).toBe(1)
     expect(withoutTheStep({ views: result.project.views })).toEqual({
-      views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-0', name: 'Floor 1', isDefault: true, showPlanImage: true }],
+      views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-0', name: 'Floor 1', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } }],
     })
     expect(data).not.toHaveProperty('views')
   })

@@ -14,8 +14,8 @@
  * to serialise.
  */
 import { describe, expect, it } from 'vitest'
-import layeredFixture from '../../fixtures/domain/v8/layers.json?raw'
-import zeroFixture from '../../fixtures/domain/v8/layers-zero.json?raw'
+import layeredFixture from '../../fixtures/domain/v9/layers.json?raw'
+import zeroFixture from '../../fixtures/domain/v9/layers-zero.json?raw'
 import planImageSeed from '../../fixtures/e2e/preview-seed/renovation-views.json?raw'
 import type { Project } from '../domain'
 import { drawingLayersOf, entityLayerId, UNLAYERED_LAYER_KEY } from '../domain'

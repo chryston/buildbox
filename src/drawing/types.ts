@@ -341,6 +341,13 @@ export type SizeRole =
   /** The renovation overlays' dash and gap, and the two distances they are drawn at (#70 §F). */
   | 'renovation-dash'
   | 'renovation-gap'
+  /**
+   * The dash and the gap of an Above-range outline (#74 §3). Longer than a renovation's because
+   * it runs round a whole footprint that the reader has to recognise through the dashes alone,
+   * and shorter than a removed section's because it is not standing in for a gap.
+   */
+  | 'range-dash'
+  | 'range-gap'
   | 'renovation-halo-gap'
   | 'renovation-hatch-pitch'
   | 'plan-placeholder-line'
@@ -428,12 +435,27 @@ export type Style = {
 }
 
 /**
+ * How the Plan View Range presents this one item (#74 §3).
+ *
+ * It is a presentation and not a `StyleKey`, because the range says *how* a row is drawn — take
+ * the fill out of it, or draw the whole row at the faded opacity — and never *which* row it is.
+ * The row keeps the entity's own colours, so a layer drawn in a colour of its own still reads as
+ * one thing when the range cuts through it, and `emphasised()` can still find the row's
+ * `:selected` and `:hovered` variants. `rangeStyle` is the only reader.
+ */
+export type RangePaint = 'outline' | 'faded'
+
+/**
  * One drawn thing.
  *
  * `color` is what a `'item'` paint reads — the Placed Item's own colour — and is absent
  * whenever no style in the row needs it. `layout` is carried by text because the label
  * placer and the display list's own `bounds` both need the box the string occupies, and
  * measuring it twice, twice, is how a chip and its obstacle disagreed (#57).
+ *
+ * `paint` is the range's mark, stamped by the drawing pass and read by both renderers; absent
+ * means the entity is In range and draws normally. A label carries the same `ref` as the
+ * geometry it names, so it carries the same `paint` and follows it (#74 §3).
  */
 export type DisplayItem =
   | {
@@ -443,6 +465,7 @@ export type DisplayItem =
       closed: boolean
       style: StyleKey
       color?: string
+      paint?: RangePaint
     }
   | {
       kind: 'text'
@@ -457,6 +480,7 @@ export type DisplayItem =
       decoration?: 'underline'
       color?: string
       opacity?: number
+      paint?: RangePaint
       layout: { width: number; ascent: number; descent: number }
     }
   | {
@@ -484,6 +508,15 @@ export type DisplayLayer = { key: LayerKey; items: DisplayItem[] }
 export type MissingGlyph = { ref: Ref | null; text: string; chars: string[] }
 
 /**
+ * A label the drawing had no room for (#74 §3).
+ *
+ * A label that would have landed on another label is left out of the picture rather than
+ * written over it — but it is still carried here, with the words and the place it wanted, so the
+ * surface that draws the list can show it on hover instead of losing the name.
+ */
+export type OmittedLabel = { ref: Ref; text: string; at: Pt }
+
+/**
  * A whole drawing: one surface's worth of layers, in `LAYER_ORDER` order.
  *
  * `bounds` is in millimetres and already includes the laid-out text extents, so a caller can
@@ -495,4 +528,10 @@ export type DisplayList = {
   bounds: Rect
   layers: DisplayLayer[]
   missingGlyphs: MissingGlyph[]
+  /**
+   * The labels this drawing left out because they had nowhere to sit (#74 §3). Absent means none
+   * was omitted — which is every drawing but a Plan View's, since only the Plan View packs a
+   * whole Floor's names into one room.
+   */
+  omittedLabels?: OmittedLabel[]
 }

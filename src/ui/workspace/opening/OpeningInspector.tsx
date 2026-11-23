@@ -59,6 +59,8 @@ export interface OpeningInspectorProps {
   onDelete: () => void
   /** The renovation action for this Opening (#69 §13), when there is an Option to move it to. */
   renovationAction?: ReactNode
+  /** The Vertical Extent block (#74 §5): `Base (sill)`, `Height`, `Top` and `Shown as:`. */
+  extent?: ReactNode
 }
 
 function Row(props: { testId: string; label: string; value: string }): ReactNode {
@@ -74,6 +76,7 @@ export function OpeningInspector(props: OpeningInspectorProps): ReactNode {
   const {
     opening, host, end, hostLength, unit, precision,
     onRename, onSetWidth, onSetStart, onFlipHinge, onFlipSwing, onSelectHost, onDelete, renovationAction,
+    extent,
   } = props
   const { locked, notice } = useFieldsLocked()
   const [labelText, setLabelText] = useState(opening.label)
@@ -199,6 +202,9 @@ export function OpeningInspector(props: OpeningInspectorProps): ReactNode {
       <span className="bb-workspace-unit-suffix" data-testid="opening-inspector-readout">
         {readoutMm(shown, unit, precision)}
       </span>
+      {/* The Vertical Extent, before the actions: it is a measurement of this Opening, not a thing to
+          do to it (#74 §5). */}
+      {extent}
       {renovationAction}
       <button
         type="button"

@@ -203,13 +203,13 @@ describe('click-to-cycle over overlapping states (#70 criteria 15–18)', () => 
     expect(document.querySelector('[data-testid="overlap-cycle"]')).toBeNull()
     clickWall(container, W2)
     expect(header()).toBe('Overlap 1/2 · click again to cycle')
-    expect(rows()).toEqual(['▶ [Proposed] W-2′', '[Demolition] W-2'])
-    expect(currentRow()).toBe('▶ [Proposed] W-2′')
+    expect(rows()).toEqual(['▶ [Proposed] 1 of 2 · W-2′ · In range', '[Demolition] 2 of 2 · W-2 · In range'])
+    expect(currentRow()).toBe('▶ [Proposed] 1 of 2 · W-2′ · In range')
     clickWall(container, W2, 0, 3)
     expect(header()).toBe('Overlap 2/2 · click again to cycle')
     // The rows stay in cycle order; only the marker moves.
-    expect(rows()).toEqual(['[Proposed] W-2′', '▶ [Demolition] W-2'])
-    expect(currentRow()).toBe('▶ [Demolition] W-2')
+    expect(rows()).toEqual(['[Proposed] 1 of 2 · W-2′ · In range', '▶ [Demolition] 2 of 2 · W-2 · In range'])
+    expect(currentRow()).toBe('▶ [Demolition] 2 of 2 · W-2 · In range')
   })
 
   it('keeps the list inside the canvas bounds', () => {

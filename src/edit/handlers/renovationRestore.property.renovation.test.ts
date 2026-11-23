@@ -14,6 +14,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
+import { currentSchemaOf } from '../../domain/testing'
 import type { Project } from '../../domain'
 import { designOptionsOf, validateProject } from '../../domain'
 import { canonicalJson } from '../../lib'
@@ -48,7 +49,7 @@ describe('Restore undoes Replace (#69 acceptance 5)', () => {
         fc.property(
           fc.array(fc.record({ pick: fc.nat(), thick: fc.boolean() }), { minLength: 1, maxLength: 6 }),
           (draws) => {
-            const before = structuredClone(seed.projects[0]!.data)
+            const before = currentSchemaOf(seed.projects[0]!.data, 8)
             const pool = subjectsOf(before)
             let current = before
             const replaced: string[] = []

@@ -7,8 +7,9 @@
  * - the header counts the click that has been made — `Overlap 1/2 · click again to cycle`, then
  *   `2/2` — because the question a person is asking is "have I got the one I wanted yet";
  * - one row per candidate, top first, in the same order the cycle walks, each row the State in
- *   brackets and the entity's **full** name: `W-2` and `W-2′` differ by one character, so a
- *   shortened name is a list that cannot be read;
+ *   brackets, which of the candidates it is, the entity's **full** name and its Range Class:
+ *   `[Existing] 2 of 2 · Wall cabinet #1 · Above range` (#74 §6). `W-2` and `W-2′` differ by one
+ *   character, so a shortened name is a list that cannot be read;
  * - the current row carries `▶` and is bold, and the whole list is kept inside the canvas bounds by
  *   `clampOverlay` — the same rule the snap radius uses for "the same spot", measured in CSS pixels.
  *
@@ -16,7 +17,7 @@
  */
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { RENOVATION_STRINGS } from '../../strings/renovation'
+import { RANGE_CLASS_LABELS, RENOVATION_STRINGS } from '../../strings/renovation'
 import { DISPLAY_LABELS } from './displayTheme'
 import { clampOverlay } from '../selection/overlapCycle'
 import type { CanvasPoint, CanvasSize, CycleCandidate } from '../selection/overlapCycle'
@@ -63,7 +64,13 @@ export function OverlapCycleList(props: OverlapCycleListProps): ReactNode {
             className={row === index ? 'bb-renovation-overlap-row is-current' : 'bb-renovation-overlap-row'}
           >
             <span aria-hidden="true">{row === index ? '▶ ' : ''}</span>
-            {RENOVATION_STRINGS.overlapRow(DISPLAY_LABELS[candidate.renovationState], nameOf(candidate.entityId))}
+            {RENOVATION_STRINGS.overlapRow(
+              DISPLAY_LABELS[candidate.renovationState],
+              row + 1,
+              candidates.length,
+              nameOf(candidate.entityId),
+              RANGE_CLASS_LABELS[candidate.rangeClass ?? 'in'],
+            )}
           </li>
         ))}
       </ul>

@@ -72,12 +72,17 @@ export interface SelectionInspectorProps {
   onApplyPreview: () => void
   onCancelPreview: () => void
   onTogglePick: () => void
-  onFork: () => void
   onOpenDetail: () => void
   onDelete: () => void
   onTransfer: () => void
   /** The `Move to a Design Option…` action (#69 §13), mounted by a flagged build only. */
   renovationAction?: ReactNode
+  /**
+   * The Vertical Extent block (#74 §5): `Base`, `Top` (`moves item`) and the read-only Height line,
+   * with `Fork design…` under that line — the number it quotes is the one the fork would copy, so the
+   * two belong together rather than at opposite ends of the rail.
+   */
+  extent?: ReactNode
 }
 
 export function SelectionInspector(props: SelectionInspectorProps): ReactNode {
@@ -191,7 +196,7 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
   const {
     item, bounds, design, unit, precision, canTransfer, preview, pickingOrigin,
     onSetPosition, onSetRotation, onEditDesign, onPreviewOrigin, onApplyPreview,
-    onCancelPreview, onTogglePick, onFork, onOpenDetail, onDelete, onTransfer, renovationAction,
+    onCancelPreview, onTogglePick, onOpenDetail, onDelete, onTransfer, renovationAction, extent,
   } = props
   const { locked, notice } = useFieldsLocked()
   const isCabinet = design === null || design.kind === 'cabinet'
@@ -269,6 +274,9 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
         label={STRINGS.floorBounds}
         value={bounds === null ? '—' : `${size(bounds.w)} × ${size(bounds.h)}`}
       />
+      {/* The Vertical Extent, before any action: it is a measurement of this placement, and the
+          `Fork design…` button belongs under its Height line (#74 §5). */}
+      {extent}
       <div style={{ marginTop: 12 }}>
         <button
           type="button"
@@ -281,16 +289,6 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
         </button>
       </div>
       {renovationAction}
-      <div style={{ marginTop: 12 }}>
-        <button
-          type="button"
-          data-testid="fork-design"
-          className="bb-workspace-tool-button"
-          onClick={onFork}
-        >
-          {STRINGS.forkDesign}
-        </button>
-      </div>
       <div style={{ marginTop: 12 }}>
         <button
           type="button"

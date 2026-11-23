@@ -19,7 +19,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import { affineApply, affineInvert, resolveSnap } from '../../derive'
-import type { DerivedFloor, FloorRooms, FloorWalls, RenovationState, SnapCandidate, SnapKind } from '../../derive'
+import type { DerivedFloor, FloorRooms, FloorWalls, RangeClass, RenovationState, SnapCandidate, SnapKind } from '../../derive'
 import type { DisplayUnit, Point2 } from '../../domain'
 import { footprintPath } from '../../domain'
 import {
@@ -30,7 +30,7 @@ import {
   drawWarningBadges,
   displayRects,
 } from '../../drawing'
-import type { BadgeSubject, DisplayList, LayerGates, OpeningPreview, PlanPreview, RoomProposal, Sizing, WallOpenings } from '../../drawing'
+import type { BadgeSubject, DisplayList, LayerGates, OpeningPreview, PlanPreview, RangeGates, RoomProposal, Sizing, WallOpenings } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
 import { OverlapCycleList } from './renovation/OverlapCycleList'
 import { cycleOrder, nextCycle, reachableCandidates } from './selection/overlapCycle'
@@ -142,6 +142,15 @@ export interface PlanViewCanvasProps {
    * canvas whose gates rode on the Display would silently stop gating one.
    */
   layerGates?: LayerGates | null
+  /**
+   * This saved view's Plan View Range (#74 §3), answered per entity by the caller. Absent means the
+   * drawing is not a Plan View's, or the range is the whole world: everything is drawn normally.
+   *
+   * Like `layerGates`, and for the same reason, this is a prop of its own: the range is a property of
+   * the view, not of the Design Option, and it changes only how a thing is drawn and where it paints
+   * inside its own band — never whether it is drawn, and never what a click can reach.
+   */
+  rangeGates?: RangeGates | null
   /** The selected Wall: drawn with a heavier line and its end handles (#64 §15). */
   selectedWallId?: string | null
   /** A Wall band was clicked; the selection moves to it (#64 §15). */
@@ -211,7 +220,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     tool, selection, onSelect, onCursorChange, onCanvasClick, dragPreview, onDragPreview, onMoveItem, onRotateItem,
     editLocked = false,
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
-    angleSnap, overlay, htmlOverlay, walls, renovation = null, layerGates = null, selectedWallId = null, onSelectWall,
+    angleSnap, overlay, htmlOverlay, walls, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
     openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
     rooms = null, selectedRoomId = null, onSelectRoom, roomProposal = null,
     warningSubjects = [], onSelectWarningBadge,
@@ -490,6 +499,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       sizing,
       renovation: states === null ? null : { states },
       layers,
+      range: rangeGates,
       showPlanImage,
       preview,
       selectedWallId,
@@ -502,6 +512,12 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     },
   )
   const { list: painted, floor: drawnFloor, walls: drawnWalls, rooms: drawnRooms, openings: drawnOpenings } = view
+  // The names this view had no room for, keyed by the thing that lost its label (#74 §3): the
+  // renderer puts each one on the entity's group, so hovering the footprint says the name the
+  // packing could not fit beside it.
+  const hoverNames = new Map(
+    (painted.omittedLabels ?? []).flatMap((each) => (each.ref.id === null ? [] : [[each.ref.id, each.text] as const])),
+  )
   const annotations = overlay === undefined
     ? drawSelectionAnnotations(floor, selection, {
       sizing, formatLength, preview, handles: !editLocked && !selectionReadOnly,
@@ -545,17 +561,23 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
    * caller selects what was clicked, exactly as it did before.
    */
   function cyclePick(clickedId: string, clientX: number, clientY: number): string | null {
-    if (renovation === null || tool !== 'select' || renovation.onCycle === undefined) return null
+    // `Pick on canvas` owns the click while it is armed: the press answers that question and is
+    // never a step of a cycle, however long the stack under the pointer (#70 §8, #74 §6).
+    if (renovation === null || tool !== 'select' || pickingOrigin || renovation.onCycle === undefined) return null
     const at = toFloor(clientX, clientY)
     const host = hostRef.current
     if (at === null || host === null || states === null) return null
     const rect = host.getBoundingClientRect()
+    // What this view's Range makes of an entity travels with the candidate (#74 §6): it decides the
+    // order the cycle walks — In range first, then Above, then Below — and the words on its row. It
+    // never removes one: an Above-range cabinet is still something a person means to pick.
+    const classOf = (id: string): RangeClass => rangeGates?.classOf(id) ?? 'in'
     const candidates = candidatesAtPoint(at, {
       walls: (drawnWalls?.walls ?? []).map((wall) => ({ id: wall.id, outline: wall.outline })),
       placements: drawnFloor.placements.map((item) => ({ id: item.id, outline: item.worldPath })),
       rooms: (drawnRooms?.rooms ?? []).map((room) => ({ id: room.id, outline: room.path })),
       states,
-    })
+    }).map((candidate) => ({ ...candidate, rangeClass: classOf(candidate.entityId) }))
     // An Opening answers the pointer through its own symbol, which the Wall drawing lays above the
     // Wall it is cut in. The symbol's geometry is not a closed path the hit test can take, so the
     // click itself is the evidence that it is drawn and selectable here — and its layer puts it
@@ -567,6 +589,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
         entityId: clickedId,
         renovationState: openingState,
         drawOrder: drawOrderOf('wall-openings', candidates.length),
+        rangeClass: classOf(clickedId),
       })
     }
     // #71 criterion 10: content this view will not let be picked is not a candidate at all — the
@@ -695,6 +718,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
               emphasis={{ selected: selection === null ? undefined : new Set([selection]) }}
               resolveAsset={resolveAsset}
               interactions={interactions}
+              hoverNames={hoverNames}
             />
             {annotations === null
               ? overlay !== undefined && <g transform={matrix}>{overlay}</g>

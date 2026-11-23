@@ -7,7 +7,7 @@
  * is not: a Display of `Existing` needs no Option, because the Existing Model is what it draws.
  */
 import { describe, expect, it } from 'vitest'
-import renovationFixture from '../../fixtures/domain/v8/renovation-views.json?raw'
+import renovationFixture from '../../fixtures/domain/v9/renovation-views.json?raw'
 import type { PlanView, Project } from '../domain'
 import { needsActiveOption } from './index'
 

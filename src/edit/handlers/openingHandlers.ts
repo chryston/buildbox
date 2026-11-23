@@ -16,7 +16,7 @@ import type { EntityId, Project } from '../../domain'
 import type { Locator, OpeningIntent } from '../intents'
 import type { Handler, IntentHandler } from './context'
 import { creationLayerField } from './creationLayer'
-import { refuse, spendIds } from './support'
+import { refuse, requireExtentValue, spendIds } from './support'
 import {
   editOpening,
   openingField,
@@ -107,6 +107,30 @@ const setWidth: Handler<'opening.setWidth'> = (ctx) => {
   written.start = at
 }
 
+/**
+ * One Vertical Extent box of an Opening (#74 §5). The record keeps `sill` and `head`, so the three
+ * boxes are arithmetic on that pair: `base` moves both and keeps the difference between them, `height`
+ * grows the head off the sill it keeps, `top` restates the head.
+ *
+ * The host is never read and never written. An Opening stays in the Wall it was cut into however high
+ * up it stands (#74 §5 criterion 15) — the elevation is not a position along the Wall, and nothing
+ * about the fit rule of #65 §5 changes with it.
+ */
+const setVerticalExtent: Handler<'opening.setVerticalExtent'> = (ctx) => {
+  const { openingId, field, value } = ctx.intent.payload
+  const opening = requireOpening(ctx.project, openingId)
+  requireExtentValue(field, value, openingField(openingId, field === 'base' ? 'sill' : 'head'), opening.sill)
+  const written = editOpening(ctx.draft, openingId)
+  if (field === 'base') {
+    written.sill = value
+    written.head = value + (opening.head - opening.sill)
+  } else if (field === 'height') {
+    written.head = opening.sill + value
+  } else {
+    written.head = value
+  }
+}
+
 /** `Flip hinge`: the leaf hangs on the other jamb (#65 §6). The Opening stands where it was. */
 const flipHinge: Handler<'opening.flipHinge'> = (ctx) => {
   const { openingId } = ctx.intent.payload
@@ -143,6 +167,10 @@ export const OPENING_HANDLERS: OpeningHandlers = {
   'opening.create': { run: createOpening, locate: (_project, intent) => planLocator(intent.payload.floorId) },
   'opening.setStart': { run: setStart, locate: (project, intent) => planLocator(openingFloor(project, intent.payload.openingId)) },
   'opening.setWidth': { run: setWidth, locate: (project, intent) => planLocator(openingFloor(project, intent.payload.openingId)) },
+  'opening.setVerticalExtent': {
+    run: setVerticalExtent,
+    locate: (project, intent) => planLocator(openingFloor(project, intent.payload.openingId)),
+  },
   'opening.flipHinge': { run: flipHinge, locate: (project, intent) => planLocator(openingFloor(project, intent.payload.openingId)) },
   'opening.flipSwing': { run: flipSwing, locate: (project, intent) => planLocator(openingFloor(project, intent.payload.openingId)) },
   'opening.rename': { run: renameOpening, locate: (project, intent) => planLocator(openingFloor(project, intent.payload.openingId)) },

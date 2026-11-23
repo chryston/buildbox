@@ -41,6 +41,13 @@ export interface WallDrawOptions {
   /** The selected Opening, drawn heavier than its neighbours. */
   selectedOpeningId?: string | null
   /**
+   * Boxes the `W-n` references must not land on (#74 §3): the Item names of the same Floor, which
+   * are drawn before them and so are the ones that stay put. A reference that finds its side taken
+   * crosses to the other side of the band, which is what it already does for another Wall's
+   * reference — this only widens what it is looking at.
+   */
+  labelObstacles?: readonly Rect[]
+  /**
    * Whether the selected Wall's end handles are drawn at all; `true` unless said otherwise.
    *
    * A handle is an offer to edit, so a selection that cannot be edited is drawn without them
@@ -142,16 +149,18 @@ function placeWallLabel(wall: DerivedWall, sizing: Sizing, taken: Rect[]): { box
 }
 
 /**
- * The boxes the `W-n` references take on this Floor (#67 behaviour 35).
+ * The boxes the `W-n` references take on this Floor (#67 behaviour 35; #74 §3).
  *
  * A Room label may not sit on one, and the only way to know where they are without drawing them
  * twice is to run the same placement — which is why it lives here, next to the drawing that uses
- * it, rather than being guessed at by the caller.
+ * it, rather than being guessed at by the caller. `obstacles` is what the references themselves
+ * must avoid — the Item names, which were placed first — so that this answers with the same boxes
+ * the drawing draws rather than a second opinion.
  */
-export function wallLabelBoxes(walls: FloorWalls, sizing: Sizing): Rect[] {
-  const taken: Rect[] = []
+export function wallLabelBoxes(walls: FloorWalls, sizing: Sizing, obstacles: readonly Rect[] = []): Rect[] {
+  const taken: Rect[] = [...obstacles]
   for (const wall of walls.walls) placeWallLabel(wall, sizing, taken)
-  return taken
+  return taken.slice(obstacles.length)
 }
 
 /**
@@ -161,12 +170,13 @@ export function wallLabelBoxes(walls: FloorWalls, sizing: Sizing): Rect[] {
 export function drawWalls(walls: FloorWalls, options: WallDrawOptions): DisplayList {
   const {
     sizing, selectedWallId = null, openings = [], selectedOpeningId = null, preview = null, handles: showHandles = true,
+    labelObstacles = [],
   } = options
   const shapes: DisplayItem[] = []
   const symbols: DisplayItem[] = []
   const labels: DisplayItem[] = []
   const handles: DisplayItem[] = []
-  const taken: Rect[] = []
+  const taken: Rect[] = [...labelObstacles]
   let box: Rect | null = null
 
   for (const wall of walls.walls) {

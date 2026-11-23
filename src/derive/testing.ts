@@ -45,3 +45,12 @@ export const basicProject = (): Project => domainFixture('v1/project-basic.json'
 
 /** The reference Project: three Floors, thirty cabinets, six hundred and thirty placements. */
 export const referenceProject = (): Project => domainFixture('v3/reference-project.json')
+
+/**
+ * The #74 Plan View Range scene: one Floor with an upper limit of 2 600 and no lower one, W-1…W-4 at
+ * 0–2 600, a window in W-1 at 900–2 100, and four placements — `Base cabinet #1` and `#2` at Base 0
+ * (two placements of one design), `Wall cabinet #1` at 1 500 standing over the first of them, and a
+ * `Sump box` at −150 — with the Floor's default Plan View ranged 0–1 200. That is one entity in each
+ * Range Class, one pair of footprints that overlap, and one entity below the Floor Datum.
+ */
+export const planRangeScene = (): Project => domainFixture('v9/plan-range-scene.json')

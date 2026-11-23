@@ -18,6 +18,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { currentSchemaOf } from '../domain/testing'
 import { roomSegments, validateProject } from '../domain'
 import type { Project } from '../domain'
 import { deriveRooms, deriveWalls, roomFaceCandidates } from '../derive'
@@ -30,7 +31,7 @@ const seed = JSON.parse(
   projects: { id: string; revision: number; schemaVersion: number; data: Project }[]
 }
 
-const project = seed.projects[0]!.data
+const project = currentSchemaOf(seed.projects[0]!.data, seed.projects[0]!.schemaVersion)
 const floorId = project.floors[0]!.id
 const walls = deriveWalls(project, floorId)
 const rooms = project.existingModel.rooms

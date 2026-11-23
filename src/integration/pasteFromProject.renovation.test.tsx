@@ -25,6 +25,7 @@ import { fileURLToPath } from 'node:url'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import type { RenderResult } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { act } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import type { EntityId, Project } from '../domain'
@@ -48,7 +49,7 @@ const GPO = 'seed-item-028'
 const DINING_CHAIR = 'fp-sofa'
 
 const readProject = (name: string): Project => {
-  const text = readFileSync(join(fixturesRoot, 'domain', 'v8', name), 'utf8')
+  const text = readFileSync(join(fixturesRoot, 'domain', 'v9', name), 'utf8')
   return structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project)
 }
 
@@ -92,11 +93,12 @@ async function openView(viewId: string): Promise<void> {
   await waitFor(() => expect(screen.getByTestId('view-picker')).toHaveValue(viewId))
 }
 
-/** A press on the drawing's own group for that record, which is how a selection starts. */
+/** Stand on that record. A press at the canvas's synthetic point reaches whatever the cycle says is
+ * under it (#74 §6), and these fixtures' Items do not stand under that point — so the selection the
+ * copy needs is made through the store's own action, which is the action the canvas takes. What a
+ * press reaches is the cycle's own tests to settle, not this file's. */
 function select(itemId: string): void {
-  const node = screen.getByTestId(`placed-object-${itemId}`)
-  fireEvent.pointerDown(node, { button: 0, buttons: 1, clientX: 40, clientY: 40 })
-  fireEvent.pointerUp(node, { button: 0, buttons: 0, clientX: 40, clientY: 40 })
+  act(() => workspaceStore.getState().select(itemId))
 }
 
 const pasteButton = (): HTMLButtonElement => screen.getByTestId('renovation-paste-button') as HTMLButtonElement

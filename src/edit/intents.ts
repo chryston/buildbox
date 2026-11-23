@@ -84,6 +84,7 @@ export type S7IntentType =
   | 'plan.addObject'
   | 'plan.placeDesign'
   | 'plan.movePlacement'
+  | 'plan.setPlacementVerticalExtent'
   | 'plan.rotatePlacement'
   | 'plan.removeObject'
   | 'plan.addTemplate'
@@ -102,6 +103,7 @@ export type S7IntentType =
   | 'wall.setDirection'
   | 'wall.setArc'
   | 'wall.setThickness'
+  | 'wall.setVerticalExtent'
   | 'wall.offset'
   | 'wall.split'
   | 'wall.merge'
@@ -115,6 +117,7 @@ export type S7IntentType =
   | 'opening.create'
   | 'opening.setStart'
   | 'opening.setWidth'
+  | 'opening.setVerticalExtent'
   | 'opening.flipHinge'
   | 'opening.flipSwing'
   | 'opening.rename'
@@ -134,6 +137,7 @@ export type S7IntentType =
   | 'view.rename'
   | 'view.delete'
   | 'view.setShowPlanImage'
+  | 'view.setPlanViewRange'
   | 'warning.acknowledge'
   | 'warning.editNote'
 
@@ -316,6 +320,29 @@ export interface PlacePlanDesign {
 export interface MovePlanPlacement {
   placedItemId: EntityId
   translation: Point2
+}
+/**
+ * Which of the three Vertical Extent boxes was committed (#74 §5).
+ *
+ * One Intent carries the three fields rather than three Intents, because they are one control over
+ * one pair of elevations and differ only in which two of the three numbers are held still — the
+ * difference is one line of arithmetic in the handler, and a second and third Intent type would
+ * multiply the labels, the ID order and the undo menu for no decision the user ever makes.
+ */
+export type VerticalExtentField = 'base' | 'height' | 'top'
+/** The fields a Placed Item has: it owns a base and no height, so there is no `height` box (#74 §5). */
+export type PlacementVerticalExtentField = Extract<VerticalExtentField, 'base' | 'top'>
+/**
+ * One Vertical Extent box of a Placed Item (#74 §5), in millimetres from the Floor Datum.
+ *
+ * `top` moves the item — the new base is the entered top minus the height its Item Design owns — and
+ * writes nothing to the Design. That is the whole of #74 §7's no-per-placement-copy guard: a Placed
+ * Item record has no `height` field to write, and this Intent is the only place a top is answered.
+ */
+export interface SetPlacementVerticalExtent {
+  placedItemId: EntityId
+  field: PlacementVerticalExtentField
+  value: number
 }
 /**
  * One turn about the Item Origin (#57 behaviour 33): free rotation, clockwise degrees in
@@ -503,6 +530,22 @@ export interface SetPlanViewShowsPlanImage {
 }
 
 /**
+ * The Plan View Range of one saved view (#74 §1, §4): the two elevations, from the Floor Datum, that
+ * this view draws between.
+ *
+ * The range belongs to the view and to nothing else, so the payload names the view — the caller sends
+ * the one the saved-view card is showing, which is the only view a range change is allowed to touch.
+ * Both numbers arrive already in millimetres: the field component holds the display unit and converts
+ * what was typed, so the Intent carries the value that gets stored rather than a string plus a unit to
+ * read it with.
+ */
+export interface SetPlanViewRange {
+  viewId: EntityId
+  lowerMm: number
+  upperMm: number
+}
+
+/**
  * One segment of a chained Wall draw: everything a Wall needs before it has an ID and a `ref`,
  * which the caller pre-allocates (#64 §11).
  */
@@ -586,6 +629,20 @@ export interface SetWallArc {
 export interface SetWallThickness {
   wallId: EntityId
   thickness: number
+}
+
+/**
+ * One Vertical Extent box of a Wall (#74 §5), in millimetres from the Floor Datum.
+ *
+ * `base` carries the height with it, `height` grows the top off the base it keeps, `top` holds the
+ * base and restates the height. Nothing here moves the reference line, so no face, no Junction and
+ * no hosted Opening shifts — which is why this Intent is not wrapped in the Wall-fit check every
+ * geometry edit of #65 §7 pays.
+ */
+export interface SetWallVerticalExtent {
+  wallId: EntityId
+  field: VerticalExtentField
+  value: number
 }
 
 /** The secondary `Offset wall by … mm`: the reference line moves perpendicular, to a side. */
@@ -720,6 +777,20 @@ export interface SetOpeningWidth {
   openingId: EntityId
   width: number
   start?: number
+}
+
+/**
+ * One Vertical Extent box of an Opening (#74 §5), in millimetres from the Floor Datum. `base` is the
+ * sill and `top` the head, which are the two numbers the record already keeps.
+ *
+ * The host is never part of this: an Opening stays in the Wall it was cut into however its elevation
+ * moves (#74 §5), and the Wall it stands in is tall enough for the whole storey in every case the
+ * inspector offers.
+ */
+export interface SetOpeningVerticalExtent {
+  openingId: EntityId
+  field: VerticalExtentField
+  value: number
 }
 
 /** `Flip hinge`: the leaf hangs on the other jamb. A hinged door only (#65 §6). */
@@ -1077,6 +1148,7 @@ export interface IntentPayloads {
   'plan.addObject': AddPlanObject & IntentTarget
   'plan.placeDesign': PlacePlanDesign & IntentTarget
   'plan.movePlacement': MovePlanPlacement & IntentTarget
+  'plan.setPlacementVerticalExtent': SetPlacementVerticalExtent & IntentTarget
   'plan.rotatePlacement': RotatePlanPlacement & IntentTarget
   'plan.removeObject': RemovePlanObject & IntentTarget
   'plan.addTemplate': AddPlanTemplate
@@ -1095,6 +1167,7 @@ export interface IntentPayloads {
   'wall.setDirection': SetWallDirection & IntentTarget
   'wall.setArc': SetWallArc & IntentTarget
   'wall.setThickness': SetWallThickness & IntentTarget
+  'wall.setVerticalExtent': SetWallVerticalExtent & IntentTarget
   'wall.offset': OffsetWall & IntentTarget
   'wall.split': SplitWall & IntentTarget
   'wall.merge': MergeWalls & IntentTarget
@@ -1108,6 +1181,7 @@ export interface IntentPayloads {
   'opening.create': CreateOpening & IntentTarget
   'opening.setStart': SetOpeningStart & IntentTarget
   'opening.setWidth': SetOpeningWidth & IntentTarget
+  'opening.setVerticalExtent': SetOpeningVerticalExtent & IntentTarget
   'opening.flipHinge': FlipOpeningHinge & IntentTarget
   'opening.flipSwing': FlipOpeningSwing & IntentTarget
   'opening.rename': RenameOpening & IntentTarget
@@ -1127,6 +1201,7 @@ export interface IntentPayloads {
   'view.rename': RenamePlanView
   'view.delete': DeletePlanView
   'view.setShowPlanImage': SetPlanViewShowsPlanImage
+  'view.setPlanViewRange': SetPlanViewRange
   'warning.acknowledge': AcknowledgeWarning
   'warning.editNote': EditWarningNote
   'designOption.create': CreateDesignOption
@@ -1230,6 +1305,7 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
   'plan.addObject': ['itemDesignId', 'placedItemId'],
   'plan.placeDesign': ['placedItemId'],
   'plan.movePlacement': [],
+  'plan.setPlacementVerticalExtent': [],
   'plan.rotatePlacement': [],
   'plan.removeObject': [],
   'plan.addTemplate': ['itemDesignId'],
@@ -1248,6 +1324,7 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
   'wall.setDirection': [],
   'wall.setArc': [],
   'wall.setThickness': [],
+  'wall.setVerticalExtent': [],
   'wall.offset': [],
   'wall.split': ['wallId', 'junctionId'],
   'wall.merge': [],
@@ -1261,6 +1338,7 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
   'opening.create': ['openingId'],
   'opening.setStart': [],
   'opening.setWidth': [],
+  'opening.setVerticalExtent': [],
   'opening.flipHinge': [],
   'opening.flipSwing': [],
   'opening.rename': [],
@@ -1280,6 +1358,7 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
   'view.rename': [],
   'view.delete': [],
   'view.setShowPlanImage': [],
+  'view.setPlanViewRange': [],
   'warning.acknowledge': ['acknowledgementId'],
   'warning.editNote': [],
 }
@@ -1458,6 +1537,9 @@ export type RejectionCode =
   /** A Drawing Layer this view will not accept: it is read-only here, or it is not a layer the
    * Project has (#71 §4, §5). */
   | 'layer-blocked'
+  /** A Vertical Extent or Plan View Range that describes no band of height: a value that is not a
+   * number, a height of 0 or less, a top at or below its base, a Lower not below its Upper (#74 §4, §5). */
+  | 'invalid-extent'
 
 /**
  * What an Intent takes with it, listed before it runs (#20 §4, #65 §8).

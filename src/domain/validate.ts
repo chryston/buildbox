@@ -99,7 +99,8 @@ const META_FIELDS = ['name', 'address']
 const PREFERENCES_FIELDS = ['displayUnit', 'displayPrecision', 'defaultWallHeight']
 const FLOOR_FIELDS = ['id', 'name', 'planImage', 'limits', 'defaultWallHeight']
 const FLOOR_LIMITS_FIELDS = ['lowerMm', 'upperMm']
-const PLAN_VIEW_FIELDS = ['id', 'kind', 'floorId', 'name', 'isDefault', 'showPlanImage', 'designOptionId', 'renovationDisplay', 'layerSettings', 'layerOrder', 'activeLayerId', 'snapToHiddenContent']
+const PLAN_VIEW_RANGE_FIELDS = ['lowerMm', 'upperMm']
+const PLAN_VIEW_FIELDS = ['id', 'kind', 'floorId', 'name', 'isDefault', 'showPlanImage', 'planViewRange', 'designOptionId', 'renovationDisplay', 'layerSettings', 'layerOrder', 'activeLayerId', 'snapToHiddenContent']
 /** One Drawing Layer (#71 §1): an immutable ID, an editable name and a Project default colour. */
 const DRAWING_LAYER_FIELDS = ['id', 'name', 'color']
 /** What one saved view says about one layer (#71 §3); `color` is the only field that may be absent. */
@@ -930,6 +931,30 @@ function validateViewLayerOrder(raw: unknown, path: string, index: IdIndex, add:
   }
 }
 
+/**
+ * The cut a Plan View draws at (#74 §1): both ends required, each a finite number of millimetres
+ * from the Floor Datum, and the lower one strictly below the upper.
+ *
+ * A range of no height is refused rather than clamped: it would put every entity in the building on
+ * one side of it at once, which is a picture of nothing and not a picture of a storey.
+ */
+function validatePlanViewRange(raw: unknown, path: string, add: Add): void {
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected the Plan View Range as an object.')
+    return
+  }
+  const lowerMm = checkNumber(raw.lowerMm, childPath(path, 'lowerMm'), 'the Plan View Range lower limit in millimetres', add)
+  const upperMm = checkNumber(raw.upperMm, childPath(path, 'upperMm'), 'the Plan View Range upper limit in millimetres', add)
+  if (lowerMm !== null && upperMm !== null && lowerMm >= upperMm) {
+    add(
+      childPath(path, 'lowerMm'),
+      OUT_OF_RANGE,
+      `Expected the Plan View Range lower limit below its upper limit — ${String(lowerMm)} mm is not below ${String(upperMm)} mm.`,
+    )
+  }
+  checkUnknownFields(raw, path, PLAN_VIEW_RANGE_FIELDS, add)
+}
+
 function validatePlanView(
   raw: unknown,
   path: string,
@@ -974,6 +999,15 @@ function validatePlanView(
 
   checkBoolean(raw.isDefault, childPath(path, 'isDefault'), 'whether this is the default Plan View of the Floor', add)
   checkBoolean(raw.showPlanImage, childPath(path, 'showPlanImage'), 'whether this Plan View draws the Plan Image', add)
+
+  // The height this view draws at (#74 §1). Required, and a missing one is a missing field and not
+  // "unbounded": #74 §1 refuses the reading that a Plan View without a range sees everything, and a
+  // field that means "nobody said" would let a half-written file quietly change what is on screen.
+  if (raw.planViewRange === undefined) {
+    add(childPath(path, 'planViewRange'), MISSING, 'Missing the Plan View Range — every Plan View says the height it draws at.')
+  } else {
+    validatePlanViewRange(raw.planViewRange, childPath(path, 'planViewRange'), add)
+  }
 
   // The Design Option this view looks through (#70 §1). An absent field is a view written before
   // the capability, and `null` is the Existing Model alone — both valid, and valid for **every**

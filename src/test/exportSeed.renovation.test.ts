@@ -1,7 +1,7 @@
 /**
  * Seed 3 and Seed 4 of the export contract (#73 criteria 6, 7 and 8).
  *
- * `fixtures/domain/v8/export.json` is the Project the issue's two Lists seeds are named after —
+ * `fixtures/domain/v9/export.json` is the Project the issue's two Lists seeds are named after —
  * `Ground Floor`, the three default layers, four Placed Items on Furniture, and the saved view
  * `Ground Floor · Plan · Demolition` (Option A, Demolition) with Furniture hidden. It is written by
  * `scripts/make-export-seed.ts` out of real Intents, so the four items are in the state a person
@@ -34,7 +34,7 @@ const fixturesRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../fix
 const GOLDEN_DIR = join(fixturesRoot, 'export', 'golden')
 
 const project = (
-  JSON.parse(readFileSync(join(fixturesRoot, 'domain', 'v8', 'export.json'), 'utf8')) as { project: Project }
+  JSON.parse(readFileSync(join(fixturesRoot, 'domain', 'v9', 'export.json'), 'utf8')) as { project: Project }
 ).project
 const snapshot = { project, revision: 12 }
 const CLOCK: ExportClock = { now: () => '2026-11-23T09:30:00.000Z', localDate: () => '2026-11-23' }

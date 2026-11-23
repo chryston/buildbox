@@ -2,7 +2,7 @@
  * The renovation-views scene fixture (#70 criterion 7).
  *
  * `fixtures/e2e/preview-seed/renovation-views.json` is the scene the four Renovation Displays are
- * tested against, and `fixtures/domain/v8/renovation-views.json` is the same Project as a domain
+ * tested against, and `fixtures/domain/v9/renovation-views.json` is the same Project as a domain
  * golden. This holds the committed bytes — not the generator's in-memory Project — to the issue's
  * scene, and then reads each of the four Displays off it, because criterion 7 is a sentence about
  * what a Display *draws*, and the only honest place to read that is the derived display model the
@@ -28,6 +28,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { currentSchemaOf } from '../domain/testing'
 import { displayModel, effectiveModel } from '../derive'
 import { validateProject } from '../domain'
 import type { Project, RenovationDisplay } from '../domain'
@@ -40,7 +41,7 @@ const seed = JSON.parse(
   projects: { id: string; revision: number; schemaVersion: number; data: Project }[]
 }
 
-const project = seed.projects[0]!.data
+const project = currentSchemaOf(seed.projects[0]!.data, seed.projects[0]!.schemaVersion)
 const floorId = project.floors[0]!.id
 const model = project.existingModel
 const wallByRef = (ref: string) => model.walls.find((wall) => wall.ref === ref)!
@@ -176,11 +177,11 @@ describe('the renovation-views scene (#70 criterion 7)', () => {
     expect(named('Option B · Combined').renovationDisplay).toBe('combined')
   })
 
-  it('is the same Project as the v8 domain golden', () => {
+  it('is the same Project as the v9 domain golden', () => {
     const golden = JSON.parse(
-      readFileSync(join(fixturesRoot, 'domain', 'v8', 'renovation-views.json'), 'utf8'),
+      readFileSync(join(fixturesRoot, 'domain', 'v9', 'renovation-views.json'), 'utf8'),
     ) as { domainSchemaVersion: number; project: Project }
-    expect(golden.domainSchemaVersion).toBe(8)
+    expect(golden.domainSchemaVersion).toBe(9)
     expect(validateProject(golden.project).ok).toBe(true)
     expect(golden.project).toEqual(project)
   })

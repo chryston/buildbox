@@ -17,10 +17,10 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, snapCandidateAllowed } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, rangeClasses, snapCandidateAllowed } from '../../derive'
 import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings } from '../../drawing'
-import type { BadgeSubject, LayerGates, OpeningPreview, RoomProposal } from '../../drawing'
+import type { BadgeSubject, LayerGates, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
 import type { Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
 import { designOptionsOf, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride } from '../../domain'
 import type { SessionAsset } from '../../session'
@@ -52,7 +52,10 @@ import { DeleteWallReviewDialog } from './wall/DeleteWallReviewDialog'
 import { emptyOpeningDraft, openingAim } from './opening/openingDraft'
 import type { OpeningAim, OpeningDraft } from './opening/openingDraft'
 import { DEFAULT_OPENING_PRESET_ID, openingPresetRow, resolveOpeningPreset } from './opening/openingPresets'
-import { readoutMm } from './displayUnits'
+import { formatMm, readoutMm } from './displayUnits'
+import { VerticalExtentRows } from './VerticalExtentFields'
+import type { ExtentNumberFormat } from './verticalExtentFields'
+import { openingExtentView, placementExtentView, wallExtentView } from './verticalExtentFields'
 import { WallInspector } from './wall/WallInspector'
 import { RoomInspector } from './rooms/RoomInspector'
 import { RoomDraftOverlay } from './rooms/RoomDraftOverlay'
@@ -75,6 +78,8 @@ import { ToolbarMenu, ToolbarMenuItem, WorkspaceToolbar } from './WorkspaceToolb
 import type { ToolbarGroup } from './WorkspaceToolbar'
 import { PlanViewCanvas } from './PlanViewCanvas'
 import { SavedViewCard } from './SavedViewCard'
+import { PlanViewRangeSection, rangeGaugeScale } from './PlanViewRangeSection'
+import type { RangeGaugeScale } from './PlanViewRangeSection'
 import { SelectionInspector } from './SelectionInspector'
 import type { DesignEdit } from './SelectionInspector'
 import { quarterTurn } from './rotateHandle'
@@ -199,11 +204,18 @@ export function FloorWorkspace(): ReactNode {
    * The State of every entity this view's Renovation Display draws, and the only list of what the
    * Display draws at all: an entity absent from it is not on the canvas (#70 criterion 7). The
    * overlays themselves are `drawing`'s rules, laid on the outlines the canvas already has.
+   *
+   * A Floor aimed at no Design Option still has States — every entity Existing — because the click
+   * to cycle and its candidate list read this map, and the Plan View Range divides a plain Floor's
+   * content just as it divides an Option's (#74 criterion 9). `renovationStates` stays `null`
+   * without an Option, so every renovation surface keeps refusing what no Option could answer.
    */
-  const renovationStates: ReadonlyMap<string, RenovationState> | null =
-    renovationOptionId === null || floorId === null || view === null
+  const entityStates: ReadonlyMap<string, RenovationState> | null =
+    floorId === null || view === null
       ? null
       : displayStates(displayModel(effectiveModel(project, floorId, renovationOptionId), viewRenovationDisplay(view)))
+  const renovationStates: ReadonlyMap<string, RenovationState> | null =
+    renovationOptionId === null ? null : entityStates
   /**
    * The Project the canvas's geometry is derived from. `deriveWalls` and `deriveRooms` derive the
    * standing set, but a Wall marked for demolition is still drawn — with the demolition overlay on it
@@ -964,6 +976,22 @@ export function FloorWorkspace(): ReactNode {
     ? null
     : project.itemDesigns.find((design) => design.id === selected.designId) ?? null
 
+  /**
+   * The selected placement's own record (#74 §5): `PlanItemView` carries what the plan draws, and the
+   * Vertical Extent rows need the `baseMm` the record holds. The Effective Model is read, so a
+   * Proposed placement gets the same rows as an Existing one.
+   */
+  const selectedPlacement = useMemo(() => {
+    if (selection === null || floorId === null) return null
+    const found = effectiveModel(project, floorId, renovationOptionId).placedItems
+      .find(({ entity }) => entity.id === selection)
+    return found?.entity ?? null
+  }, [project, floorId, renovationOptionId, selection])
+
+  /** The extent boxes are typed in the Project's display unit, like every other length field. */
+  const extentFormat: ExtentNumberFormat = (mm) =>
+    formatMm(mm, project.preferences.displayUnit, project.preferences.displayPrecision)
+
   /** Where the Item Origin stands: what a drag and `Position X` / `Position Y` both mean. */
   const setPosition = (x: number, y: number): void => {
     if (selection === null) return
@@ -1551,6 +1579,38 @@ export function FloorWorkspace(): ReactNode {
   }, [project, view, entityLayerKey, showHiddenToolNotice])
 
   /**
+   * This view's Plan View Range, answered per entity (#74 §3): the same classification the cycle
+   * orders by and the inspector reads, computed once here because the canvas may not read the domain.
+   *
+   * An entity absent from the map is In range — the kinds with no Vertical Extent, a Room and an
+   * Annotation, are absent by construction — so the drawing's own default and this answer agree.
+   */
+  const rangeGates: RangeGates | null = useMemo(() => {
+    if (view === null || floorId === null) return null
+    const classes = rangeClasses(
+      effectiveModel(project, floorId, renovationOptionId),
+      project.itemDesigns,
+      view.planViewRange,
+    )
+    return { classOf: (id) => classes.get(id) ?? 'in' }
+  }, [project, view, floorId, renovationOptionId])
+
+  /**
+   * What the Range gauge has room for (#74 §4): the Floor Datum, this Floor's own limits, every
+   * entity's Vertical Extent and the Range itself, plus 5%. Measured over the same effective model the
+   * classes are counted over, so the gauge and the drawing never disagree about how tall the Floor is.
+   */
+  const rangeScale: RangeGaugeScale | null = useMemo(() => {
+    if (view === null || floor === null || floorId === null) return null
+    return rangeGaugeScale(
+      floor,
+      effectiveModel(project, floorId, renovationOptionId),
+      project.itemDesigns,
+      view.planViewRange,
+    )
+  }, [project, view, floor, floorId, renovationOptionId])
+
+  /**
    * Whether one entity's geometry may be snapped to in this view (#71 criterion 12): hidden or
    * non-selectable content is not a target, and `Snap to hidden content` is the one switch that puts
    * it back. Picking stays impossible either way — that answer is `layerAccessOf`'s, above.
@@ -1945,6 +2005,23 @@ export function FloorWorkspace(): ReactNode {
                       RENOVATION_STRINGS.setRenovationDisplay(displayLabel(renovationDisplay)),
                     )
                   }}
+                  // #74 §4: the Range of the Plan View being looked through. Its undo label is the
+                  // Intent's own — `Change Plan View Range` — because there is nothing else to name:
+                  // the transaction changes the view and no entity.
+                  range={
+                    view !== null && rangeScale !== null ? (
+                      <PlanViewRangeSection
+                        range={view.planViewRange}
+                        scale={rangeScale}
+                        unit={project.preferences.displayUnit}
+                        precision={project.preferences.displayPrecision}
+                        onCommit={(lowerMm, upperMm) => {
+                          if (view === null) return
+                          send('view.setPlanViewRange', { viewId: view.id, lowerMm, upperMm })
+                        }}
+                      />
+                    ) : undefined
+                  }
                   layers={
                     <RenovationLayers
                       project={project}
@@ -2125,6 +2202,22 @@ export function FloorWorkspace(): ReactNode {
                 onFlipSwing={() => send('opening.flipSwing', { openingId: selectedOpening.opening.id })}
                 onSelectHost={() => selectWall(selectedOpening.opening.hostWallId)}
                 renovationAction={renovationAction(selectedOpening.opening.id)}
+                extent={
+                  view === null
+                    ? undefined
+                    : <VerticalExtentRows
+                        view={openingExtentView(selectedOpening.opening, view.planViewRange, extentFormat)}
+                        unit={project.preferences.displayUnit}
+                        testId="opening"
+                        onCommit={(field, valueMm) => {
+                          send('opening.setVerticalExtent', {
+                            openingId: selectedOpening.opening.id,
+                            field,
+                            value: valueMm,
+                          })
+                        }}
+                      />
+                }
                 onDelete={() => {
                   send('opening.delete', { openingId: selectedOpening.opening.id })
                   selectOpening(null)
@@ -2153,7 +2246,36 @@ export function FloorWorkspace(): ReactNode {
             onApplyPreview={applyPreview}
             onCancelPreview={cancelPreview}
             onTogglePick={() => setPickingOrigin(!pickingOrigin)}
-            onFork={() => setForkOpen(true)}
+            extent={
+              selected === null || selectedDesign === null || selectedPlacement === null || view === null
+                ? undefined
+                : <VerticalExtentRows
+                    view={placementExtentView(
+                      selectedDesign,
+                      selectedPlacement,
+                      selected.placementCount,
+                      view.planViewRange,
+                      extentFormat,
+                    )}
+                    unit={project.preferences.displayUnit}
+                    testId="placed"
+                    onCommit={(field, valueMm) => {
+                      // A Placed Item has no Height box: the number is the Item Design's (#74 §7).
+                      if (selection === null || field === 'height') return
+                      send('plan.setPlacementVerticalExtent', { placedItemId: selection, field, value: valueMm })
+                    }}
+                    fork={
+                      <button
+                        type="button"
+                        data-testid="fork-design"
+                        className="bb-workspace-tool-button"
+                        onClick={() => setForkOpen(true)}
+                      >
+                        {STRINGS.forkDesign}
+                      </button>
+                    }
+                  />
+            }
             onOpenDetail={openDetail}
             onTransfer={() => setTransferOpen(true)}
             onDelete={() => {
@@ -2181,6 +2303,18 @@ export function FloorWorkspace(): ReactNode {
                 onDelete={() => deleteWall(selectedWall.wall.id)}
                 deleteBlocked={roomDeleteBlockFor(project, selectedWall.wall)}
                 renovationAction={renovationAction(selectedWall.wall.id)}
+                extent={
+                  view === null
+                    ? undefined
+                    : <VerticalExtentRows
+                        view={wallExtentView(selectedWall.wall, view.planViewRange, extentFormat)}
+                        unit={project.preferences.displayUnit}
+                        testId="wall"
+                        onCommit={(field, valueMm) => {
+                          send('wall.setVerticalExtent', { wallId: selectedWall.wall.id, field, value: valueMm })
+                        }}
+                      />
+                }
               />
           }
           </FieldsLockedContext.Provider>
@@ -2218,10 +2352,10 @@ export function FloorWorkspace(): ReactNode {
               angleSnap={angleSnap}
               walls={floorWalls}
               renovation={
-                renovationStates === null
+                entityStates === null
                   ? null
                   : {
-                      states: renovationStates,
+                      states: entityStates,
                       pickStates,
                       cycle,
                       cycleCandidates,
@@ -2230,6 +2364,7 @@ export function FloorWorkspace(): ReactNode {
                     }
               }
               layerGates={layerGates}
+              rangeGates={rangeGates}
               selectedWallId={wallSelection}
               rooms={floorRooms}
               selectedRoomId={roomSelection}

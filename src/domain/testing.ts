@@ -47,6 +47,9 @@ import type {
   WallJunction,
 } from './project'
 import { defaultOpeningLabel } from './openings'
+import { defaultPlanViewRange } from './planViewRange'
+import { migrateProject } from './migrate'
+import type { EntityId } from './project'
 import { fitOpening, gapChord, usableIntervals } from '../geometry'
 import type { CornerRadii, Preset, Pt, UsableGap } from '../geometry'
 
@@ -428,6 +431,7 @@ export function arbProject(): fc.Arbitrary<Project> {
         name: floor.name,
         isDefault: true,
         showPlanImage: true,
+        planViewRange: defaultPlanViewRange(floor.limits),
       }))
 
       const designs: ItemDesign[] = [
@@ -627,6 +631,7 @@ function injectedPlanView(index: number, floorId: string, overrides: Partial<Pla
     name: `${INJECT} view ${index}`,
     isDefault: false,
     showPlanImage: true,
+    planViewRange: { lowerMm: 0, upperMm: 2600 },
     ...overrides,
   }
 }
@@ -1099,4 +1104,43 @@ export function arbCorruption(): fc.Arbitrary<Corruption> {
   return fc
     .tuple(arbProject(), fc.integer({ min: 0, max: CORRUPTIONS.length - 1 }))
     .map(([project, kind]) => CORRUPTIONS[kind](project))
+}
+
+/**
+ * A record committed at an older schema, read the way the app reads it: through the migrator.
+ *
+ * A fixture or a seed is compatibility evidence and keeps its bytes forever, so a test that edits
+ * through one cannot use it as the current Project — it has to bring it up first, which is what
+ * `persistence` does on load. The IDs the chain still has to issue are numbered after everything
+ * the record already spent, so they cannot collide with it.
+ */
+export function currentSchemaOf(record: unknown, fromVersion: number): Project {
+  let spent = 0
+  const result = migrateProject(record, fromVersion, (count) =>
+    Array.from({ length: count }, () => {
+      spent += 1
+      return `migrated-${String(spent)}` as EntityId
+    }),
+  )
+  if (!result.ok) throw new Error(`the fixture must migrate: ${result.error.message}`)
+  return result.project
+}
+
+/**
+ * An older record with only its Plan Views completed, and nothing else touched.
+ *
+ * A test that edits the Drawing Layer list itself — emptying it, renaming the default away — cannot
+ * come in through `currentSchemaOf`, which would file the record's content on the three default
+ * layers the eighth step grows. It wants the older Project exactly as it was written plus the one
+ * field a Plan View has gained since: the range it draws at, defaulted from the Floor it shows.
+ */
+export function withPlanViewRanges(project: Project): Project {
+  const limits = new Map(project.floors.map((floor) => [floor.id, floor.limits]))
+  return {
+    ...project,
+    views: project.views.map((view) => ({
+      ...view,
+      planViewRange: view.planViewRange ?? defaultPlanViewRange(limits.get(view.floorId)),
+    })),
+  }
 }

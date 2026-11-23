@@ -10,9 +10,21 @@
  * chrome around it: the field labels, the two buttons, and the one thing the delete of an Option
  * owes the person before they press it.
  */
+import type { RangeClass } from '../../derive'
 
 /** The counts the delete of an Option lists, each in the words the glossary uses. */
 const count = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`
+
+/**
+ * What the Plan View Range says about a candidate (#74 §6), in the legend's own three words: the row of
+ * the cycle list and the legend beside it have to read as the same three names, or the second one stops
+ * telling the person anything new.
+ */
+export const RANGE_CLASS_LABELS: Record<RangeClass, string> = {
+  in: 'In range',
+  above: 'Above range',
+  below: 'Below range',
+}
 
 export const RENOVATION_STRINGS = {
   // ---- the `Design Options` section of Project settings (#69 §15)
@@ -179,7 +191,17 @@ export const RENOVATION_STRINGS = {
   // to know. The row is the State in brackets and the entity's full name — never shortened, because
   // `W-2` and `W-2′` are one character apart and a truncated name cannot tell them apart.
   overlapHeader: (index: number, total: number): string => `Overlap ${index}/${total} · click again to cycle`,
-  overlapRow: (stateLabel: string, name: string): string => `[${stateLabel}] ${name}`,
+  /**
+   * One row of the list: the State, which of the candidates this one is, the entity's full name, and
+   * what the Plan View Range says about it (#74 §6) — `[Existing] 2 of 2 · Wall cabinet #1 · Above
+   * range`. The count is the position in the cycle the click is walking, so the row says where a
+   * further click goes next to it.
+   *
+   * The name is never shortened and never broken at a `#`: `Wall cabinet #1` beside `Wall cabinet #12`
+   * is exactly the pair a truncated name cannot tell apart, and `W-2` beside `W-2′` is the other one.
+   */
+  overlapRow: (stateLabel: string, index: number, total: number, name: string, rangeLabel: string): string =>
+    `[${stateLabel}] ${index} of ${total} · ${name} · ${rangeLabel}`,
 
   // ---- the inspector's renovation block (#70 §5)
   // The row labels and the action labels are the issue's words. `Kind` and `Owner` are the two the
