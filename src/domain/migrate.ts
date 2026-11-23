@@ -250,8 +250,8 @@ export function migrateV6toV7(data: unknown): unknown {
  * looks at that model (#70 §1): `designOptionId: null` and `renovationDisplay: 'existing'`, which
  * is the way every view already looked — the Existing Model, and nothing of anyone's Option.
  *
- * #71 adds the Drawing Layers to the same step, because the flag has not come off yet and one
- * preview version is allowed to carry two model changes; #73 splits the golden evidence. A Project
+ * #71 adds the Drawing Layers to the same step, because one version was already carrying two model
+ * changes and a third did not need its own; #73 split the golden evidence. A Project
  * that arrives without a `drawingLayers` array gains the three defaults — `Structure`, `Services`,
  * `Furniture` — and every Wall, Opening and Room in the Existing Model and in every Design Option is
  * filed on `Structure`, every Placed Item on `Furniture`, which is the grouping the user would get

@@ -17,10 +17,8 @@
  * never silently redirected to a layer the person did not choose, and nothing is committed, so the
  * revision is unchanged. The notice says what to press instead.
  *
- * The field is returned rather than assigned so a flag-off build writes nothing at all: the spread
- * folds away with the flag, and a Project saved by production stays byte-identical to one saved
- * before layers existed. Unlayered content omits the field too — absent and `null` read the same, and
- * a Project with no layers then keeps the bytes it had.
+ * The field is returned rather than assigned so that content with no layer omits it entirely:
+ * absent and `null` read the same, and a Project with no layers then keeps the bytes it had.
  */
 import type { CreationSubtype, EntityId, PlanView, Project } from '../../domain'
 import { DEFAULT_LAYER_NAMES, DEFAULT_LAYER_SETTING, drawingLayerById, drawingLayerByName } from '../../domain'

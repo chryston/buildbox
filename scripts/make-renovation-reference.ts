@@ -21,8 +21,6 @@
  * derive's own answer and not this script's arithmetic. Everything is checked with `validateProject`
  * before a byte is written.
  *
- * It runs only with the flag on, because the Project it writes carries Design Options:
- *
  *   npx vite-node scripts/make-renovation-reference.ts
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'

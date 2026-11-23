@@ -152,31 +152,63 @@ export async function storedRecord(
 }
 
 /**
- * A Project as a spec compares it against something that came back through the app: the Plan
- * View ids a migration minted are replaced by one placeholder, because opening a record that
- * predates them mints fresh ones every single time. Nothing else is forgiven.
+ * A Project as a spec compares it against something that came back through the app: the ids a
+ * migration minted are replaced by placeholders, because opening a record that predates them mints
+ * fresh ones every single time — the Plan View ids (#56) and, since #71, the three starting Drawing
+ * Layers together with every record filed on one. Nothing else is forgiven.
  */
-export function withoutMintedViewIds(data: unknown): unknown {
-  if (typeof data !== 'object' || data === null || !('views' in data) || !Array.isArray(data.views)) {
-    throw new Error('a Project should carry its Plan Views')
+export function withoutMintedIds(data: unknown): unknown {
+  if (typeof data !== 'object' || data === null) throw new Error('a Project should be an object')
+  if (!('views' in data) || !Array.isArray(data.views)) throw new Error('a Project should carry its Plan Views')
+  // Every minted layer id stands for its position in the list, so both sides of the comparison
+  // agree without knowing what the app's allocator handed out.
+  const layers = (data as { drawingLayers?: unknown }).drawingLayers
+  const minted = new Map<string, string>()
+  if (Array.isArray(layers)) {
+    for (const [index, layer] of layers.entries()) {
+      if (typeof layer === 'object' && layer !== null && typeof layer.id === 'string') minted.set(layer.id, `layer-${index}`)
+    }
   }
+  const one = (id: unknown): unknown => (typeof id === 'string' ? minted.get(id) ?? id : id)
+  const walk = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(walk)
+    if (typeof value !== 'object' || value === null) return value
+    const out: Record<string, unknown> = {}
+    for (const [key, each] of Object.entries(value)) {
+      if (key === 'drawingLayers' && Array.isArray(each)) {
+        out[key] = each.map((layer, index) => ({ ...(layer as Record<string, unknown>), id: `layer-${index}` }))
+      } else if (key === 'drawingLayerId' || key === 'activeLayerId') {
+        out[key] = one(each)
+      } else if (key === 'layerOrder' && Array.isArray(each)) {
+        out[key] = each.map(one)
+      } else if (key === 'layerSettings' && typeof each === 'object' && each !== null) {
+        out[key] = Object.fromEntries(Object.entries(each).map(([id, setting]) => [String(one(id)), setting]))
+      } else {
+        out[key] = walk(each)
+      }
+    }
+    return out
+  }
+  const object = (value: unknown): Record<string, unknown> => walk(value) as Record<string, unknown>
   const views: unknown[] = data.views.map((each) => {
     if (typeof each !== 'object' || each === null || !('id' in each)) throw new Error('a Plan View should have an id')
-    return { ...each, id: 'minted' }
+    return { ...object(each), id: 'minted' }
   })
-  return { ...data, views }
+  return { ...object(data), views }
 }
 
 /**
  * The stored record a Backup was taken *from*, in the form the restored Project has to match:
  * migrated to the version the app writes, exactly as opening it migrates it (#56), and with the
- * view ids that migration minted set aside.
+ * ids that migration minted set aside. The allocator runs on across the whole chain — one step's
+ * `minted-0` is never another step's, the way a real ID source cannot repeat itself.
  */
 export function migratedForComparison(data: unknown, schemaVersion: number): unknown {
+  let spent = 0
   const migrated = migrateProject(data, schemaVersion, (count) =>
-    Array.from({ length: count }, (_, index) => `minted-${index}`))
+    Array.from({ length: count }, () => `minted-${spent++}`))
   if (!migrated.ok) throw new Error(`the seed should migrate: ${migrated.error.message}`)
-  return withoutMintedViewIds(migrated.project)
+  return withoutMintedIds(migrated.project)
 }
 
 /** Every Library row the database holds. */

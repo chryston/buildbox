@@ -31,10 +31,9 @@ function base(): Rec {
 /**
  * The fixture with the layers written by hand.
  *
- * A flag-off build never runs the migration that adds them — v7 is its top of the chain — so this
- * file writes what `migrateV7toV8` would have, and proves the point the file exists for: the
- * validator's layer rules are not gated, and a flag-off build reading a file that carries layers
- * reaches the same verdict a preview build does.
+ * This file writes what `migrateV7toV8` would have, and proves the point the file exists for: the
+ * validator's layer rules are not conditional on anything else in the Project, so a file that
+ * carries layers reaches the same verdict however those layers got there.
  */
 function layered(): Rec {
   const project = base()

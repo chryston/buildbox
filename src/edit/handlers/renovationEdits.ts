@@ -1,7 +1,6 @@
 /**
- * The base-plan renovation-edit table (#69 §7–§8), and
- * reachable only through the flag-gated spread in `../registry` (see `./renovationHandlers` for
- * why that matters).
+ * The base-plan renovation-edit table (#69 §7–§8), reachable only through the renovation half of
+ * `../registry` (see `./renovationHandlers` for why that matters).
  *
  * Five Intents, each one Edit Transaction with one undo:
  *

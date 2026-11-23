@@ -14,7 +14,7 @@ import {
   storedAssetHashes,
   storedRecord,
   toast,
-  withoutMintedViewIds,
+  withoutMintedIds,
 } from '../support/libraryApp'
 
 /**
@@ -64,15 +64,15 @@ test('a Backup restored into an empty profile is the same Project', async ({ pag
     // #56: a Backup is written at the domain version the app writes, so a record from before
     // Floors comes back migrated — the same step opening the Project takes. #58 moved that
     // version to 3, where an Item Footprint is a shape rather than a pair of numbers, #64
-    // to 4, where a Project carries Walls, Wall Junctions and a default Wall height, and #65
-    // to 5, where it carries Openings too.
-    // Everything the migration cannot invent is still compared byte for byte; the Plan View ids
-    // it mints are compared as a shape, because opening an unmigrated record mints fresh ones
-    // every time.
+    // to 4, where a Project carries Walls, Wall Junctions and a default Wall height, #65
+    // to 5, where it carries Openings too, and #69/#71 to 8, where it carries Design Options
+    // and Drawing Layers — which is also the first step that mints layer ids, so those are set
+    // aside beside the Plan View ids.
+    // Everything the migration cannot invent is still compared byte for byte.
     const restoredRecord = await storedRecord(restored, 'proj-kitchen-wall')
     if (restoredRecord === null) throw new Error('the restore wrote no record')
-    expect(restoredRecord.schemaVersion).toBe(7)
-    expect(canonical(withoutMintedViewIds(restoredRecord.data)))
+    expect(restoredRecord.schemaVersion).toBe(8)
+    expect(canonical(withoutMintedIds(restoredRecord.data)))
       .toBe(canonical(migratedForComparison(record.data, record.schemaVersion)))
     expect(await storedAssetHashes(restored)).toEqual(originalAssets)
     expect(problems).toEqual([])
@@ -90,7 +90,8 @@ test('a Backup restored into an empty profile is the same Project', async ({ pag
  * nothing along the way drops `existingModel.rooms` or rewrites an Edge reference.
  *
  * The profile is empty on purpose. A restore into a Library that already held the Project would
- * take the collision path, and the claim here is the plain one: v7 bytes in, v7 Project out.
+ * take the collision path, and the claim here is the plain one: v7 bytes in, the same Project out
+ * — at the version this build writes, with the eighth step's layers added and nothing else moved.
  */
 const ROOMS_FIXTURE = new URL('../../fixtures/package/v7/rooms.buildbox', import.meta.url)
 const ROOMS_PROJECT = 'Maple Street Kitchen'
@@ -109,10 +110,11 @@ test('a v7 Backup carrying Rooms is stored as the Project it holds', async ({ br
 
     const record = await storedRecord(page, 'project-0')
     if (record === null) throw new Error('the restore wrote no record')
-    expect(record.schemaVersion).toBe(7)
-    // The file was written at the version the app writes, so no migration ran and nothing is
-    // forgiven: the stored payload is the fixture Project, Plan View ids included.
-    expect(canonical(record.data)).toBe(canonical(roomsFixtureProject()))
+    // v7 is one step behind this build, so the eighth step ran on the way in: what is stored is the
+    // Project at 8, carrying the three starting Drawing Layers. Everything #67 added is compared
+    // below, with only the ids that step minted set aside.
+    expect(record.schemaVersion).toBe(8)
+    expect(canonical(withoutMintedIds(record.data))).toBe(canonical(migratedForComparison(roomsFixtureProject(), 7)))
 
     // The Rooms themselves, because they are what #67 added and what a careless importer loses:
     // a preset Rectangle and a Custom Path, each holding one Edge to a face of the same Wall.

@@ -17,8 +17,8 @@ export const CREATE_PROJECT_ID_COUNT = 9
 
 export interface CreateProjectArgs {
   /**
-   * `[projectId, floorId, viewId, itemDesignId, placedItemId, rootNodeId]`, plus — in a flagged
-   * build — `[structureLayerId, servicesLayerId, furnitureLayerId]`.
+   * `[projectId, floorId, viewId, itemDesignId, placedItemId, rootNodeId]`, plus the three starting
+   * Drawing Layers: `[structureLayerId, servicesLayerId, furnitureLayerId]`.
    */
   ids: string[]
   /**

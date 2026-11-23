@@ -14,7 +14,7 @@ import {
   migratedForComparison,
   previewSeed,
   storedProject,
-  withoutMintedViewIds,
+  withoutMintedIds,
   storedRecoveryIds,
   toast,
 } from '../support/libraryApp'
@@ -64,7 +64,7 @@ test('a restore adds exactly one Recovery Point, opens with no Undo, and can its
   // The point was written by a v1 build, so restoring it runs the same migration opening the
   // Project does (#57 made this visible: the Plan View a Project now opens on reads `views`).
   // What lands is the seed migrated — the same comparison #56 makes of a restored Backup.
-  expect(canonical(withoutMintedViewIds(await storedProject(page, PROJECT_ID))))
+  expect(canonical(withoutMintedIds(await storedProject(page, PROJECT_ID))))
     .toBe(canonical(migratedForComparison(seeded, previewSeed.projects[0]!.schemaVersion)))
   expect(await projectRevision(page, PROJECT_ID)).toBe(3)
 

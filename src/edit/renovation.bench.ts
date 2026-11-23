@@ -10,7 +10,7 @@
  * frame costs.
  *
  * `npm run bench` prints the means; the run fails above the issue's budgets — 30 ms for apply +
- * validate, 50 ms for derive — and the flag-off pass never sees this file (#69 Scope 16).
+ * validate, 50 ms for derive — on the Project this file loads (#69 Scope 16).
  *
  * **The apply budget is met; the correction is not, and the run says so.** Validation is scoped to
  * the entities a Transaction touched plus their referrers (#69 §8, architecture §4), which took a

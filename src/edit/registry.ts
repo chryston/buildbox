@@ -46,8 +46,8 @@ export const INTENT_HANDLERS: { [T in S7IntentType]: IntentHandler<T> } & {
   ...VIEW_HANDLERS,
   ...WARNING_HANDLERS,
   // The one way into `./handlers/renovationHandlers`, `./handlers/renovationEdits` and
-  // `./handlers/correctionHandlers`: with the flag off these fold to nothing, the imports go
-  // unused, and all three modules — marker string and all — are gone from the bundle.
+  // `./handlers/correctionHandlers`: nothing else imports those three modules, so this catalogue is
+  // the single place their handlers become reachable.
   ...RENOVATION_HANDLERS,
   ...RENOVATION_EDIT_HANDLERS,
   ...CORRECTION_HANDLERS,

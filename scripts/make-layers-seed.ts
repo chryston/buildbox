@@ -19,8 +19,6 @@
  * cannot drift from what the editor can actually produce, and `validateProject` at the end is what
  * proves the transcript ends somewhere legal.
  *
- * It runs only with the flag on, because the files it writes hold layer fields:
- *
  *   npx vite-node scripts/make-layers-seed.ts
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'

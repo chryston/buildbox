@@ -305,8 +305,8 @@ export function assignChanged(draftValue: object, nextValue: object): void {
  * an S7 Intent — the checks, the messages and the writes are the same code, and no handler is
  * forked into an “existing” and a “proposed” copy.
  *
- * With the flag off the guard folds to the Existing Model alone, so the Option half is dead code
- * in a released bundle.
+ * With no `target` the guard returns the Existing Model alone, which is what a Project with no
+ * Design Options always means.
  */
 export function containerOf(draft: Project, designOptionId: EntityId | null | undefined): ProposedModel {
   if (designOptionId === null || designOptionId === undefined) return draft.existingModel
@@ -319,8 +319,8 @@ export function containerOf(draft: Project, designOptionId: EntityId | null | un
 /**
  * The Project as one Design Option sees it: that Option's effective collections standing in for
  * the Existing Model's, so an existing check — a usable interval, a join, the next free reference
- * — reads what the user is looking at rather than the survey. With no target, or with the flag
- * off, this is the Project itself.
+ * — reads what the user is looking at rather than the survey. With no target this is the Project
+ * itself.
  */
 export function effectiveView(project: Project, floorId: EntityId | null, designOptionId: EntityId | null | undefined): Project {
   if (designOptionId === null || designOptionId === undefined) return project

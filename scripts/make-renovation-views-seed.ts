@@ -23,8 +23,6 @@
  * record and `validateProject` below is what proves it is a legal one. Everything else in the
  * fixture is what the editor could have drawn.
  *
- * It runs only with the flag on, because the file it writes is a v8 Project:
- *
  *   npx vite-node scripts/make-renovation-views-seed.ts
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'

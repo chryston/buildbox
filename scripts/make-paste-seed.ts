@@ -29,8 +29,6 @@
  * The Project `id` is the one field written outside an Intent: it is the record's storage identity,
  * which no Intent can change, and two Projects in one database cannot share one.
  *
- * It runs only with the flag on, because the files it writes hold layer fields:
- *
  *   npx vite-node scripts/make-paste-seed.ts
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'

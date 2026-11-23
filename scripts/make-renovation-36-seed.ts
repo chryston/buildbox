@@ -18,8 +18,6 @@
  * an empty Option's effective model is the Existing Model exactly. A fixture that drifted would
  * fail here rather than photograph an edit that means nothing.
  *
- * It runs only with the flag on, because the file it writes is a v8 Project:
- *
  *   npx vite-node scripts/make-renovation-36-seed.ts
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'

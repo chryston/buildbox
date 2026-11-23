@@ -58,8 +58,8 @@ export interface Project {
    * array reversed.
    *
    * Optional rather than an always-present array, for the same reason `designOptions` is: a Project
-   * written before this capability stays valid in a build with the flag off, and the validator never
-   * defaults a field. `drawingLayersOf` is the accessor, and a Project with no layers at all is a
+   * written before this capability stays valid without the field, and the validator never defaults
+   * one. `drawingLayersOf` is the accessor, and a Project with no layers at all is a
    * legal one — everything in it is Unlayered, which is what a Project written before #71 reads as.
    *
    * Unlayered is not a member: it is the absence of a layer, it is always present in the list, and
@@ -72,9 +72,8 @@ export interface Project {
    * The Design Options of this Project (#69 §2), in the order the list offers them.
    *
    * Optional rather than an always-present array so that a Project written before this capability
-   * — every Project in every Backup taken until now — stays valid in a build that has the flag off:
-   * the validator never defaults a field, and a flag-off build must keep reading what it wrote.
-   * `designOptionsOf` is the accessor; the v7 → v8 migrator adds the empty array.
+   * — every Project in every Backup taken until now — stays valid without the field: the validator
+   * never defaults one. `designOptionsOf` is the accessor; the v7 → v8 migrator adds the empty array.
    */
   designOptions?: DesignOption[]
   /**
@@ -286,7 +285,7 @@ export const entityLayerId = (entity: { drawingLayerId?: EntityId | null }): Ent
  *
  * The two renovation fields are optional in the type for the same reason `designOptions` is
  * (#69): a view written before this capability — every Project, and every Backup taken until
- * now — has to stay readable in a build with the flag off, and the validator never defaults a
+ * now — has to stay readable without them, and the validator never defaults a
  * field. `viewDesignOptionId` and `viewRenovationDisplay` are the accessors, and the v7 → v8
  * migrator writes both on every view.
  */

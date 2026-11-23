@@ -175,8 +175,8 @@ function renovationOutlines(
  * z-band, then pass the result through the layer gates.
  *
  * The filtering happens here rather than in the caller so that the pixels and the pick list cannot
- * drift apart, and it is skipped entirely when neither gate is in force — which is every flag-off
- * drawing and every Project with no Design Options — so that the common case allocates nothing it did
+ * drift apart, and it is skipped entirely when neither gate is in force — which is every Project
+ * with no Design Options and no layer turned off — so that the common case allocates nothing it did
  * not allocate before (#69's derive budget measures the canvas too).
  */
 export function drawFloorView(entities: FloorViewEntities, options: FloorViewOptions): FloorView {

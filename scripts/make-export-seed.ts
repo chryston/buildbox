@@ -22,8 +22,6 @@
  * Nothing here writes a field directly. `validateProject` at the end is what proves the transcript
  * ends somewhere legal.
  *
- * It runs only with the flag on, because the file it writes holds layer and renovation fields:
- *
  *   npx vite-node scripts/make-export-seed.ts
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'

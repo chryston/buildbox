@@ -170,7 +170,7 @@ export type RenovationIntentType =
   | 'entity.setLayer'
   | 'renovation.pasteFromProject'
 
-/** Every Intent type the catalogue can answer: the S7 set, plus the renovation set in a flagged build. */
+/** Every Intent type the catalogue can answer: the S7 set plus the renovation set. */
 export type IntentType = S7IntentType | RenovationIntentType
 
 /**
@@ -1192,10 +1192,9 @@ export type OpeningIntent = Intent<Extract<IntentType, `opening.${string}`>>
 export type DesignIntent = Intent<Extract<IntentType, `design.${string}`>>
 export type FloorIntent = Intent<Extract<IntentType, `floor.${string}`>>
 /**
- * The saved-view Intents the ungated `./handlers/floorHandlers` map is complete for. `S7IntentType`
- * and not `IntentType`, because `view.setDesignOption` and `view.setRenovationDisplay` (#70 §1) are
- * registered behind the flag in `./handlers/renovationHandlers` — the same reason `designOption.*`
- * is absent from `DesignIntent`.
+ * The saved-view Intents the `./handlers/floorHandlers` map answers on its own. `S7IntentType`
+ * and not `IntentType`, because `view.setDesignOption` and `view.setRenovationDisplay` (#70 §1) live
+ * in `./handlers/renovationHandlers` — the same reason `designOption.*` is absent from `DesignIntent`.
  */
 export type ViewIntent = Intent<Extract<S7IntentType, `view.${string}`>>
 export type WarningIntent = Intent<Extract<IntentType, `warning.${string}`>>
@@ -1204,8 +1203,8 @@ export type WarningIntent = Intent<Extract<IntentType, `warning.${string}`>>
  * The IDs each S7 Intent consumes, in order — the contract between the caller that
  * allocates and the handler that spends. An empty list means the Intent needs no ID.
  *
- * The renovation set carries its own table beside its handlers, so a build without the flag
- * does not read a contract it cannot answer.
+ * The renovation set carries its own table beside its handlers, so the contract a caller reads is
+ * the one the registry it got can answer.
  */
 export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
   'project.rename': [],
@@ -1286,9 +1285,7 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
 }
 
 /**
- * The lookup `intentIdCount` reads: the S7 table, plus the renovation one in a build that
- * registers those handlers. With the flag off the ternary folds to the S7 table alone and the
- * import of the renovation module becomes dead, so a released bundle carries neither table.
+ * The lookup `intentIdCount` reads: the S7 table and the renovation table, one map by type.
  */
 const ID_ORDER_BY_TYPE: Partial<Record<IntentType, readonly string[]>> = {
   ...INTENT_ID_ORDER,

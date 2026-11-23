@@ -1,12 +1,9 @@
 /**
  * The Design Option half of the catalogue (#69 §2).
  *
- * This module is reachable from exactly one place: the flag-gated spread in `../registry`. In a
- * build without the flag that spread folds to nothing, the import goes unused, and dead-code
- * elimination drops this file whole — which is what `scripts/check-bundle-strings.mjs` proves by
- * grepping a production bundle for `RENOVATION_MARKER`, the string below. Nothing here is
- * importable through any other path: no label in `../labels`, no row in `../intents`'
- * `INTENT_ID_ORDER`, no sentence in a dialog.
+ * This module is reachable from exactly one place: the renovation half of `../registry`'s
+ * catalogue. Nothing here is importable through any other path: no label in `../labels`, no row in
+ * `../intents`' `INTENT_ID_ORDER`, no sentence in a dialog.
  *
  * What is registered is the Option itself — create, rename, delete. The renovation *edits* (rows
  * 7–11 of #69's table) arrive as parameters of the Intents that already exist: every Wall,
@@ -19,13 +16,6 @@ import type { DesignOption, EntityId, Project } from '../../domain'
 import type { DeleteDesignOptionReview, Locator, RenovationIntentType } from '../intents'
 import type { Handler, IntentHandler } from './context'
 import { refuse, spendIds } from './support'
-
-/**
- * The string a flag-off bundle is checked for. It appears nowhere else in `src`, and this module
- * is the only thing that mentions it, so finding it in `dist` means something reached the
- * renovation set without the flag.
- */
-export const RENOVATION_MARKER = '__renovation_intents__'
 
 /**
  * The Option half of the renovation set, plus the two saved-view settings of #70 §1. The edit table

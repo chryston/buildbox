@@ -11,8 +11,9 @@ import roomsFixture from '../../fixtures/domain/v7/rooms.json?raw'
 // rejects are about references between collections — an Opening on a Wall, a Room Edge on a Wall
 // face, a Junction between two Wall ends — and the fixture already holds a real one of each.
 //
-// These tests are not flag-gated: the validator's renovation rules are inert in a Project with no
-// Design Options, so a flag-off build runs the same code and must reach the same verdict.
+// These tests are not conditional on the Project carrying Options: the validator's renovation
+// rules are inert in a Project with no Design Options, so the same code must reach the same verdict
+// either way.
 
 type Rec = Record<string, unknown>
 
