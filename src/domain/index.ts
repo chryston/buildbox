@@ -94,6 +94,7 @@ export {
   migrateV4toV5,
   migrateV7toV8,
   migrateV9toV10,
+  migrateV10toV11,
   runMigrationChain,
   type Migrator,
   type MigrateError,
@@ -137,6 +138,7 @@ export type {
 export type {
   Acknowledgement,
   CabinetItemDesign,
+  ClearanceEnvelope,
   DesignOption,
   DisplayUnit,
   EntityId,

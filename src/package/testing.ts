@@ -499,3 +499,38 @@ export function elevationFixtureProject(): Project {
     ],
   }
 }
+
+/**
+ * The renovation fixture at the eleventh schema (#76), with one Clearance Envelope on the Base
+ * Cabinet design: a 600 × 300 mm zone off its front edge, rising the design's own 850 mm from each
+ * placement's Base — the shape the zone-off-edge builder draws, spelled out as stored bytes.
+ *
+ * The envelope belongs to the design, so every placement of the Base Cabinet carries it, and the
+ * round-trip of a Project that holds one is judged against these bytes.
+ */
+export function clearanceFixtureProject(): Project {
+  const project = elevationFixtureProject()
+  return {
+    ...project,
+    itemDesigns: project.itemDesigns.map((design) =>
+      design.id === ('design-0' as EntityId)
+        ? {
+            ...design,
+            clearanceEnvelope: {
+              path: {
+                start: { x: 0, y: 560 },
+                segments: [
+                  { kind: 'line', to: { x: 600, y: 560 } },
+                  { kind: 'line', to: { x: 600, y: 860 } },
+                  { kind: 'line', to: { x: 0, y: 860 } },
+                  { kind: 'line', to: { x: 0, y: 560 } },
+                ],
+              },
+              bottomOffset: 0,
+              height: 850,
+            },
+          }
+        : design,
+    ),
+  }
+}

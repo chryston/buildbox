@@ -448,6 +448,8 @@ export interface CabinetItemDesign {
   kind: 'cabinet'
   name: string
   construction: { settings: GlobalSettings; root: CabinetNode }
+  /** The design's Clearance Envelope (#76 §4); `null` is none, and absent is `null`. */
+  clearanceEnvelope?: ClearanceEnvelope | null
 }
 
 /** A selected or user-drawn item: a rectangular footprint, a centre origin, a colour. */
@@ -469,6 +471,33 @@ export interface GenericItemDesign {
   catalogKey?: string
   /** Legacy custom shape / user-defined design. */
   isCustom?: boolean
+  /** The design's Clearance Envelope (#76 §4); `null` is none, and absent is `null`. */
+  clearanceEnvelope?: ClearanceEnvelope | null
+}
+
+/**
+ * The one volume an Item Design asks to keep free around each of its placements (#76 §4).
+ *
+ * A Clearance Envelope is exactly what the name says: a region of plan and a span of height that
+ * should stay clear — a door swing's reach, a fridge's ventilation gap — supplied by the user or
+ * their manufacturer, never inferred. BuildBox holds the numbers it is given and derives no rule
+ * from them: there is no built-in depth, no default per kind, and nothing here says anything
+ * about what a clearance is for.
+ *
+ * It belongs to the Item Design, so every placement of the design shares it: `path` is a closed
+ * loop in the design's own local coordinates, in the same frame as its Item Footprint, and each
+ * placement carries it through its own turn and translation. `bottomOffset` is measured from the
+ * placement's Base (so it rides every Base elevation the placement is given), and `height` rises
+ * from there, greater than 0. Zero or one envelope per design; a design that names none asks
+ * nothing of the space around it.
+ */
+export interface ClearanceEnvelope {
+  /** A closed path in Item-Design-local millimetres, validated by the geometry kernel. */
+  path: ClosedPath
+  /** Millimetres from each placement's Base; negative hangs below it. Default 0. */
+  bottomOffset: number
+  /** Millimetres, greater than 0, rising from `bottomOffset`. */
+  height: number
 }
 
 /** The closed plan boundary of an Item Design in local coordinates (#58). */

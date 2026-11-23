@@ -13,12 +13,13 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { canonicalJsonBytes, sha256Hex } from '../lib'
 import { DEFAULT_DRAWING_LAYERS, MIGRATORS, type PlanView, type Project } from '../domain'
-import { withElevationViews, withPlanViewRanges } from '../domain/testing'
+import { withClearanceEnvelopes, withElevationViews, withPlanViewRanges } from '../domain/testing'
 import { encodeProject } from './encode'
 import { migrateDomainProject, stageImport } from './import'
 import {
   acknowledgementsFixtureProject,
   allocateIds,
+  clearanceFixtureProject,
   elevationFixtureProject,
   FIXTURE_BUILD,
   FIXTURE_EXPORTED_AT,
@@ -33,7 +34,7 @@ import {
 
 const ASSET_ENTRY = `assets/${FIXTURE_PLAN_IMAGE_HASH}.png`
 
-type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6' | 'v7' | 'v8' | 'v9' | 'v10'
+type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6' | 'v7' | 'v8' | 'v9' | 'v10' | 'v11'
 
 const fixtureDir = (version: FixtureVersion): URL => new URL(`../../fixtures/package/${version}/`, import.meta.url)
 const readFrom = (version: FixtureVersion) => (relative: string): Uint8Array =>
@@ -49,6 +50,7 @@ const readV7 = readFrom('v7')
 const readV8 = readFrom('v8')
 const readV9 = readFrom('v9')
 const readV10 = readFrom('v10')
+const readV11 = readFrom('v11')
 
 const ARCHIVE_V1 = readV1('reference.buildbox')
 const ARCHIVE_V2 = readV2('reference.buildbox')
@@ -70,6 +72,9 @@ const ARCHIVE_V8 = readV8('renovation.buildbox')
 // whose Plan Views each carry a Vertical Range (#74).
 const ARCHIVE_V9 = readV9('plan-range.buildbox')
 const ARCHIVE_V10 = readV10('elevation.buildbox')
+// The v11 file is named for what the step added, as the four before it were: it is the first
+// Backup whose Project carries a Clearance Envelope (#76).
+const ARCHIVE_V11 = readV11('clearance.buildbox')
 const ASSET_BYTES = readV2(ASSET_ENTRY)
 
 /** The one Plan Image every fixture carries, served the way the export serves it. */
@@ -145,6 +150,9 @@ function atCurrentSchema(project: Project, spent = 0): Project {
       activeLayerId: structure!,
       snapToHiddenContent: false,
     })),
+    // The eleventh step (#76): every design carries the Clearance Envelope field, null for the
+    // designs that have none — the chain invents no shape, and neither does this.
+    itemDesigns: project.itemDesigns.map((design) => ({ ...design, clearanceEnvelope: null })),
   }
 }
 
@@ -449,7 +457,7 @@ describe('the committed v8 Backup (#69)', () => {
     // The scene comes through untouched. The only thing the ninth step adds is the range each view
     // draws at, taken from the Floor it shows — and this fixture's Floor carries no limits, so both
     // views get the Project-wide default of a Floor structural level to just below the ceiling.
-    expect(result.staged.project).toEqual(withElevationViews(withPlanViewRanges(renovationFixtureProject())))
+    expect(result.staged.project).toEqual(withClearanceEnvelopes(withElevationViews(withPlanViewRanges(renovationFixtureProject()))))
     expect(result.staged.migratedFrom).toBe(8)
   })
 
@@ -533,7 +541,7 @@ describe('the committed v9 Backup (#74)', () => {
   it('stages into the Project it was written from, read forward one step (#75)', async () => {
     const result = await stageImport(ARCHIVE_V9, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
-    expect(result.staged.project).toEqual(withElevationViews(planRangeFixtureProject()))
+    expect(result.staged.project).toEqual(withClearanceEnvelopes(withElevationViews(planRangeFixtureProject())))
     expect(result.staged.migratedFrom).toBe(9)
   })
 
@@ -578,15 +586,17 @@ describe('the committed v9 Backup (#74)', () => {
 // Criterion 14, the tenth schema (#75): the Backup this build writes, and what a build one schema
 // behind says when it is handed it.
 describe('the committed v10 Backup (#75)', () => {
-  it('stages into the Project it was written from, unmigrated', async () => {
+  it('stages into the Project it was written from, read forward one step (#76)', async () => {
     const result = await stageImport(ARCHIVE_V10, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
-    expect(result.staged.project).toEqual(elevationFixtureProject())
-    expect(result.staged.migratedFrom).toBeNull()
+    expect(result.staged.project).toEqual(withClearanceEnvelopes(elevationFixtureProject()))
+    expect(result.staged.migratedFrom).toBe(10)
   })
 
-  it('is re-encoded byte for byte by this build', async () => {
-    expect(await encodeProject(elevationFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V10)
+  it('keeps the canonical record it was written from, which this build no longer writes', () => {
+    // Being re-encoded byte for byte is the property of the Backup at the current schema — the v11
+    // file below. What a superseded file owes forever is that its own bytes are the canonical form
+    // of the Project they were written from, so the step above is the only thing between them.
     expect(new TextDecoder().decode(readV10('project.json'))).toBe(`${canonicalOf(elevationFixtureProject())}\n`)
   })
 
@@ -620,5 +630,61 @@ describe('the committed v10 Backup (#75)', () => {
 
   it('carries the same asset, byte for byte', () => {
     expect(readV10(ASSET_ENTRY)).toEqual(ASSET_BYTES)
+  })
+})
+
+// Criterion 14, the eleventh schema (#76): the Backup this build writes, and what a build one
+// schema behind says when it is handed it.
+describe('the committed v11 Backup (#76)', () => {
+  it('stages into the Project it was written from, unmigrated', async () => {
+    const result = await stageImport(ARCHIVE_V11, { acceptPreview: false, allocateId: allocateIds() })
+    if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
+    expect(result.staged.project).toEqual(clearanceFixtureProject())
+    expect(result.staged.migratedFrom).toBeNull()
+  })
+
+  it('is re-encoded byte for byte by this build', async () => {
+    expect(await encodeProject(clearanceFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V11)
+    expect(new TextDecoder().decode(readV11('project.json'))).toBe(`${canonicalOf(clearanceFixtureProject())}\n`)
+  })
+
+  it('is described by a manifest that names domain schema v11', async () => {
+    const staged = await stageImport(ARCHIVE_V11, { acceptPreview: false, allocateId: allocateIds() })
+    if (!staged.ok) throw new Error('the fixture must stage')
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOf(clearanceFixtureProject()), 11))
+  })
+
+  // Criterion 14: a BuildBox that stops at v10 has no eleventh step to read this with.
+  it('is refused by a build one schema behind as saved by a newer BuildBox', () => {
+    const record = JSON.parse(new TextDecoder().decode(readV11('project.json'))) as unknown
+    const v10Reader = migrateDomainProject(record, 11, MIGRATORS.slice(0, 9), 10, allocateIds())
+    if (v10Reader.ok) throw new Error('a build at schema v10 read a v11 Project')
+    expect(v10Reader.problem).toEqual({ code: 'newer-schema', detail: { detected: 11, supported: 10 } })
+  })
+
+  it('holds one Clearance Envelope on the Base Cabinet design and nulls on the rest', () => {
+    const designs = clearanceFixtureProject().itemDesigns
+    const base = designs.find((design) => design.id === ('design-0' as never))
+    expect(base?.clearanceEnvelope).toEqual({
+      path: {
+        start: { x: 0, y: 560 },
+        segments: [
+          { kind: 'line', to: { x: 600, y: 560 } },
+          { kind: 'line', to: { x: 600, y: 860 } },
+          { kind: 'line', to: { x: 0, y: 860 } },
+          { kind: 'line', to: { x: 0, y: 560 } },
+        ],
+      },
+      bottomOffset: 0,
+      height: 850,
+    })
+    expect(designs.filter((design) => design.clearanceEnvelope == null)).toHaveLength(designs.length - 1)
+    // The v10 record beside it has no envelope field at all — the step in one comparison.
+    const prior = JSON.parse(new TextDecoder().decode(readV10('project.json'))) as { itemDesigns: Record<string, unknown>[] }
+    expect(prior.itemDesigns[0]).not.toHaveProperty('clearanceEnvelope')
+  })
+
+  it('carries the same asset, byte for byte', () => {
+    expect(readV11(ASSET_ENTRY)).toEqual(ASSET_BYTES)
   })
 })

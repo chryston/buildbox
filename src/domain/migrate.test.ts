@@ -10,6 +10,7 @@ import {
   migrateV3toV4,
   migrateV4toV5,
   migrateV9toV10,
+  migrateV10toV11,
   rectangleFootprint,
   runMigrationChain,
   type IdAllocator,
@@ -41,6 +42,7 @@ function validProject(): Project {
         height: 500,
         heightIsTypical: true,
         color: '#8b5a2b',
+        clearanceEnvelope: null,
       },
     ],
     existingModel: {
@@ -105,9 +107,9 @@ function withoutTheStep(project: unknown): unknown {
 
 describe('DOMAIN_SCHEMA_VERSION', () => {
   it('is the version this build writes', () => {
-    // v10 is production: the Elevation View shipped, so the number the chain ends at and the number
-    // this build writes are the same one (#73, #75).
-    expect(DOMAIN_SCHEMA_VERSION).toBe(10)
+    // v11 is production: the Clearance Envelope shipped, so the number the chain ends at and the
+    // number this build writes are the same one (#73, #75, #76).
+    expect(DOMAIN_SCHEMA_VERSION).toBe(11)
   })
 })
 
@@ -247,10 +249,12 @@ const CABINET_DESIGN = {
  */
 function v2Record(): Record<string, unknown> {
   const project = validProject()
+  const v2Design = { ...project.itemDesigns[0] } as Record<string, unknown>
+  delete v2Design.clearanceEnvelope
   return {
     ...project,
     itemDesigns: [
-      { ...project.itemDesigns[0], footprint: { kind: 'rectangle', width: 1820, depth: 1980 } },
+      { ...v2Design, footprint: { kind: 'rectangle', width: 1820, depth: 1980 } },
       {
         id: 'design-1',
         kind: 'generic',
@@ -291,8 +295,9 @@ describe('migrateV2toV3 — a rectangle becomes a Rectangle preset (#58)', () =>
       centre: { x: 160, y: 160 },
       orientationDeg: 0,
     })
-    // A cabinet's size comes from its construction, so it has no footprint to restate.
-    expect(result.project.itemDesigns[2]).toEqual(CABINET_DESIGN)
+    // A cabinet's size comes from its construction, so it has no footprint to restate. The
+    // Clearance Envelope field the eleventh step adds is the only thing beside it (#76).
+    expect(result.project.itemDesigns[2]).toEqual({ ...CABINET_DESIGN, clearanceEnvelope: null })
   })
 
   it('draws exactly the outline the v2 record drew', () => {
@@ -682,5 +687,77 @@ describe('migrateV9toV10 — a Project gains its Elevation Views (#75)', () => {
     expect(migrateProject({}, 9, allocator()).ok).toBe(false)
     expect(migrateV9toV10(null)).toBeNull()
     expect(migrateV9toV10([{ id: 'elev-1' }])).toEqual([{ id: 'elev-1' }])
+  })
+})
+
+describe('migrateV10toV11 — every Item Design gains its Clearance Envelope field (#76)', () => {
+  /** The same Project as its v10 twin: designs written before the envelope existed. */
+  function v10Record(): Record<string, unknown> {
+    const record: Record<string, unknown> = { ...validProject() }
+    const designs = record.itemDesigns as Record<string, unknown>[]
+    const design = { ...designs[0] }
+    delete design.clearanceEnvelope
+    record.itemDesigns = [design]
+    return record
+  }
+
+  it('adds the null field to every design, and spends no IDs of its own', () => {
+    const asked: number[] = []
+    const result = migrateProject(v10Record(), 10, (count) => {
+      asked.push(count)
+      return allocator()(count)
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    // Nothing past v10 invents an ID: an envelope is always one a person drew, so the field
+    // arrives null and stays null until a transaction writes a shape into it.
+    expect(asked).toEqual([])
+    expect(result.project.itemDesigns.map((design) => design.clearanceEnvelope)).toEqual([null])
+  })
+
+  it('changes nothing else about any record', () => {
+    const prior = v10Record()
+    const result = migrateProject(prior, 10, allocator())
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    // The step adds one field to each design and touches nothing beside it: no placement moves,
+    // no warning reopens, because no measurement changed (#76 acceptance 16).
+    const rest = { ...(result.project as unknown as Record<string, unknown>) }
+    const priorRest = { ...prior }
+    delete rest.itemDesigns
+    delete priorRest.itemDesigns
+    expect(rest).toEqual(priorRest)
+  })
+
+  it('leaves a v11 Project exactly as it found it', () => {
+    const migrated = migrateProject(v10Record(), 10, allocator())
+    expect(migrated.ok).toBe(true)
+    if (!migrated.ok) return
+    const again = migrateProject(migrated.project, 10, allocator())
+    expect(again.ok && again.project).toEqual(migrated.project)
+  })
+
+  it('keeps the envelope a design already carries', () => {
+    // A migrator that overwrote the field it was only meant to add would silently delete
+    // somebody's envelope — the one thing this step could get wrong.
+    const carried = {
+      itemDesigns: [
+        { id: 'design-0', kind: 'generic', clearanceEnvelope: { path: { segments: [] }, bottomOffset: 0, height: 100 } },
+      ],
+    }
+    expect(migrateV10toV11(carried)).toBe(carried)
+  })
+
+  it('hands back the record itself when every design already has the field', () => {
+    // Identity, not equality: the step copies nothing when there is nothing to add.
+    const carried = { itemDesigns: [{ id: 'a', clearanceEnvelope: null }, { id: 'b', clearanceEnvelope: null }] }
+    expect(migrateV10toV11(carried)).toBe(carried)
+  })
+
+  it('adds the field to a record that is not a Project shape, without crashing', () => {
+    expect(migrateV10toV11(null)).toBeNull()
+    expect(migrateV10toV11([{ id: 'design-0' }])).toEqual([{ id: 'design-0' }])
+    const empty = { itemDesigns: [] }
+    expect(migrateV10toV11(empty)).toBe(empty)
   })
 })

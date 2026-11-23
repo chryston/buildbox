@@ -146,11 +146,11 @@ describe('the renovation-36 scene (#69 criterion 1)', () => {
     }
   })
 
-  it('is the same Project as the v10 domain golden', () => {
+  it('is the same Project as the v11 domain golden', () => {
     const golden = JSON.parse(
-      readFileSync(join(fixturesRoot, 'domain', 'v10', 'renovation.json'), 'utf8'),
+      readFileSync(join(fixturesRoot, 'domain', 'v11', 'renovation.json'), 'utf8'),
     ) as { domainSchemaVersion: number; project: Project }
-    expect(golden.domainSchemaVersion).toBe(10)
+    expect(golden.domainSchemaVersion).toBe(11)
     expect(validateProject(golden.project).ok).toBe(true)
     expect(golden.project).toEqual(project)
   })

@@ -21,15 +21,16 @@ import { validateProject } from './validate'
 /**
  * The domain schema this build writes and understands at the top of the chain.
  *
- * The tenth step (#75 §1) is the Elevation View: the Project gains the list of saved sideways looks,
- * empty for every Project that predates them. The ninth before it (#74 §1) is the Plan View Range:
- * every saved view gains the height it draws at. The eighth (#69 §1, #73) is the renovation model:
- * Design Options, the Drawing Layers every Project starts with, and the four settings a saved view
- * gained. A Project saved by an older build carries `schemaVersion: 9` and comes up the chain; a
- * Project saved by a newer one is refused as `newer-schema` rather than opened and quietly stripped
- * of its Elevation Views.
+ * The eleventh step (#76 §4) is the Clearance Envelope: every Item Design gains the one envelope it
+ * may carry, `null` for every design that has none. The tenth before it (#75 §1) is the Elevation
+ * View: the Project gains the list of saved sideways looks, empty for every Project that predates
+ * them. The ninth (#74 §1) is the Plan View Range: every saved view gains the height it draws at.
+ * The eighth (#69 §1, #73) is the renovation model: Design Options, the Drawing Layers every
+ * Project starts with, and the four settings a saved view gained. A Project saved by an older build
+ * carries `schemaVersion: 10` and comes up the chain; a Project saved by a newer one is refused as
+ * `newer-schema` rather than opened and quietly stripped of its Clearance Envelopes.
  */
-export const DOMAIN_SCHEMA_VERSION = 10
+export const DOMAIN_SCHEMA_VERSION = 11
 
 /**
  * One pure vN → vN+1 step. Its input is already a copy; it never reads the clock, and a
@@ -40,8 +41,9 @@ export type Migrator = (data: unknown, allocateId: IdAllocator) => unknown
 /**
  * `MIGRATORS[i]` migrates v(i+1) → v(i+2), so index 0 is v1 → v2.
  *
- * Ten steps, the last of which is the Elevation View list (#75), the one before it the Plan View
- * Range (#74) and the one before that the renovation model (#69, #71, #73).
+ * Eleven steps, the last of which is the Clearance Envelope field (#76), the one before it the
+ * Elevation View list (#75), the one before that the Plan View Range (#74) and the one before that
+ * the renovation model (#69, #71, #73).
  */
 export const MIGRATORS: readonly Migrator[] = [
   migrateV1toV2,
@@ -53,6 +55,7 @@ export const MIGRATORS: readonly Migrator[] = [
   migrateV7toV8,
   migrateV8toV9,
   migrateV9toV10,
+  migrateV10toV11,
 ]
 
 /**
@@ -356,6 +359,30 @@ export function migrateV9toV10(data: unknown): unknown {
   if (Array.isArray(record.elevationViews)) return data
   return { ...record, elevationViews: [] }
 }
+
+/**
+ * v10 → v11 (#76 §4): every Item Design gains the Clearance Envelope field it was written without.
+ *
+ * The value is `null` for every design that arrives, because a Clearance Envelope is always one a
+ * person drew or measured — there is no built-in depth to invent and no kind that implies one
+ * (#15 supplies no implicit rules). A design that already carries the field, `null` or an envelope,
+ * is carried over untouched, so the step is idempotent and a v11 file comes back as the same object
+ * it arrived as. The step reads no clock, mints no ID and touches no other record: no placement
+ * moves, no warning reopens, because no measurement and no entity changed.
+ */
+export function migrateV10toV11(data: unknown): unknown {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return data
+  const record = data as Record<string, unknown>
+  if (!Array.isArray(record.itemDesigns) || !record.itemDesigns.some(needsEnvelope)) return data
+  return {
+    ...record,
+    itemDesigns: record.itemDesigns.map((design) => (needsEnvelope(design) ? { ...design, clearanceEnvelope: null } : design)),
+  }
+}
+
+/** An Item Design that has no Clearance Envelope field yet. */
+const needsEnvelope = (design: unknown): design is Record<string, unknown> =>
+  design !== null && typeof design === 'object' && !Array.isArray(design) && (design as Record<string, unknown>).clearanceEnvelope === undefined
 
 /** A saved view that has no Plan View Range yet. */
 const needsRange = (view: unknown): view is Record<string, unknown> =>
