@@ -299,6 +299,27 @@ const renamePlanView: Handler<'view.rename'> = (ctx) => {
 }
 
 /**
+ * The Plan View Range (#74 §4): two elevations on one saved view, and nothing else.
+ *
+ * This writes one field of one record in `views`. No entity moves, which is what lets an undo put the
+ * old range back and leave the model byte-identical (criterion 3), and what makes a range change
+ * unable to reopen a warning: warnings are derived from entities, and an entity that has not moved
+ * derives exactly the warning it derived before, acknowledged or not (#66).
+ *
+ * The two numbers are this view's own. Another Plan View of the same Floor keeps the range it was aimed
+ * with, because the range says where this view is looking up from and no other view is.
+ */
+const setPlanViewRange: Handler<'view.setPlanViewRange'> = (ctx) => {
+  const { viewId, lowerMm, upperMm } = ctx.intent.payload
+  requireView(ctx.project, viewId)
+  const draftView = requireView(ctx.draft, viewId)
+  const path = `${viewPath(viewId)}.planViewRange`
+  if (!Number.isFinite(lowerMm) || !Number.isFinite(upperMm)) refuse('invalid-extent', path, 'Enter a number.')
+  if (!(lowerMm < upperMm)) refuse('invalid-extent', path, 'Lower needs to be below Upper.')
+  draftView.planViewRange = { lowerMm, upperMm }
+}
+
+/**
  * The default Plan View is part of its Floor and goes only with it (#56). Deleting the
  * last named view of a Floor is fine; deleting the one that came with the Floor is not.
  */
@@ -411,6 +432,10 @@ export const VIEW_HANDLERS: { [T in ViewIntent['type']]: IntentHandler<T> } = {
   'view.delete': { run: deletePlanView, locate: (project, intent) => viewLocator(project, intent.payload.viewId) },
   'view.setShowPlanImage': {
     run: setPlanViewShowsPlanImage,
+    locate: (project, intent) => viewLocator(project, intent.payload.viewId),
+  },
+  'view.setPlanViewRange': {
+    run: setPlanViewRange,
     locate: (project, intent) => viewLocator(project, intent.payload.viewId),
   },
 }

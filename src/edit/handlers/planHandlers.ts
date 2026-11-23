@@ -8,7 +8,7 @@
  * what it stores is the Item Origin's Floor position, which for a design whose Origin is its
  * centre is the same number (#43).
  */
-import { designFootprintSize, rectangleFootprint } from '../../domain'
+import { designFootprintSize, designHeight, rectangleFootprint } from '../../domain'
 import type { EntityId, Project } from '../../domain'
 import { normaliseDeg } from '../../geometry'
 import { CUSTOM_PLAN_ENTRY, PLAN_CATALOGUE } from '../planCatalogue'
@@ -19,8 +19,10 @@ import {
   findDesign,
   floorPath,
   genericPlacementsOn,
+  placedPath,
   placementsOf,
   refuse,
+  requireExtentValue,
   requireFloor,
   requireGenericDesign,
   requirePlacement,
@@ -150,6 +152,28 @@ const movePlacement: Handler<'plan.movePlacement'> = (ctx) => {
 }
 
 /**
+ * One Vertical Extent box of a Placed Item (#74 §5). Both answers move the item, because a Placed Item
+ * owns its base and nothing else: `base` stands it at the entered elevation, `top` stands it so that
+ * the height its Item Design owns lands just under the entered top.
+ *
+ * Nothing here is written to the Design, and there is nowhere on a Placed Item to write a height — the
+ * schema has no such field, which is #74 §7's guard against the prototype's per-placement copy. The
+ * Height line the inspector shows under these two boxes is read from the Design, and stays true for
+ * every other placement of it.
+ */
+const setPlacementVerticalExtent: Handler<'plan.setPlacementVerticalExtent'> = (ctx) => {
+  const { placedItemId, field, value } = ctx.intent.payload
+  const placement = requirePlacement(ctx.project, placedItemId)
+  const design = findDesign(ctx.project, placement.itemDesignId)
+  if (design === undefined) {
+    refuse('unknown-target', placedPath(placedItemId), 'This item has no item design to take a height from.')
+  }
+  requireExtentValue(field, value, `${placedPath(placedItemId)}.baseElevation`, placement.baseElevation)
+  requirePlacement(ctx.draft, placedItemId).baseElevation =
+    field === 'base' ? value : value - designHeight(design)
+}
+
+/**
  * One turn about the Item Origin (#57 behaviour 33). Free rotation: any decimal, clockwise
  * with +Y down, normalised into the one turn the validator asks for. The Item Footprint is
  * never re-authored by a turn, which is why a 600 × 400 design at 90° still reads 600 wide.
@@ -246,6 +270,7 @@ export function planLocator(
         placedItemIds: intent.ids.slice(0, 1),
       }
     case 'plan.movePlacement':
+    case 'plan.setPlacementVerticalExtent':
     case 'plan.rotatePlacement':
     case 'plan.removeObject': {
       const placement = project.existingModel.placedItems.find((item) => item.id === intent.payload.placedItemId)
@@ -284,6 +309,7 @@ export const PLAN_HANDLERS: PlanHandlers = {
   'plan.addObject': { run: addObject, locate: planLocator },
   'plan.placeDesign': { run: placeDesign, locate: planLocator },
   'plan.movePlacement': { run: movePlacement, locate: planLocator },
+  'plan.setPlacementVerticalExtent': { run: setPlacementVerticalExtent, locate: planLocator },
   'plan.rotatePlacement': { run: rotatePlacement, locate: planLocator },
   'plan.removeObject': { run: removeObject, locate: planLocator },
   'plan.addTemplate': { run: addTemplate, locate: planLocator },

@@ -13,7 +13,7 @@ import type { CabinetItemDesign, CabinetNode, EntityId, Floor, GenericItemDesign
 import { problem } from '../../lib'
 import type { ValidationProblem } from '../../lib'
 import type { RejectionCode } from '../intents'
-import type { IntentType } from '../intents'
+import type { IntentType, VerticalExtentField } from '../intents'
 import type { IntentHandler } from './context'
 
 /**
@@ -109,6 +109,24 @@ export function requirePlacement(project: Project, placedItemId: EntityId): Plac
   const placed = project.existingModel.placedItems.find((item) => item.id === placedItemId)
   if (placed === undefined) refuse('unknown-target', placedPath(placedItemId), `No Placed Item ${placedItemId} is in this Project.`)
   return placed
+}
+
+/**
+ * The one number a Vertical Extent field committed (#74 §5), or the plain sentence that says it is
+ * not one. The three messages are the field's own words, and they are the same for every kind: a
+ * Wall, an Opening and a Placed Item differ in what they do with a legal number, never in what counts
+ * as one.
+ *
+ * `base` is checked only for being a number, because a Sump box stands at −150 mm and is right to:
+ * the Floor Datum is a reference plane, not a floor to sit on. `height` has to be more than 0 and
+ * `top` has to sit above the `base` the caller holds, since neither describes a band otherwise.
+ */
+export function requireExtentValue(field: VerticalExtentField, value: number, path: string, base: number | null): void {
+  if (!Number.isFinite(value)) refuse('invalid-extent', path, 'Enter a number.')
+  if (field === 'height' && !(value > 0)) refuse('invalid-extent', path, 'A height has to be more than 0 mm.')
+  if (field === 'top' && base !== null && !(value > base)) {
+    refuse('invalid-extent', path, 'The top has to be above the base.')
+  }
 }
 
 /**
