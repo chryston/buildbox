@@ -13,7 +13,7 @@ import { defineConfig, devices } from '@playwright/test'
  */
 export default defineConfig({
   testDir: 'e2e/smoke',
-  testMatch: ['design-options.spec.ts', 'renovation-displays.spec.ts', 'renovation-layers.spec.ts', 'renovation-paste.spec.ts'],
+  testMatch: ['design-options.spec.ts', 'renovation-displays.spec.ts', 'renovation-export.spec.ts', 'renovation-layers.spec.ts', 'renovation-paste.spec.ts'],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
