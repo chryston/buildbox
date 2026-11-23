@@ -462,3 +462,40 @@ export function planRangeFixtureProject(): Project {
     ],
   }
 }
+
+/**
+ * The renovation fixture at the tenth schema (#75), with two Elevation Views on its one Floor.
+ *
+ * One view line runs due along the room — the ordinary case, a view of the wall the run of base
+ * cabinets stands against — and the other is laid at an angle, which is what the record has to be
+ * able to hold: a view line is two points and a side, not an axis. Neither carries a saved Design
+ * Option, a Renovation Display or a Layer setting, so the bytes also prove that every one of the
+ * settings an Elevation View shares with a Plan View stays absent when nobody has set it.
+ */
+export function elevationFixtureProject(): Project {
+  const project = planRangeFixtureProject()
+  const floorId = project.views[0]!.floorId
+  return {
+    ...project,
+    elevationViews: [
+      {
+        id: 'view-elevation-sink' as EntityId,
+        kind: 'elevation',
+        floorId,
+        name: 'Sink elevation',
+        line: { start: { x: 600, y: 1400 }, end: { x: 2600, y: 1400 } },
+        side: 'left',
+        depth: 2000,
+      },
+      {
+        id: 'view-elevation-corner' as EntityId,
+        kind: 'elevation',
+        floorId,
+        name: 'Corner at an angle',
+        line: { start: { x: 0, y: 0 }, end: { x: 3200, y: 2400 } },
+        side: 'right',
+        depth: 1500,
+      },
+    ],
+  }
+}
