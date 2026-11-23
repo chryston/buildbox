@@ -81,11 +81,15 @@ function optionArm(
   mode: string,
   originOption: string | undefined,
   chosen: readonly string[] | 'existing-only',
+  allOptions: readonly string[],
 ): readonly string[] | 'existing-only' {
   if (mode === 'existing') return 'existing-only'
   if (mode === 'this') return originOption === undefined ? 'existing-only' : [originOption]
-  if (chosen !== 'existing-only') return chosen
-  return originOption === undefined ? [] : [originOption]
+  // `Choose options…` is a comparison, so it starts with every Option in and the person removes the
+  // ones not being compared. A scope of one Option is the first radio's answer, so the list would
+  // have nothing to show and the radio is not offered as a change — hence the length test.
+  if (allOptions.length > 1) return [...allOptions]
+  return chosen === 'existing-only' ? (originOption === undefined ? [] : [originOption]) : chosen
 }
 
 export interface ListsPanelProps {
@@ -224,7 +228,12 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
     patch({
       scope: {
         ...recipe.scope,
-        designOptionIds: optionArm(mode, originOption, chosen),
+        designOptionIds: optionArm(
+          mode,
+          originOption,
+          chosen,
+          options.designOptions.map((each) => each.id),
+        ),
         // `Existing Model only` has no States to pick between — every row in it is Existing — so
         // the boxes go grey and all-on rather than holding a filter that cannot filter (#73 §2).
         ...(mode === 'existing' ? { renovationStates: [...STATES] } : {}),
