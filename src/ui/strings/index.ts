@@ -559,6 +559,21 @@ export const STRINGS = {
   openingDraftFixedSize: 'Fixed size',
   openingDraftDistance: 'Distance from the highlighted end',
   openingCancelEsc: 'Cancel (Esc)',
+  // The Vertical Extent fields (#74 §5). `Base (sill)` carries both words on purpose: the glossary's
+  // `Base`, and the trade word the Opening's own read-out already uses.
+  extentBase: 'Base',
+  extentHeight: 'Height',
+  extentTop: 'Top',
+  extentBaseSill: 'Base (sill)',
+  /** Under a Placed Item's `Top`, because that is what typing there does: the item moves and the
+   * height stays where it belongs, with the Item Design. */
+  extentMovesItem: 'moves item',
+  /** `700 mm · from Item Design Wall cabinet · shared by 1 placement` — the height a Placed Item does
+   * not own, said together with who does own it and how many placements share it. */
+  extentHeightLine: (height: string, designName: string, placements: number): string =>
+    `${height} mm · from Item Design ${designName} · shared by ${placements} placement${placements === 1 ? '' : 's'}`,
+  /** What this Plan View's Range says about the entity the fields belong to. */
+  extentShownAs: (rangeClass: string): string => `Shown as: ${rangeClass}`,
   // The Floors dialog (#64 §16, §17).
   floorNameRequired: 'Give this Floor a name',
   floorNameTaken: (name: string): string => `Another Floor is already called ${name}`,

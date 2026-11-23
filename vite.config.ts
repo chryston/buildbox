@@ -47,6 +47,9 @@ const NODE_ONLY_INCLUDE = [
   // The #74 Plan View Range scene is held to its committed bytes and re-run through `edit`, both of
   // which read `fixtures/` off disk — `import.meta.url` has to be a file URL for that.
   'src/test/planRangeScene.test.ts',
+  // The Vertical Extent rows are built from the same scene fixture, and are pure data — no React, no
+  // DOM — so they run under Node too.
+  'src/ui/workspace/verticalExtentFields.test.ts',
   // The five element goldens (#68 criterion 1) are compared against the files on disk, so they are
   // Node tests of the same kind — and `ui/strings` is injected into `tables` from here.
   'src/test/tablesGolden.test.ts',

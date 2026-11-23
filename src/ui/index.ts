@@ -60,6 +60,16 @@ export {
   type CycleOutcome,
   type CycleState,
 } from './workspace/selection/overlapCycle'
+// #74 §5: the Vertical Extent rows of the inspector, as data.
+export {
+  openingExtentView,
+  placementExtentView,
+  wallExtentView,
+  type ExtentField,
+  type ExtentNumberFormat,
+  type ExtentRow,
+  type VerticalExtentView,
+} from './workspace/verticalExtentFields'
 // #70 §2: the renovation block of the saved-view card, and the one Display-name and Display-colour
 // table the rail, the mode bar and the legend read.
 export { RenovationViewSection } from './workspace/renovation/RenovationViewSection'
