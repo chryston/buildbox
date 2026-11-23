@@ -47,6 +47,7 @@ import type {
   WallJunction,
 } from './project'
 import { defaultOpeningLabel } from './openings'
+import { defaultPlanViewRange } from './project'
 import { fitOpening, gapChord, usableIntervals } from '../geometry'
 import type { CornerRadii, Preset, Pt, UsableGap } from '../geometry'
 
@@ -428,6 +429,7 @@ export function arbProject(): fc.Arbitrary<Project> {
         name: floor.name,
         isDefault: true,
         showPlanImage: true,
+        planViewRange: defaultPlanViewRange(floor.limits),
       }))
 
       const designs: ItemDesign[] = [
@@ -627,6 +629,7 @@ function injectedPlanView(index: number, floorId: string, overrides: Partial<Pla
     name: `${INJECT} view ${index}`,
     isDefault: false,
     showPlanImage: true,
+    planViewRange: { lowerMm: 0, upperMm: 2600 },
     ...overrides,
   }
 }

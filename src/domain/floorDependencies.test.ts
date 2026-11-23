@@ -18,6 +18,7 @@ const view = (id: string, floorId: string, isDefault: boolean): PlanView => ({
   name: id,
   isDefault,
   showPlanImage: true,
+  planViewRange: { lowerMm: 0, upperMm: 2600 },
 })
 const placed = (id: string, floorId: string): Project['existingModel']['placedItems'][number] => ({
   id,

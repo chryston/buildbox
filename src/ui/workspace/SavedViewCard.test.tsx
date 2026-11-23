@@ -21,10 +21,10 @@ const image = (pixelsPerMm: number | null): PlanImage => ({
 const kitchen: Floor = { id: 'floor-1', name: 'Kitchen level', planImage: image(null) }
 const loft: Floor = { id: 'floor-2', name: 'Loft', planImage: null }
 const defaultView: PlanView = {
-  id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Kitchen level', isDefault: true, showPlanImage: true,
+  id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Kitchen level', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 },
 }
 const furnitureView: PlanView = {
-  id: 'view-2', kind: 'plan', floorId: 'floor-1', name: 'Furniture', isDefault: false, showPlanImage: false,
+  id: 'view-2', kind: 'plan', floorId: 'floor-1', name: 'Furniture', isDefault: false, showPlanImage: false, planViewRange: { lowerMm: 0, upperMm: 2600 },
 }
 
 const project = (over: Partial<Project> = {}): Project => ({

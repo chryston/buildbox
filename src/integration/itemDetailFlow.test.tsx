@@ -26,6 +26,7 @@ function twoFloors(base: Project): Project {
     name: 'Floor Plan',
     isDefault: true,
     showPlanImage: true,
+    planViewRange: { lowerMm: 0, upperMm: 2600 },
   }
   const placed: PlacedItem = {
     id: 'p-1-loft-place',

@@ -27,7 +27,7 @@ const project = (floors: Floor[]): Project => ({
   preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 },
   floors,
   views: floors.map((each) => ({
-    id: `view-${each.id}`, kind: 'plan', floorId: each.id, name: each.name, isDefault: true, showPlanImage: true,
+    id: `view-${each.id}`, kind: 'plan', floorId: each.id, name: each.name, isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 },
   })),
   itemDesigns: [],
   existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [] },

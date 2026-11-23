@@ -12,19 +12,20 @@
  */
 import type { ValidationProblem } from '../lib'
 import type { IdAllocator } from './remapIds'
-import type { Floor, PlanView, Project } from './project'
-import { DEFAULT_DRAWING_LAYERS } from './project'
+import type { Floor, PlanView, PlanViewRange, Project } from './project'
+import { DEFAULT_DRAWING_LAYERS, DEFAULT_PLAN_VIEW_RANGE, defaultPlanViewRange } from './project'
 import { validateProject } from './validate'
 
 /**
  * The domain schema this build writes and understands at the top of the chain.
  *
- * The eighth step (#69 §1, #73) is the renovation model: Design Options, the Drawing Layers every
+ * The ninth step (#74 §1) is the Plan View Range: every saved view gains the height it draws at.
+ * The eighth before it (#69 §1, #73) is the renovation model: Design Options, the Drawing Layers every
  * Project starts with, and the four settings a saved view gained. A Project saved by an older build
- * carries `schemaVersion: 7` and comes up the chain; a Project saved by a newer one is refused as
+ * carries `schemaVersion: 8` and comes up the chain; a Project saved by a newer one is refused as
  * `newer-schema` rather than opened and quietly stripped of its Design Options.
  */
-export const DOMAIN_SCHEMA_VERSION = 8
+export const DOMAIN_SCHEMA_VERSION = 9
 
 /**
  * One pure vN → vN+1 step. Its input is already a copy; it never reads the clock, and a
@@ -35,7 +36,8 @@ export type Migrator = (data: unknown, allocateId: IdAllocator) => unknown
 /**
  * `MIGRATORS[i]` migrates v(i+1) → v(i+2), so index 0 is v1 → v2.
  *
- * Eight steps, the last of which is the renovation model (#69, #71, #73).
+ * Nine steps, the last of which is the Plan View Range (#74) and the one before it the renovation
+ * model (#69, #71, #73).
  */
 export const MIGRATORS: readonly Migrator[] = [
   migrateV1toV2,
@@ -45,6 +47,7 @@ export const MIGRATORS: readonly Migrator[] = [
   migrateV5toV6,
   migrateV6toV7,
   migrateV7toV8,
+  migrateV8toV9,
 ]
 
 /**
@@ -71,7 +74,9 @@ export function migrateV1toV2(data: unknown, allocateId: IdAllocator): unknown {
       floor !== null && typeof floor === 'object' && typeof (floor as Floor).id === 'string',
   )
   const ids = allocateId(shaped.length)
-  const views: PlanView[] = shaped.map((floor, index) => ({
+  // The view as v2 wrote it: `planViewRange` belongs to v9 (#74) and a step never writes a field its
+  // own version does not have, so this is the shape minus that one field.
+  const views: Omit<PlanView, 'planViewRange'>[] = shaped.map((floor, index) => ({
     id: ids[index] as string,
     kind: 'plan',
     floorId: floor.id,
@@ -297,6 +302,61 @@ export function migrateV7toV8(data: unknown, allocateId: IdAllocator): unknown {
   if (views !== null) next.views = views.map((view) => (needsView(view) ? completedView(view, layers ?? asLayers(record.drawingLayers)) : view))
   if (layers !== null) fileExistingContent(next, layers)
   return next
+}
+
+/**
+ * v8 → v9 (#74 §1): every saved view gains the Plan View Range it draws at.
+ *
+ * The rule is the one a new Plan View gets (#74 behaviour 4), read from the Floor the view shows
+ * *at migration time*: the Floor's lower limit, or 0 when it has none, up to its upper limit, or
+ * 2 600 mm when it has none. That is the whole storey, so a migrated Project draws exactly what it
+ * drew before — nothing appears, nothing is styled differently, and no warning reopens, because no
+ * entity was touched.
+ *
+ * Two details the shape forces:
+ *
+ *  - A view whose `floorId` names no Floor — which the validator refuses, but a file on disk can
+ *    still say — takes the plain 0–2 600, because there is no Floor to read limits from.
+ *  - A Floor whose own limits do not rise (`lowerMm` at or above `upperMm`, which the validator
+ *    allows as equal) cannot give a range, since a range must rise. Such a Floor falls back to
+ *    0–2 600 rather than producing a view the validator would reject.
+ *
+ * A view that already carries `planViewRange` is carried over untouched, so the step is idempotent
+ * and a v9 file comes back as the same object it arrived as. Nothing else moves and no clock is read.
+ */
+export function migrateV8toV9(data: unknown, _allocateId: IdAllocator): unknown {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return data
+  const record = data as Record<string, unknown>
+  const views: readonly unknown[] | null = Array.isArray(record.views) ? record.views : null
+  if (views === null || !views.some(needsRange)) return data
+  const defaults = floorRanges(record.floors)
+  return {
+    ...record,
+    views: views.map((view) => (needsRange(view) ? { ...view, planViewRange: rangeForView(view, defaults) } : view)),
+  }
+}
+
+/** A saved view that has no Plan View Range yet. */
+const needsRange = (view: unknown): view is Record<string, unknown> =>
+  view !== null && typeof view === 'object' && !Array.isArray(view) && (view as Record<string, unknown>).planViewRange === undefined
+
+/** The default range of every Floor in the record, by ID. */
+function floorRanges(floors: unknown): Map<string, PlanViewRange> {
+  const ranges = new Map<string, PlanViewRange>()
+  if (!Array.isArray(floors)) return ranges
+  for (const floor of floors) {
+    if (floor === null || typeof floor !== 'object' || Array.isArray(floor)) continue
+    const shaped = floor as Floor
+    if (typeof shaped.id !== 'string') continue
+    ranges.set(shaped.id, defaultPlanViewRange(shaped.limits))
+  }
+  return ranges
+}
+
+/** The range a view of this Floor starts at; the plain 0–2 600 when its Floor says nothing usable. */
+function rangeForView(view: unknown, defaults: ReadonlyMap<string, PlanViewRange>): PlanViewRange {
+  const floorId = (view as Record<string, unknown>).floorId
+  return (typeof floorId === 'string' ? defaults.get(floorId) : undefined) ?? DEFAULT_PLAN_VIEW_RANGE
 }
 
 /** A `drawingLayers` value read as records, ignoring anything the shape does not describe. */

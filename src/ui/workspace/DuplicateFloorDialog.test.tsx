@@ -24,8 +24,8 @@ const project = (): Project => ({
     { id: 'floor-2', name: 'Loft', planImage: null },
   ],
   views: [
-    { id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Kitchen level', isDefault: true, showPlanImage: true },
-    { id: 'view-2', kind: 'plan', floorId: 'floor-2', name: 'Loft', isDefault: true, showPlanImage: true },
+    { id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Kitchen level', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } },
+    { id: 'view-2', kind: 'plan', floorId: 'floor-2', name: 'Loft', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } },
   ],
   itemDesigns: [
     { id: 'd-sofa', kind: 'generic', name: 'Sofa 3-seater', footprint: rectangleFootprint(600, 220), origin: { x: 300, y: 110 }, height: 850, heightIsTypical: true, color: 'indigo' },

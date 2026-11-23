@@ -29,7 +29,7 @@ function validProject(): Project {
     meta: { name: 'Maple Street Kitchen' },
     preferences: { displayUnit: 'mm', displayPrecision: 0, defaultWallHeight: 2600 },
     floors: [{ id: 'floor-0', name: 'Floor 1', planImage: null }],
-    views: [{ id: 'view-0', kind: 'plan', floorId: 'floor-0', name: 'Floor 1', isDefault: true, showPlanImage: true }],
+    views: [{ id: 'view-0', kind: 'plan', floorId: 'floor-0', name: 'Floor 1', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } }],
     itemDesigns: [
       {
         id: 'design-0',
@@ -114,8 +114,8 @@ describe('migrateV1toV2 — one default Plan View per Floor (#56)', () => {
     const data = { ...v1Project(), floors: [{ id: 'floor-a', name: 'Ground', planImage: null }, { id: 'floor-b', name: 'Loft', planImage: null }] }
     const result = migrateV1toV2(data, allocator()) as Project
     expect(result.views).toEqual([
-      { id: 'view-1', kind: 'plan', floorId: 'floor-a', name: 'Ground', isDefault: true, showPlanImage: true },
-      { id: 'view-2', kind: 'plan', floorId: 'floor-b', name: 'Loft', isDefault: true, showPlanImage: true },
+      { id: 'view-1', kind: 'plan', floorId: 'floor-a', name: 'Ground', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } },
+      { id: 'view-2', kind: 'plan', floorId: 'floor-b', name: 'Loft', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } },
     ])
   })
 
@@ -192,7 +192,7 @@ describe('migrateProject — the envelope version (#14)', () => {
     if (!result.ok) return
     expect(result.migratedFrom).toBe(1)
     expect(withoutTheStep({ views: result.project.views })).toEqual({
-      views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-0', name: 'Floor 1', isDefault: true, showPlanImage: true }],
+      views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-0', name: 'Floor 1', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } }],
     })
     expect(data).not.toHaveProperty('views')
   })

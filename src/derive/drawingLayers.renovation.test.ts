@@ -52,6 +52,7 @@ const view = (settings: Record<string, Partial<LayerSetting>>, over: Partial<Pla
   floorId: FLOOR,
   isDefault: true,
   showPlanImage: false,
+  planViewRange: { lowerMm: 0, upperMm: 2600 },
   designOptionId: null,
   renovationDisplay: 'combined',
   layerSettings: Object.fromEntries(Object.entries(settings).map(([key, setting]) => [key, { visible: true, selectable: true, editable: true, ...setting }])),

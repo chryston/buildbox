@@ -11,6 +11,7 @@
  * that holds two of them cannot be renamed out of it.
  */
 import type { EntityId, Floor, PlanView, Project, RenovationDisplay } from './project'
+import { defaultPlanViewRange } from './project'
 
 /** The comparison key every uniqueness rule uses. */
 export const nameKey = (name: string): string => name.trim().normalize('NFC').toLowerCase()
@@ -55,6 +56,8 @@ export const defaultPlanView = (
   name: floor.name,
   isDefault: true,
   showPlanImage: true,
+  // The whole storey, which is what a Floor's own view has always shown (#74 behaviour 4).
+  planViewRange: defaultPlanViewRange(floor.limits),
   designOptionId: view?.designOptionId ?? null,
   renovationDisplay: view?.renovationDisplay ?? 'existing',
 })

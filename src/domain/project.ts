@@ -133,6 +133,46 @@ export interface FloorLimits {
 }
 
 /**
+ * The cut a Plan View draws at: the closed vertical interval `[lowerMm, upperMm]` measured
+ * from the same Floor Datum as every elevation (#74 §1, #29 §D1).
+ *
+ * The same two numbers as {@link FloorLimits}, and the same rule that a missing limit is
+ * unbounded — except that a Plan View Range is never missing and never unbounded: every Plan
+ * View carries both ends, and its lower end is strictly below its upper one. It is a *view*
+ * property: two Plan Views of one Floor may cut at different heights, and moving one touches
+ * no entity, reopens no warning and hides nothing (#74 §3).
+ *
+ * Whether an entity is In range, Above range or Below range is decided by overlap, not by
+ * containment, so a half-open interval would only make an entity standing exactly on
+ * `upperMm` ambiguous. It is closed, and `derive` decides the boundary case with the
+ * tolerance #29 §D1 fixes at 0.01 mm.
+ */
+export interface PlanViewRange {
+  lowerMm: number
+  upperMm: number
+}
+
+/** The range of a Floor that gives no usable pair of limits: the storey as BuildBox assumes it. */
+export const DEFAULT_PLAN_VIEW_RANGE: PlanViewRange = { lowerMm: 0, upperMm: 2600 }
+
+/**
+ * The range a Plan View of a Floor with these limits starts at (#74 behaviour 4): the Floor's lower
+ * limit, or 0 when it has none, up to its upper limit, or 2 600 mm when it has none — the whole
+ * storey, so a new view shows everything the Floor has.
+ *
+ * One function because two places need exactly this rule — `edit` when a Plan View is created, and
+ * the v8 → v9 migrator when every existing view is given one — and a second copy of a default is a
+ * second rule. A Floor whose own limits do not rise cannot give a range, since a range must rise,
+ * so such a Floor falls back to the plain 0–2 600 rather than producing a view the validator would
+ * reject.
+ */
+export const defaultPlanViewRange = (limits?: FloorLimits): PlanViewRange => {
+  const lower = typeof limits?.lowerMm === 'number' && Number.isFinite(limits.lowerMm) ? limits.lowerMm : DEFAULT_PLAN_VIEW_RANGE.lowerMm
+  const upper = typeof limits?.upperMm === 'number' && Number.isFinite(limits.upperMm) ? limits.upperMm : DEFAULT_PLAN_VIEW_RANGE.upperMm
+  return lower < upper ? { lowerMm: lower, upperMm: upper } : DEFAULT_PLAN_VIEW_RANGE
+}
+
+/**
  * The four Renovation Displays (#18, #70 §1), in the order the card lays them out:
  * Existing and Demolition across the top row, Proposed and Combined underneath.
  *
@@ -299,6 +339,16 @@ export interface PlanView {
   isDefault: boolean
   /** Whether this view draws the Floor's Plan Image. */
   showPlanImage: boolean
+  /**
+   * The height this view draws at (#74 §1).
+   *
+   * Required, not optional: a Plan View without a range would be a view that hides things by
+   * accident, and #74 §1 refuses that reading. The v8 → v9 migrator gives every view that
+   * predates it the range its Floor's limits say — the Floor's lower limit, or 0 when it has
+   * none, up to its upper limit, or 2 600 when it has none — which is the whole storey, and so
+   * the whole storey is what every existing Plan View keeps drawing.
+   */
+  planViewRange: PlanViewRange
   /**
    * The Design Option this view looks through, or `null` for the Existing Model alone.
    *

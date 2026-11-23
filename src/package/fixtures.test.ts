@@ -92,6 +92,7 @@ function v1StagedAsViews(): Project {
       name: floor.name,
       isDefault: true,
       showPlanImage: true,
+      planViewRange: { lowerMm: 0, upperMm: 2600 },
     })),
   }
 }
