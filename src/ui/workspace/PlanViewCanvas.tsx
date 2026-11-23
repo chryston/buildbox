@@ -19,7 +19,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import { affineApply, affineInvert, resolveSnap } from '../../derive'
-import type { DerivedFloor, FloorRooms, FloorWalls, RenovationState, SnapCandidate, SnapKind } from '../../derive'
+import type { DerivedFloor, FloorRooms, FloorWalls, RangeClass, RenovationState, SnapCandidate, SnapKind } from '../../derive'
 import type { DisplayUnit, Point2 } from '../../domain'
 import { footprintPath } from '../../domain'
 import {
@@ -512,6 +512,12 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     },
   )
   const { list: painted, floor: drawnFloor, walls: drawnWalls, rooms: drawnRooms, openings: drawnOpenings } = view
+  // The names this view had no room for, keyed by the thing that lost its label (#74 §3): the
+  // renderer puts each one on the entity's group, so hovering the footprint says the name the
+  // packing could not fit beside it.
+  const hoverNames = new Map(
+    (painted.omittedLabels ?? []).flatMap((each) => (each.ref.id === null ? [] : [[each.ref.id, each.text] as const])),
+  )
   const annotations = overlay === undefined
     ? drawSelectionAnnotations(floor, selection, {
       sizing, formatLength, preview, handles: !editLocked && !selectionReadOnly,
@@ -560,12 +566,16 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     const host = hostRef.current
     if (at === null || host === null || states === null) return null
     const rect = host.getBoundingClientRect()
+    // What this view's Range makes of an entity travels with the candidate (#74 §6): it decides the
+    // order the cycle walks — In range first, then Above, then Below — and the words on its row. It
+    // never removes one: an Above-range cabinet is still something a person means to pick.
+    const classOf = (id: string): RangeClass => rangeGates?.classOf(id) ?? 'in'
     const candidates = candidatesAtPoint(at, {
       walls: (drawnWalls?.walls ?? []).map((wall) => ({ id: wall.id, outline: wall.outline })),
       placements: drawnFloor.placements.map((item) => ({ id: item.id, outline: item.worldPath })),
       rooms: (drawnRooms?.rooms ?? []).map((room) => ({ id: room.id, outline: room.path })),
       states,
-    })
+    }).map((candidate) => ({ ...candidate, rangeClass: classOf(candidate.entityId) }))
     // An Opening answers the pointer through its own symbol, which the Wall drawing lays above the
     // Wall it is cut in. The symbol's geometry is not a closed path the hit test can take, so the
     // click itself is the evidence that it is drawn and selectable here — and its layer puts it
@@ -577,6 +587,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
         entityId: clickedId,
         renovationState: openingState,
         drawOrder: drawOrderOf('wall-openings', candidates.length),
+        rangeClass: classOf(clickedId),
       })
     }
     // #71 criterion 10: content this view will not let be picked is not a candidate at all — the
@@ -705,6 +716,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
               emphasis={{ selected: selection === null ? undefined : new Set([selection]) }}
               resolveAsset={resolveAsset}
               interactions={interactions}
+              hoverNames={hoverNames}
             />
             {annotations === null
               ? overlay !== undefined && <g transform={matrix}>{overlay}</g>
