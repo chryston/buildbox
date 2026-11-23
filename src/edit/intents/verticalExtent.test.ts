@@ -189,6 +189,21 @@ describe('wall.setVerticalExtent', () => {
     expect(after.height).toBe(2600)
   })
 
+  it('holds the soffit for the Elevation View bottom handle, so the height is what changes (#75 §6 criterion 17)', () => {
+    const { project, wall } = wallOn(0, 2600)
+    const raised = expectApplied(project, intent('wall.setVerticalExtent', { wallId: wall.id, field: 'bottom', value: 100 }))
+    const after = raised.project.existingModel.walls[0]!
+    expect(after.baseElevation).toBe(100)
+    expect(after.height).toBe(2500)
+    expect(after.baseElevation + after.height).toBe(2600)
+    // A Wall standing in a Sump pit keeps the same rule through the Floor Datum and below it.
+    const sunk = wallOn(-400, 3000)
+    const lowered = expectApplied(sunk.project, intent('wall.setVerticalExtent', { wallId: sunk.wall.id, field: 'bottom', value: -900 }))
+    const pit = lowered.project.existingModel.walls[0]!
+    expect(pit.baseElevation).toBe(-900)
+    expect(pit.height).toBe(3500)
+  })
+
   it('moves no reference-line point and leaves a hosted Opening alone (#74 §5)', () => {
     const wall0 = wallOn(0, 2600)
     const { project, opening } = windowIn(wall0.project, wall0.wall)
@@ -208,6 +223,8 @@ describe('wall.setVerticalExtent', () => {
     expect(under.problems[0]!.message).toBe('The top has to be above the base.')
     const blank = expectRejection(project, intent('wall.setVerticalExtent', { wallId: wall.id, field: 'base', value: Number.NaN }), 'invalid-extent')
     expect(blank.problems[0]!.message).toBe('Enter a number.')
+    const through = expectRejection(project, intent('wall.setVerticalExtent', { wallId: wall.id, field: 'bottom', value: 2600 }), 'invalid-extent')
+    expect(through.problems[0]!.message).toBe('The bottom has to be below the top.')
   })
 
   it('undoes to the Project it started from', () => {
@@ -241,6 +258,19 @@ describe('opening.setVerticalExtent', () => {
     const lowered = expectApplied(project, intent('opening.setVerticalExtent', { openingId: opening.id, field: 'top', value: 2200 }))
     expect(lowered.project.existingModel.openings[0]!.head).toBe(2200)
     expect(lowered.project.existingModel.openings[0]!.sill).toBe(900)
+  })
+
+  it('lowers the sill and holds the head for the Elevation View bottom handle (#75 §6 behaviour 11)', () => {
+    const wall0 = wallOn(0, 2600)
+    const { project, opening } = windowIn(wall0.project, wall0.wall)
+    const applied = expectApplied(project, intent('opening.setVerticalExtent', { openingId: opening.id, field: 'bottom', value: 550 }))
+    const after = applied.project.existingModel.openings[0]!
+    expect(after.sill).toBe(550)
+    expect(after.head).toBe(2100)
+    expect(after.head - after.sill).toBe(1550)
+    const through = expectRejection(project, intent('opening.setVerticalExtent', { openingId: opening.id, field: 'bottom', value: 2100 }), 'invalid-extent')
+    expect(through.problems[0]!.message).toBe('The bottom has to be below the top.')
+    expectRoundTrip(project, intent('opening.setVerticalExtent', { openingId: opening.id, field: 'bottom', value: 550 }))
   })
 
   it('refuses a top at or below the sill and a height of 0 (#74 §5 criterion 5)', () => {

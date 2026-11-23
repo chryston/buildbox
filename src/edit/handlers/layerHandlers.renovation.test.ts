@@ -10,7 +10,7 @@
  * override that says the default in other words has to be absent, not present-and-default.
  */
 import { describe, expect, it } from 'vitest'
-import { withPlanViewRanges } from '../../domain/testing'
+import { withElevationViews, withPlanViewRanges } from '../../domain/testing'
 import layersFixture from '../../../fixtures/domain/v7/rooms.json?raw'
 import type { DesignOption, DrawingLayer, PlacedItem, Project, Wall } from '../../domain'
 import { validateProject } from '../../domain'
@@ -18,7 +18,7 @@ import { canonicalJson } from '../../lib'
 import { applyIntent, intentIdCount, intentLabel, previewIntent } from '../index'
 import { expectRoundTrip, intent } from '../testing'
 
-const base = withPlanViewRanges((JSON.parse(layersFixture) as { project: Project }).project)
+const base = withElevationViews(withPlanViewRanges((JSON.parse(layersFixture) as { project: Project }).project))
 
 const SHELL = 'layer-shell'
 const SOFT = 'layer-soft'

@@ -90,9 +90,8 @@ other files use. The step adds one Project field, `designOptions`, and this is t
 carries a non-empty pair of them: `Option A` and `Option B`, each proposing nothing, beside six
 Walls, three Openings, two Rooms and one Placed Item.
 
-v8 is the current schema. `DOMAIN_SCHEMA_VERSION` is 8 in every build since #73 turned the
-renovation model on, so `src/domain/fixtures.test.ts` reads this folder to the end and holds this
-file as the version's golden.
+v8 was the current schema from #69 to #73. `src/domain/fixtures.test.ts` still reads this folder to
+the end, so every file in it is proof that the chain reads a Project saved before this build existed.
 
 `v8/renovation-views.json` is the same Project with the renovation work in it, drawn by
 `scripts/make-renovation-views-seed.ts` through the Intents the app dispatches, and carried by
@@ -103,6 +102,16 @@ Displays are named by. The Island is the one record in the file no Intent drew �
 places new work into an Option — so the script writes it as a domain record and the validator is what
 proves it is a legal one. It is the scene `#70`'s Displays, cycle and screenshots stand on, and the
 one the empty pair of Options above is the *before* state of.
+
+## `v9/` and `v10/` — the carried-forward goldens (#74, #75)
+
+Neither folder holds a new scene. `scripts/make-v9-fixtures.ts` and `scripts/make-v10-fixtures.ts`
+read each file of the schema below it through `migrateProject` and write it out at the new schema, so
+the only difference a carry-forward makes is the field the step adds: the Plan View Range on every
+Plan View for v9, and the empty `elevationViews` list for v10 — an Elevation View is always a view a
+person made, so no carry-forward invents one. `v10/` is what `DOMAIN_SCHEMA_VERSION` is 10 names as
+current, and `v9/plan-range-scene.json`, `v9/renovation.json` and their neighbours stay committed as
+the evidence that a Project saved at the ninth schema still opens.
 
 ## How it was produced
 

@@ -16,6 +16,7 @@ import { FLOOR_HANDLERS, PLAN_FLOOR_HANDLERS, VIEW_HANDLERS } from './handlers/f
 import { LAYER_HANDLERS } from './handlers/layerHandlers'
 import { OPENING_HANDLERS } from './handlers/openingHandlers'
 import { PASTE_HANDLERS } from './handlers/pasteHandlers'
+import { ELEVATION_HANDLERS } from './handlers/elevationHandlers'
 import { PLAN_HANDLERS } from './handlers/planHandlers'
 import { PROJECT_HANDLERS } from './handlers/projectHandlers'
 import { RENOVATION_EDIT_HANDLERS } from './handlers/renovationEdits'
@@ -53,6 +54,7 @@ export const INTENT_HANDLERS: { [T in S7IntentType]: IntentHandler<T> } & {
   ...CORRECTION_HANDLERS,
   ...LAYER_HANDLERS,
   ...PASTE_HANDLERS,
+  ...ELEVATION_HANDLERS,
 }
 
 /** Every Intent type the catalogue answers — the list #48's undo menu and #66 read. */

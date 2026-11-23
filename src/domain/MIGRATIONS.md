@@ -171,6 +171,36 @@ BuildBox"** and writes nothing (#20 §5). Old Backups are unaffected: v1 through
 the step that runs on the way in adds one pair of numbers per view and changes no measurement, no
 entity and no existing value.
 
+## What v10 holds (#75)
+
+One thing, an addition to the Project itself:
+
+* `elevationViews`, the saved **Elevation Views** of the Project (#75 §1) — each one a view line, the
+  side of it it looks from and how far it looks, plus the same Design Option, Renovation Display and
+  layer settings every saved view carries.
+
+`migrateV9toV10` writes the empty list and nothing else. It reads no clock, mints no ID and touches no
+entity, because an Elevation View is always one a person made: inventing a view of the longest Wall
+would be a drawing of something nobody asked to look at. A record that already carries the list comes
+back as the same object it arrived as, so the step is idempotent and a v10 file is untouched by it.
+
+Existing Projects are unaffected in every other way. A Plan View is unchanged — the six settings it
+shares with an Elevation View moved into one interface both kinds extend (`SavedViewSettings`), which
+is a type-level fact and not a change to what is written down — and a Project with no Elevation Views
+draws, measures and saves exactly as it did at v9.
+
+The strict validator refuses an Elevation View with a view line of no length, a depth of zero or less,
+a Floor that does not exist, a name its Floor's Elevation Views already use, and every saved-view
+problem a Plan View is refused for. Nothing about what a view *shows* is stored: which entities are
+inside the prism, where they land and in what order they are drawn are derived on the way to the
+canvas and never written down.
+
+**A Backup made by this version cannot be opened by an older one.** It is domain schema v10, and a
+build that stops at v9 has no tenth step to read it with, so it answers **"saved by a newer
+BuildBox"** and writes nothing (#20 §5). Old Backups are unaffected: v1 through v9 still open, and the
+step that runs on the way in adds one empty list and changes no measurement, no entity and no existing
+value.
+
 ## What this release means for a reader (#73)
 
 In plain words:

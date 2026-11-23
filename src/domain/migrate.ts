@@ -21,13 +21,15 @@ import { validateProject } from './validate'
 /**
  * The domain schema this build writes and understands at the top of the chain.
  *
- * The ninth step (#74 §1) is the Plan View Range: every saved view gains the height it draws at.
- * The eighth before it (#69 §1, #73) is the renovation model: Design Options, the Drawing Layers every
- * Project starts with, and the four settings a saved view gained. A Project saved by an older build
- * carries `schemaVersion: 8` and comes up the chain; a Project saved by a newer one is refused as
- * `newer-schema` rather than opened and quietly stripped of its Design Options.
+ * The tenth step (#75 §1) is the Elevation View: the Project gains the list of saved sideways looks,
+ * empty for every Project that predates them. The ninth before it (#74 §1) is the Plan View Range:
+ * every saved view gains the height it draws at. The eighth (#69 §1, #73) is the renovation model:
+ * Design Options, the Drawing Layers every Project starts with, and the four settings a saved view
+ * gained. A Project saved by an older build carries `schemaVersion: 9` and comes up the chain; a
+ * Project saved by a newer one is refused as `newer-schema` rather than opened and quietly stripped
+ * of its Elevation Views.
  */
-export const DOMAIN_SCHEMA_VERSION = 9
+export const DOMAIN_SCHEMA_VERSION = 10
 
 /**
  * One pure vN → vN+1 step. Its input is already a copy; it never reads the clock, and a
@@ -38,8 +40,8 @@ export type Migrator = (data: unknown, allocateId: IdAllocator) => unknown
 /**
  * `MIGRATORS[i]` migrates v(i+1) → v(i+2), so index 0 is v1 → v2.
  *
- * Nine steps, the last of which is the Plan View Range (#74) and the one before it the renovation
- * model (#69, #71, #73).
+ * Ten steps, the last of which is the Elevation View list (#75), the one before it the Plan View
+ * Range (#74) and the one before that the renovation model (#69, #71, #73).
  */
 export const MIGRATORS: readonly Migrator[] = [
   migrateV1toV2,
@@ -50,6 +52,7 @@ export const MIGRATORS: readonly Migrator[] = [
   migrateV6toV7,
   migrateV7toV8,
   migrateV8toV9,
+  migrateV9toV10,
 ]
 
 /**
@@ -336,6 +339,22 @@ export function migrateV8toV9(data: unknown): unknown {
     ...record,
     views: views.map((view) => (needsRange(view) ? { ...view, planViewRange: rangeForView(view, defaults) } : view)),
   }
+}
+
+/**
+ * v9 → v10 (#75 §1): the Project gains `elevationViews`, and every Floor keeps the views it has.
+ *
+ * The list is empty for every Project that arrives, because an Elevation View is always one a person
+ * made — there is nothing to invent for them, and inventing a view of the longest Wall would be a
+ * drawing of something nobody asked to look at. The step reads no clock and mints no ID, and a record
+ * that already carries the list comes back as the same object it arrived as, so the step is idempotent
+ * and a v10 file is untouched by it.
+ */
+export function migrateV9toV10(data: unknown): unknown {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return data
+  const record = data as Record<string, unknown>
+  if (Array.isArray(record.elevationViews)) return data
+  return { ...record, elevationViews: [] }
 }
 
 /** A saved view that has no Plan View Range yet. */

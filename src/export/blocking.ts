@@ -10,11 +10,17 @@
  * Only the predicate is here; the sentence the dialog shows is `ui/strings`' copy, in the same table
  * as the banner the workspace shows for the same missing Option.
  */
-import type { PlanView } from '../domain'
+import type { SavedView } from '../domain'
 import { viewDesignOptionId, viewRenovationDisplay } from '../domain'
 
 
-/** Whether this view's Display cannot be exported because it has no Design Option to display. */
-export function needsActiveOption(view: PlanView): boolean {
+/**
+ * Whether this view's Display cannot be exported because it has no Design Option to display.
+ *
+ * An Elevation View is a saved view with the same two settings, so it is blocked by exactly the same
+ * rule: a sheet that showed the Existing Model while the view claimed to show a Design Option would
+ * be a different drawing from the one on the screen.
+ */
+export function needsActiveOption(view: SavedView): boolean {
   return viewDesignOptionId(view) === null && viewRenovationDisplay(view) !== 'existing'
 }

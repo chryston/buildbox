@@ -9,6 +9,7 @@ import {
   migrateV1toV2,
   migrateV3toV4,
   migrateV4toV5,
+  migrateV9toV10,
   rectangleFootprint,
   runMigrationChain,
   type IdAllocator,
@@ -71,8 +72,9 @@ function v1Project(): Record<string, unknown> {
 
 /**
  * The additions the chain has to make on the way to this build's schema — the empty Design Option
- * list, the Drawing Layers, the filing of the content on them, and the four view fields (#69, #71,
- * #73) — taken back out, so a step's own work can be compared with the record it started from.
+ * list, the Drawing Layers, the filing of the content on them, the four view fields (#69, #71, #73)
+ * and the empty Elevation View list (#75) — taken back out, so a step's own work can be compared with
+ * the record it started from.
  *
  * Every record these tests feed in predates v8, so nothing stripped here was ever in the input.
  */
@@ -83,7 +85,7 @@ function withoutTheStep(project: unknown): unknown {
   }
   const unfiled = (entries: unknown): unknown =>
     Array.isArray(entries) ? entries.map((entry) => drop(entry, 'drawingLayerId')) : entries
-  const record = drop(project, 'designOptions', 'drawingLayers') as Record<string, unknown>
+  const record = drop(project, 'designOptions', 'drawingLayers', 'elevationViews') as Record<string, unknown>
   const model = record.existingModel
   const views = record.views
   return {
@@ -103,9 +105,9 @@ function withoutTheStep(project: unknown): unknown {
 
 describe('DOMAIN_SCHEMA_VERSION', () => {
   it('is the version this build writes', () => {
-    // v8 is production: the renovation model shipped, so the number the chain ends at and the number
-    // this build writes are the same one (#73).
-    expect(DOMAIN_SCHEMA_VERSION).toBe(9)
+    // v10 is production: the Elevation View shipped, so the number the chain ends at and the number
+    // this build writes are the same one (#73, #75).
+    expect(DOMAIN_SCHEMA_VERSION).toBe(10)
   })
 })
 
@@ -609,5 +611,76 @@ describe('migrateV6toV7 — a Project gains its Rooms (#67)', () => {
     // Migrators run before the validator, so they see whatever a damaged file held.
     expect(migrateProject({ existingModel: null }, 6, allocator()).ok).toBe(false)
     expect(migrateProject({}, 6, allocator()).ok).toBe(false)
+  })
+})
+
+describe('migrateV9toV10 — a Project gains its Elevation Views (#75)', () => {
+  /** The same Project as its v9 twin: Plan Views named, no sideways view thought of yet. */
+  function v9Record(): Record<string, unknown> {
+    const record: Record<string, unknown> = { ...validProject() }
+    delete record.elevationViews
+    return record
+  }
+
+  it('adds the empty Elevation View list, and spends no IDs of its own', () => {
+    const asked: number[] = []
+    const result = migrateProject(v9Record(), 9, (count) => {
+      asked.push(count)
+      return allocator()(count)
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    // Nothing past v9 invents an ID: an Elevation View is always one the user made, so the field
+    // arrives empty and stays empty until a transaction writes one.
+    expect(asked).toEqual([])
+    expect(result.project.elevationViews).toEqual([])
+    const prior = v9Record() as Record<string, unknown>
+    expect(withoutTheStep({ ...result.project, ...prior })).toEqual(prior)
+  })
+
+  it('leaves a v10 Project exactly as it found it', () => {
+    const migrated = migrateProject(v9Record(), 9, allocator())
+    expect(migrated.ok).toBe(true)
+    if (!migrated.ok) return
+    const again = migrateProject(migrated.project, 9, allocator())
+    expect(again.ok && again.project).toEqual(migrated.project)
+  })
+
+  it('keeps the Elevation Views a record already carries', () => {
+    // A migrator that overwrote the list it was only meant to add would silently delete somebody's
+    // Elevation Views — the one thing this step could get wrong.
+    const carried: Project = {
+      ...validProject(),
+      elevationViews: [
+        {
+          id: 'elev-1',
+          kind: 'elevation',
+          floorId: 'floor-0',
+          name: 'Kitchen elevation',
+          line: { start: { x: 0, y: 1400 }, end: { x: 4000, y: 1400 } },
+          side: 'left',
+          depth: 2000,
+        },
+      ],
+    }
+    const result = migrateProject(carried, 9, allocator())
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.project).toEqual(carried)
+  })
+
+  it('hands back the record itself when the field is already there', () => {
+    // Identity, not equality: the step copies nothing when there is nothing to add, so a Project that
+    // has already been through it costs nothing to run through it again.
+    const carried = { elevationViews: [] }
+    expect(migrateV9toV10(carried)).toBe(carried)
+    expect(migrateV9toV10({})).toEqual({ elevationViews: [] })
+  })
+
+  it('adds the field to a record that is not a Project shape, without crashing', () => {
+    // Migrators run before the validator, so they see whatever a damaged file held.
+    expect(migrateProject({}, 9, allocator()).ok).toBe(false)
+    expect(migrateV9toV10(null)).toBeNull()
+    expect(migrateV9toV10([{ id: 'elev-1' }])).toEqual([{ id: 'elev-1' }])
   })
 })

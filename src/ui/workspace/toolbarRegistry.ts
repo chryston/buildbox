@@ -94,6 +94,17 @@ export const WORKSPACE_TOOLS: readonly WorkspaceToolDefinition[] = [
     // Plan View draws, at the size a 24-unit button holds.
     icon: 'M2 12 H7 M17 12 H22 M7 12 V4 M7 4 A8 8 0 0 1 15 12',
   },
+  {
+    id: 'elevation',
+    label: STRINGS.newElevationView,
+    testId: 'tool-elevation',
+    // The view line is two places on the Floor, so it writes millimetres like a Wall does and waits
+    // for the same calibration (#75 §3). What it makes is a way of looking rather than model
+    // content, which is why the Renovation Display never takes the tool away.
+    requiresCalibratedFloor: true,
+    // The view line, the arrow into the band, the far edge: the marker the plan draws for a view.
+    icon: 'M3 16 H17 M10 16 V8 M7 11 L10 8 L13 11 M3 5 H17',
+  },
 ]
 
 /**

@@ -50,8 +50,8 @@ import type {
 } from '../ui'
 import type { PrefsRepository } from '../persistence'
 import type { ProjectSession } from '../session'
-import type { PlanView, Project } from '../domain'
-import { designOptionsOf, viewRenovationDisplay } from '../domain'
+import type { Project, SavedView } from '../domain'
+import { designOptionsOf, elevationViewsOf, savedViewById, viewRenovationDisplay } from '../domain'
 
 export interface ExportPortDeps {
   /**
@@ -182,8 +182,16 @@ function assetHashes(project: Project, views: readonly RecipeViewRef[]): string[
  * since the recipe was remembered. Everything the dialog asks about a view answers `null` rather
  * than guessing: no chips, no composition, no blocking, and a scope of the Existing Model alone.
  */
-function planViewOf(project: Project, ref: RecipeViewRef): PlanView | null {
-  return ref.kind === 'plan' ? project.views.find((each) => each.id === ref.viewId) ?? null : null
+/**
+ * The saved view a Recipe points at, Plan View or Elevation View, or null when the Recipe points at an
+ * Item Design — which is not a view of a Floor and has no layers, no Display and no Option.
+ *
+ * An Elevation View is addressed by ID alone, exactly as a Plan View is: the two collections share one
+ * ID space, so a Recipe that named a kind as well as an ID would only add a way to be wrong.
+ */
+function savedViewOf(project: Project, ref: RecipeViewRef): SavedView | null {
+  if (ref.kind === 'item-detail') return null
+  return savedViewById(project, ref.viewId)
 }
 
 export function createExportPort(deps: ExportPortDeps): ExportPort {
@@ -287,12 +295,20 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
         label: view.name,
         group: floorName(view.floorId),
       }))
+      // An Elevation View is a drawing of the Floor like any other, so it is picked from the same list
+      // and grouped under the same Floor (#75 §8). Its name is its own, and two views of one Floor can
+      // share it — which is what the group is for.
+      const elevations: ExportableView[] = elevationViewsOf(project).map((view) => ({
+        ref: { kind: 'elevation', viewId: view.id },
+        label: view.name,
+        group: floorName(view.floorId),
+      }))
       const details: ExportableView[] = project.itemDesigns.map((design) => ({
         ref: { kind: 'item-detail', itemDesignId: design.id },
         label: design.name,
         group: 'Item Design',
       }))
-      return [...planViews, ...details]
+      return [...planViews, ...elevations, ...details]
     },
 
     async measure(ref: RecipeViewRef): Promise<ExportMeasurement> {
@@ -364,7 +380,7 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
     async listsOptions(origin: RecipeViewRef): Promise<ListsOptions> {
       const project = deps.session().getSnapshot().project
       const { defaultListsScope, drawingLayerChips } = await import('../export')
-      const view = planViewOf(project, origin)
+      const view = savedViewOf(project, origin)
       return {
         floors: project.floors.map((floor) => ({ id: floor.id, label: floor.name })),
         designOptions: designOptionsOf(project).map((option) => ({ id: option.id, label: option.name })),
@@ -378,13 +394,13 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
     async drawingLayers(ref: RecipeViewRef): Promise<readonly DrawingLayerChip[]> {
       const { drawingLayerChips } = await import('../export')
       const project = deps.session().getSnapshot().project
-      return drawingLayerChips(project, planViewOf(project, ref))
+      return drawingLayerChips(project, savedViewOf(project, ref))
     },
 
     async composition(ref: RecipeViewRef, toggles: DrawingToggles): Promise<RecordedComposition | null> {
       const { drawingComposition } = await import('../export')
       const project = deps.session().getSnapshot().project
-      const view = planViewOf(project, ref)
+      const view = savedViewOf(project, ref)
       // An Item Detail View has no layers and no Display: its sheet is one elevation of one design,
       // so the Drawing tab shows no composition block for it rather than an empty one.
       return view === null ? null : drawingComposition(project, view, view.floorId, toggles).recorded
@@ -394,7 +410,7 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
       const { needsActiveOption } = await import('../export')
       const project = deps.session().getSnapshot().project
       for (const ref of refs) {
-        const view = planViewOf(project, ref)
+        const view = savedViewOf(project, ref)
         if (view !== null && needsActiveOption(view)) {
           return { viewId: view.id, viewName: view.name, display: viewRenovationDisplay(view) }
         }

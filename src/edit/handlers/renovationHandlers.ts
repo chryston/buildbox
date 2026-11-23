@@ -11,11 +11,11 @@
  * is edited by `wall.setThickness` and not by a second family of handlers that fork on which
  * container a record lives in.
  */
-import { designOptionsOf, nameKey, viewDesignOptionId } from '../../domain'
+import { designOptionsOf, nameKey, savedViewsOf, viewDesignOptionId } from '../../domain'
 import type { DesignOption, EntityId, Project } from '../../domain'
 import type { DeleteDesignOptionReview, Locator, RenovationIntentType } from '../intents'
 import type { Handler, IntentHandler } from './context'
-import { refuse, spendIds } from './support'
+import { refuse, savedViewPath, spendIds } from './support'
 
 /**
  * The Option half of the renovation set, plus the two saved-view settings of #70 §1. The edit table
@@ -152,18 +152,19 @@ const deleteOption: Handler<'designOption.delete'> = (ctx) => {
   // (#70 §1, criterion 11) — same transaction, so one undo brings the Option back *with* the
   // references, and no view is ever left naming an Option that no longer exists. A view that never
   // named it is not written at all, so its bytes are untouched.
-  for (const view of ctx.draft.views) {
+  for (const view of savedViewsOf(ctx.draft)) {
     if (viewDesignOptionId(view) === optionId) view.designOptionId = null
   }
 }
 
 /**
- * The saved view whose setting is being changed. A view is addressed by id alone, because a Plan
- * View is a Project-level record that names its Floor (#56).
+ * The saved view whose setting is being changed. A view is addressed by id alone, because a saved
+ * view is a Project-level record that names its Floor (#56) — and since #75 that record may be an
+ * Elevation View, which takes a Design Option and a Renovation Display exactly as a Plan View does.
  */
 function requireView(draft: Project, viewId: EntityId) {
-  const view = draft.views.find((candidate) => candidate.id === viewId)
-  if (view === undefined) refuse('unknown-target', `views[${viewId}]`, `There is no saved view ${viewId} to change.`)
+  const view = savedViewsOf(draft).find((candidate) => candidate.id === viewId)
+  if (view === undefined) refuse('unknown-target', savedViewPath(draft, viewId), `There is no saved view ${viewId} to change.`)
   return view
 }
 
@@ -205,7 +206,7 @@ const setViewRenovationDisplay: Handler<'view.setRenovationDisplay'> = (ctx) => 
  * of a card click legible. The navigation is the Locator's answer, never a history step of its own.
  */
 function viewSettingLocator(project: Project, intent: { payload: { viewId: EntityId } }): Locator {
-  const view = project.views.find((candidate) => candidate.id === intent.payload.viewId)
+  const view = savedViewsOf(project).find((candidate) => candidate.id === intent.payload.viewId)
   return {
     floorId: view?.floorId ?? null,
     viewId: intent.payload.viewId,

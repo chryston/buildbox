@@ -152,7 +152,7 @@ export function renderWithBindings(
     readPlanImage: () => Promise.reject(new Error('jsdom models no file reader')),
     planImageAccept: PLAN_IMAGE_ACCEPT,
     planCatalogue: [{ key: 'sofa-2', label: 'Sofa 2-seater' }],
-    viewportCache: { read: async () => undefined, write: () => {}, readActive: async () => null, writeActive: () => {} },
+    viewportCache: { read: async () => undefined, write: () => {}, readActive: async () => null, writeActive: () => {}, readPane: async () => null, writePane: () => {} },
     exportDrawings: TEST_EXPORT_PORT,
   }
   const result = render(

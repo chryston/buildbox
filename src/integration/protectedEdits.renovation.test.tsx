@@ -77,6 +77,8 @@ function servicesFor(view: TestView): WorkspaceServices {
       write: () => {},
       readActive: async () => null,
       writeActive: () => {},
+    readPane: async () => null,
+    writePane: () => {},
     },
     exportDrawings: TEST_EXPORT_PORT,
   }

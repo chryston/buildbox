@@ -179,6 +179,16 @@ export interface PrefsMap {
    * Floor. View state like the viewport above — never in the document, never in a Backup.
    */
   [key: `activeView:${string}`]: { floorId: string | null; viewsByFloor: Record<string, string> }
+  /**
+   * #75: how the workspace's two panes were last arranged — the split's share, the Elevation View
+   * open on each Floor, and whether one pane was shown alone. View state like the two above: never
+   * in the document, never in a Backup, and losing it costs one drag.
+   */
+  [key: `paneState:${string}`]: {
+    ratio: number
+    elevationByFloor: Record<string, string>
+    alone: 'plan' | 'elevation' | null
+  }
   exportRecipes: unknown[]
   /**
    * #62: the Lists tab's recipe, remembered per Project and saved view. Opaque for the same

@@ -168,7 +168,9 @@ const setPlacementVerticalExtent: Handler<'plan.setPlacementVerticalExtent'> = (
   if (design === undefined) {
     refuse('unknown-target', placedPath(placedItemId), 'This item has no item design to take a height from.')
   }
-  requireExtentValue(field, value, `${placedPath(placedItemId)}.baseElevation`, placement.baseElevation)
+  // A Placed Item owns no top of its own — its Item Design's height sits on the base — and it has no
+  // `bottom` field to check against one, so there is no top for the check to hold.
+  requireExtentValue(field, value, `${placedPath(placedItemId)}.baseElevation`, placement.baseElevation, null)
   requirePlacement(ctx.draft, placedItemId).baseElevation =
     field === 'base' ? value : value - designHeight(design)
 }

@@ -21,11 +21,12 @@ import {
   drawingLayerById,
   drawingLayersOf,
   nameKey,
+  savedViewsOf,
 } from '../../domain'
-import type { DrawingLayer, EntityId, PlanView, Project, ProposedModel } from '../../domain'
+import type { DrawingLayer, EntityId, Project, ProposedModel, SavedViewSettings } from '../../domain'
 import type { DeleteLayerReview, Locator, RenovationIntentType } from '../intents'
 import type { Handler, IntentHandler } from './context'
-import { containerOf, findDesign, refuse, spendIds } from './support'
+import { containerOf, findDesign, refuse, savedViewPath, spendIds } from './support'
 
 /** The layer half of the renovation set. */
 type LayerIntentType = Extract<
@@ -71,10 +72,17 @@ export const LAYER_INTENT_LABELS: { [T in LayerIntentType]: string } = {
 /** A colour the canvas can use: six lowercase hex digits, the form the validator accepts. */
 const COLOR = /^#[0-9a-f]{6}$/
 
-/** The saved view whose setting is being changed. */
-function requireView(draft: Project, viewId: EntityId): PlanView {
-  const view = draft.views.find((candidate) => candidate.id === viewId)
-  if (view === undefined) refuse('unknown-target', `views[${viewId}]`, `There is no saved view ${viewId} to change.`)
+/**
+ * The saved view whose setting is being changed, of either kind (#75 §3).
+ *
+ * A Layer setting, the active Layer, snapping to hidden content, a Design Option and a Renovation
+ * Display say the same thing about an Elevation View as they do about a Plan View, so one Intent
+ * reaches both. What stays Plan-View-only is the Vertical Range and the Plan Image, and those live in
+ * `floorHandlers`, which looks in the Plan View list alone.
+ */
+function requireView(draft: Project, viewId: EntityId): SavedViewSettings {
+  const view = savedViewsOf(draft).find((candidate) => candidate.id === viewId)
+  if (view === undefined) refuse('unknown-target', savedViewPath(draft, viewId), `There is no saved view ${viewId} to change.`)
   return view
 }
 
@@ -112,7 +120,7 @@ const projectLocator = (): Locator => ({ floorId: null, viewId: null, view: 'pla
  * back on the view whose layer list it put right.
  */
 function viewSettingLocator(project: Project, intent: { payload: { viewId: EntityId } }): Locator {
-  const view = project.views.find((candidate) => candidate.id === intent.payload.viewId)
+  const view = savedViewsOf(project).find((candidate) => candidate.id === intent.payload.viewId)
   return {
     floorId: view?.floorId ?? null,
     viewId: intent.payload.viewId,
@@ -136,7 +144,7 @@ const addLayer: Handler<'layer.add'> = (ctx) => {
   // A view with an order of its own holds a full order, so the new layer joins each of them at the
   // same place it joined the Project's — the front. A view that follows the Project has nothing to
   // write, and gets it for free.
-  for (const view of ctx.draft.views) if (view.layerOrder !== undefined && view.layerOrder !== null) view.layerOrder.push(layerId)
+  for (const view of savedViewsOf(ctx.draft)) if (view.layerOrder !== undefined && view.layerOrder !== null) view.layerOrder.push(layerId)
 }
 
 const renameLayer: Handler<'layer.rename'> = (ctx) => {
@@ -211,7 +219,7 @@ function reviewDeleteLayer(project: Project, layerId: EntityId, viewId: EntityId
   // A view is affected when it says something about this layer that the delete makes meaningless:
   // an override of its own, or an order of its own that names it.
   const affected = project.views.filter((view) => view.layerSettings?.[layerId] !== undefined || view.layerOrder !== undefined)
-  const view = viewId === null ? undefined : project.views.find((candidate) => candidate.id === viewId)
+  const view = viewId === null ? undefined : savedViewsOf(project).find((candidate) => candidate.id === viewId)
   // The question the dialog answers with this: content that comes back Unlayered is governed by the
   // Unlayered row from now on, and a hidden row means it stops being drawn in this view.
   const unlayeredHidden = view === undefined ? false : view.layerSettings?.[UNLAYERED_LAYER_KEY]?.visible === false
@@ -245,7 +253,7 @@ const deleteLayer: Handler<'layer.delete'> = (ctx) => {
       if (entry.record.drawingLayerId === layerId) entry.record.drawingLayerId = null
     }
   }
-  for (const view of ctx.draft.views) {
+  for (const view of savedViewsOf(ctx.draft)) {
     if (view.layerSettings?.[layerId] !== undefined) {
       delete view.layerSettings[layerId]
       // An empty map is the same statement as no map (#71 §3), so a view whose only override was for

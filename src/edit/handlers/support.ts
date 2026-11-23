@@ -8,7 +8,7 @@
  */
 import { findNode } from '../../cabinet'
 import { effectiveModel } from '../../derive'
-import { designOptionsOf } from '../../domain'
+import { designOptionsOf, elevationViewsOf } from '../../domain'
 import type { CabinetItemDesign, CabinetNode, EntityId, Floor, GenericItemDesign, ItemDesign, PlacedItem, ProposedModel, Project } from '../../domain'
 import { problem } from '../../lib'
 import type { ValidationProblem } from '../../lib'
@@ -76,6 +76,17 @@ export const designPath = (itemDesignId: EntityId): string => `itemDesigns[${ite
 export const placedPath = (placedItemId: EntityId): string => `existingModel.placedItems[${placedItemId}]`
 export const floorPath = (floorId: EntityId): string => `floors[${floorId}]`
 
+/**
+ * The path of one saved view, of either kind, in the validator's vocabulary (#75 §3).
+ *
+ * Three lookups accept a Plan View or an Elevation View by id alone, and a rejection that names the
+ * wrong collection sends a reader to the wrong half of the Project — so the one that has to say
+ * where it looked asks which list holds the id.
+ */
+export function savedViewPath(project: Project, viewId: EntityId): string {
+  return elevationViewsOf(project).some((view) => view.id === viewId) ? `elevationViews[${viewId}]` : `views[${viewId}]`
+}
+
 // --- Reading the Project ------------------------------------------------------
 
 export function findFloor(project: Project, floorId: EntityId): Floor | undefined {
@@ -118,14 +129,25 @@ export function requirePlacement(project: Project, placedItemId: EntityId): Plac
  * as one.
  *
  * `base` is checked only for being a number, because a Sump box stands at −150 mm and is right to:
- * the Floor Datum is a reference plane, not a floor to sit on. `height` has to be more than 0 and
- * `top` has to sit above the `base` the caller holds, since neither describes a band otherwise.
+ * the Floor Datum is a reference plane, not a floor to sit on. `height` has to be more than 0, `top`
+ * has to sit above the `base` the caller holds and `bottom` has to stay under the `top` it holds,
+ * since none of the three describes a band otherwise. A caller whose entity owns no top — a Placed
+ * Item, which has no `bottom` field to send — passes `null`.
  */
-export function requireExtentValue(field: VerticalExtentField, value: number, path: string, base: number | null): void {
+export function requireExtentValue(
+  field: VerticalExtentField,
+  value: number,
+  path: string,
+  base: number | null,
+  top: number | null,
+): void {
   if (!Number.isFinite(value)) refuse('invalid-extent', path, 'Enter a number.')
   if (field === 'height' && !(value > 0)) refuse('invalid-extent', path, 'A height has to be more than 0 mm.')
   if (field === 'top' && base !== null && !(value > base)) {
     refuse('invalid-extent', path, 'The top has to be above the base.')
+  }
+  if (field === 'bottom' && top !== null && !(value < top)) {
+    refuse('invalid-extent', path, 'The bottom has to be below the top.')
   }
 }
 

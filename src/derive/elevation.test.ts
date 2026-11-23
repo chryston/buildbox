@@ -1,0 +1,187 @@
+/**
+ * What the prism holds, and where it puts it (#75 §4, criteria 6, 9, 10, 13).
+ *
+ * The scene is the committed Elevation View fixture — the #74 Plan View Range scene with a `Tall
+ * cupboard` added outside the prism and two Elevation Views of the one Floor. Every number below is
+ * either read off the issue's own arithmetic, recomputed here from the view line's endpoints, or a
+ * number the fixture stores.
+ *
+ * The issue's definition is what is being tested, not this module's: `u` is the unit vector
+ * start→end, `n` the unit normal on the chosen side, the prism is the closed set
+ * `0 ≤ (p − start)·u ≤ L, 0 ≤ (p − start)·n ≤ depth`, and the horizontal coordinate is `(p − start)·u`.
+ * So the expectations spell that arithmetic out rather than calling the function that implements it.
+ */
+import { describe, expect, it } from 'vitest'
+import type { ElevationView, ItemDesign, PlacedItem } from '../domain'
+import type { Pt } from '../geometry'
+import { elevationScene } from './index'
+import { designOutline, worldPoint } from './placement'
+import { elevationScene as elevationSceneFixture } from './testing'
+
+const project = elevationSceneFixture()
+const view = (id: string): ElevationView => {
+  const found = (project.elevationViews ?? []).find((candidate) => candidate.id === id)
+  if (found === undefined) throw new Error('the fixture lost its Elevation View')
+  return found
+}
+const kitchen = (): ElevationView => view('el-004')
+const angled = (): ElevationView => view('el-005')
+
+/** The issue's arithmetic, spelled out for one view line and side. */
+function axes(at: Pt, to: Pt, side: 'left' | 'right'): { readonly s: (p: Pt) => number; readonly d: (p: Pt) => number; readonly length: number } {
+  const dx = to.x - at.x
+  const dy = to.y - at.y
+  const length = Math.hypot(dx, dy)
+  const u = { x: dx / length, y: dy / length }
+  const n = side === 'left' ? { x: u.y, y: -u.x } : { x: -u.y, y: u.x }
+  return { length, s: (p) => (p.x - at.x) * u.x + (p.y - at.y) * u.y, d: (p) => (p.x - at.x) * n.x + (p.y - at.y) * n.y }
+}
+
+/** The footprint corners of one Placement, in Floor millimetres, as the plan places them. */
+const cornersOf = (design: ItemDesign, placed: PlacedItem): Pt[] => {
+  const path = designOutline(design)
+  return [path.start, ...path.segments.map((segment) => segment.to)].map((corner) => worldPoint(design, placed, corner))
+}
+
+type Row = { readonly id: string; readonly kind: string; readonly name: string }
+
+const row = <T extends Row>(rows: readonly T[], id: string): T => {
+  const found = rows.find((candidate) => candidate.id === id)
+  if (found === undefined) throw new Error(`no row for ${id}`)
+  return found
+}
+const has = (rows: readonly Row[], id: string): boolean => rows.some((candidate) => candidate.id === id)
+
+describe('elevationScene (#75 criteria 6, 9, 10, 13)', () => {
+  it('projects the Kitchen elevation onto the axes the issue defines', () => {
+    const shown = elevationScene(project, kitchen())
+    expect(shown.length).toBe(4000)
+    expect(shown.frame.u).toEqual({ x: 1, y: 0 })
+    expect(shown.frame.n).toEqual({ x: 0, y: -1 })
+    expect(shown.floor?.id).toBe('pr-002')
+
+    // W-1 runs the whole width, 1 300 mm beyond the line, and is not crossed by it.
+    const wall = row(shown.rows, 'pr-017')
+    expect([wall.sMin, wall.sMax, wall.distance, wall.crossesLine]).toEqual([0, 4000, 1300, false])
+    expect([wall.zMin, wall.zMax]).toEqual([0, 2600])
+    expect(wall.kind).toBe('wall')
+    expect(wall.name).toBe('W-1')
+
+    // The window sits in that Wall, at its own height, and belongs to it.
+    const opening = row(shown.rows, 'pr-021')
+    expect([opening.sMin, opening.sMax, opening.distance]).toEqual([1500, 2700, 1300])
+    expect([opening.zMin, opening.zMax, opening.kind, opening.hostWallId]).toEqual([900, 2100, 'opening', 'pr-017'])
+    expect(opening.name).toBe('Window 1')
+  })
+
+  it('holds the Placements at their own distance and clips nothing they do not cross', () => {
+    const shown = elevationScene(project, kitchen())
+    const base = row(shown.rows, 'pr-005')
+    expect([base.sMin, base.sMax, base.distance, base.zMin, base.zMax, base.name]).toEqual([300, 900, 550, 0, 860, 'Base cabinet #1'])
+    expect([row(shown.rows, 'pr-016').sMin, row(shown.rows, 'pr-016').sMax, row(shown.rows, 'pr-016').name]).toEqual([1100, 1700, 'Base cabinet #2'])
+    expect([row(shown.rows, 'pr-011').sMin, row(shown.rows, 'pr-011').zMin, row(shown.rows, 'pr-011').zMax]).toEqual([300, 1500, 2200])
+    // A Placement below the Floor Datum keeps its negative height: the view has no section plane.
+    expect([row(shown.rows, 'pr-014').zMin, row(shown.rows, 'pr-014').zMax]).toEqual([-150, -50])
+  })
+
+  it('marks the content the view line runs through, and only that (#75 criterion 13)', () => {
+    const shown = elevationScene(project, kitchen())
+    // W-2 and W-4 stand across the two ends of the line: their bodies straddle d = 0.
+    const east = row(shown.rows, 'pr-018')
+    const west = row(shown.rows, 'pr-020')
+    expect([east.crossesLine, east.distance, east.sMin, east.sMax]).toEqual([true, 0, 3900, 4000])
+    expect([west.crossesLine, west.distance, west.sMin, west.sMax]).toEqual([true, 0, 0, 100])
+    expect(row(shown.rows, 'pr-017').crossesLine).toBe(false)
+    expect(row(shown.rows, 'pr-005').crossesLine).toBe(false)
+  })
+
+  it('leaves out what the prism does not hold, and takes it back when the prism moves (#75 criterion 9)', () => {
+    const shown = elevationScene(project, kitchen())
+    // W-3 and the Tall cupboard stand on the far side of the line, which is behind the viewer.
+    expect(has(shown.rows, 'pr-019')).toBe(false)
+    expect(has(shown.rows, 'el-002')).toBe(false)
+    expect(shown.rows.filter((each) => each.kind === 'item')).toHaveLength(4)
+
+    // The same line moved 1 200 mm into the room holds the Tall cupboard 200 mm beyond it and
+    // leaves W-1 — now 2 600 mm away, past the depth — out. Nothing else about the view changed.
+    const moved = elevationScene(project, { ...kitchen(), line: { start: { x: 0, y: 2900 }, end: { x: 4000, y: 2900 } } })
+    const cupboard = row(moved.rows, 'el-002')
+    const placed = project.existingModel.placedItems.find((each) => each.id === 'el-002')!
+    const design = project.itemDesigns.find((each) => each.id === placed.itemDesignId)!
+    const { d } = axes({ x: 0, y: 2900 }, { x: 4000, y: 2900 }, 'left')
+    expect(cupboard.distance).toBeCloseTo(Math.min(...cornersOf(design, placed).map(d)), 2)
+    expect(cupboard.crossesLine).toBe(false)
+    expect(has(moved.rows, 'pr-017')).toBe(false)
+  })
+
+  it('includes content touching the far edge exactly, and clips at the view edge (#75 criterion 10)', () => {
+    // W-1 is 1 300 mm from the line: a depth of exactly 1 300 holds it, a micron less does not.
+    expect(has(elevationScene(project, { ...kitchen(), depth: 1300 }).rows, 'pr-017')).toBe(true)
+    expect(has(elevationScene(project, { ...kitchen(), depth: 1299.999 }).rows, 'pr-017')).toBe(false)
+
+    // A view line that stops short of W-1's ends draws the part of it it stands in front of.
+    const short = elevationScene(project, { ...kitchen(), line: { start: { x: 1000, y: 1400 }, end: { x: 3000, y: 1400 } } })
+    expect([short.length, row(short.rows, 'pr-017').sMin, row(short.rows, 'pr-017').sMax]).toEqual([2000, 0, 2000])
+    // The window is 1 500–2 700 along the Wall, so 500–1 700 along this shorter line.
+    expect([row(short.rows, 'pr-021').sMin, row(short.rows, 'pr-021').sMax]).toEqual([500, 1700])
+  })
+
+  it('projects a view line at 29.86° to the plan axes to a hundredth of a millimetre (#75 criterion 6)', () => {
+    const shown = elevationScene(project, angled())
+    const at = { x: 400, y: 200 }
+    const to = { x: 2598, y: 1460 }
+    const { s, length } = axes(at, to, 'right')
+    expect(shown.length).toBeCloseTo(length, 6)
+
+    // `Base cabinet #2` stands at (1 400, 600). Its band is the issue's own arithmetic over the
+    // footprint the plan places there: the least and greatest of (p − start)·u over its corners,
+    // and its distance the least of (p − start)·n.
+    const placed = project.existingModel.placedItems.find((each) => each.id === 'pr-016')!
+    const design = project.itemDesigns.find((each) => each.id === placed.itemDesignId)!
+    const along = cornersOf(design, placed).map(s)
+    const item = row(shown.rows, 'pr-016')
+    expect(item.sMin).toBeCloseTo(Math.max(0, Math.min(...along)), 2)
+    expect(item.sMax).toBeCloseTo(Math.min(shown.length, Math.max(...along)), 2)
+    expect(item.sMin).toBeGreaterThanOrEqual(0)
+    expect(item.sMax).toBeLessThanOrEqual(shown.length)
+    // Its distance is the least of (p − start)·n over the part of it the prism holds, which is 0
+    // for a Placement the view line runs through and never less than 0 for anything it does not.
+    expect(item.distance).toBeGreaterThanOrEqual(0)
+
+    // The two Walls the angled prism holds are the two it stands in front of.
+    expect(has(shown.rows, 'pr-019')).toBe(true)
+    expect(has(shown.rows, 'pr-020')).toBe(true)
+    expect(has(shown.rows, 'pr-017')).toBe(false)
+    expect(has(shown.rows, 'pr-018')).toBe(false)
+    // W-3 is the Wall along y = 3 000, 200 mm thick. Its nearest face would be 1 500 mm from this
+    // line at x = 4 000, but that corner lies beyond the end of the view line (s = 4 465 > 2 533),
+    // so the nearest point the prism holds is where the face crosses s = L: 1 659.82 mm.
+    expect(row(shown.rows, 'pr-019').distance).toBeCloseTo(1659.8233173336532, 6)
+  })
+
+  it('flipping the side looks the other way and sees the Wall behind the viewer', () => {
+    const shown = elevationScene(project, kitchen())
+    const flipped = elevationScene(project, { ...kitchen(), side: 'right' })
+    expect(has(shown.rows, 'pr-017')).toBe(true)
+    expect(has(flipped.rows, 'pr-017')).toBe(false)
+    expect(has(flipped.rows, 'pr-019')).toBe(true)
+    expect(row(flipped.rows, 'pr-019').distance).toBeCloseTo(1500, 6)
+    // The four Placements stood in front of the old side; the Tall cupboard stood behind it.
+    expect(flipped.rows.filter((each) => each.kind === 'item').map((each) => each.id)).toEqual(['el-002'])
+  })
+
+  it('draws no Room and no Plan Image, whatever the Floor holds', () => {
+    const shown = elevationScene(project, kitchen())
+    const roomIds = new Set((project.existingModel.rooms ?? []).map((room) => room.id))
+    expect(shown.rows.filter((each) => roomIds.has(each.id))).toEqual([])
+    expect(shown.rows.every((each) => each.kind === 'wall' || each.kind === 'opening' || each.kind === 'item')).toBe(true)
+    expect(shown.rows.every((each) => Number.isFinite(each.sMin) && Number.isFinite(each.sMax) && each.sMin <= each.sMax)).toBe(true)
+  })
+
+  it('answers the same rows twice, and no rows for a line with nothing beside it', () => {
+    expect(elevationScene(project, kitchen()).rows).toEqual(elevationScene(project, kitchen()).rows)
+    const away = elevationScene(project, { ...kitchen(), line: { start: { x: 5000, y: 5000 }, end: { x: 6000, y: 5000 } }, depth: 1000 })
+    expect(away.rows).toEqual([])
+    expect(away.length).toBe(1000)
+  })
+})

@@ -51,7 +51,7 @@ const wallPath = (wallId: EntityId): string => `existingModel.walls[${wallId}]`
  * base and its height, and the top is the sum — so the path names the field that actually changed.
  */
 const wallField = (wallId: EntityId, field: VerticalExtentField): string =>
-  `${wallPath(wallId)}.${field === 'base' ? 'baseElevation' : 'height'}`
+  `${wallPath(wallId)}.${field === 'base' || field === 'bottom' ? 'baseElevation' : 'height'}`
 const junctionPath = (junctionId: EntityId): string => `existingModel.wallJunctions[${junctionId}]`
 
 /** The Wall, or a rejection: every Wall Intent names one. */
@@ -450,9 +450,10 @@ const setThickness: Handler<'wall.setThickness'> = (ctx) => {
 }
 
 /**
- * One Vertical Extent box of a Wall (#74 §5). The three boxes are one Intent over one pair of
- * elevations, and each is one line of arithmetic on it: `base` carries the height with it, `height`
- * grows the soffit off the base it keeps, `top` holds the base and restates the height.
+ * One Vertical Extent box of a Wall (#74 §5). The boxes are one Intent over one pair of elevations,
+ * and each is one line of arithmetic on it: `base` carries the height with it, `height` grows the
+ * soffit off the base it keeps, `top` holds the base and restates the height, and `bottom` — the
+ * Elevation View's bottom handle (#75 §6) — holds the soffit and restates the height.
  *
  * The reference line does not move, so no face, no Junction and no hosted Opening is affected. That is
  * why this is registered plainly rather than through `wallHandler`: the Wall-fit check that wrapper
@@ -462,9 +463,12 @@ const setThickness: Handler<'wall.setThickness'> = (ctx) => {
 const setVerticalExtent: Handler<'wall.setVerticalExtent'> = (ctx) => {
   const { wallId, field, value } = ctx.intent.payload
   const wall = editWall(ctx.draft, wallId)
-  requireExtentValue(field, value, wallField(wallId, field), wall.baseElevation)
+  requireExtentValue(field, value, wallField(wallId, field), wall.baseElevation, wall.baseElevation + wall.height)
   if (field === 'base') wall.baseElevation = value
-  else wall.height = field === 'height' ? value : value - wall.baseElevation
+  else if (field === 'bottom') {
+    wall.height = wall.baseElevation + wall.height - value
+    wall.baseElevation = value
+  } else wall.height = field === 'height' ? value : value - wall.baseElevation
 }
 
 /** `Offset wall by … mm`: the reference line moves perpendicular, to the chosen side (#64 §10).

@@ -7,7 +7,7 @@
  * rather than blocking it.
  */
 import { describe, expect, it } from 'vitest'
-import type { Floor, PlanView, Project } from './index'
+import type { ElevationView, Floor, PlanView, Project } from './index'
 import { FLOOR_DEPENDENCY_KINDS, floorHasDependencies, summarizeFloorDependencies } from './index'
 
 const floor = (id: string, over: Partial<Floor> = {}): Floor => ({ id, name: id, planImage: null, ...over })
@@ -19,6 +19,15 @@ const view = (id: string, floorId: string, isDefault: boolean): PlanView => ({
   isDefault,
   showPlanImage: true,
   planViewRange: { lowerMm: 0, upperMm: 2600 },
+})
+const elevation = (id: string, floorId: string): ElevationView => ({
+  id,
+  kind: 'elevation',
+  floorId,
+  name: id,
+  line: { start: { x: 0, y: 1400 }, end: { x: 4000, y: 1400 } },
+  side: 'left',
+  depth: 2000,
 })
 const placed = (id: string, floorId: string): Project['existingModel']['placedItems'][number] => ({
   id,
@@ -43,6 +52,7 @@ function project(): Project {
       view('view-kitchen-evening', 'floor-kitchen', false),
       view('view-cellar', 'floor-cellar', true),
     ],
+    elevationViews: [elevation('elevation-kitchen-sink', 'floor-kitchen')],
     itemDesigns: [],
     existingModel: {
       walls: [],
@@ -58,12 +68,12 @@ function project(): Project {
 const textOf = (floorId: string): string[] => summarizeFloorDependencies(project(), floorId).map((row) => row.text)
 
 describe('summarizeFloorDependencies', () => {
-  it('counts the Placed Items, the Plan Image and the named Plan Views of one Floor', () => {
-    expect(textOf('floor-kitchen')).toEqual(['3 Placed Items', '1 Plan Image', '1 named Plan View'])
+  it('counts the Placed Items, the Plan Image, the named Plan Views and the Elevation Views of one Floor', () => {
+    expect(textOf('floor-kitchen')).toEqual(['3 Placed Items', '1 Plan Image', '1 named Plan View', '1 Elevation View'])
   })
 
   it('reads an empty Floor as having nothing leaning on it', () => {
-    expect(textOf('floor-cellar')).toEqual(['0 Placed Items', '0 Plan Images', '0 named Plan Views'])
+    expect(textOf('floor-cellar')).toEqual(['0 Placed Items', '0 Plan Images', '0 named Plan Views', '0 Elevation Views'])
     expect(floorHasDependencies(project(), 'floor-cellar')).toBe(false)
   })
 
@@ -73,17 +83,18 @@ describe('summarizeFloorDependencies', () => {
   })
 
   it('names each kind in registry order, so a dialog can key a row', () => {
-    expect(FLOOR_DEPENDENCY_KINDS.map((kind) => kind.id)).toEqual(['placedItems', 'planImage', 'planViews'])
+    expect(FLOOR_DEPENDENCY_KINDS.map((kind) => kind.id)).toEqual(['placedItems', 'planImage', 'planViews', 'elevationViews'])
     expect(summarizeFloorDependencies(project(), 'floor-kitchen').map((row) => row.kind.id)).toEqual([
       'placedItems',
       'planImage',
       'planViews',
+      'elevationViews',
     ])
   })
 
   it('reads a Floor that is not there as having nothing, rather than throwing', () => {
     expect(floorHasDependencies(project(), 'floor-nowhere')).toBe(false)
-    expect(textOf('floor-nowhere')).toEqual(['0 Placed Items', '0 Plan Images', '0 named Plan Views'])
+    expect(textOf('floor-nowhere')).toEqual(['0 Placed Items', '0 Plan Images', '0 named Plan Views', '0 Elevation Views'])
   })
 
   it('says "1 Placed Item" and "2 Placed Items", which is the whole row', () => {
@@ -102,6 +113,7 @@ describe('floorHasDependencies', () => {
     emptied.existingModel.placedItems = []
     emptied.floors[0]!.planImage = null
     emptied.views = emptied.views.filter((candidate) => candidate.isDefault)
+    emptied.elevationViews = []
     expect(floorHasDependencies(emptied, 'floor-kitchen')).toBe(false)
   })
 

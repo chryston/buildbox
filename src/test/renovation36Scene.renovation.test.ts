@@ -11,7 +11,7 @@
  * The last of those is the assertion the fixture exists to make. Every row of the issue's
  * renovation-edit table reads "…in Option A, and Option B is unchanged", which is only a sentence
  * with content if the starting state has both Options standing empty beside the Existing Model.
- * The same Project is committed as `fixtures/domain/v9/renovation.json`, the domain golden of the
+ * The same Project is committed as `fixtures/domain/v10/renovation.json`, the domain golden of the
  * step, and the two are checked to be the same Project — the file the app loads and the file the
  * migrator is tested against cannot be allowed to drift apart.
  *
@@ -146,11 +146,11 @@ describe('the renovation-36 scene (#69 criterion 1)', () => {
     }
   })
 
-  it('is the same Project as the v9 domain golden', () => {
+  it('is the same Project as the v10 domain golden', () => {
     const golden = JSON.parse(
-      readFileSync(join(fixturesRoot, 'domain', 'v9', 'renovation.json'), 'utf8'),
+      readFileSync(join(fixturesRoot, 'domain', 'v10', 'renovation.json'), 'utf8'),
     ) as { domainSchemaVersion: number; project: Project }
-    expect(golden.domainSchemaVersion).toBe(9)
+    expect(golden.domainSchemaVersion).toBe(10)
     expect(validateProject(golden.project).ok).toBe(true)
     expect(golden.project).toEqual(project)
   })

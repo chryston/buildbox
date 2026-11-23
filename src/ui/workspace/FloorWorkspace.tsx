@@ -15,14 +15,14 @@
  * owners of it (#25): every selector below takes the Floor id, so nothing drawn, snapped or
  * selected can cross a Floor boundary.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, rangeClasses, snapCandidateAllowed } from '../../derive'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, enabledVerticalSnapKinds, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates, verticalSnapCandidates } from '../../derive'
 import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
-import { wallOpenings } from '../../drawing'
+import { wallOpenings, drawElevationView } from '../../drawing'
 import type { BadgeSubject, LayerGates, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
-import type { Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
-import { designOptionsOf, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride } from '../../domain'
+import type { ElevationView, Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
+import { designOptionsOf, elevationViewsOf, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
@@ -78,6 +78,17 @@ import { ToolbarMenu, ToolbarMenuItem, WorkspaceToolbar } from './WorkspaceToolb
 import type { ToolbarGroup } from './WorkspaceToolbar'
 import { PlanViewCanvas } from './PlanViewCanvas'
 import { SavedViewCard } from './SavedViewCard'
+// #75: the split workspace's second pane, the card that names the view it draws, the tool that draws
+// a view line, and the confirm that removes one.
+import { ElevationPane, elevationPaneTitle } from './ElevationPane'
+import { ElevationSnapsMenu } from './elevation/ElevationSnapsMenu'
+import { ElevationViewCard } from './ElevationViewCard'
+import { elevationLineProblem } from './ElevationDefinitionSection'
+import { DeleteElevationViewDialog } from './DeleteElevationViewDialog'
+import { ElevationDraftOverlay } from './elevation/ElevationDraftOverlay'
+import type { ElevationDraftResult } from './elevation/ElevationDraftOverlay'
+import type { ElevationDraft } from './elevation/elevationDraft'
+import { clampPointToCanvas, depthDrag, elevationArrowPath, elevationLabelAt, elevationPrismPoints, emptyElevationDraft, farEdgeHandle } from './elevation/elevationDraft'
 import { PlanViewRangeSection, rangeGaugeScale } from './PlanViewRangeSection'
 import type { RangeGaugeScale } from './PlanViewRangeSection'
 import { SelectionInspector } from './SelectionInspector'
@@ -190,6 +201,28 @@ export function FloorWorkspace(): ReactNode {
   const floor = project.floors.find((entry) => entry.id === floorId) ?? null
   const views = planViewsForFloor(project, floorId)
   const view = resolvePlanView(project, floorId, floorId === null ? null : viewsByFloor[floorId] ?? null)
+  /**
+   * The Elevation View this Floor has open (#75 §1), the same kind of pointer as the Plan View above:
+   * a stale id — a view deleted, a Floor switched, another window's name — falls back to the Floor's
+   * first view rather than blanking the pane. An empty list is the honest empty state.
+   */
+  const activeElevationByFloor = useWorkspace((state) => state.activeElevationByFloor)
+  const setActiveElevation = useWorkspace((state) => state.setActiveElevation)
+  const splitRatio = useWorkspace((state) => state.splitRatio)
+  /** The Elevation View's three `Snaps ▾` rows (#75 §7): UI-session, never saved, never undone. */
+  const verticalSnapSettings = useWorkspace((state) => state.verticalSnapSettings)
+  const setSplitRatio = useWorkspace((state) => state.setSplitRatio)
+  const paneAlone = useWorkspace((state) => state.paneAlone)
+  const setPaneAlone = useWorkspace((state) => state.setPaneAlone)
+  const paneHydrated = useWorkspace((state) => state.paneHydrated)
+  const elevationViews = useMemo(
+    () => elevationViewsOf(project).filter((entry) => entry.floorId === floorId),
+    [project, floorId],
+  )
+  const elevationView: ElevationView | null =
+    elevationViews.find((entry) => entry.id === (floorId === null ? '' : activeElevationByFloor[floorId])) ??
+    elevationViews[0] ??
+    null
   const planImage = floor?.planImage ?? null
   const imageSrc = usePlanImageSrc(services.assetUrls, planImage?.assetHash ?? null)
   const image = planImageForView(project, view, imageSrc)
@@ -462,6 +495,7 @@ export function FloorWorkspace(): ReactNode {
   // holds for a Room Outline and for an armed shelter: putting the tool down puts the draft down.
   useEffect(() => {
     if (tool !== 'wall') setWallDraft(null)
+    if (tool !== 'elevation') setElevationDraft(null)
     if (tool !== 'line' && tool !== 'arc' && tool !== 'ellipticalArc') {
       setRoomDraft(null)
       setRoomDraftTarget(null)
@@ -475,6 +509,7 @@ export function FloorWorkspace(): ReactNode {
   }, [tool])
   useEffect(() => {
     setWallDraft(null)
+    setElevationDraft(null)
     setRoomDraft(null)
     setRoomDraftTarget(null)
     setShelterArmed(false)
@@ -549,6 +584,12 @@ export function FloorWorkspace(): ReactNode {
   const [transferOpen, setTransferOpen] = useState(false)
   const [newItemOpen, setNewItemOpen] = useState(false)
   const [forkOpen, setForkOpen] = useState(false)
+  /** The view line being drawn by the `elevation` tool, or null between presses (#75 §2). */
+  const [elevationDraft, setElevationDraft] = useState<ElevationDraft | null>(null)
+  /** The view whose delete is being confirmed, or null when no dialog is open (#75 §3). */
+  const [deleteElevationId, setDeleteElevationId] = useState<string | null>(null)
+  /** The elevation pane's own host: its `Fit` and its wheel are measured against this box. */
+  const elevationHostRef = useRef<HTMLDivElement>(null)
 
   const narrow = useNarrow()
   const uncalibrated = floorNeedsCalibration(planImage)
@@ -576,6 +617,65 @@ export function FloorWorkspace(): ReactNode {
     if (!activeHydrated) return
     services.viewportCache.writeActive({ floorId, viewsByFloor: encodeActiveViews(project, viewsByFloor) })
   }, [activeHydrated, floorId, viewsByFloor, project, services])
+
+  /**
+   * The split's own three answers (#75 §1, §5): how the canvas is divided, which view each Floor has
+   * open, and whether one pane was put alone. The same device-local rule as the open pair — never the
+   * document, never a Backup, never Undo — and the same one-record-per-Project shape.
+   */
+  useEffect(() => {
+    let live = true
+    void services.viewportCache.readPane().then((pane) => {
+      if (!live) return
+      workspaceStore.getState().hydratePane(pane ?? { ratio: 0.5, elevationByFloor: {}, alone: null })
+    })
+    return () => {
+      live = false
+    }
+  }, [session.id, services])
+
+  useEffect(() => {
+    if (!paneHydrated) return
+    services.viewportCache.writePane({
+      ratio: splitRatio,
+      elevationByFloor: activeElevationByFloor,
+      alone: paneAlone,
+    })
+  }, [paneHydrated, splitRatio, activeElevationByFloor, paneAlone, services])
+
+  /**
+   * The elevation pane's viewport, cached under its own key (#75 §4): zooming a Section is not
+   * zooming the Plan, and two views of the same Floor are two pictures. The key is the view's
+   * identity — Floor and name, the two things a view line is named by — so a deleted view leaves no
+   * entry behind and a renamed one starts at `Fit`.
+   */
+  const elevationViewKey = elevationView === null ? null : `elevation:${elevationView.floorId}:${elevationView.name}`
+  const elevationViewport = useWorkspace((state) =>
+    elevationViewKey === null ? null : state.viewports[elevationViewKey] ?? null,
+  )
+  const elevationHydrated = useWorkspace((state) =>
+    elevationViewKey === null ? true : state.hydrated[elevationViewKey] === true,
+  )
+  const setElevationViewport = useCallback(
+    (next: Viewport) => {
+      if (elevationViewKey === null) return
+      workspaceStore.getState().setViewport(elevationViewKey, next)
+      services.viewportCache.write(elevationViewKey, next)
+    },
+    [elevationViewKey, services],
+  )
+  useEffect(() => {
+    if (elevationViewKey === null || elevationHydrated) return
+    let live = true
+    void services.viewportCache.read(elevationViewKey).then((cached) => {
+      if (!live) return
+      if (cached !== undefined) workspaceStore.getState().setViewport(elevationViewKey, cached)
+      workspaceStore.getState().markHydrated(elevationViewKey)
+    })
+    return () => {
+      live = false
+    }
+  }, [elevationViewKey, elevationHydrated, services])
 
   // Undo and redo navigate to what they touched (#26): the Floor and view the edit was about.
   // An Edit Transaction that touched no Floor — a Project preference — leaves the pointer
@@ -1143,6 +1243,14 @@ export function FloorWorkspace(): ReactNode {
           setTool('select')
           return
         }
+        if (tool === 'elevation') {
+          // The same backing out, for the key press that lands on the canvas rather than on the
+          // overlay's own bar (#75 §3): the line drawn so far is discarded and nothing is sent.
+          event.preventDefault()
+          setElevationDraft(null)
+          setTool('select')
+          return
+        }
         if (designPreview === null && !pickingOrigin) return
         event.preventDefault()
         setDesignPreview(null)
@@ -1596,6 +1704,95 @@ export function FloorWorkspace(): ReactNode {
   }, [project, view, floorId, renovationOptionId])
 
   /**
+   * What the elevation pane draws (#75 §4): the Section the view's line cuts, over the same effective
+   * model the Plan is drawn from, so the two pictures of one Wall agree about where it is and how
+   * tall it stands.
+   */
+  const elevationSceneValue = useMemo(
+    () => (elevationView === null ? null : elevationScene(project, elevationView)),
+    [project, elevationView],
+  )
+
+  /**
+   * The heights a vertical drag in this pane may stop at (#75 §7), or null when there is no pane to
+   * drag in. The three `Snaps ▾` rows filter the families; the candidate source itself already applies
+   * the view's Design Option, Renovation Display, layer rules and `Snap to hidden content`, and leaves
+   * each entity's own id on its candidate so the dragged entity cannot be its own target.
+   */
+  const elevationSnapCandidates = useMemo(
+    () => (elevationView === null
+      ? null
+      : verticalSnapCandidates({
+        project,
+        view: elevationView,
+        enabled: enabledVerticalSnapKinds(verticalSnapSettings),
+      })),
+    [project, elevationView, verticalSnapSettings],
+  )
+
+  /**
+   * One finished vertical drag, as the one Intent that writes it (#75 §6, behaviour 11).
+   *
+   * The row's kind decides which of the three Intents the field belongs to; the field decides the
+   * value's meaning. Nothing else is written alongside it — no second Intent for the plan, no patch
+   * for the pane — because the plan, the elevation, the warnings and the inspector all read the same
+   * canonical entity, so one transaction and one render moves all four together.
+   */
+  const commitVerticalExtent = useCallback((field: 'base' | 'height' | 'top' | 'bottom', value: number): void => {
+    // The same three selections the pane is shown: a Wall and an Opening are selected in their own
+    // slices, so reading only the Placed Item's would drop the commit for the two entities a vertical
+    // drag most often moves.
+    const id = selection ?? wallSelection ?? openingSelection
+    const row = elevationSceneValue?.rows.find((entry) => entry.id === id) ?? null
+    if (row === null) return
+    if (row.kind === 'wall') send('wall.setVerticalExtent', { wallId: row.id, field, value })
+    else if (row.kind === 'opening') send('opening.setVerticalExtent', { openingId: row.id, field, value })
+    // A Placed Item has no height of its own and no bottom handle, so the only fields that can reach
+    // this branch are `base` and `top` — `elevationHandleKinds` is what guarantees it — and the handler
+    // reads a `top` back as the base the design's height lands under.
+    else send('plan.setPlacementVerticalExtent', { placedItemId: row.id, field: field === 'base' ? 'base' : 'top', value })
+  }, [selection, wallSelection, openingSelection, elevationSceneValue, send])
+
+  /**
+   * The Elevation View's own layer answers (#71 §4): the view is a saved view like any Plan View, so
+   * hiding Structure hides it in the Section too. Built the same way as `layerGates` above and for the
+   * same reason — the Display's own subset is already applied by `elevationScene`, so the layer gate is
+   * the second of the two — but never reused from it: the two views hold independent settings, and
+   * sharing them would make one view's switches answer for the other's.
+   */
+  const elevationLayerGates: LayerGates | null = useMemo(() => {
+    if (elevationView === null || entityLayerKey === null) return null
+    const keyOf = (id: string): string => entityLayerKey.get(id) ?? UNLAYERED_LAYER_KEY
+    const access = (id: string): LayerAccess => layerAccessOf(project, elevationView, keyOf(id), { displayIncluded: true })
+    const order = effectiveLayerOrder(project, elevationView)
+    return {
+      drawn: (id) => access(id).drawn,
+      pickable: (id) => access(id).pickable,
+      modifiable: (id) => access(id).modifiable,
+      colorOf: (id) => viewLayerSettingOverride(elevationView, keyOf(id))?.color ?? null,
+      orderOf: (id) => order.indexOf(keyOf(id)),
+      readOnlyLayerOf: (id) =>
+        access(id).modifiable ? null : drawingLayerById(project, keyOf(id))?.name ?? RENOVATION_STRINGS.layerUnlayered,
+      onRefusal: (name) => showHiddenToolNotice(RENOVATION_STRINGS.layerReadOnlyNotice(name)),
+    }
+  }, [project, elevationView, entityLayerKey, showHiddenToolNotice])
+
+  /**
+   * The drawing at unit scale: the pane's own viewport matrix is what turns millimetres into pixels,
+   * so the display list is the same bytes however the pane is zoomed. `sizing` is the one thing that
+   * has to follow the zoom, because a line that stays a hairline and a label that stays readable are
+   * both measured in screen pixels.
+   */
+  const elevationDrawing = useMemo(() => {
+    if (elevationSceneValue === null) return null
+    const zoom = elevationViewport?.zoom ?? 1
+    return {
+      list: drawElevationView(elevationSceneValue, { sizing: { kind: 'screen', pxPerMm: zoom }, layers: elevationLayerGates }),
+      sizing: { kind: 'screen', pxPerMm: zoom } as const,
+    }
+  }, [elevationSceneValue, elevationLayerGates, elevationViewport?.zoom])
+
+  /**
    * What the Range gauge has room for (#74 §4): the Floor Datum, this Floor's own limits, every
    * entity's Vertical Extent and the Range itself, plus 5%. Measured over the same effective model the
    * classes are counted over, so the gauge and the drawing never disagree about how tall the Floor is.
@@ -1855,6 +2052,323 @@ export function FloorWorkspace(): ReactNode {
     else select(id)
   }
 
+  /**
+   * The view lines on the Plan (#75 §2, §3). The marker is drawn on the screen and never written to
+   * the display list, which is what keeps it off an exported Plan drawing: the exporter builds its own
+   * list and never asks this file for an overlay.
+   *
+   * Every width is divided by the zoom, because the group it sits in is scaled by the same factor —
+   * a rule that is a hairline at `Fit` has to stay one at 400%.
+   */
+  const [depthDragId, setDepthDragId] = useState<string | null>(null)
+  /** The depth a far-edge drag is showing mid-gesture; the document still holds the old one. */
+  const [previewDepth, setPreviewDepth] = useState<{ viewId: string; depth: number } | null>(null)
+  /** The line an endpoint drag is showing mid-gesture, for the same reason. */
+  const [previewLine, setPreviewLine] = useState<{ viewId: string; line: ElevationView['line'] } | null>(null)
+
+  /**
+   * The canvas's own box, measured as the layout changes.
+   *
+   * Two things need it and nothing else does: a label that would otherwise slide off the edge of the
+   * screen has to be pulled back inside it, and a drag whose pointer reaches the edge has to pan the
+   * plan under the hand. Both read it in Floor millimetres through the viewport, so the answer is the
+   * same at `Fit` and at 400%.
+   */
+  const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 })
+  useLayoutEffect(() => {
+    const el = hostRef.current
+    if (el === null) return
+    const measure = (): void => {
+      const rect = el.getBoundingClientRect()
+      setCanvasSize({ width: rect.width, height: rect.height })
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  /** A point pulled inside the visible canvas, so a name never disappears off the edge (#75 §3). */
+  const clampToCanvas = (at: Pt): Pt =>
+    viewport === undefined
+      ? at
+      : clampPointToCanvas(at, viewport, canvasSize.width, canvasSize.height, 48)
+
+  /** How close to the edge a drag has to come before the plan starts moving under the pointer. */
+  const AUTO_PAN_EDGE_PX = 28
+
+  /**
+   * Pan the plan when a marker drag's pointer reaches the canvas edge (#75 §3).
+   *
+   * The step is proportional to how far past the threshold the pointer is, so easing up to the edge
+   * nudges and pushing hard across it runs. It writes the store directly, because the gesture reads
+   * the viewport back on the next move and a render's copy would be a frame behind.
+   */
+  const autoPanToward = (clientX: number, clientY: number): void => {
+    const el = hostRef.current
+    const key = viewKey
+    const current = key === null ? undefined : workspaceStore.getState().viewports[key]
+    if (el === null || key === null || current === undefined) return
+    const rect = el.getBoundingClientRect()
+    const near = AUTO_PAN_EDGE_PX
+    const step = (over: number): number => Math.max(-near, Math.min(near, over))
+    const dx = clientX < rect.left + near
+      ? step(near - (clientX - rect.left))
+      : clientX > rect.right - near
+        ? -step(near - (rect.right - clientX))
+        : 0
+    const dy = clientY < rect.top + near
+      ? step(near - (clientY - rect.top))
+      : clientY > rect.bottom - near
+        ? -step(near - (rect.bottom - clientY))
+        : 0
+    if (dx === 0 && dy === 0) return
+    const next = { ...current, panX: current.panX + dx, panY: current.panY + dy }
+    setViewport(next)
+  }
+
+  /** A client point in Floor millimetres, through the canvas's own matrix — the one truth about zoom. */
+  const floorPointAt = (clientX: number, clientY: number): Pt | null => {
+    const svg = svgRef.current
+    const ctm = svg?.getScreenCTM() ?? null
+    // No matrix, or no platform that offers one, and there is no honest answer to give: a gesture
+    // that cannot say where its pointer sits on the Floor writes nothing rather than guesses.
+    if (svg === null || ctm === null || typeof DOMPoint === 'undefined') return null
+    const point = new DOMPoint(clientX, clientY).matrixTransform(ctm.inverse())
+    return { x: point.x, y: point.y }
+  }
+
+  /** The three window listeners one marker gesture needs, taken off again on release or cancel. */
+  const onMarkerMove = (
+    move: (event: PointerEvent) => void,
+    finish: (event: PointerEvent) => void,
+  ): (() => void) => {
+    const cancel = (event: PointerEvent): void => finish(event)
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', finish)
+    window.addEventListener('pointercancel', cancel)
+    return () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', finish)
+      window.removeEventListener('pointercancel', cancel)
+    }
+  }
+
+  /**
+   * One gesture on the far edge, one Intent (#20 §7): the handle follows the pointer for the length of
+   * the drag and the depth is written once, on release. The side never moves — pulling the far edge
+   * through the line makes the depth small and then large again on the same side, which is what the
+   * number box would say too.
+   */
+  const beginDepthDrag = (viewId: string, event: ReactPointerEvent<SVGElement>): void => {
+    event.stopPropagation()
+    const entry = elevationViews.find((each) => each.id === viewId)
+    if (entry === undefined) return
+    setDepthDragId(viewId)
+    const at = (point: { clientX: number; clientY: number }): number | null => {
+      const mm = floorPointAt(point.clientX, point.clientY)
+      return mm === null ? null : depthDrag({ start: entry.line.start, end: entry.line.end, side: entry.side }, mm)
+    }
+    const move = (moveEvent: PointerEvent): void => {
+      autoPanToward(moveEvent.clientX, moveEvent.clientY)
+      const next = at(moveEvent)
+      if (next !== null) setPreviewDepth({ viewId, depth: next })
+    }
+    const finish = (upEvent: PointerEvent): void => {
+      off()
+      setDepthDragId(null)
+      setPreviewDepth(null)
+      const next = at(upEvent)
+      if (next === null || Math.abs(next - entry.depth) < 0.5) return
+      send('elevationView.edit', { viewId, depth: Math.round(next) })
+    }
+    const off = onMarkerMove(move, finish)
+  }
+
+  /**
+   * One gesture on an endpoint, one Intent (#75 §3): the line follows the pointer and the whole line is
+   * written on release — never half of it, which is what a field-by-field write would do. A line whose
+   * ends have met is refused here exactly as the number boxes refuse it, so a drag cannot put the
+   * document into a state the card would then reject.
+   */
+  const beginEndpointDrag = (
+    viewId: string,
+    corner: 'start' | 'end',
+    event: ReactPointerEvent<SVGElement>,
+  ): void => {
+    event.stopPropagation()
+    const entry = elevationViews.find((each) => each.id === viewId)
+    if (entry === undefined) return
+    const original = entry.line
+    setDepthDragId(`${viewId}:${corner}`)
+    const at = (point: { clientX: number; clientY: number }): ElevationView['line'] | null => {
+      const mm = floorPointAt(point.clientX, point.clientY)
+      if (mm === null) return null
+      const next: ElevationView['line'] = {
+        start: corner === 'start' ? { x: mm.x, y: mm.y } : original.start,
+        end: corner === 'end' ? { x: mm.x, y: mm.y } : original.end,
+      }
+      return elevationLineProblem(next) === null ? next : null
+    }
+    const move = (moveEvent: PointerEvent): void => {
+      autoPanToward(moveEvent.clientX, moveEvent.clientY)
+      const next = at(moveEvent)
+      if (next !== null) setPreviewLine({ viewId, line: next })
+    }
+    const finish = (upEvent: PointerEvent): void => {
+      off()
+      setDepthDragId(null)
+      setPreviewLine(null)
+      const next = at(upEvent)
+      if (next === null) return
+      const same = next.start.x === original.start.x && next.start.y === original.start.y
+        && next.end.x === original.end.x && next.end.y === original.end.y
+      if (same) return
+      send('elevationView.edit', { viewId, line: {
+        start: { x: Math.round(next.start.x), y: Math.round(next.start.y) },
+        end: { x: Math.round(next.end.x), y: Math.round(next.end.y) },
+      } })
+    }
+    const off = onMarkerMove(move, finish)
+  }
+
+  const planElevationMarkers: ReactNode =
+    elevationViews.length === 0 || viewport === undefined ? undefined : (
+      <g data-testid="elevation-markers">
+        {elevationViews.map((entry) => {
+          const open = entry.id === elevationView?.id
+          const depth = previewDepth?.viewId === entry.id ? previewDepth.depth : entry.depth
+          const line = previewLine?.viewId === entry.id ? previewLine.line : entry.line
+          const prism = elevationPrismPoints(line.start, line.end, entry.side, depth)
+          const label = clampToCanvas(elevationLabelAt(line.start, line.end, entry.side, depth))
+          const handle = farEdgeHandle(line.start, line.end, entry.side, depth)
+          const hairline = 1.5 / viewport.zoom
+          const endpoint = 4 / viewport.zoom
+          return (
+            <g key={entry.id} data-testid={`elevation-marker-${entry.id}`} data-open={open ? 'true' : 'false'}>
+              {open && prism.length === 4 && (
+                <polygon
+                  data-testid={`elevation-prism-${entry.id}`}
+                  points={prism.map((point) => `${point.x},${point.y}`).join(' ')}
+                  fill="var(--bb-accent)"
+                  fillOpacity={0.1}
+                  stroke="var(--bb-accent)"
+                  strokeOpacity={0.45}
+                  strokeWidth={hairline}
+                  strokeDasharray={`${6 / viewport.zoom} ${4 / viewport.zoom}`}
+                />
+              )}
+              <line
+                data-testid={`elevation-line-${entry.id}`}
+                x1={line.start.x}
+                y1={line.start.y}
+                x2={line.end.x}
+                y2={line.end.y}
+                stroke="var(--bb-accent)"
+                strokeWidth={open ? hairline * 1.6 : hairline}
+              />
+              <path
+                data-testid={`elevation-arrow-${entry.id}`}
+                d={elevationArrowPath(line.start, line.end, entry.side, depth, depth * 0.45)}
+                fill="none"
+                stroke="var(--bb-accent)"
+                strokeWidth={hairline}
+              />
+              <text
+                data-testid={`elevation-marker-label-${entry.id}`}
+                x={label.x}
+                y={label.y}
+                fontSize={12 / viewport.zoom}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fill="var(--bb-accent)"
+              >
+                {entry.name}
+              </text>
+              {(['start', 'end'] as const).map((corner) => (
+                <rect
+                  key={corner}
+                  data-testid={`elevation-endpoint-${corner}-${entry.id}`}
+                  x={line[corner].x - endpoint}
+                  y={line[corner].y - endpoint}
+                  width={endpoint * 2}
+                  height={endpoint * 2}
+                  fill="var(--bb-accent)"
+                  stroke="var(--bb-bg-app)"
+                  strokeWidth={hairline}
+                  style={{ cursor: depthDragId === `${entry.id}:${corner}` ? 'grabbing' : 'grab' }}
+                  onPointerDown={(event) => beginEndpointDrag(entry.id, corner, event)}
+                />
+              ))}
+              {open && handle !== null && (
+                <circle
+                  data-testid={`elevation-depth-handle-${entry.id}`}
+                  cx={handle.x}
+                  cy={handle.y}
+                  r={4 / viewport.zoom}
+                  fill="var(--bb-bg-app)"
+                  stroke="var(--bb-accent)"
+                  strokeWidth={hairline}
+                  style={{ cursor: depthDragId === entry.id ? 'grabbing' : 'grab' }}
+                  onPointerDown={(event) => beginDepthDrag(entry.id, event)}
+                />
+              )}
+            </g>
+          )
+        })}
+      </g>
+    )
+
+  /**
+   * The `Elevation View` tool's own bar and ghost (#75 §3): three clicks — start, end, then a side and
+   * a depth — and one Intent. It is the fourth member of the `htmlOverlay` chain because it owns the
+   * pointer exactly as the Wall and Room drafts do, and for the same reason the canvas cannot see the
+   * moves underneath it.
+   */
+  const elevationDraftOverlay: ReactNode =
+    tool === 'elevation' && floorId !== null && floorWalls !== null && viewport !== null && viewport !== undefined ? (
+      <ElevationDraftOverlay
+        viewport={viewport}
+        draft={elevationDraft ?? emptyElevationDraft()}
+        onDraft={setElevationDraft}
+        snapAt={(at, from) => {
+          const snap = resolveSnap(
+            snapCandidates({
+              geometry: roomSnapGeometry,
+              walls: floorWalls.snapSources,
+              cursor: at,
+              from,
+              gridSpacingMm: snapSettings.gridSpacingMm,
+              angleIncrementDeg: snapSettings.angle.incrementDeg,
+              enabled: snapKinds,
+              allowed: snapLayerAllowed,
+            }),
+            at,
+            1 / viewport.zoom,
+            snapKinds,
+          )
+          return snap === null ? at : snap.point
+        }}
+        onCancel={() => setElevationDraft(null)}
+        onFinish={(result: ElevationDraftResult) => {
+          if (floorId === null) return
+          // One view, one Intent, one undo step (#20 §7): the line, the side and the depth arrive
+          // together, and the handler names a blank one `Elevation N`.
+          send('elevationView.create', {
+            floorId,
+            fromViewId: view?.id,
+            line: { start: result.start, end: result.end },
+            side: result.side,
+            depth: Math.round(result.depth),
+          })
+          setElevationDraft(null)
+          setTool('select')
+        }}
+        unit={project.preferences.displayUnit}
+        precision={project.preferences.displayPrecision}
+      />
+    ) : undefined
+
   return (
     <>
       <WorkspaceShell
@@ -1966,6 +2480,7 @@ export function FloorWorkspace(): ReactNode {
           ) : undefined
         }
         viewCard={
+          <>
           <SavedViewCard
             project={project}
             floor={floor}
@@ -2139,6 +2654,28 @@ export function FloorWorkspace(): ReactNode {
             }
             onFit={fit}
           />
+          {floor !== null && (
+            <ElevationViewCard
+              floor={floor}
+              views={elevationViews}
+              view={elevationView}
+              unit={project.preferences.displayUnit}
+              precision={project.preferences.displayPrecision}
+              onOpen={(viewId) => {
+                if (floorId === null) return
+                setActiveElevation(floorId, viewId)
+                if (paneAlone === 'plan') setPaneAlone(null)
+              }}
+              onEdit={(change) => {
+                if (elevationView === null) return
+                send('elevationView.edit', { viewId: elevationView.id, ...change })
+              }}
+              onDelete={() => {
+                if (elevationView !== null) setDeleteElevationId(elevationView.id)
+              }}
+            />
+          )}
+          </>
         }
         inspector={
           // §7c: the inspector rail reads one flag for whether its fields are shut, instead of a prop
@@ -2399,7 +2936,7 @@ export function FloorWorkspace(): ReactNode {
                     setPendingDistancePx(distancePx)
                   }}
                 />
-              ) : undefined}
+              ) : (planElevationMarkers)}
               htmlOverlay={tool === 'wall' && floorId !== null && floorWalls !== null && viewport !== null && viewport !== undefined ? (
                 <WallDraftOverlay
                   viewport={viewport}
@@ -2493,7 +3030,7 @@ export function FloorWorkspace(): ReactNode {
                   unit={project.preferences.displayUnit}
                   precision={project.preferences.displayPrecision}
                 />
-              ) : undefined}
+              ) : elevationDraftOverlay}
             />
             )}
             <input
@@ -2506,6 +3043,107 @@ export function FloorWorkspace(): ReactNode {
             />
           </>
         }
+        /**
+         * The two panes (#75 §1, §2). The Plan pane's body is the shell's own canvas, which the shell
+         * hands to the split itself so the draft bar and the warning strip stay anchored to the
+         * picture; the elevation pane's body is this file's. `Close` puts the Plan alone rather than
+         * deleting anything: the view stays in the Project, and `Show alone` on the Plan pane is the
+         * same answer from the other side.
+         */
+        split={
+          elevationView === null || elevationSceneValue === null || elevationDrawing === null
+            // With no Elevation View open there is nothing to split: the Plan View is the whole
+            // centre, exactly as it was before the split existed, with no header row above it
+            // taking height the picture is fitted to.
+            ? null
+            : {
+          ratio: splitRatio,
+          onRatio: setSplitRatio,
+          alone: paneAlone,
+          onAlone: setPaneAlone,
+          plan: {
+            id: 'plan',
+            header: <span data-testid="split-title-plan">{view?.name ?? STRINGS.planViews}</span>,
+            body: null,
+            active: paneAlone !== 'elevation',
+            onFocus: () => {
+              if (workspaceStore.getState().paneAlone !== null) setPaneAlone(null)
+            },
+            // Read the store, not the render's `paneAlone`: the pane's frame is memoised, so a
+            // closure here would keep answering for the state the gesture started from and the
+            // second press would set the same pane alone again instead of putting it back.
+            onShowAlone: () => setPaneAlone(workspaceStore.getState().paneAlone === 'plan' ? null : 'plan'),
+          },
+          elevation:
+            elevationView === null || elevationSceneValue === null || elevationDrawing === null
+              ? null
+              : {
+                  id: elevationView.id,
+                  header: (
+                    <>
+                      <span data-testid="split-title-elevation">
+                        {elevationPaneTitle(
+                          elevationView,
+                          designOptionsOf(project).find((option) => option.id === viewDesignOptionId(elevationView))
+                            ?.name ?? null,
+                          viewRenovationDisplay(elevationView),
+                        )}
+                      </span>
+                      {/* The three vertical-snap rows, in this pane's own tool strip (#75 §7). */}
+                      <ElevationSnapsMenu />
+                    </>
+                  ),
+                  body: (
+                    <div className="bb-elevation-pane" ref={elevationHostRef} data-testid="elevation-pane-host">
+                      <ElevationPane
+                        view={elevationView}
+                        scene={elevationSceneValue}
+                        list={elevationDrawing.list.list}
+                        area={elevationDrawing.list.area}
+                        topMm={elevationDrawing.list.topMm}
+                        sizing={elevationDrawing.sizing}
+                        optionName={
+                          designOptionsOf(project).find((option) => option.id === viewDesignOptionId(elevationView))
+                            ?.name ?? null
+                        }
+                        display={viewRenovationDisplay(elevationView)}
+                        selectedIds={[selection, wallSelection, openingSelection]
+                          .filter((id): id is string => id !== null)}
+                        // The same routing the Plan View gives a click: a Wall, an Opening and a Placed
+                        // Item are three different selections, and the inspector edits the one it is
+                        // told about. Picking a Wall here must select it there too, or criterion 11 is
+                        // only half true — the pane would hold a selection nothing else can see.
+                        onPick={(id) => {
+                          if (id === null) {
+                            select(null)
+                          } else if (project.existingModel.walls.some((wall) => wall.id === id)) {
+                            selectWall(id)
+                          } else if (project.existingModel.openings.some((opening) => opening.id === id)) {
+                            selectOpening(id)
+                          } else {
+                            select(id)
+                          }
+                        }}
+                        viewport={elevationViewport}
+                        onViewport={setElevationViewport}
+                        dragCandidates={elevationSnapCandidates}
+                        onVerticalExtent={commitVerticalExtent}
+                        hostRef={elevationHostRef}
+                        resolveAsset={(hash) =>
+                          planImage !== null && planImage.assetHash === hash ? imageSrc : null
+                        }
+                      />
+                    </div>
+                  ),
+                  active: paneAlone !== 'plan',
+                  onFocus: () => {
+                    if (workspaceStore.getState().paneAlone !== null) setPaneAlone(null)
+                  },
+                  onShowAlone: () =>
+                    setPaneAlone(workspaceStore.getState().paneAlone === 'elevation' ? null : 'elevation'),
+                  onClose: () => setPaneAlone('plan'),
+                },
+        }}
         warningStrip={
           floorWarnings.length === 0 && uploadError === null && !uncalibrated ? null : (
             <>
@@ -2539,6 +3177,17 @@ export function FloorWorkspace(): ReactNode {
           )
         }
       />
+      {deleteElevationId !== null && (
+        <DeleteElevationViewDialog
+          name={elevationViews.find((entry) => entry.id === deleteElevationId)?.name ?? ''}
+          onConfirm={() => {
+            send('elevationView.delete', { viewId: deleteElevationId })
+            setDeleteElevationId(null)
+            if (floorId !== null) setActiveElevation(floorId, null)
+          }}
+          onCancel={() => setDeleteElevationId(null)}
+        />
+      )}
       {deleteReview !== null && (
         <DeleteWallReviewDialog
           review={deleteReview}

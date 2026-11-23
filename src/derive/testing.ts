@@ -54,3 +54,13 @@ export const referenceProject = (): Project => domainFixture('v3/reference-proje
  * Range Class, one pair of footprints that overlap, and one entity below the Floor Datum.
  */
 export const planRangeScene = (): Project => domainFixture('v9/plan-range-scene.json')
+
+/**
+ * The #75 Elevation View scene: the Plan View Range scene's one Floor — upper limit 2 600, no lower one —
+ * with a `Tall cupboard` added at (3 000, 2 400) and two Elevation Views of that Floor. `Kitchen
+ * elevation` stands on the line (0, 1 400) → (4 000, 1 400), looks `left` (into the room, toward −y) and
+ * 2 000 deep, so it holds W-1 with its window and all four of the original placements while the Tall
+ * cupboard stands behind the viewer; `Angled elevation` stands on (400, 200) → (2 598, 1 460) — 29.86°
+ * to the plan axes — looks `right` and 2 400 deep, which is the line at an angle the criteria ask for.
+ */
+export const elevationScene = (): Project => domainFixture('v10/elevation-scene.json')

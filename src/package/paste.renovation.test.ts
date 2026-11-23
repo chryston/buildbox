@@ -11,7 +11,7 @@
  * the e2e asserting a scene that no longer exists, which is worse than no e2e.
  */
 import { describe, expect, it } from 'vitest'
-import { currentSchemaOf } from '../domain/testing'
+import { currentSchemaOf, withElevationViews } from '../domain/testing'
 import fitoutFixture from '../../fixtures/domain/v9/paste-fitout.json?raw'
 import elmFixture from '../../fixtures/domain/v9/paste-elm.json?raw'
 import pairSeed from '../../fixtures/e2e/preview-seed/paste-pair.json?raw'
@@ -120,9 +120,11 @@ describe('the pair is the scene the browser tier drives (#72 criterion 1)', () =
 
   it('carries the same bytes the domain fixtures hold', () => {
     // The e2e and the domain tests read the same Project, or the e2e is testing a different scene
-    // than the one the paste was reasoned about against.
-    expect(currentSchemaOf(pair.projects[0]!.data, 8)).toEqual(fitout)
-    expect(currentSchemaOf(pair.projects[1]!.data, 8)).toEqual(elm)
+    // than the one the paste was reasoned about against. The domain goldens beside them were written
+    // at v9, before the Elevation View list existed, so the read-forward carries the empty one the
+    // tenth step writes (#75).
+    expect(currentSchemaOf(pair.projects[0]!.data, 8)).toEqual(withElevationViews(fitout))
+    expect(currentSchemaOf(pair.projects[1]!.data, 8)).toEqual(withElevationViews(elm))
     expect(pair.projects.every((record) => record.schemaVersion === 8)).toBe(true)
   })
 

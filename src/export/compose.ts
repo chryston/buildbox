@@ -21,7 +21,7 @@
  */
 
 import type { DisplayLayer, DisplayList, MissingGlyph, Rect } from '../drawing'
-import { drawFloorView, drawItemDetail, wallOpenings } from '../drawing'
+import { drawElevationView, drawFloorView, drawItemDetail, wallOpenings } from '../drawing'
 import {
 
   designOptionName,
@@ -33,6 +33,7 @@ import {
   effectiveFloor,
   effectiveItemDetail,
   effectiveModel,
+  elevationScene,
   rangeClasses,
 } from '../derive'
 import type { RenovationState } from '../derive'
@@ -171,6 +172,43 @@ function rawDrawing(
       },
     }
   }
+  if (view.kind === 'elevation') {
+    const elevationView = (project.elevationViews ?? []).find((each) => each.id === view.viewId)
+    if (elevationView === undefined) return { ok: false, reason: 'unknown-view' }
+    // The same layer access a Plan View sheet gets (#71 §4): an Elevation View is a saved view like
+    // any other, and a sheet that quietly drew what the view hides would be a different drawing from
+    // the one on the screen. There are no temporary chips for one yet, so `undefined` is the view.
+    const composition = drawingComposition(project, elevationView, elevationView.floorId, undefined)
+    const scene = elevationScene(project, elevationView)
+    const states = composition.optionId === null
+      ? null
+      : displayStates(displayModel(effectiveModel(project, elevationView.floorId, composition.optionId), viewRenovationDisplay(elevationView)))
+    const { list } = drawElevationView(scene, {
+      sizing: SHEET_SIZING,
+      layers: composition.gates,
+      scale: shrink,
+      // The ruler and the height lines name the room, not the paper: 2600 on a 1:50 sheet, never 52.
+      formatHeight: (mm: number) => formatLength(mm, recipe.unit, recipe.precision),
+    })
+    return {
+      ok: true,
+      drawing: {
+        list,
+        viewName: elevationView.name,
+        // The subject row says `Floor`, exactly as a Plan sheet's does: what the drawing is of is
+        // the same thing, and the view's own name is what says it is looked at sideways.
+        subjectLabel: TITLE_BLOCK.floor,
+        subject: project.floors.find((each) => each.id === elevationView.floorId)?.name ?? '',
+        renovation: composition.optionId === null || states === null
+          ? null
+          : {
+              designOption: designOptionName(project, composition.optionId),
+              renovationDisplay: DISPLAY_NAME[viewRenovationDisplay(elevationView)],
+              states: [...new Set(states.values())],
+            },
+      },
+    }
+  }
   const design = project.itemDesigns.find((each) => each.id === view.itemDesignId)
   if (design === undefined) return { ok: false, reason: 'unknown-view' }
   const detail = effectiveItemDetail(project, revision, design.id)
@@ -211,6 +249,21 @@ export function modelBounds(snapshot: ExportSnapshot, view: RecipeViewRef): Rect
     // A Floor with no Plan Image and nothing on it has no extent, which is not the same as there
     // being no such view: criterion 7 wants its sheet drawn, frame and all.
     return effectiveFloor(displayProject(project, optionId), revision, planView.floorId, optionId).bounds ?? { x: 0, y: 0, w: 0, h: 0 }
+  }
+  if (view.kind === 'elevation') {
+    const elevationView = (project.elevationViews ?? []).find((each) => each.id === view.viewId)
+    if (elevationView === undefined) return null
+    // The drawn area, in millimetres of the model: the view line's length across, and the heights the
+    // rows and the Floor's own limits reach. The ruler stands outside it and is sized by the paper,
+    // not by the model, so it is not part of what has to fit.
+    const scene = elevationScene(project, elevationView)
+    const limits = scene.floor?.limits
+    const heights = [0, ...scene.rows.flatMap((row) => [row.zMin, row.zMax])]
+    if ((limits?.lowerMm ?? null) !== null) heights.push(limits!.lowerMm!)
+    if ((limits?.upperMm ?? null) !== null) heights.push(limits!.upperMm!)
+    const low = Math.min(...heights)
+    const high = Math.max(...heights)
+    return { x: 0, y: low, w: scene.length, h: high - low }
   }
   const design = project.itemDesigns.find((each) => each.id === view.itemDesignId)
   if (design === undefined) return null

@@ -26,9 +26,17 @@ import type { Project } from '../domain'
 
 /** What one drawing was drawn from, or nothing for an Item Detail, which has no layers to record. */
 function compositionOf(project: Project, view: RecipeViewRef): RecordedComposition | null {
-  if (view.kind !== 'plan') return null
-  const planView = project.views.find((each) => each.id === view.viewId)
-  return planView === undefined ? null : drawingComposition(project, planView, planView.floorId, view.toggles).recorded
+  if (view.kind === 'plan') {
+    const planView = project.views.find((each) => each.id === view.viewId)
+    return planView === undefined ? null : drawingComposition(project, planView, planView.floorId, view.toggles).recorded
+  }
+  if (view.kind === 'elevation') {
+    // The Elevation definition rides along with the layer record (#75 criterion 15): the sheet says
+    // where the viewer stood, so a drawing whose view line has since moved is still explainable.
+    const elevationView = (project.elevationViews ?? []).find((each) => each.id === view.viewId)
+    return elevationView === undefined ? null : drawingComposition(project, elevationView, elevationView.floorId, undefined).recorded
+  }
+  return null
 }
 
 /**

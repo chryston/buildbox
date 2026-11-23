@@ -9,7 +9,7 @@
  *
  * The words themselves are in `strings.ts`; this file only decides which of them apply.
  */
-import type { PlanView, Project } from '../domain'
+import type { Project, SavedView } from '../domain'
 import { designOptionsOf, drawingLayerById } from '../domain'
 import { RENOVATION_STATES, type QuantityScope, type RenovationState } from '../derive'
 
@@ -39,7 +39,7 @@ export function defaultCutListStates(scope: Pick<QuantityScope, 'designOptionIds
  * Option A and asks for a list means Option A — and a view with no Option, or a build with no
  * Design Options at all, is the Existing Model.
  */
-export function defaultListsScope(project: Project, view: PlanView | null): QuantityScope {
+export function defaultListsScope(project: Project, view: SavedView | null): QuantityScope {
   const optionId = view !== null ? viewDesignOptionId(view) : null
   return {
     floorIds: project.floors.map((floor) => floor.id),

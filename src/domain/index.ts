@@ -93,6 +93,7 @@ export {
   migrateV3toV4,
   migrateV4toV5,
   migrateV7toV8,
+  migrateV9toV10,
   runMigrationChain,
   type Migrator,
   type MigrateError,
@@ -167,6 +168,8 @@ export type {
   Room,
   RoomOutline,
   RoomWallFaceRef,
+  SavedView,
+  SavedViewSettings,
   Wall,
   WallClassification,
   WallEnd,
@@ -178,6 +181,8 @@ export type {
 } from './project'
 export type { PlanViewRange } from './planViewRange'
 export { DEFAULT_PLAN_VIEW_RANGE, defaultPlanViewRange } from './planViewRange'
+export type { ElevationView, ElevationViewLine, ElevationViewSide } from './elevationView'
+export { ELEVATION_VIEW_SIDES, elevationViewNameTaken, nextElevationViewName } from './elevationView'
 export {
   DEFAULT_DRAWING_LAYERS,
   DEFAULT_LAYER_NAMES,
@@ -190,6 +195,9 @@ export {
   drawingLayerByName,
   drawingLayersOf,
   entityLayerId,
+  elevationViewsOf,
+  savedViewById,
+  savedViewsOf,
   viewActiveLayerId,
   viewDesignOptionId,
   viewLayerOrder,

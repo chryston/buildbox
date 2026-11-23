@@ -15,13 +15,19 @@
  */
 import type { LayerGates } from '../drawing'
 import { UNLAYERED_LAYER, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, layerAccessOf } from '../derive'
-import type { EntityId, PlanView, Project } from '../domain'
+import type { ElevationView, EntityId, PlanView, Project } from '../domain'
 import { UNLAYERED_LAYER_KEY, drawingLayerById, viewDesignOptionId, viewLayerSettingOverride, viewRenovationDisplay } from '../domain'
-import type { CompositionColorOverride, CompositionLayer, DrawingToggles, RecordedComposition } from './types'
+import type {
+  CompositionColorOverride,
+  CompositionLayer,
+  DrawingToggles,
+  RecordedComposition,
+  RecordedElevation,
+} from './types'
 
-/** The gates and the record for one Plan View, from one set of temporary toggles. */
+/** The gates and the record for one saved view, from one set of temporary toggles. */
 export interface DrawingComposition {
-  /** What `drawFloorView` paints through. */
+  /** What `drawFloorView` and `drawElevationView` paint through. */
   readonly gates: LayerGates
   /** What the metadata says this sheet was drawn from. */
   readonly recorded: RecordedComposition
@@ -32,8 +38,20 @@ export interface DrawingComposition {
 /** What one layer key is called on the sheet: the Project's own name, or `Unlayered`. */
 const layerName = (project: Project, key: EntityId): string => drawingLayerById(project, key)?.name ?? UNLAYERED_LAYER
 
+/** The Elevation definition the metadata records: the three fields and the name they belong to. */
+const elevationOf = (view: ElevationView): RecordedElevation => ({
+  name: view.name,
+  line: { start: { x: view.line.start.x, y: view.line.start.y }, end: { x: view.line.end.x, y: view.line.end.y } },
+  side: view.side,
+  depth: view.depth,
+})
+
 /**
- * The composition of one Plan View: its own layer access, with the dialog's chips over the top.
+ * The composition of one saved view: its own layer access, with the dialog's chips over the top.
+ *
+ * A Plan View and an Elevation View are composed the same way — both are a `SavedViewSettings`
+ * standing on one Floor, and #71's layer access does not care which kind is asking. Only the record
+ * differs: an Elevation sheet also says what it was aimed at.
  *
  * `toggles.layers` is either absent — every layer this view draws, which is the saved view exactly —
  * or the complete set of keys the chips leave on. It *replaces* the view's visibility rather than
@@ -42,7 +60,7 @@ const layerName = (project: Project, key: EntityId): string => drawingLayerById(
  */
 export function drawingComposition(
   project: Project,
-  view: PlanView,
+  view: PlanView | ElevationView,
   floorId: EntityId,
   toggles: DrawingToggles | undefined,
 ): DrawingComposition {
@@ -85,6 +103,7 @@ export function drawingComposition(
       included_layers: order.filter(drawnKey).map(row),
       color_overrides: order.map(override).filter((each): each is CompositionColorOverride => each !== null),
       notes: { overlay: toggles?.notesOverlay ?? false },
+      ...(view.kind === 'elevation' ? { elevation: elevationOf(view) } : {}),
     },
     optionId,
   }
@@ -105,7 +124,10 @@ export interface DrawingLayerChip {
  * (#71 §2). The `Notes overlay` chip is not here: it has nothing to overlay until #80 and #81 land,
  * so the dialog renders it disabled and this list stays the Project's own.
  */
-export function drawingLayerChips(project: Project, view: PlanView | null): readonly DrawingLayerChip[] {
+export function drawingLayerChips(
+  project: Project,
+  view: PlanView | ElevationView | null,
+): readonly DrawingLayerChip[] {
   return effectiveLayerOrder(project, view).map((key) => ({
     id: key,
     name: layerName(project, key),

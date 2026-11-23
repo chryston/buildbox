@@ -11,6 +11,7 @@
  * than a dependant of it, so it goes with the Floor in the same transaction and never
  * counts as a reason to refuse.
  */
+import { elevationViewsOf } from './project'
 import type { Project } from './project'
 
 /** One kind of floor-local content, and how many of it a Floor carries. */
@@ -54,10 +55,32 @@ const planViews: FloorDependencyKind = {
 }
 
 /**
+ * The Elevation Views looking along a Floor (#75 §3).
+ *
+ * Every one of them is a dependant, with no default among them: an Elevation View is always one a
+ * person made, so none of them goes with the Floor without being asked about. Deleting the Floor
+ * would leave a view pointing at a Floor that is not there, which is a Project the validator refuses
+ * and a card that opens on nothing — so the Floor waits until its views are deleted first.
+ */
+const elevationViews: FloorDependencyKind = {
+  id: 'elevationViews',
+  label: 'Elevation Views',
+  labelOne: 'Elevation View',
+  labelMany: 'Elevation Views',
+  count: (project, floorId) =>
+    elevationViewsOf(project).reduce((total, view) => (view.floorId === floorId ? total + 1 : total), 0),
+}
+
+/**
  * Every kind that can depend on a Floor, in the order a summary lists them. A later issue
  * adds a kind by appending one entry here; no caller changes.
  */
-export const FLOOR_DEPENDENCY_KINDS: readonly FloorDependencyKind[] = [placedItems, planImage, planViews]
+export const FLOOR_DEPENDENCY_KINDS: readonly FloorDependencyKind[] = [
+  placedItems,
+  planImage,
+  planViews,
+  elevationViews,
+]
 
 /** One kind's count for one Floor, with the words to show it. */
 export interface FloorDependency {

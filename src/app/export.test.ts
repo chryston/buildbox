@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest'
 import { deriveWarnings } from '../derive'
 import { domainFixture, referenceProject } from '../derive/testing'
-import type { Project, Wall } from '../domain'
+import type { ElevationView, Project, Wall } from '../domain'
 import type { Recipe } from '../export'
 import { createExportPort } from './export'
 import type { ProjectSession } from '../session'
@@ -236,5 +236,32 @@ describe('the view list', () => {
         ],
       }).unacknowledgedWarnings(),
     ).toBe(0)
+  })
+
+  it('offers an Elevation View as a drawing of its own Floor, and reads its composition back', async () => {
+    const project = referenceProject()
+    const floor = project.floors[0]!
+    const view: ElevationView = {
+      id: 'view-elevation-kitchen',
+      kind: 'elevation',
+      floorId: floor.id,
+      name: 'Kitchen',
+      line: { start: { x: 0, y: 4000 }, end: { x: 6000, y: 4000 } },
+      side: 'left',
+      depth: 3000,
+    }
+    const port = portWithProject({ ...project, elevationViews: [view] })
+
+    const listed = port.views().find((each) => each.ref.viewId === view.id)
+    // Criterion 22: it is offered, addressed as an Elevation View, and grouped under the Floor it was
+    // drawn across — the same sentence a Plan View gets.
+    expect(listed).toEqual({ ref: { kind: 'elevation', viewId: view.id }, label: 'Kitchen', group: floor.name })
+
+    // The Drawing tab's two reads both resolve the reference: an elevation that answered `null` would
+    // silently lose its layer chips and its composition line.
+    const chips = await port.drawingLayers({ kind: 'elevation', viewId: view.id })
+    expect(chips.length).toBeGreaterThan(0)
+    const composition = await port.composition({ kind: 'elevation', viewId: view.id }, {})
+    expect(composition).not.toBeNull()
   })
 })
