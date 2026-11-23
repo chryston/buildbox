@@ -23,7 +23,7 @@
 import type { DisplayLayer, DisplayList, MissingGlyph, Rect } from '../drawing'
 import { drawFloorView, drawItemDetail, wallOpenings } from '../drawing'
 import {
-  FF_RENOVATION,
+
   designOptionName,
   deriveRooms,
   deriveWalls,
@@ -195,7 +195,7 @@ export function modelBounds(snapshot: ExportSnapshot, view: RecipeViewRef): Rect
     if (planView === undefined) return null
     // The same Floor `rawDrawing` draws, Option and all: a fixed scale is checked against the extent
     // of what will be drawn, and a Design Option's proposed Walls can reach past the Existing Model.
-    const optionId = FF_RENOVATION ? viewDesignOptionId(planView) : null
+    const optionId = viewDesignOptionId(planView)
     // A Floor with no Plan Image and nothing on it has no extent, which is not the same as there
     // being no such view: criterion 7 wants its sheet drawn, frame and all.
     return effectiveFloor(displayProject(project, optionId), revision, planView.floorId, optionId).bounds ?? { x: 0, y: 0, w: 0, h: 0 }

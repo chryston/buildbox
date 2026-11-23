@@ -18,7 +18,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
-import { affineApply, affineInvert, FF_RENOVATION, resolveSnap } from '../../derive'
+import { affineApply, affineInvert, resolveSnap } from '../../derive'
 import type { DerivedFloor, FloorRooms, FloorWalls, RenovationState, SnapCandidate, SnapKind } from '../../derive'
 import type { DisplayUnit, Point2 } from '../../domain'
 import { footprintPath } from '../../domain'
@@ -749,8 +749,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
           </>
         )}
       </svg>
-      {FF_RENOVATION &&
-        renovation !== null &&
+      {renovation !== null &&
         renovation.cycle !== null &&
         renovation.cycle !== undefined &&
         (renovation.cycleCandidates ?? []).length > 1 && (

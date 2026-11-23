@@ -17,10 +17,16 @@ import type { Project } from '../domain'
 
 const fixturesRoot = fileURLToPath(new URL('../../fixtures', import.meta.url))
 
-/** The IDs a migration invents, named for the caller that asked for them (#42 §3). */
-const allocator = (prefix: string): ((count: number) => string[]) => {
-  let issued = 0
-  return (count) => Array.from({ length: count }, () => `${prefix}-${++issued}`)
+/**
+ * The IDs a migration invents, named for the caller that asked for them (#42 §3), starting past the
+ * highest number the file already carries. The eighth step invents Drawing Layer IDs from the same
+ * allocator, and a committed fixture's views are named `view-1`, `view-2` — an allocator that starts
+ * at one would hand a Layer an ID a View already holds, and the migrated Project would not validate.
+ */
+const allocator = (prefix: string, record: unknown): ((count: number) => string[]) => {
+  const taken = [...JSON.stringify(record).matchAll(new RegExp(`${prefix}-(\\d+)`, 'g'))]
+  let issued = taken.reduce((max, match) => Math.max(max, Number(match[1])), 0)
+  return (count) => Array.from({ length: count }, () => `${prefix}-${(issued += 1)}`)
 }
 
 /** A committed Project fixture, read and migrated exactly as the app reads one. */
@@ -29,7 +35,7 @@ export function domainFixture(relativePath: string, idPrefix = 'view'): Project 
     domainSchemaVersion: number
     project: unknown
   }
-  const result = migrateProject(envelope.project, envelope.domainSchemaVersion, allocator(idPrefix))
+  const result = migrateProject(envelope.project, envelope.domainSchemaVersion, allocator(idPrefix, envelope.project))
   if (!result.ok) throw new Error(`${relativePath}: ${result.error.message}`)
   return result.project
 }

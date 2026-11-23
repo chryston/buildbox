@@ -10,7 +10,7 @@ import { findNode } from '../../cabinet'
 import { effectiveModel } from '../../derive'
 import { designOptionsOf } from '../../domain'
 import type { CabinetItemDesign, CabinetNode, EntityId, Floor, GenericItemDesign, ItemDesign, PlacedItem, ProposedModel, Project } from '../../domain'
-import { FF_RENOVATION, problem } from '../../lib'
+import { problem } from '../../lib'
 import type { ValidationProblem } from '../../lib'
 import type { RejectionCode } from '../intents'
 import type { IntentType } from '../intents'
@@ -309,7 +309,7 @@ export function assignChanged(draftValue: object, nextValue: object): void {
  * in a released bundle.
  */
 export function containerOf(draft: Project, designOptionId: EntityId | null | undefined): ProposedModel {
-  if (!FF_RENOVATION || designOptionId === null || designOptionId === undefined) return draft.existingModel
+  if (designOptionId === null || designOptionId === undefined) return draft.existingModel
   const option = designOptionsOf(draft).find((entry) => entry.id === designOptionId)
   if (option === undefined)
     refuse('unknown-target', 'designOptions', `There is no Design Option ${designOptionId} to hold this edit.`)
@@ -323,7 +323,7 @@ export function containerOf(draft: Project, designOptionId: EntityId | null | un
  * off, this is the Project itself.
  */
 export function effectiveView(project: Project, floorId: EntityId | null, designOptionId: EntityId | null | undefined): Project {
-  if (!FF_RENOVATION || designOptionId === null || designOptionId === undefined) return project
+  if (designOptionId === null || designOptionId === undefined) return project
   const model = effectiveModel(project, floorId, designOptionId)
   return {
     ...project,

@@ -16,7 +16,7 @@ import type { Patch } from 'immer'
 import { validateProject } from '../domain'
 import type { Project } from '../domain'
 import { designOptionsOf } from '../domain'
-import { FF_RENOVATION, problem } from '../lib'
+import { problem } from '../lib'
 import { validationScopeFor } from './validationScope'
 import type { Applied, DependencyReview, Intent, IntentType, Locator, Rejection, RejectionCode } from './intents'
 import { IntentRejection } from './handlers/support'
@@ -56,7 +56,7 @@ function rejected(code: RejectionCode, path: string, message: string): Rejection
  * re-files it still trips the guard on its other patches.
  */
 const isLayerReassignment = (patch: Patch): boolean =>
-  FF_RENOVATION && patch.path[patch.path.length - 1] === 'drawingLayerId'
+  patch.path[patch.path.length - 1] === 'drawingLayerId'
 
 /**
  * Run one Intent against a Project.
@@ -105,7 +105,6 @@ export function applyIntent(project: Project, intent: Intent): Applied | Rejecti
   // where the edits landed, not which Intent was sent, so nothing the catalogue gains later can
   // slip past this.
   if (
-    FF_RENOVATION &&
     designOptionsOf(project).length > 0 &&
     intent.type !== 'renovation.correctExistingModel' &&
     patches.some((patch) => patch.path[0] === 'existingModel' && !isLayerReassignment(patch))

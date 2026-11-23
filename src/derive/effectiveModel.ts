@@ -21,7 +21,6 @@
  * and a Floor with no Option is the same array `project.existingModel` already holds.
  */
 import { designOptionsOf, type EntityId, type Opening, type PlacedItem, type Project, type Room, type Wall, type WallJunction } from '../domain'
-import { FF_RENOVATION } from '../lib'
 import type { RenovationState } from './quantities/scope'
 
 /** One entity of the effective model, and the Renovation State it is seen in. */
@@ -104,7 +103,7 @@ export function effectiveModel(
   floorId: EntityId | null,
   optionId: EntityId | null,
 ): EffectiveModel {
-  const option = FF_RENOVATION && optionId !== null ? designOptionsOf(project).find((candidate) => candidate.id === optionId) ?? null : null
+  const option = optionId !== null ? designOptionsOf(project).find((candidate) => candidate.id === optionId) ?? null : null
   const demolished = new Set<EntityId>(option?.demolishedIds ?? [])
   const proposed = option?.proposed
   const walls = tag(onFloor(project.existingModel.walls, floorId), demolished, proposed === undefined ? [] : onFloor(proposed.walls, floorId))

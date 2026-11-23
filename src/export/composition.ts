@@ -14,7 +14,7 @@
  * here writes: the Project is read, the view is read, and the gates are a closure over a lookup.
  */
 import type { LayerGates } from '../drawing'
-import { FF_RENOVATION, UNLAYERED_LAYER, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, layerAccessOf } from '../derive'
+import { UNLAYERED_LAYER, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, layerAccessOf } from '../derive'
 import type { EntityId, PlanView, Project } from '../domain'
 import { UNLAYERED_LAYER_KEY, drawingLayerById, viewDesignOptionId, viewLayerSettingOverride, viewRenovationDisplay } from '../domain'
 import type { CompositionColorOverride, CompositionLayer, DrawingToggles, RecordedComposition } from './types'
@@ -48,7 +48,7 @@ export function drawingComposition(
 ): DrawingComposition {
   // Flag off, no sheet may say it was drawn from a Design Option: the drawing is the Existing Model
   // whatever the saved view holds, and the metadata and the title block have to agree with it.
-  const optionId = FF_RENOVATION ? viewDesignOptionId(view) : null
+  const optionId = viewDesignOptionId(view)
   const keys = entityLayerKeys(project, floorId, optionId)
   const keyOf = (id: EntityId): EntityId => keys.get(id) ?? UNLAYERED_LAYER_KEY
   const order = effectiveLayerOrder(project, view)

@@ -16,7 +16,7 @@ import { useEffect, useState } from 'react'
 import { SCOPE, defaultCutListStates } from '../../../export'
 import type { ExportProgress, ListsRecipe, ListsSummary, RecipeViewRef, TableId } from '../../../export'
 import { UNLAYERED_LAYER_KEY } from '../../../domain'
-import { FF_RENOVATION } from '../../../derive'
+
 import type { QuantityScope, RenovationState } from '../../../derive'
 import { STRINGS } from '../../strings'
 import { RENOVATION_STRINGS } from '../../strings/renovation'
@@ -338,7 +338,7 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
         ) : (
           <div className="bb-export-options" data-testid="export-lists-options">
             <span className="helper">{STRINGS.exportListsDesignOption}</span>
-            {FF_RENOVATION && (
+            {(
               <>
                 <label>
                   <input
@@ -451,7 +451,7 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
       <div className="bb-export-notices" data-testid="export-lists-notices">
         <p data-testid="export-lists-notice-warnings">{STRINGS.exportWarningCount(warnings)}</p>
         {unsavedChanges && <p data-testid="export-lists-notice-unsaved">{STRINGS.exportUnsavedNotice}</p>}
-        {FF_RENOVATION && summary !== null && summary.hiddenInView.count > 0 && (
+        {summary !== null && summary.hiddenInView.count > 0 && (
           // Informational and never blocking: the scope asked for these rows and the file holds
           // them, whatever the view on the other side of the dialog happens to hide.
           <details data-testid="export-lists-notice-hidden">

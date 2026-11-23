@@ -18,6 +18,7 @@ import {
   expectRoundTrip,
   idSource,
   intent,
+  layerNamed,
   newProject,
 } from '../testing'
 
@@ -96,6 +97,9 @@ describe('opening.create', () => {
       head: 2100,
       swing: 'left',
       hingeSide: 'start',
+      // An Opening is Structure content, and the Project's `Structure` layer is where new Walls and
+      // Openings are created (#71 §2).
+      drawingLayerId: layerNamed(applied.project, 'Structure'),
     })
     // The Wall is untouched: an Opening is an absence, not an edit of the host.
     expect(applied.project.existingModel.walls).toEqual(project.existingModel.walls)

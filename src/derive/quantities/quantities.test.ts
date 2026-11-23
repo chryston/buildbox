@@ -65,13 +65,20 @@ describe('the scope filters', () => {
   })
 
   test('Unlayered content is in only when the scope says so', () => {
-    // Every Placed Item in the domain is unlayered until #18 gives a Project a layer, so a
-    // narrowed scope that leaves Unlayered out has nothing left to count.
+    // Every Project files its content on a layer now (#71), so this makes a Project whose content is
+    // deliberately Unlayered — filed on nothing — and asks the narrowed scope about that.
+    const unlayered: Project = {
+      ...project,
+      existingModel: {
+        ...project.existingModel,
+        placedItems: project.existingModel.placedItems.map((item) => ({ ...item, drawingLayerId: null })),
+      },
+    }
     const excluding = scope({ drawingLayers: { layerIds: ['layer-1'], includeUnlayered: false } })
-    expect(quantities(project, 1, excluding).items).toEqual([])
-    expect(quantities(project, 1, excluding).cuts).toEqual([])
+    expect(quantities(unlayered, 1, excluding).items).toEqual([])
+    expect(quantities(unlayered, 1, excluding).cuts).toEqual([])
     const including = scope({ drawingLayers: { layerIds: ['layer-1'], includeUnlayered: true } })
-    expect(quantities(project, 1, including).items).toEqual(quantities(project, 1, scope()).items)
+    expect(quantities(unlayered, 1, including).items).toEqual(quantities(unlayered, 1, scope()).items)
   })
 
   test('an option with no content of its own yet counts the Existing Model’s, tagged with its ID', () => {

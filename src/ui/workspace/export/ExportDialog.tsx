@@ -31,7 +31,7 @@ import type {
   RecordedComposition,
   ScaleDenominator,
 } from '../../../export'
-import { FF_RENOVATION } from '../../../derive'
+
 import { ListsPanel } from './ListsPanel'
 import { viewKey } from './port'
 import type { BlockedView, ExportPort, ExportRunOutcome } from './port'
@@ -262,7 +262,7 @@ export const ExportDialog = ({
       ? STRINGS.exportNeedViews
       : // The flag, not merely `blockedView`: a runtime ternary would leave the renovation sentence in
         // a flag-off bundle, and that copy is what the bundle scan looks for (#69 criterion 13).
-        FF_RENOVATION && blockedView !== null
+        blockedView !== null
         ? RENOVATION_STRINGS.exportNeedsOption(blockedView.viewName, displayLabel(blockedView.display))
         : !fit && typeof recipe.scale === 'number'
           ? STRINGS.exportScaleNoFit(recipe.scale)
@@ -343,7 +343,7 @@ export const ExportDialog = ({
             {isPdf && selected.length > 0 && <p className="helper">{STRINGS.exportPdfSingleView}</p>}
           </fieldset>
 
-          {FF_RENOVATION && chips.length > 0 && (
+          {chips.length > 0 && (
             <fieldset disabled={busy || originRef === undefined}>
               <legend>{RENOVATION_STRINGS.exportLayersGroup}</legend>
               <p className="helper" data-testid="export-layers-start">
@@ -573,7 +573,7 @@ export const ExportDialog = ({
                   ))}
                 </>
               )}
-              {FF_RENOVATION && blockedView !== null && onOpenView !== undefined && (
+              {blockedView !== null && onOpenView !== undefined && (
                 <>
                   {' '}
                   <button

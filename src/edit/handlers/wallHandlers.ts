@@ -29,7 +29,7 @@ import {
 } from '../../geometry'
 import { chainJunctionCount, wallEndKey } from '../intents'
 import type { CreateWallChain, DependencyReview, Intent, IntentTarget, Locator, MergeWalls, WallEndTarget, WallIntent } from '../intents'
-import { FF_RENOVATION } from '../../lib'
+
 import type { Handler, IntentHandler } from './context'
 import { creationLayerField } from './creationLayer'
 import { containerOf, effectiveView, isInOption, nextWallRef, proposedProvenance, refuse, spendIds } from './support'
@@ -583,7 +583,7 @@ const mergeWalls: Handler<'wall.merge'> = (ctx) => {
   // is the record every option is drawn against, and changing it is a correction, not a renovation.
   const container = containerOf(ctx.draft, target?.designOptionId)
   const inOption = isInOption(container, ctx.draft)
-  if (FF_RENOVATION && !inOption && designOptionsOf(ctx.project).length > 0) {
+  if (!inOption && designOptionsOf(ctx.project).length > 0) {
     refuse(
       'baseline-correction-required',
       wallPath(secondId),
@@ -591,7 +591,7 @@ const mergeWalls: Handler<'wall.merge'> = (ctx) => {
     )
   }
   const view = effectiveView(ctx.project, null, target?.designOptionId)
-  if (FF_RENOVATION && inOption) {
+  if (inOption) {
     for (const id of [firstId, secondId]) {
       if (container.walls.some((wall) => wall.id === id)) continue
       refuse('merge-mismatch', wallPath(id), 'An option merges the walls it drew, not the walls the survey recorded.')

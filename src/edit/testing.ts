@@ -21,9 +21,13 @@ import type { Applied, Intent, IntentType, PayloadOf, Rejection, RejectionCode }
 export const NOW = '2026-11-18T09:00:00.000Z'
 
 /** The caller's ID allocator: `ids(2)` is the next two IDs, in order. */
-export function idSource(prefix: string): (count?: number) => string[] {
-  let issued = 0
-  return (count = 1) => Array.from({ length: count }, () => `${prefix}-${++issued}`)
+export function idSource(prefix: string, avoid?: unknown): (count?: number) => string[] {
+  // A migration invents its Drawing Layer IDs from the same allocator, and a committed fixture's
+  // views are already named `view-1`, `view-2` — so the counter starts past the highest number the
+  // record carries rather than at one, or the migrated Project would hold a duplicate ID.
+  const taken = avoid === undefined ? [] : [...JSON.stringify(avoid).matchAll(new RegExp(`${prefix}-(\\d+)`, 'g'))]
+  let issued = taken.reduce((max, match) => Math.max(max, Number(match[1])), 0)
+  return (count = 1) => Array.from({ length: count }, () => `${prefix}-${(issued += 1)}`)
 }
 
 /** One Intent, labelled as the catalogue labels it, carrying the IDs it will spend. */
@@ -35,7 +39,7 @@ export function intent<T extends IntentType>(type: T, payload: PayloadOf<T>, tak
 export function basicProject(): Project {
   const url = new URL('../../fixtures/domain/v1/project-basic.json', import.meta.url)
   const envelope = JSON.parse(readFileSync(fileURLToPath(url), 'utf8')) as Record<string, unknown>
-  const result = migrateProject(envelope.project, envelope.domainSchemaVersion as number, idSource('view'))
+  const result = migrateProject(envelope.project, envelope.domainSchemaVersion as number, idSource('view', envelope.project))
   if (!result.ok) throw new Error(`project-basic.json: ${result.error.message}`)
   return result.project
 }
@@ -119,4 +123,11 @@ export function deepFreeze<T>(value: T): T {
     Object.freeze(value)
   }
   return value
+}
+
+/** The ID of the Drawing Layer with this name, which is where new content of its subtype is created (#71 §2). */
+export function layerNamed(project: Project, name: string): string {
+  const layer = (project.drawingLayers ?? []).find((candidate) => candidate.name === name)
+  if (layer === undefined) throw new Error(`This Project has no ${name} layer.`)
+  return layer.id
 }

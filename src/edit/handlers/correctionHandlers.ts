@@ -31,7 +31,7 @@ import { applyPatches, produceWithPatches } from 'immer'
 import type { Patch } from 'immer'
 import { designOptionsOf, validateProject } from '../../domain'
 import type { DesignOption, EntityId, Opening, PlacedItem, Project, Room, Wall, WallJunction } from '../../domain'
-import { canonicalJson, FF_RENOVATION } from '../../lib'
+import { canonicalJson } from '../../lib'
 import type {
   CorrectionEffect,
   CorrectionReview,
@@ -209,7 +209,7 @@ function dependantsOf(project: Project, option: DesignOption, subjectId: EntityI
 /** The handler behind an inner Intent; only an Existing Model edit is correctable. */
 function innerHandler(type: IntentType): IntentHandler<IntentType> {
   const wrapped = type === 'renovation.correctExistingModel' || type === 'renovation.moveToDesignOption'
-  if (!FF_RENOVATION || wrapped || type.startsWith('designOption.')) {
+  if (wrapped || type.startsWith('designOption.')) {
     refuse('unknown-target', 'payload.inner', 'A correction wraps one Existing Model edit, never another correction.')
   }
   return requireHandler(type)

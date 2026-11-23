@@ -22,7 +22,6 @@
  * before layers existed. Unlayered content omits the field too — absent and `null` read the same, and
  * a Project with no layers then keeps the bytes it had.
  */
-import { FF_RENOVATION } from '../../lib'
 import type { CreationSubtype, EntityId, PlanView, Project } from '../../domain'
 import { DEFAULT_LAYER_NAMES, DEFAULT_LAYER_SETTING, drawingLayerById, drawingLayerByName } from '../../domain'
 import { refuse } from './support'
@@ -47,7 +46,7 @@ export function creationLayerField(
   viewId: EntityId | null | undefined,
   subtype: CreationSubtype,
 ): CreationLayerField {
-  if (!FF_RENOVATION) return {}
+
   const view = viewOf(project, viewId)
   const named = drawingLayerByName(project, DEFAULT_LAYER_NAMES[subtype])
   // The active layer is the fallback, and `Unlayered` (null) or an ID the Project no longer has ends

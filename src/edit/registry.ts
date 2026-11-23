@@ -7,7 +7,7 @@
  * once — the registry's key is the proof that the pair belongs together.
  */
 import type { IntentType, RenovationIntentType, S7IntentType } from './intents'
-import { FF_RENOVATION } from '../lib'
+
 import type { IntentHandler } from './handlers/context'
 import { CABINET_HANDLERS } from './handlers/cabinetHandlers'
 import { CORRECTION_HANDLERS } from './handlers/correctionHandlers'
@@ -49,11 +49,11 @@ export const INTENT_HANDLERS: { [T in S7IntentType]: IntentHandler<T> } & {
   // The one way into `./handlers/renovationHandlers`, `./handlers/renovationEdits` and
   // `./handlers/correctionHandlers`: with the flag off these fold to nothing, the imports go
   // unused, and all three modules — marker string and all — are gone from the bundle.
-  ...(FF_RENOVATION ? RENOVATION_HANDLERS : {}),
-  ...(FF_RENOVATION ? RENOVATION_EDIT_HANDLERS : {}),
-  ...(FF_RENOVATION ? CORRECTION_HANDLERS : {}),
-  ...(FF_RENOVATION ? LAYER_HANDLERS : {}),
-  ...(FF_RENOVATION ? PASTE_HANDLERS : {}),
+  ...RENOVATION_HANDLERS,
+  ...RENOVATION_EDIT_HANDLERS,
+  ...CORRECTION_HANDLERS,
+  ...LAYER_HANDLERS,
+  ...PASTE_HANDLERS,
 }
 
 /** Every Intent type the catalogue answers — the list #48's undo menu and #66 read. */

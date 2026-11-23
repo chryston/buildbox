@@ -12,7 +12,7 @@
 import type { PlanView, Project } from '../domain'
 import { designOptionsOf, drawingLayerById } from '../domain'
 import { RENOVATION_STATES, type QuantityScope, type RenovationState } from '../derive'
-import { FF_RENOVATION } from '../lib'
+
 import { viewDesignOptionId } from '../domain'
 import { SCOPE } from './strings'
 
@@ -40,7 +40,7 @@ export function defaultCutListStates(scope: Pick<QuantityScope, 'designOptionIds
  * Design Options at all, is the Existing Model.
  */
 export function defaultListsScope(project: Project, view: PlanView | null): QuantityScope {
-  const optionId = FF_RENOVATION && view !== null ? viewDesignOptionId(view) : null
+  const optionId = view !== null ? viewDesignOptionId(view) : null
   return {
     floorIds: project.floors.map((floor) => floor.id),
     designOptionIds: optionId === null ? 'existing-only' : [optionId],

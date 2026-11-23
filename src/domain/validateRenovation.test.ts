@@ -18,7 +18,12 @@ type Rec = Record<string, unknown>
 
 function base(): Rec {
   const envelope = JSON.parse(roomsFixture) as { domainSchemaVersion: number; project: Rec }
-  const result = migrateProject(envelope.project, envelope.domainSchemaVersion, () => [])
+  // The chain now runs to v8, which invents three Drawing Layer IDs, so the fixture needs a real
+  // allocator rather than the empty one these loaders used while the chain stopped at v7.
+  let issued = 0
+  const result = migrateProject(envelope.project, envelope.domainSchemaVersion, (count) =>
+    Array.from({ length: count }, () => `fixture-layer-${(issued += 1)}`),
+  )
   if (!result.ok) throw new Error(`The rooms fixture no longer migrates: ${result.error.message}`)
   return structuredClone(result.project) as unknown as Rec
 }

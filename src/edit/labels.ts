@@ -3,7 +3,7 @@
  * has a single place to read. Labels are short verb phrases — they show in the undo/redo
  * tooltip, where "Undo Change cabinet size" has to read as one sentence.
  */
-import { FF_RENOVATION } from '../lib'
+
 import type { IntentType, S7IntentType } from './intents'
 import { RENOVATION_EDIT_INTENT_LABELS } from './handlers/renovationEdits'
 import { CORRECTION_INTENT_LABELS } from './handlers/correctionHandlers'
@@ -99,9 +99,13 @@ export const INTENT_LABELS = {
  * a renovation type in a flag-off build answers with the type itself — an Intent nothing
  * registered can be, so the answer is never shown.
  */
-const RENOVATION_LABELS: Partial<Record<IntentType, string>> = FF_RENOVATION
-  ? { ...RENOVATION_INTENT_LABELS, ...RENOVATION_EDIT_INTENT_LABELS, ...CORRECTION_INTENT_LABELS, ...LAYER_INTENT_LABELS, ...PASTE_INTENT_LABELS }
-  : {}
+const RENOVATION_LABELS: Partial<Record<IntentType, string>> = {
+  ...RENOVATION_INTENT_LABELS,
+  ...RENOVATION_EDIT_INTENT_LABELS,
+  ...CORRECTION_INTENT_LABELS,
+  ...LAYER_INTENT_LABELS,
+  ...PASTE_INTENT_LABELS,
+}
 
 export function intentLabel(type: IntentType): string {
   const known = INTENT_LABELS as Partial<Record<IntentType, string>>

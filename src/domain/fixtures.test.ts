@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 import { describe, expect, it } from 'vitest'
-import { canonicalJson, FF_RENOVATION } from '../lib'
+import { canonicalJson } from '../lib'
 import { DOMAIN_SCHEMA_VERSION, migrateProject, type PlanView } from './index'
 import readmeText from '../../fixtures/domain/README.md?raw'
 
@@ -15,7 +15,6 @@ import readmeText from '../../fixtures/domain/README.md?raw'
 const fixtures = Object.entries(
   import.meta.glob<string>('/fixtures/domain/**/*.json', { eager: true, query: '?raw', import: 'default' }),
 )
-  .filter(([path]) => FF_RENOVATION || !path.includes('/v8/'))
   .map(([path, text]) => ({ path, text }))
 
 function envelopeOf(text: string): Record<string, unknown> {
@@ -86,12 +85,24 @@ describe('domain fixtures (#42 §6)', () => {
     // them, #65 adds the empty Opening collection and #67 the empty Room collection. A
     // fixture that already has Walls — `v4/walls.json` — keeps the ones it was written with,
     // and so does one that already has Openings or Rooms.
+    //
+    // #73: the eighth step then files what it reads on the default layers — Walls, Openings and
+    // Rooms on `Structure`, Placed Items on `Furniture` — so every entry carries the ID of the layer
+    // this run's allocator issued for it, read back off the migrated Project.
+    const layerId = (name: string): string => (result.project.drawingLayers ?? []).find((layer) => layer.name === name)!.id
+    const filed = <T extends object>(entries: readonly T[] | undefined, name: string): T[] =>
+      (entries ?? []).map((entry) => ({ ...entry, drawingLayerId: layerId(name) }))
     const priorModel = prior.existingModel as Record<string, unknown>
+    const entriesOf = (key: string): object[] => priorModel[key] as object[]
     expect(result.project.existingModel).toEqual({
       ...priorModel,
       ...('walls' in priorModel ? {} : { walls: [], wallJunctions: [] }),
       ...('openings' in priorModel ? {} : { openings: [] }),
       ...('rooms' in priorModel ? {} : { rooms: [] }),
+      placedItems: filed(entriesOf('placedItems'), 'Furniture'),
+      walls: filed(entriesOf('walls'), 'Structure'),
+      openings: filed(entriesOf('openings'), 'Structure'),
+      rooms: filed(entriesOf('rooms'), 'Structure'),
     })
     expect(identity(result.project.itemDesigns)).toEqual(identity(prior.itemDesigns))
   })

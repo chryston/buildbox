@@ -12,13 +12,9 @@
  */
 import type { PlanView } from '../domain'
 import { viewDesignOptionId, viewRenovationDisplay } from '../domain'
-import { FF_RENOVATION } from '../lib'
+
 
 /** Whether this view's Display cannot be exported because it has no Design Option to display. */
 export function needsActiveOption(view: PlanView): boolean {
-  // Flag-off there are no Design Options to be missing, and every Display is the Existing Model —
-  // a build that cannot offer an Option must not refuse a drawing for want of one.
-  return FF_RENOVATION &&
-    viewDesignOptionId(view) === null &&
-    viewRenovationDisplay(view) !== 'existing'
+  return viewDesignOptionId(view) === null && viewRenovationDisplay(view) !== 'existing'
 }

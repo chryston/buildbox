@@ -9,14 +9,14 @@ import { describe, expect, it } from 'vitest'
 import { validateProject } from '../../domain'
 import { canonicalJson } from '../../lib'
 import { applyIntent } from '../apply'
-import { createProject } from '../create'
+import { CREATE_PROJECT_ID_COUNT, createProject } from '../create'
 import { LEGACY_DEFAULT_SETTINGS } from '../defaults'
 import { NOW, deepFreeze, expectDeterministic, expectRejection, expectRoundTrip, idSource, intent, newProject } from '../testing'
 
 describe('createProject', () => {
   it('makes the Project "New Project" made, in domain vocabulary', () => {
-    const ids = idSource('create')(6)
-    const [projectId, floorId, viewId, itemDesignId, placedItemId, rootNodeId] = ids
+    const ids = idSource('create')(CREATE_PROJECT_ID_COUNT)
+    const [projectId, floorId, viewId, itemDesignId, placedItemId, rootNodeId, , , furnitureId] = ids
     const project = createProject({ ids, now: NOW, name: 'Kitchen' })
 
     expect(validateProject(project).ok, JSON.stringify(validateProject(project))).toBe(true)
@@ -35,7 +35,8 @@ describe('createProject', () => {
         },
       ],
     })
-    // Legacy `x = 0, y = 0` is the unit's top-left corner; the placement holds its centre.
+    // Legacy `x = 0, y = 0` is the unit's top-left corner; the placement holds its centre, and the
+    // cabinet is Furniture — the layer a Project starts with (#71 §1).
     expect(project.existingModel.placedItems).toEqual([
       {
         id: placedItemId,
@@ -44,17 +45,22 @@ describe('createProject', () => {
         translation: { x: 300, y: 250 },
         rotationDeg: 0,
         baseElevation: 0,
+        drawingLayerId: furnitureId,
       },
     ])
   })
 
-  it('spends exactly the six IDs it is given, in the order it states', () => {
+  it('spends exactly the nine IDs it is given, in the order it states', () => {
     const ids = idSource('create')
-    const spent = [...ids(6)]
+    const spent = [...ids(CREATE_PROJECT_ID_COUNT)]
     const project = createProject({ ids: spent, now: NOW, name: 'A' })
     expect(project.views[0]!.id).toBe(spent[2])
     expect(canonicalJson(project.existingModel.placedItems[0]!.id)).toBe(JSON.stringify(spent[4]))
-    expect(() => createProject({ ids: ids(5), now: NOW, name: 'A' })).toThrowError(/spends 6 pre-allocated IDs/)
+    // The three default Drawing Layers take the IDs after the tree (#71 §1), and the cabinet the
+    // Project comes with is filed on the last of them.
+    expect((project.drawingLayers ?? []).map((layer) => layer.id)).toEqual(spent.slice(6))
+    expect(project.existingModel.placedItems[0]!.drawingLayerId).toBe(spent[8])
+    expect(() => createProject({ ids: ids(8), now: NOW, name: 'A' })).toThrowError(/spends 9 pre-allocated IDs/)
   })
 })
 

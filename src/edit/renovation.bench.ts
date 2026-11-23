@@ -35,7 +35,6 @@ import { bench, describe } from 'vitest'
 import { effectiveFloor } from '../derive'
 import { designOptionsOf, validateProject } from '../domain'
 import type { Project, Wall } from '../domain'
-import { FF_RENOVATION } from '../lib'
 import { applyIntent } from './apply'
 import type { Intent } from './intents'
 import { intentLabel } from './labels'
@@ -45,9 +44,6 @@ const DERIVE_BUDGET_MS = 50
 const ITERATIONS = 20
 const WARMUP = 5
 
-if (!FF_RENOVATION) {
-  throw new Error('this bench measures the renovation model: run it with VITE_FF_RENOVATION=true (`npm run bench` does)')
-}
 
 const SOURCES = import.meta.glob<string>('/fixtures/bench/renovation-reference.json', {
   eager: true,

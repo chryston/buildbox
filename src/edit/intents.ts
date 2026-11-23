@@ -43,7 +43,7 @@ import type {
 } from '../domain'
 import { roomOutlinePath } from '../domain'
 import type { KeepFixed, Pt } from '../geometry'
-import { FF_RENOVATION } from '../lib'
+
 import type { ValidationProblem } from '../lib'
 import { RENOVATION_EDIT_INTENT_ID_ORDER } from './handlers/renovationEdits'
 import { CORRECTION_INTENT_ID_ORDER } from './handlers/correctionHandlers'
@@ -1289,9 +1289,14 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
  * registers those handlers. With the flag off the ternary folds to the S7 table alone and the
  * import of the renovation module becomes dead, so a released bundle carries neither table.
  */
-const ID_ORDER_BY_TYPE: Partial<Record<IntentType, readonly string[]>> = FF_RENOVATION
-  ? { ...INTENT_ID_ORDER, ...RENOVATION_INTENT_ID_ORDER, ...RENOVATION_EDIT_INTENT_ID_ORDER, ...CORRECTION_INTENT_ID_ORDER, ...LAYER_INTENT_ID_ORDER, ...PASTE_INTENT_ID_ORDER }
-  : INTENT_ID_ORDER
+const ID_ORDER_BY_TYPE: Partial<Record<IntentType, readonly string[]>> = {
+  ...INTENT_ID_ORDER,
+  ...RENOVATION_INTENT_ID_ORDER,
+  ...RENOVATION_EDIT_INTENT_ID_ORDER,
+  ...CORRECTION_INTENT_ID_ORDER,
+  ...LAYER_INTENT_ID_ORDER,
+  ...PASTE_INTENT_ID_ORDER,
+}
 
 /**
  * How many IDs an Intent spends. An entry ending in `…` stands for a count that depends on
