@@ -10,7 +10,7 @@
  *
  * The scenes are the layers twin of the renovation-views kitchen (`fixtures/e2e/preview-seed/
  * renovation-layers.json`), except the empty state, which is the same kitchen before any layer was
- * made. Flag-on artifact only (`npm run test:screenshots:renovation`).
+ * made.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -25,9 +25,6 @@ const load = (name: string): PreviewSeed =>
   JSON.parse(readFileSync(join(fixturesRoot, 'e2e', 'preview-seed', name), 'utf8')) as PreviewSeed
 const layersSeed = load('renovation-layers.json')
 const plainSeed = load('renovation-views.json')
-
-/** A preview build never opens the database real work lives in (#53); the seed lands where it looks. */
-const PREVIEW_DB_NAME = 'buildbox-preview'
 
 // A frozen clock keeps the persisted timestamp out of the diff (#39 notes).
 const FIXED_NOW = '2026-01-01T09:00:00+08:00'
@@ -51,7 +48,7 @@ async function settle(page: Page): Promise<void> {
 
 async function openPlan(page: Page, seed: PreviewSeed, viewId: string | null = null): Promise<void> {
   await page.clock.setFixedTime(FIXED_NOW)
-  await seedPreviewDb(page, { ...seed, dbName: PREVIEW_DB_NAME })
+  await seedPreviewDb(page, { ...seed})
   await page.goto('./', { waitUntil: 'networkidle' })
   await page.getByRole('button', { name: 'Open' }).first().click()
   await settle(page)

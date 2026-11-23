@@ -1,9 +1,8 @@
 /**
- * The cross-Project paste (#72) — dark until `VITE_FF_RENOVATION` is on.
+ * The cross-Project paste (#72).
  *
- * Reachable from exactly one place: the flag-gated spread in `../registry`. With the flag off that
- * spread folds to nothing, the import goes unused, and this module is gone from the bundle whole —
- * the same mechanism `./renovationHandlers` documents.
+ * Reachable from exactly one place: the renovation half of `../registry`'s catalogue, which is
+ * what keeps it out of every other module's import list.
  *
  * One Intent, and the only one in the catalogue whose subject is another Project: the payload is the
  * by-value snapshot `Copy` took over there, so nothing here reads the source Project or needs it to
@@ -49,8 +48,8 @@ export const PASTE_INTENT_ID_ORDER: { [T in PasteIntentType]: readonly string[] 
 
 /**
  * The base of the transaction label. The row that sends the paste appends the count and the source
- * Project's name — `Paste 4 entities from “Unit 4 Fitout”` — because both are data, and a released
- * bundle holds neither the words of a flagged command nor the name of a Project it has never seen.
+ * Project's name — `Paste 4 entities from “Unit 4 Fitout”` — because both are data, and a label is
+ * built from the payload rather than from a sentence written in advance.
  */
 export const PASTE_INTENT_LABELS: { [T in PasteIntentType]: string } = {
   'renovation.pasteFromProject': 'Paste from other Project',

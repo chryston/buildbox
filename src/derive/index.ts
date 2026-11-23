@@ -71,22 +71,16 @@ export type {
 } from './effective'
 export { designOptionName, effectiveModel } from './effectiveModel'
 export type { EffectiveEntity, EffectiveModel } from './effectiveModel'
-export { displayCounts, displayModel, displayRows } from './renovationDisplay'
+export { displayCounts, displayModel, displayProject, displayRows, displayStates } from './renovationDisplay'
 export type { DisplayEntity, DisplayModel } from './renovationDisplay'
-export { effectiveLayerOrder, effectiveLayerSetting, layerAccessOf, layerRowsFrontFirst, snapCandidateAllowed } from './drawingLayers'
+export { effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, layerAccessOf, layerRowsFrontFirst, snapCandidateAllowed } from './drawingLayers'
 export type { DrawingGates, EffectiveLayerSetting, LayerAccess } from './drawingLayers'
-/**
- * The build-time feature flags (#69, architecture §11), re-exported because `ui` may not reach
- * `lib` (#20 §2). A component asks this whether a dark surface exists at all, and the answer is a
- * constant, so the branch it guards — and everything the branch names — leaves the bundle.
- */
-export { FF_RENOVATION } from '../lib'
 export { DERIVE_CACHE_MAX_ENTRIES, createDeriveCache } from './cache'
 export type { DeriveCache } from './cache'
 export { isCutListCapable, cutListParts } from './quantities/cutList'
-export type { CutListPart, CutListRow } from './quantities/cutList'
+export type { CutListGroup, CutListPart, CutListRow } from './quantities/cutList'
 export { itemListRowsForFloor } from './quantities/itemList'
-export type { ItemListRow } from './quantities/itemList'
+export type { ItemListGroup, ItemListRow } from './quantities/itemList'
 export { quantities, quantitiesForFloor } from './quantities/quantities'
 export type { FloorQuantities, Quantities } from './quantities/quantities'
 export { UNLAYERED_LAYER, tables, warningMessages } from './tables'

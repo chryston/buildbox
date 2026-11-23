@@ -1,7 +1,7 @@
 /**
- * The Drawing Layer half of the catalogue (#71 §2–§5), under `VITE_FF_RENOVATION=true`: this file
- * runs in the `renovation` project (`npm run test:renovation`) and nowhere else. With the flag off
- * these ten types have no handler at all, and `applyIntent` answers one of them with the rejection
+ * The Drawing Layer half of the catalogue (#71 §2–§5): the ten types whose
+ * handler lives in `./layerHandlers`. A type the catalogue does not hold is answered by
+ * `applyIntent` with the rejection
  * any unknown type gets — which is what `../intents.test.ts` checks.
  *
  * Every case here is about the two promises the feature rests on: a layer operation never changes

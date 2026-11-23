@@ -13,7 +13,18 @@
  * decides whether a Worker exists: `run` answers with a finished download or a failure, because
  * a fallback the user has to understand is a fallback that did not work.
  */
-import type { ExportFailure, ExportProgress, ListsRecipe, ListsSummary, Recipe, RecipeViewRef } from '../../../export'
+import type {
+  DrawingLayerChip,
+  DrawingToggles,
+  ExportFailure,
+  ExportProgress,
+  ListsRecipe,
+  ListsSummary,
+  Recipe,
+  RecipeViewRef,
+  RecordedComposition,
+} from '../../../export'
+import type { RenovationDisplay } from '../../../domain'
 import type { QuantityScope, Rect } from '../../../derive'
 
 /** One view the picker can offer, already named the way the Project names it. */
@@ -58,14 +69,27 @@ export interface ListsChoice {
 /**
  * What the Lists tab can offer.
  *
- * The dialog still never sees a Project: it is told which Floors there are and which Design
- * Options exist, and that is the whole of what it needs to draw its controls. `designOptions` is
- * empty for every Project until #73 gives them content, which is why the control reads
- * `Existing only`.
+ * The dialog still never sees a Project: it is told which Floors there are, which Design Options
+ * exist, which Drawing Layers there are, and what scope to open with — and that is the whole of
+ * what it needs to draw its controls. `designOptions` is empty for every Project until #73 gives
+ * them content, which is why the control reads `Existing only`, and `layers` is empty in a build
+ * with no Drawing Layers, which is why the Layer group is absent rather than empty.
  */
 export interface ListsOptions {
   readonly floors: readonly ListsChoice[]
   readonly designOptions: readonly ListsChoice[]
+  /** The Drawing Layers, `Unlayered` last, in the order the Layers panel shows them. */
+  readonly layers: readonly ListsChoice[]
+  /** The scope the tab opens with: every Floor, the originating view's Option, every State, every Layer. */
+  readonly defaultScope: QuantityScope
+}
+
+/** The one thing that stops a Drawing export (#73 §3): a Display with no Option to display. */
+export interface BlockedView {
+  readonly viewId: string
+  /** The view's own name, because a Drawing Set can hold four views and one of them is the problem. */
+  readonly viewName: string
+  readonly display: RenovationDisplay
 }
 
 export interface ExportPort {
@@ -80,16 +104,36 @@ export interface ExportPort {
   remember(key: string, recipe: Recipe): void
   run(recipe: Recipe, onProgress: (progress: ExportProgress) => void): Promise<ExportRunOutcome>
 
-  /** The Floors and Design Options the Lists tab offers, in the Project's own order. */
-  listsOptions(): ListsOptions
+  /**
+   * The Floors, Design Options and Drawing Layers the Lists tab offers, and the scope it opens
+   * with. Asynchronous because the scope is `export`'s view of the Project, loaded on demand.
+   */
+  listsOptions(origin: RecipeViewRef): Promise<ListsOptions>
+  /**
+   * The chips the Drawing tab offers for one view (#73 §1): every Drawing Layer in paint order,
+   * `Unlayered` among them, each starting from the visibility the saved view gives it. Asynchronous
+   * for the same reason as `composition`: the layer rules live in `export`, which is loaded on demand.
+   */
+  drawingLayers(ref: RecipeViewRef): Promise<readonly DrawingLayerChip[]>
+  /**
+   * What the sheet would be drawn from with these toggles (#73 §1), which is what the collapsible
+   * block shows and what the file's metadata will carry. Asynchronous because it is `export`'s.
+   */
+  composition(ref: RecipeViewRef, toggles: DrawingToggles): Promise<RecordedComposition | null>
+  /**
+   * The first selected view whose Drawing export is blocked (#73 §3), or `null`. The Lists tab is
+   * never blocked: its scope is chosen here and never inherited from a view.
+   */
+  blocking(refs: readonly RecipeViewRef[]): Promise<BlockedView | null>
   /**
    * What a scope would export, as the controls move: the plain-words statement, the rows each
-   * table would hold, and whether a design with parts to cut is in scope at all.
+   * table would hold, whether a design with parts to cut is in scope at all, and how many of those
+   * rows the originating view hides (#73 §2).
    *
    * Asynchronous for the same reason `measure` is: the derivation lives in `export`, which is
    * loaded on demand so that a reader who never presses Export does not download it.
    */
-  summariseLists(scope: QuantityScope): Promise<ListsSummary>
+  summariseLists(scope: QuantityScope, origin: RecipeViewRef): Promise<ListsSummary>
   /** The last lists recipe used for this view on this device, if there is one. */
   recallLists(key: string): Promise<ListsRecipe | null>
   rememberLists(key: string, recipe: ListsRecipe): void

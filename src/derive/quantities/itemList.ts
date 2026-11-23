@@ -1,8 +1,9 @@
 /**
  * The Item List: Placed Items grouped by Item Design (#62 §6, export contract §7).
  *
- * One row per Floor × Design Option × Renovation State × Item Design with a count of at least
- * one. A design with no Placed Item in scope writes nothing — a row that says zero is a row
+ * One group per Floor × Design Option × Renovation State × Drawing Layer × Item Design with a count
+ * of at least one, which `quantities` sums back into one row per Item Design once the scope has
+ * spoken. A design with no Placed Item in scope writes nothing — a row that says zero is a row
  * someone has to read and then ignore.
  *
  * The three extents are the Item Design's **local** width, depth and height, read through
@@ -17,7 +18,7 @@
  * warning counts. So this file reads `existingModel.placedItems` and consults nothing else — no
  * selection, no view, no warning list. There is nothing here to get wrong by adding a filter.
  */
-import { designFootprintSize, designHeight } from '../../domain'
+import { designFootprintSize, designHeight, entityLayerId } from '../../domain'
 import type { EntityId, ItemDesign, Project } from '../../domain'
 import type { OptionColumns, RenovationState } from './scope'
 import { effectiveModel } from '../effectiveModel'
@@ -44,37 +45,59 @@ export type ItemListRow = {
 }
 
 /**
- * The Item List rows of one Floor under one Design Option.
+ * One Item List row's Placed Items, still kept apart by the Drawing Layer they stand on.
+ *
+ * The Item List has no Layer column, so a reader never sees this: `quantities` sums the groups of
+ * one Item Design back into one row once the scope's Drawing Layers have filtered them (#73
+ * criterion 7). The split lives here rather than as a filter on the rows because the per-Floor
+ * stage is memoised without the scope in its key (#62 criterion 12) — a group is the finest thing
+ * that can be cached and still answer every Layer selection.
+ */
+export type ItemListGroup = ItemListRow & { readonly layerId: EntityId | null }
+
+/** The Item List row a group of Placed Items writes: every field but the Layer it was split by. */
+export function itemListRow(group: ItemListGroup): ItemListRow {
+  const { floorId, floor, designOptionId, designOption, renovationState, itemDesignId, itemDesign, count, widthMm, depthMm, heightMm } = group
+  return { floorId, floor, designOptionId, designOption, renovationState, itemDesignId, itemDesign, count, widthMm, depthMm, heightMm }
+}
+
+/**
+ * The Item List groups of one Floor under one Design Option.
  *
  * `option` is the two Design Option columns; the Existing Model alone is two empty strings, which
  * is also how the Option is named away — an empty column has no Option behind it (#69 §5). A row
  * carries the Renovation State of the Placed Items it counts, so the three bases one Option
  * proposes are a `Proposed 3` row beside the `Existing 5` one and never summed into it (#62 §7).
  *
- * Rows come out in placement order — the order the Project stores them — because the sort that
+ * Groups come out in placement order — the order the Project stores them — because the sort that
  * makes a file is the caller's, and it is a rule about the table rather than about one Floor.
  */
 export function itemListRowsForFloor(
   project: Project,
   floorId: EntityId,
   option: OptionColumns,
-): ItemListRow[] {
+): ItemListGroup[] {
   const floor = project.floors.find((candidate) => candidate.id === floorId)
   if (floor === undefined) return []
   const designs = new Map<EntityId, ItemDesign>(project.itemDesigns.map((design) => [design.id, design]))
   const optionId = option.designOptionId === '' ? null : option.designOptionId
-  const counts = new Map<string, { itemDesignId: EntityId; renovationState: RenovationState; count: number }>()
+  const counts = new Map<string, {
+    itemDesignId: EntityId
+    renovationState: RenovationState
+    layerId: EntityId | null
+    count: number
+  }>()
   for (const { entity: placed, renovationState } of effectiveModel(project, floorId, optionId).placedItems) {
-    if (renovationState === 'demolition') continue
     if (!designs.has(placed.itemDesignId)) continue
-    const key = `${placed.itemDesignId}\u0000${renovationState}`
+    const layerId = entityLayerId(placed)
+    const key = `${placed.itemDesignId}\u0000${renovationState}\u0000${layerId ?? ''}`
     const seen = counts.get(key)
-    if (seen === undefined) counts.set(key, { itemDesignId: placed.itemDesignId, renovationState, count: 1 })
+    if (seen === undefined) counts.set(key, { itemDesignId: placed.itemDesignId, renovationState, layerId, count: 1 })
     else seen.count += 1
   }
 
-  const rows: ItemListRow[] = []
-  for (const { itemDesignId, renovationState, count } of counts.values()) {
+  const rows: ItemListGroup[] = []
+  for (const { itemDesignId, renovationState, layerId, count } of counts.values()) {
     const design = designs.get(itemDesignId)!
     const { width, depth } = designFootprintSize(design)
     rows.push({
@@ -88,6 +111,7 @@ export function itemListRowsForFloor(
       widthMm: width,
       depthMm: depth,
       heightMm: designHeight(design),
+      layerId,
     })
   }
   return rows

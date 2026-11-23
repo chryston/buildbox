@@ -3,7 +3,7 @@
  * has a single place to read. Labels are short verb phrases — they show in the undo/redo
  * tooltip, where "Undo Change cabinet size" has to read as one sentence.
  */
-import { FF_RENOVATION } from '../lib'
+
 import type { IntentType, S7IntentType } from './intents'
 import { RENOVATION_EDIT_INTENT_LABELS } from './handlers/renovationEdits'
 import { CORRECTION_INTENT_LABELS } from './handlers/correctionHandlers'
@@ -93,15 +93,18 @@ export const INTENT_LABELS = {
 /**
  * The default label of any Intent the catalogue can answer (#69 §2).
  *
- * The renovation half is read under the same flag as its handlers: with the flag off the guard
- * folds away, the import of `./handlers/renovationHandlers` becomes dead, and a released bundle
- * carries neither those labels nor the code that would return them. Reaching this function with
- * a renovation type in a flag-off build answers with the type itself — an Intent nothing
- * registered can be, so the answer is never shown.
+ * The renovation half sits beside the handlers it names, in the module that owns both, so a label
+ * and the Transaction it describes cannot drift apart. Reaching this function with a type the
+ * catalogue does not hold answers with the type itself — an Intent nothing registered can be, so
+ * the answer is never shown.
  */
-const RENOVATION_LABELS: Partial<Record<IntentType, string>> = FF_RENOVATION
-  ? { ...RENOVATION_INTENT_LABELS, ...RENOVATION_EDIT_INTENT_LABELS, ...CORRECTION_INTENT_LABELS, ...LAYER_INTENT_LABELS, ...PASTE_INTENT_LABELS }
-  : {}
+const RENOVATION_LABELS: Partial<Record<IntentType, string>> = {
+  ...RENOVATION_INTENT_LABELS,
+  ...RENOVATION_EDIT_INTENT_LABELS,
+  ...CORRECTION_INTENT_LABELS,
+  ...LAYER_INTENT_LABELS,
+  ...PASTE_INTENT_LABELS,
+}
 
 export function intentLabel(type: IntentType): string {
   const known = INTENT_LABELS as Partial<Record<IntentType, string>>

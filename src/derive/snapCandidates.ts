@@ -81,8 +81,8 @@ export interface SnapSourceInput {
   readonly enabled: ReadonlySet<SnapKind>
   /**
    * Whether one entity's geometry may be snapped to, answered by the owning entity's id
-   * (#71 criterion 12). Absent means everything may — the flag-off answer, and the answer of a
-   * Project with no Drawing Layers.
+   * (#71 criterion 12). Absent means everything may — the answer of a
+   * Project with no Drawing Layers, or one with every layer on.
    */
   readonly allowed?: (ownerId: string) => boolean
 }

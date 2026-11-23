@@ -1,11 +1,9 @@
 /**
- * The renovation surface (#69 §9, §13, §15) — dark until `VITE_FF_RENOVATION` is on.
+ * The renovation surface (#69 §9, §13, §15).
  *
- * Everything here is reached only from a `FF_RENOVATION` branch, which is what keeps a flag-off
- * build from shipping a dialog for a command it cannot run, or a sentence about one: criterion 13
- * is measured on what ships, not on what compiles. The flag is read through `derive`, because #20
- * §2 keeps `lib` out of `ui`, and it is a build-time constant, so the branch it guards — and this
- * whole folder with it — is gone before the bundle is written.
+ * Everything here is reached from the workspace's own renovation state — which Option is active,
+ * which Display is showing, which layers the view draws — so the folder holds the dialogs, the mode
+ * bar, the legend and the overlay together, and `FloorWorkspace` is the only module that imports it.
  */
 import type { RenovationDisplay } from '../../../domain'
 import type { Intent } from '../../../edit'

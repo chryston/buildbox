@@ -37,13 +37,13 @@
  * that built its own English here would be a second copy of that sentence, and the strip and the
  * CSV would drift the first time one of them was reworded.
  */
-import { designHeight, openingHeight, openingSpan, type EntityId, type HingeSide, type OpeningSwing, type Project, type Wall, type WallClassification } from '../domain'
-import { arcFromThrough } from '../geometry'
+import { designHeight, drawingLayerById, entityLayerId, openingHeight, openingSpan, type EntityId, type HingeSide, type OpeningSwing, type Project, type Wall, type WallClassification } from '../domain'
+import { arcFromThrough, refLength } from '../geometry'
 import { compareCodePoints, stableSort } from '../lib'
 import { layerMatches, type OptionColumns, type QuantityScope, type RenovationState } from './quantities/scope'
-import { effectiveFloor, placementLabels, type DerivedPlacement } from './effective'
-import { designOptionName, effectiveModel, type EffectiveEntity, type EffectiveModel } from './effectiveModel'
-import { deriveRooms, type FloorRooms, type RoomMembership } from './rooms'
+import { derivePlacement, effectiveFloor, placementLabels, type DerivedPlacement } from './effective'
+import { designOptionName, effectiveModel, type EffectiveModel } from './effectiveModel'
+import { derivedRoomsOf, deriveRooms, roomMembershipOf, type FloorRooms, type RoomMembership } from './rooms'
 import { deriveWalls, type FloorWalls } from './walls'
 import { deriveWarnings } from './warnings/engine'
 import type { WarningParams, WarningSubjectKind } from './warnings/types'
@@ -211,17 +211,47 @@ export interface TableDeps {
 }
 
 /**
- * The element columns of a Project that has neither Design Options nor Layers yet (#68 Scope 2).
+ * The two Drawing Layer columns of one entity.
  *
- * Every one of these is filled with the stated S7 default rather than left out: the columns are
- * published in v1.0 now so that `#73` can fill them from the S8 model without moving a column,
- * which would be a major version.
+ * Kept apart from {@link ElementColumns} because the scope's filter reads the same pair: the
+ * `drawing_layer_id` a row publishes is the one the Layers control tested it against, so a CSV
+ * that says `Structure` can never have been written by a scope that left Structure out.
+ */
+type LayerColumns = Pick<ElementColumns, 'drawingLayerId' | 'drawingLayer'>
+
+/** What an entity on no Drawing Layer writes: the word, never an empty cell (#68 Scope 2). */
+const UNLAYERED_COLUMNS: LayerColumns = { drawingLayerId: '', drawingLayer: UNLAYERED_LAYER }
+
+/**
+ * The Drawing Layer of every entity one Option's model holds, keyed by id (#73 §4).
+ *
+ * A stored Layer is named by its Project record. A `drawing_layer_id` that names no Layer — one
+ * deleted from under the entity, or read from a file written by a newer editor — is Unlayered, the
+ * same reading {@link layerRows} gives it: an entity is never on two Layers at once and never on a
+ * Layer that does not exist.
+ */
+function layerColumnsOf(project: Project, model: EffectiveModel): ReadonlyMap<EntityId, LayerColumns> {
+  const layers = new Map<EntityId, LayerColumns>()
+  for (const row of [...model.rooms, ...model.walls, ...model.openings, ...model.placedItems]) {
+    const layer = drawingLayerById(project, entityLayerId(row.entity))
+    layers.set(row.entity.id, layer === null ? UNLAYERED_COLUMNS : { drawingLayerId: layer.id, drawingLayer: layer.name })
+  }
+  return layers
+}
+
+/**
+ * The columns every element table shares: the two Option columns, the Floor, the Renovation State
+ * the Option gives the entity, and the Drawing Layer it stands on.
+ *
+ * `predecessor_ids` is the stated S7 default — the column is published in v1.0 so a later issue can
+ * fill it without moving one, which would be a major version.
  */
 function elementColumns(
   option: OptionColumns,
   floorId: EntityId,
   floor: string,
-  renovationState: RenovationState = 'existing',
+  renovationState: RenovationState,
+  layer: LayerColumns,
 ): ElementColumns {
   return {
     ...option,
@@ -229,21 +259,9 @@ function elementColumns(
     floorId,
     floor,
     renovationState,
-    drawingLayerId: '',
-    drawingLayer: UNLAYERED_LAYER,
+    ...layer,
     predecessorIds: [],
   }
-}
-
-/**
- * The Renovation State the Option gives this entity.
- *
- * `existing` is the answer for anything the Option does not touch, which is also the answer for an
- * entity the Option's own derive pass invented — a tidied Wall always names a stored one, so that
- * arm never happens, and a row would rather say `existing` than nothing.
- */
-function stateOf(rows: readonly EffectiveEntity<{ id: EntityId }>[], id: EntityId): RenovationState {
-  return rows.find((row) => row.entity.id === id)?.renovationState ?? 'existing'
 }
 
 /** The Rooms of one Floor: name, analytic area at six decimals, analytic perimeter at three. */
@@ -253,14 +271,25 @@ function roomsForFloor(
   floor: string,
   derived: FloorRooms,
   model: EffectiveModel,
+  layers: ReadonlyMap<EntityId, LayerColumns>,
 ): RoomsRow[] {
-  return derived.rooms.map((room) => ({
-    ...elementColumns(option, floorId, floor, stateOf(model.rooms, room.id)),
-    stableId: room.id,
-    name: room.name,
-    areaM2: room.areaM2,
-    perimeterMm: room.perimeterMm,
-  }))
+  const measured = new Map(derived.rooms.map((room) => [room.id, room]))
+  // A Room the Option takes down is not in the derive pass, which measures what stands: its area is
+  // its own outline, which is the area it had before it was marked.
+  for (const room of derivedRoomsOf(model.rooms.filter((each) => !measured.has(each.entity.id)).map((each) => each.entity))) {
+    measured.set(room.id, room)
+  }
+  return model.rooms.flatMap(({ entity, renovationState }) => {
+    const room = measured.get(entity.id)
+    if (room === undefined) return []
+    return [{
+      ...elementColumns(option, floorId, floor, renovationState, layers.get(room.id) ?? UNLAYERED_COLUMNS),
+      stableId: room.id,
+      name: room.name,
+      areaM2: room.areaM2,
+      perimeterMm: room.perimeterMm,
+    }]
+  })
 }
 
 /**
@@ -277,20 +306,21 @@ function wallsForFloor(
   floor: string,
   model: EffectiveModel,
   derived: FloorWalls,
+  layers: ReadonlyMap<EntityId, LayerColumns>,
 ): WallsRow[] {
-  const stored = new Map<EntityId, Wall>(model.standingWalls.map((wall) => [wall.id, wall]))
   const rows: WallsRow[] = []
-  for (const wall of derived.walls) {
-    const source = stored.get(wall.id)
-    if (source === undefined) continue
+  for (const { entity: source, renovationState } of model.walls) {
     const line = source.line
+    // The derive pass measures what stands, so a Wall the Option takes down is not in it: its length
+    // is its own reference line, untrimmed, because its neighbours' junctions were tidied without it.
+    const lengthMm = derived.byId.get(source.id)?.length ?? refLength(line)
     rows.push({
-      ...elementColumns(option, floorId, floor, stateOf(model.walls, wall.id)),
-      stableId: wall.id,
+      ...elementColumns(option, floorId, floor, renovationState, layers.get(source.id) ?? UNLAYERED_COLUMNS),
+      stableId: source.id,
       classification: source.classification ?? '',
       constructionLabel: source.constructionLabel ?? '',
       shape: line.kind === 'arc' ? 'arc' : 'straight',
-      lengthMm: wall.length,
+      lengthMm,
       radiusMm: line.kind === 'arc' ? arcFromThrough(line.start, line.through, line.end)?.radius ?? null : null,
       thicknessMm: source.thickness,
       justification: source.justification,
@@ -315,16 +345,17 @@ function openingsForFloor(
   floorId: EntityId,
   floor: string,
   model: EffectiveModel,
-  derived: FloorWalls,
+  layers: ReadonlyMap<EntityId, LayerColumns>,
 ): OpeningsRow[] {
-  const stored = new Map<EntityId, Wall>(model.standingWalls.map((wall) => [wall.id, wall]))
+  const stored = new Map<EntityId, Wall>(model.walls.map(({ entity }) => [entity.id, entity]))
   const rows: OpeningsRow[] = []
-  for (const opening of model.standingOpenings) {
-    if (!derived.byId.has(opening.hostWallId)) continue
+  for (const { entity: opening, renovationState } of model.openings) {
+    // An Opening whose host is not in the model at all is dropped rather than written with an empty
+    // host. A host the Option takes down is still its host: the Opening comes down with it.
     const line = stored.get(opening.hostWallId)?.line
     if (line === undefined) continue
     rows.push({
-      ...elementColumns(option, floorId, floor, stateOf(model.openings, opening.id)),
+      ...elementColumns(option, floorId, floor, renovationState, layers.get(opening.id) ?? UNLAYERED_COLUMNS),
       stableId: opening.id,
       kind: opening.kind,
       label: opening.label,
@@ -361,22 +392,25 @@ function placedItemsForFloor(
   model: EffectiveModel,
   placements: readonly DerivedPlacement[],
   derived: FloorRooms,
+  layers: ReadonlyMap<EntityId, LayerColumns>,
 ): PlacedItemsRow[] {
   const labels = placementLabels(placements)
-  const stored = new Map(model.standingPlacedItems.map((placed) => [placed.id, placed]))
+  const standing = new Map(placements.map((each) => [each.id, each]))
   const designs = new Map(project.itemDesigns.map((design) => [design.id, design]))
   const { membership } = derived
   const rows: PlacedItemsRow[] = []
-  for (const placement of placements) {
-    const placed = stored.get(placement.id)
-    const design = designs.get(placement.designId)
-    if (placed === undefined || design === undefined) continue
-    const memberships = membership.get(placement.id) ?? []
+  for (const { entity: placed, renovationState } of model.placedItems) {
+    const design = designs.get(placed.itemDesignId)
+    if (design === undefined) continue
+    // A placement the Option takes down is not in the derive pass, which measures what stands; the
+    // same transform answers for it, and its Room is the one its footprint stands in now.
+    const placement = standing.get(placed.id) ?? derivePlacement(design, placed)
+    const memberships = membership.get(placement.id) ?? roomMembershipOf(placement.worldPath, derived.rooms)
     const inside = memberships.find((each) => each.relation === 'inside')
     const relation: RoomRelation =
       inside !== undefined ? 'inside' : memberships.some((each) => each.relation === 'crosses') ? 'crosses' : 'outside'
     rows.push({
-      ...elementColumns(option, floorId, floor, stateOf(model.placedItems, placement.id)),
+      ...elementColumns(option, floorId, floor, renovationState, layers.get(placement.id) ?? UNLAYERED_COLUMNS),
       stableId: placement.id,
       label: labels.get(placement.id) ?? placement.label,
       itemDesignId: placement.designId,
@@ -476,21 +510,23 @@ export function tables(project: Project, scope: QuantityScope, deps: TableDeps):
       if (floor === undefined) continue
       // The Renovation State and the Drawing Layer are the whole scope of an element table, and
       // they are the same two tests `quantities` applies (#62 §6), which is what keeps two tables
-      // of one ZIP agreeing about what is in the scope. The State is a per-row test now, because
-      // one Option's model holds Existing, Demolition and Proposed content at once (#69 §5).
-      if (layerMatches(scope.drawingLayers, [])) {
-        // One pass of each derive stage per Floor under this Option, shared by the tables that read it.
-        const model = effectiveModel(project, floorId, optionId)
-        const derivedRooms = deriveRooms(project, floorId, optionId)
-        const derivedWalls = deriveWalls(project, floorId, optionId)
-        const placements = effectiveFloor(project, 0, floorId, optionId).placements
-        const inScope = <T extends { renovationState: RenovationState }>(rows: readonly T[]): T[] =>
-          rows.filter((row) => states.has(row.renovationState))
-        rooms.push(...inScope(roomsForFloor(option, floorId, floor, derivedRooms, model)))
-        walls.push(...inScope(wallsForFloor(option, floorId, floor, model, derivedWalls)))
-        openings.push(...inScope(openingsForFloor(option, floorId, floor, model, derivedWalls)))
-        placedItems.push(...inScope(placedItemsForFloor(option, floorId, floor, project, model, placements, derivedRooms)))
-      }
+      // of one ZIP agreeing about what is in the scope. Both are per-row: one Option's model holds
+      // Existing, Demolition and Proposed content at once (#69 §5), and one Floor's content is
+      // spread over the Layers the Layers control offers (#73 criterion 7).
+      const model = effectiveModel(project, floorId, optionId)
+      const layers = layerColumnsOf(project, model)
+      const inScope = <T extends ElementColumns>(rows: readonly T[]): T[] =>
+        rows.filter((row) =>
+          states.has(row.renovationState) &&
+          layerMatches(scope.drawingLayers, row.drawingLayerId === '' ? [] : [row.drawingLayerId]))
+      // One pass of each derive stage per Floor under this Option, shared by the tables that read it.
+      const derivedRooms = deriveRooms(project, floorId, optionId)
+      const derivedWalls = deriveWalls(project, floorId, optionId)
+      const placements = effectiveFloor(project, 0, floorId, optionId).placements
+      rooms.push(...inScope(roomsForFloor(option, floorId, floor, derivedRooms, model, layers)))
+      walls.push(...inScope(wallsForFloor(option, floorId, floor, model, derivedWalls, layers)))
+      openings.push(...inScope(openingsForFloor(option, floorId, floor, model, layers)))
+      placedItems.push(...inScope(placedItemsForFloor(option, floorId, floor, project, model, placements, derivedRooms, layers)))
       // The Warnings List is scoped by Floor and Design Option only (export contract §3): no
       // Renovation State and no Layer ever hides a warning.
       warnings.push(...warningsForFloor(option, optionId, floorId, floor, project, deps))

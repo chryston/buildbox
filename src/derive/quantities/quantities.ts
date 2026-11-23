@@ -5,8 +5,10 @@
  * `effectiveFloor`, memoised by the same `(revision, floorId, optionId)` key — and the aggregation
  * across the scoped Floors happens here, once, in one direction:
  *
- *   - the **Item List** is never aggregated. It has a `floor_id` column, so a Floor's rows are
- *     simply concatenated; two Floors holding the same design write two rows.
+ *   - the **Item List** is never aggregated across Floors. It has a `floor_id` column, so a
+ *     Floor's rows are simply concatenated; two Floors holding the same design write two rows.
+ *     Within one Floor the Placed Items come back split by Drawing Layer, and the layers a scope
+ *     keeps are summed into the one row per Item Design the table publishes (#73 criterion 7).
  *   - the **Cut List** has no Floor column, so a panel spec seen on three Floors is one row whose
  *     `item_count` is the Placed Items of that design across all three, and whose `qty_in_scope`
  *     is `qty_per_item × item_count`.
@@ -23,16 +25,17 @@
 import { compareCodePoints, stableSort } from '../../lib'
 import type { EntityId, Project } from '../../domain'
 import type { DeriveCache } from '../cache'
-import { cutListParts, isCutListCapable, type CutListRow } from './cutList'
-import { itemListRowsForFloor, type ItemListRow } from './itemList'
+import { cutListParts, cutListRow, isCutListCapable, type CutListGroup, type CutListRow } from './cutList'
+import { itemListRow, itemListRowsForFloor, type ItemListGroup, type ItemListRow } from './itemList'
 import { RENOVATION_STATES, layerMatches, type OptionColumns, type QuantityScope, type RenovationState } from './scope'
 import { designOptionName } from '../effectiveModel'
 
 /** What one Floor under one Design Option contributes to a scope. */
 export interface FloorQuantities {
-  readonly items: readonly ItemListRow[]
+  /** The Placed Items, still split by Drawing Layer — see `itemList`'s `ItemListGroup`. */
+  readonly items: readonly ItemListGroup[]
   /** Its Cut List rows, with `item_count` counting this Floor's Placed Items only. */
-  readonly cuts: readonly CutListRow[]
+  readonly cuts: readonly CutListGroup[]
 }
 
 /** A scope's two tables, sorted as a file and as the panel want them. */
@@ -56,12 +59,12 @@ export function quantitiesForFloor(
 ): FloorQuantities {
   const option: OptionColumns = { designOptionId: optionId ?? '', designOption: designOptionName(project, optionId) }
   const items = itemListRowsForFloor(project, floorId, option)
-  const cuts: CutListRow[] = []
+  const cuts: CutListGroup[] = []
   for (const row of items) {
     const design = project.itemDesigns.find((candidate) => candidate.id === row.itemDesignId)
     if (design === undefined || !isCutListCapable(design)) continue
     for (const part of cutListParts(design, row.count)) {
-      cuts.push({ ...option, renovationState: row.renovationState, ...part })
+      cuts.push({ ...option, renovationState: row.renovationState, ...part, layerId: row.layerId })
     }
   }
   return { items, cuts }
@@ -93,27 +96,32 @@ export function quantities(
   const floorOrder = new Map<EntityId, number>(project.floors.map((floor, index) => [floor.id, index]))
   const optionOrder = new Map<string, number>(optionIds.map((id, index) => [id ?? '', index]))
 
-  const items: ItemListRow[] = []
+  const items = new Map<string, ItemListGroup>()
   const cuts = new Map<string, CutListRow>()
   for (const optionId of optionIds) {
     for (const floorId of floorIds) {
       const floor = cache
         ? cache.quantities(project, revision, floorId, optionId)
         : quantitiesForFloor(project, floorId, optionId)
+      // The Drawing Layers filter the Placed Items, and the groups of one Item Design that survive
+      // are summed back into the one row the Item List publishes (#73 criterion 7).
       for (const row of floor.items) {
         if (!states.has(row.renovationState)) continue
-        if (!layerMatches(scope.drawingLayers, [])) continue
-        items.push(row)
+        if (!layerMatches(scope.drawingLayers, row.layerId === null ? [] : [row.layerId])) continue
+        const key = `${row.floorId}\u0000${row.designOptionId}\u0000${row.renovationState}\u0000${row.itemDesignId}`
+        const held = items.get(key)
+        items.set(key, held === undefined ? row : { ...held, count: held.count + row.count })
       }
-      if (!layerMatches(scope.drawingLayers, [])) continue
       // One cabinet can emit two rows that are identical in every column — two drawers of one
       // size are two rows of `Drawer box (…)` — so a row is identified by its columns *and* by
       // which of those like rows it is. Merging the first Floor's with the second Floor's, and
       // the second with the second, is what keeps `item_count` from being added twice.
       const like = new Map<string, number>()
-      for (const row of floor.cuts) {
-        if (!states.has(row.renovationState)) continue
-        if (scope.itemDesignId !== undefined && row.itemDesignId !== scope.itemDesignId) continue
+      for (const group of floor.cuts) {
+        if (!states.has(group.renovationState)) continue
+        if (scope.itemDesignId !== undefined && group.itemDesignId !== scope.itemDesignId) continue
+        if (!layerMatches(scope.drawingLayers, group.layerId === null ? [] : [group.layerId])) continue
+        const row = cutListRow(group)
         const identity = mergeKey(row)
         const seen = like.get(identity) ?? 0
         like.set(identity, seen + 1)
@@ -139,7 +147,7 @@ export function quantities(
   const byDesign = (a: { itemDesign: string; itemDesignId: string }, b: typeof a): number =>
     compareCodePoints(a.itemDesign, b.itemDesign) || compareCodePoints(a.itemDesignId, b.itemDesignId)
 
-  const sortedItems = stableSort(items, (a, b) =>
+  const sortedItems = stableSort([...items.values()].map(itemListRow), (a, b) =>
     (floorOrder.get(a.floorId) ?? 0) - (floorOrder.get(b.floorId) ?? 0) ||
     byScope(a, b) ||
     byState(a, b) ||

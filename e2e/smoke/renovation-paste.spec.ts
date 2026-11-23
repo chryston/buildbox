@@ -15,7 +15,7 @@
  * a name match to be offered and the other has nothing to answer with but a new layer.
  *
  * The workspace has one selection, not a set, so each Copy takes one record; the multi-record copy
- * is exercised at the edit layer. It runs only against a `VITE_FF_RENOVATION` build.
+ * is exercised at the edit layer.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -33,9 +33,6 @@ const nameOf = (id: string): string => pairSeed.library.find((record) => record.
 const FITOUT = nameOf('proj-paste-fitout')
 const ELM = nameOf('proj-paste-elm')
 
-/** A preview build never opens the database real work lives in (#53); the seed has to land where it looks. */
-const PREVIEW_DB_NAME = 'buildbox-preview'
-
 /** `Option A · Combined` of 14 Elm St — a Display a paste is allowed into. */
 const COMBINED = 'views-view-014'
 const FURNITURE = 'layers-001'
@@ -44,7 +41,7 @@ const TALL_PANTRY = 'seed-003'
 const GPO = 'seed-item-028'
 
 async function openPair(page: Page, projectName: string): Promise<void> {
-  await seedPreviewDb(page, { ...pairSeed, dbName: PREVIEW_DB_NAME })
+  await seedPreviewDb(page, { ...pairSeed})
   await page.goto('./', { waitUntil: 'networkidle' })
   await openProjectFromLibrary(page, projectName)
   await expect(floorPlanObjectIds(page)).resolves.not.toHaveLength(0)

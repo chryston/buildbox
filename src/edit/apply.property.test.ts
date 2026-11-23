@@ -19,7 +19,7 @@ import { arbProject } from '../domain/testing'
 import { canonicalJson } from '../lib'
 import { convertLegacy } from '../package'
 import type { Intent, IntentType, PayloadOf, RoomOutlineShape, WallDraft, WallEndTarget } from './index'
-import { applyIntent, applyPatches, chainJunctionCount, createProject, INTENT_LABELS, PLAN_CATALOGUE, SHELTER_ID_COUNT } from './index'
+import { applyIntent, applyPatches, chainJunctionCount, CREATE_PROJECT_ID_COUNT, createProject, INTENT_LABELS, PLAN_CATALOGUE, SHELTER_ID_COUNT } from './index'
 import { intent, NOW } from './testing'
 
 const fixturesRoot = fileURLToPath(new URL('../../fixtures/legacy', import.meta.url))
@@ -951,7 +951,7 @@ const STARTS: { name: string; project: Project }[] = []
  */
 function seedRarePreconditions(): void {
   const give = idSource()
-  const g: Gen = { rand: () => 0.5, project: createProject({ ids: give(6), now: NOW, name: 'Rooms' }), ids: give }
+  const g: Gen = { rand: () => 0.5, project: createProject({ ids: give(CREATE_PROJECT_ID_COUNT), now: NOW, name: 'Rooms' }), ids: give }
   let current = g.project
   const floorId = current.floors[0]!.id
   const [wallId] = g.ids(1)
@@ -1020,7 +1020,7 @@ function seedRarePreconditions(): void {
 
 beforeAll(async () => {
   seedRarePreconditions()
-  STARTS.push({ name: 'createProject', project: createProject({ ids: idSource()(6), now: NOW, name: 'New kitchen' }) })
+  STARTS.push({ name: 'createProject', project: createProject({ ids: idSource()(CREATE_PROJECT_ID_COUNT), now: NOW, name: 'New kitchen' }) })
   for (const rel of LEGACY_FIXTURES) {
     const result = await convertLegacy(read(rel), { newId: allocator() })
     if (!result.ok) throw new Error(`${rel}: ${JSON.stringify(result.problems)}`)

@@ -1464,3 +1464,60 @@
   color: var(--bb-text-muted);
   line-height: 1.45;
 }
+
+/* The dialog's three tabs are buttons, and the preflight leaves a button with no border, no
+   background and no space between siblings, so `Drawing`, `Lists` and the disabled `Handoff pack`
+   arrived as one run-on phrase with nothing marking the tab you are standing on — and which tab
+   you are on is the first thing this dialog asks. A row, a gap, an underline. */
+.bb-export-tabs {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--bb-border);
+}
+
+.bb-export-tabs button {
+  padding: 4px 2px 6px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--bb-text-muted);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bb-export-tabs button.active {
+  border-bottom-color: var(--bb-accent);
+  color: var(--bb-text);
+}
+
+.bb-export-tabs button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* The Lists tab's Floors, Renovation States and Drawing Layers groups are a small heading and a run
+   of checkboxes. In inline flow that came out `Renovation States✔Existing✔Demolition✔Proposed` —
+   the group's name inside its first choice, and no edge anywhere a click meant "the next one". A
+   wrapping row with a gap keeps each choice a choice and the heading above the run. */
+.bb-export-floors,
+.bb-export-states,
+.bb-export-layers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+}
+
+/* The Export dialog's renovation groups and its Views list (#73 §1, §2, #61 §12): their labels are
+   sentences, Layer names and a name-plus-group pair, and inline flow let a checkbox wrap away from
+   its words and welded `Floor 1` to the `Floor 1` beside it — the third Design Option radio ended a
+   line while its words started the next. One choice per row, control and words together. All three
+   exist only in this dialog, so nothing else takes the rule. */
+.bb-export-views label,
+.bb-export-chips label,
+.bb-export-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

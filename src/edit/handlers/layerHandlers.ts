@@ -1,9 +1,8 @@
 /**
- * The Drawing Layer half of the catalogue (#71 §2–§5) — dark until `VITE_FF_RENOVATION` is on.
+ * The Drawing Layer half of the catalogue (#71 §2–§5).
  *
- * Reachable from exactly one place: the flag-gated spread in `../registry`. With the flag off that
- * spread folds to nothing, the import goes unused, and this module is gone from the bundle whole —
- * the same mechanism `./renovationHandlers` documents.
+ * Reachable from exactly one place: the renovation half of `../registry`'s catalogue, which is
+ * what keeps it out of every other module's import list.
  *
  * Two kinds of Intent live here, and the difference matters to the guard in `../apply`:
  *

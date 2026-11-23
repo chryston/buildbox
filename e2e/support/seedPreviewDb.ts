@@ -2,11 +2,11 @@ import type { Page } from '@playwright/test'
 import type { AssetRecord, LibraryRecord, ProjectRecord, ProjectSummary, RecoveryPointKind } from '../../src/persistence'
 
 /**
- * Seeding the flagged build's database (#49 criterion 1).
+ * Seeding the browser tier's database (#49 criterion 1).
  *
- * Raw IndexedDB, in an init script, before any app script runs: the preview app opens
- * `buildbox-preview` during mount, so the records have to exist by the time its first read
- * happens, and there is deliberately no production test hook to lean on. The store and index
+ * Raw IndexedDB, in an init script, before any app script runs: the app opens its database during
+ * mount, so the records have to exist by the time its first read happens, and there is deliberately
+ * no production test hook to lean on. The store and index
  * names below are the adapter's own (`src/persistence/indexeddb/schema.ts`), created at the
  * same version, so the app's open finds an existing database and never upgrades it.
  *

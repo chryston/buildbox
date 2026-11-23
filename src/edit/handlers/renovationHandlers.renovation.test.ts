@@ -1,8 +1,7 @@
 /**
- * The Design Option half of the catalogue (#69 §2, criterion 9), under `VITE_FF_RENOVATION=true`:
- * this file runs in the `renovation` project (`npm run test:renovation`) and nowhere else. The
- * flag-off half is the existing suite — with the flag off these types have no handler at all, and
- * `applyIntent` answers one of them with the rejection any unknown type gets.
+ * The Design Option half of the catalogue (#69 §2, criterion 9): the types
+ * whose handler lives in `./renovationHandlers`. Every other type is the existing suite's, and one
+ * that no handler holds is answered by `applyIntent` with the rejection any unknown type gets.
  */
 import { describe, expect, it } from 'vitest'
 import roomsFixture from '../../../fixtures/domain/v7/rooms.json?raw'

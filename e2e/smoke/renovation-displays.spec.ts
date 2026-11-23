@@ -10,9 +10,7 @@
  *
  * The scene is the `renovation-views` seed: Walls W-1…W-6, `Option A · Open kitchen` demolishing W-2
  * and Base 600 #1 and proposing Base 600 #1′ plus an Island, `Option B · Widened opening` replacing
- * W-2 with W-2′ on the same footprint. It runs only against a `VITE_FF_RENOVATION` build
- * (`npm run test:e2e:renovation`), which is also the only build that opens the database it is seeded
- * into.
+ * W-2 with W-2′ on the same footprint. The scene is seeded into the database the app opens.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -27,9 +25,6 @@ const renovationSeed = JSON.parse(
   readFileSync(join(fixturesRoot, 'e2e', 'preview-seed', 'renovation-views.json'), 'utf8'),
 ) as PreviewSeed
 const projectName = renovationSeed.library.find((record) => record.id === renovationSeed.projects[0]!.id)!.name
-
-/** A preview build never opens the database real work lives in (#53); the seed has to land where it looks. */
-const PREVIEW_DB_NAME = 'buildbox-preview'
 
 const W_1 = 'seed-wall-002'
 const W_2 = 'seed-wall-003'
@@ -48,7 +43,7 @@ async function wallRefs(page: Page): Promise<string[]> {
 }
 
 async function openRenovationPlan(page: Page): Promise<void> {
-  await seedPreviewDb(page, { ...renovationSeed, dbName: PREVIEW_DB_NAME })
+  await seedPreviewDb(page, { ...renovationSeed})
   await page.goto('./', { waitUntil: 'networkidle' })
   await openProjectFromLibrary(page, projectName)
   await expect(floorPlanCanvas(page)).toBeVisible()

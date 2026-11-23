@@ -18,9 +18,7 @@
  * an empty Option's effective model is the Existing Model exactly. A fixture that drifted would
  * fail here rather than photograph an edit that means nothing.
  *
- * It runs only with the flag on, because the file it writes is a v8 Project:
- *
- *   VITE_FF_RENOVATION=true npx vite-node scripts/make-renovation-36-seed.ts
+ *   npx vite-node scripts/make-renovation-36-seed.ts
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, relative, resolve } from 'node:path'
@@ -31,7 +29,7 @@ import { deriveRooms, deriveWalls, effectiveModel, roomFaceCandidates } from '..
 import { migrateProject, validateProject } from '../src/domain'
 import type { DesignOption, Project, WallFaceSide, WallRefLine } from '../src/domain'
 import { pt } from '../src/geometry'
-import { canonicalJson, FF_RENOVATION } from '../src/lib'
+import { canonicalJson } from '../src/lib'
 import { createMemoryAdapter } from '../src/persistence'
 import type { AssetRecord, NewAsset, ProjectRecord } from '../src/persistence'
 
@@ -50,7 +48,6 @@ function fail(message: string): never {
   process.exit(1)
 }
 
-if (!FF_RENOVATION) fail('VITE_FF_RENOVATION is off, so this build cannot write a Project that holds Design Options')
 
 let nextId = 0
 const newIds = (prefix: string, count: number): string[] =>

@@ -18,6 +18,7 @@
  */
 import { effectiveFloor, quantities, tables as deriveTables } from '../derive'
 import type { QuantityScope } from '../derive'
+import type { PlanView } from '../domain'
 
 import { sha256Hex } from '../lib'
 import { TABLES } from './csv/tables'
@@ -25,6 +26,8 @@ import type { TableId } from './csv/tables'
 import { writeCsv } from './csv/write'
 import type { CsvRow } from './csv/write'
 import { fileDate } from './format'
+import { hiddenInView } from './hiddenInView'
+import type { HiddenInView } from './hiddenInView'
 import { provenanceOf } from './provenance'
 import { describeScope } from './scope'
 import { listFileName, listsArchiveName } from './slug'
@@ -43,6 +46,12 @@ export interface ListsSummary {
   readonly rows: Readonly<Record<TableId, number>>
   /** Whether a design with a cut list is in scope at all, which decides the Cut List checkbox. */
   readonly cutListCapable: boolean
+  /**
+   * How many of those rows the originating saved view hides, and who they are (#73 §2). The notice
+   * is informational: a Data export never inherits view hiding, so these rows are in the file and
+   * the person is told rather than stopped.
+   */
+  readonly hiddenInView: HiddenInView
 }
 
 /**
@@ -64,7 +73,11 @@ function cutListCapable(project: ExportSnapshot['project'], revision: number, sc
 }
 
 /** The scope as the dialog reads it, with the row counts beside each table. */
-export function listsSummary(snapshot: ExportSnapshot, scope: QuantityScope): ListsSummary {
+export function listsSummary(
+  snapshot: ExportSnapshot,
+  scope: QuantityScope,
+  view: PlanView | null,
+): ListsSummary {
   const counted = quantities(snapshot.project, snapshot.revision, scope)
   // The five #68 tables are derived here for their row counts alone: a count never depends on the
   // sentence a Warnings row carries, so no copy is rendered and no `ui` module is reached.
@@ -81,6 +94,10 @@ export function listsSummary(snapshot: ExportSnapshot, scope: QuantityScope): Li
       warnings: at.warnings.length,
     },
     cutListCapable: cutListCapable(snapshot.project, snapshot.revision, scope),
+    // #73 §2: the scope decides the rows and the view decides what a person can see, so the dialog
+    // needs to know how many of these rows the view is hiding. It is a count of rows the writer is
+    // about to write, which is why it is computed here and not guessed from the chips.
+    hiddenInView: hiddenInView(snapshot.project, scope, view),
   }
 }
 

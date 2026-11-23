@@ -9,17 +9,16 @@
  */
 import type { DrawingLayer, PlanView, Project } from '../domain'
 import { DEFAULT_DRAWING_LAYERS, DEFAULT_WALL_HEIGHT_MM } from '../domain'
-import { FF_RENOVATION } from '../lib'
 import { LEGACY_DEFAULT_SETTINGS } from './defaults'
 import { spendIds } from './handlers/support'
 
 /** How many pre-allocated IDs a New Project spends: three more once the layers exist (#71 §1). */
-export const CREATE_PROJECT_ID_COUNT = FF_RENOVATION ? 9 : 6
+export const CREATE_PROJECT_ID_COUNT = 9
 
 export interface CreateProjectArgs {
   /**
-   * `[projectId, floorId, viewId, itemDesignId, placedItemId, rootNodeId]`, plus — in a flagged
-   * build — `[structureLayerId, servicesLayerId, furnitureLayerId]`.
+   * `[projectId, floorId, viewId, itemDesignId, placedItemId, rootNodeId]`, plus the three starting
+   * Drawing Layers: `[structureLayerId, servicesLayerId, furnitureLayerId]`.
    */
   ids: string[]
   /**
@@ -41,11 +40,9 @@ export function createProject({ ids, name }: CreateProjectArgs): Project {
   // The three layers a new Project starts with (#71 §1), back to front, and the one of them new
   // Walls, Openings and Rooms are created on. Flag-off this is nothing at all: no array, no view
   // fields, the same bytes this build has always written.
-  const layers: DrawingLayer[] | null = FF_RENOVATION
-    ? DEFAULT_DRAWING_LAYERS.map((layer, index) => ({ id: layerIds[index]!, name: layer.name, color: layer.color }))
-    : null
-  const structureId = layers?.find((layer) => layer.name === 'Structure')?.id ?? null
-  const furnitureId = layers?.find((layer) => layer.name === 'Furniture')?.id ?? null
+  const layers: DrawingLayer[] = DEFAULT_DRAWING_LAYERS.map((layer, index) => ({ id: layerIds[index]!, name: layer.name, color: layer.color }))
+  const structureId = layers.find((layer) => layer.name === 'Structure')?.id ?? null
+  const furnitureId = layers.find((layer) => layer.name === 'Furniture')?.id ?? null
   const view: PlanView = {
     id: viewId,
     kind: 'plan',
@@ -53,7 +50,10 @@ export function createProject({ ids, name }: CreateProjectArgs): Project {
     name: 'Floor 1',
     isDefault: true,
     showPlanImage: true,
-    ...(FF_RENOVATION ? { layerSettings: {}, layerOrder: null, activeLayerId: structureId, snapToHiddenContent: false } : {}),
+    layerSettings: {},
+    layerOrder: null,
+    activeLayerId: structureId,
+    snapToHiddenContent: false,
   }
   return {
     id: projectId,
@@ -82,7 +82,7 @@ export function createProject({ ids, name }: CreateProjectArgs): Project {
           rotationDeg: 0,
           baseElevation: 0,
           // The cabinet the Project comes with is furniture (#71 §1).
-          ...(FF_RENOVATION ? { drawingLayerId: furnitureId } : {}),
+          drawingLayerId: furnitureId,
         },
       ],
       // A new Project has no Walls yet; the collections exist so the shape is the same one

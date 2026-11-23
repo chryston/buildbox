@@ -3,10 +3,9 @@ import { designOptionName, effectiveModel } from './index'
 import type { DesignOption, EntityId, Opening, PlacedItem, Project, Room, Wall, WallJunction } from '../domain'
 import roomsFixture from '../../fixtures/domain/v7/rooms.json?raw'
 
-// The effective model of #69 §5, under `VITE_FF_RENOVATION=true`: this file runs in the
-// `renovation` project (`npm run test:renovation`) and nowhere else, because a build without the
-// flag cannot read an Option at all. The flag-off half is the whole existing derive suite, which
-// derives the Existing Model byte-identically with `optionId` of `null`.
+// The effective model of #69 §5: which entities stand, which are only seen, and what the Existing
+// Model alone means. The other half is the existing derive suite, which derives the Existing Model
+// byte-identically with `optionId` of `null`.
 
 const envelope = JSON.parse(roomsFixture) as { project: Project }
 

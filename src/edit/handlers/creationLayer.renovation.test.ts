@@ -1,5 +1,5 @@
 /**
- * Where new content goes (#71 §2, criteria 2), under `VITE_FF_RENOVATION=true`.
+ * Where new content goes (#71 §2, criteria 2).
  *
  * The rule is a lookup and one refusal, and both are easy to get subtly wrong in opposite
  * directions: a creation tool that files by layer *ID* would strand new Walls the moment a person

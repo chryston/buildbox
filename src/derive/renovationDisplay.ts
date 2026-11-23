@@ -27,7 +27,8 @@
  * already holds: the canvas paints a layer at a time, and a re-derive must never reshuffle what the
  * user has been clicking on.
  */
-import type { EntityId, Opening, PlacedItem, RenovationDisplay, Room, Wall, WallJunction } from '../domain'
+import type { EntityId, Opening, PlacedItem, Project, RenovationDisplay, Room, Wall, WallJunction } from '../domain'
+import { designOptionsOf } from '../domain'
 import type { EffectiveEntity, EffectiveModel } from './effectiveModel'
 import type { RenovationState } from './quantities/scope'
 
@@ -86,6 +87,36 @@ export function displayModel(model: EffectiveModel, display: RenovationDisplay):
     openings: displayRows(model.openings, display),
     rooms: displayRows(model.rooms, display),
     placedItems: displayRows(model.placedItems, display),
+  }
+}
+
+/**
+ * Which entities a Renovation Display draws, and as what (#70 criterion 7).
+ *
+ * `displayModel` already answered both — it is the Display's own rows, each carrying the State it is
+ * drawn in — so this only turns them into the lookup a drawing needs. Openings are in here too: a
+ * Display that does not draw a Wall does not draw what is cut in it either.
+ */
+export function displayStates(model: DisplayModel): ReadonlyMap<EntityId, RenovationState> {
+  const rows = [...model.walls, ...model.openings, ...model.rooms, ...model.placedItems]
+  return new Map(rows.map((row) => [row.entity.id, row.renovationState]))
+}
+
+/**
+ * The Project whose geometry a Renovation Display draws (#70 §The four Renovation Displays).
+ *
+ * A Wall marked for demolition is still drawn, with the demolition overlay on it, so the standing
+ * geometry — junctions, faces, corners — has to be computed with the Option's own demolition records
+ * set aside. This decides only what *can* be drawn; `displayStates` still decides what reaches the
+ * surface, and the Project the model is measured against is never this one.
+ */
+export function displayProject(project: Project, optionId: EntityId | null): Project {
+  if (optionId === null) return project
+  return {
+    ...project,
+    designOptions: designOptionsOf(project).map((option) =>
+      option.id === optionId ? { ...option, demolishedIds: [] } : option,
+    ),
   }
 }
 

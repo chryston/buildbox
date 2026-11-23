@@ -318,11 +318,16 @@ async function rasterImages(ops: readonly FlatOp[], deps: ExportDeps): Promise<M
 export { composeSheet, modelBounds } from './compose'
 export type { ComposedDrawing, ComposedSheet } from './compose'
 export { fitCheck, suggestionsFor, downsampledSize, pngSize, PAGE_MM, MARGIN_MM, FIXED_SCALES } from './fit'
-export { EXPORT_FOOTER, NOT_TO_SCALE, scaleStatement, SCOPE } from './strings'
+export { EXPORT_FOOTER, NOT_TO_SCALE, roomLabel, scaleStatement, SCOPE } from './strings'
 // The whole table as one namespace, for the CI scan over shipped strings (#66 criterion 8),
 // which has to see every word the writers can put in a file rather than the four the dialog asks for.
 export * as EXPORT_WORDS from './strings'
-export { defaultCutListStates, describeScope } from './scope'
+export { defaultCutListStates, defaultListsScope, describeScope } from './scope'
+export { hiddenInView } from './hiddenInView'
+export type { HiddenInView } from './hiddenInView'
+export { needsActiveOption } from './blocking'
+export { drawingComposition, drawingLayerChips } from './composition'
+export type { DrawingComposition, DrawingLayerChip } from './composition'
 export { exportLists, listsSummary, CSV_MEDIA_TYPE } from './lists'
 export type { ListsSummary } from './lists'
 export { LENGTH_DP, AREA_DP, ANGLE_DP, INTEGER_DP, formatNumber, neutralise, quote } from './csv/format'
@@ -341,7 +346,11 @@ export { provenanceOf, provenanceJson } from './provenance'
 export { manifestOf, manifestBytes, zipOf } from './zip'
 export type { Manifest, ManifestFile } from './zip'
 export type {
+  CompositionColorOverride,
+  CompositionLayer,
+  CompositionNotes,
   DrawingFormat,
+  DrawingToggles,
   ExportClock,
   ExportDeps,
   ExportFailure,
@@ -360,6 +369,7 @@ export type {
   RasterSurface,
   Recipe,
   RecipeViewRef,
+  RecordedComposition,
   ScaleDenominator,
   ScaleSetting,
 } from './types'

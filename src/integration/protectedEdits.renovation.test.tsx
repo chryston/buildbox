@@ -9,7 +9,7 @@
  * Both dialogs are opened through the store seam exactly as the workspace opens them, and every
  * assertion reads the Project the session committed.
  *
- * Dark in a flag-off build, so it runs only in the `renovation-dom` project.
+ * It runs in the browser project, where the panel and its overlays are reachable.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'

@@ -19,6 +19,15 @@ BuildBox is an interactive 2D cabinet design configurator for laying out cabinet
 - Export a cut list
 - Export SVG drawings
 - Undo and redo edits
+- Keep Design Options — named alternatives over one Existing Model — and switch a Plan View between
+  the Existing, Proposed, Combined and Demolition Renovation Displays
+- Organise a Floor into Drawing Layers, starting with Structure, Services and Furniture, and hide
+  what the drawing does not need without losing what it measures
+- Choose in the Export dialog which layers a drawing draws and which Design Option a List is counted
+  over, and see how many rows that scope hides
+
+Backups made by this version are domain schema v8: an older BuildBox refuses them as "saved by a
+newer BuildBox" rather than guessing. Older Backups still open — see `src/domain/MIGRATIONS.md`.
 
 ## Development
 

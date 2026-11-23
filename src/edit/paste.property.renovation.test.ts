@@ -1,6 +1,5 @@
 /**
- * Random copy sets under random layer mappings (#72 criteria 4, 5, 6, 10), under
- * `VITE_FF_RENOVATION=true`.
+ * Random copy sets under random layer mappings (#72 criteria 4, 5, 6, 10).
  *
  * The unit tests pin the scene the issue describes. This one asks the question a scene cannot: is
  * there *any* selection of records and *any* set of layer answers for which the paste leaves the

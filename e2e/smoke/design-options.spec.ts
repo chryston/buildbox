@@ -15,9 +15,8 @@
  *     the delete itself leaves the Existing Model alone and can be undone (criterion 15).
  *
  * The scene arrives in the seed (`scripts/make-renovation-36-seed.ts`): Walls W-1…W-6, a Kitchen
- * and a Bedroom, ten Placed Items, and two Options standing empty. This spec runs only against a
- * `VITE_FF_RENOVATION` build — `npm run test:e2e:renovation` — because no other build carries the
- * section at all, and a flag-off build refuses the v8 seed the scene is stored in.
+ * and a Bedroom, ten Placed Items, and two Options standing empty. The scene is stored in a v8
+ * seed, which is what every build of this version writes.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -36,21 +35,11 @@ const projectName = renovationSeed.library.find((record) => record.id === renova
 /** The Sofa, surveyed into the Existing Model by the seed and the thing the move takes away. */
 const SOFA = 'fp-sofa'
 
-/**
- * The database this build opens, and not the one the other smoke specs seed.
- *
- * A build with any `VITE_FF_*` on is a preview build, and a preview build never opens the database
- * real work lives in (#53, architecture §11) — that is what keeps preview work out of it. The seed
- * therefore has to land in `buildbox-preview`, or the Library this build reads is the empty one and
- * the Project card the test is waiting for was never in it. `src/app/channel.ts` owns the name.
- */
-const PREVIEW_DB_NAME = 'buildbox-preview'
-
 const rows = (page: Page): Locator => page.locator('[data-testid^="design-option-row-"]')
 const nameErrors = (page: Page): Locator => page.locator('[data-testid^="design-option-name-error-"]')
 
 async function openRenovationPlan(page: Page): Promise<void> {
-  await seedPreviewDb(page, { ...renovationSeed, dbName: PREVIEW_DB_NAME })
+  await seedPreviewDb(page, renovationSeed)
   await page.goto('./', { waitUntil: 'networkidle' })
   await openProjectFromLibrary(page, projectName)
   await expect(floorPlanCanvas(page)).toBeVisible()

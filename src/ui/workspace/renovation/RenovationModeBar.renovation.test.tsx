@@ -1,5 +1,5 @@
 /**
- * The mode bar (#70 §3, criterion 3), under `VITE_FF_RENOVATION=true`.
+ * The mode bar (#70 §3, criterion 3).
  *
  * The four sentences are quoted in full rather than matched loosely: they are the issue's exact
  * words, they are the only place a person learns that the same keystroke means a correction in one

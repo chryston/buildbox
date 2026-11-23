@@ -25,6 +25,8 @@
 import { createExportRunner, createRasterizer, downloadFile } from '../platform'
 import type { ExportRunRequest } from '../platform'
 import type {
+  DrawingLayerChip,
+  DrawingToggles,
   ExportClock,
   ExportProgress,
   ExportResult,
@@ -33,11 +35,13 @@ import type {
   Rasterizer,
   Recipe,
   RecipeViewRef,
+  RecordedComposition,
 } from '../export'
 import type { QuantityScope } from '../derive'
 import { countUnacknowledged, warningMessages } from '../derive'
 import { warningSentence } from '../ui'
 import type {
+  BlockedView,
   ExportMeasurement,
   ExportPort,
   ExportRunOutcome,
@@ -46,7 +50,8 @@ import type {
 } from '../ui'
 import type { PrefsRepository } from '../persistence'
 import type { ProjectSession } from '../session'
-import type { Project } from '../domain'
+import type { PlanView, Project } from '../domain'
+import { designOptionsOf, viewRenovationDisplay } from '../domain'
 
 export interface ExportPortDeps {
   /**
@@ -170,6 +175,15 @@ function assetHashes(project: Project, views: readonly RecipeViewRef[]): string[
     if (image !== undefined && image !== null) hashes.add(image.assetHash)
   }
   return [...hashes]
+}
+
+/**
+ * The saved view a recipe entry names, or `null` for an Item Detail View and for a view deleted
+ * since the recipe was remembered. Everything the dialog asks about a view answers `null` rather
+ * than guessing: no chips, no composition, no blocking, and a scope of the Existing Model alone.
+ */
+function planViewOf(project: Project, ref: RecipeViewRef): PlanView | null {
+  return ref.kind === 'plan' ? project.views.find((each) => each.id === ref.viewId) ?? null : null
 }
 
 export function createExportPort(deps: ExportPortDeps): ExportPort {
@@ -347,20 +361,56 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
       return runJob(request, onProgress, () => runHere(request, onProgress))
     },
 
-    listsOptions(): ListsOptions {
+    async listsOptions(origin: RecipeViewRef): Promise<ListsOptions> {
       const project = deps.session().getSnapshot().project
+      const { defaultListsScope, drawingLayerChips } = await import('../export')
+      const view = planViewOf(project, origin)
       return {
         floors: project.floors.map((floor) => ({ id: floor.id, label: floor.name })),
-        // Design Options are #73's; until a Project can hold one the control reads `Existing only`.
-        designOptions: [],
+        designOptions: designOptionsOf(project).map((option) => ({ id: option.id, label: option.name })),
+        // The Project's own layers with no view's visibility in the way, `Unlayered` last: the
+        // Lists scope is chosen here and starts with everything on (#73 §2).
+        layers: drawingLayerChips(project, null).map((chip) => ({ id: chip.id, label: chip.name })),
+        defaultScope: defaultListsScope(project, view),
       }
     },
 
-    async summariseLists(scope: QuantityScope) {
+    async drawingLayers(ref: RecipeViewRef): Promise<readonly DrawingLayerChip[]> {
+      const { drawingLayerChips } = await import('../export')
+      const project = deps.session().getSnapshot().project
+      return drawingLayerChips(project, planViewOf(project, ref))
+    },
+
+    async composition(ref: RecipeViewRef, toggles: DrawingToggles): Promise<RecordedComposition | null> {
+      const { drawingComposition } = await import('../export')
+      const project = deps.session().getSnapshot().project
+      const view = planViewOf(project, ref)
+      // An Item Detail View has no layers and no Display: its sheet is one elevation of one design,
+      // so the Drawing tab shows no composition block for it rather than an empty one.
+      return view === null ? null : drawingComposition(project, view, view.floorId, toggles).recorded
+    },
+
+    async blocking(refs: readonly RecipeViewRef[]): Promise<BlockedView | null> {
+      const { needsActiveOption } = await import('../export')
+      const project = deps.session().getSnapshot().project
+      for (const ref of refs) {
+        const view = planViewOf(project, ref)
+        if (view !== null && needsActiveOption(view)) {
+          return { viewId: view.id, viewName: view.name, display: viewRenovationDisplay(view) }
+        }
+      }
+      return null
+    },
+
+    async summariseLists(scope: QuantityScope, origin: RecipeViewRef) {
       // `listsSummary` is the cheap half of `export` — the derivation, not the writers — and it is
-      // still loaded on demand so the first paint never waits for the module.
+      // still loaded on demand so the first paint never waits for the module. The originating view
+      // goes with the scope because the dialog's hidden-in-view count is that view's, not the
+      // Project's (#73 §2); an Item Detail View hides nothing, so it answers `null`.
       const { listsSummary } = await import('../export')
-      return listsSummary(snapshotOf(), scope)
+      const { project } = deps.session().getSnapshot()
+      const view = origin.kind === 'plan' ? project.views.find((each) => each.id === origin.viewId) ?? null : null
+      return listsSummary(snapshotOf(), scope, view)
     },
 
     async recallLists(key: string): Promise<ListsRecipe | null> {

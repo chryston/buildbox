@@ -1,5 +1,5 @@
 /**
- * The `Pick:` filter's home (#70 §3, criterion 5), under `VITE_FF_RENOVATION=true`.
+ * The `Pick:` filter's home (#70 §3, criterion 5).
  *
  * The filter decides which Renovation States a click may take, which makes it a question about the
  * screen rather than about the building. So the tests are about where it is *not*: the Project

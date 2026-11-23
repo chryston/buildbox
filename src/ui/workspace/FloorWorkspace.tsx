@@ -17,10 +17,10 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, FF_RENOVATION, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, snapCandidateAllowed } from '../../derive'
-import type { DisplayModel, LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, snapCandidateAllowed } from '../../derive'
+import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings } from '../../drawing'
-import type { BadgeSubject, OpeningPreview, RoomProposal } from '../../drawing'
+import type { BadgeSubject, LayerGates, OpeningPreview, RoomProposal } from '../../drawing'
 import type { Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
 import { designOptionsOf, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride } from '../../domain'
 import type { SessionAsset } from '../../session'
@@ -74,15 +74,13 @@ import { WorkspaceShell } from './WorkspaceShell'
 import { ToolbarMenu, ToolbarMenuItem, WorkspaceToolbar } from './WorkspaceToolbar'
 import type { ToolbarGroup } from './WorkspaceToolbar'
 import { PlanViewCanvas } from './PlanViewCanvas'
-import type { LayerGates } from './PlanViewCanvas'
 import { SavedViewCard } from './SavedViewCard'
 import { SelectionInspector } from './SelectionInspector'
 import type { DesignEdit } from './SelectionInspector'
 import { quarterTurn } from './rotateHandle'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
-// #69: the whole renovation surface is reached from `FF_RENOVATION` branches only, so a flag-off
-// build drops these three names — and every word they say — out of the bundle. #70 adds the
-// saved-view block and the words its undo labels are built from.
+// #69's renovation surface, with #70's saved-view block and the words its undo labels are built
+// from. `FloorWorkspace` is the one consumer, which is why the folder is imported directly.
 import {
   DesignOptionsSection,
   MoveToOptionAction,
@@ -196,7 +194,7 @@ export function FloorWorkspace(): ReactNode {
    * The Design Option this view draws (#70 §F). Flag-off, or a view with no Option, is `null`, and
    * every derivation below is the Existing Model exactly as it has always been.
    */
-  const renovationOptionId = FF_RENOVATION && view !== null ? viewDesignOptionId(view) : null
+  const renovationOptionId = view !== null ? viewDesignOptionId(view) : null
   /**
    * The State of every entity this view's Renovation Display draws, and the only list of what the
    * Display draws at all: an entity absent from it is not on the canvas (#70 criterion 7). The
@@ -205,7 +203,7 @@ export function FloorWorkspace(): ReactNode {
   const renovationStates: ReadonlyMap<string, RenovationState> | null =
     renovationOptionId === null || floorId === null || view === null
       ? null
-      : statesOf(displayModel(effectiveModel(project, floorId, renovationOptionId), viewRenovationDisplay(view)))
+      : displayStates(displayModel(effectiveModel(project, floorId, renovationOptionId), viewRenovationDisplay(view)))
   /**
    * The Project the canvas's geometry is derived from. `deriveWalls` and `deriveRooms` derive the
    * standing set, but a Wall marked for demolition is still drawn — with the demolition overlay on it
@@ -214,15 +212,10 @@ export function FloorWorkspace(): ReactNode {
    * junctions and faces are then computed over the Walls that are actually on screen; the Display's
    * own list above still decides what reaches the canvas.
    */
-  const drawingProject = useMemo<Project>(() => {
-    if (renovationOptionId === null) return project
-    return {
-      ...project,
-      designOptions: designOptionsOf(project).map((option) =>
-        option.id === renovationOptionId ? { ...option, demolishedIds: [] } : option,
-      ),
-    }
-  }, [project, renovationOptionId])
+  const drawingProject = useMemo<Project>(
+    () => displayProject(project, renovationOptionId),
+    [project, renovationOptionId],
+  )
   /** The Floor the canvas draws, from the session's one derive cache (#60 criterion 3). */
   const derivedFloor =
     floorId === null
@@ -703,15 +696,13 @@ export function FloorWorkspace(): ReactNode {
    * today's bare rejection: there the baseline is what a person is working on (#70 §7c).
    */
   const sendIntent = (intent: Intent): void => {
-    if (FF_RENOVATION) {
-      const demolition = deleteAsDemolition(intent)
-      if (demolition !== null) {
-        dispatch(demolition)
-        return
-      }
+    const demolition = deleteAsDemolition(intent)
+    if (demolition !== null) {
+      dispatch(demolition)
+      return
     }
     const result = dispatch(intent)
-    if (!FF_RENOVATION || result.ok) return
+    if (result.ok) return
     if (result.code === 'layer-blocked') {
       // New content had nowhere it was allowed to go (#71 §2): the tool's own press is undone, the
       // revision never moved, and the notice says which layer stood in the way and what would move it.
@@ -795,7 +786,7 @@ export function FloorWorkspace(): ReactNode {
    * hidden while the Project holds no Option, because a move with nowhere to go can only be refused.
    */
   const renovationAction = (entityId: string): ReactNode =>
-    FF_RENOVATION ? <MoveToOptionAction entityId={entityId} /> : null
+    <MoveToOptionAction entityId={entityId} />
 
   /**
    * A Room the workspace has just created takes the inspector, and its name field takes the
@@ -1089,10 +1080,6 @@ export function FloorWorkspace(): ReactNode {
    * than left to be discovered later as a gap in the other Project.
    */
   const copyToClipboard = (entityId: string): void => {
-    // The flag is folded here, inside the function, rather than only at the two places that call it:
-    // the notice this command can give lives in the gated table, and a call site cannot retire a
-    // table the body still names. With the flag off the rest of this body is unreachable.
-    if (!FF_RENOVATION) return
     if (view === null) return
     const copySet = services.intent.capture(project, view, [entityId])
     if (copySet === null) return
@@ -1107,14 +1094,14 @@ export function FloorWorkspace(): ReactNode {
       if (event.key === 'Escape') {
         // An unlocked correction is abandoned first: the handles and fields shut again and nothing
         // was written, which is the whole point of the press being reversible (#70 criterion 20).
-        if (FF_RENOVATION && correctionUnlocked !== null) {
+        if (correctionUnlocked !== null) {
           event.preventDefault()
           lockCorrection()
           return
         }
         // A running overlap cycle backs out first: Esc ends the cycle (#70 criterion 18) and the
         // selection it made stays, because the click that made it was a real selection.
-        if (FF_RENOVATION && cycle !== null) {
+        if (cycle !== null) {
           event.preventDefault()
           clearCycle()
           return
@@ -1139,7 +1126,7 @@ export function FloorWorkspace(): ReactNode {
       // Ctrl/Cmd+C copies the selected record into this tab's clipboard (#72 §3). Nothing is
       // dispatched, so the source Project keeps its revision; with nothing selected the key is left
       // alone, because then it is not the workspace's key to answer.
-      if (FF_RENOVATION && (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'c') {
+      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'c') {
         const copied = wallSelection ?? openingSelection ?? roomSelection ?? selection
         if (copied === null) return
         event.preventDefault()
@@ -1529,14 +1516,8 @@ export function FloorWorkspace(): ReactNode {
    * picked is the same entity a tool must not snap to.
    */
   const entityLayerKey = useMemo(() => {
-    if (!FF_RENOVATION || floorId === null) return null
-    const model = effectiveModel(project, floorId, renovationOptionId)
-    const layerOf = new Map<string, string>()
-    for (const { entity } of model.walls) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
-    for (const { entity } of model.openings) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
-    for (const { entity } of model.rooms) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
-    for (const { entity } of model.placedItems) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
-    return layerOf
+    if (floorId === null) return null
+    return entityLayerKeys(project, floorId, renovationOptionId)
   }, [project, floorId, renovationOptionId])
 
   /**
@@ -1549,7 +1530,7 @@ export function FloorWorkspace(): ReactNode {
    * layer gate is the second of the two, and `layerAccessOf` intersects them.
    */
   const layerGates: LayerGates | null = useMemo(() => {
-    if (!FF_RENOVATION || view === null || entityLayerKey === null) return null
+    if (view === null || entityLayerKey === null) return null
     const keyOf = (id: string): string => entityLayerKey.get(id) ?? UNLAYERED_LAYER_KEY
     const access = (id: string): LayerAccess => layerAccessOf(project, view, keyOf(id), { displayIncluded: true })
     const order = effectiveLayerOrder(project, view)
@@ -1575,7 +1556,7 @@ export function FloorWorkspace(): ReactNode {
    * it back. Picking stays impossible either way — that answer is `layerAccessOf`'s, above.
    */
   const snapLayerAllowed = useMemo(() => {
-    if (!FF_RENOVATION || view === null || entityLayerKey === null) return undefined
+    if (view === null || entityLayerKey === null) return undefined
     return (ownerId: string): boolean =>
       snapCandidateAllowed(project, view, entityLayerKey.get(ownerId) ?? UNLAYERED_LAYER_KEY)
   }, [project, view, entityLayerKey])
@@ -1592,7 +1573,7 @@ export function FloorWorkspace(): ReactNode {
    * edit rules, because `Editable` is a statement about this layer and not about the Display.
    */
   const inspectorLayer: RenovationInspectorLayer | null = useMemo(() => {
-    if (!FF_RENOVATION || view === null || inspectedEntityId === null) return null
+    if (view === null || inspectedEntityId === null) return null
     const key = entityLayerKey?.get(inspectedEntityId) ?? UNLAYERED_LAYER_KEY
     return {
       current: key === UNLAYERED_LAYER_KEY ? null : key,
@@ -1630,7 +1611,7 @@ export function FloorWorkspace(): ReactNode {
    * selects the subject, and it never changes a layer's visibility to make a warning visible.
    */
   const warningLayerSuffix = useMemo(() => {
-    if (!FF_RENOVATION || view === null || entityLayerKey === null) return undefined
+    if (view === null || entityLayerKey === null) return undefined
     return (warning: Warning): string => {
       const hidden = warning.subjects
         .map((subject) => entityLayerKey.get(subject.id) ?? UNLAYERED_LAYER_KEY)
@@ -1726,7 +1707,7 @@ export function FloorWorkspace(): ReactNode {
    * Project's own count is the test because it is the test the edit layer makes: with no Option there
    * is nothing sharing the record, and an Existing edit commits as it always did (criterion 24).
    */
-  const baselineLocked = FF_RENOVATION && baselineEditLocked({
+  const baselineLocked = baselineEditLocked({
     display: renovationDisplayNow,
     hasOptions: designOptionsOf(project).length > 0,
     state: renovationStates?.get(renovationSubject ?? '') ?? 'existing',
@@ -1740,7 +1721,7 @@ export function FloorWorkspace(): ReactNode {
    */
   const fieldsLock: FieldsLock = baselineLocked
     ? { locked: true, notice: RENOVATION_STRINGS.correctLocked }
-    : FF_RENOVATION && inspectedReadOnly
+    : inspectedReadOnly
       ? { locked: true, notice: RENOVATION_STRINGS.layerReadOnlyNotice(inspectorLayer?.readOnlyLayer ?? '') }
       : FIELDS_UNLOCKED
 
@@ -1880,9 +1861,9 @@ export function FloorWorkspace(): ReactNode {
           </>
         }
         toolbar={<WorkspaceToolbar groups={groups} />}
-        renovationLegend={FF_RENOVATION && view !== null ? <RenovationLegend /> : undefined}
+        renovationLegend={view !== null ? <RenovationLegend /> : undefined}
         renovationBar={
-          FF_RENOVATION && view !== null ? (
+          view !== null ? (
             <>
               <RenovationModeBar
                 display={viewRenovationDisplay(view)}
@@ -1942,7 +1923,7 @@ export function FloorWorkspace(): ReactNode {
             }}
             onCalibrate={() => setIsCalibrating(true)}
             renovation={
-              FF_RENOVATION ? (
+              (
                 <>
                   <RenovationViewSection
                   view={view}
@@ -2077,7 +2058,7 @@ export function FloorWorkspace(): ReactNode {
                     onSelectEntity={selectRenovationEntity}
                   />
                 </>
-              ) : undefined
+              )
             }
             onFit={fit}
           />
@@ -2449,6 +2430,7 @@ export function FloorWorkspace(): ReactNode {
           precision={project.preferences.displayPrecision}
           unsavedChanges={session.getSnapshot().save.kind !== 'saved'}
           port={services.exportDrawings}
+          onOpenView={openView}
           onClose={() => {
             setIsExporting(false)
           }}
@@ -2465,12 +2447,12 @@ export function FloorWorkspace(): ReactNode {
           }}
           onClose={() => setSettingsOpen(false)}
         >
-          {FF_RENOVATION && <DesignOptionsSection />}
+          <DesignOptionsSection />
         </ProjectSettingsDialog>
       )}
       {/* The `Demolish W-3?` and `Move to a Design Option?` reviews (#69 §9, §13), asked for by the
           inspector action or by #70's `Mark demolition` through the workspace store. */}
-      {FF_RENOVATION && <RenovationOverlays />}
+      <RenovationOverlays />
       {manageFloorsOpen && (
         <ManageFloorsDialog
           project={project}
@@ -2536,14 +2518,5 @@ export function FloorWorkspace(): ReactNode {
   )
 }
 
-/**
- * Which entities a Renovation Display draws, and as what (#70 criterion 7).
- *
- * `displayModel` already answered both — it is the Display's own rows, each carrying the State it is
- * drawn in — so this only turns them into the lookup the canvas needs. Openings are in here too: a
- * Display that does not draw a Wall does not draw what is cut in it either.
- */
-function statesOf(model: DisplayModel): ReadonlyMap<string, RenovationState> {
-  const rows = [...model.walls, ...model.openings, ...model.rooms, ...model.placedItems]
-  return new Map(rows.map((row) => [row.entity.id, row.renovationState]))
-}
+
+

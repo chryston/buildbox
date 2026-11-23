@@ -84,8 +84,8 @@ function literalsOf(source: string, path: string): Array<[string, string]> {
 const shipped: Array<[string, string]> = [
   ...stringsOf(STRINGS, 'ui/strings'),
   ...stringsOf(WARNING_COPY, 'ui/strings/warning'),
-  // #69: the dark surface's copy is scanned with the rest. It ships only in a flagged build, but a
-  // banned word is banned in a dialog nobody has switched on yet too.
+  // #69: the renovation surface's copy is scanned with the rest, because a banned word is banned in
+  // a dialog nobody has opened yet too.
   ...stringsOf(RENOVATION_STRINGS, 'ui/strings/renovation'),
   ...stringsOf(EXPORT_WORDS, 'export/strings'),
   // #68 criterion 8: the CI scan covers every header and every enum code, because both are words

@@ -25,11 +25,31 @@ function scopeFor(project: Project, over: Partial<QuantityScope> = {}): Quantity
   }
 }
 
+const EMPTY_PROPOSED = { walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [] }
+
+/** The same Project with two Drawing Layers, so a narrowed Layers control has names to print. */
+const layered: Project = {
+  ...basicProject(),
+  drawingLayers: [
+    { id: 'layer-structure', name: 'Structure', color: '#b9b9c2' },
+    { id: 'layer-furniture', name: 'Furniture', color: '#e3a857' },
+  ],
+}
+
+/** The same Project with two Design Options, for the option part of the sentence. */
+const options: Project = {
+  ...basicProject(),
+  designOptions: [
+    { id: 'option-a', name: 'Option A · Open kitchen', demolishedIds: [], proposed: EMPTY_PROPOSED },
+    { id: 'option-b', name: 'Option B · Widened opening', demolishedIds: [], proposed: EMPTY_PROPOSED },
+  ],
+}
+
 describe('describeScope', () => {
   test('names every Floor when the scope covers them all (#62 criterion 13)', () => {
     const project = referenceProject()
     expect(describeScope(scopeFor(project), project)).toBe(
-      'All Floors · Existing only · Existing, Demolition, Proposed · all layers incl. Unlayered',
+      'All Floors · Existing Model only · Existing, Demolition, Proposed · all layers incl. Unlayered',
     )
   })
 
@@ -39,7 +59,7 @@ describe('describeScope', () => {
       floorIds: [project.floors[0]!.id],
       renovationStates: ['existing'],
     })
-    expect(describeScope(one, project)).toBe('Floor 1 · Existing only · Existing · all layers incl. Unlayered')
+    expect(describeScope(one, project)).toBe('Floor 1 · Existing Model only · Existing · all layers incl. Unlayered')
   })
 
   test('lists the Floors it names when that is not all of them', () => {
@@ -50,18 +70,31 @@ describe('describeScope', () => {
     expect(describeScope(two, project)).not.toContain('All Floors')
   })
 
-  test('says which layers once they are narrowed, and whether Unlayered came along', () => {
-    const project = basicProject()
-    const narrowed = scopeFor(project, { drawingLayers: { layerIds: ['layer-a'], includeUnlayered: true } })
-    expect(describeScope(narrowed, project)).toMatch(/selected layers incl\. Unlayered$/)
-    expect(describeScope(scopeFor(project, { drawingLayers: { layerIds: ['layer-a'], includeUnlayered: false } }), project))
-      .toMatch(/selected layers$/)
+  test('names the layers it kept, and Unlayered among them, once they are narrowed (#73 §2)', () => {
+    const narrowed = scopeFor(layered, { drawingLayers: { layerIds: ['layer-structure'], includeUnlayered: true } })
+    expect(describeScope(narrowed, layered)).toBe(
+      'All Floors · Existing Model only · Existing, Demolition, Proposed · Structure, Unlayered',
+    )
+    expect(describeScope(scopeFor(layered, { drawingLayers: { layerIds: ['layer-structure', 'layer-furniture'], includeUnlayered: false } }), layered))
+      .toMatch(/· Structure, Furniture$/)
+  })
+
+  test('names a Design Option, and says when several are being compared (#73 criterion 8)', () => {
+    expect(describeScope(scopeFor(options, { designOptionIds: ['option-a'] }), options))
+      .toBe('All Floors · Option A · Open kitchen · Existing, Demolition, Proposed · all layers incl. Unlayered')
+    expect(describeScope(scopeFor(options, { designOptionIds: ['option-a', 'option-b'] }), options))
+      .toBe('All Floors · Option A · Open kitchen, Option B · Widened opening (compared) · Existing, Demolition, Proposed · all layers incl. Unlayered')
+  })
+
+  test('names an Option the Project no longer has by the only thing there is to name it with', () => {
+    expect(describeScope(scopeFor(basicProject(), { designOptionIds: ['option-gone'] }), basicProject()))
+      .toContain('· option-gone · ')
   })
 
   test('ignores a Floor the Project does not have', () => {
     const project = basicProject()
     const scope = scopeFor(project, { floorIds: [project.floors[0]!.id, 'floor-gone'] })
-    expect(describeScope(scope, project)).toBe('Floor 1 · Existing only · Existing, Demolition, Proposed · all layers incl. Unlayered')
+    expect(describeScope(scope, project)).toBe('Floor 1 · Existing Model only · Existing, Demolition, Proposed · all layers incl. Unlayered')
   })
 
   test('changes its words when the scope narrows, and the rows narrow with it (#62 criterion 13)', () => {

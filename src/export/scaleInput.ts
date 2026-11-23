@@ -17,13 +17,20 @@
 import type {
   Affine,
   ClosedPath,
+  DerivedFace,
   DerivedFloor,
   DerivedItemDetail,
   DerivedPlacement,
+  DerivedRoom,
+  DerivedWall,
+  FloorRooms,
+  FloorWalls,
   Pt,
   Rect,
   Segment,
 } from '../derive'
+import type { WallOpenings } from '../drawing'
+import type { WallRefLine } from '../domain'
 import { affineMultiply, affineScale } from '../derive'
 
 /** The cabinet arm of a derived Item Detail, and the scene it carries. */
@@ -95,6 +102,102 @@ export function scaleDerivedFloor(d: DerivedFloor, k: number): DerivedFloor {
     placements: d.placements.map((p) => scalePlacement(k, p)),
     bounds: d.bounds === null ? null : scaleRect(k, d.bounds),
   }
+}
+
+/** One tidied Wall face at `k`. */
+function scaleFace(k: number, face: DerivedFace): DerivedFace {
+  return { ...face, from: scalePt(k, face.from), to: scalePt(k, face.to), segment: scaleSegment(k, face.segment) }
+}
+
+/** A Wall's reference line at `k`: two points for a straight run, three for an arc. */
+function scaleRefLine(k: number, line: WallRefLine): WallRefLine {
+  return line.kind === 'line'
+    ? { ...line, start: scalePt(k, line.start), end: scalePt(k, line.end) }
+    : { ...line, start: scalePt(k, line.start), end: scalePt(k, line.end), through: scalePt(k, line.through) }
+}
+
+/**
+ * The Walls of one Floor, in millimetres of paper (#73 §1).
+ *
+ * Every geometric field goes through the shrink, the snap sources included: a paper copy whose parts
+ * disagreed with one another is a copy someone could draw from and get the wrong answer out of.
+ * `length` scales with them because the only thing the drawing asks it is whether a `W-3` reference
+ * fits inside the band, which at 1:50 is a question about paper.
+ */
+export function scaleFloorWalls(d: FloorWalls, k: number): FloorWalls {
+  const walls = d.walls.map((wall): DerivedWall => ({
+    ...wall,
+    outline: scaleClosedPath(k, wall.outline),
+    faces: [scaleFace(k, wall.faces[0]), scaleFace(k, wall.faces[1])] as readonly [DerivedFace, DerivedFace],
+    length: wall.length * k,
+  }))
+  return {
+    ...d,
+    walls,
+    byId: new Map(walls.map((wall) => [wall.id, wall])),
+    faces: d.faces.map((face) => scaleFace(k, face)),
+    corners: d.corners.map((corner) => ({ ...corner, point: scalePt(k, corner.point) })),
+    snapSources: d.snapSources.map((source) => ({
+      ...source,
+      corners: source.corners.map((corner) => ({ ...corner, point: scalePt(k, corner.point) })),
+      faces: source.faces.map((face) => ({
+        ...face,
+        from: scalePt(k, face.from),
+        to: scalePt(k, face.to),
+        segment: scaleSegment(k, face.segment),
+      })),
+    })),
+  }
+}
+
+/**
+ * The Rooms of one Floor, in millimetres of paper.
+ *
+ * The measured fields — `areaMm2`, `areaM2`, `perimeterMm` — deliberately do not scale: they are what
+ * a Room's label says out loud, and a sheet at 1:50 reading `0.05 m²` is a sheet with a lie printed
+ * on it. The domain's own `outline` is left as it was written, because the drawing reads the
+ * evaluated `path` and nothing else.
+ */
+export function scaleFloorRooms(d: FloorRooms, k: number): FloorRooms {
+  return {
+    ...d,
+    rooms: d.rooms.map((room): DerivedRoom => ({
+      ...room,
+      path: scaleClosedPath(k, room.path),
+      labelAnchor: scalePt(k, room.labelAnchor),
+      bounds: scaleRect(k, room.bounds),
+      anchors: room.anchors.map((anchor) => ({ ...anchor, at: scalePt(k, anchor.at) })),
+    })),
+    roomBounds: d.roomBounds === null ? null : scaleRect(k, d.roomBounds),
+    floorBounds: d.floorBounds === null ? null : scaleRect(k, d.floorBounds),
+  }
+}
+
+/**
+ * The Openings of one Floor's Walls, in millimetres of paper.
+ *
+ * `start`, `end` and `width` are distances along the host's reference line and the leaf's own length,
+ * and the reference line and its face offsets are the geometry those distances are measured on, so
+ * all of it shrinks together or a door is drawn outside the Wall it is cut in.
+ */
+export function scaleWallOpenings(d: readonly WallOpenings[], k: number): WallOpenings[] {
+  return d.map((host) => ({
+    ...host,
+    pieces: host.pieces.map((piece) => ({
+      ...piece,
+      from: piece.from * k,
+      to: piece.to * k,
+      outline: scaleClosedPath(k, piece.outline),
+    })),
+    symbols: host.symbols.map((symbol) => ({
+      ...symbol,
+      start: symbol.start * k,
+      end: symbol.end * k,
+      width: symbol.width * k,
+      line: scaleRefLine(k, symbol.line),
+      offsets: [symbol.offsets[0] * k, symbol.offsets[1] * k] as const,
+    })),
+  }))
 }
 
 const scaleBox = (k: number, box: { x: number; y: number; w: number; h: number }) => scaleRect(k, box)

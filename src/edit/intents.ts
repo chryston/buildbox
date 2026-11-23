@@ -43,7 +43,7 @@ import type {
 } from '../domain'
 import { roomOutlinePath } from '../domain'
 import type { KeepFixed, Pt } from '../geometry'
-import { FF_RENOVATION } from '../lib'
+
 import type { ValidationProblem } from '../lib'
 import { RENOVATION_EDIT_INTENT_ID_ORDER } from './handlers/renovationEdits'
 import { CORRECTION_INTENT_ID_ORDER } from './handlers/correctionHandlers'
@@ -55,10 +55,10 @@ import type { CopySet } from './copySet'
 /**
  * Every Intent type the released catalogue answers (#47), one per current store action.
  *
- * This is the S7 set, kept apart from #69's renovation set because the two are registered
- * under different conditions: the handlers, labels and ID orders of `RenovationIntentType`
- * exist only in a `VITE_FF_RENOVATION=true` build, so a production bundle does not carry the
- * strings at all. The types are one union either way — a type is not a byte.
+ * This is the S7 set, kept apart from #69's renovation set because the two are stated separately:
+ * the handlers, labels and ID orders of `RenovationIntentType` live in their own registration
+ * (#69 §13), and the two sets together are what `applyIntent` answers. The types are one union
+ * either way — a type is not a byte.
  */
 export type S7IntentType =
   | 'project.rename'
@@ -138,11 +138,12 @@ export type S7IntentType =
   | 'warning.editNote'
 
 /**
- * The Intents #69 registers only while `VITE_FF_RENOVATION` is on.
+ * The Intents #69 and #70 add to the released catalogue.
  *
  * The last two are the saved-view settings of #70 §1. They are renovation Intents rather than S7
- * ones because the thing they change only exists in a renovation build — and because a Display
- * switch is a command the user takes back as one step, which is what an Intent is for.
+ * ones because the thing they change only exists with a Design Option or a Display to change — and
+ * because a Display switch is a command the user takes back as one step, which is what an Intent is
+ * for.
  */
 export type RenovationIntentType =
   | 'designOption.create'
@@ -169,7 +170,7 @@ export type RenovationIntentType =
   | 'entity.setLayer'
   | 'renovation.pasteFromProject'
 
-/** Every Intent type the catalogue can answer: the S7 set, plus the renovation set in a flagged build. */
+/** Every Intent type the catalogue can answer: the S7 set plus the renovation set. */
 export type IntentType = S7IntentType | RenovationIntentType
 
 /**
@@ -1010,7 +1011,7 @@ export interface SetEntityLayer {
 }
 
 /**
- * The cross-Project paste (#72 §4, §5), dark until `VITE_FF_RENOVATION` is on.
+ * The cross-Project paste (#72 §4, §5).
  *
  * The payload is the by-value snapshot `Copy` took in the other Project — nothing about the
  * destination, because the same clipboard entry pasted into a second Project is a different edit.
@@ -1191,10 +1192,9 @@ export type OpeningIntent = Intent<Extract<IntentType, `opening.${string}`>>
 export type DesignIntent = Intent<Extract<IntentType, `design.${string}`>>
 export type FloorIntent = Intent<Extract<IntentType, `floor.${string}`>>
 /**
- * The saved-view Intents the ungated `./handlers/floorHandlers` map is complete for. `S7IntentType`
- * and not `IntentType`, because `view.setDesignOption` and `view.setRenovationDisplay` (#70 §1) are
- * registered behind the flag in `./handlers/renovationHandlers` — the same reason `designOption.*`
- * is absent from `DesignIntent`.
+ * The saved-view Intents the `./handlers/floorHandlers` map answers on its own. `S7IntentType`
+ * and not `IntentType`, because `view.setDesignOption` and `view.setRenovationDisplay` (#70 §1) live
+ * in `./handlers/renovationHandlers` — the same reason `designOption.*` is absent from `DesignIntent`.
  */
 export type ViewIntent = Intent<Extract<S7IntentType, `view.${string}`>>
 export type WarningIntent = Intent<Extract<IntentType, `warning.${string}`>>
@@ -1203,8 +1203,8 @@ export type WarningIntent = Intent<Extract<IntentType, `warning.${string}`>>
  * The IDs each S7 Intent consumes, in order — the contract between the caller that
  * allocates and the handler that spends. An empty list means the Intent needs no ID.
  *
- * The renovation set carries its own table beside its handlers, so a build without the flag
- * does not read a contract it cannot answer.
+ * The renovation set carries its own table beside its handlers, so the contract a caller reads is
+ * the one the registry it got can answer.
  */
 export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
   'project.rename': [],
@@ -1285,13 +1285,16 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
 }
 
 /**
- * The lookup `intentIdCount` reads: the S7 table, plus the renovation one in a build that
- * registers those handlers. With the flag off the ternary folds to the S7 table alone and the
- * import of the renovation module becomes dead, so a released bundle carries neither table.
+ * The lookup `intentIdCount` reads: the S7 table and the renovation table, one map by type.
  */
-const ID_ORDER_BY_TYPE: Partial<Record<IntentType, readonly string[]>> = FF_RENOVATION
-  ? { ...INTENT_ID_ORDER, ...RENOVATION_INTENT_ID_ORDER, ...RENOVATION_EDIT_INTENT_ID_ORDER, ...CORRECTION_INTENT_ID_ORDER, ...LAYER_INTENT_ID_ORDER, ...PASTE_INTENT_ID_ORDER }
-  : INTENT_ID_ORDER
+const ID_ORDER_BY_TYPE: Partial<Record<IntentType, readonly string[]>> = {
+  ...INTENT_ID_ORDER,
+  ...RENOVATION_INTENT_ID_ORDER,
+  ...RENOVATION_EDIT_INTENT_ID_ORDER,
+  ...CORRECTION_INTENT_ID_ORDER,
+  ...LAYER_INTENT_ID_ORDER,
+  ...PASTE_INTENT_ID_ORDER,
+}
 
 /**
  * How many IDs an Intent spends. An entry ending in `…` stands for a count that depends on

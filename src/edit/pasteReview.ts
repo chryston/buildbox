@@ -1,6 +1,5 @@
 /**
- * What `Paste from other Project…` asks before it writes anything (#72 §5) — dark until
- * `VITE_FF_RENOVATION` is on.
+ * What `Paste from other Project…` asks before it writes anything (#72 §5).
  *
  * A Copy Set names its Drawing Layers and its Walls by the **source** Project's IDs, and none of
  * those exist here. So the paste is not one click but a review: one row per source layer actually

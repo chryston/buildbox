@@ -40,6 +40,9 @@ const onFloor = (itemDesignId: EntityId, floorId: EntityId, rotationDeg = 0): Om
   rotationDeg,
   translation: { x: 0, y: 0 },
   baseElevation: 0,
+  // A row is per Item Design, renovation state and Drawing Layer (#71), so an added Item joins the
+  // fixture's row only when it is filed on the same layer the fixture's are.
+  drawingLayerId: project.existingModel.placedItems.find((item) => item.itemDesignId === itemDesignId)?.drawingLayerId ?? null,
 })
 
 describe('itemListRowsForFloor', () => {

@@ -24,6 +24,7 @@
  */
 import type { EntityId, PlanView, Project } from '../domain'
 import { DEFAULT_LAYER_SETTING, UNLAYERED_LAYER_KEY, drawingLayerById, drawingLayersOf, viewLayerOrder, viewSnapToHidden } from '../domain'
+import { effectiveModel } from './effectiveModel'
 
 /** What one view lets you do with the content of one layer key. */
 export interface EffectiveLayerSetting {
@@ -67,6 +68,25 @@ export function effectiveLayerOrder(project: Project, view: PlanView | null): En
 /** The same keys in the order the Layers list shows them: front-most first. */
 export function layerRowsFrontFirst(project: Project, view: PlanView | null): EntityId[] {
   return effectiveLayerOrder(project, view).reverse()
+}
+
+/**
+ * Which Drawing Layer each entity of one Floor stands on, keyed by entity ID (#71 §4).
+ *
+ * The canvas gates, the snap gate and an exported sheet all ask this the same question, and an answer
+ * that differed between them would let a sheet draw content the screen hides. Entities of the Option
+ * are in here too, which is why the Option is an argument: a proposed Wall is on a layer like any
+ * other. An entity the Project never named a layer for is absent, and `Unlayered` is the caller's
+ * default — the same default `entityLayerId` gives the tables.
+ */
+export function entityLayerKeys(project: Project, floorId: EntityId, optionId: EntityId | null): ReadonlyMap<EntityId, EntityId> {
+  const model = effectiveModel(project, floorId, optionId)
+  const layerOf = new Map<EntityId, EntityId>()
+  for (const { entity } of model.walls) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
+  for (const { entity } of model.openings) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
+  for (const { entity } of model.rooms) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
+  for (const { entity } of model.placedItems) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
+  return layerOf
 }
 
 /**

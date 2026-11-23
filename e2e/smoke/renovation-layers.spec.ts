@@ -11,7 +11,6 @@
  * renovation-layers.json`, from `scripts/make-renovation-layers-seed.ts`): `Structure` under the
  * Walls, Opening and Rooms, `Furniture` under every Placed Item, `Services` empty, and four saved
  * views — `Floor 1` says nothing about any layer, `Option B · Combined` has made Structure read-only.
- * It runs only against a `VITE_FF_RENOVATION` build (`npm run test:e2e:renovation`).
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -27,9 +26,6 @@ const layersSeed = JSON.parse(
 ) as PreviewSeed
 const projectName = layersSeed.library.find((record) => record.id === layersSeed.projects[0]!.id)!.name
 
-/** A preview build never opens the database real work lives in (#53); the seed has to land where it looks. */
-const PREVIEW_DB_NAME = 'buildbox-preview'
-
 const FLOOR_1 = 'seed-view-001'
 const COMBINED = 'views-view-016'
 const FURNITURE = 'layers-001'
@@ -40,7 +36,7 @@ const WARDROBE = 'fp-wardrobe'
 const WALL = 'seed-wall-002'
 
 async function openLayersPlan(page: Page): Promise<void> {
-  await seedPreviewDb(page, { ...layersSeed, dbName: PREVIEW_DB_NAME })
+  await seedPreviewDb(page, { ...layersSeed})
   await page.goto('./', { waitUntil: 'networkidle' })
   await openProjectFromLibrary(page, projectName)
   await expect(floorPlanCanvas(page)).toBeVisible()

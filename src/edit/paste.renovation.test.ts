@@ -1,6 +1,5 @@
 /**
- * The cross-Project paste (#72 §4, §5) under `VITE_FF_RENOVATION=true`: this file runs in the
- * `renovation` project (`npm run test:renovation`) and nowhere else.
+ * The cross-Project paste (#72 §4, §5).
  *
  * Two Projects stand in for the issue's criterion 1. `Unit 4 Fitout` is a fitout drawing on two
  * Drawing Layers with no Design Options of its own; `14 Elm St` is an empty Floor with one

@@ -20,6 +20,7 @@ import {
   expectRoundTrip,
   idSource,
   intent,
+  layerNamed,
   newProject,
 } from '../testing'
 
@@ -70,6 +71,9 @@ describe('plan.addObject', () => {
       translation: { x: 100 + entry.w / 2, y: 100 + entry.h / 2 },
       rotationDeg: 0,
       baseElevation: entry.base,
+      // A bed is Furniture, and the Project's Furniture layer is where new content of that subtype is
+      // created (#71 §2).
+      drawingLayerId: layerNamed(applied.project, 'Furniture'),
     })
     expect(applied.affected).toEqual({
       floorId: project.floors[0]!.id,
@@ -105,6 +109,9 @@ describe('plan.placeDesign', () => {
       translation: { x: 100 + 450, y: 100 + 225 },
       rotationDeg: 0,
       baseElevation: 0,
+      // A bed is Furniture, and the Project's Furniture layer is where new content of that subtype
+      // is created (#71 §2).
+      drawingLayerId: layerNamed(applied.project, 'Furniture'),
     })
     expect(applied.affected).toEqual({
       floorId: 'floor-main',

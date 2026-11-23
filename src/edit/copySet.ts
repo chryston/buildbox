@@ -1,5 +1,5 @@
 /**
- * What `Copy` takes out of a Project (#72 §4) — dark until `VITE_FF_RENOVATION` is on.
+ * What `Copy` takes out of a Project (#72 §4).
  *
  * A Copy Set is a **by-value snapshot**: the records as they stood in the source Project at the
  * moment of the copy, in the shape a container holds them. The clipboard lives in the UI session

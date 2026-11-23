@@ -11,8 +11,6 @@
  * relationship between the mode bar, the rail, the tool strip and the drawing, and a defect in that
  * layout is invisible in a canvas-only crop. Two things are masked — the save status, whose words
  * follow the autosave, and the `Pick:` chips, whose pressed state follows the pointer.
- *
- * Flag-on artifact only (`npm run test:screenshots:renovation`): a flag-off build draws none of this.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -26,9 +24,6 @@ const fixturesRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../fix
 const renovationSeed = JSON.parse(
   readFileSync(join(fixturesRoot, 'e2e', 'preview-seed', 'renovation-views.json'), 'utf8'),
 ) as PreviewSeed
-
-/** A preview build never opens the database real work lives in (#53); the seed lands where it looks. */
-const PREVIEW_DB_NAME = 'buildbox-preview'
 
 // A frozen clock keeps the persisted timestamp out of the diff (#39 notes).
 const FIXED_NOW = '2026-01-01T09:00:00+08:00'
@@ -48,7 +43,7 @@ async function settle(page: Page): Promise<void> {
 
 async function openRenovationPlan(page: Page): Promise<void> {
   await page.clock.setFixedTime(FIXED_NOW)
-  await seedPreviewDb(page, { ...renovationSeed, dbName: PREVIEW_DB_NAME })
+  await seedPreviewDb(page, { ...renovationSeed})
   await page.goto('./', { waitUntil: 'networkidle' })
   await page.getByRole('button', { name: 'Open' }).first().click()
   await settle(page)

@@ -104,7 +104,7 @@ export interface FloorRooms {
 }
 
 /** The Room Outlines of one Floor, evaluated and measured. */
-const derivedRoomsOf = (rooms: readonly Room[]): DerivedRoom[] =>
+export const derivedRoomsOf = (rooms: readonly Room[]): DerivedRoom[] =>
   rooms.map((room) => {
     const areaMm2 = roomArea(room.outline)
     return {

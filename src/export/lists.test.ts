@@ -315,9 +315,9 @@ describe('the five tables of #68', () => {
 
 describe('listsSummary', () => {
   test('names the scope and counts the rows each table would hold', () => {
-    const summary = listsSummary({ project, revision: 3 }, scopeFor())
+    const summary = listsSummary({ project, revision: 3 }, scopeFor(), null)
     expect(summary.statement).toBe(
-      'All Floors · Existing only · Existing, Demolition, Proposed · all layers incl. Unlayered',
+      'All Floors · Existing Model only · Existing, Demolition, Proposed · all layers incl. Unlayered',
     )
     expect(summary.rows.items).toBe(3)
     expect(summary.rows['cut-list']).toBeGreaterThan(0)
@@ -329,14 +329,14 @@ describe('listsSummary', () => {
       ...project,
       existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [] },
     }
-    const summary = listsSummary({ project: empty, revision: 1 }, scopeFor())
+    const summary = listsSummary({ project: empty, revision: 1 }, scopeFor(), null)
     expect(summary.cutListCapable).toBe(false)
     expect(summary.rows.items).toBe(0)
     expect(summary.rows['cut-list']).toBe(0)
   })
 
   test('counts the five tables of #68 beside the two that were here first', () => {
-    const summary = listsSummary({ project: crossing, revision: 1 }, scopeFor())
+    const summary = listsSummary({ project: crossing, revision: 1 }, scopeFor(), null)
     expect({ ...summary.rows, 'cut-list': 0 }).toEqual({
       items: 3,
       // Every placement is counted, cabinet or not — which is why this is not the Items table.
@@ -349,7 +349,7 @@ describe('listsSummary', () => {
     })
     expect(summary.rows['cut-list']).toBeGreaterThan(0)
     // Counting needs no copy: the sentences are rendered for a file, never for a number.
-    expect(listsSummary({ project: crossing, revision: 1 }, scopeFor({ floorIds: ['floor-mezz'] })).rows.walls).toBe(
+    expect(listsSummary({ project: crossing, revision: 1 }, scopeFor({ floorIds: ['floor-mezz'] }), null).rows.walls).toBe(
       0,
     )
   })

@@ -8,7 +8,7 @@
  * assertion reads the Project the session committed, because the rule under test is that a
  * demolition writes records into *one* Option and touches the Existing Model not at all.
  *
- * Dark in a flag-off build, so it runs only in the `renovation-dom` project.
+ * It runs in the browser project, where the panel and its overlays are reachable.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'

@@ -1,6 +1,5 @@
 /**
- * The saved-view settings of #70 §1 and §9, under `VITE_FF_RENOVATION=true`: this file runs in the
- * `renovation` project (`npm run test:renovation`) and nowhere else.
+ * The saved-view settings of #70 §1 and §9, whose handlers live in `./renovationViews`.
  *
  * The three things these tests hold: each setting is **one** Edit Transaction with **one** inverse
  * (criterion 2's data side), a Display that needs an Option the view does not have is **writable**

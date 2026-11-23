@@ -10,8 +10,7 @@
  * result — the pasted record standing on the drawing, selected, its Layer row reading `Furniture`.
  *
  * The scene is the paste pair (`fixtures/e2e/preview-seed/paste-pair.json`, `scripts/make-paste-seed.ts`):
- * `Unit 4 Fitout`, where the copy is made, and `14 Elm St`, where it is answered. Flag-on artifact
- * only (`npm run test:screenshots:renovation`).
+ * `Unit 4 Fitout`, where the copy is made, and `14 Elm St`, where it is answered.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -29,9 +28,6 @@ const pairSeed = JSON.parse(
 const nameOf = (id: string): string => pairSeed.library.find((record) => record.id === id)!.name
 const FITOUT = nameOf('proj-paste-fitout')
 const ELM = nameOf('proj-paste-elm')
-
-/** A preview build never opens the database real work lives in (#53); the seed lands where it looks. */
-const PREVIEW_DB_NAME = 'buildbox-preview'
 
 // A frozen clock keeps the persisted timestamp out of the diff (#39 notes).
 const FIXED_NOW = '2026-01-01T09:00:00+08:00'
@@ -59,7 +55,7 @@ async function settle(page: Page): Promise<void> {
 
 async function openPair(page: Page, projectName: string): Promise<void> {
   await page.clock.setFixedTime(FIXED_NOW)
-  await seedPreviewDb(page, { ...pairSeed, dbName: PREVIEW_DB_NAME })
+  await seedPreviewDb(page, { ...pairSeed})
   await page.goto('./', { waitUntil: 'networkidle' })
   await openProjectFromLibrary(page, projectName)
   await settle(page)

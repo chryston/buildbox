@@ -16,7 +16,6 @@ import { applyIntent, intentLabel } from '../edit'
 import type { Intent, IntentType, PayloadOf } from '../edit'
 import { designOptionsOf, validateProject } from '../domain'
 import type { Project } from '../domain'
-import { FF_RENOVATION } from '../lib'
 import { createHistory } from './history'
 import type { HistoryEntry } from './types'
 
@@ -26,9 +25,6 @@ const STEPS = 200
 const ITERATIONS = 20
 const WARMUP = 5
 
-if (!FF_RENOVATION) {
-  throw new Error('this bench measures the renovation model: run it with VITE_FF_RENOVATION=true (`npm run bench` does)')
-}
 
 const SOURCES = import.meta.glob<string>('/fixtures/bench/renovation-reference.json', {
   eager: true,

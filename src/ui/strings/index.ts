@@ -445,13 +445,17 @@ export const STRINGS = {
   exportListWarnings: 'Warnings List',
   /** Why the State and Layer controls go grey: that table is scoped by Floor and option only. */
   exportListsWarningsIgnoreScope: 'Warnings ignore layers and states.',
+  /**
+   * Above the scope controls (#73 §2): a table is scoped by what is ticked here and never by what
+   * the saved view happens to hide, which is the one thing a person is most likely to assume.
+   */
+  exportListsScopeExplicit: 'Data exports never inherit view hiding. Scope is explicit:',
   /** The Cut List checkbox is absent rather disabled when nothing in scope has parts to cut. */
   exportListsNoCabinets: 'No cabinet designs in this scope',
   exportListsFloors: 'Floors',
   exportListsDesignOption: 'Design Option',
   exportListsExistingOnly: 'Existing only',
   exportListsStates: 'Renovation States',
-  exportListsAllLayers: 'All layers incl. Unlayered',
   /** Beside each table: the rows it holds. `0 rows` is criterion 5's notice, in the same words. */
   exportListsRows: (count: number): string => `${count} ${count === 1 ? 'row' : 'rows'}`,
   /** A bare CSV has nowhere to put the Project, the revision or the recipe (export contract §9). */
@@ -794,12 +798,9 @@ export const STRINGS = {
   area: 'Area',
   perimeter: 'Perimeter',
   bounds: 'Bounds',
-  // Rooms (#67). The name is what the inspector calls the field's subject; the label is the one
-  // sentence the Plan View draws, and it is drawn from the Room's own name and its analytic area.
+  // Rooms (#67). The name is what the inspector calls the field's subject; the sentence the Plan View
+  // draws is `export/strings.ts`'s `roomLabel`, which the sheet draws too.
   room: 'Room',
-  roomLabel(name: string, area: string): string {
-    return `${name} · ${area}`
-  },
   /**
    * The one sentence a Room proposal that would overlap another earns (#67 §7). It is the same
    * sentence the Intent refuses with, so the live check and the commit never disagree in words.

@@ -11,14 +11,12 @@
  */
 import { describe, expect, it } from 'vitest'
 import { overlap, pt } from '../geometry'
-import { FF_RENOVATION } from '../lib'
 import { MIN_ROOM_OVERLAP_MM2, roomOutlinePath, roomOverlapWith, roomOverlaps } from './rooms'
 import type { Room, RoomOutline } from './project'
 
 const texts = Object.entries(
   import.meta.glob<string>('/fixtures/{domain,bench}/**/*.json', { eager: true, query: '?raw', import: 'default' }),
 )
-  .filter(([path]) => FF_RENOVATION || !path.includes('/v8/'))
   .map(([path, text]) => ({ path, text }))
 
 const rect = (x: number, y: number, width: number, height: number): RoomOutline => ({

@@ -10,7 +10,7 @@ import {
   storedRecord,
   previewSeed,
   toast,
-  withoutMintedViewIds,
+  withoutMintedIds,
 } from '../support/libraryApp'
 import { FIRST_PROJECT, floorPlanCanvas, toolbarStatus } from '../support/previewApp'
 import { openPreviewApp } from '../support/previewApp'
@@ -75,7 +75,7 @@ test('the Library says storage is missing, Backup still works from memory, and n
     // seed migrated — the same step opening it takes. Compared against that, view ids aside.
     const restoredRecord = await storedRecord(restored, previewSeed.projects[0].id)
     if (restoredRecord === null) throw new Error('the restore wrote no record')
-    expect(canonical(withoutMintedViewIds(restoredRecord.data)))
+    expect(canonical(withoutMintedIds(restoredRecord.data)))
       .toBe(canonical(migratedForComparison(original.data, original.schemaVersion)))
   } finally {
     await fresh.close()

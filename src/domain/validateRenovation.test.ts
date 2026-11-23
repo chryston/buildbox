@@ -11,14 +11,20 @@ import roomsFixture from '../../fixtures/domain/v7/rooms.json?raw'
 // rejects are about references between collections — an Opening on a Wall, a Room Edge on a Wall
 // face, a Junction between two Wall ends — and the fixture already holds a real one of each.
 //
-// These tests are not flag-gated: the validator's renovation rules are inert in a Project with no
-// Design Options, so a flag-off build runs the same code and must reach the same verdict.
+// These tests are not conditional on the Project carrying Options: the validator's renovation
+// rules are inert in a Project with no Design Options, so the same code must reach the same verdict
+// either way.
 
 type Rec = Record<string, unknown>
 
 function base(): Rec {
   const envelope = JSON.parse(roomsFixture) as { domainSchemaVersion: number; project: Rec }
-  const result = migrateProject(envelope.project, envelope.domainSchemaVersion, () => [])
+  // The chain now runs to v8, which invents three Drawing Layer IDs, so the fixture needs a real
+  // allocator rather than the empty one these loaders used while the chain stopped at v7.
+  let issued = 0
+  const result = migrateProject(envelope.project, envelope.domainSchemaVersion, (count) =>
+    Array.from({ length: count }, () => `fixture-layer-${(issued += 1)}`),
+  )
   if (!result.ok) throw new Error(`The rooms fixture no longer migrates: ${result.error.message}`)
   return structuredClone(result.project) as unknown as Rec
 }

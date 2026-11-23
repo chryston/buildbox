@@ -195,7 +195,7 @@ const affineOf = (transform: Transform): Affine => affineMultiply(
 )
 
 /** One placement against its design: the same transform the Plan View applies today, applied once. */
-const derivePlacement = (design: ItemDesign, placed: PlacedItem): DerivedPlacement => {
+export const derivePlacement = (design: ItemDesign, placed: PlacedItem): DerivedPlacement => {
   const outline = designOutline(design)
   const transform = placementTransform(design, placed)
   const origin = designOrigin(design)

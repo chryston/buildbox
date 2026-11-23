@@ -13,15 +13,13 @@
  *   computed on the **standing** set — everything not demolished. Demolished entities come back for
  *   display and selection only, so a Wall the Option knocks out is still on screen and still
  *   clickable, and still not something a Room can stand on.
- * - `optionId` of `null` is the Existing Model alone, and so is any Option in a build without
- *   `VITE_FF_RENOVATION`: the flag decides whether an Option can be read at all, which is what makes
- *   the whole of this arithmetic dead code in a production bundle (#69 §1).
+ * - `optionId` of `null` is the Existing Model alone: no Option is in force, so the standing set is
+ *   exactly what the Project already holds (#69 §1).
  *
  * Order is Existing-Model order, then the Option's, so a re-derive never reorders what is on screen
  * and a Floor with no Option is the same array `project.existingModel` already holds.
  */
 import { designOptionsOf, type EntityId, type Opening, type PlacedItem, type Project, type Room, type Wall, type WallJunction } from '../domain'
-import { FF_RENOVATION } from '../lib'
 import type { RenovationState } from './quantities/scope'
 
 /** One entity of the effective model, and the Renovation State it is seen in. */
@@ -104,7 +102,7 @@ export function effectiveModel(
   floorId: EntityId | null,
   optionId: EntityId | null,
 ): EffectiveModel {
-  const option = FF_RENOVATION && optionId !== null ? designOptionsOf(project).find((candidate) => candidate.id === optionId) ?? null : null
+  const option = optionId !== null ? designOptionsOf(project).find((candidate) => candidate.id === optionId) ?? null : null
   const demolished = new Set<EntityId>(option?.demolishedIds ?? [])
   const proposed = option?.proposed
   const walls = tag(onFloor(project.existingModel.walls, floorId), demolished, proposed === undefined ? [] : onFloor(proposed.walls, floorId))

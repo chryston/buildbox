@@ -1,6 +1,5 @@
 /**
- * The renovation block of the saved-view card (#70 §2, criteria 1, 2 and 3), under
- * `VITE_FF_RENOVATION=true`.
+ * The renovation block of the saved-view card (#70 §2, criteria 1, 2 and 3).
  *
  * The scene is the committed renovation fixture driven through a real session, because the two
  * settings are Project data on a saved view: what matters is that a click writes the active view,

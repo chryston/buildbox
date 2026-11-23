@@ -4,17 +4,17 @@
  * BuildBox has to keep reading — and keep writing byte for byte, for the version it writes.
  *
  * v1 is the compatibility evidence #44 left behind; #56 made it evidence of a different kind,
- * because a v1 Backup has no Plan Views and staging one has to invent them. v7 is the version
- * this build writes: a Project gained its Room collection (#67), which is what makes v1 through
- * v6 compatibility evidence rather than something to re-issue.
+ * because a v1 Backup has no Plan Views and staging one has to invent them. v8 is the version this
+ * build writes: a Project gained Design Options and Drawing Layers (#69, #71), which is what makes
+ * v1 through v7 compatibility evidence rather than something to re-issue.
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { canonicalJsonBytes, FF_RENOVATION, sha256Hex } from '../lib'
-import type { PlanView, Project } from '../domain'
+import { canonicalJsonBytes, sha256Hex } from '../lib'
+import { DEFAULT_DRAWING_LAYERS, DOMAIN_SCHEMA_VERSION, MIGRATORS, type PlanView, type Project } from '../domain'
 import { encodeProject } from './encode'
-import { stageImport } from './import'
+import { migrateDomainProject, stageImport } from './import'
 import {
   acknowledgementsFixtureProject,
   allocateIds,
@@ -99,15 +99,42 @@ function v1StagedAsViews(): Project {
 const canonicalOf = (record: unknown): string => new TextDecoder().decode(canonicalJsonBytes(record))
 
 /**
- * What this build's current schema asks of a Project that has no Design Option of its own (#69).
+ * What this build's current schema asks of a Project that has no Design Option of its own: the
+ * record a Backup holds, plus everything the eighth step adds (#73 criterion 14) — an empty
+ * `designOptions`, the three default Drawing Layers, every entity filed on the layer its subtype
+ * belongs to (Walls, Openings and Rooms on `Structure`, Placed Items on `Furniture`), and the four
+ * view fields that carry a Display, a layer stack and the snapping switch.
  *
- * In a `VITE_FF_RENOVATION` build the current schema is v8, so every Backup below stages into a
- * Project carrying an empty `designOptions` — the one thing `migrateV7toV8` adds, and the same thing
- * a v7 Project gains the moment it is opened — and the v7 file is no longer the top of the chain.
- * A flag-off build stages exactly the record each file holds, which is what these expectations were
- * written against.
+ * `spent` is how many IDs the chain had already issued when the eighth step ran: a v1 file spends
+ * one per Floor on the default Plan Views it grows, so its layers are numbered after them.
  */
-const atCurrentSchema = (project: Project): Project => (FF_RENOVATION ? { ...project, designOptions: [] } : project)
+function atCurrentSchema(project: Project, spent = 0): Project {
+  const layerId = (index: number): string => `migrated-${String(spent + index + 1)}`
+  const [structure, , furniture] = [layerId(0), layerId(1), layerId(2)] as const
+  const filed = <T extends { id: string }>(entries: readonly T[], drawingLayerId: string): T[] =>
+    entries.map((entry) => ({ ...entry, drawingLayerId }))
+  return {
+    ...project,
+    designOptions: [],
+    drawingLayers: DEFAULT_DRAWING_LAYERS.map((layer, index) => ({ id: layerId(index), name: layer.name, color: layer.color })),
+    existingModel: {
+      ...project.existingModel,
+      placedItems: filed(project.existingModel.placedItems, furniture!),
+      walls: filed(project.existingModel.walls, structure!),
+      openings: filed(project.existingModel.openings, structure!),
+      rooms: filed(project.existingModel.rooms, structure!),
+    },
+    views: project.views.map((view) => ({
+      ...view,
+      designOptionId: null,
+      renovationDisplay: 'existing' as const,
+      layerSettings: {},
+      layerOrder: null,
+      activeLayerId: structure!,
+      snapToHiddenContent: false,
+    })),
+  }
+}
 
 const manifestOf = async (canonical: string, domainSchemaVersion: number) => ({
   format: 'buildbox-project',
@@ -171,7 +198,7 @@ describe('the committed v1 Backup', () => {
   it('stages into the current Project, with one default Plan View per Floor (#56)', async () => {
     const result = await stageImport(ARCHIVE_V1, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
-    expect(result.staged.project).toEqual(atCurrentSchema(v1StagedAsViews()))
+    expect(result.staged.project).toEqual(atCurrentSchema(v1StagedAsViews(), fixtureProject().floors.length))
     expect(result.staged.migratedFrom).toBe(1)
     expect(result.staged.manifest.entries.map((entry) => entry.path)).toEqual(['project.json', ASSET_ENTRY])
     expect([...result.staged.assets.keys()]).toEqual([FIXTURE_PLAN_IMAGE_HASH])
@@ -365,16 +392,15 @@ describe('the committed v7 Backup (#67)', () => {
     const result = await stageImport(ARCHIVE_V7, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${result.problem}`)
     expect(result.staged.project).toEqual(atCurrentSchema(roomsFixtureProject()))
-    // v7 is the current schema of a production build, so a flag-off run stages it with no step at
-    // all; a preview build is one version ahead, and the step it runs is the empty Option list.
-    expect(result.staged.migratedFrom).toBe(FF_RENOVATION ? 7 : null)
+    // v7 is one step behind the current schema now, so staging runs the eighth step: the empty Option
+    // list, the three default layers and the filing (#73).
+    expect(result.staged.migratedFrom).toBe(7)
   })
 
-  // A preview build writes v8 and marks the Package `preview: true`, so re-encoding the committed
-  // v7 file produces different bytes there by design — what a preview build writes is the v8
-  // Backup's own business below. Byte for byte is the property of the build that writes v7.
-  it.skipIf(FF_RENOVATION)('is re-encoded byte for byte by this build', async () => {
-    expect(await encodeProject(roomsFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V7)
+  // This build writes v8, so "re-encoded byte for byte" is the v8 Backup's property, not this file's.
+  // What stays true of a v7 Backup is the bytes it holds: a migration reads them and stages a newer
+  // Project, it never rewrites the file.
+  it('holds the record it was written from, byte for byte', async () => {
     const canonical = canonicalOf(roomsFixtureProject())
     expect(new TextDecoder().decode(readV7('project.json'))).toBe(`${canonical}\n`)
   })
@@ -400,44 +426,82 @@ describe('the committed v7 Backup (#67)', () => {
   })
 })
 
-// The eighth golden step exists only in a `VITE_FF_RENOVATION` build, with the schema version and
-// the migrator that read it (#69 §1, architecture §11). A flag-off run neither runs nor misses it:
-// the file is on disk either way, and refusing to open it is that build's correct behaviour, which
-// the last case below is the one place that asserts it from the outside.
-describe.skipIf(!FF_RENOVATION)('the committed v8 Backup (#69)', () => {
+// The eighth golden step, its schema version and the migrator that reads it (#69 §1, architecture
+// §11). The file is the production format of this version: an ordinary Backup, staged the way any
+// Backup is, and the last case below is the one place that asserts from the outside what a build
+// one schema behind answers when it is handed it.
+describe('the committed v8 Backup (#69)', () => {
   it('stages into the Project it was written from, unmigrated', async () => {
-    const result = await stageImport(ARCHIVE_V8, { acceptPreview: true, allocateId: allocateIds() })
+    const result = await stageImport(ARCHIVE_V8, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
     expect(result.staged.project).toEqual(renovationFixtureProject())
     expect(result.staged.migratedFrom).toBeNull()
   })
 
-  it('is a preview package, which a build that does not accept previews refuses', async () => {
-    const result = await stageImport(ARCHIVE_V8, { acceptPreview: false, allocateId: allocateIds() })
-    if (result.ok) throw new Error('a preview package staged without being accepted as one')
-    expect(result.problem.code).toBe('preview-package')
+  // Criterion 14: a BuildBox that stops at v7 has no eighth step to read this with, and #20 §5 says
+  // what it owes the person — "saved by a newer BuildBox", before a single field is touched.
+  it('is refused by a build one schema behind as saved by a newer BuildBox', () => {
+    const record = JSON.parse(new TextDecoder().decode(readV8('project.json'))) as unknown
+    const v7Reader = migrateDomainProject(record, DOMAIN_SCHEMA_VERSION, MIGRATORS.slice(0, 7), 7, allocateIds())
+    if (v7Reader.ok) throw new Error('a build at schema v7 read a v8 Project')
+    expect(v7Reader.problem).toEqual({ code: 'newer-schema', detail: { detected: 8, supported: 7 } })
   })
 
   it('is re-encoded byte for byte by this build', async () => {
-    expect(await encodeProject(renovationFixtureProject(), assetSource, { ...FIXTURE_BUILD, preview: true })).toEqual(ARCHIVE_V8)
+    expect(await encodeProject(renovationFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V8)
     const canonical = canonicalOf(renovationFixtureProject())
     expect(new TextDecoder().decode(readV8('project.json'))).toBe(`${canonical}\n`)
   })
 
-  it('is described by a manifest that names domain schema v8 and says it is a preview', async () => {
-    const staged = await stageImport(ARCHIVE_V8, { acceptPreview: true, allocateId: allocateIds() })
+  it('is described by a manifest that names domain schema v8', async () => {
+    const staged = await stageImport(ARCHIVE_V8, { acceptPreview: false, allocateId: allocateIds() })
     if (!staged.ok) throw new Error('the fixture must stage')
-    expect(staged.staged.manifest).toEqual({
-      ...(await manifestOf(canonicalOf(renovationFixtureProject()), 8)),
-      preview: true,
-    })
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOf(renovationFixtureProject()), 8))
   })
 
-  it('carries one Design Option with work of its own to do, which is what the step was for', () => {
+  it('carries the whole feature in bytes: two Options, a replace, a demolition, four layers, two views', () => {
     const record = renovationFixtureProject()
-    expect(record.designOptions?.map((option) => option.name)).toEqual(['Open plan'])
-    // The v7 record beside it has no Design Option container at all — the step in one comparison.
+    expect(record.designOptions?.map((option) => option.name)).toEqual(['Open plan', 'Store wall'])
+    // A replace demolishes an Existing Placed Item and proposes its successor; a demolition only
+    // demolishes. A Demolition sheet says something different about each, so the fixture holds one.
+    const [replace, demolition] = record.designOptions!
+    expect(replace!.demolishedIds).toEqual(['place-1'])
+    expect(replace!.proposed.placedItems.map((item) => [item.id, item.predecessorIds])).toEqual([['place-4', ['place-1']]])
+    expect(demolition!.demolishedIds).toEqual(['wall-2'])
+    expect(demolition!.proposed.placedItems).toEqual([])
+    // The three layers every Project starts with, plus one a person made, with the content filed.
+    expect(record.drawingLayers?.map((layer) => layer.name)).toEqual(['Structure', 'Services', 'Furniture', 'Finishes'])
+    expect(record.existingModel.walls.map((wall) => wall.drawingLayerId)).toEqual(['layer-1', 'layer-1'])
+    expect(record.existingModel.rooms.map((room) => room.drawingLayerId)).toEqual(['layer-1', 'layer-1'])
+    expect(record.existingModel.placedItems.map((item) => item.drawingLayerId)).toEqual([
+      'layer-3',
+      'layer-3',
+      'layer-3',
+      'layer-4',
+    ])
+    // One view says nothing about any layer and looks at the Existing Model; the other overrides
+    // every field the eighth schema gave a view and looks at the world through an Option.
+    const [zero, overridden] = record.views
+    expect([
+      zero!.designOptionId,
+      zero!.renovationDisplay,
+      zero!.layerSettings,
+      zero!.layerOrder,
+      zero!.activeLayerId,
+      zero!.snapToHiddenContent,
+    ]).toEqual([null, 'existing', {}, null, 'layer-1', false])
+    expect(Object.keys(overridden!.layerSettings!).sort()).toEqual(['layer-3', 'layer-4', 'unlayered'])
+    expect([
+      overridden!.designOptionId,
+      overridden!.renovationDisplay,
+      overridden!.layerOrder,
+      overridden!.activeLayerId,
+      overridden!.snapToHiddenContent,
+    ]).toEqual(['option-1', 'combined', ['layer-4', 'layer-3', 'layer-2', 'layer-1', 'unlayered'], 'layer-4', true])
+    expect(overridden!.layerSettings!['layer-4']).toEqual({ visible: false, selectable: false, editable: false, color: '#3f7fa6' })
+    // The v7 record beside it has none of this — the step in one comparison.
     expect(roomsFixtureProject()).not.toHaveProperty('designOptions')
+    expect(roomsFixtureProject()).not.toHaveProperty('drawingLayers')
   })
 
   it('carries the same asset, byte for byte', () => {

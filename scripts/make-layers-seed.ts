@@ -19,9 +19,7 @@
  * cannot drift from what the editor can actually produce, and `validateProject` at the end is what
  * proves the transcript ends somewhere legal.
  *
- * It runs only with the flag on, because the files it writes hold layer fields:
- *
- *   VITE_FF_RENOVATION=true npx vite-node scripts/make-layers-seed.ts
+ *   npx vite-node scripts/make-layers-seed.ts
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
@@ -30,7 +28,7 @@ import { applyIntent, INTENT_LABELS } from '../src/edit'
 import type { IntentType, PayloadOf } from '../src/edit'
 import { validateProject } from '../src/domain'
 import type { EntityId, Project } from '../src/domain'
-import { canonicalJson, FF_RENOVATION } from '../src/lib'
+import { canonicalJson } from '../src/lib'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const SOURCE = resolve(repoRoot, 'fixtures/domain/v8/renovation-views.json')
@@ -50,7 +48,6 @@ function fail(message: string): never {
   process.exit(1)
 }
 
-if (!FF_RENOVATION) fail('VITE_FF_RENOVATION is off, so this build cannot write a Project that holds Drawing Layers')
 
 let nextId = 0
 const newIds = (count: number): string[] => Array.from({ length: count }, () => `layers-${String(++nextId).padStart(3, '0')}`)
