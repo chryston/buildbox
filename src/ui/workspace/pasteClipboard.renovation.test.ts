@@ -1,6 +1,5 @@
 /**
- * The tab's clipboard (#72 criterion 11) under `VITE_FF_RENOVATION=true`: this file runs in the
- * `renovation` project (`npm run test:renovation`) and nowhere else.
+ * The tab's clipboard (#72 criterion 11).
  *
  * Criterion 11 is three claims about a thing deliberately not stored anywhere: a copy outlives
  * walking back to the Library and opening another Project, a reload ends it, and it is offered only

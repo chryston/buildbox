@@ -82,7 +82,7 @@ file on disk, so this one is what proves a stored acknowledgement survives the s
 the canonical writer and a round trip through `migrateProject` at the current schema — and that
 the day the signature algorithm moves, an old decision is read unchanged instead of dropped.
 
-## `v8/` — domain schema v8 (#69, dark)
+## `v8/` — domain schema v8 (#69, #70, #71)
 
 `v8/renovation.json` is the Project `scripts/make-renovation-36-seed.ts` draws — the same Project
 `fixtures/e2e/preview-seed/renovation-36.json` carries, byte for byte — wrapped in the envelope the

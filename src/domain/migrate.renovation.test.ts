@@ -12,10 +12,8 @@ import {
 } from './index'
 import roomsFixture from '../../fixtures/domain/v7/rooms.json?raw'
 
-// v8 exists only in a build with `VITE_FF_RENOVATION=true`, so this file matches the `renovation`
-// Vitest project and is excluded from `pure` (`npm run test:renovation`). The flag-off half of the
-// story — production stays at v7 and refuses a v8 file as newer — is in `migrate.test.ts`, which
-// every build runs.
+// v8 is the current schema, so this file runs in `pure` like the rest of `domain`. The other half
+// of the story — a build at an older schema refuses a v8 file as newer — is in `migrate.test.ts`.
 
 /**
  * An allocator the migrator can reach for. #71's step is the first to need one — three IDs for the

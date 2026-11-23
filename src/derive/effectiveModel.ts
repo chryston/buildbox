@@ -13,9 +13,8 @@
  *   computed on the **standing** set — everything not demolished. Demolished entities come back for
  *   display and selection only, so a Wall the Option knocks out is still on screen and still
  *   clickable, and still not something a Room can stand on.
- * - `optionId` of `null` is the Existing Model alone, and so is any Option in a build without
- *   `VITE_FF_RENOVATION`: the flag decides whether an Option can be read at all, which is what makes
- *   the whole of this arithmetic dead code in a production bundle (#69 §1).
+ * - `optionId` of `null` is the Existing Model alone: no Option is in force, so the standing set is
+ *   exactly what the Project already holds (#69 §1).
  *
  * Order is Existing-Model order, then the Option's, so a re-derive never reorders what is on screen
  * and a Floor with no Option is the same array `project.existingModel` already holds.

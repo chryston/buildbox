@@ -4,17 +4,17 @@
  * BuildBox has to keep reading — and keep writing byte for byte, for the version it writes.
  *
  * v1 is the compatibility evidence #44 left behind; #56 made it evidence of a different kind,
- * because a v1 Backup has no Plan Views and staging one has to invent them. v7 is the version
- * this build writes: a Project gained its Room collection (#67), which is what makes v1 through
- * v6 compatibility evidence rather than something to re-issue.
+ * because a v1 Backup has no Plan Views and staging one has to invent them. v8 is the version this
+ * build writes: a Project gained Design Options and Drawing Layers (#69, #71), which is what makes
+ * v1 through v7 compatibility evidence rather than something to re-issue.
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { canonicalJsonBytes, sha256Hex } from '../lib'
-import { DEFAULT_DRAWING_LAYERS, type PlanView, type Project } from '../domain'
+import { DEFAULT_DRAWING_LAYERS, DOMAIN_SCHEMA_VERSION, MIGRATORS, type PlanView, type Project } from '../domain'
 import { encodeProject } from './encode'
-import { stageImport } from './import'
+import { migrateDomainProject, stageImport } from './import'
 import {
   acknowledgementsFixtureProject,
   allocateIds,
@@ -426,37 +426,37 @@ describe('the committed v7 Backup (#67)', () => {
   })
 })
 
-// The eighth golden step exists only in a `VITE_FF_RENOVATION` build, with the schema version and
-// the migrator that read it (#69 §1, architecture §11). A flag-off run neither runs nor misses it:
-// the file is on disk either way, and refusing to open it is that build's correct behaviour, which
-// the last case below is the one place that asserts it from the outside.
+// The eighth golden step, its schema version and the migrator that reads it (#69 §1, architecture
+// §11). The file is the production format of this version: an ordinary Backup, staged the way any
+// Backup is, and the last case below is the one place that asserts from the outside what a build
+// one schema behind answers when it is handed it.
 describe('the committed v8 Backup (#69)', () => {
   it('stages into the Project it was written from, unmigrated', async () => {
-    const result = await stageImport(ARCHIVE_V8, { acceptPreview: true, allocateId: allocateIds() })
+    const result = await stageImport(ARCHIVE_V8, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
     expect(result.staged.project).toEqual(renovationFixtureProject())
     expect(result.staged.migratedFrom).toBeNull()
   })
 
-  it('is a preview package, which a build that does not accept previews refuses', async () => {
-    const result = await stageImport(ARCHIVE_V8, { acceptPreview: false, allocateId: allocateIds() })
-    if (result.ok) throw new Error('a preview package staged without being accepted as one')
-    expect(result.problem.code).toBe('preview-package')
+  // Criterion 14: a BuildBox that stops at v7 has no eighth step to read this with, and #20 §5 says
+  // what it owes the person — "saved by a newer BuildBox", before a single field is touched.
+  it('is refused by a build one schema behind as saved by a newer BuildBox', () => {
+    const record = JSON.parse(new TextDecoder().decode(readV8('project.json'))) as unknown
+    const v7Reader = migrateDomainProject(record, DOMAIN_SCHEMA_VERSION, MIGRATORS.slice(0, 7), 7, allocateIds())
+    if (v7Reader.ok) throw new Error('a build at schema v7 read a v8 Project')
+    expect(v7Reader.problem).toEqual({ code: 'newer-schema', detail: { detected: 8, supported: 7 } })
   })
 
   it('is re-encoded byte for byte by this build', async () => {
-    expect(await encodeProject(renovationFixtureProject(), assetSource, { ...FIXTURE_BUILD, preview: true })).toEqual(ARCHIVE_V8)
+    expect(await encodeProject(renovationFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V8)
     const canonical = canonicalOf(renovationFixtureProject())
     expect(new TextDecoder().decode(readV8('project.json'))).toBe(`${canonical}\n`)
   })
 
-  it('is described by a manifest that names domain schema v8 and says it is a preview', async () => {
-    const staged = await stageImport(ARCHIVE_V8, { acceptPreview: true, allocateId: allocateIds() })
+  it('is described by a manifest that names domain schema v8', async () => {
+    const staged = await stageImport(ARCHIVE_V8, { acceptPreview: false, allocateId: allocateIds() })
     if (!staged.ok) throw new Error('the fixture must stage')
-    expect(staged.staged.manifest).toEqual({
-      ...(await manifestOf(canonicalOf(renovationFixtureProject()), 8)),
-      preview: true,
-    })
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOf(renovationFixtureProject()), 8))
   })
 
   it('carries the whole feature in bytes: two Options, a replace, a demolition, four layers, two views', () => {

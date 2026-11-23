@@ -79,9 +79,8 @@ import { SelectionInspector } from './SelectionInspector'
 import type { DesignEdit } from './SelectionInspector'
 import { quarterTurn } from './rotateHandle'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
-// #69: the whole renovation surface is reached from `FF_RENOVATION` branches only, so a flag-off
-// build drops these three names — and every word they say — out of the bundle. #70 adds the
-// saved-view block and the words its undo labels are built from.
+// #69's renovation surface, with #70's saved-view block and the words its undo labels are built
+// from. `FloorWorkspace` is the one consumer, which is why the folder is imported directly.
 import {
   DesignOptionsSection,
   MoveToOptionAction,

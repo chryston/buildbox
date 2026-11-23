@@ -27,10 +27,9 @@ import { installCatalogue } from './handlers/support'
 
 /**
  * The catalogue. The S7 half is complete — add an `IntentType` without a handler here and the
- * build stops — and the renovation half is optional, because it is registered only while
- * `VITE_FF_RENOVATION` is on (#69 criterion 13). `applyIntent` treats a missing handler as the
- * rejection an unknown type always gets, so a flagged Intent that reaches an unflagged build is
- * refused, never a crash.
+ * build stops — and the renovation half is typed optional, because the two sets are registered
+ * apart from one another (#69 criterion 13). `applyIntent` treats a missing handler as the
+ * rejection an unknown type always gets, so an Intent with no handler is refused, never a crash.
  */
 export const INTENT_HANDLERS: { [T in S7IntentType]: IntentHandler<T> } & {
   [T in RenovationIntentType]?: IntentHandler<T>

@@ -55,10 +55,10 @@ import type { CopySet } from './copySet'
 /**
  * Every Intent type the released catalogue answers (#47), one per current store action.
  *
- * This is the S7 set, kept apart from #69's renovation set because the two are registered
- * under different conditions: the handlers, labels and ID orders of `RenovationIntentType`
- * exist only in a `VITE_FF_RENOVATION=true` build, so a production bundle does not carry the
- * strings at all. The types are one union either way — a type is not a byte.
+ * This is the S7 set, kept apart from #69's renovation set because the two are stated separately:
+ * the handlers, labels and ID orders of `RenovationIntentType` live in their own registration
+ * (#69 §13), and the two sets together are what `applyIntent` answers. The types are one union
+ * either way — a type is not a byte.
  */
 export type S7IntentType =
   | 'project.rename'
@@ -138,11 +138,12 @@ export type S7IntentType =
   | 'warning.editNote'
 
 /**
- * The Intents #69 registers only while `VITE_FF_RENOVATION` is on.
+ * The Intents #69 and #70 add to the released catalogue.
  *
  * The last two are the saved-view settings of #70 §1. They are renovation Intents rather than S7
- * ones because the thing they change only exists in a renovation build — and because a Display
- * switch is a command the user takes back as one step, which is what an Intent is for.
+ * ones because the thing they change only exists with a Design Option or a Display to change — and
+ * because a Display switch is a command the user takes back as one step, which is what an Intent is
+ * for.
  */
 export type RenovationIntentType =
   | 'designOption.create'
@@ -1010,7 +1011,7 @@ export interface SetEntityLayer {
 }
 
 /**
- * The cross-Project paste (#72 §4, §5), dark until `VITE_FF_RENOVATION` is on.
+ * The cross-Project paste (#72 §4, §5).
  *
  * The payload is the by-value snapshot `Copy` took in the other Project — nothing about the
  * destination, because the same clipboard entry pasted into a second Project is a different edit.

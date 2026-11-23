@@ -80,7 +80,7 @@ which is the only way a hand-edited or newer-schema file can be caught. A migrat
 historical record, so the number is a frozen constant in `migrate.ts` rather than a live read
 of the pack; `src/domain/migrate.test.ts` pins it to the pack entry it came from.
 
-## What v8 holds (#69, #70, #71, dark)
+## What v8 holds (#69, #70, #71)
 
 Three things, all additions:
 
@@ -110,24 +110,37 @@ Project that already carries a `drawingLayers` array keeps it exactly as it is, 
 an empty array is a Project whose content is all Unlayered, and refilling it would invent layers
 somebody deleted.
 
-`drawingLayers` is required in a flagged build and absent from the type's reach in a flag-off one;
-`drawingLayerId` and the four view settings are optional in TypeScript and validated when present,
-never defaulted, so a file written before the capability stays readable with the flag off and the
-bytes a flag-off build writes are unchanged. The strict validator refuses a `drawingLayerId` that
+`drawingLayers` is required by the type; `drawingLayerId` and the four view settings are optional
+and validated when present, never defaulted, so a file written before the capability stays readable
+once the step has run. The strict validator refuses a `drawingLayerId` that
 names no layer, a `layerSettings` key that names neither a layer nor `unlayered`, a
 `layerOrder` that repeats a layer, omits one, or leaves out `unlayered`, and an `activeLayerId`
 that names nothing — and a layer whose own ID is the reserved `unlayered`, which would otherwise
 let a layer shadow the Unlayered row's settings.
 
-**Layers ride this version rather than taking a ninth one.** #71 ships behind the same flag as #69
-and #70, and a preview version is allowed to carry three model changes; #73 turns the flag on,
-splits the golden evidence per issue, and writes the release note. The consequence, stated plainly:
-a Project written by a preview build before #71 and after #69 still validates and still opens,
-because everything #71 adds is either defaulted by the step or optional.
+**Layers rode this version rather than taking a ninth one.** #71 arrived while #69 and #70 were
+still landing, and one version carrying three model changes is what a preview is for; #73 shipped
+them, split the golden evidence per issue, and wrote the release note below. The consequence, stated
+plainly: a Project written by a preview build before #71 and after #69 still validates and still
+opens, because everything #71 adds is either defaulted by the step or optional.
 
-**This version was once decided by a flag; it is not any more.** Since #73 `DOMAIN_SCHEMA_VERSION`
-is `8` in every build and `migrateV7toV8` is registered unconditionally, so a v1–v7 Backup stages
-into a Project that carries its Design Options, Renovation Displays and Drawing Layers. The
-consequence for a reader is the ordinary one for a schema step: a Backup written by this version
-opens in no older build, which answers "saved by a newer BuildBox" — the failure mode #20 §5 exists
-to name. Nothing about the step itself changed when the flag went away.
+## What this release means for a reader (#73)
+
+In plain words:
+
+* A Project can hold **Design Options** — named alternatives over one Existing Model — and every
+  Plan View remembers which Option it looks through and which of the four **Renovation Displays**
+  (Existing, Proposed, Combined, Demolition) it draws.
+* Every Project gains **Drawing Layers**, starting with three: `Structure`, `Services` and
+  `Furniture`. Existing Walls, Openings and Rooms are filed on `Structure` and existing furniture on
+  `Furniture`, so a Project looks and prints the way it did before; nothing is lost by hiding a
+  layer, and a hidden layer's content still measures.
+* The **Export dialog** now asks which layers a drawing draws and which Option a List is counted
+  over, and says how many rows that scope hides.
+
+**A Backup made by this version cannot be opened by an older one.** It is domain schema v8, and a
+build that stops at v7 has no eighth step to read it with, so it answers
+**"saved by a newer BuildBox"** and writes nothing (#20 §5). Old Backups are unaffected: v1 through
+v7 still open, and the step that runs on the way in adds the empty Options, the two view settings,
+the three starting layers and the layer filing — it changes no measurement, no drawing and no
+existing value.

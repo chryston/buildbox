@@ -1,9 +1,8 @@
 /**
- * #73 §1–3 through the real dialog with the flag on: the layer chips a view starts from, the
- * composition the sheet will record, the scope the Lists tab opens with, and the one blocking
- * error a Display with no Option raises. The flag-off half of the dialog lives in
- * `ExportDialog.test.tsx`; this is the half `VITE_FF_RENOVATION` lights up, so it runs in the
- * `renovation-dom` project (`npm run test:renovation`).
+ * #73 §1–3 through the real dialog: the layer chips a view starts from, the composition the sheet
+ * will record, the scope the Lists tab opens with, and the one blocking error a Display with no
+ * Option raises. The rest of the dialog — format, sheet, scale, warnings — lives in
+ * `ExportDialog.test.tsx`.
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'

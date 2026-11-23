@@ -1,9 +1,8 @@
 /**
  * The words the renovation surface speaks (#69 §2, §9, §13).
  *
- * They sit apart from `STRINGS` because the whole surface is dark until `VITE_FF_RENOVATION` is
- * on: a flag-off build ships no sentence about a command it cannot run, and a table reached only
- * from a flagged branch is dropped with it. The banned-word scan in `app` reads this file the
+ * They sit apart from `STRINGS` because they belong to one surface: the Design Option dialogs, the
+ * mode bar, the layer list and the paste review. The banned-word scan in `app` reads this file the
  * same way it reads the main table, because it reads every shipped module under `ui`.
  *
  * A review from `edit` already carries the question it was asked with — `Demolish W-3?` — and the
