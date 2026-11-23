@@ -96,7 +96,7 @@ export function ExtentNumberField(props: {
         }}
       />
       {caption !== undefined && caption !== '' && (
-        <span className="bb-workspace-field-hint" data-testid={`${testId}-caption`}>{caption}</span>
+        <span className="bb-workspace-field-hint bb-extent-caption" data-testid={`${testId}-caption`}>{caption}</span>
       )}
       {error !== null && (
         <p className="bb-workspace-field-error" data-testid={`${testId}-error`} role="alert">{error}</p>
@@ -159,7 +159,7 @@ export function VerticalExtentRows(props: VerticalExtentRowsProps): ReactNode {
       {view.heightLine !== null && fork !== undefined && (
         <div className="bb-workspace-button-row" data-testid={`${testId}-extent-fork`}>{fork}</div>
       )}
-      <span className="bb-workspace-field-hint" data-testid={`${testId}-extent-shown-as`}>{view.shownAs}</span>
+      <span className="bb-workspace-field-hint bb-extent-caption" data-testid={`${testId}-extent-shown-as`}>{view.shownAs}</span>
     </div>
   )
 }

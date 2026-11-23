@@ -117,9 +117,26 @@ test.describe('the Plan View Range', () => {
     await page.keyboard.press('Escape')
     await expect(page.getByTestId('placed-extent')).toBeVisible()
     await expect(page.getByTestId('placed-extent-height-line')).toContainText('from Item Design Base cabinet')
-    await page.getByTestId('placed-extent').scrollIntoViewIfNeeded()
+    // The rail's own fold cuts the caption under `Top` in half, so the last line of the
+    // section is what is brought into view.
+    await page.getByTestId('placed-extent-shown-as').scrollIntoViewIfNeeded()
     await waitForFonts(page)
     await waitForStablePaint(page.getByTestId('placed-extent'))
     await expect(page).toHaveScreenshot('plan-range-placed-extent.png')
+  })
+
+  test('the Wall inspector reads the Wall’s own extent', async ({ page }) => {
+    await openRangePlan(page)
+    // W-1 is drawn in two pieces, the Window at 1 500–2 700 between them, and the fitted view
+    // leaves the far piece off the right of the canvas — so the press is on the near piece, where
+    // the Wall stands alone. One candidate there, so no list opens and nothing needs backing out:
+    // Escape would hand the selection back with it.
+    await clickMm(page, { x: 700, y: 0 })
+    await expect(page.getByTestId('wall-extent')).toBeVisible()
+    await expect(page.getByTestId('wall-extent-top')).toHaveValue('2600')
+    await page.getByTestId('wall-extent-shown-as').scrollIntoViewIfNeeded()
+    await waitForFonts(page)
+    await waitForStablePaint(page.getByTestId('wall-extent'))
+    await expect(page).toHaveScreenshot('plan-range-wall-extent.png')
   })
 })

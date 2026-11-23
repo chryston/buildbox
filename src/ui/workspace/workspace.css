@@ -628,6 +628,12 @@
   color: var(--bb-text-subtle);
 }
 
+/* A caption under a number input, not under a static value: the shared -6px tuck slides it under
+ * the input's own box, so the extent rows keep their captions clear of it. */
+.bb-extent-caption {
+  margin-top: 2px;
+}
+
 .bb-workspace-design-section {
   margin-top: 16px;
   padding-top: 12px;
