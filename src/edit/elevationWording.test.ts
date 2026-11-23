@@ -15,6 +15,8 @@
  * `left` or `right` of its own line and nothing about where north is.
  */
 import { describe, expect, it } from 'vitest'
+import { verticalSnapCandidates } from '../derive'
+import { elevationScene } from '../derive/testing'
 import type { Project } from '../domain'
 import { elevationViewsOf } from '../domain'
 import { BANNED_WORDS, bannedWordsIn, mentionsWord } from '../lib'
@@ -97,7 +99,7 @@ const REFUSALS: readonly { readonly at: string; readonly run: () => unknown }[] 
   },
 ]
 
-/** Every sentence this feature can put on screen: the three labels and every refusal it can give. */
+/** Every sentence this feature can put on screen: the three labels, every refusal, and every guide line. */
 function shipped(): string[] {
   const labels = (['elevationView.create', 'elevationView.edit', 'elevationView.delete'] as const).map((type) => intentLabel(type))
   const refusals = REFUSALS.map(({ at, run }) => {
@@ -105,7 +107,9 @@ function shipped(): string[] {
     if (result.ok || result.problems === undefined) throw new Error(`no refusal for ${at}`)
     return result.problems.map((problem) => problem.message)
   }).flat()
-  return [...labels, ...refusals]
+  // A snap guide says a height's name next to the cursor, which is as much on screen as a toast.
+  const guides = (elevationScene().elevationViews ?? []).flatMap((view) => verticalSnapCandidates({ project: elevationScene(), view }).map((candidate) => candidate.label))
+  return [...labels, ...refusals, ...guides]
 }
 
 describe('the words #75 ships saying', () => {

@@ -21,8 +21,13 @@
  * why). That separation is what `drawingLayers.test.ts` pins: the same Project with its layer
  * settings toggled derives byte-identical warnings and quantities, and a memo slot built before the
  * toggle still answers after it.
+ *
+ * **The view is any saved view (#75 criterion 12).** Every function here reads `SavedViewSettings` —
+ * the layer overrides, the order, the active layer and `Snap to hidden content` — and nothing reads a
+ * Plan View field, so an Elevation View is answered by these same rules rather than by a second copy
+ * that would drift the first time a rule moved.
  */
-import type { EntityId, PlanView, Project } from '../domain'
+import type { EntityId, Project, SavedViewSettings } from '../domain'
 import { DEFAULT_LAYER_SETTING, UNLAYERED_LAYER_KEY, drawingLayerById, drawingLayersOf, viewLayerOrder, viewSnapToHidden } from '../domain'
 import { effectiveModel } from './effectiveModel'
 
@@ -59,14 +64,14 @@ export interface DrawingGates {
  * The rows of the Layers list are the reverse of this — front-first — which is why the order is
  * stated once here rather than in the panel.
  */
-export function effectiveLayerOrder(project: Project, view: PlanView | null): EntityId[] {
+export function effectiveLayerOrder(project: Project, view: SavedViewSettings | null): EntityId[] {
   const override = view === null ? null : viewLayerOrder(view)
   if (override !== null) return [...override]
   return [...drawingLayersOf(project).map((layer) => layer.id), UNLAYERED_LAYER_KEY]
 }
 
 /** The same keys in the order the Layers list shows them: front-most first. */
-export function layerRowsFrontFirst(project: Project, view: PlanView | null): EntityId[] {
+export function layerRowsFrontFirst(project: Project, view: SavedViewSettings | null): EntityId[] {
   return effectiveLayerOrder(project, view).reverse()
 }
 
@@ -95,7 +100,7 @@ export function entityLayerKeys(project: Project, floorId: EntityId, optionId: E
  * `Unlayered` has no Project entry and so no colour of its own: `null` means "draw in the neutral
  * token colour", which is a drawing decision the panel makes, not a colour stored on the Project.
  */
-export function effectiveLayerSetting(project: Project, view: PlanView | null, layerKey: EntityId): EffectiveLayerSetting {
+export function effectiveLayerSetting(project: Project, view: SavedViewSettings | null, layerKey: EntityId): EffectiveLayerSetting {
   const override = view?.layerSettings?.[layerKey]
   const layer = drawingLayerById(project, layerKey)
   return {
@@ -116,7 +121,7 @@ export function effectiveLayerSetting(project: Project, view: PlanView | null, l
  */
 export function layerAccessOf(
   project: Project,
-  view: PlanView | null,
+  view: SavedViewSettings | null,
   layerKey: EntityId,
   gates: DrawingGates,
 ): LayerAccess {
@@ -133,7 +138,7 @@ export function layerAccessOf(
  * says `Snap to hidden content`, which makes it a target and nothing more: a snap is not a
  * selection, so `pickable` stays false either way.
  */
-export function snapCandidateAllowed(project: Project, view: PlanView | null, layerKey: EntityId): boolean {
+export function snapCandidateAllowed(project: Project, view: SavedViewSettings | null, layerKey: EntityId): boolean {
   const setting = effectiveLayerSetting(project, view, layerKey)
   return (setting.visible && setting.selectable) || (view === null ? false : viewSnapToHidden(view))
 }

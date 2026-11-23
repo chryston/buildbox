@@ -29,6 +29,8 @@
 export { cabinetSceneUnits } from './cabinetSceneUnits'
 export { SNAP_ROW_KINDS, enabledSnapKinds, snapCandidates } from './snapCandidates'
 export type { SnapGeometry, SnapSettingKinds, SnapSourceInput, WallFaceSource } from './snapCandidates'
+export { VERTICAL_SNAP_ROW_KINDS, enabledVerticalSnapKinds, verticalSnapCandidates } from './verticalSnapCandidates'
+export type { VerticalSnapInput, VerticalSnapRow } from './verticalSnapCandidates'
 export { deriveWalls } from './walls'
 export type { DerivedCorner, DerivedFace, DerivedWall, FloorWalls } from './walls'
 export { deriveRooms, roomFaceCandidates, roomFaceLabel, roomMembershipOf } from './rooms'
