@@ -1755,6 +1755,16 @@
   pointer-events: none;
 }
 
+/* The canvas host fills every svg it holds, which is what a drawing needs and the opposite of what this
+   badge needs: filled across the pane it paints its own card over the elevation, and the drawing under it
+   disappears. `auto` hands the size back to the element's own width and height, which is the one place
+   the glyph's size is written. Two classes rather than one because the host rule is a class and an
+   element, and this has to outrank it. */
+.bb-elevation-pane .bb-elevation-direction {
+  width: auto;
+  height: auto;
+}
+
 .bb-elevation-direction-shaft {
   fill: none;
   stroke: currentColor;

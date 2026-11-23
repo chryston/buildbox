@@ -42,6 +42,7 @@ const projectName = elevationSeed.library.find((record) => record.id === elevati
 
 const scene0 = elevationSeed.projects[0]!.data as unknown as Project
 const kitchen = scene0.elevationViews!.find((view) => view.name === 'Kitchen elevation')!
+const WALL = scene0.existingModel.walls[0]!.id
 const WINDOW = scene0.existingModel.openings[0]!.id
 const CABINET = scene0.existingModel.placedItems
   .find((item) => item.baseElevation === 0)!.id
@@ -148,6 +149,39 @@ async function datum(page: Page): Promise<{ y: number, pxPerMm: number }> {
 /** `+1` when `to` lies below `from` on the screen, `-1` when above: the pane's own sense of up. */
 const towards = (to: number, from: number): number => (to > from ? 1 : -1)
 
+/**
+ * The share of a rectangle the page paints with the drawing's own near-white ink.
+ *
+ * A Wall's face is filled with the same token the Plan View draws its Walls with, so a face that shows
+ * none of it is a face with something painted over it. Nothing in the DOM says so — the element is
+ * there, sized where the pane put it, with the fill it asked for — which is why this reads pixels.
+ */
+async function inkShare(page: Page, box: { x: number, y: number, width: number, height: number }): Promise<number> {
+  const shot = await page.screenshot()
+  return page.evaluate(async ({ data, x, y, w, h }) => {
+    const img = new Image()
+    img.src = `data:image/png;base64,${data}`
+    await img.decode()
+    const canvas = document.createElement('canvas')
+    canvas.width = img.width
+    canvas.height = img.height
+    const ctx = canvas.getContext('2d')!
+    ctx.drawImage(img, 0, 0)
+    const px = ctx.getImageData(x, y, w, h).data
+    let ink = 0
+    for (let i = 0; i < px.length; i += 4) {
+      if (px[i] > 200 && px[i + 1] > 200 && px[i + 2] > 200) ink++
+    }
+    return ink / (w * h)
+  }, {
+    data: shot.toString('base64'),
+    x: Math.round(box.x) + 2,
+    y: Math.round(box.y) + 2,
+    w: Math.round(box.width) - 4,
+    h: Math.round(box.height) - 4,
+  })
+}
+
 test.describe('Elevation Views in the split workspace', () => {
   test('the card opens an Elevation View beside the Plan View (#75 criterion 8)', async ({ page }) => {
     await openElevationPlan(page)
@@ -170,6 +204,16 @@ test.describe('Elevation Views in the split workspace', () => {
     const limitY = (await page.locator('[data-testid="elevation-canvas"] text', { hasText: 'Upper limit' })
       .first().boundingBox())!.y
     expect(limitY).toBeLessThan(datumY)
+
+    // And the pane shows the drawing rather than a card over it (#75 criterion 27). The canvas host
+    // fills every svg it holds, which is right for a canvas and wrong for the direction badge: filled
+    // across the pane, the badge paints its own card colour over the room and every element underneath
+    // stays correct, so only the pixels say so.
+    const glyph = (await page.getByTestId('elevation-direction').boundingBox())!
+    expect(glyph.width).toBeLessThan(60)
+    expect(glyph.height).toBeLessThan(60)
+    const face = (await rowOf(page, WALL).first().boundingBox())!
+    expect(await inkShare(page, face)).toBeGreaterThan(0.5)
   })
 
   test('selecting in either pane selects in both (#75 criterion 11)', async ({ page }) => {
