@@ -126,6 +126,10 @@ export {
   tangentPoints,
 } from './snap'
 export type { Snap, SnapCandidate, SnapKind } from './snap'
+export { alongElevation, elevationCoords, elevationDistance, elevationFrame, insideElevationBand, projectElevationOutline, wallBodyOutline } from './elevation'
+export type { ElevationFrame, ElevationLine, ElevationProjection, ElevationSide } from './elevation'
+export { movedEdges, VERTICAL_SNAP_PX, verticalBodySnap, verticalSnap, verticalTolerance } from './verticalSnap'
+export type { VerticalBodySnap, VerticalEdges, VerticalSnap, VerticalSnapCandidate, VerticalSnapKind } from './verticalSnap'
 export { toValidationProblems, validateLoop } from './validate'
 export type { LoopInput } from './validate'
 export { geometryProblem, pt, TOLERANCE_MM } from './types'
