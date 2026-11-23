@@ -8,7 +8,7 @@
  */
 import { findNode } from '../../cabinet'
 import { effectiveModel } from '../../derive'
-import { designOptionsOf } from '../../domain'
+import { designOptionsOf, elevationViewsOf } from '../../domain'
 import type { CabinetItemDesign, CabinetNode, EntityId, Floor, GenericItemDesign, ItemDesign, PlacedItem, ProposedModel, Project } from '../../domain'
 import { problem } from '../../lib'
 import type { ValidationProblem } from '../../lib'
@@ -75,6 +75,17 @@ export function spendIds(ids: readonly string[], count: number, type: string): s
 export const designPath = (itemDesignId: EntityId): string => `itemDesigns[${itemDesignId}]`
 export const placedPath = (placedItemId: EntityId): string => `existingModel.placedItems[${placedItemId}]`
 export const floorPath = (floorId: EntityId): string => `floors[${floorId}]`
+
+/**
+ * The path of one saved view, of either kind, in the validator's vocabulary (#75 §3).
+ *
+ * Three lookups accept a Plan View or an Elevation View by id alone, and a rejection that names the
+ * wrong collection sends a reader to the wrong half of the Project — so the one that has to say
+ * where it looked asks which list holds the id.
+ */
+export function savedViewPath(project: Project, viewId: EntityId): string {
+  return elevationViewsOf(project).some((view) => view.id === viewId) ? `elevationViews[${viewId}]` : `views[${viewId}]`
+}
 
 // --- Reading the Project ------------------------------------------------------
 

@@ -20,17 +20,17 @@
  * The field is returned rather than assigned so that content with no layer omits it entirely:
  * absent and `null` read the same, and a Project with no layers then keeps the bytes it had.
  */
-import type { CreationSubtype, EntityId, PlanView, Project } from '../../domain'
-import { DEFAULT_LAYER_NAMES, DEFAULT_LAYER_SETTING, drawingLayerById, drawingLayerByName } from '../../domain'
-import { refuse } from './support'
+import type { CreationSubtype, EntityId, Project, SavedViewSettings } from '../../domain'
+import { DEFAULT_LAYER_NAMES, DEFAULT_LAYER_SETTING, drawingLayerById, drawingLayerByName, savedViewsOf } from '../../domain'
+import { refuse, savedViewPath } from './support'
 
 /** The layer field of a record a creation tool is about to make — empty when there is nothing to say. */
 export interface CreationLayerField {
   readonly drawingLayerId?: EntityId
 }
 
-const viewOf = (project: Project, viewId: EntityId | null | undefined): PlanView | null =>
-  viewId === null || viewId === undefined ? null : project.views.find((view) => view.id === viewId) ?? null
+const viewOf = (project: Project, viewId: EntityId | null | undefined): SavedViewSettings | null =>
+  viewId === null || viewId === undefined ? null : savedViewsOf(project).find((view) => view.id === viewId) ?? null
 
 /**
  * The layer new `subtype` content belongs to, resolved against `viewId` (#71 §2).
@@ -55,7 +55,7 @@ export function creationLayerField(
   if (!setting.editable) {
     refuse(
       'layer-blocked',
-      `views[${view?.id ?? viewId ?? ''}].layerSettings[${layer.id}]`,
+      `${viewId === null || viewId === undefined ? 'views' : savedViewPath(project, viewId)}.layerSettings[${layer.id}]`,
       `${layer.name} is read-only in this view. Make it editable or choose another active layer.`,
     )
   }

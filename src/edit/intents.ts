@@ -20,6 +20,8 @@ import type {
   DisplayUnit,
   ElementType,
   EntityId,
+  ElevationViewLine,
+  ElevationViewSide,
   GlobalSettings,
   ItemFootprint,
   HingeSide,
@@ -50,6 +52,7 @@ import { CORRECTION_INTENT_ID_ORDER } from './handlers/correctionHandlers'
 import { RENOVATION_INTENT_ID_ORDER } from './handlers/renovationHandlers'
 import { LAYER_INTENT_ID_ORDER } from './handlers/layerHandlers'
 import { PASTE_INTENT_ID_ORDER } from './handlers/pasteHandlers'
+import { ELEVATION_INTENT_ID_ORDER } from './handlers/elevationHandlers'
 import type { CopySet } from './copySet'
 
 /**
@@ -173,6 +176,9 @@ export type RenovationIntentType =
   | 'view.setSnapToHidden'
   | 'entity.setLayer'
   | 'renovation.pasteFromProject'
+  | 'elevationView.create'
+  | 'elevationView.edit'
+  | 'elevationView.delete'
 
 /** Every Intent type the catalogue can answer: the S7 set plus the renovation set. */
 export type IntentType = S7IntentType | RenovationIntentType
@@ -515,6 +521,40 @@ export interface CreatePlanView {
    * Floor's default view; with no default either, the Existing Model on the Existing Display.
    */
   fromViewId?: EntityId
+}
+/**
+ * A named Elevation View on a Floor (#75 §1, §3).
+ *
+ * The record is a view line, a side and a distance — nothing else. The view stores no copy of the
+ * world it looks at, so making one changes no Wall, no Opening and no Placed Item, and the same
+ * world read from the other side of the line is a second view rather than a second world.
+ */
+export interface CreateElevationView {
+  floorId: EntityId
+  /**
+   * The view this one takes its Design Option and Renovation Display from, exactly as a new Plan View
+   * takes them (#70 §1). Absent, or a view that no longer exists, is the Floor's own Plan View.
+   */
+  fromViewId?: EntityId
+  /** Two places on the Floor the view runs between, in Floor coordinates. */
+  line: ElevationViewLine
+  /** Which side of that line the view stands on. */
+  side: ElevationViewSide
+  /** How far in front of the line the view reaches, in millimetres, and always more than zero. */
+  depth: number
+  /** Blank or absent is filled with the next free `Elevation N` on the Floor, in this same step. */
+  name?: string
+}
+/** One field at a time, and never the Floor the view belongs to (#75 §3). */
+export interface EditElevationView {
+  viewId: EntityId
+  name?: string
+  side?: ElevationViewSide
+  depth?: number
+  line?: ElevationViewLine
+}
+export interface DeleteElevationView {
+  viewId: EntityId
 }
 export interface RenamePlanView {
   viewId: EntityId
@@ -1202,6 +1242,9 @@ export interface IntentPayloads {
   'view.delete': DeletePlanView
   'view.setShowPlanImage': SetPlanViewShowsPlanImage
   'view.setPlanViewRange': SetPlanViewRange
+  'elevationView.create': CreateElevationView
+  'elevationView.edit': EditElevationView
+  'elevationView.delete': DeleteElevationView
   'warning.acknowledge': AcknowledgeWarning
   'warning.editNote': EditWarningNote
   'designOption.create': CreateDesignOption
@@ -1373,6 +1416,7 @@ const ID_ORDER_BY_TYPE: Partial<Record<IntentType, readonly string[]>> = {
   ...CORRECTION_INTENT_ID_ORDER,
   ...LAYER_INTENT_ID_ORDER,
   ...PASTE_INTENT_ID_ORDER,
+  ...ELEVATION_INTENT_ID_ORDER,
 }
 
 /**

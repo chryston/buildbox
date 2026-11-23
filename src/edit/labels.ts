@@ -10,6 +10,7 @@ import { CORRECTION_INTENT_LABELS } from './handlers/correctionHandlers'
 import { RENOVATION_INTENT_LABELS } from './handlers/renovationHandlers'
 import { LAYER_INTENT_LABELS } from './handlers/layerHandlers'
 import { PASTE_INTENT_LABELS } from './handlers/pasteHandlers'
+import { ELEVATION_INTENT_LABELS } from './handlers/elevationHandlers'
 
 /** The default label per S7 Intent type, verbatim from the #47 catalogue. */
 export const INTENT_LABELS = {
@@ -108,6 +109,7 @@ const RENOVATION_LABELS: Partial<Record<IntentType, string>> = {
   ...CORRECTION_INTENT_LABELS,
   ...LAYER_INTENT_LABELS,
   ...PASTE_INTENT_LABELS,
+  ...ELEVATION_INTENT_LABELS,
 }
 
 export function intentLabel(type: IntentType): string {

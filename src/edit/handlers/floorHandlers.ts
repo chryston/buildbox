@@ -13,10 +13,11 @@
  * - **Reordering is not editing.** `floor.reorder` moves one array entry and touches no
  *   geometry, which is what criterion 2 measures byte for byte.
  */
-import { defaultPlanView, defaultPlanViewRange, floorHasDependencies, nextFloorName, viewDesignOptionId, viewRenovationDisplay } from '../../domain'
+import { defaultPlanView, defaultPlanViewRange, elevationViewsOf, floorHasDependencies, nextFloorName, viewDesignOptionId, viewRenovationDisplay } from '../../domain'
 import type { EntityId, Floor, PlanView, Project } from '../../domain'
 import type { FloorIntent, Locator, PlanIntent, TransferPlanObjectsToFloor, ViewIntent } from '../intents'
 import type { Handler, IntentHandler } from './context'
+import { elevationViewPath } from './elevationHandlers'
 import { floorPath, refuse, requireFloor, requirePlacement, spendIds } from './support'
 
 /** The path of one saved Plan View, in the validator's vocabulary. */
@@ -27,11 +28,23 @@ function defaultViewOf(project: Project, floorId: EntityId): PlanView | undefine
   return project.views.find((view) => view.floorId === floorId && view.isDefault)
 }
 
-/** A Plan View, or a rejection. */
+/**
+ * A Plan View, or a rejection.
+ *
+ * The Plan Image and the Vertical Range are Plan View words (#75 criterion 11): an Elevation View has
+ * neither, so it is refused by name rather than reported as an id nobody knows.
+ */
 function requireView(project: Project, viewId: EntityId): PlanView {
   const view = project.views.find((candidate) => candidate.id === viewId)
-  if (view === undefined) refuse('unknown-target', viewPath(viewId), `No Plan View is called ${viewId}.`)
-  return view
+  if (view !== undefined) return view
+  if (elevationViewsOf(project).some((candidate) => candidate.id === viewId)) {
+    refuse(
+      'unknown-target',
+      elevationViewPath(viewId),
+      'That is an Elevation View, which has no Plan Image and no Vertical Range to change.',
+    )
+  }
+  refuse('unknown-target', viewPath(viewId), `No Plan View is called ${viewId}.`)
 }
 
 /** The IDs `floor.duplicate` spends, in `INTENT_ID_ORDER` order. */
