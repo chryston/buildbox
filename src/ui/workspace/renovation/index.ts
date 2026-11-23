@@ -1,5 +1,5 @@
 /**
- * The renovation surface (#69 §9, §13, §15) — dark until `VITE_FF_RENOVATION` is on.
+ * The renovation surface (#69 §9, §13, §15).
  *
  * Everything here is reached only from a `FF_RENOVATION` branch, which is what keeps a flag-off
  * build from shipping a dialog for a command it cannot run, or a sentence about one: criterion 13

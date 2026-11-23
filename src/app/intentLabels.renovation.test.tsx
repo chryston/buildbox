@@ -1,5 +1,5 @@
 /**
- * The undo tooltip of a saved-view setting (#70 §2), under `VITE_FF_RENOVATION=true`.
+ * The undo tooltip of a saved-view setting (#70 §2).
  *
  * The catalogue's default label cannot name what was chosen — the Option's name is Project data and
  * the Display's is `ui/strings` copy — so the card composes the line and `IntentBuilder.build` puts

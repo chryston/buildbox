@@ -1,5 +1,5 @@
 /**
- * The Existing Model correction (#69 §12–§13) — dark until `VITE_FF_RENOVATION` is on, and
+ * The Existing Model correction (#69 §12–§13), and
  * reachable only through the flag-gated spreads in `../registry` and `../intents`.
  *
  * Once a Project carries a Design Option, the Existing Model is the baseline every alternative is

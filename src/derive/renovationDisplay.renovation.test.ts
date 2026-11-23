@@ -1,5 +1,5 @@
 /**
- * The Renovation Display funnel (#70 §4, criteria 7–9), under `VITE_FF_RENOVATION=true`.
+ * The Renovation Display funnel (#70 §4, criteria 7–9).
  *
  * One Option over one Floor, read four ways. The Floor holds two Walls, one Opening, two Rooms and
  * three Placed Items; the Option knocks out `wall-2` and `place-0` and proposes `prop-wall` plus

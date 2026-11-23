@@ -1,5 +1,5 @@
 /**
- * The Drawing Layer half of the catalogue (#71 §2–§5) — dark until `VITE_FF_RENOVATION` is on.
+ * The Drawing Layer half of the catalogue (#71 §2–§5).
  *
  * Reachable from exactly one place: the flag-gated spread in `../registry`. With the flag off that
  * spread folds to nothing, the import goes unused, and this module is gone from the bundle whole —

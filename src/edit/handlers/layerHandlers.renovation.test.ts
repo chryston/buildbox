@@ -1,5 +1,5 @@
 /**
- * The Drawing Layer half of the catalogue (#71 §2–§5), under `VITE_FF_RENOVATION=true`: this file
+ * The Drawing Layer half of the catalogue (#71 §2–§5): this file
  * runs in the `renovation` project (`npm run test:renovation`) and nowhere else. With the flag off
  * these ten types have no handler at all, and `applyIntent` answers one of them with the rejection
  * any unknown type gets — which is what `../intents.test.ts` checks.

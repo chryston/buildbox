@@ -3,7 +3,7 @@ import { designOptionName, effectiveModel } from './index'
 import type { DesignOption, EntityId, Opening, PlacedItem, Project, Room, Wall, WallJunction } from '../domain'
 import roomsFixture from '../../fixtures/domain/v7/rooms.json?raw'
 
-// The effective model of #69 §5, under `VITE_FF_RENOVATION=true`: this file runs in the
+// The effective model of #69 §5: this file runs in the
 // `renovation` project (`npm run test:renovation`) and nowhere else, because a build without the
 // flag cannot read an Option at all. The flag-off half is the whole existing derive suite, which
 // derives the Existing Model byte-identically with `optionId` of `null`.

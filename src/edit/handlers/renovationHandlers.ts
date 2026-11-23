@@ -1,5 +1,5 @@
 /**
- * The Design Option half of the catalogue (#69 §2) — dark until `VITE_FF_RENOVATION` is on.
+ * The Design Option half of the catalogue (#69 §2).
  *
  * This module is reachable from exactly one place: the flag-gated spread in `../registry`. In a
  * build without the flag that spread folds to nothing, the import goes unused, and dead-code

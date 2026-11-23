@@ -1,5 +1,5 @@
 /**
- * The saved-view settings of #70 §1 and §9, under `VITE_FF_RENOVATION=true`: this file runs in the
+ * The saved-view settings of #70 §1 and §9: this file runs in the
  * `renovation` project (`npm run test:renovation`) and nowhere else.
  *
  * The three things these tests hold: each setting is **one** Edit Transaction with **one** inverse

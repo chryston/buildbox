@@ -1,5 +1,5 @@
 /**
- * The base-plan renovation-edit table (#69 §7–§8) — dark until `VITE_FF_RENOVATION` is on, and
+ * The base-plan renovation-edit table (#69 §7–§8), and
  * reachable only through the flag-gated spread in `../registry` (see `./renovationHandlers` for
  * why that matters).
  *

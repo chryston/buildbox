@@ -1,5 +1,5 @@
 /**
- * A Backup of a layered Project, restored (#71 criterion 3), under `VITE_FF_RENOVATION=true`.
+ * A Backup of a layered Project, restored (#71 criterion 3).
  *
  * The codec is the only place a Project leaves the app and comes back, and Drawing Layers make a
  * new kind of promise for it: the layer list is Project data, the per-view settings are saved-view

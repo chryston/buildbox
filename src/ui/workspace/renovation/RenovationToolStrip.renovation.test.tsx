@@ -1,5 +1,5 @@
 /**
- * The contextual tool strip (#70 §3, criteria 4, 5, 6), under `VITE_FF_RENOVATION=true`.
+ * The contextual tool strip (#70 §3, criteria 4, 5, 6).
  *
  * The rows are asserted as a list rather than one by one: criterion 4 is about the set being exactly
  * the table's, and a strip that quietly grows a row in one Display is the failure mode a per-row

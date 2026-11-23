@@ -1,5 +1,5 @@
 /**
- * The Design Option half of the catalogue (#69 §2, criterion 9), under `VITE_FF_RENOVATION=true`:
+ * The Design Option half of the catalogue (#69 §2, criterion 9):
  * this file runs in the `renovation` project (`npm run test:renovation`) and nowhere else. The
  * flag-off half is the existing suite — with the flag off these types have no handler at all, and
  * `applyIntent` answers one of them with the rejection any unknown type gets.

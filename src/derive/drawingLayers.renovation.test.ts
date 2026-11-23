@@ -1,5 +1,5 @@
 /**
- * The effective drawing rules of #71 §4, under `VITE_FF_RENOVATION=true`.
+ * The effective drawing rules of #71 §4.
  *
  * Two things are easy to get wrong in opposite directions, and the file is built around them. The
  * first is a layer switch that reaches further than drawing: hiding Furniture must empty the canvas
