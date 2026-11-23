@@ -228,6 +228,30 @@ test.describe('Elevation Views in the split workspace', () => {
     }
   })
 
+  test('every height’s words stand on a card that covers them (#75 criterion 14)', async ({ page }) => {
+    await openElevationPlan(page)
+    // The words that name a height are the drawing's own ink and a Wall's face is filled with that
+    // same ink, so laid straight onto the picture they are the colour of the thing behind them. The
+    // card underneath is what makes them read — and it only makes them read if it covers the glyphs
+    // the browser actually painted, which is the width the drawing measured for them. A word measured
+    // as some other string than the one drawn is a card the word walks off the end of, and only the
+    // rendered boxes say so.
+    const cards = page.locator('[data-testid="elevation-canvas"] path[fill*="bg-card"]')
+    expect(await cards.count()).toBe(2)
+    for (const name of ['Floor Datum', 'Upper limit']) {
+      const box = (await page.locator('[data-testid="elevation-canvas"] text', { hasText: name })
+        .first().boundingBox())!
+      expect(box.width, name).toBeGreaterThan(40)
+      let covered = false
+      for (const card of await cards.all()) {
+        const c = (await card.boundingBox())!
+        covered = covered || (c.x <= box.x && c.y <= box.y
+          && c.x + c.width >= box.x + box.width && c.y + c.height >= box.y + box.height)
+      }
+      expect(covered, name).toBe(true)
+    }
+  })
+
   test('selecting in either pane selects in both (#75 criterion 11)', async ({ page }) => {
     await openElevationPlan(page)
 

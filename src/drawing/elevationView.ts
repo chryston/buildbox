@@ -28,6 +28,7 @@ import type { ElevationRow, ElevationScene } from '../derive'
 import type { Pt } from '../geometry'
 import { layoutText, measureRect } from './font/layoutText'
 import { mmText } from './format'
+import { roundedRectCommands } from './path'
 import type { LayerGates } from './floorView'
 import { resolveSize } from './styles'
 import type { DisplayItem, DisplayList, PathCommand, Rect, Sizing, StyleKey } from './types'
@@ -117,10 +118,25 @@ function heightLine(
   style: StyleKey,
   layout: { width: number; ascent: number; descent: number },
   area: Rect,
+  sizing: Sizing,
 ): DisplayItem[] {
   // The words stand just above the line they name: above is a smaller y, because the picture's y grows
   // downward from its highest height.
   const at: Pt = { x: area.x + LABEL_MM, y: z - LABEL_MM - layout.ascent / 2 }
+  // And they stand on a card. The line they name runs through the drawing, a height's words are the ink
+  // of the drawing itself, and a Wall's face is filled with that same ink — words laid straight onto the
+  // picture are the colour of the thing behind them and read as nothing. The card the app already puts
+  // behind a word that has to survive anything is the answer here too, because it is a shape: it holds
+  // on a screen, on a sheet, and in a PDF, where stroking the glyphs themselves is not something a text
+  // operator can do.
+  const height = layout.ascent + layout.descent
+  const corner = resolveSize('plan-chip-corner', sizing).mm
+  const box: Rect = {
+    x: at.x - LABEL_MM,
+    y: at.y - height / 2 - LABEL_MM,
+    w: layout.width + 2 * LABEL_MM,
+    h: height + 2 * LABEL_MM,
+  }
   return [
     {
       kind: 'path',
@@ -130,6 +146,12 @@ function heightLine(
       ],
       closed: false,
       style,
+    },
+    {
+      kind: 'path',
+      segments: roundedRectCommands(box.x, box.y, box.w, box.h, Math.min(corner, box.w / 2, box.h / 2)),
+      closed: true,
+      style: 'plan-chip-box',
     },
     {
       kind: 'text',
@@ -219,11 +241,16 @@ export function drawElevationView(scene: ElevationScene, options: ElevationViewO
   const area: Rect = { x: 0, y: zOf(highMm), w: k * scene.length, h: zOf(lowMm) - zOf(highMm) }
 
   const labelSize = resolveSize('plan-label', sizing).mm
-  const datumSize = layoutText(height(0), labelSize)
   const lines: DisplayItem[] = []
-  lines.push(...heightLine(zOf(0), `Floor Datum ${height(0)}`, 'elevation-datum', datumSize, area))
-  if (upper !== null) lines.push(...heightLine(zOf(upper), `Upper limit ${height(upper)}`, 'elevation-limit', datumSize, area))
-  if (lower !== null) lines.push(...heightLine(zOf(lower), `Lower limit ${height(lower)}`, 'elevation-limit', datumSize, area))
+  // Each line's words are measured for themselves: the box the words stand on, the height they are
+  // centred at and the extent the picture is fitted to all come from that one measurement, so
+  // measuring a different string than the one drawn undershoots all three.
+  const name = (z: number, text: string, style: StyleKey): void => {
+    lines.push(...heightLine(zOf(z), text, style, layoutText(text, labelSize), area, sizing))
+  }
+  name(0, `Floor Datum ${height(0)}`, 'elevation-datum')
+  if (upper !== null) name(upper, `Upper limit ${height(upper)}`, 'elevation-limit')
+  if (lower !== null) name(lower, `Lower limit ${height(lower)}`, 'elevation-limit')
 
   // The ruler, outside the drawing area on the left: its spine, its ticks and its words all stand at
   // x < 0, so no label of its own can ever land on content, whatever the content is.

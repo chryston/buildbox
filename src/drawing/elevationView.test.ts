@@ -191,6 +191,31 @@ describe('drawElevationView: heights and the ruler (#75 criterion 14)', () => {
     expect(paths(drawn.list, 'elevation-limit')).toHaveLength(1)
   })
 
+  it('lays a card behind every height’s words, which are the same ink as the Walls they cross', () => {
+    const drawn = drawElevationView(KITCHEN, { sizing: SCREEN })
+    const datum = band(drawn.list, 'elevation-datum')
+    const cards = datum.filter((item) => item.kind === 'path' && item.style === 'plan-chip-box')
+    const words = datum.filter((item) => item.kind === 'text')
+    expect(cards).toHaveLength(words.length)
+    expect(words.length).toBe(2)
+    words.forEach((word, index) => {
+      const card = cards[index]!
+      // Behind the word in painter's order, so the word is on the card and not under it.
+      expect(datum.indexOf(card)).toBeLessThan(datum.indexOf(word))
+      // And wide enough to cover it on every side: a card the word overhangs is a card that
+      // leaves part of the word on the Wall, which is the thing that could not be read.
+      const box = boxOf(card)
+      const laid = boxOf(word)
+      expect(box.x).toBeLessThan(laid.x)
+      expect(box.y).toBeLessThan(laid.y)
+      expect(box.x + box.w).toBeGreaterThan(laid.x + laid.w)
+      expect(box.y + box.h).toBeGreaterThan(laid.y + laid.h)
+    })
+    // The card is the app's own: the card colour, which is no colour the drawing paints content
+    // with, in both themes.
+    expect(resolveStyle('plan-chip-box').fill).toBe('var(--bb-bg-card)')
+  })
+
   it('names a lower limit when the Floor has one', () => {
     const withLower: Project = {
       ...PROJECT,
