@@ -22,7 +22,7 @@
  * The same-spot radius is `SNAP_ACQUISITION_PX` — the constant the shape editor already uses for
  * "the same pixel twice" — so a click that jitters by a pixel keeps cycling instead of restarting.
  */
-import { SNAP_ACQUISITION_PX, type RenovationState } from '../../../derive'
+import { SNAP_ACQUISITION_PX, type RangeClass, type RenovationState } from '../../../derive'
 import type { EntityId } from '../../../domain'
 
 /** One thing a click could pick, as the canvas sees it. */
@@ -35,6 +35,18 @@ export interface CycleCandidate {
    * canvas already knows this — it is the index it drew the entity at.
    */
   readonly drawOrder: number
+  /**
+   * What the Plan View Range says about it (#74 §6): In, Above or Below. Absent means In range,
+   * which is what every entity without a Vertical Extent is — a Room, a Plan Image, a Drawing Layer's
+   * annotation — and what a caller that has not derived the classes yet means.
+   */
+  readonly rangeClass?: RangeClass
+  /**
+   * How far in front of the Elevation View's viewing line the entity stands, in millimetres (#75).
+   * Only an Elevation View reads it: nearest first is the order that picks what the eye is on. Absent
+   * is 0, the nearest answer there is.
+   */
+  readonly distance?: number
 }
 
 /** A point in CSS pixels, the space the 12 px acquisition radius is measured in. */
@@ -74,12 +86,44 @@ export function reachableCandidates(
 }
 
 /**
- * The cycle order: top candidate first. Layer order decides, then the State — Proposed above
- * Demolition above Existing — and two candidates in the same layer and State keep the order the
- * canvas drew them in, so the function is stable and a re-derive cannot reshuffle the list.
+ * Which Range Class the cycle walks first (#74 §6): In range, then Above, then Below.
+ *
+ * This is `RANGE_RANK` rotated rather than copied. That constant orders the *paint* pass, where a
+ * Below-range entity goes down first because it is the faintest background and everything else is
+ * drawn over it; the cycle starts with what the view is looking at, which is where the paint pass ends.
+ * Two orders of one grouping, and the difference is which end a person clicks first.
  */
-export function cycleOrder(candidates: readonly CycleCandidate[]): CycleCandidate[] {
-  return [...candidates].sort((a, b) => b.drawOrder - a.drawOrder || STATE_RANK[b.renovationState] - STATE_RANK[a.renovationState])
+const RANGE_CYCLE_RANK: Record<RangeClass, number> = { in: 0, above: 1, below: 2 }
+
+/**
+ * Which view is cycling (#74 §6). A Plan View groups by Range Class; an Elevation View has no Range —
+ * it is a slice — so it orders by distance from the viewing line instead, nearest first.
+ */
+export type CycleViewKind = 'plan' | 'elevation'
+
+/**
+ * The cycle order: top candidate first.
+ *
+ * In a Plan View the Plan View Range decides first — In range, then Above, then Below — then layer
+ * order, then the State (Proposed above Demolition above Existing), and two candidates equal on all
+ * three keep the order the canvas drew them in, so the function is stable and a re-derive cannot
+ * reshuffle the list.
+ *
+ * "Walls and Openings before Rooms" needs no key of its own: a Room has no Vertical Extent, so it is
+ * In range by definition, and it is always drawn behind the Walls and Openings of the same Floor. Both
+ * halves of §6's order therefore fall out of the two keys above, in the group the criterion describes.
+ *
+ * In an Elevation View distance from the viewing line decides first, nearest first (#75 aims it); the
+ * two tiebreaks are the same.
+ */
+export function cycleOrder(candidates: readonly CycleCandidate[], viewKind: CycleViewKind = 'plan'): CycleCandidate[] {
+  const tie = (a: CycleCandidate, b: CycleCandidate): number =>
+    b.drawOrder - a.drawOrder || STATE_RANK[b.renovationState] - STATE_RANK[a.renovationState]
+  return [...candidates].sort(
+    viewKind === 'plan'
+      ? (a, b) => RANGE_CYCLE_RANK[a.rangeClass ?? 'in'] - RANGE_CYCLE_RANK[b.rangeClass ?? 'in'] || tie(a, b)
+      : (a, b) => (a.distance ?? 0) - (b.distance ?? 0) || tie(a, b),
+  )
 }
 
 /** Whether two clicks are "the same spot": inside the snap acquisition radius of each other. */
@@ -103,8 +147,9 @@ export function nextCycle(
   filter: readonly RenovationState[],
   point: CanvasPoint,
   previous: CycleState | null,
+  viewKind: CycleViewKind = 'plan',
 ): CycleOutcome {
-  const ordered = cycleOrder(reachableCandidates(candidates, filter))
+  const ordered = cycleOrder(reachableCandidates(candidates, filter), viewKind)
   if (ordered.length === 0) return { selected: null, state: null }
   const ids = ordered.map((row) => row.entityId)
   const continues =
