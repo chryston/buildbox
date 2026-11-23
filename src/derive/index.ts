@@ -31,6 +31,8 @@ export { SNAP_ROW_KINDS, enabledSnapKinds, snapCandidates } from './snapCandidat
 export type { SnapGeometry, SnapSettingKinds, SnapSourceInput, WallFaceSource } from './snapCandidates'
 export { VERTICAL_SNAP_ROW_KINDS, enabledVerticalSnapKinds, verticalSnapCandidates } from './verticalSnapCandidates'
 export type { VerticalSnapInput, VerticalSnapRow } from './verticalSnapCandidates'
+export { elevationFrameOf, elevationScene } from './elevation'
+export type { ElevationRow, ElevationRowKind, ElevationScene } from './elevation'
 export { deriveWalls } from './walls'
 export type { DerivedCorner, DerivedFace, DerivedWall, FloorWalls } from './walls'
 export { deriveRooms, roomFaceCandidates, roomFaceLabel, roomMembershipOf } from './rooms'

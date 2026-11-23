@@ -174,14 +174,19 @@ export function projectElevationOutline(frame: ElevationFrame, outline: readonly
   const band = clip(clip(clip(clip(points, (p) => p.s), (p) => p.d), (p) => length - p.s), (p) => depth - p.d)
   // The band is closed, so a shape touching an edge survives the clip, which is criterion 10's answer.
   if (band.length === 0) return { ...OUTSIDE, crossesLine }
+  // The extent along the line is the shape's own, clamped to the view's ends — not the extent of the
+  // part that happens to stand within the depth. An entity the prism holds is drawn whole in depth
+  // (#75 criterion 10), and only what lies beyond an end of the view line is clipped away.
   let sMin = Number.POSITIVE_INFINITY
   let sMax = Number.NEGATIVE_INFINITY
-  let distance = Number.POSITIVE_INFINITY
-  for (const point of band) {
+  for (const point of points) {
     if (point.s < sMin) sMin = point.s
     if (point.s > sMax) sMax = point.s
-    if (point.d < distance) distance = point.d
   }
+  // The distance is the least depth of the part the prism holds, so content the view line runs
+  // through stands at 0 and nothing else can be nearer than that.
+  let distance = Number.POSITIVE_INFINITY
+  for (const point of band) if (point.d < distance) distance = point.d
   return {
     inside: true,
     sMin: Math.min(Math.max(sMin, 0), frame.length),
@@ -231,5 +236,26 @@ export function wallBodyOutline(line: WallRefLine, offsets: readonly [number, nu
   const ring: Pt[] = []
   for (let i = 0; i <= steps; i += 1) ring.push(refPointAt(left, (length * i) / steps))
   for (let i = steps; i >= 0; i -= 1) ring.push(refPointAt(right, (length * i) / steps))
+  return ring
+}
+
+/**
+ * The closed outline of the piece of a Wall body an Opening occupies (#75 §4).
+ *
+ * An Opening stores `start` and `width` along its host Wall's reference line, so its plan footprint
+ * is that span of the Wall's body and nothing more: the same two faces, between the same two arc
+ * lengths. It is what makes an Opening project where its Wall does — and, in the drawing, the box
+ * the outline is drawn inside.
+ */
+export function openingBodyOutline(line: WallRefLine, from: number, to: number, offsets: readonly [number, number]): Pt[] {
+  const left = offsetRefLine(line, offsets[0])
+  const right = offsetRefLine(line, offsets[1])
+  const lo = Math.min(from, to)
+  const hi = Math.max(from, to)
+  if (line.kind === 'line') return [refPointAt(left, lo), refPointAt(left, hi), refPointAt(right, hi), refPointAt(right, lo)]
+  const steps = Math.max(2, Math.ceil((hi - lo) / BODY_SAMPLE_MM))
+  const ring: Pt[] = []
+  for (let i = 0; i <= steps; i += 1) ring.push(refPointAt(left, lo + ((hi - lo) * i) / steps))
+  for (let i = steps; i >= 0; i -= 1) ring.push(refPointAt(right, lo + ((hi - lo) * i) / steps))
   return ring
 }

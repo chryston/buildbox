@@ -12,10 +12,12 @@ import {
   elevationDistance,
   elevationFrame,
   insideElevationBand,
+  openingBodyOutline,
   projectElevationOutline,
+  refLength,
   wallBodyOutline,
 } from './index'
-import type { Pt } from './index'
+import type { Pt, WallRefLine } from './index'
 
 /** The Kitchen elevation of the #75 scene: a line across the room at y = 1 400, 2 000 deep. */
 const KITCHEN = elevationFrame({ start: { x: 0, y: 1400 }, end: { x: 4000, y: 1400 } }, 'left', 2000)
@@ -176,5 +178,44 @@ describe('the Wall body (#64 faces, #75 §4)', () => {
     near(elevationCoords(elevationFrame(line, 'left', 1000), at).s, 500)
     near(elevationCoords(elevationFrame(line, 'left', 1000), at).d, 500)
     near(elevationCoords(elevationFrame(line, 'right', 1000), at).d, -500)
+  })
+})
+
+describe('the piece of a Wall body an Opening occupies (#75 §4)', () => {
+  const straight: WallRefLine = { kind: 'line', start: { x: 0, y: 0 }, end: { x: 4000, y: 0 } }
+
+  it('takes the two faces between the Opening’s own start and width', () => {
+    const piece = openingBodyOutline(straight, 1500, 2700, [-100, 100])
+    expect(piece.map((p) => p.x).sort((a, b) => a - b)).toEqual([1500, 1500, 2700, 2700])
+    expect(piece.map((p) => p.y).sort((a, b) => a - b)).toEqual([-100, -100, 100, 100])
+  })
+
+  it('keeps the faces of a Wall justified to one side', () => {
+    // A Wall standing entirely on one face of its reference line gives its Opening the same body.
+    const piece = openingBodyOutline(straight, 0, 500, [0, 200])
+    expect(piece.map((p) => p.y).sort((a, b) => a - b)).toEqual([0, 0, 200, 200])
+  })
+
+  it('reads a span the other way round as the same piece', () => {
+    expect(openingBodyOutline(straight, 2700, 1500, [-100, 100]).map((p) => p.x).sort((a, b) => a - b))
+      .toEqual([1500, 1500, 2700, 2700])
+  })
+
+  it('is a closed piece of zero width where the Opening has none', () => {
+    const piece = openingBodyOutline(straight, 1500, 1500, [-100, 100])
+    expect(piece.every((p) => p.x === 1500)).toBe(true)
+    expect(piece).toHaveLength(4)
+  })
+
+  it('follows an arc Wall, sampled, and stays inside its body', () => {
+    const arc: WallRefLine = { kind: 'arc', start: { x: 0, y: 0 }, through: { x: 1000, y: 500 }, end: { x: 2000, y: 0 } }
+    const body = wallBodyOutline(arc, [-100, 100])
+    const piece = openingBodyOutline(arc, 400, 1200, [-100, 100])
+    const xs = piece.map((p) => p.x)
+    expect(Math.min(...xs)).toBeGreaterThanOrEqual(Math.min(...body.map((p) => p.x)))
+    expect(Math.max(...xs)).toBeLessThanOrEqual(Math.max(...body.map((p) => p.x)))
+    // The span is measured along the curve, so the piece is shorter than the Wall it sits in.
+    expect(piece.length).toBeGreaterThan(4)
+    expect(refLength(arc)).toBeGreaterThan(1200)
   })
 })
