@@ -2875,9 +2875,12 @@ export function FloorWorkspace(): ReactNode {
             body: null,
             active: paneAlone !== 'elevation',
             onFocus: () => {
-              if (paneAlone !== null) setPaneAlone(null)
+              if (workspaceStore.getState().paneAlone !== null) setPaneAlone(null)
             },
-            onShowAlone: () => setPaneAlone(paneAlone === 'plan' ? null : 'plan'),
+            // Read the store, not the render's `paneAlone`: the pane's frame is memoised, so a
+            // closure here would keep answering for the state the gesture started from and the
+            // second press would set the same pane alone again instead of putting it back.
+            onShowAlone: () => setPaneAlone(workspaceStore.getState().paneAlone === 'plan' ? null : 'plan'),
           },
           elevation:
             elevationView === null || elevationSceneValue === null || elevationDrawing === null
@@ -2919,9 +2922,10 @@ export function FloorWorkspace(): ReactNode {
                   ),
                   active: paneAlone !== 'plan',
                   onFocus: () => {
-                    if (paneAlone !== null) setPaneAlone(null)
+                    if (workspaceStore.getState().paneAlone !== null) setPaneAlone(null)
                   },
-                  onShowAlone: () => setPaneAlone(paneAlone === 'elevation' ? null : 'elevation'),
+                  onShowAlone: () =>
+                    setPaneAlone(workspaceStore.getState().paneAlone === 'elevation' ? null : 'elevation'),
                   onClose: () => setPaneAlone('plan'),
                 },
         }}

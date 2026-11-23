@@ -59,6 +59,9 @@ const NODE_ONLY_INCLUDE = [
   // Criterion 6 of #68 exports a PDF, which needs the bundled font read from disk — and
   // `import.meta.url` is only a file URL outside jsdom.
   'src/test/warningsOnDrawings.test.ts',
+  // The same contract for a view line (#75 criterion 7): it reads the bytes `export` writes, and
+  // `referenceProject` reads its fixture from disk, so `import.meta.url` has to be a file URL.
+  'src/test/elevationMarkersOnDrawings.test.ts',
   // The invalid-proposal controller (#58 §6) lives in `ui` because it is UI state, but it is
   // a pure state machine — no React, no DOM — and the issue verifies it under Node.
   'src/ui/workspace/shape/**/*.test.ts',
