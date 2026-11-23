@@ -166,6 +166,15 @@ export interface WarningFloor {
 export interface WarningProducer {
   readonly type: string
   /**
+   * The `messageKey`s this producer's candidates can carry.
+   *
+   * Usually just the `type` — most producers say one sentence. A producer that measures one pair
+   * but words it by its shape (the vertical relation says *above*, *below* or *over* depending on
+   * how the two extents sit, #76 §3) lists the keys here, and the copy-table test fails if any of
+   * them has no row.
+   */
+  readonly messageKeys?: readonly string[]
+  /**
    * The suspected warnings of one Floor.
    *
    * `optionId` arrives separately because it is not part of the model the producer reads:

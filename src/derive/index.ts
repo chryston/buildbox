@@ -55,6 +55,15 @@ export type {
   WarningWall,
 } from './warnings/types'
 export {
+  chooseVerticalSubject,
+  floorLimitCopy,
+  hostRangeCopy,
+  verticalOverlap,
+  verticalRelationCopy,
+  VERTICAL_MESSAGE_KEYS,
+} from './warnings/verticalCopy'
+export type { VerticalCopy, VerticalExtent, VerticalKind, VerticalSubject } from './warnings/verticalCopy'
+export {
   AFFINE_IDENTITY,
   affineApply,
   affineInvert,
