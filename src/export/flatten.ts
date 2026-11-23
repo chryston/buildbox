@@ -15,7 +15,7 @@
 import type { Affine, Rect } from '../derive'
 import { affineApply, affineMultiply } from '../derive'
 import type { DisplayItem, DisplayList, PathCommand, Sizing, StyleKey, TextAnchor, TextBaseline } from '../drawing'
-import { STYLES, resolveSize, unionRect } from '../drawing'
+import { STYLES, rangeStyle, resolveSize, unionRect } from '../drawing'
 import type { Rgba } from './palette'
 import { colourToRgba, resolveColour } from './palette'
 
@@ -90,7 +90,9 @@ const opacityOf = (itemOpacity: number | undefined, styleOpacity: number | undef
 function flattenItem(item: DisplayItem, m: Affine, sizing: Sizing, out: FlatOp[]): void {
   switch (item.kind) {
     case 'path': {
-      const style = STYLES[item.style as StyleKey]
+      // #74 §3: the same mark the SVG writer reads, so a sheet and a screen cannot disagree
+      // about which cabinet the section plane is standing under.
+      const style = rangeStyle(item.paint, STYLES[item.style as StyleKey], 'path')
       out.push({
         kind: 'path',
         segments: item.segments.map((cmd) => mapCommand(cmd, m)),
@@ -104,7 +106,7 @@ function flattenItem(item: DisplayItem, m: Affine, sizing: Sizing, out: FlatOp[]
       return
     }
     case 'text': {
-      const style = STYLES[item.style as StyleKey]
+      const style = rangeStyle(item.paint, STYLES[item.style as StyleKey], 'text')
       if (style.size === undefined) {
         throw new Error(`export: style "${item.style}" paints text but names no SIZE_ROLES row`)
       }
