@@ -1,0 +1,347 @@
+{
+  "dbName": "buildbox",
+  "source": "the plan-range scene (scripts/make-plan-range-seed.ts)",
+  "projects": [
+    {
+      "id": "pr-001",
+      "revision": 1,
+      "schemaVersion": 9,
+      "savedAt": "2026-01-01T10:15:00+08:00",
+      "data": {
+        "id": "pr-001",
+        "meta": {
+          "name": "Plan with a Plan View Range"
+        },
+        "preferences": {
+          "displayUnit": "mm",
+          "displayPrecision": 0,
+          "defaultWallHeight": 2600
+        },
+        "floors": [
+          {
+            "id": "pr-002",
+            "name": "Floor 1",
+            "planImage": null,
+            "limits": {
+              "upperMm": 2600
+            }
+          }
+        ],
+        "views": [
+          {
+            "id": "pr-003",
+            "kind": "plan",
+            "floorId": "pr-002",
+            "name": "Floor 1",
+            "isDefault": true,
+            "showPlanImage": true,
+            "planViewRange": {
+              "lowerMm": 0,
+              "upperMm": 1200
+            },
+            "layerSettings": {},
+            "layerOrder": null,
+            "activeLayerId": "pr-007",
+            "snapToHiddenContent": false
+          }
+        ],
+        "drawingLayers": [
+          {
+            "id": "pr-007",
+            "name": "Structure",
+            "color": "#b9b9c2"
+          },
+          {
+            "id": "pr-008",
+            "name": "Services",
+            "color": "#5fb3ff"
+          },
+          {
+            "id": "pr-009",
+            "name": "Furniture",
+            "color": "#e3a857"
+          }
+        ],
+        "itemDesigns": [
+          {
+            "id": "pr-004",
+            "kind": "cabinet",
+            "name": "Base cabinet",
+            "construction": {
+              "settings": {
+                "unit": "mm",
+                "height": 860,
+                "width": 600,
+                "depth": 500,
+                "thickness": 18,
+                "backThickness": 6,
+                "toeKick": null,
+                "material": "oak"
+              },
+              "root": {
+                "id": "pr-006",
+                "elementType": "void"
+              }
+            }
+          },
+          {
+            "id": "pr-010",
+            "kind": "cabinet",
+            "name": "Wall cabinet",
+            "construction": {
+              "settings": {
+                "unit": "mm",
+                "height": 700,
+                "width": 600,
+                "depth": 500,
+                "thickness": 18,
+                "backThickness": 6,
+                "toeKick": null,
+                "material": "oak"
+              },
+              "root": {
+                "id": "pr-012",
+                "elementType": "void"
+              }
+            }
+          },
+          {
+            "id": "pr-013",
+            "kind": "cabinet",
+            "name": "Sump box",
+            "construction": {
+              "settings": {
+                "unit": "mm",
+                "height": 100,
+                "width": 600,
+                "depth": 500,
+                "thickness": 18,
+                "backThickness": 6,
+                "toeKick": null,
+                "material": "oak"
+              },
+              "root": {
+                "id": "pr-015",
+                "elementType": "void"
+              }
+            }
+          }
+        ],
+        "existingModel": {
+          "placedItems": [
+            {
+              "id": "pr-005",
+              "itemDesignId": "pr-004",
+              "floorId": "pr-002",
+              "translation": {
+                "x": 600,
+                "y": 600
+              },
+              "rotationDeg": 0,
+              "baseElevation": 0,
+              "drawingLayerId": "pr-009"
+            },
+            {
+              "id": "pr-011",
+              "itemDesignId": "pr-010",
+              "floorId": "pr-002",
+              "translation": {
+                "x": 600,
+                "y": 600
+              },
+              "rotationDeg": 0,
+              "baseElevation": 1500,
+              "drawingLayerId": "pr-009"
+            },
+            {
+              "id": "pr-014",
+              "itemDesignId": "pr-013",
+              "floorId": "pr-002",
+              "translation": {
+                "x": 2200,
+                "y": 600
+              },
+              "rotationDeg": 0,
+              "baseElevation": -150,
+              "drawingLayerId": "pr-009"
+            },
+            {
+              "id": "pr-016",
+              "itemDesignId": "pr-004",
+              "floorId": "pr-002",
+              "translation": {
+                "x": 1400,
+                "y": 600
+              },
+              "rotationDeg": 0,
+              "baseElevation": 0,
+              "drawingLayerId": "pr-009"
+            }
+          ],
+          "walls": [
+            {
+              "id": "pr-017",
+              "ref": "W-1",
+              "floorId": "pr-002",
+              "line": {
+                "kind": "line",
+                "start": {
+                  "x": 0,
+                  "y": 0
+                },
+                "end": {
+                  "x": 4000,
+                  "y": 0
+                }
+              },
+              "thickness": 200,
+              "justification": "centre",
+              "baseElevation": 0,
+              "height": 2600,
+              "drawingLayerId": "pr-007"
+            },
+            {
+              "id": "pr-018",
+              "ref": "W-2",
+              "floorId": "pr-002",
+              "line": {
+                "kind": "line",
+                "start": {
+                  "x": 4000,
+                  "y": 0
+                },
+                "end": {
+                  "x": 4000,
+                  "y": 3000
+                }
+              },
+              "thickness": 200,
+              "justification": "centre",
+              "baseElevation": 0,
+              "height": 2600,
+              "drawingLayerId": "pr-007"
+            },
+            {
+              "id": "pr-019",
+              "ref": "W-3",
+              "floorId": "pr-002",
+              "line": {
+                "kind": "line",
+                "start": {
+                  "x": 4000,
+                  "y": 3000
+                },
+                "end": {
+                  "x": 0,
+                  "y": 3000
+                }
+              },
+              "thickness": 200,
+              "justification": "centre",
+              "baseElevation": 0,
+              "height": 2600,
+              "drawingLayerId": "pr-007"
+            },
+            {
+              "id": "pr-020",
+              "ref": "W-4",
+              "floorId": "pr-002",
+              "line": {
+                "kind": "line",
+                "start": {
+                  "x": 0,
+                  "y": 3000
+                },
+                "end": {
+                  "x": 0,
+                  "y": 0
+                }
+              },
+              "thickness": 200,
+              "justification": "centre",
+              "baseElevation": 0,
+              "height": 2600,
+              "drawingLayerId": "pr-007"
+            }
+          ],
+          "wallJunctions": [],
+          "openings": [
+            {
+              "id": "pr-021",
+              "floorId": "pr-002",
+              "hostWallId": "pr-017",
+              "kind": "window",
+              "label": "Window 1",
+              "start": 1500,
+              "width": 1200,
+              "sill": 900,
+              "head": 2100,
+              "drawingLayerId": "pr-007"
+            }
+          ],
+          "rooms": []
+        },
+        "warningAcknowledgements": []
+      }
+    }
+  ],
+  "library": [
+    {
+      "id": "pr-001",
+      "name": "Plan with a Plan View Range",
+      "address": null,
+      "revision": 1,
+      "savedAt": "2026-01-01T10:15:00+08:00",
+      "schemaVersion": 9,
+      "sizeBytes": 3158,
+      "lastBackupInitiatedAt": null,
+      "lastBackupRevision": null,
+      "trashedAt": null,
+      "summary": {
+        "floorCount": 1,
+        "designOptionCount": 0,
+        "itemCount": 4,
+        "previewAssetHash": null,
+        "previewOutline": {
+          "bounds": [
+            300,
+            350,
+            2500,
+            850
+          ],
+          "rects": [
+            [
+              600,
+              600,
+              600,
+              500,
+              0
+            ],
+            [
+              600,
+              600,
+              600,
+              500,
+              0
+            ],
+            [
+              2200,
+              600,
+              600,
+              500,
+              0
+            ],
+            [
+              1400,
+              600,
+              600,
+              500,
+              0
+            ]
+          ]
+        }
+      }
+    }
+  ],
+  "assets": []
+}

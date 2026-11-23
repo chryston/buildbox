@@ -138,11 +138,13 @@ describe('a saved view’s Drawing Layers on its Plan View', () => {
     await userEvent.setup().click(screen.getByTestId(`layer-selectable-${STRUCTURE}`))
     expect(screen.getByTestId(`layer-mark-unselectable-${STRUCTURE}`)).toBeInTheDocument()
 
-    // The Wall is still drawn — Selectable is not Visible — but the press finds nothing to select.
+    // The Wall is still drawn — Selectable is not Visible — but the press cannot land on it. What it
+    // reaches instead is what the cycle reaches: the front-most In-range candidate under the pointer,
+    // which is the Sofa the Wall stands over (#74 §6).
     expect(screen.getByTestId(`wall-band-${WALL}`)).toBeInTheDocument()
     press(`wall-band-${WALL}`)
     expect(screen.queryByTestId('wall-inspector')).toBeNull()
-    expect(workspaceStore.getState().selection).toBeNull()
+    expect(workspaceStore.getState().selection).toBe(SOFA)
   })
 
   it('keeps a non-selectable layer out of the overlap cycle (#71 criterion 10)', async () => {
@@ -164,6 +166,11 @@ describe('a saved view’s Drawing Layers on its Plan View', () => {
     await expand(STRUCTURE)
     await userEvent.setup().click(screen.getByTestId(`layer-editable-${STRUCTURE}`))
     expect(screen.getByTestId(`layer-mark-readonly-${STRUCTURE}`)).toBeInTheDocument()
+    // The Sofa stands over this stretch of Wall, and the first click goes to the front-most In-range
+    // candidate under the pointer (#74 §6) — so Furniture is taken off the Plan View first, by the
+    // box that takes it off, and the Wall is what is left to press.
+    await expand(FURNITURE)
+    await userEvent.setup().click(screen.getByTestId(`layer-visible-${FURNITURE}`))
 
     press(`wall-band-${WALL}`)
     // Read-only is still selectable — the inspector is the point of it — and the handles are the
@@ -180,7 +187,10 @@ describe('a saved view’s Drawing Layers on its Plan View', () => {
     const written = JSON.stringify(view.project())
     const label = view.session.getSnapshot().history.undoLabel
 
-    press(`placed-object-${ISLAND}`)
+    // The press is on the Item the cycle would land on at this point — the front-most Furniture in
+    // range under the pointer (#74 §6), which is the Sofa; a press that the cycle answers with a
+    // different entity is a selection, not a drag of the thing whose group was pressed.
+    press(`placed-object-${SOFA}`)
     expect(screen.getByTestId('hidden-tool-notice')).toHaveTextContent(
       'Furniture is read-only in this view — inspect only',
     )

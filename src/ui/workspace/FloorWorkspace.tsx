@@ -204,11 +204,18 @@ export function FloorWorkspace(): ReactNode {
    * The State of every entity this view's Renovation Display draws, and the only list of what the
    * Display draws at all: an entity absent from it is not on the canvas (#70 criterion 7). The
    * overlays themselves are `drawing`'s rules, laid on the outlines the canvas already has.
+   *
+   * A Floor aimed at no Design Option still has States — every entity Existing — because the click
+   * to cycle and its candidate list read this map, and the Plan View Range divides a plain Floor's
+   * content just as it divides an Option's (#74 criterion 9). `renovationStates` stays `null`
+   * without an Option, so every renovation surface keeps refusing what no Option could answer.
    */
-  const renovationStates: ReadonlyMap<string, RenovationState> | null =
-    renovationOptionId === null || floorId === null || view === null
+  const entityStates: ReadonlyMap<string, RenovationState> | null =
+    floorId === null || view === null
       ? null
       : displayStates(displayModel(effectiveModel(project, floorId, renovationOptionId), viewRenovationDisplay(view)))
+  const renovationStates: ReadonlyMap<string, RenovationState> | null =
+    renovationOptionId === null ? null : entityStates
   /**
    * The Project the canvas's geometry is derived from. `deriveWalls` and `deriveRooms` derive the
    * standing set, but a Wall marked for demolition is still drawn — with the demolition overlay on it
@@ -2345,10 +2352,10 @@ export function FloorWorkspace(): ReactNode {
               angleSnap={angleSnap}
               walls={floorWalls}
               renovation={
-                renovationStates === null
+                entityStates === null
                   ? null
                   : {
-                      states: renovationStates,
+                      states: entityStates,
                       pickStates,
                       cycle,
                       cycleCandidates,

@@ -23,6 +23,10 @@
  * Item Design heights.
  *
  *   npx vite-node scripts/make-plan-range-seed.ts
+ *
+ * The scene is written twice: as the domain fixture the unit and jsdom tests read, and as the
+ * preview seed the browser specs seed into IndexedDB — the same Project committed through the
+ * production adapter, so the browser cannot be shown a record the app could not have written.
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
@@ -31,10 +35,15 @@ import { applyIntent, CREATE_PROJECT_ID_COUNT, createProject, INTENT_LABELS } fr
 import type { IntentType, PayloadOf } from '../src/edit'
 import { designHeight, validateProject } from '../src/domain'
 import type { EntityId, Project } from '../src/domain'
+import { createMemoryAdapter } from '../src/persistence'
+import type { ProjectRecord } from '../src/persistence'
 import { canonicalJson } from '../src/lib'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = resolve(repoRoot, 'fixtures/domain/v9/plan-range-scene.json')
+const PREVIEW_OUT = resolve(repoRoot, 'fixtures/e2e/preview-seed/plan-range.json')
+/** The database the e2e artifact opens; the seeder writes into this one. */
+const DB_NAME = 'buildbox'
 
 const NOW = '2026-01-01T10:15:00+08:00'
 const PROJECT_NAME = 'Plan with a Plan View Range'
@@ -183,6 +192,35 @@ if (!checked.ok) fail(`the scene does not validate: ${JSON.stringify(checked.pro
 
 mkdirSync(dirname(OUT), { recursive: true })
 writeFileSync(OUT, `${canonicalJson({ domainSchemaVersion: 9, project: current })}\n`)
+
+// The same Project as a browser fixture: committed through the production adapter and read back, so
+// every record in the seed is one the app itself wrote — revision, summary and all.
+const ports = createMemoryAdapter()
+const committed = await ports.projects.commit({ project: current, revision: 1, savedAt: NOW, newAssets: [] }, null)
+if (!committed.ok) fail(`committing the scene failed: ${committed.error.kind}`)
+const listed = await ports.projects.list({ includeTrashed: false })
+if (!listed.ok) fail(`reading the library back failed: ${listed.error.kind}`)
+const records: ProjectRecord[] = []
+for (const row of listed.value) {
+  const loaded = await ports.projects.load(row.id)
+  if (!loaded.ok) fail(`reading "${row.id}" back failed: ${loaded.error.kind}`)
+  records.push(loaded.value)
+}
+mkdirSync(dirname(PREVIEW_OUT), { recursive: true })
+writeFileSync(
+  PREVIEW_OUT,
+  `${JSON.stringify(
+    {
+      dbName: DB_NAME,
+      source: 'the plan-range scene (scripts/make-plan-range-seed.ts)',
+      projects: records,
+      library: listed.value,
+      assets: [],
+    },
+    null,
+    2,
+  )}\n`,
+)
 
 const refOf = (wallId: EntityId): string => current.existingModel.walls.find((wall) => wall.id === wallId)?.ref ?? '?'
 const nameOf = (designIdOf: EntityId): string => current.itemDesigns.find((design) => design.id === designIdOf)?.name ?? '?'

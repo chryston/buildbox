@@ -233,19 +233,16 @@ describe('attaching a Room edge to a wall face', () => {
     await user.click(screen.getByTestId(/^room-face-pick-(?!on-canvas)/))
     await user.click(screen.getByTestId(/^room-face-attach-/))
 
-    // Select the Wall by the band the Plan View paints for it — the hit shape the pointer
-    // actually answers to (a bare canvas click at its reference line hits nothing).
-    const select = (element: HTMLElement): void => {
-      fireEvent.pointerDown(element, { clientX: 2000, clientY: 0 })
-      fireEvent.pointerUp(element, { clientX: 2000, clientY: 0 })
-      fireEvent.click(element, { clientX: 2000, clientY: 0 })
+    // Both entities are stood on through the store's own actions rather than by pressing the shapes
+    // the Plan View paints for them. A press now answers with whatever the cycle finds under the
+    // point (#74 §6), and the fixed point these jsdom presses carry is not the entity's own
+    // geometry — which entity a press reaches is the cycle's own tests to settle, not this file's,
+    // whose subject is what a Wall with a claim on it may and may not do.
+    const selectWall = (): void => {
+      act(() => workspaceStore.getState().selectWall(view.project().existingModel.walls[0]!.id))
     }
-    const selectWall = (): void => select(screen.getByTestId(/wall-band-/))
     const selectRoom = (): void => {
-      // The Room is painted twice — its fill and its hit shape share the id — and the hit shape
-      // is the one that answers to the pointer.
-      const shapes = screen.getAllByTestId(`room-${view.project().existingModel.rooms[0]?.id ?? ''}`)
-      select(shapes[shapes.length - 1] as HTMLElement)
+      act(() => workspaceStore.getState().selectRoom(view.project().existingModel.rooms[0]!.id))
     }
     await user.click(screen.getByTestId('tool-select'))
     selectWall()
