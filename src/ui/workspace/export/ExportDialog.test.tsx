@@ -224,6 +224,31 @@ describe('the Export dialog', () => {
     expect(screen.getByTestId('export-unit-line')).toHaveTextContent('Dimensions in mm')
   })
 
+  it('lists an Elevation View among the drawings and puts it in the recipe by its own kind', async () => {
+    const elevation: RecipeViewRef = { kind: 'elevation', viewId: 'ev-1' }
+    const fake = fakePort({
+      views: [
+        { ref: ORIGIN, label: 'Floor plan', group: 'Ground floor' },
+        { ref: elevation, label: 'Kitchen', group: 'Ground floor' },
+      ],
+    })
+    await open(fake.port)
+
+    const box = screen.getByTestId(`export-view-${viewKey(elevation)}`)
+    // Criterion 22: an Elevation View is picked from the same list as a Plan View, and the group beside
+    // it is the Floor it was drawn across — not a second section of the dialog for it to live in.
+    expect(box).toBeEnabled()
+    expect(box.closest('label')?.textContent).toContain('Kitchen')
+    expect(box.closest('label')?.textContent).toContain('Ground floor')
+
+    fireEvent.click(box)
+    fireEvent.click(screen.getByTestId('export-run'))
+    await waitFor(() => expect(fake.runs).toHaveLength(1))
+    // The Recipe names it as an Elevation View: the same ID addressed as a Plan View would be a
+    // different drawing, or none at all. The origin the dialog opened on is still in the recipe.
+    expect(fake.runs[0]?.views).toEqual([ORIGIN, elevation])
+  })
+
   it('offers Lists as a live tab and Handoff pack as one that does nothing yet', async () => {
     const { port } = fakePort()
     await open(port)
