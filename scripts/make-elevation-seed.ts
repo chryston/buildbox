@@ -31,11 +31,16 @@ import { applyIntent, INTENT_LABELS } from '../src/edit'
 import type { IntentType, PayloadOf } from '../src/edit'
 import { designHeight, migrateProject, validateProject } from '../src/domain'
 import type { EntityId, Project } from '../src/domain'
+import { createMemoryAdapter } from '../src/persistence'
+import type { ProjectRecord } from '../src/persistence'
 import { canonicalJson } from '../src/lib'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const SOURCE = resolve(repoRoot, 'fixtures/domain/v9/plan-range-scene.json')
 const OUT = resolve(repoRoot, 'fixtures/domain/v10/elevation-scene.json')
+/** The same Project as a browser fixture, which `e2e/smoke/elevation.spec.ts` seeds into IndexedDB. */
+const PREVIEW_OUT = resolve(repoRoot, 'fixtures/e2e/preview-seed/elevation.json')
+const DB_NAME = 'buildbox'
 
 const NOW = '2026-01-01T10:20:00+08:00'
 /** The height the preset pack calls a Tall cupboard, and the one entity the scene adds. */
@@ -123,6 +128,33 @@ if (!checked.ok) fail(`the scene does not validate: ${JSON.stringify(checked.pro
 
 mkdirSync(dirname(OUT), { recursive: true })
 writeFileSync(OUT, `${canonicalJson({ domainSchemaVersion: 10, project: current })}\n`)
+
+// The same Project as a browser fixture: committed through the production adapter and read back, so
+// every record in the seed is one the app itself wrote — revision, summary and all. The Elevation
+// View has to survive that round trip for the browser spec to have a pane to open.
+const ports = createMemoryAdapter()
+const committed = await ports.projects.commit({ project: current, revision: 1, savedAt: NOW, newAssets: [] }, null)
+if (!committed.ok) fail(`committing the scene failed: ${committed.error.kind}`)
+const listed = await ports.projects.list({ includeTrashed: false })
+if (!listed.ok) fail(`reading the library back failed: ${listed.error.kind}`)
+const records: ProjectRecord[] = []
+for (const row of listed.value) {
+  const loaded = await ports.projects.load(row.id)
+  if (!loaded.ok) fail(`reading "${row.id}" back failed: ${loaded.error.kind}`)
+  records.push(loaded.value)
+}
+mkdirSync(dirname(PREVIEW_OUT), { recursive: true })
+writeFileSync(PREVIEW_OUT, `${JSON.stringify(
+  {
+    dbName: DB_NAME,
+    source: 'the elevation scene (scripts/make-elevation-seed.ts)',
+    projects: records,
+    library: listed.value,
+    assets: [],
+  },
+  null,
+  2,
+)}\n`)
 
 const nameOf = (id: EntityId): string => current.itemDesigns.find((design) => design.id === id)?.name ?? '?'
 const topOf = (id: EntityId): number => {
