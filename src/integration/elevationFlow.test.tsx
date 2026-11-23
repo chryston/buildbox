@@ -306,6 +306,52 @@ describe('Elevation Views in the split workspace', () => {
     expect((screen.getByLabelText(STRINGS.elevationSnapMounting) as HTMLInputElement).checked).toBe(false)
   })
 
+  it('drags the base of a Wall in the pane, leaves its plan position alone, and undoes in one step', async () => {
+    // A Wall standing on the view line's own band, 0 to 2600 mm.
+    await view.dispatch('wall.createChain', {
+      floorId: view.project().floors[0]?.id ?? '',
+      walls: [{
+        line: { kind: 'line', start: { x: 1500, y: 2000 }, end: { x: 4500, y: 2000 } },
+        thickness: 150,
+        justification: 'centre',
+        baseElevation: 0,
+        height: 2600,
+      }],
+      starts: [{ kind: 'free' }],
+      ends: [{ kind: 'free' }],
+    })
+    await renderWorkspace()
+    const viewId = await createView('Kitchen')
+    await screen.findByTestId(`split-pane-${viewId}`)
+    const floorId = view.project().floors[0]?.id ?? ''
+    const wall = view.project().existingModel.walls[0]!
+    const lineBefore = JSON.stringify(wall.line)
+
+    // The pane draws y = z in Floor millimetres, so a viewport of 1:1 at the origin makes a client
+    // y the height it stands for. jsdom lays nothing out, so the canvas box reads as zeros and this
+    // is the whole mapping — which is what lets the gesture be driven by real pointer events here.
+    act(() => {
+      workspaceStore.getState().setViewport(`elevation:${floorId}:Kitchen`, { zoom: 1, panX: 0, panY: 0 })
+      workspaceStore.getState().select(wall.id)
+    })
+
+    act(() => {
+      fireEvent.pointerDown(screen.getByTestId('elevation-handle-bottom'), { clientX: 300, clientY: 0 })
+      fireEvent(window, new MouseEvent('pointermove', { clientX: 300, clientY: -640, bubbles: true }))
+      fireEvent(window, new MouseEvent('pointerup', { clientX: 300, clientY: -640, bubbles: true }))
+    })
+
+    await waitFor(() => expect(view.project().existingModel.walls[0]?.baseElevation).toBe(-640))
+    // Criterion 10: a drag in an Elevation View changes vertical values and nothing else. Where the
+    // Wall stands is the plan's, and the plan was never touched.
+    expect(JSON.stringify(view.project().existingModel.walls[0]?.line)).toBe(lineBefore)
+    expect(view.project().existingModel.walls[0]?.height).toBe(2600)
+
+    // Criterion 11: one Edit Transaction, so one Undo puts the whole drag back.
+    await act(async () => { view.session.undo() })
+    expect(view.project().existingModel.walls[0]?.baseElevation).toBe(0)
+  })
+
   it('offers the tool in every Renovation Display and gates it on calibration', async () => {
     await renderWorkspace()
     const button = screen.getByTestId('tool-elevation')
