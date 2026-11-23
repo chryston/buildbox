@@ -246,6 +246,26 @@ export const STYLES: Record<StyleKey, Style> = {
   },
   'plan-dimension': { fill: 'var(--bb-accent)', size: 'plan-dimension', fontFamily: FONT_STACK, hit: 'none' },
   'plan-dimension-line': { stroke: 'var(--bb-accent)', strokeWidth: 'hairline', hit: 'none' },
+  // The heavier outline token (#75 §4): the same ink as a Wall's outline and the weight a selected
+  // entity gets, so content the view line runs through reads as the thing standing in the viewer's
+  // way without being a different colour, and without ever being a click target of its own.
+  'elevation-crossing': { stroke: 'var(--bb-text)', strokeWidth: 'plan-line-selected', hit: 'none' },
+  'elevation-datum': {
+    stroke: 'var(--bb-text)',
+    strokeWidth: 'plan-line',
+    dash: ['range-dash', 'range-gap'],
+    hit: 'none',
+  },
+  'elevation-limit': {
+    stroke: 'var(--bb-text)',
+    strokeWidth: 'hairline',
+    dash: ['range-dash', 'range-gap'],
+    hit: 'none',
+  },
+  'elevation-ruler': { stroke: 'var(--bb-text)', strokeWidth: 'hairline', opacity: 0.7, hit: 'none' },
+  // The words that name a height. `plan-label` takes the entity's own colour, which a height line
+  // has none of, so these get the ink of the drawing itself.
+  'elevation-label': { fill: 'var(--bb-text)', size: 'plan-label', fontFamily: FONT_STACK, hit: 'none' },
   'plan-chip-box': {
     fill: 'var(--bb-bg-card)',
     stroke: 'var(--bb-border-card)',

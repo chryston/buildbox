@@ -26,12 +26,15 @@ import {
   deriveWalls,
   effectiveFloor,
   effectiveItemDetail,
+  elevationScene,
 } from '../derive'
+import { elevationScene as elevationSceneFixture } from '../derive/testing'
 import type { Floor, GenericItemDesign, ItemDesign, ItemFootprint, PlanView, PlacedItem, PresetItemFootprint, Project } from '../domain'
 import { computeSceneLayout } from '../cabinet'
 import { drawItemDetail } from './itemDetail'
 import { wallOpenings } from './openings'
 import { measureRect } from './font/layoutText'
+import { drawElevationView } from './elevationView'
 import { drawPlanView } from './planView'
 import { drawSelectionAnnotations } from './annotations'
 import { serializeSvg, toSvgTree } from './svg'
@@ -288,6 +291,17 @@ describe('golden: the display list', () => {
     { pinnedNodeId: null },
     { sizing, formatLength: wholeMm },
   ))
+
+// The Elevation View of the #74 scene (#75 criterion 15): the same derived model a Plan View is
+// drawn from, projected through the `Kitchen elevation` view line, and the one place the mirror,
+// the painter's order, the height lines and the ruler are all decided at once.
+const ELEVATION_SCENE = elevationSceneFixture()
+const ELEVATION_VIEW = (ELEVATION_SCENE.elevationViews ?? []).find((each) => each.id === 'el-004')!
+goldenBoth('elevation-kitchen', (sizing) => drawElevationView(elevationScene(ELEVATION_SCENE, ELEVATION_VIEW), { sizing }).list)
+goldenBoth('elevation-angled', (sizing) => drawElevationView(
+    elevationScene(ELEVATION_SCENE, (ELEVATION_SCENE.elevationViews ?? []).find((each) => each.id === 'el-005')!),
+    { sizing },
+  ).list)
 })
 
 // --- What every golden must, and must not, contain -------------------------------
@@ -296,6 +310,7 @@ describe('golden: the display list', () => {
 const SCENES = [
   'plan-empty', 'plan-image-items', 'plan-curves',
   'plan-selected-annotations', 'plan-openings', 'cabinet-detail', 'item-detail-generic',
+  'elevation-kitchen', 'elevation-angled',
 ] as const
 
 const bytesOf = (name: string, sizing: 'screen' | 'paper'): string =>

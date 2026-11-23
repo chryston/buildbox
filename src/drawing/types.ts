@@ -87,6 +87,12 @@ export type LayerKey =
   | 'cabinet-marks'
   | 'item-footprint'
   | 'item-labels'
+  /** The bodies of an Elevation View, in painter's order: farthest first (#75 §4). */
+  | 'elevation-content'
+  /** The Floor Datum and Vertical Extent limit lines, and the words on them (#75 §4). */
+  | 'elevation-datum'
+  /** The millimetre ruler, which sits outside the drawing area and so over nothing in it (#75 §4). */
+  | 'elevation-ruler'
   /** The title block, footer and scale bar #61 composes around a drawing, drawn last. */
   | 'sheet-furniture'
 
@@ -125,6 +131,9 @@ export const LAYER_ORDER: readonly LayerKey[] = [
   'cabinet-marks',
   'item-footprint',
   'item-labels',
+  'elevation-content',
+  'elevation-datum',
+  'elevation-ruler',
   'sheet-furniture',
   'plan-warning-badges',
 ]
@@ -235,6 +244,16 @@ export type StyleKey =
   | 'plan-label'
   | 'plan-dimension'
   | 'plan-dimension-line'
+  /** The heavier outline token: content the view line itself runs through (#75 §4). */
+  | 'elevation-crossing'
+  /** The Floor Datum's line, dashed like every other height that was not drawn (#75 §4). */
+  | 'elevation-datum'
+  /** A Floor's own lower or upper limit, dashed and one weight lighter than the Datum. */
+  | 'elevation-limit'
+  /** The ruler's spine and ticks, outside the drawing area (#75 §4). */
+  | 'elevation-ruler'
+  /** The words that name a height, in the drawing's own ink (#75 §4). */
+  | 'elevation-label'
   | 'plan-chip-box'
   | 'plan-chip-text'
   | 'plan-origin'

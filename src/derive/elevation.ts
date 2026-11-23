@@ -57,6 +57,8 @@ export interface ElevationRow {
   readonly crossesLine: boolean
   /** The Wall an Opening is cut in, or `null`: an Opening is drawn inside its host, never over it. */
   readonly hostWallId: EntityId | null
+  /** The entity's own colour, or `null` where it has none: a Placed Item's fill is its own (#20 §4). */
+  readonly color: string | null
   /** The Drawing Layer it stands on, which is the painter's tie-break after distance. */
   readonly layerKey: EntityId
 }
@@ -103,6 +105,7 @@ export function elevationScene(project: Project, view: ElevationView): Elevation
     zMin: number,
     zMax: number,
     hostWallId: EntityId | null = null,
+    color: string | null = null,
   ): void => {
     const band = projectElevationOutline(frame, outline)
     if (!band.inside) return
@@ -117,6 +120,7 @@ export function elevationScene(project: Project, view: ElevationView): Elevation
       distance: band.distance,
       crossesLine: band.crossesLine,
       hostWallId,
+      color,
       layerKey: layers.get(entity.id) ?? UNLAYERED_LAYER_KEY,
     })
   }
@@ -147,10 +151,19 @@ export function elevationScene(project: Project, view: ElevationView): Elevation
     return design === undefined ? [] : [{ entity, placement: derivePlacement(design, entity), design }]
   })
   const names = placementLabels(placements.map((row) => row.placement))
-  for (const { entity, design } of placements) {
+  for (const { entity, placement, design } of placements) {
     const context = placementContext(design, entity)
     const outline = ringOf(designOutline(design)).map((at) => worldPointOf(context, at))
-    add(entity, 'item', names.get(entity.id) ?? design.name, outline, entity.baseElevation, entity.baseElevation + designHeight(design))
+    add(
+      entity,
+      'item',
+      names.get(entity.id) ?? design.name,
+      outline,
+      entity.baseElevation,
+      entity.baseElevation + designHeight(design),
+      null,
+      placement.color,
+    )
   }
 
   return { frame, length: frame.length, floor, rows }
