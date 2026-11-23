@@ -105,7 +105,7 @@ describe('DOMAIN_SCHEMA_VERSION', () => {
   it('is the version this build writes', () => {
     // v8 is production: the renovation model shipped, so the number the chain ends at and the number
     // this build writes are the same one (#73).
-    expect(DOMAIN_SCHEMA_VERSION).toBe(8)
+    expect(DOMAIN_SCHEMA_VERSION).toBe(9)
   })
 })
 
@@ -114,8 +114,8 @@ describe('migrateV1toV2 — one default Plan View per Floor (#56)', () => {
     const data = { ...v1Project(), floors: [{ id: 'floor-a', name: 'Ground', planImage: null }, { id: 'floor-b', name: 'Loft', planImage: null }] }
     const result = migrateV1toV2(data, allocator()) as Project
     expect(result.views).toEqual([
-      { id: 'view-1', kind: 'plan', floorId: 'floor-a', name: 'Ground', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } },
-      { id: 'view-2', kind: 'plan', floorId: 'floor-b', name: 'Loft', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } },
+      { id: 'view-1', kind: 'plan', floorId: 'floor-a', name: 'Ground', isDefault: true, showPlanImage: true },
+      { id: 'view-2', kind: 'plan', floorId: 'floor-b', name: 'Loft', isDefault: true, showPlanImage: true },
     ])
   })
 

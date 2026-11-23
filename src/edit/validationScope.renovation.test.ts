@@ -18,6 +18,7 @@ import { applyIntent, previewIntent } from './index'
 import type { Intent } from './index'
 import { intent } from './testing'
 import { validationScopeFor } from './validationScope'
+import { currentSchemaOf } from '../domain/testing'
 
 const fixturesRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../fixtures')
 const seed = JSON.parse(
@@ -30,7 +31,7 @@ const W2 = 'seed-wall-003'
 const ROOM = 'seed-room-017'
 const A = 'option-a'
 
-const project = (): Project => structuredClone(seed.projects[0]!.data)
+const project = (): Project => currentSchemaOf(seed.projects[0]!.data, 8)
 
 function long(title: string, fn: () => void): void {
   it(title, fn, 30_000)

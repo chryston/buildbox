@@ -48,6 +48,8 @@ import type {
 } from './project'
 import { defaultOpeningLabel } from './openings'
 import { defaultPlanViewRange } from './project'
+import { migrateProject } from './migrate'
+import type { EntityId } from './project'
 import { fitOpening, gapChord, usableIntervals } from '../geometry'
 import type { CornerRadii, Preset, Pt, UsableGap } from '../geometry'
 
@@ -1102,4 +1104,24 @@ export function arbCorruption(): fc.Arbitrary<Corruption> {
   return fc
     .tuple(arbProject(), fc.integer({ min: 0, max: CORRUPTIONS.length - 1 }))
     .map(([project, kind]) => CORRUPTIONS[kind](project))
+}
+
+/**
+ * A record committed at an older schema, read the way the app reads it: through the migrator.
+ *
+ * A fixture or a seed is compatibility evidence and keeps its bytes forever, so a test that edits
+ * through one cannot use it as the current Project — it has to bring it up first, which is what
+ * `persistence` does on load. The IDs the chain still has to issue are numbered after everything
+ * the record already spent, so they cannot collide with it.
+ */
+export function currentSchemaOf(record: unknown, fromVersion: number): Project {
+  let spent = 0
+  const result = migrateProject(record, fromVersion, (count) =>
+    Array.from({ length: count }, () => {
+      spent += 1
+      return `migrated-${String(spent)}` as EntityId
+    }),
+  )
+  if (!result.ok) throw new Error(`the fixture must migrate: ${result.error.message}`)
+  return result.project
 }

@@ -127,6 +127,7 @@ function atCurrentSchema(project: Project, spent = 0): Project {
     },
     views: project.views.map((view) => ({
       ...view,
+      planViewRange: { lowerMm: 0, upperMm: 2600 },
       designOptionId: null,
       renovationDisplay: 'existing' as const,
       layerSettings: {},

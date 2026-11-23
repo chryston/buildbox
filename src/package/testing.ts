@@ -87,9 +87,11 @@ export function fixtureProject(): Project {
       { id: 'floor-1', name: 'Mezzanine', planImage: null },
     ],
     views: [
-      { id: 'view-0', kind: 'plan', floorId: 'floor-0', name: 'Floor 1', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } },
-      { id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Mezzanine', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } },
-    ],
+      // The record these fixtures were written from is a v2 one: a Plan View of that schema had no
+      // range, and the file keeps the bytes it was written from, so the array is the shape it had.
+      { id: 'view-0', kind: 'plan', floorId: 'floor-0', name: 'Floor 1', isDefault: true, showPlanImage: true },
+      { id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Mezzanine', isDefault: true, showPlanImage: true },
+    ] as unknown as PlanView[],
     itemDesigns: [
       { id: 'design-0', kind: 'cabinet', name: 'Base Cabinet', construction: { settings: SETTINGS, root: SPLIT_ROOT } },
       { id: 'design-1', kind: 'cabinet', name: 'Tall Larder', construction: { settings: SETTINGS, root: TALL_ROOT } },

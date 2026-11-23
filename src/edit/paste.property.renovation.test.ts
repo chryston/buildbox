@@ -18,11 +18,12 @@ import { canonicalJson } from '../lib'
 import { applyIntent, captureCopySet, intentIdCount, intentLabel, pasteReviewOf } from './index'
 import type { PasteLayerResolution, PasteReview } from './index'
 import { NOW, expectRoundTrip, idSource } from './testing'
+import { currentSchemaOf } from '../domain/testing'
 
 /** The fixture's shape is fixed by `scripts/make-layers-seed.ts`, which wrote it. */
-const fixture = JSON.parse(layersFixture) as { project: Project }
+const fixture = JSON.parse(layersFixture) as { project: unknown }
 
-const base = fixture.project
+const base = currentSchemaOf(fixture.project, 8)
 const SRC_JOINERY = 'prop-joinery'
 const SRC_SERVICES = 'prop-services'
 const DEST_OPTION = 'prop-option'
