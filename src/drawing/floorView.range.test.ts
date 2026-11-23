@@ -350,4 +350,15 @@ describe('the Plan View Range on the drawing (#74 §3)', () => {
     // very same names, because a range changes how a thing is drawn and never where its name goes.
     expect(scene(null, crowded).omittedLabels).toEqual(omittedLabels)
   })
+
+  it('keeps a renovation overlay drawing its own dash over the range (#70 criterion 8)', () => {
+    // The overlays are #70's and they sit on top of the range's mark: a demolished Wall Above the
+    // section plane is still dashed the way demolition is dashed, and a proposed one still haloed.
+    // `rangeStyle` supplies a dash only where the row had none, so both keep their own rhythm.
+    for (const key of ['renovation-demolition', 'renovation-halo'] as const) {
+      const row = resolveStyle(key)
+      expect(rangeStyle('outline', row, 'path')).toEqual({ ...row, fill: 'none' })
+      expect(rangeStyle('faded', row, 'path').dash).toEqual(row.dash)
+    }
+  })
 })
