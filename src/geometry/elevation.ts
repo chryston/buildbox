@@ -32,6 +32,7 @@
  * the world and the view together.
  */
 import type { Pt } from './types'
+import { offsetRefLine, refLength, refPointAt, type WallRefLine } from './wall'
 
 /** Which side of the view line the viewer stands on; the same two words `domain` uses (#75 §1). */
 export type ElevationSide = 'left' | 'right'
@@ -206,26 +207,29 @@ function crossesViewLine(frame: ElevationFrame, points: readonly { s: number; d:
   return polygonHolds(points, { s: 0, d: 0 }) || polygonHolds(points, { s: frame.length, d: 0 })
 }
 
+/** How finely an arc Wall's body is sampled for the band test: 50 mm along the reference line. */
+const BODY_SAMPLE_MM = 50
+
 /**
- * The four corners of a Wall body: the reference line thickened by `thickness`, centred on it.
+ * The closed outline of a Wall body: its reference line with its two faces.
  *
- * A Wall's body is what the band is tested against, not its reference line — a view line that runs
- * along the middle of a Wall cuts it, and one that stops 50 mm short of it does not (#75 criterion 13).
- * The corners are the reference ends offset by half the thickness along the Wall's own normal, which is
- * the same `(-u.y, u.x)` the faces use (#64).
+ * `offsets` are the two faces' signed distances from the reference line along its normal `(-u.y, u.x)`,
+ * which is exactly what `faceOffsets(thickness, justification)` answers (#64) — so a Wall justified to
+ * one face projects the body it draws, not a centred one. A Wall's body is what the band is tested
+ * against, not its reference line: a view line that runs along the middle of a Wall cuts it, and one
+ * that stops 50 mm short of it does not (#75 criterion 13).
+ *
+ * A straight reference line gives its four corners exactly. An arc is sampled every 50 mm, which is
+ * fine enough to catch the bulge of the shallowest arc a Plan holds and coarse enough to cost nothing.
  */
-export function wallBodyOutline(start: Pt, end: Pt, thickness: number): Pt[] {
-  const dx = end.x - start.x
-  const dy = end.y - start.y
-  const length = Math.hypot(dx, dy)
-  if (length === 0) return [start, end]
-  const half = thickness / 2
-  const nx = -dy / length
-  const ny = dx / length
-  return [
-    { x: start.x + nx * half, y: start.y + ny * half },
-    { x: end.x + nx * half, y: end.y + ny * half },
-    { x: end.x - nx * half, y: end.y - ny * half },
-    { x: start.x - nx * half, y: start.y - ny * half },
-  ]
+export function wallBodyOutline(line: WallRefLine, offsets: readonly [number, number]): Pt[] {
+  const left = offsetRefLine(line, offsets[0])
+  const right = offsetRefLine(line, offsets[1])
+  if (line.kind === 'line') return [left.start, left.end, right.end, right.start]
+  const length = refLength(line)
+  const steps = Math.max(2, Math.ceil(length / BODY_SAMPLE_MM))
+  const ring: Pt[] = []
+  for (let i = 0; i <= steps; i += 1) ring.push(refPointAt(left, (length * i) / steps))
+  for (let i = steps; i >= 0; i -= 1) ring.push(refPointAt(right, (length * i) / steps))
+  return ring
 }

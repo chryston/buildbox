@@ -93,6 +93,7 @@ export {
   migrateV3toV4,
   migrateV4toV5,
   migrateV7toV8,
+  migrateV9toV10,
   runMigrationChain,
   type Migrator,
   type MigrateError,

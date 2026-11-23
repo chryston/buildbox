@@ -106,7 +106,7 @@ describe('projecting a shape (#75 criterion 6, criterion 10, criterion 12)', () 
 
   it('clips a shape that reaches past both ends of the line to the view edge', () => {
     // W-1 of the scene: 4 200 of Wall body across a 4 000 line, 1 300–1 500 into the band.
-    const body = wallBodyOutline({ x: 0, y: 0 }, { x: 4000, y: 0 }, 200)
+    const body = wallBodyOutline({ kind: 'line', start: { x: 0, y: 0 }, end: { x: 4000, y: 0 } }, [-100, 100])
     const seen = projectElevationOutline(KITCHEN, body)
     expect(seen.inside).toBe(true)
     expect([seen.sMin, seen.sMax]).toEqual([0, 4000])
@@ -138,7 +138,7 @@ describe('projecting a shape (#75 criterion 6, criterion 10, criterion 12)', () 
 
 describe('the heavier outline (#75 criterion 13)', () => {
   it('marks content the view line runs through, and content it runs along', () => {
-    const wall = wallBodyOutline({ x: 0, y: 0 }, { x: 4000, y: 0 }, 200)
+    const wall = wallBodyOutline({ kind: 'line', start: { x: 0, y: 0 }, end: { x: 4000, y: 0 } }, [-100, 100])
     // A Wall the band looks at from 1 300 mm away is seen whole, not cut.
     expect(projectElevationOutline(KITCHEN, wall).crossesLine).toBe(false)
     // A Wall the line itself passes through is cut.
@@ -163,9 +163,9 @@ describe('the heavier outline (#75 criterion 13)', () => {
 
 describe('the Wall body (#64 faces, #75 §4)', () => {
   it('stands centred on the reference line, half the thickness each side', () => {
-    const body = wallBodyOutline({ x: 0, y: 0 }, { x: 4000, y: 0 }, 200)
+    const body = wallBodyOutline({ kind: 'line', start: { x: 0, y: 0 }, end: { x: 4000, y: 0 } }, [-100, 100])
     expect(body.map((p) => p.y).sort((a, b) => a - b)).toEqual([-100, -100, 100, 100])
-    const turned = wallBodyOutline({ x: 0, y: 0 }, { x: 0, y: 3000 }, 200)
+    const turned = wallBodyOutline({ kind: 'line', start: { x: 0, y: 0 }, end: { x: 0, y: 3000 } }, [-100, 100])
     expect(turned.map((p) => p.x).sort((a, b) => a - b)).toEqual([-100, -100, 100, 100])
   })
 

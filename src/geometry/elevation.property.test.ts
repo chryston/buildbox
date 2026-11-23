@@ -146,7 +146,7 @@ describe('a projection never reports a span outside the view', () => {
     fc.assert(
       fc.property(lineArb, side, positiveMm, pointArb, positiveMm, positiveMm, (line, s, depth, at, width, height) => {
         const frame = elevationFrame(line, s, depth)
-        const outline = wallBodyOutline(at, { x: at.x + width, y: at.y + height }, 200)
+        const outline = wallBodyOutline({ kind: 'line', start: at, end: { x: at.x + width, y: at.y + height } }, [-100, 100])
         const seen = projectElevationOutline(frame, outline)
         expect(seen.sMin).toBeGreaterThanOrEqual(0)
         expect(seen.sMax).toBeLessThanOrEqual(frame.length)
@@ -167,7 +167,7 @@ describe('a projection never reports a span outside the view', () => {
       fc.property(positiveMm, pointArb, (depth, at) => {
         // A Wall body lying 400 … 600 on one side of the line: the side that faces it sees it, the
         // other side never does, and the far edge decides the rest.
-        const body = wallBodyOutline({ x: at.x, y: at.y + 500 }, { x: at.x + 300, y: at.y + 500 }, 200)
+        const body = wallBodyOutline({ kind: 'line', start: { x: at.x, y: at.y + 500 }, end: { x: at.x + 300, y: at.y + 500 } }, [-100, 100])
         const line = { start: at, end: { x: at.x + 1000, y: at.y } }
         const facing = elevationFrame(line, 'right', depth)
         const back = elevationFrame(line, 'left', depth)
