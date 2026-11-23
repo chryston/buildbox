@@ -15,6 +15,8 @@ describe('the tool table of #70 §3', () => {
     expect(hiddenToolCount('proposed', true)).toBe(2)
     expect(hiddenToolCount('combined', true)).toBe(0)
     // §6: Demolition, Proposed or Combined with no Design Option — everything but looking is hidden.
+    // Still six with the view tool in the table, because the row the eighth one adds is never among
+    // the hidden: an Elevation View is a way of looking, so the error state keeps it (#75 §3).
     expect(hiddenToolCount('demolition', false)).toBe(6)
     expect(hiddenToolCount('proposed', false)).toBe(6)
     expect(hiddenToolCount('combined', false)).toBe(6)
@@ -22,14 +24,16 @@ describe('the tool table of #70 §3', () => {
     expect(hiddenToolCount('existing', false)).toBe(2)
   })
 
-  it('shows Select in every column, and only Select in the error state', () => {
+  it('shows Select in every column, and only Select and the view tool in the error state', () => {
     for (const display of displays) expect(toolIsAvailable('select', display, true)).toBe(true)
-    // §6: Demolition, Proposed or Combined with no Option — nothing can be owned, so nothing else
-    // is offered. The Existing Display is the exception: a Project with no Options at all is still
-    // drawn and edited on it, exactly as it was before any of this existed.
+    // §6: Demolition, Proposed or Combined with no Option — nothing can be owned, so nothing that
+    // owns anything is offered. An Elevation View owns nothing: it saves a way of looking, so the
+    // error state is still a state you can draw a view from. The Existing Display is the other
+    // exception: a Project with no Options at all is still drawn and edited on it, exactly as it was
+    // before any of this existed.
     for (const display of ['demolition', 'proposed', 'combined'] as const)
-      expect(availableTools(display, false)).toEqual(['select'])
-    expect(availableTools('existing', false)).toEqual(['select', 'wall', 'opening', 'room', 'placeItem'])
+      expect(availableTools(display, false)).toEqual(['select', 'elevation'])
+    expect(availableTools('existing', false)).toEqual(['select', 'wall', 'opening', 'room', 'placeItem', 'elevation'])
   })
 
   it('puts the renovation tools in Demolition and Combined only', () => {
@@ -55,7 +59,7 @@ describe('the tool table of #70 §3', () => {
   })
 
   it('is one row per tool, each reachable somewhere — so #81 adds a row and nothing else', () => {
-    expect(RENOVATION_TOOL_ROWS).toHaveLength(7)
+    expect(RENOVATION_TOOL_ROWS).toHaveLength(8)
     for (const row of RENOVATION_TOOL_ROWS) {
       expect(row.allowedIn.length).toBeGreaterThan(0)
       expect(displaysAllowing(row.id)).toEqual(row.allowedIn)
