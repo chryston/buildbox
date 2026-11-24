@@ -89,10 +89,11 @@ const LABEL_MM = 4
 
 /**
  * The painter's tie-break after distance: a Beam, then a Wall, then what is cut in it, then what
- * stands before it. A Beam is documentation drawn under the Wall that stands on it, so at one
- * distance it paints first and the Wall covers it (#77 §4).
+ * stands on its face, then what stands before it. A Beam is documentation drawn under the Wall that
+ * stands on it, so at one distance it paints first and the Wall covers it (#77 §4); a Skirting
+ * stands on the face, so it paints over the Wall it leans on and under the cabinet in front (#78 §7).
  */
-const KIND_RANK: Record<ElevationRow['kind'], number> = { beam: 0, wall: 1, opening: 2, item: 3 }
+const KIND_RANK: Record<ElevationRow['kind'], number> = { beam: 0, wall: 1, opening: 2, skirting: 3, item: 4 }
 
 /** The rectangle one row covers, in the drawing's own millimetres. */
 const boxOf = (row: ElevationRow, xOf: (s: number) => number, zOf: (z: number) => number): Rect => {
@@ -110,9 +111,10 @@ const outlineOf = (box: Rect): PathCommand[] => [
 
 /** The style one row is drawn in: its family, and the selected weight when it is the selected one. */
 const styleOf = (row: ElevationRow, selected: boolean): StyleKey => {
-  if (selected) return row.kind === 'item' ? 'plan-item:selected' : 'wall:selected'
+  if (selected) return row.kind === 'item' ? 'plan-item:selected' : row.kind === 'skirting' ? 'skirting:selected' : 'wall:selected'
   if (row.kind === 'opening') return 'opening'
   if (row.kind === 'beam') return 'beam'
+  if (row.kind === 'skirting') return 'skirting'
   return row.kind === 'item' ? 'plan-item' : 'wall'
 }
 
@@ -224,7 +226,7 @@ export function drawElevationView(scene: ElevationScene, options: ElevationViewO
   const content: DisplayItem[] = []
   for (const row of painted) {
     const box = boxOf(row, xOf, zOf)
-    const ref = { id: row.id, role: row.kind === 'opening' ? 'wall-opening' : row.kind === 'item' ? 'placed-item' : row.kind === 'beam' ? 'beam' : 'wall' }
+    const ref = { id: row.id, role: row.kind === 'opening' ? 'wall-opening' : row.kind === 'item' ? 'placed-item' : row.kind === 'beam' ? 'beam' : row.kind === 'skirting' ? 'skirting' : 'wall' }
     // A Drawing Layer's own colour wins over the entity's, exactly as it does in a Plan View: the
     // layer says what the drawing is *about*, and the entity's colour is what it would otherwise be.
     const colour = (layers === null ? null : layers.colorOf(row.id)) ?? row.color

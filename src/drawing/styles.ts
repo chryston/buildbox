@@ -210,6 +210,20 @@ export const STYLES: Record<StyleKey, Style> = {
   // at, and Firefox delivers no `pointerdown` for a stroke-only path at all (#65 §11).
   'beam-hit': { fill: 'transparent', stroke: 'none' },
   'beam-label': { fill: 'var(--bb-text)', size: 'plan-label', fontFamily: FONT_STACK, hit: 'none' },
+  // A Skirting is a 15 mm strip standing on a Wall face, so it is painted solidly enough to read at
+  // a room's scale and thin enough never to be mistaken for the Wall it leans on (#78 §7). It draws
+  // over the Wall band on purpose: the strip is on the face, not inside the Wall.
+  'skirting': { fill: 'var(--bb-text)', fillAlpha: 0x2e / 0xff, stroke: 'var(--bb-text)', strokeWidth: 'plan-line' },
+  'skirting:selected': {
+    fill: 'var(--bb-accent)',
+    fillAlpha: 0x4a / 0xff,
+    stroke: 'var(--bb-accent)',
+    strokeWidth: 'plan-line-selected',
+  },
+  // The strip again with nothing visible on it: 15 mm of plan is a hairline a pointer misses, and
+  // Firefox delivers no `pointerdown` for a stroke-only path at all (#65 §11).
+  'skirting-hit': { fill: 'transparent', stroke: 'none' },
+  'skirting-label': { fill: 'var(--bb-text)', size: 'plan-label', fontFamily: FONT_STACK, hit: 'none' },
   // The renovation overlays (#70 §F): bounded graphics laid over the entity's own layer style,
   // which they never rewrite — the Wall a Design Option demolishes is still drawn in the `walls`
   // layer's colour, and the dashed outline plus 45° hatching is what says it is going. Both are

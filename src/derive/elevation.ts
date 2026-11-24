@@ -22,8 +22,8 @@
  * pass applies through the same `LayerGates` a Plan View is painted with, so that a hidden Wall is
  * hidden by one answer and not by two that can disagree (#71 §4).
  */
-import type { Beam, ElevationView, EntityId, Floor, Opening, PlacedItem, Project, Wall } from '../domain'
-import { UNLAYERED_LAYER_KEY, beamLabel, beamTop, designHeight, viewDesignOptionId, viewRenovationDisplay } from '../domain'
+import type { Beam, ElevationView, EntityId, Floor, Opening, PlacedItem, Project, Skirting, Wall } from '../domain'
+import { UNLAYERED_LAYER_KEY, beamLabel, beamTop, designHeight, skirtingLabel, skirtingTop, viewDesignOptionId, viewRenovationDisplay } from '../domain'
 import type { ClosedPath, ElevationFrame, Pt } from '../geometry'
 import { elevationFrame, faceOffsets, linearElement, openingBodyOutline, projectElevationOutline, wallBodyOutline } from '../geometry'
 import { entityLayerKeys } from './drawingLayers'
@@ -31,9 +31,10 @@ import { derivePlacement, placementLabels } from './effective'
 import { effectiveModel } from './effectiveModel'
 import { designOutline, placementContext, worldPointOf } from './placement'
 import { displayModel } from './renovationDisplay'
+import { deriveSkirting } from './skirting'
 
 /** Which family an Elevation View draws a row as, which decides its style and its handles. */
-export type ElevationRowKind = 'wall' | 'opening' | 'item' | 'beam'
+export type ElevationRowKind = 'wall' | 'opening' | 'item' | 'beam' | 'skirting'
 
 /**
  * One entity's place in one Elevation View: the band it covers and the height it stands at.
@@ -98,7 +99,7 @@ export function elevationScene(project: Project, view: ElevationView): Elevation
 
   /** One projected body, or nothing when the prism holds none of it. */
   const add = (
-    entity: Wall | Opening | PlacedItem | Beam,
+    entity: Wall | Opening | PlacedItem | Beam | Skirting,
     kind: ElevationRowKind,
     name: string,
     outline: readonly Pt[],
@@ -178,6 +179,19 @@ export function elevationScene(project: Project, view: ElevationView): Elevation
       entity.underside,
       beamTop(entity),
     )
+  }
+
+  // A Skirting owns its height too, so its band is Bottom to Top. It is drawn as one row per run:
+  // the gaps `deriveSkirting` cuts for an Opening, a branch Wall and a corner are the same holes the
+  // Plan View paints and the same ones `net_length_mm` counts, so an Elevation View of a Wall with a
+  // door in it shows a strip broken at the door and nothing else.
+  const derivedSkirting = deriveSkirting(project, view.floorId, optionId, viewRenovationDisplay(view))
+  for (const { entity } of display.skirting) {
+    const body = derivedSkirting.byId.get(entity.id)
+    if (body === undefined) continue
+    for (const run of body.runs) {
+      add(entity, 'skirting', skirtingLabel(entity), ringOf(run.outline), body.bottom, skirtingTop(entity), entity.hostWallId)
+    }
   }
 
   return { frame, length: frame.length, floor, rows }

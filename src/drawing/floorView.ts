@@ -15,13 +15,14 @@
  * exported what they had been looking at and got the Existing Model. One function now answers both
  * callers, so the only thing that can differ between them is what a sheet cannot carry: the pointer.
  */
-import type { DerivedFloor, FloorBeams, FloorRooms, FloorWalls, RangeClass, RenovationState } from '../derive'
+import type { DerivedFloor, FloorBeams, FloorRooms, FloorSkirting, FloorWalls, RangeClass, RenovationState } from '../derive'
 import { RANGE_RANK } from '../derive'
 import { drawPlanView, drawPlacement, unionRect } from './planView'
 import type { PlanPreview } from './planView'
 import { drawWalls, wallLabelBoxes } from './walls'
 import type { OpeningPreview } from './walls'
 import { drawBeams } from './beams'
+import { drawSkirting } from './skirting'
 import { drawRooms } from './rooms'
 import type { RoomProposal } from './rooms'
 import { renovationOverlays } from './renovation'
@@ -78,6 +79,8 @@ export interface FloorViewEntities {
   openings: readonly WallOpenings[]
   /** The Beams of this Floor (#77 §4), or `null` for a drawing with no Beams to show. */
   beams?: FloorBeams | null
+  /** The Skirting of this Floor (#78 §7), or `null` for a drawing with no Skirting to show. */
+  skirting?: FloorSkirting | null
 }
 
 /** Everything a Floor View needs that is not the Floor: the paper, the view and the pointer. */
@@ -104,6 +107,7 @@ export interface FloorViewOptions {
   selectedOpeningId?: string | null
   openingPreview?: OpeningPreview | null
   selectedBeamId?: string | null
+  selectedSkirtingId?: string | null
   selectedRoomId?: string | null
   roomProposal?: RoomProposal | null
   /** The Room label's words, which the screen takes from the workspace's unit settings (#73 §1). */
@@ -128,6 +132,8 @@ export interface FloorView {
   readonly openings: readonly WallOpenings[]
   /** The Beams that survived the Display and the Layers (#77 §4). */
   readonly beams: FloorBeams | null | undefined
+  /** The Skirting that survived the Display and the Layers (#78 §7). */
+  readonly skirting: FloorSkirting | null | undefined
   /**
    * The labels this view had no room for (#74 §3): the names that would have been written over a
    * name already placed. They are not drawn, and a canvas shows each one on hover instead of
@@ -263,7 +269,7 @@ function renovationOutlines(
  * not allocate before (#69's derive budget measures the canvas too).
  */
 export function drawFloorView(entities: FloorViewEntities, options: FloorViewOptions): FloorView {
-  const { floor, walls, rooms, openings, beams } = entities
+  const { floor, walls, rooms, openings, beams, skirting } = entities
   const { sizing, showPlanImage } = options
   const states = options.renovation === null || options.renovation === undefined ? null : options.renovation.states
   const layers = options.layers ?? null
@@ -289,6 +295,9 @@ export function drawFloorView(entities: FloorViewEntities, options: FloorViewOpt
   const drawnBeams: FloorBeams | null | undefined = plain || beams === undefined || beams === null
     ? beams
     : { ...beams, beams: beams.beams.filter((beam) => shown(beam.id)) }
+  const drawnSkirting: FloorSkirting | null | undefined = plain || skirting === undefined || skirting === null
+    ? skirting
+    : { ...skirting, skirting: skirting.skirting.filter((body) => shown(body.id)) }
   // #70 §F: a Renovation Display draws a subset of the Floor and marks what it draws. The subset is
   // `states`' domain — an entity the Display does not draw is absent from it — and the marking is the
   // overlay items `renovationOverlays` lays in each entity's own layer.
@@ -336,7 +345,10 @@ export function drawFloorView(entities: FloorViewEntities, options: FloorViewOpt
   const beamList = drawnBeams === undefined || drawnBeams === null
     ? null
     : drawBeams(drawnBeams, { sizing, selectedBeamId: options.selectedBeamId })
-  const extra = [beamList, wallList, roomList, overlayList].filter((one): one is DisplayList => one !== null)
+  const skirtingList = drawnSkirting === undefined || drawnSkirting === null
+    ? null
+    : drawSkirting(drawnSkirting, { sizing, selectedSkirtingId: options.selectedSkirtingId })
+  const extra = [beamList, skirtingList, wallList, roomList, overlayList].filter((one): one is DisplayList => one !== null)
   const withWalls: DisplayList = extra.length === 0
     ? list
     : {
@@ -361,6 +373,7 @@ export function drawFloorView(entities: FloorViewEntities, options: FloorViewOpt
     rooms: drawnRooms,
     openings: drawnOpenings,
     beams: drawnBeams,
+    skirting: drawnSkirting,
     omittedLabels: withWalls.omittedLabels ?? [],
   }
 }
