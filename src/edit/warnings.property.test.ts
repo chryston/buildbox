@@ -157,8 +157,6 @@ function walk(source: Project, seed: number, steps: number): { project: Project;
 }
 
 describe('random Intent sequences and acknowledgements (#66 criteria 3, 4)', () => {
-  // #76's vertical producers make each `deriveWarnings` pass measurably heavier (pairwise
-  // clipping), and this case runs the whole engine on every step of 60 sequences.
   it('never leaves an acknowledgement whose subject has gone, and undoes every step', () => {
     let accepted = 0
     fc.assert(
@@ -170,7 +168,7 @@ describe('random Intent sequences and acknowledgements (#66 criteria 3, 4)', () 
     )
     // A property that never ran is not a property.
     expect(accepted).toBeGreaterThan(20)
-  }, 30_000)
+  })
 
   it('reached both halves of the rule along the way', () => {
     // A property that never ran is not a property: the walk has to have dropped at least one
