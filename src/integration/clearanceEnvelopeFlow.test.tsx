@@ -186,4 +186,27 @@ describe('the Clearance Envelope group (#76 §4)', () => {
     await settle()
     expect(screen.queryByTestId('clearance-custom-editor')).not.toBeInTheDocument()
   })
+
+  it('says so in the Warning strip when an Item is moved into an envelope, and Locate selects it', async () => {
+    await open('pr-005')
+    // The Tall cupboard moves onto the Base cabinet's Clearance Envelope — the intrusion the
+    // producer measures in m² and percent, and the strip is where it gets said.
+    await view.dispatch('plan.movePlacement', { placedItemId: 'el-002', translation: { x: 700, y: 800 } })
+    await settle()
+    fireEvent.click(screen.getByTestId('warning-toggle'))
+    await settle()
+    const sentences = screen.getAllByTestId(/^warning-sentence-/)
+    const intrusion = sentences.find((row) => row.textContent!.includes('Clearance Envelope'))
+    expect(intrusion).toBeDefined()
+    expect(intrusion!.textContent).toMatch(/^Tall cupboard takes up \d+\.\d\d m² \(\d+%\)/)
+    const key = intrusion!.getAttribute('data-testid')!.replace('warning-sentence-', '')
+    await act(async () => {
+      workspaceStore.getState().select(null)
+      await Promise.resolve()
+    })
+    fireEvent.click(screen.getByTestId(`warning-locate-${key}`))
+    await settle()
+    // Locate answers for the warning's primary subject: the Item that moved in.
+    expect(workspaceStore.getState().selection).toBe('el-002')
+  })
 })
