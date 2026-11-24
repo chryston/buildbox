@@ -40,7 +40,6 @@ const scene0 = skirtingSeed.projects[0]!.data as unknown as Project
 const section = scene0.elevationViews!.find((view) => view.name === 'Kitchen section')!
 const SKIRTING_1 = scene0.existingModel.skirting!.find((each) => each.label === 'Skirting SK-1')!.id
 /** `W-2`, the right-hand Wall of the Flat, which the fixture leaves bare on both faces. */
-const BARE = scene0.existingModel.walls.find((wall) => wall.ref === 'W-2')!.id
 
 async function openSkirtingPlan(page: Page): Promise<void> {
   await page.clock.setFixedTime(FIXED_NOW)
@@ -65,11 +64,32 @@ test.describe('the Skirting', () => {
   test('the tool names the face under the pointer in words a person would use', async ({ page }) => {
     await openSkirtingPlan(page)
     await page.getByTestId('tool-skirting').click()
-    const face = page.getByTestId(`skirting-face-hit-${BARE}|left`)
-    const box = (await face.boundingBox())!
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    const pane = (await floorPlanCanvas(page).boundingBox())!
+    // A face target runs its Wall's whole length, and a Wall can stand wholly outside the part of the
+    // plan the pane shows. The pointer goes to a face the plan actually offers on screen, which is the
+    // only one a person could hover.
+    const offered = await page.$$eval('[data-testid^="skirting-face-hit-"]', (nodes) =>
+      nodes.map((node) => ({
+        testId: node.getAttribute('data-testid') ?? '',
+        box: node.getBoundingClientRect(),
+      })),
+    )
+    const onScreen = offered.find(
+      (each) =>
+        each.box.left >= pane.x &&
+        each.box.right <= pane.x + pane.width &&
+        each.box.top >= pane.y &&
+        each.box.bottom <= pane.y + pane.height &&
+        each.box.width + each.box.height > 40,
+    )
+    expect(onScreen).toBeDefined()
+    await page.mouse.move(onScreen!.box.x + onScreen!.box.width / 2, onScreen!.box.y + onScreen!.box.height / 2, {
+      steps: 4,
+    })
     // The acquired face, its length and the Height the bar is holding — and no `left` or `right` in it.
-    await expect(page.getByTestId('skirting-face-label')).toBeVisible()
+    const label = page.getByTestId('skirting-face-label')
+    await expect(label).toBeVisible()
+    await expect(label).not.toContainText(/\bleft\b|\bright\b/)
     await waitForFonts(page)
     await expect(page).toHaveScreenshot('skirting-tool-face.png')
   })
