@@ -147,6 +147,10 @@ const TEST_IDS: Readonly<Record<string, (id: string) => string>> = {
   // the text layer, which takes none — so it is found by its own text, not by a test id.
   'room': (id) => `room-${id}`,
   'room-hit': (id) => `room-${id}`,
+  // The Beam's body and its invisible width target are one Beam, and a suite that clicked either
+  // means the same thing: select it (#77 §3).
+  'beam': (id) => `beam-${id}`,
+  'beam-hit': (id) => `beam-${id}`,
   // Every mark of an Opening *is* the Opening: the leaf, a panel, an arrow, a window line or a
   // removed section's dash all select the same one (#65 §11). The role is part of the name because
   // one Opening draws several of them under one id, and a suite that clicked `opening-x` could not

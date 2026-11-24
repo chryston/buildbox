@@ -1292,6 +1292,15 @@ export function FloorWorkspace(): ReactNode {
           setTool('select')
           return
         }
+        if (tool === 'beam') {
+          // The same backing out, for the key press that lands on the canvas rather than on the
+          // bar's own `Cancel` (#77 criterion 2): the line drawn so far is discarded and nothing is
+          // sent, and the tool goes with it so no crosshair outlives the Beam it was drawing.
+          event.preventDefault()
+          setBeamDraft(null)
+          setTool('select')
+          return
+        }
         if (designPreview === null && !pickingOrigin) return
         event.preventDefault()
         setDesignPreview(null)
@@ -2036,6 +2045,9 @@ export function FloorWorkspace(): ReactNode {
         return { ref: opening.label, kind: RENOVATION_STRINGS.kindOpening, predecessors: opening.predecessorIds ?? [] }
       const room = [...model.rooms, ...(proposed?.rooms ?? [])].find((each) => each.id === entityId)
       if (room !== undefined) return { ref: room.name, kind: RENOVATION_STRINGS.kindRoom, predecessors: room.predecessorIds ?? [] }
+      const beam = beamsOf(model).find((each) => each.id === entityId)
+      if (beam !== undefined)
+        return { ref: beam.label ?? STRINGS.beamSectionTitle, kind: RENOVATION_STRINGS.kindBeam, predecessors: beam.predecessorIds ?? [] }
       const placed = [...model.placedItems, ...(proposed?.placedItems ?? [])].find((each) => each.id === entityId)
       if (placed !== undefined) {
         const design = project.itemDesigns.find((each) => each.id === placed.itemDesignId)
