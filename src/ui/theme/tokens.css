@@ -288,6 +288,18 @@
   --bb-workspace-rail-width: 300px;
   --bb-workspace-notes-width: 380px;
 
+  /* Notes (#80 §37): amber pins and badges, red-orange high priority, muted grey Resolved. The pin
+     amber is the same decision the Warning band already makes — a note is a thing to attend to, and a
+     second amber in the shell would be two words for one idea. Priority dots and pins read from these
+     and nothing else, so no component hard-codes a colour. */
+  --bb-note-pin: #e7bd58;
+  --bb-note-pin-text: #241b04;
+  --bb-note-high: #ff6a3d;
+  --bb-note-normal: #8fb7ff;
+  --bb-note-low: #7c7c86;
+  --bb-note-resolved: #6e6e78;
+  --bb-note-row-radius: 8px;
+
   /* Renovation Displays (#70 §3): one border + tint pair per Display. The mode bar is a tinted
      band with a 3px bottom border in the border colour, the 2x2 Display cards swatch it, and the
      canvas legend dots wear it — so a Display is recognisable in all three places by one colour

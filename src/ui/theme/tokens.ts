@@ -257,6 +257,15 @@ export const TOKEN = {
   workspaceRailWidth: "--bb-workspace-rail-width",
   workspaceNotesWidth: "--bb-workspace-notes-width",
 
+  /* Notes (#80 §37) — amber pins and badges, red-orange high priority, muted grey Resolved. */
+  notePin: "--bb-note-pin",
+  notePinText: "--bb-note-pin-text",
+  noteHigh: "--bb-note-high",
+  noteNormal: "--bb-note-normal",
+  noteLow: "--bb-note-low",
+  noteResolved: "--bb-note-resolved",
+  noteRowRadius: "--bb-note-row-radius",
+
   /* Renovation Displays (#70 §3) — border + tint per Display, shared by the mode bar, the Display
      cards and the canvas legend. */
   renovationExistingBorder: "--bb-renovation-existing-border",
