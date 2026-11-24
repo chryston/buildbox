@@ -21,19 +21,21 @@ import { validateProject } from './validate'
 /**
  * The domain schema this build writes and understands at the top of the chain.
  *
- * The thirteenth step (#78 §1) is the Skirting: the Existing Model gains the Skirting collection,
- * and so does every Design Option's proposed work. The twelfth before it (#77 §1) is the Beam: the
- * Existing Model gains the Beam collection, and so does every Design Option's proposed work. The
+ * The fourteenth step (#79 §1) is the Service: the Existing Model gains the Service collection, and
+ * so does every Design Option's proposed work. The thirteenth before it (#78 §1) is the Skirting: the
+ * Existing Model gains the Skirting collection, and so does every Design Option's proposed work. The
+ * twelfth before it (#77 §1) is the Beam: the Existing Model gains the Beam collection, and so does
+ * every Design Option's proposed work. The
  * eleventh before that (#76 §4) is the Clearance Envelope: every Item Design gains the one envelope
  * it may carry, `null` for every design that has none. The tenth before that (#75 §1) is the
  * Elevation View: the Project gains the list of saved sideways looks, empty for every Project that
  * predates them. The ninth (#74 §1) is the Plan View Range: every saved view gains the height it
  * draws at. The eighth (#69 §1, #73) is the renovation model: Design Options, the Drawing Layers
  * every Project starts with, and the four settings a saved view gained. A Project saved by an older
- * build carries `schemaVersion: 12` and comes up the chain; a Project saved by a newer one is
- * refused as `newer-schema` rather than opened and quietly stripped of its Skirting.
+ * build carries `schemaVersion: 13` and comes up the chain; a Project saved by a newer one is
+ * refused as `newer-schema` rather than opened and quietly stripped of its Services.
  */
-export const DOMAIN_SCHEMA_VERSION = 13
+export const DOMAIN_SCHEMA_VERSION = 14
 
 /**
  * One pure vN → vN+1 step. Its input is already a copy; it never reads the clock, and a
@@ -44,7 +46,8 @@ export type Migrator = (data: unknown, allocateId: IdAllocator) => unknown
 /**
  * `MIGRATORS[i]` migrates v(i+1) → v(i+2), so index 0 is v1 → v2.
  *
- * Thirteen steps, the last of which is the Skirting collection (#78), the one before it the Beam
+ * Fourteen steps, the last of which is the Service collection (#79), the one before it the Skirting
+ * collection (#78), the one before that the Beam
  * collection (#77), the one before that the Clearance Envelope field (#76), the one before that the Elevation View list (#75), the one before that the
  * Plan View Range (#74) and the one before that the renovation model (#69, #71, #73).
  */
@@ -61,6 +64,7 @@ export const MIGRATORS: readonly Migrator[] = [
   migrateV10toV11,
   migrateV11toV12,
   migrateV12toV13,
+  migrateV13toV14,
 ]
 
 /**
@@ -460,6 +464,41 @@ export function migrateV12toV13(data: unknown): unknown {
 /** Whether this is an object a field can be added to. */
 const isRecordLike = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value)
+
+/**
+ * v13 → v14 (#79): the Service collection.
+ *
+ * The Existing Model and every Design Option's proposed work gain `services: []`. A v13 Project has
+ * never seen a Service, and no legacy service data exists (#20 §7), so there is nothing to translate
+ * and nothing to infer: a pipe nobody drew is not a record of a pipe, and guessing where one ran
+ * would put a body on a drawing that nobody documented. The honest default is the empty list.
+ *
+ * Nothing else moves. A Service stores its own line or its own point and points at nothing, so no
+ * Wall, Opening, Room or Placement is rewritten, no ID is spent, and no view changes. A v14 file
+ * cannot already carry the field on a write this build made, and an array found here came from a
+ * newer build, so it is left exactly as it is: the step is idempotent, and a v14 record comes back
+ * as the same object it arrived as.
+ */
+export function migrateV13toV14(data: unknown): unknown {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return data
+  const record = data as Record<string, unknown>
+  // A model that already carries the field came from a build that knows Services; leave it alone.
+  const missing = (model: unknown): model is Record<string, unknown> | undefined | null =>
+    !isRecordLike(model) || !Array.isArray(model.services)
+  const existing = isRecordLike(record.existingModel) ? record.existingModel : null
+  const options = Array.isArray(record.designOptions) ? record.designOptions : []
+  if (!missing(existing) && !options.some((option) => isRecordLike(option) && missing(option.proposed))) return data
+  const next: Record<string, unknown> = { ...record }
+  if (missing(existing)) next.existingModel = { ...(existing ?? {}), services: [] }
+  if (options.length > 0) {
+    next.designOptions = options.map((option) =>
+      isRecordLike(option) && missing(option.proposed)
+        ? { ...option, proposed: { ...(option.proposed as object | null | undefined), services: [] } }
+        : option,
+    )
+  }
+  return next
+}
 
 /** A saved view that has no Plan View Range yet. */
 const needsRange = (view: unknown): view is Record<string, unknown> =>

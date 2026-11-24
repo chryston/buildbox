@@ -114,12 +114,16 @@ describe('domain fixtures (#42 §6)', () => {
       ...('rooms' in priorModel ? {} : { rooms: [] }),
       ...('beams' in priorModel ? {} : { beams: [] }),
       ...('skirting' in priorModel ? {} : { skirting: [] }),
+      ...('services' in priorModel ? {} : { services: [] }),
       placedItems: filed(entriesOf('placedItems'), 'Furniture'),
       walls: filed(entriesOf('walls'), 'Structure'),
       openings: filed(entriesOf('openings'), 'Structure'),
       rooms: filed(entriesOf('rooms'), 'Structure'),
       beams: filed(entriesOf('beams'), 'Structure'),
       skirting: filed(entriesOf('skirting'), 'Structure'),
+      // A Service is filed on `Services`, the layer its own subtype names (#79 §6) — the one layer
+      // rule in this list that is not `Structure` or `Furniture`.
+      services: filed(entriesOf('services'), 'Services'),
     })
     expect(identity(result.project.itemDesigns)).toEqual(identity(prior.itemDesigns))
   })

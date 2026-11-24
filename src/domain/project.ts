@@ -574,6 +574,15 @@ export interface ExistingModel {
    * empty array.
    */
   skirting?: Skirting[]
+  /**
+   * Every Service of every Floor (#79). A Service is hostless like a Beam — it stands on its own
+   * centreline or its own point and is derived from no Wall — so it is a collection of its own.
+   *
+   * Optional for the same reason `beams` is: a Project written before this capability stays valid
+   * without the field. {@link servicesOf} is the accessor, and the v13 → v14 migrator adds the empty
+   * array.
+   */
+  services?: Service[]
 }
 
 /**
@@ -600,6 +609,8 @@ export interface ProposedModel {
   beams?: Beam[]
   /** Every Skirting this Option introduces (#78), in the same shape the Existing Model stores. */
   skirting?: Skirting[]
+  /** Every Service this Option introduces (#79), in the same shape the Existing Model stores. */
+  services?: Service[]
 }
 
 /**
@@ -617,6 +628,14 @@ export const skirtingOf = (model: { skirting?: Skirting[] } | undefined): Skirti
  * Every consumer reads through this rather than the field, so "no Beams" has one spelling.
  */
 export const beamsOf = (model: { beams?: Beam[] } | undefined): Beam[] => model?.beams ?? []
+
+/**
+ * The Services of one model — the Existing Model or a Design Option's proposed work — which a
+ * Project written before #79 does not carry.
+ *
+ * Every consumer reads through this rather than the field, so "no Service" has one spelling.
+ */
+export const servicesOf = (model: { services?: Service[] } | undefined): Service[] => model?.services ?? []
 
 /**
  * One alternative for the same Existing Model (#69 §2).
@@ -1020,6 +1039,170 @@ export const skirtingTop = (skirting: Skirting): number => skirting.bottom + ski
 
 /** The name a Skirting is called by in a sentence, and on the plan. */
 export const skirtingLabel = (skirting: Skirting): string => skirting.label ?? 'Skirting'
+
+/**
+ * What a Service is for (#79 §1): the six descriptive kinds the Services decision settles on.
+ *
+ * Kind is *data*, never the element's name: a Water service is a `Service`, and the Kind is what the
+ * plan writes beside it. `other` is the kind that carries a free-text label as its display text,
+ * which is why the record's {@link Service.label} is read for it and for nothing else.
+ */
+export type ServiceKind = 'water' | 'drain' | 'gas' | 'electrical' | 'air_con' | 'other'
+
+/** Every Service Kind, in the order the inspector lists them. */
+export const SERVICE_KINDS: readonly ServiceKind[] = Object.freeze([
+  'water',
+  'drain',
+  'gas',
+  'electrical',
+  'air_con',
+  'other',
+])
+
+/** Whether a Service is a straight Run or a vertical Riser (#79 §1). Fixed after creation. */
+export type ServiceShape = 'run' | 'riser'
+
+/** Every Service shape, in the order the tool offers them. */
+export const SERVICE_SHAPES: readonly ServiceShape[] = Object.freeze(['run', 'riser'])
+
+/**
+ * The section of a Run (#79 §1): a round bar or a rectangular duct. A Riser is always round and
+ * stores no section at all, so the field is absent there and the validator refuses one.
+ */
+export type ServiceSection = 'round' | 'rectangular'
+
+/** Every Run section, in the order the inspector offers them. */
+export const SERVICE_SECTIONS: readonly ServiceSection[] = Object.freeze(['round', 'rectangular'])
+
+/** The fields every Service carries, whatever its shape. */
+export interface ServiceBase {
+  id: EntityId
+  floorId: EntityId
+  /** What this Service is for. Editable after creation; never the element's name. */
+  kind: ServiceKind
+  /**
+   * The Service's display name. Absent is legal and says only `Service`; `other` shows this text on
+   * the plan in place of its Kind code (#79 §6).
+   */
+  label?: string
+  /** The Service this one came out of (#69 §3); absent on an Existing Model Service. */
+  predecessorIds?: PredecessorIds
+  /**
+   * The Drawing Layer this Service belongs to (#71 §1); `null` is Unlayered, and absent is `null`.
+   * New Services default to `Services` (#79 §6), and nothing derives one from a Wall it crosses.
+   */
+  drawingLayerId?: EntityId | null
+}
+
+/**
+ * One Service Run (#79 §1): a single straight centreline at one constant section and one constant
+ * centreline elevation.
+ *
+ * A Run is the third Building Element on the shared linear-element contract (#20 §7) and the one
+ * the Services decision says reuses the Beam contract outright: a straight reference line, one
+ * constant plan width, centre justification, faces derived through `geometry.linearElement`. What
+ * makes it a Run and not a Beam is the vertical vocabulary. The one stored number is
+ * `centrelineElevation` — the number a person measures to the middle of a pipe — and the Bottom and
+ * Top of its Vertical Extent are arithmetic on it and on the section. Neither is stored, because a
+ * Run that remembered its own Bottom could disagree with its own Diameter.
+ *
+ * The section is one of two shapes, and only the fields that shape has are present: a round Run
+ * stores `outsideDiameter`, a rectangular Run stores `width` (across the Run in plan) and `depth`
+ * (vertical). The other pair is absent, and the validator refuses it — a round pipe with a Width on
+ * it is a record of two different pipes.
+ */
+export interface ServiceRun extends ServiceBase {
+  readonly shape: 'run'
+  section: ServiceSection
+  /**
+   * The centreline, straight: a Run has no arc and no slope. `start` and `end` are Floor-local
+   * millimetres, and the line's own direction is what `left` and `right` of the footprint mean.
+   */
+  line: { start: Point2; end: Point2 }
+  /** Millimetres from the Floor Datum; negative is valid. The middle of the Vertical Extent. */
+  centrelineElevation: number
+  /** Millimetres, greater than 0. Present exactly when `section` is `round`. */
+  outsideDiameter?: number
+  /** Millimetres, greater than 0: across the Run in plan. Present exactly when `section` is `rectangular`. */
+  width?: number
+  /** Millimetres, greater than 0: the vertical side. Present exactly when `section` is `rectangular`. */
+  depth?: number
+}
+
+/**
+ * One Service Riser (#79 §1): one plan point with a round outside diameter, running vertically.
+ *
+ * A Riser is not a linear element — it is a point plus a circle — which is why it stores a Bottom
+ * and a Height rather than a centreline: a vertical bar's middle is the one number nobody measures.
+ * `bottomElevation + height` is the Top, derived and never stored, on the Wall rule (#78). A Riser
+ * that continues through several Floors is one independent element per Floor (#25), with nothing
+ * linking the two records.
+ */
+export interface ServiceRiser extends ServiceBase {
+  readonly shape: 'riser'
+  /** The plan point the Riser passes through, in Floor-local millimetres. */
+  point: Point2
+  /** Millimetres, greater than 0. A Riser is always round. */
+  outsideDiameter: number
+  /** Millimetres from the Floor Datum; negative is valid. The bottom of the Vertical Extent. */
+  bottomElevation: number
+  /** Millimetres, greater than 0. The Top is `bottomElevation + height`, derived and never stored. */
+  height: number
+}
+
+/**
+ * One Service (#79): a documented pipe, duct or cable run, recorded for coordination and for nothing
+ * else.
+ *
+ * A Service is the fourth Building Element and the second one that stands on its own line. It has no
+ * host, no connection and no network: two Runs whose endpoints snap together are two Records, and
+ * moving one never moves the other. What it stores is the whole of it — Kind, shape, section, one
+ * line or one point, and the vertical numbers that shape has. There are no fittings, bends, slopes,
+ * hosts, materials, size tables or capacities, and `checkUnknownFields` is what refuses one.
+ */
+export type Service = ServiceRun | ServiceRiser
+
+/**
+ * The parts of a Service Run a later Anchor can name (#79 §3, for S10).
+ *
+ * The two ends of the centreline, the two faces read along it, and the two edges of its Vertical
+ * Extent. The midpoint of the line is absent for the reason it is absent on a Beam: it moves when
+ * either end does.
+ */
+export const SERVICE_RUN_FEATURE_IDS = ['start', 'end', 'left', 'right', 'bottom', 'top'] as const
+
+/** One stable Service Run feature. */
+export type ServiceRunFeatureId = (typeof SERVICE_RUN_FEATURE_IDS)[number]
+
+/**
+ * The parts of a Service Riser a later Anchor can name (#79 §3, for S10).
+ *
+ * `axis` is the vertical centre line the Riser is drawn around, `outline` its circle, and `bottom`
+ * and `top` the two ends of its Height.
+ */
+export const SERVICE_RISER_FEATURE_IDS = ['axis', 'bottom', 'top', 'outline'] as const
+
+/** One stable Service Riser feature. */
+export type ServiceRiserFeatureId = (typeof SERVICE_RISER_FEATURE_IDS)[number]
+
+/** The bottom of a Service's Vertical Extent, in millimetres from the Floor Datum (#79 §1). */
+export const serviceBottom = (service: Service): number =>
+  service.shape === 'run'
+    ? service.centrelineElevation - (service.section === 'round' ? (service.outsideDiameter ?? 0) / 2 : (service.depth ?? 0) / 2)
+    : service.bottomElevation
+
+/** The top of a Service's Vertical Extent, in millimetres from the Floor Datum (#79 §1). */
+export const serviceTop = (service: Service): number =>
+  service.shape === 'run'
+    ? service.centrelineElevation + (service.section === 'round' ? (service.outsideDiameter ?? 0) / 2 : (service.depth ?? 0) / 2)
+    : service.bottomElevation + service.height
+
+/** The plan width a Run's footprint is built at: its outside diameter, or its rectangular Width. */
+export const serviceRunWidth = (run: ServiceRun): number =>
+  run.section === 'round' ? (run.outsideDiameter ?? 0) : (run.width ?? 0)
+
+/** The name a Service is called by in a sentence. Kind is never this (#79 §1). */
+export const serviceLabel = (service: Service): string => service.label ?? 'Service'
 
 /** A placement of an Item Design: placement context only, never a copy of its dimensions (#16). */
 export interface PlacedItem {

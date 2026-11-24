@@ -135,6 +135,7 @@ export function fixtureProject(): Project {
       rooms: [],
       beams: [],
       skirting: [],
+      services: [],
       placedItems: [
         {
           id: 'place-0',
@@ -370,13 +371,13 @@ export function renovationFixtureProject(): Project {
       {
         id: 'option-1',
         name: 'Open plan',
-        proposed: { placedItems: [replacement], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], skirting: [] },
+        proposed: { placedItems: [replacement], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], skirting: [], services: [] },
         demolishedIds: [demolished.id],
       },
       {
         id: 'option-2',
         name: 'Store wall',
-        proposed: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], skirting: [] },
+        proposed: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], skirting: [], services: [] },
         demolishedIds: ['wall-2'],
       },
     ],
@@ -598,5 +599,98 @@ export function skirtingFixtureProject(): Project {
         },
       ],
     },
+  }
+}
+
+/**
+ * The renovation fixture at the fourteenth schema (#79), with four Services of the Existing Model and
+ * one owned by a Design Option — every shape and every vertical case the issue names, spelled out as
+ * stored bytes:
+ *
+ *  - `service-1`: a round Water Run, Ø50 at a 2 200 mm centreline, so 2 175–2 225.
+ *  - `service-2`: a rectangular Air-con Run, 80 × 60 at a 2 500 mm centreline, so 2 470–2 530.
+ *  - `service-3`: a Drain Riser, Ø100 through one point, 0 to 2 600 — a Riser owns its Height.
+ *  - `service-4`: an Electrical Run at a −100 mm centreline, so −150 to −50: below the Floor Datum,
+ *    which is legal and is the case the Plan View Range fades.
+ *  - `service-5`: a Gas Run owned by Design Option *Open plan*, invented there, so it carries the
+ *    empty provenance list that means exactly that (#69 §3).
+ *
+ * None of them stores a Bottom or a Top: those are arithmetic on the centreline and the section, and
+ * these bytes are what proves a record that remembered them cannot round-trip.
+ */
+export function servicesFixtureProject(): Project {
+  const project = skirtingFixtureProject()
+  return {
+    ...project,
+    existingModel: {
+      ...project.existingModel,
+      services: [
+        {
+          id: 'service-1' as EntityId,
+          floorId: 'floor-0' as EntityId,
+          kind: 'water',
+          shape: 'run',
+          section: 'round',
+          line: { start: { x: 600, y: 1200 }, end: { x: 3600, y: 1200 } },
+          centrelineElevation: 2200,
+          outsideDiameter: 50,
+        },
+        {
+          id: 'service-2' as EntityId,
+          floorId: 'floor-0' as EntityId,
+          kind: 'air_con',
+          shape: 'run',
+          section: 'rectangular',
+          line: { start: { x: 600, y: 1600 }, end: { x: 2600, y: 1600 } },
+          centrelineElevation: 2500,
+          width: 80,
+          depth: 60,
+        },
+        {
+          id: 'service-3' as EntityId,
+          floorId: 'floor-0' as EntityId,
+          kind: 'drain',
+          shape: 'riser',
+          point: { x: 3400, y: 2200 },
+          outsideDiameter: 100,
+          bottomElevation: 0,
+          height: 2600,
+        },
+        {
+          id: 'service-4' as EntityId,
+          floorId: 'floor-0' as EntityId,
+          kind: 'electrical',
+          shape: 'run',
+          section: 'round',
+          line: { start: { x: 800, y: 2000 }, end: { x: 2800, y: 2000 } },
+          centrelineElevation: -100,
+          outsideDiameter: 100,
+          label: 'Underfloor trunking',
+        },
+      ],
+    },
+    designOptions: (project.designOptions ?? []).map((option) =>
+      option.id === ('option-1' as EntityId)
+        ? {
+            ...option,
+            proposed: {
+              ...option.proposed,
+              services: [
+                {
+                  id: 'service-5' as EntityId,
+                  floorId: 'floor-0' as EntityId,
+                  kind: 'gas',
+                  shape: 'run',
+                  section: 'round',
+                  line: { start: { x: 3000, y: 600 }, end: { x: 3000, y: 1400 } },
+                  centrelineElevation: 300,
+                  outsideDiameter: 25,
+                  predecessorIds: [],
+                },
+              ],
+            },
+          }
+        : option,
+    ),
   }
 }

@@ -43,8 +43,8 @@ function step(data: unknown): unknown {
 
 describe('migrateV7toV8 — Design Options, saved-view settings and Drawing Layers (#69, #70, #71)', () => {
   it('is the step this build registers above v7, and no longer the last', () => {
-    expect(DOMAIN_SCHEMA_VERSION).toBe(13)
-    expect(MIGRATORS).toHaveLength(12)
+    expect(DOMAIN_SCHEMA_VERSION).toBe(14)
+    expect(MIGRATORS).toHaveLength(13)
   })
 
   it('adds the Options, the view settings and the three layers, and nothing else', () => {

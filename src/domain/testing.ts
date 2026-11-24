@@ -570,7 +570,7 @@ export function arbProject(): fc.Arbitrary<Project> {
         floors,
         views,
         itemDesigns: designs,
-        existingModel: { placedItems, walls, wallJunctions, openings, rooms: [], beams: [], skirting: [] },
+        existingModel: { placedItems, walls, wallJunctions, openings, rooms: [], beams: [], skirting: [], services: [] },
         warningAcknowledgements: [],
       }
     })
@@ -1202,6 +1202,26 @@ export function withSkirting<T extends Project>(project: T): T {
     designOptions: project.designOptions?.map((option) => ({
       ...option,
       proposed: { ...option.proposed, skirting: option.proposed.skirting ?? [] },
+    })),
+  }
+}
+
+/**
+ * The same Project as this build's fourteenth schema (#79): both containers carry the Service
+ * collection the step writes.
+ *
+ * The step adds `services: []` to the Existing Model and to every Design Option's proposed model that
+ * arrives without one, so a test that compares a whole Project read from a pre-v14 record has to say
+ * the same thing the step says. A Service is always one a person documented, so the collection is
+ * empty everywhere: the step invents no pipe, and neither does this.
+ */
+export function withServices<T extends Project>(project: T): T {
+  return {
+    ...project,
+    existingModel: { ...project.existingModel, services: project.existingModel.services ?? [] },
+    designOptions: project.designOptions?.map((option) => ({
+      ...option,
+      proposed: { ...option.proposed, services: option.proposed.services ?? [] },
     })),
   }
 }

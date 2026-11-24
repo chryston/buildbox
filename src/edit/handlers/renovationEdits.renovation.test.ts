@@ -643,7 +643,7 @@ describe('renovation.restore: putting back what stood here', () => {
     // The successor, its copies and the joins that held it are all this Option's records, so all of
     // them go; the demolition records — W-3's and the two Openings it took along — go with them.
     expect(optionA.demolishedIds).toEqual([])
-    expect(optionA.proposed).toEqual({ walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], skirting: [], placedItems: [] })
+    expect(optionA.proposed).toEqual({ walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], skirting: [], services: [], placedItems: [] })
     expect(canonicalJson(effectiveModel(restored.project, FLOOR, A))).toBe(beforeEffective)
     expect(canonicalJson(restored.project.existingModel)).toBe(canonicalJson(before.existingModel))
     expect(canonicalJson(optionOf(restored.project, B))).toBe(canonicalJson(optionOf(before, B)))
@@ -679,7 +679,7 @@ describe('renovation.restore: putting back what stood here', () => {
     const review = previewIntent(cut.project, restoreW3()).review as RestoreReview | null
     expect(review?.deletes.map((entry) => entry.label)).toEqual(['W-3′', 'Door 1′', 'Window 2′', 'Door 4'])
     const restored = unwrap(applyIntent(cut.project, restoreW3()))
-    expect(optionOf(restored.project, A).proposed).toEqual({ walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], skirting: [], placedItems: [] })
+    expect(optionOf(restored.project, A).proposed).toEqual({ walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], skirting: [], services: [], placedItems: [] })
     expect(validateProject(restored.project).ok).toBe(true)
   })
 

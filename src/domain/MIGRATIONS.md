@@ -301,6 +301,47 @@ BuildBox"** and writes nothing (#20 §5). Old Backups are unaffected: v1 through
 the step that runs on the way in adds one empty list to each container and changes no measurement, no
 entity and no existing value.
 
+## What v14 holds (#79)
+
+One thing, an addition to both containers:
+
+* `services`, the **Services** of a Floor (#79 §1) — a `kind` (`water`, `drain`, `gas`, `electrical`,
+  `air_con` or `other`), a `shape` (`run` or `riser`) fixed after creation, and the measurements that
+  shape has: a Run carries a `section` (`round` or `rectangular`), a straight centreline `line`, a
+  `centrelineElevation`, and either an `outsideDiameter` or a `width` and a `depth`; a Riser carries a
+  plan `point`, an `outsideDiameter`, a `bottomElevation` and a `height` — plus the optional `label`,
+  `predecessorIds` and `drawingLayerId` every Building Element carries — in the Existing Model and in
+  every Design Option's proposed model. A Service is hostless like a Beam: it is documented for
+  coordination and for nothing else. It stores no host, no connection, no network, no fitting, no
+  slope and no material, and it stores no Bottom, Centre or Top of a Run — those three are arithmetic
+  on the centreline and the vertical side of the section, and a record that remembered one could
+  disagree with its own Diameter.
+
+`migrateV13toV14` writes `services: []` on the Existing Model and on every Design Option's proposed
+model that arrives without the collection, and nothing else. It reads no clock, mints no ID and touches
+no other record: no legacy service data exists (#20 §7), and a pipe nobody documented is not a record
+of a pipe, so there is nothing to translate and nothing to infer. A container that already carries the
+collection comes back untouched, so the step is idempotent and a v14 file is the same object it arrived
+as. No entity moves and no warning reopens on the way in, because no measurement changed.
+
+The strict validator refuses a Run whose centreline is no longer than the drawing tolerance — a Run
+with no length has no direction to read its faces from; a Riser whose `height` is zero or less; an
+`outsideDiameter`, `width` or `depth` of zero or less; a `kind`, `shape` or `section` outside its
+closed vocabulary; and a field that belongs to the other shape or section — a `width` on a round Run,
+an `outsideDiameter` on a rectangular one, a `section`, a `line` or a `centrelineElevation` on a
+Riser, a `point` or a `height` on a Run — each refused by name at the field it sits at, because such a
+record describes two different elements at once. A negative `centrelineElevation` or
+`bottomElevation` is a Service below this Floor's Datum, which is a thing a person may genuinely
+document, so it is accepted and warned about rather than refused. Nothing about what a Service *means*
+against other content is stored: which Openings, Beams, Placed Items and Clearance Envelopes it takes
+space from, and by how much, are derived on the way to the warning list and never written down.
+
+**A Backup made by this version cannot be opened by an older one.** It is domain schema v14, and a
+build that stops at v13 has no fourteenth step to read it with, so it answers **"saved by a newer
+BuildBox"** and writes nothing (#20 §5). Old Backups are unaffected: v1 through v13 still open, and
+the step that runs on the way in adds one empty list to each container and changes no measurement, no
+entity and no existing value.
+
 ## What this release means for a reader (#73)
 
 In plain words:

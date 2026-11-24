@@ -12,6 +12,7 @@ import {
   migrateV9toV10,
   migrateV10toV11,
   migrateV11toV12,
+  migrateV13toV14,
   rectangleFootprint,
   runMigrationChain,
   type IdAllocator,
@@ -53,6 +54,7 @@ function validProject(): Project {
       rooms: [],
       beams: [],
       skirting: [],
+      services: [],
       placedItems: [
         {
           id: 'place-0',
@@ -110,9 +112,9 @@ function withoutTheStep(project: unknown): unknown {
 
 describe('DOMAIN_SCHEMA_VERSION', () => {
   it('is the version this build writes', () => {
-    // v13 is production: the Skirting shipped, so the number the chain ends at and the number this
-    // build writes are the same one (#73, #75, #76, #77, #78).
-    expect(DOMAIN_SCHEMA_VERSION).toBe(13)
+    // v14 is production: the Service shipped, so the number the chain ends at and the number this
+    // build writes are the same one (#73, #75, #76, #77, #78, #79).
+    expect(DOMAIN_SCHEMA_VERSION).toBe(14)
   })
 })
 
@@ -855,5 +857,96 @@ describe('migrateV11toV12 — both containers gain the Beam collection (#77)', (
     // A record whose `designOptions` is not a list gets the Existing Model's collection and leaves
     // the value it cannot read exactly as it found it.
     expect(migrateV11toV12({ designOptions: 'not a list' })).toEqual({ designOptions: 'not a list', existingModel: { beams: [] } })
+  })
+})
+
+describe('migrateV13toV14 — both containers gain the Service collection (#79)', () => {
+  /** The same Project as its v13 twin: models written before a Service existed. */
+  function v13Record(): Record<string, unknown> {
+    const record: Record<string, unknown> = { ...validProject() }
+    const model = { ...(record.existingModel as Record<string, unknown>) }
+    delete model.services
+    record.existingModel = model
+    const options = record.designOptions as Record<string, unknown>[] | undefined
+    if (options !== undefined) {
+      record.designOptions = options.map((option) => {
+        const proposed = { ...(option.proposed as Record<string, unknown>) }
+        delete proposed.services
+        return { ...option, proposed }
+      })
+    }
+    return record
+  }
+
+  it('adds the empty collection to both containers, and spends no IDs of its own', () => {
+    const asked: number[] = []
+    const result = migrateProject(v13Record(), 13, (count) => {
+      asked.push(count)
+      return allocator()(count)
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    // Nothing past v13 invents an ID: no legacy service data exists (#20 §7), and a pipe nobody
+    // documented is not a record of a pipe, so the collection arrives empty.
+    expect(asked).toEqual([])
+    expect(result.project.existingModel.services).toEqual([])
+  })
+
+  it('adds the collection to every Design Option as well', () => {
+    const withOptions = v13Record()
+    withOptions.designOptions = [
+      { id: 'option-a', name: 'Option A', proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [] }, demolishedIds: [] },
+      { id: 'option-b', name: 'Option B', proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [] }, demolishedIds: [] },
+    ]
+    const result = migrateProject(withOptions, 13, allocator())
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.project.designOptions?.map((option) => option.proposed.services)).toEqual([[], []])
+  })
+
+  it('changes nothing else about any record', () => {
+    const prior = v13Record()
+    const result = migrateProject(prior, 13, allocator())
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    // One collection per container and nothing beside it: no entity moves and no warning reopens,
+    // because no measurement changed (#79 acceptance 13).
+    const rest = { ...(result.project as unknown as Record<string, unknown>) }
+    const priorRest = { ...prior }
+    rest.existingModel = { ...(rest.existingModel as Record<string, unknown>) }
+    delete (rest.existingModel as Record<string, unknown>).services
+    delete rest.designOptions
+    delete priorRest.designOptions
+    expect(rest).toEqual(priorRest)
+  })
+
+  it('leaves a v14 Project exactly as it found it', () => {
+    const migrated = migrateProject(v13Record(), 13, allocator())
+    expect(migrated.ok).toBe(true)
+    if (!migrated.ok) return
+    const again = migrateProject(migrated.project, 14, allocator())
+    expect(again.ok && again.project).toEqual(migrated.project)
+  })
+
+  it('keeps the Services a model already carries', () => {
+    // A migrator that overwrote the collection it was only meant to add would silently delete
+    // somebody's Services — the one thing this step could get wrong.
+    const carried = {
+      existingModel: { services: [{ id: 'service-1', floorId: 'floor-0' }] },
+      designOptions: [{ id: 'option-a', proposed: { services: [{ id: 'service-2', floorId: 'floor-0' }] } }],
+    }
+    expect(migrateV13toV14(carried)).toBe(carried)
+  })
+
+  it('hands back the record itself when every container already has the collection', () => {
+    // Identity, not equality: the step copies nothing when there is nothing to add.
+    const carried = { existingModel: { services: [] }, designOptions: [{ id: 'a', proposed: { services: [] } }] }
+    expect(migrateV13toV14(carried)).toBe(carried)
+  })
+
+  it('adds the collection to a record that is not a Project shape, without crashing', () => {
+    expect(migrateV13toV14(null)).toBeNull()
+    expect(migrateV13toV14([{ existingModel: {} }])).toEqual([{ existingModel: {} }])
+    expect(migrateV13toV14({ designOptions: 'not a list' })).toEqual({ designOptions: 'not a list', existingModel: { services: [] } })
   })
 })

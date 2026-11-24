@@ -162,6 +162,24 @@ script writes two browser seeds from it: `e2e/preview-seed/skirting.json` as it 
 spec uses so each of the Skirting's own gestures commits as it always did rather than stopping at the
 locked-baseline review (#70 §7c) that `existingDisplay` tests for every kind.
 
+## `v14/` — the carried-forward goldens, and the first Service (#79)
+
+`v14/` holds no new scene: `scripts/make-v14-fixtures.ts` reads each file of `v13/` through
+`migrateProject` and writes it at the fourteenth schema, so the only difference a carry-forward makes
+is the empty `services` collection the step writes on both containers — a Service is always one a
+person documented, and no legacy service data exists, so no carry-forward invents one.
+
+It adds one file the earlier folders have no counterpart to: `v14/services.json`. It is the renovation
+scene with four Services the Existing Model holds — a round Water Run at Ø50 on a 2 200 mm centreline,
+a rectangular Air-con Run at 80 × 60 on a 2 500 mm centreline, a Drain Riser at Ø100 from 0 to 2 600,
+and an Electrical Run at a −100 mm centreline, so −150 to −50, below the Floor Datum — and a fifth Run
+Design Option `Option A` invents for itself, carrying the empty `predecessorIds` that says it came out
+of nothing. None of them stores a Bottom, a Centre or a Top: those are arithmetic on the centreline and
+the section, and these bytes are what proves a record that remembered one cannot round-trip. It is the
+first golden whose Project holds a Service, and the one `#79`'s derive, warnings, tables and
+screenshots are judged against. `v13/` stays committed as the evidence that a Project saved at the
+thirteenth schema still opens, and `v14/` is what `DOMAIN_SCHEMA_VERSION` is 14 names as current.
+
 ## How it was produced
 
 Hand-authored as a plain object, then written with `lib.canonicalJson` — keys sorted, no

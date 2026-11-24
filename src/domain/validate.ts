@@ -39,7 +39,7 @@ import { nameKey, viewNameKey } from './floorNames'
 import { fitProblem, openingNoun } from './openings'
 import { roomFaceRelation, roomOutlineProblems, roomOverlaps, roomSegmentOf, roomSegments } from './rooms'
 import { RENOVATION_DISPLAYS, UNLAYERED_LAYER_KEY } from './project'
-import type { DisplayUnit, EntityId, ItemFootprint, OpeningKind, Project, Room, RoomOutline, RoomWallFaceRef, WallEnd, WallJustification, WallRefLine } from './project'
+import type { DisplayUnit, EntityId, ItemFootprint, OpeningKind, Project, Room, RoomOutline, RoomWallFaceRef, ServiceKind, ServiceSection, ServiceShape, WallEnd, WallJustification, WallRefLine } from './project'
 import type { WallSide } from '../geometry'
 import { ACKNOWLEDGEMENT_NOTE_MAX_LENGTH, warningKey } from './warnings'
 
@@ -141,11 +141,11 @@ const SEGMENT_FIELDS: Record<string, readonly string[]> = {
 }
 const SEGMENT_KINDS = ['line', 'arc', 'ellipticalArc'] as const
 const POINT_FIELDS = ['x', 'y']
-const EXISTING_MODEL_FIELDS = ['placedItems', 'walls', 'wallJunctions', 'openings', 'rooms', 'beams', 'skirting']
+const EXISTING_MODEL_FIELDS = ['placedItems', 'walls', 'wallJunctions', 'openings', 'rooms', 'beams', 'skirting', 'services']
 /** A Design Option is a delta over the Existing Model, never a copy of it (#69 §2). */
 const DESIGN_OPTION_FIELDS = ['id', 'name', 'proposed', 'demolishedIds']
-/** The seven collections of one Option's proposed work, in the shape the Existing Model uses. */
-const PROPOSED_MODEL_FIELDS = ['walls', 'wallJunctions', 'openings', 'rooms', 'placedItems', 'beams', 'skirting']
+/** The eight collections of one Option's proposed work, in the shape the Existing Model uses. */
+const PROPOSED_MODEL_FIELDS = ['walls', 'wallJunctions', 'openings', 'rooms', 'placedItems', 'beams', 'skirting', 'services']
 /**
  * A Beam's own fields (#77 §1). There is no `host`, no `wallId` and no junction among them, and
  * `checkUnknownFields` is what refuses one: a Beam that carried a host would be a Beam that
@@ -191,6 +191,27 @@ const SKIRTING_FIELDS = [
 const SKIRTING_SIDES: readonly WallSide[] = ['left', 'right']
 /** A Skirting label this long is a mistake, not a label; the inspector field caps at the same number. */
 const SKIRTING_LABEL_MAX_LENGTH = 80
+/**
+ * The fields every Service carries, whatever its shape (#79 §1). There is no `hostWallId`, no
+ * `connections`, no `network` and no `material` among them, and `checkUnknownFields` is what refuses
+ * one: a Service that remembered what it joined would be a Service with a topology, which is the one
+ * thing the Services decision rules out.
+ */
+const SERVICE_BASE_FIELDS = ['id', 'floorId', 'kind', 'shape', 'label', 'predecessorIds', 'drawingLayerId']
+/** The fields of a Service Run, on top of the base: its line, its section and the centreline. */
+const SERVICE_RUN_FIELDS = [...SERVICE_BASE_FIELDS, 'line', 'section', 'centrelineElevation', 'outsideDiameter', 'width', 'depth']
+/** The fields of a Service Riser: a point, a diameter, a bottom and a height. No `section`, ever. */
+const SERVICE_RISER_FIELDS = [...SERVICE_BASE_FIELDS, 'point', 'outsideDiameter', 'bottomElevation', 'height']
+/** A Service Run reference line, straight: `kind` is accepted only to say `line`, and `through` never. */
+const SERVICE_LINE_FIELDS = ['kind', 'start', 'end', 'through']
+/** The six Kinds a Service may carry (#79 §1). Kind is data, never the element's name. */
+const SERVICE_KIND_VALUES: readonly ServiceKind[] = ['water', 'drain', 'gas', 'electrical', 'air_con', 'other']
+/** The two shapes. Fixed after creation: a Run that became a Riser would lose its line. */
+const SERVICE_SHAPE_VALUES: readonly ServiceShape[] = ['run', 'riser']
+/** The two sections a Run may carry. A Riser has no section field at all. */
+const SERVICE_SECTION_VALUES: readonly ServiceSection[] = ['round', 'rectangular']
+/** A Service label this long is a mistake, not a label; the inspector field caps at the same number. */
+const SERVICE_LABEL_MAX_LENGTH = 80
 /** A Room's Edges are referenced to a Wall face on one of the reference line's two sides (#67 §1). */
 const ROOM_FACE_SIDES = ['left', 'right']
 const ROOM_FIELDS = ['id', 'floorId', 'name', 'outline', 'wallFaceRefs', 'predecessorIds', 'drawingLayerId']
@@ -2314,6 +2335,9 @@ function validateExistingModel(
   // Skirting comes with the Walls, whose tidied faces it is drawn against but whose usable intervals
   // it is deliberately not measured by (#78 §2 criterion 5).
   validateSkirtings(raw.skirting, childPath(path, 'skirting'), index, EXISTING_SCOPE, walls, checks, add)
+  // Services come with the Beams and read nothing: a Service is hostless, so it is checked against
+  // the Project's Floors and its own numbers alone, never against the Walls it crosses (#79 §1).
+  validateServices(raw.services, childPath(path, 'services'), index, EXISTING_SCOPE, checks, add)
   checkUnknownFields(raw, path, EXISTING_MODEL_FIELDS, add)
   return { walls, junctions, refs, rooms }
 }
@@ -2470,6 +2494,7 @@ function validateDesignOptions(
     }
     validateBeams(proposed.beams, childPath(proposedPath, 'beams'), index, scope, null, add)
     validateSkirtings(proposed.skirting, childPath(proposedPath, 'skirting'), index, scope, walls, null, add)
+    validateServices(proposed.services, childPath(proposedPath, 'services'), index, scope, null, add)
     checkUnknownFields(proposed, proposedPath, PROPOSED_MODEL_FIELDS, add)
     checkUnknownFields(rawOption, at, DESIGN_OPTION_FIELDS, add)
 
@@ -2852,6 +2877,154 @@ function validateSkirtings(
   items.forEach((skirting, i) => {
     if (!inScope(checks, skirting)) return
     validateSkirting(skirting, childPath(path, i), index, scope, walls, add)
+  })
+}
+
+/**
+ * A Service Run's centreline (#79 §1): straight, always.
+ *
+ * The same contract a Beam's reference line holds — no arc, no third point — because the Services
+ * decision says a Run reuses the Beam line rather than adding a second line vocabulary. A zero-length
+ * line is refused here and not in `derive`: a Run with no length has no direction, and a direction is
+ * what `left` and `right` of its footprint mean, so such a record cannot be drawn at all.
+ */
+function validateServiceLine(raw: unknown, path: string, add: Add): void {
+  if (raw === undefined) {
+    add(path, MISSING, 'Missing the Service Run centreline.')
+    return
+  }
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected the Service Run centreline.')
+    return
+  }
+  const start = readPoint(raw.start, childPath(path, 'start'), 'the Service Run centreline start', add)
+  const end = readPoint(raw.end, childPath(path, 'end'), 'the Service Run centreline end', add)
+  if (raw.kind !== undefined && raw.kind !== 'line') {
+    add(childPath(path, 'kind'), NOT_ONE_OF, 'Expected a straight Service Run centreline — a Run has no arc.')
+  }
+  if (raw.through !== undefined) {
+    add(childPath(path, 'through'), UNKNOWN_FIELD, 'Expected no third point on a Service Run centreline — only an arc has one, and a Run has no arc.')
+  }
+  checkUnknownFields(raw, path, SERVICE_LINE_FIELDS, add)
+  if (start !== null && end !== null) {
+    const length = distance(start, end)
+    if (length <= TOLERANCE_MM) {
+      add(path, OUT_OF_RANGE, `Expected a Service Run centreline more than ${TOLERANCE_MM} mm long — a Run with no length has no direction to read its faces from.`)
+    }
+  }
+}
+
+/**
+ * One Service (#79 §1).
+ *
+ * A shape, a Kind and the measurements that shape has. Every refusal is one of the strict-import
+ * rules the Services decision settles, and each says which:
+ *
+ *  - **An unknown Kind, shape or section.** All three are closed vocabularies; a Kind nobody chose is
+ *    a Kind the plan cannot write a code for.
+ *  - **A measurement that is not a measurement.** Outside diameter, Width, Depth and a Riser's Height
+ *    are all greater than 0; a zero-diameter pipe is not a pipe. A Run's centreline is more than zero
+ *    long, for the reason {@link validateServiceLine} gives.
+ *  - **A field from the other shape or section.** `width` on a round Run, a `section` on a Riser, a
+ *    `point` on a Run: each is a record describing two different elements at once, so the shape's own
+ *    field list is what refuses it.
+ *
+ * What is *not* refused is a negative elevation. A Service recorded from below the Floor Datum — a
+ * pipe in a floor build-up, a duct hanging under a suspended slab — is an ordinary drawing (#79 §1).
+ * Nor is anything refused against another element: a Service that crosses a Wall, another Service or
+ * an Opening is documented as it was drawn, and the warnings about it come from `derive`.
+ */
+function validateService(raw: unknown, path: string, index: IdIndex, scope: ModelScope, add: Add): void {
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected a Service.')
+    return
+  }
+  const idPath = childPath(path, 'id')
+  const id = checkEntityId(raw.id, idPath, 'the Service ID', add)
+  if (id !== null) claimId(id, idPath, 'the Service ID', index, add)
+
+  const floorPath = childPath(path, 'floorId')
+  const floorId = checkEntityId(raw.floorId, floorPath, 'the Floor this Service is on', add)
+  if (floorId !== null && !index.floorIds.has(floorId)) {
+    add(floorPath, DANGLING_REFERENCE, `Expected the Service's Floor to be a Floor of this Project — no Floor has ID ${floorId}.`)
+  }
+
+  checkOneOf(raw.kind, childPath(path, 'kind'), 'the Service Kind', SERVICE_KIND_VALUES, add)
+  const shape = raw.shape
+  checkOneOf(shape, childPath(path, 'shape'), 'the Service shape', SERVICE_SHAPE_VALUES, add)
+  // Past an unknown shape there is no field list to check against, and inventing one would report a
+  // hundred problems about a record whose only mistake is the word in `shape`.
+  if (shape !== 'run' && shape !== 'riser') return
+
+  const label = raw.label
+  if (label !== undefined) {
+    checkText(label, childPath(path, 'label'), 'the Service label', add)
+    if (typeof label === 'string' && label.length > SERVICE_LABEL_MAX_LENGTH) {
+      add(childPath(path, 'label'), OUT_OF_RANGE, `Expected the Service label to be at most ${SERVICE_LABEL_MAX_LENGTH} characters — it is ${label.length}.`)
+    }
+  }
+  checkPredecessorIds(raw.predecessorIds, path, index, scope, add)
+  checkDrawingLayerId(raw.drawingLayerId, path, 'the Service Drawing Layer', index, add)
+
+  if (shape === 'riser') {
+    // A Riser is a point and a circle: always round, so it carries no section, no line and no
+    // centreline, and `SERVICE_RISER_FIELDS` is what refuses one rather than quietly ignoring it.
+    readPoint(raw.point, childPath(path, 'point'), 'the plan point this Service Riser passes through', add)
+    checkPositive(raw.outsideDiameter, childPath(path, 'outsideDiameter'), 'the Service Riser outside diameter', add)
+    // Negative is valid: a Riser can start below the Floor Datum, the way a Wall can.
+    checkNumber(raw.bottomElevation, childPath(path, 'bottomElevation'), 'the height of the bottom of the Service Riser', add)
+    checkPositive(raw.height, childPath(path, 'height'), 'the Service Riser height', add)
+    checkUnknownFields(raw, path, SERVICE_RISER_FIELDS, add)
+    return
+  }
+
+  const section = raw.section
+  checkOneOf(section, childPath(path, 'section'), 'the Service Run section', SERVICE_SECTION_VALUES, add)
+  validateServiceLine(raw.line, childPath(path, 'line'), add)
+  // The stored vertical number of a Run is its centreline and only its centreline: Bottom and Top are
+  // arithmetic on it and on the section, which is why neither has a field to be refused here.
+  checkNumber(raw.centrelineElevation, childPath(path, 'centrelineElevation'), 'the height of the Service Run centreline', add)
+  // Exactly the two fields the section has. A round Run with a Width on it, or a rectangular Run
+  // missing its Depth, is a record of an element that cannot be drawn.
+  if (section === 'round') {
+    checkPositive(raw.outsideDiameter, childPath(path, 'outsideDiameter'), 'the Service Run outside diameter', add)
+    for (const field of ['width', 'depth'] as const) {
+      if (raw[field] !== undefined) {
+        add(
+          childPath(path, field),
+          UNKNOWN_FIELD,
+          `Expected no ${field === 'width' ? 'Width' : 'Depth'} on a round Service Run — a round section carries an outside diameter and nothing else.`,
+        )
+      }
+    }
+  } else if (section === 'rectangular') {
+    checkPositive(raw.width, childPath(path, 'width'), 'the Service Run width', add)
+    checkPositive(raw.depth, childPath(path, 'depth'), 'the Service Run depth', add)
+    if (raw.outsideDiameter !== undefined) {
+      add(childPath(path, 'outsideDiameter'), UNKNOWN_FIELD, 'Expected no outside diameter on a rectangular Service Run — a rectangular section carries a Width and a Depth and nothing else.')
+    }
+  }
+  checkUnknownFields(raw, path, SERVICE_RUN_FIELDS, add)
+}
+
+/**
+ * Every Service of one model (#79 §1).
+ *
+ * Services are checked on their own and never against another entity, exactly as Beams are: there is
+ * no cross-check to make, which is the point of the element. A Service that crosses a Wall, one that
+ * overlaps another Service, and one that floats in the middle of a room are three ordinary drawings;
+ * the measured warnings about them are `derive`'s, not the validator's.
+ */
+function validateServices(raw: unknown, path: string, index: IdIndex, scope: ModelScope, checks: Checks, add: Add): void {
+  // An absent collection is a model written before the capability and is valid — the v13 → v14
+  // migrator adds the empty array, and `servicesOf` is the read — so this checks what is there and
+  // never defaults what is not.
+  if (raw === undefined) return
+  const items = checkArray(raw, path, 'the Services', add)
+  if (items === null) return
+  items.forEach((service, i) => {
+    if (!inScope(checks, service)) return
+    validateService(service, childPath(path, i), index, scope, add)
   })
 }
 
