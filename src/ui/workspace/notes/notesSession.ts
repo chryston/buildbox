@@ -29,6 +29,11 @@ export interface NotesSessionSnapshot {
   overlayOn: boolean
   /** The row selected in the panel, which also holds the temporary focus (§7.5). */
   selectedCommentId: EntityId | null
+  /**
+   * How many times a row has been asked to reveal its note. Selecting the same row twice has to pan
+   * there again, and a prop that compared equal to the last one would leave the canvas asleep.
+   */
+  revealNonce: number
   /** The search text, matched against reference, title and body across the whole Project (§5.2). */
   query: string
   /** Whether the §6 context rules are applied. On by default. */
@@ -67,6 +72,7 @@ const DEFAULTS = {
   panelOpen: true,
   overlayOn: false,
   selectedCommentId: null,
+  revealNonce: 0,
   titleToFocus: null,
   query: '',
   currentContext: true,
@@ -80,7 +86,7 @@ export const notesSessionStore = createStore<NotesSessionSnapshot>()((set) => ({
   setPanelOpen: (panelOpen) => set({ panelOpen }),
   setOverlayOn: (overlayOn) => set({ overlayOn, selectedCommentId: null }),
   clearFocus: () => set({ selectedCommentId: null }),
-  select: (selectedCommentId) => set({ selectedCommentId }),
+  select: (selectedCommentId) => set((state) => ({ selectedCommentId, revealNonce: state.revealNonce + 1 })),
   selectNew: (commentId) => set({ selectedCommentId: commentId, titleToFocus: commentId, panelOpen: true }),
   clearTitleFocus: () => set({ titleToFocus: null }),
   setQuery: (query) => set({ query }),

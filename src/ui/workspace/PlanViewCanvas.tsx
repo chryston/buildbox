@@ -236,6 +236,15 @@ export interface PlanViewCanvasProps {
   onSelectWarningBadge?: (id: string) => void
   /** A pin or `✎n` badge was clicked: select that note (#80 §7.5). */
   onNotePointerDown?: (id: string) => void
+  /**
+   * Pan so this Floor point stands at the centre (#80 §7.5): selecting a row reveals that one note,
+   * and a pin revealed off the edge of the screen has not been revealed.
+   *
+   * The nonce is what makes it work twice — selecting the same row again has to pan there again, and a
+   * prop that compared equal to the last one would leave the effect asleep. The canvas owns the pan
+   * because it owns its own size; the workspace knows where a note is and nothing about pixels.
+   */
+  focusPoint?: { point: Point2; nonce: number } | null
 }
 
 /**
@@ -254,7 +263,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     angleSnap, overlay, htmlOverlay, screenOverlay, walls, beams = null, selectedBeamId = null, skirting = null, selectedSkirtingId = null, services = null, selectedServiceId = null, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
     openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
     rooms = null, selectedRoomId = null, onSelectRoom, onSelectBeam, onSelectSkirting, onSelectService, roomProposal = null,
-    warningSubjects = [], notePins = [], noteBadges = [], onSelectWarningBadge, onNotePointerDown,
+    warningSubjects = [], notePins = [], noteBadges = [], onSelectWarningBadge, onNotePointerDown, focusPoint = null,
   } = props
   const [hostSize, setHostSize] = useState({ width: 0, height: 0 })
   const [dragging, setDragging] = useState(false)
@@ -292,6 +301,20 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     observer.observe(el)
     return () => observer.disconnect()
   }, [hostRef])
+
+  // A revealed note is panned to (#80 §7.5). The zoom is left alone: the person chose it, and a
+  // reveal that also changes how much of the Floor is visible is answering a different question.
+  useEffect(() => {
+    if (focusPoint === null || viewport === null) return
+    if (hostSize.width <= 0 || hostSize.height <= 0) return
+    onViewport({
+      zoom: viewport.zoom,
+      panX: hostSize.width / 2 - focusPoint.point.x * viewport.zoom,
+      panY: hostSize.height / 2 - focusPoint.point.y * viewport.zoom,
+    })
+    // The zoom and the host size are read, not depended on: panning must fire once per request, not
+    // once per pixel the host happens to change by.
+  }, [focusPoint])
 
   // No cached viewport for this view: `Fit` once the host has a size — to the Plan Image when
   // there is one, to the Floor's own bounds when there is not (#76).

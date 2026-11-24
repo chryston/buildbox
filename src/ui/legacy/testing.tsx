@@ -77,6 +77,7 @@ export async function openTestView(project: Project = testProject('p-1')): Promi
     services: {
       intent,
       assetUrls: noAssets,
+      now: () => clock.now(),
     },
     returnToProjects: vi.fn(),
     showSaveFailure: vi.fn(),

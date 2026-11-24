@@ -78,6 +78,13 @@ export interface ElevationPaneProps {
   selectedIds: readonly string[]
   /** One id per click, already resolved through the cycle by the caller's `onPick`. */
   onPick(id: string | null): void
+  /**
+   * A click on nothing, with where in the drawing it landed, in the scene's own millimetres: distance
+   * along the view line and height above the floor (#80 §12). The Comment tool needs the plan point on
+   * the view line; a selection change does not need the place at all, which is why this is a second
+   * callback rather than a second argument nobody else reads.
+   */
+  onEmptyClick?(at: Point2): void
   viewport: Viewport | null
   onViewport(viewport: Viewport): void
   hostRef: RefObject<HTMLDivElement | null>
@@ -125,7 +132,7 @@ export function elevationArrowDeg(view: ElevationView): number {
 /** What the pane is looking at, as the split's CSS and the browser suite need to name it. */
 export function ElevationPane(props: ElevationPaneProps): ReactNode {
   const {
-    view, scene, list, area, topMm, sizing, optionName, display, selectedIds, onPick,
+    view, scene, list, area, topMm, sizing, optionName, display, selectedIds, onPick, onEmptyClick,
     viewport, onViewport, hostRef, resolveAsset, dragCandidates = null, onVerticalExtent,
     previewBands, clearanceBands,
   } = props
@@ -134,6 +141,8 @@ export function ElevationPane(props: ElevationPaneProps): ReactNode {
   const panMoved = useRef(false)
   /** True while the pointer is down on empty space: that press is a pan, and a still one is a deselect. */
   const pressedEmpty = useRef(false)
+  /** Where a press on empty space stood in the drawing, for the click that may follow it (#80 §12). */
+  const emptyAt = useRef<Point2 | null>(null)
   const lastPan = useRef({ x: 0, y: 0 })
   /** What the last pick remembered: where it landed and the stack it walked, which is what a second
    * click in the same spot has to match before it is allowed to continue the cycle (#70 §8). */
@@ -270,6 +279,7 @@ export function ElevationPane(props: ElevationPaneProps): ReactNode {
       panning.current = true
       panMoved.current = false
       pressedEmpty.current = true
+      emptyAt.current = toDrawing(event.clientX, event.clientY)
       lastPan.current = { x: event.clientX, y: event.clientY }
       svgRef.current?.setPointerCapture(event.pointerId)
       return
@@ -303,10 +313,17 @@ export function ElevationPane(props: ElevationPaneProps): ReactNode {
     // A press on empty space that never moved is a click on nothing: the selection goes, as it does on
     // the Plan canvas. A drag is not a click, whatever the pointer came up over.
     const deselect = pressedEmpty.current && !panMoved.current
+    const at = emptyAt.current
     panning.current = false
     pressedEmpty.current = false
-    if (deselect) onPick(null)
-  }, [onPick])
+    emptyAt.current = null
+    if (deselect) {
+      onPick(null)
+      // The Comment tool anchors to the plan point on the view line, so the pane has to hand the
+      // place over as well as the fact that nothing was hit (#80 §12).
+      if (at !== null) onEmptyClick?.(at)
+    }
+  }, [onPick, onEmptyClick])
 
   // The one selected entity this view actually draws. A selection the pane cannot see — an entity on
   // another Floor, or one the Display hides — gets no handles, because there is no box to put them on.

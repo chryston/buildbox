@@ -147,6 +147,10 @@ export function createSessionServices(
   return {
     intent: createIntentFactory(clock, ids),
     assetUrls,
+    // A Comment payload carries the instant the person committed (#80 §3). Only `app` holds the
+    // clock: a pure module never reads it, and a UI that read it itself would be a second clock that
+    // could disagree with the one the Intent is stamped with.
+    now: () => clock.now(),
     async readPlanImage(file: File): Promise<PlanImageRead> {
       const read = await readPlanImageFile(file)
       if (!read.ok) return { message: read.error }

@@ -1422,6 +1422,14 @@ export function FloorWorkspace(): ReactNode {
     return out
   })()
 
+  /** The revealed note's pin, in the shape the canvas pans to (§7.5). */
+  const notesRevealNonce = useNotesSession((state) => state.revealNonce)
+  const notesFocusPoint = (() => {
+    if (!notesOverlayOn || notesSelectedId === null) return null
+    const pin = notePins.find((one) => one.id === notesSelectedId)
+    return pin === undefined ? null : { point: pin.at, nonce: notesRevealNonce }
+  })()
+
   /** The ghost for where the pointer stands now, in the shape the Wall list takes (#65 §10). */
   const openingAimNow = aimAtOpening(openingCursor)
   const openingPreview: OpeningPreview | null = openingAimNow === null
@@ -3680,6 +3688,7 @@ export function FloorWorkspace(): ReactNode {
               notePins={notePins}
               noteBadges={noteBadges}
               onNotePointerDown={(id) => notesSessionStore.getState().select(id)}
+              focusPoint={notesFocusPoint}
               warningSubjects={warningSubjects}
               screenOverlay={planPreviewOutlines.length === 0 && planClearanceOutlines.length === 0
                 ? undefined
@@ -3972,6 +3981,22 @@ export function FloorWorkspace(): ReactNode {
                         // Item are three different selections, and the inspector edits the one it is
                         // told about. Picking a Wall here must select it there too, or criterion 11 is
                         // only half true — the pane would hold a selection nothing else can see.
+                        // An empty click with the Comment tool armed anchors a Floor Point at the plan
+                        // point on the view line under the pointer (#80 §12). The drawing's own x is the
+                        // distance along the line, so the plan point is the frame's start walked by it —
+                        // the note is about a place on the Floor, not about a place on this sheet.
+                        onEmptyClick={(at) => {
+                          if (tool !== 'comment' || elevationSceneValue === null) return
+                          const frame = elevationSceneValue.frame
+                          placeComment({
+                            kind: 'floor_point',
+                            floorId: elevationView.floorId,
+                            point: {
+                              x: frame.start.x + frame.u.x * at.x,
+                              y: frame.start.y + frame.u.y * at.x,
+                            },
+                          })
+                        }}
                         onPick={(id) => {
                           if (id === null) {
                             select(null)

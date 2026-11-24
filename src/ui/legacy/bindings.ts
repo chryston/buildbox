@@ -16,6 +16,7 @@ import type { CabinetUnit } from '../../cabinet'
 import type {
   AccessoryType,
   CabinetMaterialId,
+  CommentAnchor,
   DrawerConfig,
   ElementType,
   GlobalSettings,
@@ -72,6 +73,11 @@ export interface LegacyBindings {
   pinNode(nodeId: string, sizeMm: number): void
   unpinNode(nodeId: string): void
   unlockNode(nodeId: string): void
+  /**
+   * A Comment anchored where the person clicked in the cabinet editor (#80 §12): a node makes a
+   * feature Comment about that node, empty canvas makes one about the Item Design as a whole.
+   */
+  createComment(anchor: CommentAnchor): void
   setNodeLabel(nodeId: string, label: string): void
   distributeEvenly(columnRootId: string, evenH: number): void
   setElementType(nodeId: string, elementType: ElementType): void

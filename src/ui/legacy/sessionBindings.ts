@@ -76,6 +76,8 @@ export interface AssetUrlSource {
 export interface SessionViewServices {
   readonly intent: IntentBuilder
   readonly assetUrls: AssetUrlSource
+  /** The current instant in ISO-8601 UTC, from the app's one clock (#80 §3). */
+  readonly now: () => string
 }
 
 /** What only the root that renders the view can do: move it, and open the dialogs above it. */
@@ -206,6 +208,11 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
     unpinNode: (nodeId) => onUnit('cabinet.unpinNode', (itemDesignId) => ({ itemDesignId, nodeId })),
     // The legacy store's `unlockNode` was `unpinNode` under another name; domain v1 has the one.
     unlockNode: (nodeId) => onUnit('cabinet.unpinNode', (itemDesignId) => ({ itemDesignId, nodeId })),
+    // A note about the cabinet on screen. The title starts empty on purpose: §10 requires a Title
+    // before the note can be saved, and a made-up one would let an empty note through the door.
+    createComment: (anchor) => {
+      send('comment.create', { anchor, title: '', body: '', priority: 'normal', at: services.now() })
+    },
     setNodeLabel: (nodeId, label) => onUnit('cabinet.setNodeLabel', (itemDesignId) => ({
       itemDesignId,
       nodeId,
