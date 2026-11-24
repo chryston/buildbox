@@ -120,7 +120,14 @@ const CROSSING: readonly Wall[] = [
 
 const project: Project = {
   ...base,
-  existingModel: { ...base.existingModel, walls: [...CROSSING] },
+  existingModel: {
+    ...base.existingModel,
+    // The reference scatter overlaps itself in plan, and #76's vertical extents turn every one
+    // of those pairs into a warning: this scene is about the three crossing Walls and their
+    // badges, so it draws with the Walls alone.
+    placedItems: [],
+    walls: [...CROSSING],
+  },
 }
 
 const open = deriveWarnings(project, FLOOR_ID, null).warnings

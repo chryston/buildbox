@@ -243,10 +243,11 @@ describe('a saved view’s Drawing Layers on its Plan View', () => {
   })
 
   it('keeps the warning row and says why its subject is nowhere on screen (#71 criterion 9)', async () => {
-    // `Option A · Proposed` has Furniture's Visible box unchecked, and the one warning this fixture
-    // earns is about a wardrobe standing on Furniture.
+    // `Option A · Proposed` has Furniture's Visible box unchecked. The wardrobe's Room-crossing
+    // warning is about a wardrobe standing on Furniture; #76's vertical warnings add rows beside
+    // it, but the wardrobe's is the one this case follows.
     await openView(PROPOSED)
-    expect(badged()).toEqual([WARDROBE])
+    expect(badged()).toContain(WARDROBE)
     await userEvent.setup().click(screen.getByTestId('warning-toggle'))
 
     const rows = screen.getAllByTestId(/warning-sentence-/)

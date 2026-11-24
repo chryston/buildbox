@@ -108,6 +108,9 @@ function withCrossing(project: Project, tag: string): Project {
     ...project,
     existingModel: {
       ...project.existingModel,
+      // Lift the Placed Items off y = 0, where these Walls run: the #76 item-into-wall producer
+      // would otherwise answer beside the wall crossings this walk is about.
+      placedItems: project.existingModel.placedItems.map((placed) => ({ ...placed, translation: { x: placed.translation.x, y: placed.translation.y + 2000 } })),
       walls: [
         ...project.existingModel.walls,
         cross('a', `W-A${tag}`, 0, 0, 4000, 0),

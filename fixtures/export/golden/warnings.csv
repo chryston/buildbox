@@ -1,4 +1,12 @@
 ﻿status,floor_id,floor,design_option_id,design_option,warning_type,subject_type,subject_id,other_type,other_id,measured_mm,message,acknowledgement_note
+unacknowledged,seed-001,Floor 1,,,item_item_overlap,placed_item,fp-sofa,placed_item,seed-002,800,Sofa (3-seat) overlaps Base Unit over 800 mm of height.,
+unacknowledged,seed-001,Floor 1,,,item_into_wall,placed_item,fp-sofa,wall,seed-wall-002,60,Sofa (3-seat) runs 60 mm into Wall W-1.,
+unacknowledged,seed-001,Floor 1,,,item_into_wall,placed_item,fp-sofa,wall,seed-wall-005,200,Sofa (3-seat) runs 200 mm into Wall W-4.,
+unacknowledged,seed-001,Floor 1,,,item_into_wall,placed_item,fp-toilet,wall,seed-wall-002,20,Toilet runs 20 mm into Wall W-1.,
+unacknowledged,seed-001,Floor 1,,,item_item_overlap,placed_item,fp-wardrobe,placed_item,fp-counter,900,Wardrobe overlaps Kitchen counter over 900 mm of height.,
+unacknowledged,seed-001,Floor 1,,,item_into_wall,placed_item,fp-wardrobe,wall,seed-wall-002,190,Wardrobe runs 190 mm into Wall W-1.,
+unacknowledged,seed-001,Floor 1,,,item_item_overlap,placed_item,seed-003,placed_item,fp-sofa,850,Tall Unit overlaps Sofa (3-seat) over 850 mm of height.,
+unacknowledged,seed-001,Floor 1,,,item_into_wall,placed_item,seed-003,wall,seed-wall-002,60,Tall Unit runs 60 mm into Wall W-1.,
 unacknowledged,seed-001,Floor 1,,,item_crosses_room,placed_item,seed-item-026,room,seed-room-012,,Base 600 #2 crosses Kitchen: 0.12 m² (50%) of its footprint is outside.,Re-measure after the partition moves.
 unacknowledged,seed-001,Floor 1,,,item_crosses_room,placed_item,seed-tbl-006,room,seed-room-019,,Base 600 #3 crosses Bedroom: 0.20 m² (83%) of its footprint is outside.,
 acknowledged,seed-001,Floor 1,,,item_crosses_room,placed_item,fp-wardrobe,room,seed-room-012,,Wardrobe crosses Kitchen: 0.02 m² (63%) of its footprint is outside.,Builder to check

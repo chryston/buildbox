@@ -47,6 +47,7 @@ export type {
   WarningFloor,
   WarningJunction,
   WarningMeasured,
+  WarningOpening,
   WarningParams,
   WarningProducer,
   WarningStatus,

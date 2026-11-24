@@ -15,6 +15,7 @@
  */
 import type {
   Acknowledgement,
+  ClearanceEnvelope,
   EntityId,
   ItemFootprint,
   RoomOutline,
@@ -90,6 +91,27 @@ export interface WarningWall {
   readonly justification: WallJustification
   /** The tidied outline: faces cut at every Junction this Wall takes part in (#64 §5). */
   readonly outline: ClosedPath
+  /** Vertical Extent (#76 §5): the Floor level it stands on and the height it reaches. */
+  readonly baseElevation: number
+  readonly height: number
+}
+
+/**
+ * One Opening as a producer may read it (#76 §5).
+ *
+ * The stored fields along the host and across the heights — the four numbers that decide whether
+ * it stays inside its host Wall — plus the display label. `start` is along the host reference
+ * line, so a producer can build the along-wall hole the Opening leaves in the Wall body.
+ */
+export interface WarningOpening {
+  readonly id: EntityId
+  readonly hostWallId: EntityId
+  /** The Opening's own display name: `Window WND-1`. */
+  readonly label: string
+  readonly sill: number
+  readonly head: number
+  readonly start: number
+  readonly width: number
 }
 
 /** One Junction as a producer may read it: which Walls meet at it. */
@@ -138,6 +160,21 @@ export interface WarningPlacement {
   /** The Design's Item Footprint, or `null` for a cabinet, whose outline is a scene layout. */
   readonly footprint: ItemFootprint | null
   readonly origin: Pt
+  /**
+   * Vertical Extent (#76 §5): the Base this placement stands at, and the height its Design gives
+   * it. The height is the Design's, never the placement's — which is why a shared-height change
+   * moves this number for every placement and reopens their warnings.
+   */
+  readonly baseElevation: number
+  readonly height: number
+  /**
+   * The Design's Clearance Envelope (#76 §4): the stored record for the signature, and the same
+   * path through the placement for the measurement — the same split `footprint` and `worldPath`
+   * use, so rotating the placement moves the world path while the signed record shows the turn
+   * as a rotation.
+   */
+  readonly clearanceEnvelope: ClearanceEnvelope | null
+  readonly envelopeWorldPath: ClosedPath | null
 }
 
 /**
@@ -151,9 +188,15 @@ export interface WarningPlacement {
 export interface WarningFloor {
   readonly floorId: EntityId
   readonly walls: readonly WarningWall[]
+  readonly openings: readonly WarningOpening[]
   readonly junctions: readonly WarningJunction[]
   readonly rooms: readonly WarningRoom[]
   readonly placements: readonly WarningPlacement[]
+  /**
+   * The Floor's own Vertical limits (#76 §5), `null` where unset. A limit that is not set warns
+   * about nothing — BuildBox invents no height rule for a Floor the person left open.
+   */
+  readonly limits: { readonly lowerMm: number | null; readonly upperMm: number | null }
 }
 
 /**
