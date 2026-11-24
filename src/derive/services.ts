@@ -103,3 +103,21 @@ export const deriveServices = (project: Project, floorId: EntityId, optionId: En
 
 /** Every Service of the Project, whichever Floor it stands on — the schedule and the lists read this. */
 export const projectServices = (project: Project): readonly Service[] => servicesOf(project.existingModel)
+
+/**
+ * The closed outline a pointer picks a Service by (#79 §6).
+ *
+ * A Run already has one. A Riser is a circle, and the geometry vocabulary has no arc — the drawing
+ * layer does, and paints a true one — so the target is the square the circle stands in. It is a
+ * hair generous on a Ø50 pipe at plan zoom, which is the direction a hit target is allowed to err.
+ */
+export const serviceHitOutline = (service: DerivedService): ClosedPath => {
+  if (service.shape === 'run') return service.outline!
+  const { x, y } = service.centre!
+  const r = service.radius!
+  const nw = pt(x - r, y - r)
+  const ne = pt(x + r, y - r)
+  const se = pt(x + r, y + r)
+  const sw = pt(x - r, y + r)
+  return { start: nw, segments: [{ kind: 'line', to: ne }, { kind: 'line', to: se }, { kind: 'line', to: sw }, { kind: 'line', to: nw }] }
+}

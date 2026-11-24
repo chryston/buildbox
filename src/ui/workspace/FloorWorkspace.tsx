@@ -17,7 +17,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveBeams, deriveSkirting, skirtingFaceTargets, skirtingSnapSources, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, elevationFrameOf, enabledVerticalSnapKinds, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates, verticalSnapCandidates } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveBeams, deriveSkirting, deriveServices, skirtingFaceTargets, skirtingSnapSources, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, elevationFrameOf, enabledVerticalSnapKinds, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates, verticalSnapCandidates } from '../../derive'
 import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings, drawElevationView } from '../../drawing'
 import type { BadgeSubject, LayerGates, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
@@ -320,6 +320,14 @@ export function FloorWorkspace(): ReactNode {
       ? null
       : deriveSkirting(drawingProject, floorId, renovationOptionId, view === null ? 'existing' : viewRenovationDisplay(view))
   /**
+   * The Floor's Services (#79 §6): each Run's body and each Riser's circle, as the Renovation Display
+   * in use shows them.
+   */
+  const floorServices =
+    floorId === null
+      ? null
+      : deriveServices(drawingProject, floorId, renovationOptionId)
+  /**
    * The Floor's Rooms: their areas, label anchors and Placed Item membership, from the same cache
    * (#67 §3). A view drawing a Design Option sees that Option's Rooms standing where its own walls
    * put them, which is what `optionId` is for (#69).
@@ -487,6 +495,8 @@ export function FloorWorkspace(): ReactNode {
   const selectBeam = useWorkspace((state) => state.selectBeam)
   const skirtingSelection = useWorkspace((state) => state.skirtingSelection)
   const selectSkirting = useWorkspace((state) => state.selectSkirting)
+  const serviceSelection = useWorkspace((state) => state.serviceSelection)
+  const selectService = useWorkspace((state) => state.selectService)
   /** This Floor's Openings, in the order the Project lists them. */
   const floorOpenings = useMemo(
     () => project.existingModel.openings.filter((opening) => opening.floorId === floorId),
@@ -1417,7 +1427,7 @@ export function FloorWorkspace(): ReactNode {
       // dispatched, so the source Project keeps its revision; with nothing selected the key is left
       // alone, because then it is not the workspace's key to answer.
       if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'c') {
-        const copied = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? skirtingSelection ?? selection
+        const copied = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? skirtingSelection ?? serviceSelection ?? selection
         if (copied === null) return
         event.preventDefault()
         copyToClipboard(copied)
@@ -1778,7 +1788,7 @@ export function FloorWorkspace(): ReactNode {
 
   // #70 §3: the two things only this component knows, which the strip cannot derive from the table —
   // whether one thing is named well enough to mark, and which Design Option would own the record.
-  const renovationSelectedIds = [wallSelection, openingSelection, roomSelection, beamSelection, skirtingSelection, selection].filter((id) => id !== null)
+  const renovationSelectedIds = [wallSelection, openingSelection, roomSelection, beamSelection, skirtingSelection, serviceSelection, selection].filter((id) => id !== null)
   const renovationBlocked: Partial<Record<RenovationToolId, string>> =
     renovationSelectedIds.length === 1 ? {} : { markDemolition: RENOVATION_STRINGS.markDemolitionNeedsOne }
   const markRenovationDemolition = (): void => {
@@ -1912,7 +1922,7 @@ export function FloorWorkspace(): ReactNode {
     // this branch are `base` and `top` — `elevationHandleKinds` is what guarantees it — and the handler
     // reads a `top` back as the base the design's height lands under.
     else send('plan.setPlacementVerticalExtent', { placedItemId: row.id, field: field === 'base' ? 'base' : 'top', value })
-  }, [selection, wallSelection, openingSelection, beamSelection, skirtingSelection, elevationSceneValue, send])
+  }, [selection, wallSelection, openingSelection, beamSelection, skirtingSelection, serviceSelection, elevationSceneValue, send])
 
   /**
    * The Elevation View's own layer answers (#71 §4): the view is a saved view like any Plan View, so
@@ -2063,7 +2073,7 @@ export function FloorWorkspace(): ReactNode {
   }, [project, view, entityLayerKey])
 
   /** The entity the inspector is showing, whichever picker named it (#70 §5, #71 §5). */
-  const inspectedEntityId = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? skirtingSelection ?? selection
+  const inspectedEntityId = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? skirtingSelection ?? serviceSelection ?? selection
 
   /**
    * The inspector's `Layer` row (#71 §5): every layer in Project order, then `Unlayered`, with this
@@ -2136,7 +2146,7 @@ export function FloorWorkspace(): ReactNode {
    */
   const renovationDisplayNow: RenovationDisplay = view === null ? 'existing' : viewRenovationDisplay(view)
   const renovationTarget = useMemo((): RenovationInspectorTarget | null => {
-    const id = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? skirtingSelection ?? selection
+    const id = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? skirtingSelection ?? serviceSelection ?? selection
     if (id === null || renovationStates === null) return null
     const state = renovationStates.get(id)
     if (state === undefined) return null
@@ -2207,9 +2217,9 @@ export function FloorWorkspace(): ReactNode {
       replaces: self.predecessors.map(link).filter((each): each is RenovationInspectorLink => each !== null),
       successors,
     }
-  }, [wallSelection, openingSelection, roomSelection, beamSelection, skirtingSelection, selection, renovationStates, renovationOptionId, project, view])
+  }, [wallSelection, openingSelection, roomSelection, beamSelection, skirtingSelection, serviceSelection, selection, renovationStates, renovationOptionId, project, view])
 
-  const renovationSubject = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? skirtingSelection ?? selection
+  const renovationSubject = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? skirtingSelection ?? serviceSelection ?? selection
   /**
    * §7c: whether the selection is a baseline record being looked at in the Existing display while the
    * Project carries a Design Option — the one case its handles, its grip and its fields stay shut. The
@@ -2235,7 +2245,7 @@ export function FloorWorkspace(): ReactNode {
       : FIELDS_UNLOCKED
 
   const runRenovationAction = (action: RenovationInspectorAction): void => {
-    const id = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? skirtingSelection ?? selection
+    const id = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? skirtingSelection ?? serviceSelection ?? selection
     if (id === null) return
     if (action === 'copy') {
       copyToClipboard(id)
@@ -3339,6 +3349,8 @@ export function FloorWorkspace(): ReactNode {
               selectedBeamId={beamSelection}
               skirting={floorSkirting}
               selectedSkirtingId={skirtingSelection}
+              services={floorServices}
+              selectedServiceId={serviceSelection}
               renovation={
                 entityStates === null
                   ? null
@@ -3364,6 +3376,12 @@ export function FloorWorkspace(): ReactNode {
               }}
               onSelectBeam={(id) => {
                 selectBeam(id)
+                setTool('select')
+              }}
+              onSelectService={(id) => {
+                // A Service is its own record: clicking it selects it and puts the tool down, and it
+                // never takes the Wall it passes through with it (#79 §6).
+                selectService(id)
                 setTool('select')
               }}
               onSelectSkirting={(id) => {

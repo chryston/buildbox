@@ -70,6 +70,9 @@ export type LayerKey =
   /** The Skirting strips (#78 §7): a 15 mm band standing on a Wall face, so it paints over the Wall
       band it leans on and under the footprint of the cabinet standing in front of it. */
   | 'skirtings'
+  /** The Service bodies (#79 §6): a band along a centreline or a Riser's circle, painted over the
+      Walls a pipe passes through and under the footprint of the cabinet it clashes with. */
+  | 'services'
   | 'placed-items'
   | 'plan-annotations'
   | 'placed-item-labels'
@@ -81,6 +84,9 @@ export type LayerKey =
   /** The Skirting names (#78 §7), after the Beam names: a strip is the shorter string of the two and
       the one a reader finds by following the Wall it stands on. */
   | 'skirting-labels'
+  /** The Service names (#79 §6), after the Skirting names: `W Ø50` is the shortest string on the
+      drawing and the one a reader looks for by following the pipe it sits on. */
+  | 'service-labels'
   /** The `Kitchen · 13.08 m²` labels (#67 behaviour 35), after the Wall references because a
       Room's name is the longer string and the one a person is looking for. */
   | 'room-labels'
@@ -128,12 +134,14 @@ export const LAYER_ORDER: readonly LayerKey[] = [
   'walls',
   'wall-openings',
   'skirtings',
+  'services',
   'placed-items',
   'plan-annotations',
   'placed-item-labels',
   'wall-labels',
   'beam-labels',
   'skirting-labels',
+  'service-labels',
   'room-labels',
   'plan-dimensions',
   'plan-chip',
@@ -250,6 +258,11 @@ export type StyleKey =
   | 'skirting:selected'
   | 'skirting-hit'
   | 'skirting-label'
+  /** The Service body, its invisible target and its name (#79 §6). */
+  | 'service'
+  | 'service:selected'
+  | 'service-hit'
+  | 'service-label'
   /** The leaf, panels or window mullion of an Opening — the part a click selects (#65 §12). */
   | 'opening'
   | 'opening:selected'

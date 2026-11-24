@@ -61,6 +61,8 @@ export interface DisplayListInteractions {
   onBeamPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
   /** A Skirting's strip or its invisible target answering the pointer (#78 §7), the same gesture. */
   onSkirtingPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
+  /** A pointer on a Service's body or its invisible target (#79 §6). */
+  onServicePointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
   /**
    * An Opening's symbol, clicked where it is drawn: it becomes the selected Opening (#65 §11).
    * Every part of the symbol — leaf, swing, glass lines — answers, because a person clicks the
@@ -156,6 +158,9 @@ const TEST_IDS: Readonly<Record<string, (id: string) => string>> = {
   // The strip's body and its invisible click target are one Skirting, for the same reason (#78 §7).
   'skirting': (id) => `skirting-${id}`,
   'skirting-hit': (id) => `skirting-${id}`,
+  // The Service body and its invisible target are one Service, for the same reason (#79 §6).
+  'service': (id) => `service-${id}`,
+  'service-hit': (id) => `service-${id}`,
   // Every mark of an Opening *is* the Opening: the leaf, a panel, an arrow, a window line or a
   // removed section's dash all select the same one (#65 §11). The role is part of the name because
   // one Opening draws several of them under one id, and a suite that clicked `opening-x` could not
@@ -332,6 +337,16 @@ function renderNode(
       // half of ink: both answer the pointer, and the cycle behind them decides which of the things
       // under the click it is (#78 §7).
       const pick = interactions.onSkirtingPointerDown
+      props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => {
+        event.stopPropagation()
+        pick(id, event)
+      }) as never
+      props.style = { cursor: 'pointer' }
+    }
+    if ((role === 'service' || role === 'service-hit') && interactions?.onServicePointerDown !== undefined) {
+      // The body and its invisible target are the same Service: a Ø50 pipe is a hairline of ink and
+      // both answer the pointer, with the cycle behind them deciding which thing was clicked (#79 §6).
+      const pick = interactions.onServicePointerDown
       props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => {
         event.stopPropagation()
         pick(id, event)
