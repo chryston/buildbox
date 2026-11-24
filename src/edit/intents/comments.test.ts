@@ -17,7 +17,7 @@ import type { Comment, Project } from '../../domain'
 import { beamsOf, designOptionsOf, skirtingOf } from '../../domain'
 import { pt } from '../../geometry'
 import { applyPatches } from '../apply'
-import type { PayloadOf } from '../intents'
+import type { Intent, PayloadOf } from '../intents'
 import { expectApplied, expectRejection, expectRoundTrip, idSource, intent, newProject, splitProject } from '../testing'
 
 const source = idSource('comment')
@@ -423,5 +423,47 @@ describe('the anchored-deletion guard (#80 §14)', () => {
     expect(beamsOf(base.existingModel)).toHaveLength(0)
     expect(skirtingOf(base.existingModel)).toHaveLength(0)
     expectApplied(base, intent('wall.dragBody', { wallId: base.existingModel.walls[0]!.id, delta: pt(0, 30) }))
+  })
+})
+
+describe('a linked Comment and its Warning stay independent (#80 §11.3)', () => {
+  const LINK = { key: 'wall_crossing|w-a,w-b|existing', message: 'W-2 and W-5 cross without a junction' }
+
+  /** Everything a Comment could be accused of changing, with the Comments cut out. */
+  const withoutComments = (project: Project): Project => ({ ...project, comments: [], commentReferenceCounter: 0 })
+
+  const linkedCreate = (base: Project): Intent =>
+    intent(
+      'comment.create',
+      projectPayload({ anchor: { kind: 'entity', entityId: base.existingModel.walls[0]!.id }, priority: 'high', linkedWarning: LINK }),
+      source(1),
+    )
+
+  it('carries the link through create and edit unchanged', () => {
+    const base = oneWall(newProject())
+    const created = expectApplied(base, linkedCreate(base))
+    const linked = commentAt(created.project)
+    expect(linked.linkedWarning).toEqual(LINK)
+    expect(linked.priority).toBe('high')
+    // Editing the note for any reason at all leaves the link where it was: it is not a field the
+    // editor offers, and a reword must not quietly unhook the note from the thing it follows up.
+    const edited = expectApplied(created.project, intent('comment.edit', { commentId: linked.id, title: 'Reworded', at: NOW }, source(2)))
+    expect(commentAt(edited.project).linkedWarning).toEqual(LINK)
+  })
+
+  it('round-trips the link through undo', () => {
+    const base = oneWall(newProject())
+    expectRoundTrip(base, linkedCreate(base))
+  })
+
+  it('resolves and deletes the note without touching anything else about the Project', () => {
+    const base = oneWall(newProject())
+    const created = expectApplied(base, linkedCreate(base))
+    const linked = commentAt(created.project)
+    const resolved = expectApplied(created.project, intent('comment.resolve', { commentId: linked.id, at: NOW }, source(2)))
+    expect(withoutComments(resolved.project)).toEqual(withoutComments(base))
+    const deleted = expectApplied(resolved.project, intent('comment.delete', { commentId: linked.id }, source(3)))
+    expect(withoutComments(deleted.project)).toEqual(withoutComments(base))
+    expect(deleted.project.comments).toHaveLength(0)
   })
 })
