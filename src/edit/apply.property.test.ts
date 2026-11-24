@@ -11,8 +11,8 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import fc from 'fast-check'
 import { beforeAll, describe, expect, it } from 'vitest'
-import type { Beam, CabinetItemDesign, CabinetNode, GenericItemDesign, ItemDesign, ItemFootprint, Opening, PlacedItem, Project, Room, Service, ServiceKind, Skirting, Wall, WallJunction } from '../domain'
-import { SERVICE_KINDS, beamsOf, footprintSize, nextOpeningLabel, roomFaceCurve, roomOutlineAfterSlide, roomOutlinePath, roomSegments, servicesOf, skirtingOf, skirtingTop, validateProject } from '../domain'
+import type { Beam, CabinetItemDesign, CabinetNode, CommentAnchor, CommentAnchorKind, CommentPriority, CommentScope, GenericItemDesign, ItemDesign, ItemFootprint, Opening, PlacedItem, Project, Room, Service, ServiceKind, Skirting, Wall, WallJunction } from '../domain'
+import { COMMENT_PRIORITIES, COMMENT_SCOPE_ALL, SERVICE_KINDS, WALL_FEATURE_IDS, anchorChoosesScope, beamsOf, footprintSize, nextOpeningLabel, roomFaceCurve, roomOutlineAfterSlide, roomOutlinePath, roomSegments, servicesOf, skirtingOf, skirtingTop, validateProject } from '../domain'
 import type { Preset } from '../geometry'
 import { DEG, edgeToFace, normaliseDeg, ontoFaceVector, pt, refLength, refPointAt } from '../geometry'
 import { arbProject } from '../domain/testing'
@@ -21,6 +21,9 @@ import { convertLegacy } from '../package'
 import type { Intent, IntentType, PayloadOf, RoomOutlineShape, WallDraft, WallEndTarget } from './index'
 import { applyIntent, applyPatches, chainJunctionCount, CREATE_PROJECT_ID_COUNT, createProject, INTENT_LABELS, PLAN_CATALOGUE, SHELTER_ID_COUNT } from './index'
 import { intent, NOW } from './testing'
+
+/** A later instant, so an edit moves `updatedAt` and the round trip can see it move. */
+const LATER = '2026-11-19T09:00:00.000Z'
 
 const fixturesRoot = fileURLToPath(new URL('../../fixtures/legacy', import.meta.url))
 const read = (rel: string): string => readFileSync(`${fixturesRoot}/${rel}`, 'utf8')
@@ -138,6 +141,43 @@ const beamList = (g: Gen): Beam[] => beamsOf(g.project.existingModel)
 const skirtingList = (g: Gen): Skirting[] => skirtingOf(g.project.existingModel)
 /** The Services the survey records, for the same reason (#79). */
 const serviceList = (g: Gen): Service[] => servicesOf(g.project.existingModel)
+/** A Design Option scope for an Anchor that has to choose one (#80 §1). */
+const commentScope = (g: Gen): CommentScope => {
+  const options = g.project.designOptions ?? []
+  return options.length === 0 || bool(g) ? COMMENT_SCOPE_ALL : pick(g, options)!.id
+}
+/**
+ * An Anchor of a kind the Project can supply a target for, or null when it cannot (#80 §1). A feature
+ * is included because a Wall always registers its two faces.
+ */
+function commentAnchor(g: Gen): CommentAnchor | null {
+  const kinds: CommentAnchorKind[] = ['project', 'floor', 'item_design', 'floor_point', 'design_option', 'entity', 'feature']
+  const model = g.project.existingModel
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const kind = pick(g, kinds)!
+    if (kind === 'project') return { kind }
+    if (kind === 'floor') {
+      const floor = pick(g, g.project.floors)
+      if (floor !== undefined) return { kind, floorId: floor.id }
+    } else if (kind === 'item_design') {
+      const design = pick(g, g.project.itemDesigns)
+      if (design !== undefined) return { kind, itemDesignId: design.id }
+    } else if (kind === 'floor_point') {
+      const floor = pick(g, g.project.floors)
+      if (floor !== undefined) return { kind, floorId: floor.id, point: pt(real(g, -4000, 4000), real(g, -4000, 4000)) }
+    } else if (kind === 'design_option') {
+      const option = pick(g, g.project.designOptions ?? [])
+      if (option !== undefined) return { kind, designOptionId: option.id }
+    } else if (kind === 'entity') {
+      const entity = pick(g, [...model.walls, ...model.openings, ...model.placedItems])
+      if (entity !== undefined) return { kind, entityId: entity.id }
+    } else {
+      const wall = pick(g, model.walls)
+      if (wall !== undefined) return { kind, ownerId: wall.id, featureId: pick(g, [...WALL_FEATURE_IDS])!, t: real(g, 0.05, 0.95) }
+    }
+  }
+  return null
+}
 /** The Walls some Room has an Edge lying on. */
 const referencedWalls = (g: Gen): Set<string> =>
   new Set(g.project.existingModel.rooms.flatMap((room) => room.wallFaceRefs.map((reference) => reference.wallId)))
@@ -1130,6 +1170,53 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
     const service = pick(g, serviceList(g))
     return service === undefined ? null : intent('service.delete', { serviceId: service.id })
   },
+  // #80: an Anchor the Project can actually resolve, because a Comment about something that is not
+  // there is refused on creation and would never be seen. The scope follows the Anchor: an Anchor that
+  // names a Design Option, an entity or a feature already answers "which Option?", and the rest have
+  // to say `All` or name one (#80 §1).
+  (g) => {
+    const anchor = commentAnchor(g)
+    if (anchor === null) return null
+    return intent(
+      'comment.create',
+      {
+        anchor,
+        title: `Check ${int(g, 1, 900)}`,
+        body: bool(g) ? `Confirm with the client (${int(g, 1, 900)}).` : '',
+        priority: pick(g, COMMENT_PRIORITIES as readonly CommentPriority[])!,
+        ...(anchorChoosesScope(anchor.kind) ? { scope: commentScope(g) } : {}),
+        at: NOW,
+      },
+      g.ids(1),
+    )
+  },
+  (g) => {
+    const comment = pick(g, g.project.comments)
+    if (comment === undefined) return null
+    const choosing = anchorChoosesScope(comment.anchor.kind)
+    return intent('comment.edit', {
+      commentId: comment.id,
+      ...(bool(g) ? { title: `Revised ${int(g, 1, 900)}` } : {}),
+      ...(bool(g) ? { body: `Site note ${int(g, 1, 900)}.` } : {}),
+      ...(bool(g) ? { priority: pick(g, COMMENT_PRIORITIES as readonly CommentPriority[])! } : {}),
+      ...(choosing && bool(g) ? { scope: commentScope(g) } : {}),
+      at: LATER,
+    })
+  },
+  // Resolve and Reopen each refuse the state the Comment is already in, so each picks one that does not
+  // have the status it would write — otherwise the pair could never be seen working.
+  (g) => {
+    const comment = pick(g, g.project.comments.filter((each) => each.status === 'open'))
+    return comment === undefined ? null : intent('comment.resolve', { commentId: comment.id, at: LATER })
+  },
+  (g) => {
+    const comment = pick(g, g.project.comments.filter((each) => each.status === 'resolved'))
+    return comment === undefined ? null : intent('comment.reopen', { commentId: comment.id, at: LATER })
+  },
+  (g) => {
+    const comment = pick(g, g.project.comments)
+    return comment === undefined ? null : intent('comment.delete', { commentId: comment.id })
+  },
   // #66: a subject that exists, because an acknowledgement of a warning about something that
   // is not there is pruned by the same step that recorded it, and would never be seen. Any
   // entity will do — the handler addresses a warning by its key, not by what the key names.
@@ -1297,7 +1384,14 @@ function runSequence(start: Project, seed: number, steps: number): Project {
     expect(result.patches.length, `${next.type} was accepted with no patches`).toBeGreaterThan(0)
     expect(validateProject(result.project).ok, `${next.type} produced an invalid Project`).toBe(true)
     const undone = applyPatches(result.project, result.inversePatches)
-    expect(canonicalJson(undone), `${next.type} did not undo to the Project it started from`).toBe(canonicalJson(current))
+    // One field is deliberately not restored by undo: the Comment reference counter counts numbers
+    // that have already been handed out, so it only ever goes up (#80 §1 criterion 2). Everything else
+    // comes back byte for byte.
+    const restorable =
+      undone.commentReferenceCounter === current.commentReferenceCounter
+        ? undone
+        : { ...undone, commentReferenceCounter: current.commentReferenceCounter }
+    expect(canonicalJson(restorable), `${next.type} did not undo to the Project it started from`).toBe(canonicalJson(current))
     current = result.project
   }
   return current

@@ -17,6 +17,10 @@ import type {
   Accessory,
   CabinetMaterialId,
   ClearanceEnvelope,
+  CommentAnchor,
+  CommentPriority,
+  CommentScope,
+  CommentWarningLink,
   DrawerConfig,
   DisplayUnit,
   ElementType,
@@ -161,6 +165,11 @@ export type S7IntentType =
   | 'service.setVerticalExtent'
   | 'service.rename'
   | 'service.delete'
+  | 'comment.create'
+  | 'comment.edit'
+  | 'comment.resolve'
+  | 'comment.reopen'
+  | 'comment.delete'
   | 'design.update'
   | 'design.setFootprint'
   | 'design.setOrigin'
@@ -1243,6 +1252,69 @@ export interface DeleteService {
 }
 
 /**
+ * A new Comment (#80 §3).
+ *
+ * The Anchor travels as the typed pointer the record stores, never as a display coordinate: a note on
+ * a Wall's Kitchen-side face means `leftFace` at some `t`, so moving the Wall moves the note. The
+ * reference is **not** in the payload — the handler takes the next one from `commentReferenceCounter`,
+ * which is the only thing that can promise a number is never handed out twice (#80 §1). Neither are the
+ * timestamps: a pure module never reads the clock, so the caller says when the user committed (#42 §3).
+ */
+export interface CreateComment {
+  anchor: CommentAnchor
+  title: string
+  body: string
+  priority: CommentPriority
+  /** Required for an Anchor that inherits no scope, refused for one that does (#80 §1). */
+  scope?: CommentScope
+  /** The Warning this note was written from, kept as its key and the message as it read (#80 §11). */
+  linkedWarning?: CommentWarningLink
+  /** ISO 8601, from the caller: becomes both `createdAt` and `updatedAt`. */
+  at: string
+}
+
+/**
+ * One committed field change on an existing Comment (#80 §3).
+ *
+ * One Intent, and one undo step, whatever number of boxes the panel has: the UI commits a title or a
+ * body on Enter or blur rather than per keystroke, so a paragraph is one transaction. The Anchor is
+ * absent by design — a Comment does not move its target by being edited, and an Intent that could would
+ * have to answer the deletion question of §14 under a different name.
+ */
+export interface EditComment {
+  commentId: EntityId
+  title?: string
+  body?: string
+  priority?: CommentPriority
+  /** Only an Anchor that chooses its scope accepts this; the others refuse it as a stored answer. */
+  scope?: CommentScope
+  /** ISO 8601, from the caller: becomes `updatedAt`. */
+  at: string
+}
+
+/** Resolve a Comment: it stays in the Project and in every Backup, and `resolvedAt` is written (#80 §3). */
+export interface ResolveComment {
+  commentId: EntityId
+  at: string
+}
+
+/** Reopen a Comment, which clears `resolvedAt` — the two disagree with each other if it survives. */
+export interface ReopenComment {
+  commentId: EntityId
+  at: string
+}
+
+/**
+ * Delete a Comment (#80 §3).
+ *
+ * One undo step, and undo restores the record with its original ID **and** its original reference: the
+ * counter is never rewound, so the number that was `C-009` is not handed to anything in between.
+ */
+export interface DeleteComment {
+  commentId: EntityId
+}
+
+/**
  * `Acknowledge warning` (#66 §4): the user's decision about one warning, recorded with the
  * note they gave for it.
  *
@@ -1647,6 +1719,11 @@ export interface IntentPayloads {
   'service.setVerticalExtent': SetServiceVerticalExtent & IntentTarget
   'service.rename': RenameService & IntentTarget
   'service.delete': DeleteService & IntentTarget
+  'comment.create': CreateComment
+  'comment.edit': EditComment
+  'comment.resolve': ResolveComment
+  'comment.reopen': ReopenComment
+  'comment.delete': DeleteComment
   'design.update': UpdateItemDesign
   'design.setFootprint': SetItemDesignFootprint
   'design.setOrigin': SetItemDesignOrigin
@@ -1737,6 +1814,9 @@ export type BeamIntent = Intent<Extract<IntentType, `beam.${string}`>>
 export type SkirtingIntent = Intent<Extract<IntentType, `skirting.${string}`>>
 /** Every Service Intent (#79 §3, §4), the same shape as {@link BeamIntent}. */
 export type ServiceIntent = Intent<Extract<IntentType, `service.${string}`>>
+
+/** Every Comment Intent (#80 §3): the five the Notes panel and the `✎ Comment` tool dispatch. */
+export type CommentIntent = Intent<Extract<IntentType, `comment.${string}`>>
 export type DesignIntent = Intent<Extract<IntentType, `design.${string}`>>
 export type FloorIntent = Intent<Extract<IntentType, `floor.${string}`>>
 /**
@@ -1850,6 +1930,13 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
   'service.setVerticalExtent': [],
   'service.rename': [],
   'service.delete': [],
+  // A Comment takes one ID — its own. The reference it is shown comes from the Project's own counter,
+  // which is a number rather than an ID and is never rewound, so undo costs nothing here (#80 §1).
+  'comment.create': ['commentId'],
+  'comment.edit': [],
+  'comment.resolve': [],
+  'comment.reopen': [],
+  'comment.delete': [],
   'design.update': [],
   'design.setFootprint': [],
   'design.setOrigin': [],
@@ -2046,6 +2133,8 @@ export type RejectionCode =
   | 'invalid-skirting'
   /** A Service edit its shape cannot represent: a Riser asked for a Length, a Run asked for a Height, a section of zero size (#79 §1, §4). */
   | 'invalid-service'
+  /** A Comment edit its record cannot represent: a scope on an Anchor that inherits one, a missing title, a priority outside the three (#80 §1, §3). */
+  | 'invalid-comment'
   /** A Room proposal that overlaps another Room, or a Wall edit a referenced Room edge cannot follow (#67 §7, §12). */
   | 'room-blocked'
   /** A Design Option the Project cannot hold: a name another Option already answers to (#69 §2). */
