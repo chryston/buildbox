@@ -42,6 +42,7 @@ const TOOL_LABELS: { [T in RenovationToolId]: string } = {
   room: STRINGS.room,
   placeItem: RENOVATION_STRINGS.toolPlaceItem,
   skirting: STRINGS.toolSkirting,
+  service: STRINGS.toolService,
   elevation: STRINGS.newElevationView,
 }
 
@@ -55,6 +56,7 @@ const TOOL_KEYS: { [T in RenovationToolId]: string } = {
   room: 'm',
   placeItem: 'i',
   skirting: 'k',
+  service: 's',
   elevation: 'e',
 }
 
@@ -73,6 +75,9 @@ const ROW_OF_TOOL: { [T in WorkspaceTool]: RenovationToolId | null } = {
   // A Skirting is new work on a Wall face, so it belongs to the same row as an Opening: a Display
   // that cannot own new work cannot offer the tool (#78 §3).
   skirting: 'skirting',
+  // A Service is new coordination content drawn into a Design Option, so it belongs to its own row:
+  // a Display that cannot own new work cannot offer the tool (#79 §2).
+  service: 'service',
   line: 'room',
   arc: 'room',
   ellipticalArc: 'room',
