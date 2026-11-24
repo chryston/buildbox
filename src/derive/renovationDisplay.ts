@@ -27,7 +27,7 @@
  * already holds: the canvas paints a layer at a time, and a re-derive must never reshuffle what the
  * user has been clicking on.
  */
-import type { Beam, EntityId, Opening, PlacedItem, Project, RenovationDisplay, Room, Skirting, Wall, WallJunction } from '../domain'
+import type { Beam, EntityId, Opening, PlacedItem, Project, RenovationDisplay, Room, Service, Skirting, Wall, WallJunction } from '../domain'
 import { designOptionsOf } from '../domain'
 import type { EffectiveEntity, EffectiveModel } from './effectiveModel'
 import type { RenovationState } from './quantities/scope'
@@ -49,6 +49,8 @@ export interface DisplayModel {
   readonly placedItems: readonly DisplayEntity<PlacedItem>[]
   readonly beams: readonly DisplayEntity<Beam>[]
   readonly skirting: readonly DisplayEntity<Skirting>[]
+  /** Every Service of the Floor (#79 §4), under the same rules as every other kind. */
+  readonly services: readonly DisplayEntity<Service>[]
 }
 
 /** Paint order: the layer a Display draws first is the one underneath. */
@@ -93,6 +95,8 @@ export function displayModel(model: EffectiveModel, display: RenovationDisplay):
     beams: displayRows(model.beams, display),
     // Skirting is built fabric too, and it is demolished by its own record or with its host Wall (#78 §4).
     skirting: displayRows(model.skirting, display),
+    // A Service is documented fabric: it is demolished by its own record and by nothing else (#79 §4).
+    services: displayRows(model.services, display),
   }
 }
 
@@ -104,7 +108,7 @@ export function displayModel(model: EffectiveModel, display: RenovationDisplay):
  * Display that does not draw a Wall does not draw what is cut in it either.
  */
 export function displayStates(model: DisplayModel): ReadonlyMap<EntityId, RenovationState> {
-  const rows = [...model.walls, ...model.openings, ...model.rooms, ...model.placedItems, ...model.beams, ...model.skirting]
+  const rows = [...model.walls, ...model.openings, ...model.rooms, ...model.placedItems, ...model.beams, ...model.skirting, ...model.services]
   return new Map(rows.map((row) => [row.entity.id, row.renovationState]))
 }
 
@@ -137,5 +141,6 @@ export function displayCounts(model: EffectiveModel, display: RenovationDisplay)
     placedItems: drawn.placedItems.length,
     beams: drawn.beams.length,
     skirting: drawn.skirting.length,
+    services: drawn.services.length,
   }
 }

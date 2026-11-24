@@ -33,7 +33,7 @@
  * corrupt the copy rather than rename it.
  */
 import type { CabinetNode } from './cabinetPayload'
-import { beamsOf, elevationViewsOf, skirtingOf } from './project'
+import { beamsOf, elevationViewsOf, servicesOf, skirtingOf } from './project'
 import type { EntityId, ItemDesign, Project, ProposedModel } from './project'
 
 /** Fresh IDs, `count` at a time (#42 §3: domain never mints one). */
@@ -158,6 +158,8 @@ export function remapEntities(model: ProposedModel, next: IdReplacement): Propos
       floorId: next(entry.floorId),
       hostWallId: next(entry.hostWallId),
     })),
+    // A Service names nothing but its Floor (#79 §1): no host, no junction, no face reference.
+    services: servicesOf(model).map((service) => ({ ...service, id: next(service.id), floorId: next(service.floorId) })),
   }
 }
 
@@ -178,6 +180,7 @@ function entityIds(project: Project): EntityId[] {
   for (const room of project.existingModel.rooms) ids.push(room.id)
   for (const beam of beamsOf(project.existingModel)) ids.push(beam.id)
   for (const entry of skirtingOf(project.existingModel)) ids.push(entry.id)
+  for (const service of servicesOf(project.existingModel)) ids.push(service.id)
   for (const acknowledgement of project.warningAcknowledgements) ids.push(acknowledgement.id)
   return ids
 }

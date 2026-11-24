@@ -15,7 +15,7 @@
  * a whole Project with (#72 §4), and an ID the copy names that it did not bring is a refusal rather
  * than a dangling reference.
  */
-import { beamsOf, drawingLayerById, remapEntities, skirtingOf } from '../../domain'
+import { beamsOf, drawingLayerById, remapEntities, servicesOf, skirtingOf } from '../../domain'
 import type { EntityId, Project, ProposedModel } from '../../domain'
 import type { IdReplacement } from '../../domain'
 import type {
@@ -117,7 +117,8 @@ const pasteFromOtherProject: Handler<'renovation.pasteFromProject'> = (ctx) => {
   const { walls, wallJunctions, openings, rooms, placedItems } = copySet.entities
   const beams = beamsOf(copySet.entities)
   const skirting = skirtingOf(copySet.entities)
-  const carried = [...walls, ...wallJunctions, ...openings, ...rooms, ...placedItems, ...beams, ...skirting]
+  const services = servicesOf(copySet.entities)
+  const carried = [...walls, ...wallJunctions, ...openings, ...rooms, ...placedItems, ...beams, ...skirting, ...services]
   // The identity map: one fresh ID per record, and the Floor the copy stands on, which is this
   // Project's whichever Floor it was copied from.
   const map = new Map<EntityId, EntityId>()
@@ -132,6 +133,7 @@ const pasteFromOtherProject: Handler<'renovation.pasteFromProject'> = (ctx) => {
   claim(placedItems)
   claim(beams)
   claim(skirting)
+  claim(services)
   // One fresh identity per Item Design, and nothing else about it changes: a cabinet's construction
   // — its spaces, boards and hardware, node IDs included — is not the copy's to renumber (#72 §4).
   const designIds: EntityId[] = []
@@ -171,6 +173,8 @@ const pasteFromOtherProject: Handler<'renovation.pasteFromProject'> = (ctx) => {
     // Skirting is the other kind that does need its host: a run whose Wall stayed behind is left
     // behind with it, for the same reason an Opening is (#78 §1).
     skirting: skirting.filter((entry) => copied.has(entry.hostWallId)),
+    // A Service names no Wall (#79 §1), so a pasted Service always crosses whole.
+    services,
   }
   const remapped = remapEntities(crossing, replace)
 
@@ -246,6 +250,8 @@ const pasteFromOtherProject: Handler<'renovation.pasteFromProject'> = (ctx) => {
   for (const beam of beamsOf(remapped)) beamContainer.push(filed(beam))
   const skirtingContainer = (container.skirting ??= [])
   for (const entry of skirtingOf(remapped)) skirtingContainer.push(filed(entry))
+  const serviceContainer = (container.services ??= [])
+  for (const service of servicesOf(remapped)) serviceContainer.push(filed(service))
   copySet.itemDesigns.forEach((design, index) => {
     const id = designIds[index]
     if (id !== undefined) ctx.draft.itemDesigns.push({ ...design, id })

@@ -24,7 +24,7 @@
  * a Wall, and what is standing in the way.
  */
 import { effectiveModel } from '../../derive'
-import { beamLabel, beamsOf, designOptionsOf, roomSegments, skirtingLabel, skirtingOf } from '../../domain'
+import { beamLabel, beamsOf, designOptionsOf, roomSegments, serviceLabel, servicesOf, skirtingLabel, skirtingOf } from '../../domain'
 import type {
   DesignOption,
   EntityId,
@@ -91,6 +91,8 @@ function nameOf(project: Project, option: DesignOption, id: EntityId): string {
   if (beam !== undefined) return beamLabel(beam)
   const skirting = [...skirtingOf(model), ...skirtingOf(proposed)].find((entry) => entry.id === id)
   if (skirting !== undefined) return skirtingLabel(skirting)
+  const service = [...servicesOf(model), ...servicesOf(proposed)].find((entry) => entry.id === id)
+  if (service !== undefined) return serviceLabel(service)
   return id
 }
 
@@ -107,6 +109,7 @@ function locateSubject(
     ...option.proposed.placedItems,
     ...beamsOf(option.proposed),
     ...skirtingOf(option.proposed),
+    ...servicesOf(option.proposed),
   ].find((entry) => entry.id === id)
   if (mine !== undefined) return { floorId: mine.floorId, proposed: true }
   const model = project.existingModel
@@ -118,6 +121,7 @@ function locateSubject(
     ...model.placedItems,
     ...beamsOf(model),
     ...skirtingOf(model),
+    ...servicesOf(model),
   ].find((entry) => entry.id === id)
   return existing === undefined ? null : { floorId: existing.floorId, proposed: false }
 }
@@ -347,6 +351,9 @@ function deleteProposed(option: DesignOption, id: EntityId): void {
   // The same for a Skirting (#78 §5): removing the one this Option proposed leaves the survey's
   // own records untouched, and a container that spells no list still spells none.
   if (proposed.skirting !== undefined) proposed.skirting = drop(proposed.skirting)
+  // The same for a Service (#79 §5): undoing a proposal is not a demolition, and a container that
+  // spells no list still spells none.
+  if (proposed.services !== undefined) proposed.services = drop(proposed.services)
   proposed.wallJunctions = proposed.wallJunctions.filter(
     (junction) =>
       !gone.has(junction.id) &&
@@ -732,6 +739,7 @@ function successorsOf(option: DesignOption, seed: EntityId): ProposedRecord[] {
     ...proposed.walls,
     ...proposed.openings,
     ...skirtingOf(proposed),
+    ...servicesOf(proposed),
     ...proposed.rooms,
     ...proposed.placedItems,
   ]
