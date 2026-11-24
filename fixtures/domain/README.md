@@ -129,6 +129,14 @@ golden whose Project holds a Beam, and the one `#77`'s warnings, tables and scre
 against. `v11/` stays committed as the evidence that a Project saved at the eleventh schema still
 opens, and `v12/` is what `DOMAIN_SCHEMA_VERSION` is 12 names as current.
 
+`v12/beams-scene.json`, written by `scripts/make-beams-seed.ts`, is the same Floor with a second
+Beam across it and the `Kitchen section` Elevation View stood on a line looking at the first — the
+scene `e2e/screenshots/beams.spec.ts` photographs and `e2e/smoke/beams.spec.ts` drives. The script
+writes two browser seeds from it: `e2e/preview-seed/beams.json` as it stands, and
+`e2e/preview-seed/beams-plain.json` with the Design Options taken out, which is the one the smoke
+spec uses so each of the Beam's own gestures commits as it always did rather than stopping at the
+locked-baseline review (#70 §7c) that `existingDisplay` tests for every kind.
+
 ## How it was produced
 
 Hand-authored as a plain object, then written with `lib.canonicalJson` — keys sorted, no

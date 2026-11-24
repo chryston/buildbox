@@ -36,6 +36,16 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const SOURCE = resolve(repoRoot, 'fixtures/domain/v12/beams.json')
 const OUT = resolve(repoRoot, 'fixtures/domain/v12/beams-scene.json')
 const PREVIEW_OUT = resolve(repoRoot, 'fixtures/e2e/preview-seed/beams.json')
+/**
+ * The same scene with its Design Options taken out, for the smoke spec.
+ *
+ * #70 §7c shuts a baseline record's fields and handles while the Project carries an Option, and the
+ * press that opens them is the Renovation inspector's. That interaction is `existingDisplay`'s to
+ * photograph, for every kind at once. What the smoke spec is about is the Beam's own gestures — the
+ * tool, the boxes, the handle, the delete, the Undo — and with no Option in the Project there is
+ * nothing sharing the record, so each gesture commits as it always did.
+ */
+const PREVIEW_PLAIN_OUT = resolve(repoRoot, 'fixtures/e2e/preview-seed/beams-plain.json')
 const DB_NAME = 'buildbox'
 
 const NOW = '2026-01-01T10:20:00+08:00'
@@ -117,6 +127,38 @@ for (const row of listed.value) {
   if (!loaded.ok) fail(`reading "${row.id}" back failed: ${loaded.error.kind}`)
   records.push(loaded.value)
 }
+// The plain twin: the same two records, no Option to share them, committed the same way.
+const plainPorts = createMemoryAdapter()
+const plainProject: Project = { ...current, designOptions: [] }
+const plainCommitted = await plainPorts.projects.commit(
+  { project: plainProject, revision: 1, savedAt: NOW, newAssets: [] },
+  null,
+)
+if (!plainCommitted.ok) fail(`committing the plain scene failed: ${plainCommitted.error.kind}`)
+const plainListed = await plainPorts.projects.list({ includeTrashed: false })
+if (!plainListed.ok) fail(`reading the plain library back failed: ${plainListed.error.kind}`)
+const plainRecords: ProjectRecord[] = []
+for (const row of plainListed.value) {
+  const loaded = await plainPorts.projects.load(row.id)
+  if (!loaded.ok) fail(`reading the plain "${row.id}" back failed: ${loaded.error.kind}`)
+  plainRecords.push(loaded.value)
+}
+mkdirSync(dirname(PREVIEW_PLAIN_OUT), { recursive: true })
+writeFileSync(
+  PREVIEW_PLAIN_OUT,
+  `${JSON.stringify(
+    {
+      dbName: DB_NAME,
+      source: 'the beams scene without Design Options (scripts/make-beams-seed.ts)',
+      projects: plainRecords,
+      library: plainListed.value,
+      assets: [],
+    },
+    null,
+    2,
+  )}\n`,
+)
+
 mkdirSync(dirname(PREVIEW_OUT), { recursive: true })
 writeFileSync(
   PREVIEW_OUT,
