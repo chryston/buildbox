@@ -196,14 +196,14 @@ export function ServiceToolLayer(props: ServiceToolLayerProps): ReactNode {
       </div>
 
       {/* The rubber line: the Run already anchored, drawn to wherever the pointer currently is. */}
-      {draft.shape === 'run' && anchor !== null && hover !== null ? (
+      {draft.shape === 'run' && anchor !== null ? (
         <svg className="pointer-events-none absolute inset-0 h-full w-full">
           <line
             data-testid="service-rubber"
             x1={anchor.x * viewport.zoom + viewport.panX}
             y1={anchor.y * viewport.zoom + viewport.panY}
-            x2={hover.x * viewport.zoom + viewport.panX}
-            y2={hover.y * viewport.zoom + viewport.panY}
+            x2={(hover ?? anchor).x * viewport.zoom + viewport.panX}
+            y2={(hover ?? anchor).y * viewport.zoom + viewport.panY}
             stroke="var(--bb-accent)"
             strokeWidth={1.5}
             strokeDasharray="6 4"
@@ -217,13 +217,13 @@ export function ServiceToolLayer(props: ServiceToolLayerProps): ReactNode {
           />
           <text
             data-testid="service-rubber-length"
-            x={(anchor.x + hover.x) / 2 * viewport.zoom + viewport.panX}
-            y={(anchor.y + hover.y) / 2 * viewport.zoom + viewport.panY - 6}
+            x={((anchor.x + (hover ?? anchor).x) / 2) * viewport.zoom + viewport.panX}
+            y={((anchor.y + (hover ?? anchor).y) / 2) * viewport.zoom + viewport.panY - 6}
             textAnchor="middle"
             fontSize={11}
             fill="var(--bb-text)"
           >
-            {formatMm(Math.round(Math.hypot(hover.x - anchor.x, hover.y - anchor.y)), unit, precision)}
+            {formatMm(Math.round(Math.hypot((hover ?? anchor).x - anchor.x, (hover ?? anchor).y - anchor.y)), unit, precision)}
           </text>
         </svg>
       ) : null}

@@ -637,6 +637,20 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
         rangeClass: classOf(clickedId),
       })
     }
+    // A Service answers the pointer through the body the canvas painted, and the cycle has to be able
+    // to name it: the hit test measures a closed band, but a Ø50 pipe at plan zoom is a hairline of
+    // ink whose band a pointer misses more often than it hits, so the click on the drawn body is
+    // itself the evidence — the same rule an Opening's symbol follows above (#79 §6, #65 §11).
+    const drawnService = drawnServices?.services.find((row) => row.id === clickedId)
+    const serviceState = drawnService === undefined ? undefined : states.get(drawnService.id)
+    if (drawnService !== undefined && serviceState !== undefined && !candidates.some((one) => one.entityId === drawnService.id)) {
+      candidates.push({
+        entityId: drawnService.id,
+        renovationState: serviceState,
+        drawOrder: drawOrderOf('services', candidates.length),
+        rangeClass: classOf(drawnService.id),
+      })
+    }
     // #71 criterion 10: content this view will not let be picked is not a candidate at all — the
     // cycle never walks to it and the list beside the pointer never names it. A read-only layer is
     // still a selectable one, so only the Selectable answer and the `Pick:` filter cut anything here.

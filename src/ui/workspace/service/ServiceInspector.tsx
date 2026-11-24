@@ -79,7 +79,9 @@ export function ServiceInspector(props: ServiceInspectorProps): ReactNode {
   const round = !run || service.section === 'round'
 
   return (
-    <div className="bb-service-inspector grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1 text-sm">
+    <div
+      data-testid="service-inspector"
+      className="bb-service-inspector grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1 text-sm">
       <Row testId="inspector-service-shape" label={STRINGS.serviceShape} value={run ? STRINGS.serviceShapeRun : STRINGS.serviceShapeRiser} />
 
       <span className="bb-workspace-field-label" data-testid="inspector-service-kind-label">{STRINGS.serviceKind}</span>
