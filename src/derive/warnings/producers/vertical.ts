@@ -26,6 +26,7 @@ import {
   containment,
   faceOffsets,
   interval,
+  linearElement,
   overlap,
   overlapLength,
   pointOn,
@@ -46,11 +47,13 @@ import {
 } from '../verticalCopy'
 import type {
   WarningCandidate,
+  WarningBeam,
   WarningFloor,
   WarningOpening,
   WarningPlacement,
   WarningProducer,
   WarningSubject,
+  WarningSubjectKind,
   WarningWall,
 } from '../types'
 
@@ -390,6 +393,7 @@ const limitedSubjects = (floor: WarningFloor): { subject: VerticalSubject; kind:
     kind: 'opening' as const,
     fields: openingFields(opening),
   })),
+  ...floor.beams.map((beam) => ({ subject: beamSubject(beam), kind: 'beam' as const, fields: beamFields(beam) })),
   ...floor.placements.map((placement) => ({ subject: placementSubject(placement), kind: 'placedItem' as const, fields: placementFields(placement) })),
 ]
 
@@ -485,7 +489,144 @@ const intrusionCandidate = (
   }
 }
 
-/** Every vertical producer, in registration order (#76 §5). */
+/** The §3 subject view of a Beam: its Underside and its derived Top (#77 §2 criterion 5). */
+const beamSubject = (b: WarningBeam): VerticalSubject => ({
+  id: b.id,
+  kind: 'beam',
+  label: b.label,
+  extent: { bottom: b.underside, top: b.top },
+})
+
+/** The model fields of one Beam, for a signature. */
+const beamFields = (b: WarningBeam): unknown => ({
+  id: b.id,
+  line: b.line,
+  width: b.width,
+  justification: b.justification,
+  underside: b.underside,
+  height: b.top - b.underside,
+})
+
+/** The Beam's body, from the same primitive the Plan View draws with. */
+const beamOutline = (b: WarningBeam): ClosedPath =>
+  linearElement({ kind: 'line', to: b.line.end }, b.line.start, b.width, b.justification).outline
+
+/** One Beam-pair candidate, worded by the shared builder with the Beam as the object. */
+const relationCandidate = (
+  other: VerticalSubject,
+  beam: VerticalSubject,
+  otherKind: WarningSubjectKind,
+  otherFields: unknown,
+  beamEntity: WarningBeam,
+): WarningCandidate => {
+  const copy = verticalRelationCopy(other, beam)
+  return {
+    subjects: [{ type: otherKind, id: other.id }, { type: 'beam', id: beam.id }],
+    measured: copy.measured,
+    messageKey: copy.messageKey,
+    params: copy.params,
+    signatureInputs: { entity: otherFields, beam: beamFields(beamEntity) },
+  }
+}
+
+/**
+ * A Beam that runs through something at height (#77 §2 criterion 5).
+ *
+ * The pair is asymmetric and the issue names its subject: the thing the Beam meets reads first —
+ * `Wall cabinet #1 top is 40 mm above Beam B-1 underside` — so the Beam is always the object and
+ * `verticalRelationCopy` words the pair from the other element's side. The plan test is a real
+ * overlap of the two bodies, not a bounding box: a Beam that passes beside a cabinet at the same
+ * height says nothing, and one that merely touches its face is touching, not overlapping.
+ *
+ * A Beam against a Wall, and a Beam against another Beam, are deliberately absent. A Beam is
+ * documentation of what is already there: it is drawn under a Wall that stands on it and across
+ * another Beam that crosses it, and a warning on every one of those would be noise that says
+ * nothing is wrong with the drawing (#77 §2 criterion 5).
+ */
+const beamPairProducer = (kind: 'placedItem' | 'opening'): WarningProducer => ({
+  type: kind === 'placedItem' ? 'beam_placed_item' : 'beam_opening',
+  messageKeys: ['vertical_above', 'vertical_below', 'vertical_overlap_height'],
+  produce: (floor) => {
+    const candidates: WarningCandidate[] = []
+    const bodies = new Map(floor.beams.map((beam) => [beam.id, beamOutline(beam)]))
+    const boxes = new Map(floor.beams.map((beam) => [beam.id, bboxOf(bodies.get(beam.id)!)]))
+    const walls = new Map(floor.walls.map((wall) => [wall.id, wall]))
+    for (const beam of floor.beams) {
+      const body = bodies.get(beam.id)!
+      const box = boxes.get(beam.id)!
+      const span = interval(beam.underside, beam.top)
+      if (kind === 'placedItem') {
+        for (const placement of floor.placements) {
+          if (!boxesMeet(bboxOf(placement.worldPath), box)) continue
+          if (overlapLength(placementInterval(placement), span) <= TOLERANCE_MM) continue
+          const shared = overlap(placement.worldPath, body)
+          if (shared.kind !== 'positive') continue
+          candidates.push(
+            relationCandidate(placementSubject(placement), beamSubject(beam), 'placedItem', placementFields(placement), beam),
+          )
+        }
+        continue
+      }
+      for (const opening of floor.openings) {
+        // An Opening is a hole in a Wall; the region it occupies in plan is that hole, which is
+        // what a Beam running through the same part of the Wall actually meets.
+        const host = walls.get(opening.hostWallId)
+        if (host === undefined) continue
+        const hole = openingHole(host.line, opening, host.thickness, host.justification)
+        if (!boxesMeet(bboxOf(hole), box)) continue
+        if (overlapLength(interval(opening.sill, opening.head), span) <= TOLERANCE_MM) continue
+        const shared = overlap(hole, body)
+        if (shared.kind !== 'positive') continue
+        candidates.push(
+          relationCandidate(
+            { id: opening.id, kind: 'opening', label: opening.label, extent: { bottom: opening.sill, top: opening.head } },
+            beamSubject(beam),
+            'opening',
+            openingFields(opening),
+            beam,
+          ),
+        )
+      }
+    }
+    return candidates
+  },
+})
+
+/**
+ * A Beam taking up part of a Clearance Envelope (#77 §2 criterion 5).
+ *
+ * The same sentence and the same area measurement as any other intruder, with the Beam named
+ * first: `Beam B-1 takes up 0.40 m² (12%) of Wall cabinet #1's Clearance Envelope.`
+ */
+const beamEnvelopeIntrusion: WarningProducer = {
+  type: 'beam_clearance_envelope_intrusion',
+  // The same copy row as every other intruder — the Beam is named in the parameters, not by a
+  // new sentence.
+  messageKeys: ['clearance_envelope_intrusion'],
+  produce: (floor) => {
+    const candidates: WarningCandidate[] = []
+    for (const owner of floor.placements) {
+      const region = owner.envelopeWorldPath
+      const span = envelopeInterval(owner)
+      if (region === null || span === null) continue
+      const regionBox = bboxOf(region)
+      const envelopeArea = Math.abs(area(region))
+      if (envelopeArea <= MIN_OVERLAP_AREA_MM2) continue
+      for (const beam of floor.beams) {
+        if (!boxesMeet(bboxOf(beamOutline(beam)), regionBox)) continue
+        if (overlapLength(interval(beam.underside, beam.top), span) <= TOLERANCE_MM) continue
+        const shared = overlap(beamOutline(beam), region)
+        if (shared.kind !== 'positive' || shared.area <= MIN_OVERLAP_AREA_MM2) continue
+        candidates.push(
+          intrusionCandidate(shared.area, envelopeArea, { type: 'beam', id: beam.id }, beam.label, owner, beamFields(beam)),
+        )
+      }
+    }
+    return candidates
+  },
+}
+
+/** Every vertical producer, in registration order (#76 §5, #77 §2). */
 export const VERTICAL_PRODUCERS: readonly WarningProducer[] = [
   itemItemOverlap,
   itemIntoWall,
@@ -494,4 +635,7 @@ export const VERTICAL_PRODUCERS: readonly WarningProducer[] = [
   floorLimitProducer('above'),
   floorLimitProducer('below'),
   envelopeIntrusion,
+  beamPairProducer('placedItem'),
+  beamPairProducer('opening'),
+  beamEnvelopeIntrusion,
 ]
