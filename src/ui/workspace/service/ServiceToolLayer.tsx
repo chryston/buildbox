@@ -81,7 +81,7 @@ export function ServiceToolLayer(props: ServiceToolLayerProps): ReactNode {
   const { viewport, draft, onDraft, onCancel, anchor, onClick, unit, precision } = props
   const [hover, setHover] = useState<Point2 | null>(null)
 
-  const toFloor = (event: React.PointerEvent<HTMLDivElement>): Point2 | null => {
+  const toFloor = (event: { currentTarget: HTMLDivElement; clientX: number; clientY: number }): Point2 | null => {
     const rect = event.currentTarget.getBoundingClientRect()
     return {
       x: (event.clientX - rect.left - viewport.panX) / viewport.zoom,
@@ -118,6 +118,10 @@ export function ServiceToolLayer(props: ServiceToolLayerProps): ReactNode {
       style={{ cursor: 'crosshair', outline: 'none' }}
       tabIndex={-1}
       onPointerMove={(event) => setHover(toFloor(event))}
+      // The rubber follows a plain mouse move too: a synthetic pointer move (a driver, a remote
+      // cursor) arrives as `mousemove` and nothing else, and a rubber line that never moves is a
+      // rubber line that says the tool is broken.
+      onMouseMove={(event) => setHover(toFloor(event))}
       onPointerLeave={() => setHover(null)}
       onKeyDown={(event) => {
         if (event.key === 'Escape') {

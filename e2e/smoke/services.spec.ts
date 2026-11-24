@@ -92,7 +92,11 @@ test.describe('Services (#79)', () => {
     await expect(page.getByTestId('service-tool-layer')).toBeVisible()
     const pane = (await floorPlanCanvas(page).boundingBox())!
     await page.mouse.click(pane.x + 120, pane.y + 320)
+    // The rubber is the line from the anchor to wherever the pointer has got to, so it has to be
+    // moved before the line has a length to show.
+    await page.mouse.move(pane.x + 320, pane.y + 320)
     await expect(page.getByTestId('service-rubber')).toBeVisible()
+    await expect(page.getByTestId('service-rubber-length')).not.toHaveText('')
     await page.mouse.click(pane.x + 320, pane.y + 320)
     await expect(page.getByTestId('service-tool-layer')).toHaveCount(0)
     expect(await planServiceCount(page)).toBe(before + 1)
@@ -112,8 +116,9 @@ test.describe('Services (#79)', () => {
     await expect(page.getByTestId('inspector-service-extent')).toContainText('250')
 
     // --- the Elevation drag, cancelled mid-drag ------------------------------------------------
-    await page.getByTestId('elevation-view-tab').getByText(section.name).click()
-    const row = page.locator(`[data-testid="elevation-canvas"] [data-ref-role="service"][data-ref="${TRUNKING}"]`).first()
+    await page.getByTestId('elevation-view-picker').selectOption(section.id)
+    await expect(page.getByTestId('elevation-pane')).toBeVisible()
+    const row = page.locator(`[data-testid="elevation-canvas"] [data-ref="${TRUNKING}"]`).first()
     await row.waitFor()
     const box = (await row.boundingBox())!
     const startY = box.y + box.height / 2
