@@ -90,6 +90,7 @@ export function listsSummary(
       rooms: at.rooms.length,
       walls: at.walls.length,
       openings: at.openings.length,
+      beams: at.beams.length,
       'placed-items': at.placedItems.length,
       warnings: at.warnings.length,
     },
@@ -144,6 +145,7 @@ export async function exportLists(
     rowsOf.rooms = at.rooms
     rowsOf.walls = at.walls
     rowsOf.openings = at.openings
+    rowsOf.beams = at.beams
     rowsOf['placed-items'] = at.placedItems
     rowsOf.warnings = at.warnings
   }

@@ -65,6 +65,9 @@ const ROW_OF_TOOL: { [T in WorkspaceTool]: RenovationToolId | null } = {
   select: 'select',
   wall: 'wall',
   opening: 'opening',
+  // A Beam documents work that already exists, so no Display has a reason to forbid drawing one:
+  // the tool belongs to no row, the same way `Pan` belongs to none (#77 §1).
+  beam: null,
   line: 'room',
   arc: 'room',
   ellipticalArc: 'room',

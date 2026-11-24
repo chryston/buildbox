@@ -25,7 +25,7 @@ import type {
 import type { ClosedPath, Pt } from '../../geometry'
 
 /** What kind of entity a warning is about. Later issues extend this list (#76–#79). */
-export type WarningSubjectKind = 'wall' | 'opening' | 'placedItem' | 'room'
+export type WarningSubjectKind = 'wall' | 'opening' | 'placedItem' | 'room' | 'beam'
 
 /** One entity a warning involves. The primary subject is always first (#66 §1). */
 export interface WarningSubject {
@@ -189,6 +189,7 @@ export interface WarningFloor {
   readonly floorId: EntityId
   readonly walls: readonly WarningWall[]
   readonly openings: readonly WarningOpening[]
+  readonly beams: readonly WarningBeam[]
   readonly junctions: readonly WarningJunction[]
   readonly rooms: readonly WarningRoom[]
   readonly placements: readonly WarningPlacement[]
@@ -197,6 +198,25 @@ export interface WarningFloor {
    * about nothing — BuildBox invents no height rule for a Floor the person left open.
    */
   readonly limits: { readonly lowerMm: number | null; readonly upperMm: number | null }
+}
+
+/**
+ * One Beam a producer may read (#77 §2 criterion 5).
+ *
+ * A Beam carries no outline here: it takes part in no plan-region overlap except a Clearance
+ * Envelope, and for that the body is built from the same `linearElement` the Plan View draws with.
+ * What it does carry is the two numbers every one of its warnings is measured by.
+ */
+export interface WarningBeam {
+  readonly id: EntityId
+  readonly floorId: EntityId
+  /** `Beam B-3`, or `Beam` where nobody named it. */
+  readonly label: string
+  readonly line: { readonly start: Pt; readonly end: Pt }
+  readonly width: number
+  readonly justification: WallJustification
+  readonly underside: number
+  readonly top: number
 }
 
 /**

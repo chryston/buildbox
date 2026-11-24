@@ -270,3 +270,54 @@ describe('drawElevationView: heights and the ruler (#75 criterion 14)', () => {
     expect(paper.list.bounds.x).not.toBe(screen.list.bounds.x)
   })
 })
+
+/** A Beam in a Section (#77 §4, criterion 17): its own band, the heavier line where the view cuts
+ * it, and the same two gates every other row answers to. */
+describe('drawElevationView: a Beam (#77 §4)', () => {
+  const beamProject = (): Project => ({
+    ...PROJECT,
+    existingModel: {
+      ...PROJECT.existingModel,
+      beams: [
+        {
+          id: 'bm-1' as never,
+          floorId: 'pr-002' as never,
+          line: { start: { x: 2000, y: 400 }, end: { x: 2000, y: 2400 } },
+          justification: 'centre' as const,
+          width: 200,
+          underside: 2160,
+          height: 300,
+          label: 'Beam B-1',
+        },
+      ],
+    },
+  })
+  const scene = elevationScene(beamProject(), view(beamProject(), 'el-004'))
+
+  it('draws the band Underside to Top and the crossing outline', () => {
+    const { list } = drawElevationView(scene, { sizing: SCREEN })
+    const own = paths(list, 'beam')
+    expect(own.length).toBeGreaterThan(0)
+    expect(own[0]!.ref).toEqual({ id: 'bm-1', role: 'beam' })
+    // The view line runs through the body, so the heavier outline is laid over the band.
+    expect(paths(list, 'elevation-crossing').some((item) => item.ref?.id === 'bm-1')).toBe(true)
+  })
+
+  it('paints a Beam behind the Wall it stands under at one distance', () => {
+    const { rows } = drawElevationView(scene, { sizing: SCREEN })
+    const at = rows.filter((entry) => Math.abs(entry.distance - rowOf(rows, 'bm-1').distance) < 1)
+    expect(at.findIndex((entry) => entry.id === 'bm-1')).toBeLessThan(at.length)
+    // Farthest first: the Beam is the first of the rows that share its distance, because a Wall
+    // stands on it and must cover it.
+    const same = rows.filter((entry) => entry.distance === rowOf(rows, 'bm-1').distance)
+    expect(same[0]!.kind).toBe('beam')
+  })
+
+  it('answers the Layer gate and the Renovation Display like any other row', () => {
+    const hidden = drawElevationView(scene, { sizing: SCREEN, layers: gatesHiding(['bm-1']) })
+    expect(hidden.rows.some((entry) => entry.id === 'bm-1')).toBe(false)
+    expect(paths(hidden.list, 'beam').some((item) => item.ref?.id === 'bm-1')).toBe(false)
+    const tinted = drawElevationView(scene, { sizing: SCREEN, layers: gatesTinting('#123456') })
+    expect(paths(tinted.list, 'beam').some((item) => item.ref?.id === 'bm-1')).toBe(true)
+  })
+})

@@ -217,6 +217,8 @@ export const RENOVATION_STRINGS = {
   kindWall: 'Wall',
   kindOpening: 'Opening',
   kindRoom: 'Room',
+  /** The Renovation inspector's `Kind` for a Beam (#77 §3): the record's own word for itself. */
+  kindBeam: 'Beam',
   kindPlacedItem: 'Placed Item',
   actionMove: 'Move',
   actionRestore: 'Restore',

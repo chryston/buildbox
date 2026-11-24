@@ -52,7 +52,7 @@ const project = (parts: Partial<Project>): Project => ({
   floors: [{ id: 'floor-1', name: 'Floor 1', planImage: null }],
   views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Floor 1', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } }],
   itemDesigns: [],
-  existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [] },
+  existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [] },
   warningAcknowledgements: [],
   ...parts,
 })
@@ -66,6 +66,7 @@ describe('cabinetSceneUnits', () => {
         wallJunctions: [],
         openings: [],
         rooms: [],
+        beams: [],
         placedItems: [place('place-a', 'unit-a', { translation: { x: 1000, y: 250 }, baseElevation: 120 })],
       },
     })
@@ -92,6 +93,7 @@ describe('cabinetSceneUnits', () => {
         wallJunctions: [],
         openings: [],
         rooms: [],
+        beams: [],
         placedItems: [place('place-b', 'unit-b', { translation: { x: 900, y: 250 } }), place('place-a', 'unit-a')],
       },
     })
@@ -102,7 +104,7 @@ describe('cabinetSceneUnits', () => {
   it('reads the settings each Item Design carries, unit and all', () => {
     const source = project({
       itemDesigns: [cabinet('unit-cm', { unit: 'cm', width: 40 })],
-      existingModel: { placedItems: [place('place-cm', 'unit-cm', { translation: { x: 20, y: 18 } })], walls: [], wallJunctions: [], openings: [], rooms: [] },
+      existingModel: { placedItems: [place('place-cm', 'unit-cm', { translation: { x: 20, y: 18 } })], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [] },
     })
     const [unit] = cabinetSceneUnits(source, 'floor-1')
 
@@ -122,6 +124,7 @@ describe('cabinetSceneUnits', () => {
         wallJunctions: [],
         openings: [],
         rooms: [],
+        beams: [],
         placedItems: [
           place('place-a', 'unit-a'),
           place('place-sofa', 'sofa-1', { translation: { x: 4000, y: 4000 } }),

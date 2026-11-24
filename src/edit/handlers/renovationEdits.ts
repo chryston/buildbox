@@ -24,7 +24,7 @@
  * a Wall, and what is standing in the way.
  */
 import { effectiveModel } from '../../derive'
-import { designOptionsOf, roomSegments } from '../../domain'
+import { beamLabel, beamsOf, designOptionsOf, roomSegments } from '../../domain'
 import type {
   DesignOption,
   EntityId,
@@ -87,6 +87,8 @@ function nameOf(project: Project, option: DesignOption, id: EntityId): string {
   const placed = [...model.placedItems, ...proposed.placedItems].find((entry) => entry.id === id)
   if (placed !== undefined)
     return project.itemDesigns.find((design) => design.id === placed.itemDesignId)?.name ?? placed.id
+  const beam = [...beamsOf(model), ...beamsOf(proposed)].find((entry) => entry.id === id)
+  if (beam !== undefined) return beamLabel(beam)
   return id
 }
 
@@ -96,14 +98,23 @@ function locateSubject(
   option: DesignOption,
   id: EntityId,
 ): { floorId: EntityId; proposed: boolean } | null {
-  const mine = [...option.proposed.walls, ...option.proposed.openings, ...option.proposed.rooms, ...option.proposed.placedItems].find(
-    (entry) => entry.id === id,
-  )
+  const mine = [
+    ...option.proposed.walls,
+    ...option.proposed.openings,
+    ...option.proposed.rooms,
+    ...option.proposed.placedItems,
+    ...beamsOf(option.proposed),
+  ].find((entry) => entry.id === id)
   if (mine !== undefined) return { floorId: mine.floorId, proposed: true }
   const model = project.existingModel
-  const existing = [...model.walls, ...model.wallJunctions, ...model.openings, ...model.rooms, ...model.placedItems].find(
-    (entry) => entry.id === id,
-  )
+  const existing = [
+    ...model.walls,
+    ...model.wallJunctions,
+    ...model.openings,
+    ...model.rooms,
+    ...model.placedItems,
+    ...beamsOf(model),
+  ].find((entry) => entry.id === id)
   return existing === undefined ? null : { floorId: existing.floorId, proposed: false }
 }
 
@@ -311,6 +322,8 @@ function deleteProposed(option: DesignOption, id: EntityId): void {
   proposed.openings = drop(proposed.openings)
   proposed.rooms = drop(proposed.rooms)
   proposed.placedItems = drop(proposed.placedItems)
+  // A container that spells no Beam list stays that way: deleting no Beam changes no bytes.
+  if (proposed.beams !== undefined) proposed.beams = drop(proposed.beams)
   proposed.wallJunctions = proposed.wallJunctions.filter(
     (junction) =>
       !gone.has(junction.id) &&

@@ -57,6 +57,8 @@ export interface DisplayListInteractions {
   onItemPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
   /** A Wall band, clicked where it is drawn: it becomes the selected Wall (#64 §15). */
   onWallPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
+  /** A Beam's body answering the pointer (#77 §3), the same gesture as a Wall's. */
+  onBeamPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
   /**
    * An Opening's symbol, clicked where it is drawn: it becomes the selected Opening (#65 §11).
    * Every part of the symbol — leaf, swing, glass lines — answers, because a person clicks the
@@ -145,6 +147,10 @@ const TEST_IDS: Readonly<Record<string, (id: string) => string>> = {
   // the text layer, which takes none — so it is found by its own text, not by a test id.
   'room': (id) => `room-${id}`,
   'room-hit': (id) => `room-${id}`,
+  // The Beam's body and its invisible width target are one Beam, and a suite that clicked either
+  // means the same thing: select it (#77 §3).
+  'beam': (id) => `beam-${id}`,
+  'beam-hit': (id) => `beam-${id}`,
   // Every mark of an Opening *is* the Opening: the leaf, a panel, an arrow, a window line or a
   // removed section's dash all select the same one (#65 §11). The role is part of the name because
   // one Opening draws several of them under one id, and a suite that clicked `opening-x` could not
@@ -300,6 +306,16 @@ function renderNode(
     }
     if (role === 'wall' && interactions?.onWallPointerDown !== undefined) {
       const pick = interactions.onWallPointerDown
+      props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => {
+        event.stopPropagation()
+        pick(id, event)
+      }) as never
+      props.style = { cursor: 'pointer' }
+    }
+    if ((role === 'beam' || role === 'beam-hit') && interactions?.onBeamPointerDown !== undefined) {
+      // The body and its invisible width target are the same Beam: a person aiming at a Beam aims
+      // at the middle of it, not at the two device pixels of its outline (#77 §3).
+      const pick = interactions.onBeamPointerDown
       props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => {
         event.stopPropagation()
         pick(id, event)

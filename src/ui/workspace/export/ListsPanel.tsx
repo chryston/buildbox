@@ -38,6 +38,7 @@ const TABLE_ROWS: readonly { id: TableId; label: string }[] = [
   { id: 'rooms', label: STRINGS.exportListRooms },
   { id: 'walls', label: STRINGS.exportListWalls },
   { id: 'openings', label: STRINGS.exportListOpenings },
+  { id: 'beams', label: STRINGS.exportListBeams },
   { id: 'placed-items', label: STRINGS.exportListPlacedItems },
   { id: 'warnings', label: STRINGS.exportListWarnings },
 ]

@@ -23,7 +23,7 @@
  * It is synchronous and pure, like every other stage of `derive`: no clock, no entropy, no
  * WebCrypto, no DOM.
  */
-import { warningKey, type Acknowledgement, type EntityId, type Project } from '../../domain'
+import { warningKey, beamLabel, beamTop, type Acknowledgement, type EntityId, type Project } from '../../domain'
 import { canonicalJson, compareCodePoints, stableHash, stableSort } from '../../lib'
 import { effectiveFloor, placementLabels } from '../effective'
 import { effectiveModel } from '../effectiveModel'
@@ -46,6 +46,7 @@ import type {
   WarningStatus,
   WarningSubject,
   WarningWall,
+  WarningBeam,
 } from './types'
 
 /**
@@ -154,6 +155,18 @@ export const warningFloorOf = (project: Project, floorId: EntityId, optionId: En
     start: opening.start,
     width: opening.width,
   }))
+  // A Beam is documentation, so a Beam this Option drew is in front of a producer exactly as a
+  // proposed Wall is; one it demolishes is not, which is the standing set rather than the record.
+  const beams: WarningBeam[] = model.beams.map(({ entity }) => ({
+    id: entity.id,
+    floorId: entity.floorId,
+    label: beamLabel(entity),
+    line: { start: entity.line.start, end: entity.line.end },
+    width: entity.width,
+    justification: entity.justification,
+    underside: entity.underside,
+    top: beamTop(entity),
+  }))
   const junctions = model.standingWallJunctions
     .map((junction) => ({
       id: junction.id,
@@ -210,6 +223,7 @@ export const warningFloorOf = (project: Project, floorId: EntityId, optionId: En
     floorId,
     walls: stableSort(walls, (a, b) => compareCodePoints(a.id, b.id)),
     openings: stableSort(openings, (a, b) => compareCodePoints(a.id, b.id)),
+    beams: stableSort(beams, (a, b) => compareCodePoints(a.id, b.id)),
     junctions: stableSort(junctions, (a, b) => compareCodePoints(a.id, b.id)),
     rooms: stableSort(rooms, (a, b) => compareCodePoints(a.id, b.id)),
     placements: stableSort(warningPlacements, (a, b) => compareCodePoints(a.id, b.id)),

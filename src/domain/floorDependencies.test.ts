@@ -59,6 +59,7 @@ function project(): Project {
       wallJunctions: [],
       openings: [],
       rooms: [],
+      beams: [],
       placedItems: [placed('placed-1', 'floor-kitchen'), placed('placed-2', 'floor-kitchen'), placed('placed-3', 'floor-kitchen')],
     },
     warningAcknowledgements: [],
@@ -68,12 +69,12 @@ function project(): Project {
 const textOf = (floorId: string): string[] => summarizeFloorDependencies(project(), floorId).map((row) => row.text)
 
 describe('summarizeFloorDependencies', () => {
-  it('counts the Placed Items, the Plan Image, the named Plan Views and the Elevation Views of one Floor', () => {
-    expect(textOf('floor-kitchen')).toEqual(['3 Placed Items', '1 Plan Image', '1 named Plan View', '1 Elevation View'])
+  it('counts the Placed Items, the Beams, the Plan Image, the named Plan Views and the Elevation Views of one Floor', () => {
+    expect(textOf('floor-kitchen')).toEqual(['3 Placed Items', '0 Beams', '1 Plan Image', '1 named Plan View', '1 Elevation View'])
   })
 
   it('reads an empty Floor as having nothing leaning on it', () => {
-    expect(textOf('floor-cellar')).toEqual(['0 Placed Items', '0 Plan Images', '0 named Plan Views', '0 Elevation Views'])
+    expect(textOf('floor-cellar')).toEqual(['0 Placed Items', '0 Beams', '0 Plan Images', '0 named Plan Views', '0 Elevation Views'])
     expect(floorHasDependencies(project(), 'floor-cellar')).toBe(false)
   })
 
@@ -83,9 +84,10 @@ describe('summarizeFloorDependencies', () => {
   })
 
   it('names each kind in registry order, so a dialog can key a row', () => {
-    expect(FLOOR_DEPENDENCY_KINDS.map((kind) => kind.id)).toEqual(['placedItems', 'planImage', 'planViews', 'elevationViews'])
+    expect(FLOOR_DEPENDENCY_KINDS.map((kind) => kind.id)).toEqual(['placedItems', 'beams', 'planImage', 'planViews', 'elevationViews'])
     expect(summarizeFloorDependencies(project(), 'floor-kitchen').map((row) => row.kind.id)).toEqual([
       'placedItems',
+      'beams',
       'planImage',
       'planViews',
       'elevationViews',
@@ -94,7 +96,25 @@ describe('summarizeFloorDependencies', () => {
 
   it('reads a Floor that is not there as having nothing, rather than throwing', () => {
     expect(floorHasDependencies(project(), 'floor-nowhere')).toBe(false)
-    expect(textOf('floor-nowhere')).toEqual(['0 Placed Items', '0 Plan Images', '0 named Plan Views', '0 Elevation Views'])
+    expect(textOf('floor-nowhere')).toEqual(['0 Placed Items', '0 Beams', '0 Plan Images', '0 named Plan Views', '0 Elevation Views'])
+  })
+
+  it('refuses a Floor a Beam still stands on, because a Beam has nothing else to lean on (#77 §1)', () => {
+    const one = project()
+    one.existingModel.beams = [
+      {
+        id: 'beam-1',
+        floorId: 'floor-kitchen',
+        line: { start: { x: 0, y: 0 }, end: { x: 3000, y: 0 } },
+        justification: 'centre',
+        width: 200,
+        underside: 2300,
+        height: 300,
+      },
+    ]
+    expect(floorHasDependencies(one, 'floor-kitchen')).toBe(true)
+    expect(summarizeFloorDependencies(one, 'floor-kitchen')[1]?.text).toBe('1 Beam')
+    expect(floorHasDependencies(one, 'floor-cellar')).toBe(false)
   })
 
   it('says "1 Placed Item" and "2 Placed Items", which is the whole row', () => {

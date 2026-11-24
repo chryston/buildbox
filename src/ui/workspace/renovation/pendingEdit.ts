@@ -26,7 +26,7 @@ export interface EntityFields {
 const NOT_CARRIED: readonly string[] = ['id', 'ref', 'floorId', 'hostWallId', 'predecessorIds']
 
 /** The payload fields that name exactly one subject, in the order the Intents use them. */
-const SUBJECT_FIELDS: readonly string[] = ['entityId', 'wallId', 'openingId', 'roomId', 'placedItemId']
+const SUBJECT_FIELDS: readonly string[] = ['entityId', 'wallId', 'openingId', 'roomId', 'placedItemId', 'beamId']
 /** The payload fields that can name a subject, when they name only one. */
 const SUBJECT_LISTS: readonly string[] = ['wallIds', 'openingIds', 'roomIds', 'placedItemIds', 'entityIds']
 

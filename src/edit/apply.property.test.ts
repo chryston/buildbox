@@ -11,8 +11,8 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import fc from 'fast-check'
 import { beforeAll, describe, expect, it } from 'vitest'
-import type { CabinetItemDesign, CabinetNode, GenericItemDesign, ItemDesign, ItemFootprint, Opening, PlacedItem, Project, Room, Wall, WallJunction } from '../domain'
-import { footprintSize, nextOpeningLabel, roomFaceCurve, roomOutlineAfterSlide, roomOutlinePath, roomSegments, validateProject } from '../domain'
+import type { Beam, CabinetItemDesign, CabinetNode, GenericItemDesign, ItemDesign, ItemFootprint, Opening, PlacedItem, Project, Room, Wall, WallJunction } from '../domain'
+import { beamsOf, footprintSize, nextOpeningLabel, roomFaceCurve, roomOutlineAfterSlide, roomOutlinePath, roomSegments, validateProject } from '../domain'
 import type { Preset } from '../geometry'
 import { DEG, edgeToFace, normaliseDeg, ontoFaceVector, pt, refLength, refPointAt } from '../geometry'
 import { arbProject } from '../domain/testing'
@@ -132,6 +132,8 @@ const openingList = (g: Gen): Opening[] => g.project.existingModel.openings
 const hingedDoors = (g: Gen): Opening[] =>
   openingList(g).filter((opening) => opening.swing === 'left' || opening.swing === 'right')
 const roomList = (g: Gen): Room[] => g.project.existingModel.rooms
+/** The Beams the survey records; a Beam this Option drew is not what these Intents address. */
+const beamList = (g: Gen): Beam[] => beamsOf(g.project.existingModel)
 /** The Walls some Room has an Edge lying on. */
 const referencedWalls = (g: Gen): Set<string> =>
   new Set(g.project.existingModel.rooms.flatMap((room) => room.wallFaceRefs.map((reference) => reference.wallId)))
@@ -834,6 +836,81 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
   (g) => {
     const opening = pick(g, openingList(g))
     return opening === undefined ? null : intent('opening.delete', { openingId: opening.id })
+  },
+  // #77: a Beam along a line long enough to be one, on a Floor the Project has. The section and the
+  // Vertical Extent are the placeholders the tool panel starts with, because that is what a first
+  // Beam carries before anyone measures anything.
+  (g) => {
+    const floor = pick(g, g.project.floors)
+    if (floor === undefined) return null
+    const start = pt(real(g, -4000, 4000), real(g, -4000, 4000))
+    return intent(
+      'beam.create',
+      {
+        floorId: floor.id,
+        line: { start, end: pt(start.x + real(g, 300, 4000), start.y + real(g, -300, 300)) },
+        justification: pick(g, ['left', 'centre', 'right'] as const)!,
+        width: pick(g, [100, 150, 200, 250, 300])!,
+        underside: real(g, 0, 2300),
+        height: pick(g, [200, 250, 300, 400])!,
+        ...(bool(g) ? { label: `Beam B-${int(g, 1, 60)}` } : {}),
+      },
+      g.ids(1),
+    )
+  },
+  (g) => {
+    const beam = pick(g, beamList(g))
+    if (beam === undefined) return null
+    const end = pick(g, ['start', 'end'] as const)!
+    const at = beam.line[end]
+    return intent('beam.dragEndpoint', {
+      beamId: beam.id,
+      end,
+      to: pt(at.x + real(g, -800, 800), at.y + real(g, -800, 800)),
+    })
+  },
+  (g) => {
+    const beam = pick(g, beamList(g))
+    return beam === undefined
+      ? null
+      : intent('beam.dragBody', { beamId: beam.id, delta: pt(real(g, -800, 800), real(g, -800, 800)) })
+  },
+  (g) => {
+    const beam = pick(g, beamList(g))
+    if (beam === undefined) return null
+    return intent('beam.setLength', {
+      beamId: beam.id,
+      length: Math.max(50, Math.hypot(beam.line.end.x - beam.line.start.x, beam.line.end.y - beam.line.start.y) + real(g, -600, 600)),
+      keepFixed: pick(g, ['start', 'end'] as const)!,
+    })
+  },
+  (g) => {
+    const beam = pick(g, beamList(g))
+    if (beam === undefined) return null
+    return intent('beam.setWidth', { beamId: beam.id, width: Math.max(50, beam.width + real(g, -100, 100)) })
+  },
+  (g) => {
+    const beam = pick(g, beamList(g))
+    if (beam === undefined) return null
+    return intent('beam.setJustification', { beamId: beam.id, justification: pick(g, ['left', 'centre', 'right'] as const)! })
+  },
+  (g) => {
+    const beam = pick(g, beamList(g))
+    return beam === undefined ? null : intent('beam.rename', { beamId: beam.id, label: `Beam B-${int(g, 1, 60)}` })
+  },
+  // #77 §3: the four boxes over a Beam's own pair of elevations, which never move the line.
+  (g) => {
+    const beam = pick(g, beamList(g))
+    if (beam === undefined) return null
+    return intent('beam.setVerticalExtent', {
+      beamId: beam.id,
+      field: pick(g, ['base', 'height', 'top', 'bottom'] as const)!,
+      value: real(g, 0, 2600),
+    })
+  },
+  (g) => {
+    const beam = pick(g, beamList(g))
+    return beam === undefined ? null : intent('beam.delete', { beamId: beam.id })
   },
   // #66: a subject that exists, because an acknowledgement of a warning about something that
   // is not there is pruned by the same step that recorded it, and would never be seen. Any

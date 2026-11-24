@@ -93,6 +93,7 @@ export function createProject({ ids, name }: CreateProjectArgs): Project {
       wallJunctions: [],
       openings: [],
       rooms: [],
+      beams: [],
     },
     // A new Project has no warnings yet, and so none acknowledged: the collection exists so
     // the shape is the one every later acknowledgement is written into (#66 §5).

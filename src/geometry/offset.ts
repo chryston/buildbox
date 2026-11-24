@@ -174,7 +174,11 @@ export const linearElement = (
     ? [-thickness / 2, thickness / 2]
     : justification === 'left' ? [0, thickness] : [-thickness, 0]
   if (reference.kind === 'line') {
-    const normal = turnNormal(sub(reference.to, from))
+    // The perpendicular has to be a unit vector: `offsets` are millimetres of thickness, and an
+    // unturned chord of 4 000 mm would otherwise throw the faces 4 000 times that far out.
+    const chord = sub(reference.to, from)
+    const length = Math.hypot(chord.x, chord.y) || 1
+    const normal = turnNormal({ x: chord.x / length, y: chord.y / length })
     const at = (point: Pt, offset: number): Pt => add(point, scale(normal, offset))
     const faces: [Segment, Segment] = [
       { kind: 'line', to: at(reference.to, offsets[0]) },

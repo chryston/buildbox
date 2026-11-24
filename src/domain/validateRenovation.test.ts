@@ -45,7 +45,7 @@ function expectProblems(value: unknown, expected: { path: string; code: string }
 
 /** The five collections of a proposed model, empty. */
 function proposed(over: Rec = {}): Rec {
-  return { walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [], ...over }
+  return { walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], placedItems: [], ...over }
 }
 
 function optionOf(over: Rec = {}): Rec {

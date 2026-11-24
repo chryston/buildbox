@@ -31,7 +31,7 @@ const leaveIt: DesignOption = {
   id: 'option-a',
   name: 'Leave it',
   demolishedIds: [],
-  proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [] },
+  proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], placedItems: [] },
 }
 
 /** `Knock W-2 out.` — the crossing Wall gone, so nothing crosses any more. */
@@ -39,7 +39,7 @@ const removeCrossingWall: DesignOption = {
   id: 'option-b',
   name: 'Open plan',
   demolishedIds: ['wall-2'],
-  proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [] },
+  proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], placedItems: [] },
 }
 
 /** `Keep everything, and run a new Wall straight through W-1.` */
@@ -64,6 +64,7 @@ const addCrossingWall: DesignOption = {
     wallJunctions: [],
     openings: [],
     rooms: [],
+    beams: [],
     placedItems: [],
   },
 }

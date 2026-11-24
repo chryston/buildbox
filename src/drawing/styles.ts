@@ -196,6 +196,20 @@ export const STYLES: Record<StyleKey, Style> = {
   'room-label': { fill: 'var(--bb-text)', size: 'plan-label', fontFamily: FONT_STACK, hit: 'none' },
   'room-label:min': { fill: 'var(--bb-text)', size: 'room-label-min', fontFamily: FONT_STACK, hit: 'none' },
   'room-label-leader': { stroke: 'var(--bb-text)', strokeWidth: 'hairline', hit: 'none' },
+  // A Beam is documentation of what is already there, so it is drawn as an outline with barely a
+  // fill: it has to read as a body on the drawing without ever looking like a Wall standing on it
+  // (#77 §4). The Plan View Range turns the whole thing into a dashed overhead outline (#74 §3).
+  'beam': { fill: 'var(--bb-text)', fillAlpha: 0x0a / 0xff, stroke: 'var(--bb-text)', strokeWidth: 'plan-line' },
+  'beam:selected': {
+    fill: 'var(--bb-accent)',
+    fillAlpha: 0x14 / 0xff,
+    stroke: 'var(--bb-accent)',
+    strokeWidth: 'plan-line-selected',
+  },
+  // The body again with nothing visible on it: two device pixels of outline is a hard thing to aim
+  // at, and Firefox delivers no `pointerdown` for a stroke-only path at all (#65 §11).
+  'beam-hit': { fill: 'transparent', stroke: 'none' },
+  'beam-label': { fill: 'var(--bb-text)', size: 'plan-label', fontFamily: FONT_STACK, hit: 'none' },
   // The renovation overlays (#70 §F): bounded graphics laid over the entity's own layer style,
   // which they never rewrite — the Wall a Design Option demolishes is still drawn in the `walls`
   // layer's colour, and the dashed outline plus 45° hatching is what says it is going. Both are

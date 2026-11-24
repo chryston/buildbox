@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import type { ClosedPath } from '../../../geometry'
 import type { ClearanceEnvelope, EntityId, ItemFootprint } from '../../../domain'
 import { VERTICAL_PRODUCERS } from './vertical'
-import type { WarningCandidate, WarningFloor, WarningOpening, WarningPlacement, WarningWall } from '../types'
+import type { WarningBeam, WarningCandidate, WarningFloor, WarningOpening, WarningPlacement, WarningWall } from '../types'
 
 const FLOOR = 'floor-main'
 
@@ -74,6 +74,7 @@ const floorWith = (parts: Partial<Omit<WarningFloor, 'floorId'>> = {}): WarningF
   floorId: FLOOR,
   walls: [],
   openings: [],
+  beams: [],
   junctions: [],
   rooms: [],
   placements: [],
@@ -306,7 +307,7 @@ describe('clearance_envelope_intrusion', () => {
 })
 
 describe('the producer set', () => {
-  it('carries the seven §5 types exactly once', () => {
+  it('carries the ten §5 and #77 types exactly once', () => {
     const types = VERTICAL_PRODUCERS.map((producer) => producer.type)
     expect(types).toEqual([
       'item_item_overlap',
@@ -316,6 +317,9 @@ describe('the producer set', () => {
       'floor_limit_above',
       'floor_limit_below',
       'clearance_envelope_intrusion',
+      'beam_placed_item',
+      'beam_opening',
+      'beam_clearance_envelope_intrusion',
     ])
   })
 
@@ -325,5 +329,103 @@ describe('the producer set', () => {
     const far = produce('item_into_wall', floorWith({ walls: [wallAlongX()], placements: [box('pl-a', 'A', 2000, -100, 600, 100)] }))
     expect(near[0]!.params.mm).toBe(far[0]!.params.mm)
     expect(JSON.stringify(near[0]!.signatureInputs)).not.toBe(JSON.stringify(far[0]!.signatureInputs))
+  })
+})
+
+/** A Beam along the x axis from (0,0) to (length,0), centred, `underside` to `underside + depth`. */
+const beamAlongX = (
+  id = 'beam-1',
+  label = 'Beam B-1',
+  length = 4000,
+  width = 200,
+  underside = 2300,
+  depth = 300,
+): WarningBeam => ({
+  id,
+  floorId: FLOOR,
+  label,
+  line: { start: { x: 0, y: 0 }, end: { x: length, y: 0 } },
+  width,
+  justification: 'centre',
+  underside,
+  top: underside + depth,
+})
+
+describe('the Beam producers (#77 §2 criterion 5)', () => {
+  const envelope = (path: ClosedPath, bottomOffset: number, height: number): ClearanceEnvelope => ({ path, bottomOffset, height })
+
+  it('says a Placed Item reaches past the Underside, naming the item first', () => {
+    // The acceptance example: a Wall cabinet whose top is 40 mm into a Beam standing at 2 300.
+    const [candidate] = produce('beam_placed_item', floorWith({
+      beams: [beamAlongX()],
+      placements: [box('pl-a', 'Wall cabinet #1', 500, -100, 600, 200, 0, 2340)],
+    }))
+    expect(candidate).toBeDefined()
+    expect(candidate!.messageKey).toBe('vertical_above')
+    expect(candidate!.params).toEqual({ a: 'Wall cabinet #1', b: 'Beam B-1', aKind: 'placedItem', bKind: 'beam', mm: 40 })
+    expect(candidate!.subjects.map((subject) => subject.id)).toEqual(['pl-a', 'beam-1'])
+  })
+
+  it('says an Opening reaches past the Underside through its host Wall', () => {
+    const [candidate] = produce('beam_opening', floorWith({
+      walls: [wallAlongX()],
+      openings: [opening('open-1', 'wall-1', 'Window WND-1', 1000, 900, 1000, 2350)],
+      beams: [beamAlongX()],
+    }))
+    expect(candidate).toBeDefined()
+    expect(candidate!.messageKey).toBe('vertical_above')
+    expect(candidate!.params).toEqual({ a: 'Window WND-1', b: 'Beam B-1', aKind: 'opening', bKind: 'beam', mm: 50 })
+  })
+
+  it('says nothing about a Beam that only touches, or only passes beside', () => {
+    // Touching is not overlapping: a cabinet top exactly at the Underside is a cabinet under a Beam.
+    expect(produce('beam_placed_item', floorWith({
+      beams: [beamAlongX()],
+      placements: [box('pl-a', 'Wall cabinet #1', 500, -100, 600, 200, 0, 2300)],
+    }))).toEqual([])
+    // The plan has to meet as well as the height: a Beam in another part of the Floor says nothing.
+    expect(produce('beam_placed_item', floorWith({
+      beams: [beamAlongX('beam-1', 'Beam B-1', 1000)],
+      placements: [box('pl-a', 'Wall cabinet #1', 3000, -100, 600, 200, 0, 2340)],
+    }))).toEqual([])
+  })
+
+  it('never warns Beam against Wall, nor Beam against Beam (#77 §2 criterion 5)', () => {
+    // A Beam under a Wall, and two Beams crossing, are both ordinary drawings of one thing.
+    const crossed = floorWith({
+      walls: [wallAlongX('wall-1', 'W-1', 4000, 100, 0, 2600)],
+      beams: [beamAlongX(), beamAlongX('beam-2', 'Beam B-2', 4000, 200, 2300, 300)],
+    })
+    for (const type of ['beam_placed_item', 'beam_opening', 'beam_clearance_envelope_intrusion']) {
+      expect(produce(type, crossed), type).toEqual([])
+    }
+    // A Beam crossing another at the same height is the whole point of drawing two of them.
+    expect(produce('beam_placed_item', floorWith({ beams: [beamAlongX(), beamAlongX('beam-2', 'Beam B-2')] }))).toEqual([])
+  })
+
+  it('measures a Beam taking up a Clearance Envelope in area and share', () => {
+    const owner = {
+      ...box('pl-a', 'Wall cabinet #1', 0, 0, 600, 600, 0, 2000),
+      clearanceEnvelope: envelope(rect(0, 0, 1000, 1000), 0, 2600),
+      envelopeWorldPath: rect(0, 0, 1000, 1000),
+    }
+    const [candidate] = produce('beam_clearance_envelope_intrusion', floorWith({ beams: [beamAlongX()], placements: [owner] }))
+    expect(candidate).toBeDefined()
+    expect(candidate!.messageKey).toBe('clearance_envelope_intrusion')
+    expect(candidate!.params.a).toBe('Beam B-1')
+    expect(candidate!.params.b).toBe('Wall cabinet #1')
+    // Half the Beam's 200 width lies inside the 1 m² envelope, over 1 000 mm of its length.
+    expect(candidate!.params.m2).toBeCloseTo(0.1, 10)
+    expect(candidate!.params.pct).toBeCloseTo(10, 10)
+    expect(candidate!.subjects.map((subject) => subject.type)).toEqual(['beam', 'placedItem'])
+  })
+
+  it('carries a Beam past the Floor’s own limits in both directions', () => {
+    const high = produce('floor_limit_above', floorWith({ beams: [beamAlongX()], limits: { lowerMm: 0, upperMm: 2560 } }))
+    expect(high[0]!.params).toEqual({ a: 'Beam B-1', aKind: 'beam', mm: 40 })
+    const low = produce('floor_limit_below', floorWith({ beams: [beamAlongX('beam-1', 'Beam B-1', 4000, 200, -130)], limits: { lowerMm: -100, upperMm: null } }))
+    expect(low[0]!.params).toEqual({ a: 'Beam B-1', aKind: 'beam', mm: 30 })
+    // A Floor with no limit set invents no rule.
+    expect(produce('floor_limit_above', floorWith({ beams: [beamAlongX()], limits: { lowerMm: null, upperMm: null } }))).toEqual([])
   })
 })

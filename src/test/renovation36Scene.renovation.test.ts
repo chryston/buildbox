@@ -136,7 +136,7 @@ describe('the renovation-36 scene (#69 criterion 1)', () => {
   it('offers both Options empty, so every edit starts from the Existing Model', () => {
     for (const option of options) {
       expect(option.demolishedIds).toEqual([])
-      expect(option.proposed).toEqual({ walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [] })
+      expect(option.proposed).toEqual({ walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], placedItems: [] })
       const effective = effectiveModel(project, floorId, option.id)
       expect(effective.standingWalls).toEqual(model.walls.filter((wall) => wall.floorId === floorId))
       expect(effective.walls.every((row) => row.renovationState === 'existing')).toBe(true)
@@ -146,11 +146,11 @@ describe('the renovation-36 scene (#69 criterion 1)', () => {
     }
   })
 
-  it('is the same Project as the v11 domain golden', () => {
+  it('is the same Project as the v12 domain golden', () => {
     const golden = JSON.parse(
-      readFileSync(join(fixturesRoot, 'domain', 'v11', 'renovation.json'), 'utf8'),
+      readFileSync(join(fixturesRoot, 'domain', 'v12', 'renovation.json'), 'utf8'),
     ) as { domainSchemaVersion: number; project: Project }
-    expect(golden.domainSchemaVersion).toBe(11)
+    expect(golden.domainSchemaVersion).toBe(12)
     expect(validateProject(golden.project).ok).toBe(true)
     expect(golden.project).toEqual(project)
   })

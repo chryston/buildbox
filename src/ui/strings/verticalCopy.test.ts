@@ -26,6 +26,18 @@ describe('the vertical sentences (#76 §3)', () => {
     expect(WARNING_COPY.vertical_overlap_height?.({ a: 'Shelf #1', b: 'Wall cabinet #1', aKind: 'placedItem', bKind: 'placedItem', mm: 100 })).toBe(
       'Shelf #1 overlaps Wall cabinet #1 over 100 mm of height.',
     )
+    expect(WARNING_COPY.vertical_above?.({ a: 'Window WND-1', b: 'Beam B-1', aKind: 'opening', bKind: 'beam', mm: 50 })).toBe(
+      'Window WND-1 top is 50 mm above Beam B-1 underside.',
+    )
+    expect(WARNING_COPY.floor_limit_above?.({ a: 'Beam B-1', aKind: 'beam', mm: 40 })).toBe(
+      "Beam B-1 top is 40 mm above this Floor's upper limit.",
+    )
+    expect(WARNING_COPY.floor_limit_below?.({ a: 'Beam B-1', aKind: 'beam', mm: 30 })).toBe(
+      "Beam B-1 underside is 30 mm below this Floor's lower limit.",
+    )
+    expect(WARNING_COPY.clearance_envelope_intrusion?.({ a: 'Beam B-1', b: 'Wall cabinet #1', m2: 0.4, pct: 12.4 })).toBe(
+      "Beam B-1 takes up 0.40 m² (12%) of Wall cabinet #1's Clearance Envelope.",
+    )
     expect(WARNING_COPY.floor_limit_above?.({ a: 'Island #1', aKind: 'placedItem', mm: 100 })).toBe(
       "Island #1 top is 100 mm above this Floor's upper limit.",
     )

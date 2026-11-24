@@ -91,7 +91,7 @@ const projectWith = (
   floors,
   views: [{ id: 'view-1', kind: 'plan', floorId: 'floor-1', name: 'Floor 1', isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 } }],
   itemDesigns: designs,
-  existingModel: { placedItems: placements, walls: [], wallJunctions: [], openings: [], rooms: [] },
+  existingModel: { placedItems: placements, walls: [], wallJunctions: [], openings: [], rooms: [], beams: [] },
   warningAcknowledgements: [],
 })
 

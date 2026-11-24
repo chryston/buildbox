@@ -82,6 +82,7 @@ function fitout(): Project {
       wallJunctions: base.existingModel.wallJunctions,
       openings: filed(base.existingModel.openings, FIT_SERVICES),
       rooms: filed(base.existingModel.rooms, JOINERY),
+      beams: [],
       placedItems: base.existingModel.placedItems.map((item) =>
         item.id in ITEM_LAYERS ? { ...item, drawingLayerId: ITEM_LAYERS[item.id] ?? null } : item,
       ),
@@ -106,7 +107,7 @@ function elmSt(overrides: Partial<Project> = {}): Project {
     id: DEST_OPTION,
     name: 'Option A',
     demolishedIds: [],
-    proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [] },
+    proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], placedItems: [] },
   }
   return {
     ...base,
@@ -116,7 +117,7 @@ function elmSt(overrides: Partial<Project> = {}): Project {
     floors: base.floors.map((floor) => ({ ...floor, id: DEST_FLOOR })),
     designOptions: overrides.designOptions ?? [option],
     drawingLayers: overrides.drawingLayers ?? [{ id: DEST_SERVICES, name: 'Services', color: '#5fb3ff' }],
-    existingModel: overrides.existingModel ?? { walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [] },
+    existingModel: overrides.existingModel ?? { walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], placedItems: [] },
     views: [
       {
         ...base.views[0]!,
@@ -333,6 +334,7 @@ describe('the paste (#72 §4)', () => {
         wallJunctions: [],
         openings: [],
         rooms: [],
+        beams: [],
         placedItems: [],
       },
     })

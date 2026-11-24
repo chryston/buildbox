@@ -15,8 +15,8 @@
  * corner radii and the Wall junctions are measured with, so a person who sets the limit to where a
  * Wall's top exactly is does not get a Wall drawn twice.
  */
-import { designHeight } from '../domain'
-import type { EntityId, ItemDesign, Opening, PlanViewRange, PlacedItem, Wall } from '../domain'
+import { beamTop, designHeight } from '../domain'
+import type { Beam, EntityId, ItemDesign, Opening, PlanViewRange, PlacedItem, Wall } from '../domain'
 import { interval, type Interval } from '../geometry'
 import { TOLERANCE_MM } from '../geometry'
 import type { EffectiveModel } from './effectiveModel'
@@ -35,6 +35,15 @@ export const wallExtent = (wall: Wall): Interval => interval(wall.baseElevation,
 
 /** The Vertical Extent of an Opening: the foot of its sill, the head of its head. */
 export const openingExtent = (opening: Opening): Interval => interval(opening.sill, opening.head)
+
+/**
+ * The Vertical Extent of a Beam: the Underside it stores and the Top its Depth reaches (#77 §1).
+ *
+ * A Beam is classified like every other piece of fabric, which is what makes an out-of-range Beam
+ * draw dashed and stay selectable (#74 §3, §5) rather than vanish — the one thing a coordination
+ * record must never do is hide itself.
+ */
+export const beamExtent = (beam: Beam): Interval => interval(beam.underside, beamTop(beam))
 
 /**
  * The Vertical Extent of a Placed Item: where it stands, and the height its Item Design gives it.
@@ -86,5 +95,6 @@ export function rangeClasses(
     // there is no height to read, so there is no extent, and it is In range the way a Room is.
     classes.set(entity.id, rangeClass(design === undefined ? null : placementExtent(design, entity), range))
   }
+  for (const { entity } of model.beams) classes.set(entity.id, rangeClass(beamExtent(entity), range))
   return classes
 }

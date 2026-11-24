@@ -21,16 +21,18 @@ import { validateProject } from './validate'
 /**
  * The domain schema this build writes and understands at the top of the chain.
  *
- * The eleventh step (#76 §4) is the Clearance Envelope: every Item Design gains the one envelope it
- * may carry, `null` for every design that has none. The tenth before it (#75 §1) is the Elevation
- * View: the Project gains the list of saved sideways looks, empty for every Project that predates
- * them. The ninth (#74 §1) is the Plan View Range: every saved view gains the height it draws at.
- * The eighth (#69 §1, #73) is the renovation model: Design Options, the Drawing Layers every
- * Project starts with, and the four settings a saved view gained. A Project saved by an older build
- * carries `schemaVersion: 10` and comes up the chain; a Project saved by a newer one is refused as
- * `newer-schema` rather than opened and quietly stripped of its Clearance Envelopes.
+ * The twelfth step (#77 §1) is the Beam: the Existing Model gains the Beam collection, and so does
+ * every Design Option's proposed work. The eleventh before it (#76 §4) is the Clearance Envelope:
+ * every Item Design gains the one envelope it may carry, `null` for every design that has none. The
+ * tenth before that (#75 §1) is the Elevation View: the Project gains the list of saved sideways
+ * looks, empty for every Project that predates them. The ninth (#74 §1) is the Plan View Range:
+ * every saved view gains the height it draws at. The eighth (#69 §1, #73) is the renovation model:
+ * Design Options, the Drawing Layers every Project starts with, and the four settings a saved view
+ * gained. A Project saved by an older build carries `schemaVersion: 11` and comes up the chain; a
+ * Project saved by a newer one is refused as `newer-schema` rather than opened and quietly stripped
+ * of its Beams.
  */
-export const DOMAIN_SCHEMA_VERSION = 11
+export const DOMAIN_SCHEMA_VERSION = 12
 
 /**
  * One pure vN → vN+1 step. Its input is already a copy; it never reads the clock, and a
@@ -41,9 +43,9 @@ export type Migrator = (data: unknown, allocateId: IdAllocator) => unknown
 /**
  * `MIGRATORS[i]` migrates v(i+1) → v(i+2), so index 0 is v1 → v2.
  *
- * Eleven steps, the last of which is the Clearance Envelope field (#76), the one before it the
- * Elevation View list (#75), the one before that the Plan View Range (#74) and the one before that
- * the renovation model (#69, #71, #73).
+ * Twelve steps, the last of which is the Beam collection (#77), the one before it the Clearance
+ * Envelope field (#76), the one before that the Elevation View list (#75), the one before that the
+ * Plan View Range (#74) and the one before that the renovation model (#69, #71, #73).
  */
 export const MIGRATORS: readonly Migrator[] = [
   migrateV1toV2,
@@ -56,6 +58,7 @@ export const MIGRATORS: readonly Migrator[] = [
   migrateV8toV9,
   migrateV9toV10,
   migrateV10toV11,
+  migrateV11toV12,
 ]
 
 /**
@@ -383,6 +386,42 @@ export function migrateV10toV11(data: unknown): unknown {
 /** An Item Design that has no Clearance Envelope field yet. */
 const needsEnvelope = (design: unknown): design is Record<string, unknown> =>
   design !== null && typeof design === 'object' && !Array.isArray(design) && (design as Record<string, unknown>).clearanceEnvelope === undefined
+
+/**
+ * v11 → v12 (#77 §1): the Beam collection.
+ *
+ * `existingModel.beams` and every Design Option's `proposed.beams` are the only changes, and an
+ * older file simply has no Beams — no legacy beam data exists (#20 §3), so there is nothing to
+ * translate and no Wall to read a Beam out of. Nothing else moves: a Beam is a new kind of element
+ * rather than a change to one, so no Wall, Opening, Room or Placement is rewritten and no ID is
+ * spent.
+ *
+ * A v11 file cannot already carry either field — the strict validator rejected unknown fields on
+ * every write — so an array found here came from a newer build, and is left exactly as it is. The
+ * step is therefore idempotent: a v12 file comes back as the same object it arrived as.
+ */
+export function migrateV11toV12(data: unknown): unknown {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return data
+  const record = data as Record<string, unknown>
+  // A model that already carries the field came from a build that knows Beams; leave it alone.
+  const missing = (model: unknown): model is Record<string, unknown> | undefined | null =>
+    !isRecordLike(model) || !Array.isArray(model.beams)
+  const existing = isRecordLike(record.existingModel) ? record.existingModel : null
+  const options = Array.isArray(record.designOptions) ? record.designOptions : []
+  if (!missing(existing) && !options.some((option) => isRecordLike(option) && missing(option.proposed))) return data
+  const next: Record<string, unknown> = { ...record }
+  if (missing(existing)) next.existingModel = { ...(existing ?? {}), beams: [] }
+  if (options.length > 0) {
+    next.designOptions = options.map((option) =>
+      isRecordLike(option) && missing(option.proposed) ? { ...option, proposed: { ...(option.proposed as object | null | undefined), beams: [] } } : option,
+    )
+  }
+  return next
+}
+
+/** Whether this is an object a field can be added to. */
+const isRecordLike = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
 
 /** A saved view that has no Plan View Range yet. */
 const needsRange = (view: unknown): view is Record<string, unknown> =>

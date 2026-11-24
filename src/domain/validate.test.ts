@@ -72,6 +72,7 @@ function baseProject(): Project {
       wallJunctions: [],
       openings: [],
       rooms: [],
+      beams: [],
       placedItems: [
         {
           id: 'place-0',
@@ -424,7 +425,7 @@ describe('validateProject — Floors and Plan Images', () => {
   })
 
   it('accepts a Project with no Floors and no Placed Items', () => {
-    const project = { ...baseProject(), floors: [], views: [], existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [] } }
+    const project = { ...baseProject(), floors: [], views: [], existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [] } }
     expect(validateProject(project).ok).toBe(true)
   })
 

@@ -41,6 +41,7 @@ export {
   rectangleFootprint,
 } from './footprint'
 export { PRESET_NAMES, convertWarningFor, lostParametersOf } from './convert'
+export { BEAM_LABEL_PREFIX, nextBeamLabel } from './beams'
 export {
   FLOOR_DEPENDENCY_KINDS,
   floorHasDependencies,
@@ -96,6 +97,7 @@ export {
   migrateV7toV8,
   migrateV9toV10,
   migrateV10toV11,
+  migrateV11toV12,
   runMigrationChain,
   type Migrator,
   type MigrateError,
@@ -138,6 +140,8 @@ export type {
 } from './presets'
 export type {
   Acknowledgement,
+  Beam,
+  BeamFeatureId,
   CabinetItemDesign,
   ClearanceEnvelope,
   DesignOption,
@@ -187,12 +191,16 @@ export { DEFAULT_PLAN_VIEW_RANGE, defaultPlanViewRange } from './planViewRange'
 export type { ElevationView, ElevationViewLine, ElevationViewSide } from './elevationView'
 export { ELEVATION_VIEW_SIDES, elevationViewNameTaken, nextElevationViewName } from './elevationView'
 export {
+  BEAM_FEATURE_IDS,
   DEFAULT_DRAWING_LAYERS,
   DEFAULT_LAYER_NAMES,
   DEFAULT_LAYER_SETTING,
   NEW_LAYER_COLOR,
   RENOVATION_DISPLAYS,
   UNLAYERED_LAYER_KEY,
+  beamLabel,
+  beamTop,
+  beamsOf,
   designOptionsOf,
   drawingLayerById,
   drawingLayerByName,

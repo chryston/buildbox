@@ -211,7 +211,7 @@ describe('the classification of a whole Floor (#74 §3)', () => {
           id: 'option-1',
           name: 'A clerestory',
           demolishedIds: [existing.id],
-          proposed: { walls: [proposed], wallJunctions: [], openings: [], rooms: [], placedItems: [] },
+          proposed: { walls: [proposed], wallJunctions: [], openings: [], rooms: [], beams: [], placedItems: [] },
         },
       ],
     }

@@ -56,6 +56,7 @@ const source: Project = {
     wallJunctions: base.existingModel.wallJunctions.filter((junction) => JOIN_IDS.includes(junction.id)),
     openings: base.existingModel.openings.filter((opening) => opening.id === 'seed-opening-014').map((opening) => filed(opening, SRC_SERVICES)),
     rooms: base.existingModel.rooms.filter((room) => room.id === 'seed-room-022').map((room) => filed(room, SRC_JOINERY)),
+    beams: [],
     placedItems: base.existingModel.placedItems
       .filter((item) => item.id === 'seed-002' || item.id === 'fp-fridge' || item.id === 'fp-sofa')
       .map((item) => filed(item, item.id === 'seed-002' ? SRC_JOINERY : item.id === 'fp-fridge' ? SRC_SERVICES : null)),
@@ -84,10 +85,10 @@ const destination = (layers: readonly DrawingLayer[]): Project => ({
   meta: { ...base.meta, name: 'Pasted into here' },
   floors: base.floors.map((floor) => ({ ...floor, id: DEST_FLOOR })),
   designOptions: [
-    { id: DEST_OPTION, name: 'Option', demolishedIds: [], proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [] } },
+    { id: DEST_OPTION, name: 'Option', demolishedIds: [], proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], placedItems: [] } },
   ],
   drawingLayers: [...layers],
-  existingModel: { walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [] },
+  existingModel: { walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], placedItems: [] },
   views: [
     {
       ...base.views[0]!,

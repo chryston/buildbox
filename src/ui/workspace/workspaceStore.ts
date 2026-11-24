@@ -25,7 +25,7 @@ import type { Viewport } from './viewport'
  * The Floor workspace does not offer them yet — a Custom Path has no Room target until #67 —
  * so only the Item Design editor renders them, and they are still gated by the same rule.
  */
-export type WorkspaceTool = 'select' | 'pan' | 'wall' | 'opening' | 'line' | 'arc' | 'ellipticalArc' | 'elevation'
+export type WorkspaceTool = 'select' | 'pan' | 'wall' | 'opening' | 'beam' | 'line' | 'arc' | 'ellipticalArc' | 'elevation'
 
 /**
  * The live drag: the Item being moved and where its Item Origin is going, in Floor
@@ -252,6 +252,12 @@ export interface WorkspaceState {
    * inspected by, and a union would make every reader ask which kind it holds.
    */
   roomSelection: string | null
+  /**
+   * The selected Beam (#77 §3), or `null`. Its own slot again: a Beam is inspected by its own four
+   * numbers and highlighted by its own outline, and a union would make every reader ask which kind
+   * it holds.
+   */
+  beamSelection: string | null
   dragPreview: ItemDragPreview | null
   /** The nine `Snaps ▾` rows (#59 §5); `angle` is the same state the rotate handle reads (#57). */
   snapSettings: SnapSettings
@@ -350,6 +356,8 @@ export interface WorkspaceActions {
   selectOpening(id: string | null): void
   /** Select a Room (#67 behaviour 3); the other three go with it. */
   selectRoom(id: string | null): void
+  /** Select one Beam, ending every other selection (#77 §3). */
+  selectBeam(id: string | null): void
   setDragPreview(preview: ItemDragPreview | null): void
   setAngleSnap(enabled: boolean, incrementDeg?: number): void
   /** One `Snaps ▾` checkbox (#59 §5). UI-session state, never undoable (#26). */
@@ -438,6 +446,7 @@ const INITIAL: WorkspaceState = {
   wallSelection: null,
   openingSelection: null,
   roomSelection: null,
+  beamSelection: null,
   dragPreview: null,
   snapSettings: {
     // All nine are on by default (#59 §5). `wallFaces` is on but silent until #64 gives it
@@ -497,6 +506,7 @@ function movedAway(
   wallSelection: null
   openingSelection: null
   roomSelection: null
+  beamSelection: null
   shapeDraft: null
   shapeSelection: null
 } | Record<string, never> {
@@ -506,6 +516,7 @@ function movedAway(
       wallSelection: null,
       openingSelection: null,
       roomSelection: null,
+      beamSelection: null,
       shapeDraft: null,
       shapeSelection: null,
     }
@@ -517,6 +528,7 @@ function movedAway(
       wallSelection: null,
       openingSelection: null,
       roomSelection: null,
+      beamSelection: null,
       shapeDraft: null,
       shapeSelection: null,
     }
@@ -528,15 +540,18 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
   // A proposal is about the thing selected, so a new selection ends it (#58 criterion 9). It is
   // discarded rather than kept out of sight: coming back to the design must show the shape it
   // has, not a half-typed one that a later Apply could write.
-  select: (selection) => set({ selection, wallSelection: null, openingSelection: null, roomSelection: null, shapeDraft: null, shapeSelection: null }),
-  selectWall: (wallSelection) => set({ wallSelection, selection: null, openingSelection: null, roomSelection: null, shapeDraft: null, shapeSelection: null }),
+  select: (selection) => set({ selection, wallSelection: null, openingSelection: null, roomSelection: null, beamSelection: null, shapeDraft: null, shapeSelection: null }),
+  selectWall: (wallSelection) => set({ wallSelection, selection: null, openingSelection: null, roomSelection: null, beamSelection: null, shapeDraft: null, shapeSelection: null }),
   // An Opening is selected by clicking its symbol on the Plan View; the Wall it is cut into is
   // not selected with it, because the inspector shows one thing at a time and the Wall's own
   // row is one click away in the Opening's inspector.
-  selectOpening: (openingSelection) => set({ openingSelection, selection: null, wallSelection: null, roomSelection: null, shapeDraft: null, shapeSelection: null }),
+  selectOpening: (openingSelection) => set({ openingSelection, selection: null, wallSelection: null, roomSelection: null, beamSelection: null, shapeDraft: null, shapeSelection: null }),
   // A Room is selected by clicking its area on the Plan View. Its own shape proposal goes with
   // the previous selection, exactly as an Item's does: the proposal is about the thing selected.
-  selectRoom: (roomSelection) => set({ roomSelection, selection: null, wallSelection: null, openingSelection: null, shapeDraft: null, shapeSelection: null }),
+  selectRoom: (roomSelection) => set({ roomSelection, selection: null, wallSelection: null, openingSelection: null, beamSelection: null, shapeDraft: null, shapeSelection: null }),
+  // A Beam is selected by clicking its body on the Plan View or its band in a Section. It is
+  // documentation of existing work, so selecting it never selects the Wall it happens to sit under.
+  selectBeam: (beamSelection) => set({ beamSelection, selection: null, wallSelection: null, openingSelection: null, roomSelection: null, shapeDraft: null, shapeSelection: null }),
   setDragPreview: (dragPreview) => set({ dragPreview }),
   setAngleSnap: (enabled, incrementDeg) =>
     set((state) => ({

@@ -113,6 +113,30 @@ person made, so no carry-forward invents one. `v10/` is what `DOMAIN_SCHEMA_VERS
 current, and `v9/plan-range-scene.json`, `v9/renovation.json` and their neighbours stay committed as
 the evidence that a Project saved at the ninth schema still opens.
 
+## `v11/` and `v12/` — the carried-forward goldens, and the first Beam (#76, #77)
+
+`v11/` holds no new scene: `scripts/make-v11-fixtures.ts` reads each file of `v10/` through
+`migrateProject` and writes it at the eleventh schema, so the only difference is the
+`clearanceEnvelope: null` the step writes on every Item Design — a Clearance Envelope is always one
+a person drew or measured, so no carry-forward invents a shape.
+
+`v12/` carries the same scenes forward again, and adds one file the earlier folders have no
+counterpart to: `v12/beams.json`, written by `scripts/make-v12-fixtures.ts`. It is the renovation
+scene with a Beam the Existing Model holds — 3 000 mm along the Kitchen, 200 mm wide on its centre
+line, 300 mm deep with its Underside at 2300 mm — and a second Beam `Option A` proposes in its place,
+carrying `predecessorIds` and the demolition that makes that predecessor honest. It is the first
+golden whose Project holds a Beam, and the one `#77`'s warnings, tables and screenshots are judged
+against. `v11/` stays committed as the evidence that a Project saved at the eleventh schema still
+opens, and `v12/` is what `DOMAIN_SCHEMA_VERSION` is 12 names as current.
+
+`v12/beams-scene.json`, written by `scripts/make-beams-seed.ts`, is the same Floor with a second
+Beam across it and the `Kitchen section` Elevation View stood on a line looking at the first — the
+scene `e2e/screenshots/beams.spec.ts` photographs and `e2e/smoke/beams.spec.ts` drives. The script
+writes two browser seeds from it: `e2e/preview-seed/beams.json` as it stands, and
+`e2e/preview-seed/beams-plain.json` with the Design Options taken out, which is the one the smoke
+spec uses so each of the Beam's own gestures commits as it always did rather than stopping at the
+locked-baseline review (#70 §7c) that `existingDisplay` tests for every kind.
+
 ## How it was produced
 
 Hand-authored as a plain object, then written with `lib.canonicalJson` — keys sorted, no

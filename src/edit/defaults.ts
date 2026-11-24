@@ -9,6 +9,7 @@
  * values a new one starts with live beside the cabinet's.
  */
 import type { Floor, GlobalSettings, Project, Wall } from '../domain'
+import { DEFAULT_WALL_HEIGHT_MM } from '../domain'
 
 export const LEGACY_DEFAULT_SETTINGS: GlobalSettings = {
   unit: 'mm',
@@ -41,3 +42,21 @@ export const newWallDefaults = (
   baseElevation: 0,
   height: floor.defaultWallHeight ?? project.preferences.defaultWallHeight,
 })
+
+/**
+ * The section a new Beam starts with (#77 §2): two placeholders the tool panel captions
+ * `measure yours`. They are placeholders and nothing more — the HDB BTO preset pack holds no Beam
+ * entries, so no Beam string may call either value typical.
+ */
+export const DEFAULT_BEAM_WIDTH_MM = 200
+export const DEFAULT_BEAM_DEPTH_MM = 300
+
+/**
+ * The `Top at` reference when the Floor sets no upper limit: the pack's nominal storey height, used
+ * as an input-time reference and for no other purpose (#77 §2 criterion 4). It is never stored on
+ * the Beam and never written to a Floor's limits — the Beam keeps only the underside it implies.
+ */
+export const DEFAULT_BEAM_TOP_MM = DEFAULT_WALL_HEIGHT_MM
+
+/** The `Top at` a Beam drawn on this Floor is offered: its upper limit, else the nominal 2600. */
+export const newBeamTopReference = (floor: Floor): number => floor.limits?.upperMm ?? DEFAULT_BEAM_TOP_MM

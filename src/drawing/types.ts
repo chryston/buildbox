@@ -60,6 +60,9 @@ export type LayerKey =
   /** The Room areas themselves (#67 behaviour 35): named Floor, drawn under every Wall band,
       because a Wall stands on a Room's boundary and not the other way round. */
   | 'rooms'
+  /** The Beam bodies (#77 §4): documentation of what is already there, so they paint under the
+      Walls that stand on them and never over a footprint. */
+  | 'beams'
   /** The Wall bands themselves (#64 §15): Building Elements, drawn under the footprints. */
   | 'walls'
   /** The symbols inside a Wall's gaps (#65 §12), above the band they are cut into. */
@@ -69,6 +72,9 @@ export type LayerKey =
   | 'placed-item-labels'
   /** The `W-n` references (#64 §15), in the same untransformed text half as the item labels. */
   | 'wall-labels'
+  /** The Beam names (#77 §4), after the Wall references: a `Beam B-1` is the shorter string and a
+      Wall reference is the one a reader follows along a run. */
+  | 'beam-labels'
   /** The `Kitchen · 13.08 m²` labels (#67 behaviour 35), after the Wall references because a
       Room's name is the longer string and the one a person is looking for. */
   | 'room-labels'
@@ -112,12 +118,14 @@ export const LAYER_ORDER: readonly LayerKey[] = [
   'plan-image',
   'sheet-grid',
   'rooms',
+  'beams',
   'walls',
   'wall-openings',
   'placed-items',
   'plan-annotations',
   'placed-item-labels',
   'wall-labels',
+  'beam-labels',
   'room-labels',
   'plan-dimensions',
   'plan-chip',
@@ -224,6 +232,11 @@ export type StyleKey =
   | 'room-label:min'
   /** The line from a label that could not be fitted inside to the Room it names. */
   | 'room-label-leader'
+  /** The Beam body, its invisible target and its name (#77 §4). */
+  | 'beam'
+  | 'beam:selected'
+  | 'beam-hit'
+  | 'beam-label'
   /** The leaf, panels or window mullion of an Opening — the part a click selects (#65 §12). */
   | 'opening'
   | 'opening:selected'

@@ -29,8 +29,8 @@
  */
 import { applyPatches, produceWithPatches } from 'immer'
 import type { Patch } from 'immer'
-import { designOptionsOf, validateProject } from '../../domain'
-import type { DesignOption, EntityId, Opening, PlacedItem, Project, Room, Wall, WallJunction } from '../../domain'
+import { beamLabel, beamsOf, designOptionsOf, validateProject } from '../../domain'
+import type { Beam, DesignOption, EntityId, Opening, PlacedItem, Project, Room, Wall, WallJunction } from '../../domain'
 import { canonicalJson } from '../../lib'
 import type {
   CorrectionEffect,
@@ -57,13 +57,14 @@ export type CorrectionIntentType = Extract<
 >
 
 /** One entity of a model, whichever collection it lives in. */
-type AnyEntity = Wall | WallJunction | Opening | Room | PlacedItem
+type AnyEntity = Wall | WallJunction | Opening | Room | PlacedItem | Beam
 
-/** The five collections a correction can touch, in the order a review reads them. */
-const COLLECTIONS = ['walls', 'wallJunctions', 'openings', 'rooms', 'placedItems'] as const
+/** The six collections a correction can touch, in the order a review reads them. */
+const COLLECTIONS = ['walls', 'wallJunctions', 'openings', 'rooms', 'placedItems', 'beams'] as const
 type Collection = (typeof COLLECTIONS)[number]
 
-const collectionOf = (model: { [K in Collection]: AnyEntity[] }, key: Collection): AnyEntity[] => model[key]
+/** One collection of a model. A container written before #77 spells no Beam list, which is empty. */
+const collectionOf = (model: { [K in Collection]?: AnyEntity[] }, key: Collection): AnyEntity[] => model[key] ?? []
 
 /** `Correct Existing Model: W-2` — the label of one correction's Edit Transaction (#69 §12). */
 const correctionLabel = (subjectRef: string): string => `Correct Existing Model: ${subjectRef}`
@@ -100,6 +101,8 @@ function labelOf(project: Project, id: EntityId): string {
   if (room !== undefined) return room.name
   const placed = model.placedItems.find((entry) => entry.id === id)
   if (placed !== undefined) return project.itemDesigns.find((d) => d.id === placed.itemDesignId)?.name ?? placed.id
+  const beam = beamsOf(model).find((entry) => entry.id === id)
+  if (beam !== undefined) return beamLabel(beam)
   for (const option of designOptionsOf(project)) {
     const entity = collectionOf(option.proposed, 'walls')
       .concat(...COLLECTIONS.slice(1).map((key) => collectionOf(option.proposed, key)))
@@ -111,6 +114,8 @@ function labelOf(project: Project, id: EntityId): string {
 
 function entityName(project: Project, entity: AnyEntity): string {
   if ('ref' in entity) return entity.ref
+  // A Beam is the only entity whose label is optional, so it is asked by what only it has.
+  if ('underside' in entity) return beamLabel(entity)
   if ('label' in entity) return entity.label
   if ('name' in entity) return entity.name
   return project.itemDesigns.find((design) => design.id === (entity as PlacedItem).itemDesignId)?.name ?? entity.id
@@ -490,12 +495,15 @@ function runMove(project: Project, draft: Project, payload: MoveToDesignOption, 
   for (const opening of model.openings) if (moved.has(opening.id)) proposed.openings.push({ ...opening, predecessorIds: [] })
   for (const wall of model.walls) if (moved.has(wall.id)) proposed.walls.push({ ...wall, predecessorIds: [] })
   for (const room of model.rooms) if (moved.has(room.id)) proposed.rooms.push({ ...room, predecessorIds: [] })
-  for (const item of model.placedItems) if (moved.has(item.id)) proposed.placedItems.push({ ...item, predecessorIds: [] })
+  for (const placed of model.placedItems) if (moved.has(placed.id)) proposed.placedItems.push({ ...placed, predecessorIds: [] })
+  for (const beam of beamsOf(model)) if (moved.has(beam.id)) (proposed.beams ??= []).push({ ...beam, predecessorIds: [] })
 
   model.walls = model.walls.filter((entity) => !moved.has(entity.id))
   model.openings = model.openings.filter((entity) => !moved.has(entity.id))
   model.rooms = model.rooms.filter((entity) => !moved.has(entity.id))
   model.placedItems = model.placedItems.filter((entity) => !moved.has(entity.id))
+  // A container that spells no Beam list stays that way: re-owning no Beam changes no bytes.
+  if (model.beams !== undefined) model.beams = model.beams.filter((entity) => !moved.has(entity.id))
   model.wallJunctions = model.wallJunctions.filter((junction) => !touchesMoved(junction, moved))
   return { moved: [...moved], perOption }
 }

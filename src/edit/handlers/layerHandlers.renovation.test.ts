@@ -29,7 +29,7 @@ function optionWith(id: string, name: string, proposed: Partial<DesignOption['pr
     id,
     name,
     demolishedIds: [],
-    proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [], ...proposed },
+    proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], placedItems: [], ...proposed },
   }
 }
 

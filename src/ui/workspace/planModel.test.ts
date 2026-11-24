@@ -56,6 +56,7 @@ const project = (over: Partial<Project> = {}): Project => ({
     wallJunctions: [],
     openings: [],
     rooms: [],
+    beams: [],
     placedItems: [{
       id: 'placed-1',
       itemDesignId: 'design-1',

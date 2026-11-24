@@ -441,6 +441,7 @@ export const STRINGS = {
   exportListRooms: 'Rooms',
   exportListWalls: 'Walls',
   exportListOpenings: 'Openings',
+  exportListBeams: 'Beams',
   exportListPlacedItems: 'Placed Items',
   exportListWarnings: 'Warnings List',
   /** Why the State and Layer controls go grey: that table is scoped by Floor and option only. */
@@ -720,6 +721,27 @@ export const STRINGS = {
   elevationPickStart: 'Click where the view line starts.',
   elevationPickEnd: 'Click where the view line ends.',
   elevationSetDepth: 'Move to the side the view stands on and click, or type a depth and press Enter.',
+  // The Beam tool (#77 §3). `Underside` and `Top` are the two words the inspector uses too; the
+  // stored number is a `height`, but a person reads the gap under a beam, not a number named for
+  // the wrong end of it.
+  toolBeam: 'Beam',
+  beamPickStart: 'Click where the Beam starts.',
+  beamPickEnd: 'Click where the Beam ends.',
+  beamSetUnderside: 'Type the Underside above the Floor Datum, then press Enter.',
+  beamDone: 'Add Beam',
+  beamCancel: 'Cancel (Esc)',
+  beamWidth: 'Width',
+  beamDepth: 'Depth',
+  beamUnderside: 'Underside',
+  beamTop: 'Top',
+  beamLabelField: 'Label',
+  beamJustification: 'Justification',
+  beamDelete: 'Delete Beam',
+  beamDeleteConfirm: 'Delete this Beam?',
+  beamDeleteNote: 'This removes the record only. Nothing else in the model refers to a Beam.',
+  beamLength: 'Length',
+  beamSectionTitle: 'Beam',
+  beamEmptyHint: 'No Beams on this Floor yet.',
   elevationNameRequired: 'Give this Elevation View a name',
   elevationNameTaken: (name: string): string =>
     `Another Elevation View on this Floor is already called ${name}`,

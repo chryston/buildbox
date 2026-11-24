@@ -93,6 +93,7 @@ function projectBuiltFrom(pack: PresetPack): Project {
       wallJunctions: [],
       openings: [],
       rooms: [],
+      beams: [],
       placedItems: [
         {
           id: 'placed-wall',

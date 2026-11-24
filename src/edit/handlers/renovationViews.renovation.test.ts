@@ -24,7 +24,7 @@ const option = (id: string, name: string): DesignOption => ({
   id,
   name,
   demolishedIds: [],
-  proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [] },
+  proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], placedItems: [] },
 })
 
 /**

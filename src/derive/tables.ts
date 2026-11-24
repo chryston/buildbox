@@ -37,7 +37,7 @@
  * that built its own English here would be a second copy of that sentence, and the strip and the
  * CSV would drift the first time one of them was reworded.
  */
-import { designHeight, drawingLayerById, entityLayerId, openingHeight, openingSpan, type EntityId, type HingeSide, type OpeningSwing, type Project, type Wall, type WallClassification } from '../domain'
+import { beamLabel, beamTop, designHeight, drawingLayerById, entityLayerId, openingHeight, openingSpan, type EntityId, type HingeSide, type OpeningSwing, type Project, type Wall, type WallClassification } from '../domain'
 import { arcFromThrough, refLength } from '../geometry'
 import { compareCodePoints, stableSort } from '../lib'
 import { layerMatches, type OptionColumns, type QuantityScope, type RenovationState } from './quantities/scope'
@@ -45,6 +45,7 @@ import { derivePlacement, effectiveFloor, placementLabels, type DerivedPlacement
 import { designOptionName, effectiveModel, type EffectiveModel } from './effectiveModel'
 import { derivedRoomsOf, deriveRooms, roomMembershipOf, type FloorRooms, type RoomMembership } from './rooms'
 import { deriveWalls, type FloorWalls } from './walls'
+import { deriveBeams, type FloorBeams } from './beams'
 import { deriveWarnings } from './warnings/engine'
 import type { WarningParams, WarningSubjectKind } from './warnings/types'
 
@@ -165,7 +166,7 @@ export type PlacedItemsRow = {
 }
 
 /** The Warnings List's word for a subject: `placed_item`, because a CSV column is snake_case. */
-export type WarningSubjectCode = 'wall' | 'opening' | 'room' | 'placed_item'
+export type WarningSubjectCode = 'wall' | 'opening' | 'room' | 'placed_item' | 'beam'
 
 /** One Warnings List row (export contract §5). */
 export type WarningsRow = {
@@ -187,11 +188,35 @@ export type WarningsRow = {
   readonly acknowledgementNote: string
 }
 
-/** A scope's five tables, each in the order its file is written in. */
+/**
+ * One Beams row (#77 §5). `depthMm` is the word the interface uses for the stored `height`, and
+ * `topMm` is `underside_mm + depth_mm` — both derived, never stored, so a row can never disagree
+ * with the faces the Plan View draws.
+ */
+export type BeamsRow = {
+  readonly stableId: string
+  readonly floorId: string
+  readonly floor: string
+  readonly designOptionId: string
+  readonly designOption: string
+  readonly renovationState: RenovationState
+  readonly drawingLayerId: string
+  readonly drawingLayer: string
+  readonly predecessorIds: readonly string[]
+  readonly label: string
+  readonly lengthMm: number
+  readonly widthMm: number
+  readonly depthMm: number
+  readonly undersideMm: number
+  readonly topMm: number
+}
+
+/** A scope's six tables, each in the order its file is written in. */
 export interface Tables {
   readonly rooms: readonly RoomsRow[]
   readonly walls: readonly WallsRow[]
   readonly openings: readonly OpeningsRow[]
+  readonly beams: readonly BeamsRow[]
   readonly placedItems: readonly PlacedItemsRow[]
   readonly warnings: readonly WarningsRow[]
 }
@@ -232,7 +257,7 @@ const UNLAYERED_COLUMNS: LayerColumns = { drawingLayerId: '', drawingLayer: UNLA
  */
 function layerColumnsOf(project: Project, model: EffectiveModel): ReadonlyMap<EntityId, LayerColumns> {
   const layers = new Map<EntityId, LayerColumns>()
-  for (const row of [...model.rooms, ...model.walls, ...model.openings, ...model.placedItems]) {
+  for (const row of [...model.rooms, ...model.walls, ...model.openings, ...model.beams, ...model.placedItems]) {
     const layer = drawingLayerById(project, entityLayerId(row.entity))
     layers.set(row.entity.id, layer === null ? UNLAYERED_COLUMNS : { drawingLayerId: layer.id, drawingLayer: layer.name })
   }
@@ -374,6 +399,41 @@ function openingsForFloor(
 }
 
 /**
+ * The Beams of one Floor (#77 §5).
+ *
+ * `lengthMm` is measured along the reference line by the same `deriveBeams` the Plan View draws
+ * with, so the number in the file and the outline on the screen are one answer. `depthMm` and
+ * `topMm` are the stored Depth and the derived Top — the interface's words for the two fields a
+ * Beam is edited by, which is what makes the file checkable against a drawing.
+ */
+function beamsForFloor(
+  option: OptionColumns,
+  floorId: EntityId,
+  floor: string,
+  model: EffectiveModel,
+  derived: FloorBeams,
+  layers: ReadonlyMap<EntityId, LayerColumns>,
+): BeamsRow[] {
+  const rows: BeamsRow[] = []
+  for (const { entity: beam, renovationState } of model.beams) {
+    const length = derived.byId.get(beam.id)?.length
+    if (length === undefined) continue
+    rows.push({
+      ...elementColumns(option, floorId, floor, renovationState, layers.get(beam.id) ?? UNLAYERED_COLUMNS),
+      stableId: beam.id,
+      predecessorIds: beam.predecessorIds ?? [],
+      label: beamLabel(beam),
+      lengthMm: length,
+      widthMm: beam.width,
+      depthMm: beam.height,
+      undersideMm: beam.underside,
+      topMm: beamTop(beam),
+    })
+  }
+  return rows
+}
+
+/**
  * The Placed Items of one Floor, and how each sits in a Room.
  *
  * `label` is the `Base 600 #2` the strip uses ({@link placementLabels}), so a warning in the
@@ -498,6 +558,7 @@ export function tables(project: Project, scope: QuantityScope, deps: TableDeps):
   const rooms: RoomsRow[] = []
   const walls: WallsRow[] = []
   const openings: OpeningsRow[] = []
+  const beams: BeamsRow[] = []
   const placedItems: PlacedItemsRow[] = []
   const warnings: WarningsRow[] = []
 
@@ -526,6 +587,7 @@ export function tables(project: Project, scope: QuantityScope, deps: TableDeps):
       rooms.push(...inScope(roomsForFloor(option, floorId, floor, derivedRooms, model, layers)))
       walls.push(...inScope(wallsForFloor(option, floorId, floor, model, derivedWalls, layers)))
       openings.push(...inScope(openingsForFloor(option, floorId, floor, model, layers)))
+      beams.push(...inScope(beamsForFloor(option, floorId, floor, model, deriveBeams(project, floorId, optionId), layers)))
       placedItems.push(...inScope(placedItemsForFloor(option, floorId, floor, project, model, placements, derivedRooms, layers)))
       // The Warnings List is scoped by Floor and Design Option only (export contract §3): no
       // Renovation State and no Layer ever hides a warning.
@@ -553,6 +615,7 @@ export function tables(project: Project, scope: QuantityScope, deps: TableDeps):
     rooms: byElement(rooms),
     walls: byElement(walls),
     openings: byElement(openings),
+    beams: byElement(beams),
     placedItems: byElement(placedItems),
     warnings: sortedWarnings,
   }
