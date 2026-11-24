@@ -1807,6 +1807,21 @@
   margin-top: 12px;
 }
 
+/* The Clearance Envelope group (#76 §4): a titled block in the same card, its fields stacked in
+   the narrow inspector and its caption the quiet line about who else it reaches. */
+.bb-clearance-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.bb-clearance-caption {
+  margin: 4px 0 0;
+  color: var(--bb-ink-muted);
+  font-size: 11px;
+}
+
 .bb-shared-design-table {
   width: 100%;
   border-collapse: collapse;

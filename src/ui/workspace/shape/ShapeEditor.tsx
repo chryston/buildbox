@@ -15,7 +15,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { designFootprintSize, footprintAsPath, PRESET_NAMES, rectangleFootprint } from '../../../domain'
+import { designFootprintSize, designHeight, footprintAsPath, PRESET_NAMES, rectangleFootprint } from '../../../domain'
 import { STRINGS } from '../../strings'
 import type { ItemDesign, ItemFootprint } from '../../../domain'
 import type { PresetKind, Pt, Segment } from '../../../derive'
@@ -71,6 +71,7 @@ import {
 } from './proposal'
 import type { ShapeDraft, ShapeGesture } from './proposal'
 import { shapeTarget } from './shapeTarget'
+import { placementCountFor } from '../planModel'
 import { placementDefaults, placementFootprint } from './placement'
 import type { DragBox, PlacementGesture } from './placement'
 import type { ShapeFieldId } from './parameters'
@@ -110,6 +111,14 @@ export interface ShapeEditorProps {
   readonly readOnly?: boolean
   /** The Placed Item's Room membership, shown on the Measurements tab (#67 §15). */
   readonly membership?: string
+  /**
+   * Edit the design's Clearance Envelope path instead of its Item Footprint (#76 §4): the same
+   * tabs, the same controller and the same gestures, but the shape on screen is the envelope (a
+   * footprint-sized rectangle starts the first one), a cabinet's envelope is editable even
+   * though its footprint is not, and a commit writes `design.setClearanceEnvelope` — keeping the
+   * envelope's own `Bottom` and `Height` — instead of `design.setFootprint`.
+   */
+  readonly envelope?: boolean
 }
 
 const TABS: readonly { id: ShapeTabName; label: string }[] = [
@@ -137,14 +146,31 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
   // renders, read-only, with the derived size in it — the size is real, only the editing is
   // not available.
   const isCabinet = design.kind === 'cabinet'
+  const envelopeMode = props.envelope === true
+  /** The envelope draft lives beside the footprint draft, under a key of its own. */
+  const draftKey = envelopeMode ? `${itemDesignId}\u0000env` : itemDesignId
   const derived = isCabinet ? designFootprintSize(design) : null
-  const committed: ItemFootprint = design.kind === 'generic'
+  const baseFootprint: ItemFootprint = design.kind === 'generic'
     ? design.footprint
     : rectangleFootprint(derived?.width ?? 0, derived?.depth ?? 0)
-  const target = isCabinet ? null : shapeTarget(project, itemDesignId)
+  const committed: ItemFootprint = envelopeMode
+    ? (design.clearanceEnvelope === null || design.clearanceEnvelope === undefined
+      ? footprintAsPath(baseFootprint)
+      : { kind: 'path', path: design.clearanceEnvelope.path })
+    : baseFootprint
+  const target = envelopeMode
+    ? {
+      itemDesignId,
+      current: committed,
+      placementCount: placementCountFor(project, itemDesignId),
+      format: { unit: project.preferences.displayUnit, precision: project.preferences.displayPrecision },
+    }
+    : isCabinet
+      ? null
+      : shapeTarget(project, itemDesignId)
   const draft: ShapeDraft | null = target === null
     ? null
-    : draftState?.itemDesignId === itemDesignId
+    : draftState?.itemDesignId === draftKey
       ? draftState.draft
       : openShape(target)
 
@@ -156,10 +182,23 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
   const ghost = draft === null ? null : ghostFootprint(draft)
   const format = { unit: project.preferences.displayUnit, precision: project.preferences.displayPrecision }
 
-  /** Write the footprint. Only ever reached with a proposal the controller accepted. */
+  /** Write the shape. Only ever reached with a proposal the controller accepted. */
   const commit = (footprint: ItemFootprint): void => {
-    dispatch(services.intent.build('design.setFootprint', { itemDesignId, footprint }))
-    workspaceStore.getState().setShapeDraft(itemDesignId, null)
+    if (envelopeMode) {
+      // The envelope's own numbers survive a shape edit: only the path changes here.
+      const held = design.clearanceEnvelope
+      dispatch(services.intent.build('design.setClearanceEnvelope', {
+        itemDesignId,
+        envelope: {
+          path: footprintAsPath(footprint).path,
+          bottomOffset: held?.bottomOffset ?? 0,
+          height: held?.height ?? designHeight(design),
+        },
+      }))
+    } else {
+      dispatch(services.intent.build('design.setFootprint', { itemDesignId, footprint }))
+    }
+    workspaceStore.getState().setShapeDraft(draftKey, null)
   }
 
   /**
@@ -175,11 +214,11 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
       commit(footprint)
       return
     }
-    workspaceStore.getState().setShapeDraft(itemDesignId, next)
+    workspaceStore.getState().setShapeDraft(draftKey, next)
   }
 
   const dropDraft = (): void => {
-    if (draft !== null) workspaceStore.getState().setShapeDraft(itemDesignId, discard(draft))
+    if (draft !== null) workspaceStore.getState().setShapeDraft(draftKey, discard(draft))
   }
 
   /**
@@ -254,8 +293,8 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
   const proposeLoop = (footprint: ItemFootprint): void => {
     if (target === null) return
     const held = workspaceStore.getState().shapeDraft
-    const state = held?.itemDesignId === itemDesignId ? held.draft : openShape(target)
-    workspaceStore.getState().setShapeDraft(itemDesignId, propose(target, state, { via: 'canvas' }, footprint))
+    const state = held?.itemDesignId === draftKey ? held.draft : openShape(target)
+    workspaceStore.getState().setShapeDraft(draftKey, propose(target, state, { via: 'canvas' }, footprint))
   }
 
   /** Every draft change goes through here, so what is on screen is always what was proposed. */
@@ -291,21 +330,22 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
     const path = closeDraft(pathDraft, kind, bulge)
     const footprint: ItemFootprint = { kind: 'path', path }
     const held = workspaceStore.getState().shapeDraft
-    const state = held?.itemDesignId === itemDesignId ? held.draft : openShape(target)
+    const state = held?.itemDesignId === draftKey ? held.draft : openShape(target)
     const next = propose(target, state, { via: 'canvas' }, footprint)
     setPathDraft(null)
     setDrawTool(null)
     setTypedLength(null)
     if (next.proposal.state !== 'valid' || needsPreview(target)) {
-      workspaceStore.getState().setShapeDraft(itemDesignId, next)
+      workspaceStore.getState().setShapeDraft(draftKey, next)
       return
     }
     commit(footprint)
     // D4: a drawn Custom Path gets its Item Origin at the centre of its local bounds. Only a shape
     // that was not already a Custom Path gets one — moving the origin of a path that has
     // placements on it moves every one of them — and only when it actually moves, because
-    // `design.setOrigin` refuses a no-change.
-    if (committed.kind !== 'path' && design.kind === 'generic') {
+    // `design.setOrigin` refuses a no-change. An envelope is not the footprint: it never moves
+    // the Item Origin.
+    if (committed.kind !== 'path' && design.kind === 'generic' && !envelopeMode) {
       const at = pathOrigin(path)
       if (at.x !== design.origin.x || at.y !== design.origin.y) {
         dispatch(services.intent.build('design.setOrigin', { itemDesignId, origin: at }))
@@ -410,7 +450,7 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
     if (at === null) {
       const held = workspaceStore.getState().shapeDraft
       if (
-        held?.itemDesignId === itemDesignId
+        held?.itemDesignId === draftKey
         && held.draft.proposal.state === 'valid'
         && !needsPreview(target)
       ) commit(held.draft.proposal.footprint)
@@ -539,7 +579,7 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
       {!inspector && (
         <div className="bb-shape-toolbar" data-testid="shape-toolbar">
           <div className="bb-workspace-toolbar-group">
-            <ToolbarMenu label={STRINGS.shapes} testId="shapes-menu" disabled={isCabinet}>
+            <ToolbarMenu label={STRINGS.shapes} testId="shapes-menu" disabled={isCabinet && !envelopeMode}>
               <ShapesGallery
                 current={shown.kind === 'preset' ? shown.preset.kind : null}
                 currentPath={shown.kind === 'path'}
@@ -575,7 +615,7 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
                 data-testid={tool.testId}
                 className="bb-workspace-tool-button"
                 aria-pressed={drawTool === tool.id ? 'true' : 'false'}
-                disabled={isCabinet}
+                disabled={isCabinet && !envelopeMode}
                 onClick={() => {
                   stopPlacing()
                   if (drawTool === tool.id) stopDraft()
@@ -601,7 +641,7 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
 
       <div className="bb-shape-body">
         <div className="bb-shape-rail" data-testid="shape-rail">
-          {isCabinet && (
+          {isCabinet && !envelopeMode && (
             <p className="bb-shape-rail-note" data-testid="shape-editor-note">{CABINET_SHAPE_NOTE}</p>
           )}
           <div className="bb-shape-tabs" role="tablist" aria-label={STRINGS.itemFootprint}>
@@ -630,7 +670,7 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
                 format={format}
                 invalidField={field}
                 invalidMessage={field === null ? null : message}
-                readOnly={isCabinet || readOnly}
+                readOnly={(isCabinet && !envelopeMode) || readOnly}
                 onGesture={gesture}
                 onDiscard={dropDraft}
                 onConvert={() => setConvertOpen(true)}
@@ -643,8 +683,8 @@ export function ShapeEditor(props: ShapeEditorProps): ReactNode {
                 selection={shapeSelection}
                 invalidField={field}
                 invalidMessage={message}
-                readOnly={isCabinet || readOnly}
-                editable={committed.kind === 'path' && !isCabinet && !readOnly}
+                readOnly={(isCabinet && !envelopeMode) || readOnly}
+                editable={committed.kind === 'path' && (!isCabinet || envelopeMode) && !readOnly}
                 onSelect={workspaceStore.getState().setShapeSelection}
                 onGesture={gesture}
                 onDiscard={dropDraft}

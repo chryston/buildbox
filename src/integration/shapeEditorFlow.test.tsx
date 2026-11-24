@@ -594,7 +594,9 @@ describe('the Item Detail shape editor', () => {
     await userEvent.click(screen.getByTestId('shape-tab-measurements'))
     expect(screen.getByTestId('measurements-area')).toHaveTextContent('2.01 m²')
     expect(screen.getByTestId('measurements-perimeter')).toHaveTextContent('5,027 mm')
-    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
+    // Nothing to type in the footprint editor itself — the Clearance Envelope group beside it
+    // has its own fields (#76 §4), so the claim is scoped to the editor.
+    expect(within(screen.getByTestId('shape-editor')).queryByRole('spinbutton')).not.toBeInTheDocument()
   })
 
   it('shows a cabinet’s size read-only, and says where it comes from', async () => {

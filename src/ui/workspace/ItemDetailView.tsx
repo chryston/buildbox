@@ -14,6 +14,7 @@ import { useState, type ReactNode } from 'react'
 import { useWorkspaceProject, useWorkspaceRoot } from './WorkspaceRoot'
 import { itemLibrary, planViewsForFloor, placementGroups } from './planModel'
 import { ShapeEditor } from './shape/ShapeEditor'
+import { ClearanceEnvelopeSection } from './ClearanceEnvelopeSection'
 import { useWorkspace, workspaceStore } from './workspaceStore'
 import { STRINGS } from '../strings'
 import { ExportDialog } from './export/ExportDialog'
@@ -133,6 +134,11 @@ export function ItemDetailView({ itemDesignId, children }: ItemDetailViewProps) 
               the inspector: left of the drawing, as on any other Item Design (#58 criterion 17). */}
           {hasEditor && design !== null && (
             <ShapeEditor itemDesignId={itemDesignId} design={design} layout="inspector" />
+          )}
+          {/* The Clearance Envelope group, in Item Detail too (#76 §4) — a cabinet's envelope is
+              editable here even though its footprint is not. */}
+          {design !== null && (
+            <ClearanceEnvelopeSection itemDesignId={itemDesignId} design={design} />
           )}
           {children ?? (design === null ? null : (
             <ShapeEditor itemDesignId={itemDesignId} design={design} />
