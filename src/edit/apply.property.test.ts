@@ -1214,6 +1214,9 @@ function seedRarePreconditions(): void {
   const edgeId = edgeIds[0]!
   const shelterIds = g.ids(SHELTER_ID_COUNT)
   const mergeIds = g.ids(3)
+  const skirtingIds = g.ids(1)
+  const skirtingOtherIds = g.ids(1)
+  const skirtingId = skirtingIds[0]!
   const wall: WallDraft = {
     line: { kind: 'line', start: pt(0, 0), end: pt(4000, 0) },
     thickness: 100,
@@ -1259,6 +1262,36 @@ function seedRarePreconditions(): void {
       mergeIds,
     ),
     intent('wall.merge', { wallIds: [mergeIds[0]!, mergeIds[1]!] }),
+    // #78: a Skirting needs a host Wall whose face carries a range, which a random sequence reaches
+    // only when it happened to draw one first. So draw one and walk through every command the tool
+    // and the inspector have — the same debt the Room steps above pay for `room.attachFace`.
+    intent(
+      'skirting.create',
+      {
+        floorId,
+        hostWallId: wallId,
+        side: 'left' as const,
+        start: 0,
+        end: 2000,
+        bottom: 0,
+        height: 100,
+        thickness: 15,
+        label: 'Skirting SK-1',
+        target: { designOptionId: null, viewId: null },
+      },
+      skirtingIds,
+    ),
+    intent('skirting.dragEndpoint', { skirtingId: skirtingId, end: 'end' as const, to: 1800 }),
+    intent('skirting.setRange', { skirtingId: skirtingId, start: 100, end: 1900 }),
+    intent('skirting.setBottom', { skirtingId: skirtingId, bottom: 10 }),
+    intent('skirting.setHeight', { skirtingId: skirtingId, height: 90 }),
+    intent('skirting.setThickness', { skirtingId: skirtingId, thickness: 18 }),
+    intent('skirting.setVerticalExtent', { skirtingId: skirtingId, field: 'top' as const, value: 120 }),
+    intent('skirting.rename', { skirtingId: skirtingId, label: 'Skirting SK-2' }),
+    intent('skirting.flipSide', { skirtingId: skirtingId }),
+    intent('skirting.duplicateOtherSide', { skirtingId: skirtingId }, skirtingOtherIds),
+    intent('skirting.delete', { skirtingId: skirtingOtherIds[0]! }),
+    intent('skirting.delete', { skirtingId }),
   ]
   for (const next of steps) {
     const tally = seen.get(next.type) ?? { applied: 0, refused: 0 }
