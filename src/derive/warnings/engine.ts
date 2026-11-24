@@ -30,7 +30,8 @@ import { effectiveModel } from '../effectiveModel'
 import { roomOutlinePath } from '../../domain'
 import { designHeight } from '../../domain'
 import { placementTransform } from '../placement'
-import { applyTransform, transformSegment } from '../../geometry'
+import { applyTransform, pt, transformSegment } from '../../geometry'
+import { deriveServices } from '../services'
 import { deriveSkirting } from '../skirting'
 import { deriveWalls } from '../walls'
 import { ROOM_PRODUCERS } from './producers/rooms'
@@ -49,6 +50,7 @@ import type {
   WarningWall,
   WarningBeam,
   WarningSkirting,
+  WarningService,
 } from './types'
 
 /**
@@ -186,6 +188,33 @@ export const warningFloorOf = (project: Project, floorId: EntityId, optionId: En
     innerOffset: row.innerOffset,
     bodies: row.runs.map((run) => run.outline),
   }))
+  // A Service's body is derived, so the producer measures against the same body the Plan View paints
+  // (#79 §6): the centreline widened by the section's plan width. A Riser is a circle, and the
+  // geometry vocabulary has no arc, so its footprint is the square the circle stands in — a hair
+  // generous on a Ø100 pipe, which errs toward naming a real coordination clash rather than missing it.
+  const services: WarningService[] = deriveServices(project, floorId, optionId).services.map((row) => ({
+    id: row.id,
+    floorId,
+    label: row.label,
+    bottom: row.bottom,
+    top: row.top,
+    centrelineElevation: row.centrelineElevation,
+    shape: row.shape,
+    kind: row.entity.kind,
+    section: row.entity.shape === 'run' ? row.entity.section : null,
+    outsideDiameter: row.entity.outsideDiameter ?? null,
+    width: row.entity.shape === 'run' ? (row.entity.width ?? null) : null,
+    depth: row.entity.shape === 'run' ? (row.entity.depth ?? null) : null,
+    name: row.entity.label,
+    body:
+      row.outline ??
+      (() => {
+        const c = row.centre!
+        const r = row.radius!
+        const a = pt(c.x - r, c.y - r)
+        return { start: a, segments: [{ kind: 'line' as const, to: pt(c.x + r, c.y - r) }, { kind: 'line' as const, to: pt(c.x + r, c.y + r) }, { kind: 'line' as const, to: pt(c.x - r, c.y + r) }] }
+      })(),
+  }))
   const junctions = model.standingWallJunctions
     .map((junction) => ({
       id: junction.id,
@@ -244,6 +273,7 @@ export const warningFloorOf = (project: Project, floorId: EntityId, optionId: En
     openings: stableSort(openings, (a, b) => compareCodePoints(a.id, b.id)),
     beams: stableSort(beams, (a, b) => compareCodePoints(a.id, b.id)),
     skirtings: stableSort(skirtings, (a, b) => compareCodePoints(a.id, b.id)),
+    services: stableSort(services, (a, b) => compareCodePoints(a.id, b.id)),
     junctions: stableSort(junctions, (a, b) => compareCodePoints(a.id, b.id)),
     rooms: stableSort(rooms, (a, b) => compareCodePoints(a.id, b.id)),
     placements: stableSort(warningPlacements, (a, b) => compareCodePoints(a.id, b.id)),

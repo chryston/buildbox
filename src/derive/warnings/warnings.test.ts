@@ -161,6 +161,7 @@ describe('view state cannot reach a producer (criterion 2)', () => {
       'openings',
       'placements',
       'rooms',
+      'services',
       'skirtings',
       'walls',
     ])
@@ -188,6 +189,7 @@ describe('view state cannot reach a producer (criterion 2)', () => {
       'openings',
       'placements',
       'rooms',
+      'services',
       'skirtings',
       'walls',
     ])

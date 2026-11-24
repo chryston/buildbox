@@ -167,7 +167,7 @@ export type PlacedItemsRow = {
 }
 
 /** The Warnings List's word for a subject: `placed_item`, because a CSV column is snake_case. */
-export type WarningSubjectCode = 'wall' | 'opening' | 'room' | 'placed_item' | 'beam' | 'skirting'
+export type WarningSubjectCode = 'wall' | 'opening' | 'room' | 'placed_item' | 'beam' | 'skirting' | 'service'
 
 /** One Warnings List row (export contract §5). */
 export type WarningsRow = {
@@ -238,6 +238,41 @@ export type SkirtingRow = {
   readonly netLengthMm: number
   readonly heightMm: number
   readonly thicknessMm: number
+  readonly bottomMm: number
+  readonly topMm: number
+}
+
+/**
+ * One Service row (#79 §8).
+ *
+ * The two shapes share a file and disagree about two columns, which is what the record itself does:
+ * a Run has a centreline and no Bottom, a Riser has a Bottom and a Height and no centreline. The
+ * empty cell is the honest answer, not a zero — a Riser has no centreline to report, and inventing
+ * one would put a number in the file that no screen ever shows. `lengthMm` is the plan length of a
+ * Run and the Height of a Riser, because those are the two measurements of the same name the
+ * inspector offers for the two shapes.
+ */
+export type ServiceRow = {
+  readonly stableId: string
+  readonly floorId: string
+  readonly floor: string
+  readonly designOptionId: string
+  readonly designOption: string
+  readonly renovationState: RenovationState
+  readonly drawingLayerId: string
+  readonly drawingLayer: string
+  readonly predecessorIds: readonly string[]
+  readonly label: string
+  readonly kind: ServiceKind
+  readonly shape: ServiceShape
+  /** `round` or `rectangular` for a Run; empty for a Riser, which is always round. */
+  readonly section: ServiceSection | ''
+  readonly outsideDiameterMm: number | ''
+  readonly widthMm: number | ''
+  readonly depthMm: number | ''
+  readonly lengthMm: number
+  /** Empty for a Riser, which stores a Bottom and a Height instead. */
+  readonly centrelineMm: number | ''
   readonly bottomMm: number
   readonly topMm: number
 }
