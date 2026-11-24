@@ -48,10 +48,13 @@ const HIGH = 2600
  * Project there is nothing sharing the record, so an Existing edit commits as it always did and the
  * gesture is the whole story.
  */
-function sceneProject(): Project {
+function fixtureProject(): Project {
   const text = readFileSync(join(fixturesRoot, 'domain', 'v12', 'beams.json'), 'utf8')
-  const project = structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project)
-  return { ...project, designOptions: [] }
+  return structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project)
+}
+
+function sceneProject(): Project {
+  return { ...fixtureProject(), designOptions: [] }
 }
 
 function testWorkspaceServices(): WorkspaceServices {
@@ -283,4 +286,39 @@ describe('a Beam in the workspace (#77)', () => {
     await waitFor(() => expect(JSON.stringify(view.project().existingModel.beams)).toBe(before))
     expect(beamTarget()).toBeInTheDocument()
   })
+
+})
+
+describe('a Beam drawn into a Project that carries Design Options (#77)', () => {
+  beforeEach(async () => {
+    await renderWorkspace()
+  })
+
+  // Criterion 18: which collection a drawn Beam joins is the view's answer, not the tool's. A Plan
+  // View bound to a Design Option proposes; a Project with no Option documents the survey.
+  it('proposes the Beam in the Option whose Plan View it was drawn in (#77 criterion 18)', async () => {
+    const withOption = fixtureProject()
+    const option = withOption.designOptions?.[0]
+    if (option === undefined) throw new Error('the beams fixture carries no Design Option')
+    const bound = withOption.views.map((each) =>
+      each.id === 'seed-view-001' ? { ...each, designOptionId: option.id, renovationDisplay: 'proposed' as const } : each,
+    )
+    view = await openTestView({ ...withOption, views: bound })
+
+    const user = userEvent.setup()
+    await user.click(screen.getByTestId('tool-beam'))
+    expect(await screen.findByTestId('beam-draft-overlay')).toBeInTheDocument()
+    clickDraft(100, 60)
+    clickDraft(300, 60)
+    await waitFor(() => expect(screen.getByTestId('beam-draft-done')).toBeEnabled())
+    await user.click(screen.getByTestId('beam-draft-done'))
+
+    await waitFor(() => expect(option.proposed.beams ?? []).toHaveLength(1))
+    // The survey keeps what it said: the Option proposes, it does not rewrite.
+    expect(view.project().existingModel.beams ?? []).toHaveLength(1)
+    expect((view.project().existingModel.beams ?? [])[0]!.id).toBe(BEAM)
+  })
+
+
+
 })

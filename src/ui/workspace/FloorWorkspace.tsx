@@ -865,7 +865,14 @@ export function FloorWorkspace(): ReactNode {
     }
     if (result.code !== 'baseline-correction-required') return
     const entityId = subjectOfIntent(intent)
-    if (renovationOptionId === null) return
+    if (renovationOptionId === null) {
+      // Nothing can be offered, so the refusal itself is said out loud: the Project carries Design
+      // Options, this view belongs to none of them, and the record the tool just drew would have
+      // been written where every Option shares it. Silence here loses the press entirely.
+      const problem = result.problems[0]
+      if (problem !== undefined) showHiddenToolNotice(problem.message)
+      return
+    }
     if (renovationDisplayNow === 'existing') {
       // The Existing display is where a survey edit is meant, so a refusal there is never noise about
       // a stray drag: it is the one edit this build cannot answer alone, whether the person unlocked
@@ -2544,7 +2551,10 @@ export function FloorWorkspace(): ReactNode {
         onFinish={(result) => {
           if (floorId === null) return
           // One Beam, one Intent, one undo step (#22): the label is the next free `Beam B-n`, which
-          // is the name the tables, the warnings and the inspector will all read back.
+          // is the name the tables, the warnings and the inspector will all read back. The view the
+          // tool was used in travels with it, so a Beam drawn in a Design Option's Plan View is
+          // Proposed work in that Option and a Beam drawn with no Option open documents the survey
+          // (criterion 18) — the same container rule every creation follows (#69 §7, #71 §2).
           send('beam.create', {
             floorId,
             line: { start: result.start, end: result.end },
@@ -2553,6 +2563,7 @@ export function FloorWorkspace(): ReactNode {
             underside: result.underside,
             height: result.height,
             label: nextBeamLabel(project),
+            target: { designOptionId: renovationOptionId, viewId: view?.id ?? null },
           })
           setBeamDraft(null)
           setTool('select')
