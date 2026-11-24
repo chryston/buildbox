@@ -412,7 +412,7 @@ export function WallDraftOverlay(props: WallDraftOverlayProps): ReactNode {
       )}
       <div
         data-testid="wall-draft-bar"
-        className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2"
+        className="absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2"
         onClick={(event) => {
           // The bar is inside the layer that places points; its own clicks are not clicks on canvas.
           event.stopPropagation()

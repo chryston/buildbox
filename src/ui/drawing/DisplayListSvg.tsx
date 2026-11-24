@@ -102,6 +102,12 @@ export interface DisplayListSvgProps {
    */
   textLayer?: TextLayer
   /**
+   * The test id of the screen-space text group. One canvas paints several lists, and a test id
+   * belongs to exactly one of them: the Floor's words answer to `plan-text-layer`, while the
+   * Warning badges carry their own so a query for the labels never meets the `!` glyphs.
+   */
+  textLayerTestId?: string
+  /**
    * CSS pixels per list unit, and the pan, both only read when `textSpace` is `'screen'`:
    * they are what a millimetre coordinate and a millimetre font size are multiplied by.
    */
@@ -428,7 +434,7 @@ export function DisplayListSvg(props: DisplayListSvgProps): ReactNode {
       {textSpace === 'screen' && layer !== 'none' && (
         /* Every word, in CSS pixels and with no transform of any kind: a footprint turns, its
            name never does (#57 criterion 11). */
-        <g data-testid="plan-text-layer" style={{ pointerEvents: 'none', userSelect: 'none' }}>
+        <g data-testid={props.textLayerTestId ?? 'plan-text-layer'} style={{ pointerEvents: 'none', userSelect: 'none' }}>
           {render('text', screen)}
         </g>
       )}

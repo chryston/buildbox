@@ -776,6 +776,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
                 sizing={sizing}
                 matrix={matrix}
                 textSpace="screen"
+                textLayerTestId="plan-warning-badge-text-layer"
                 screen={{ pxPerUnit: zoom, panX, panY }}
                 resolveAsset={resolveAsset}
                 interactions={interactions}
