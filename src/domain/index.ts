@@ -238,6 +238,7 @@ export {
   commentIsOpen,
   commentReferenceNumber,
   compareCommentReferences,
+  duplicateCommentIds,
   DEFAULT_COMMENT_PRIORITY,
   DEFAULT_COMMENT_TITLE,
   formatCommentReference,
@@ -309,7 +310,7 @@ export type {
   DrawingLayer,
   LayerSetting,
 } from './project'
-export { remapEntities, remapIds, type IdAllocator, type IdReplacement } from './remapIds'
+export { remapAnchor, remapEntities, remapIds, type IdAllocator, type IdReplacement } from './remapIds'
 export { ACKNOWLEDGEMENT_NOTE_MAX_LENGTH, warningKey } from './warnings'
 export {
   MAX_OUTLINE_RECTS,

@@ -423,6 +423,8 @@ export const RENOVATION_STRINGS = {
     'Existing display: pasted entities join the shared Existing Model and every Design Option will see them.',
   pasteCorrectAndPaste: 'Correct Existing Model and paste',
   pasteConfirm: 'Paste with this mapping',
+  /** `Include Comments` (#80 §13), naming how many the copy would bring. */
+  pasteIncludeComments: (n: number): string => `Include ${n} ${n === 1 ? 'Comment' : 'Comments'} about this work`,
 
   // ---- the buttons every one of them ends with
   cancel: 'Cancel',

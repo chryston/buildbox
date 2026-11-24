@@ -11,6 +11,7 @@
  * than a dependant of it, so it goes with the Floor in the same transaction and never
  * counts as a reason to refuse.
  */
+import { commentAnchorFloorId } from './comments'
 import { beamsOf, elevationViewsOf, servicesOf, skirtingOf } from './project'
 import type { Project } from './project'
 
@@ -81,6 +82,23 @@ const services: FloorDependencyKind = {
     servicesOf(project.existingModel).reduce((total, service) => (service.floorId === floorId ? total + 1 : total), 0),
 }
 
+/**
+ * The Comments anchored to a Floor (#80 §1).
+ *
+ * Only an Anchor that names the Floor itself counts here — `floor` and `floor_point`. A Comment about
+ * a Wall that happens to stand on the Floor is counted with the Wall, whose own kind already refuses,
+ * and the anchored-deletion guard (#80 §14) is what stops the Wall going out from under the Comment.
+ * Nothing here deletes a Comment for you.
+ */
+const comments: FloorDependencyKind = {
+  id: 'comments',
+  label: 'Comments',
+  labelOne: 'Comment',
+  labelMany: 'Comments',
+  count: (project, floorId) =>
+    project.comments.reduce((total, comment) => (commentAnchorFloorId(comment.anchor) === floorId ? total + 1 : total), 0),
+}
+
 const planImage: FloorDependencyKind = {
   id: 'planImage',
   label: 'Plan Image',
@@ -127,6 +145,7 @@ export const FLOOR_DEPENDENCY_KINDS: readonly FloorDependencyKind[] = [
   beams,
   skirting,
   services,
+  comments,
   planImage,
   planViews,
   elevationViews,

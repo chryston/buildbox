@@ -590,6 +590,15 @@ export interface DuplicateFloor {
   /** The checklist, already resolved to the Placed Items it covers. */
   placedItemIds: EntityId[]
   includePlanImage: boolean
+  /**
+   * The Comments `Include Comments` covers (#80 §13), already resolved by the dialog and **empty by
+   * default**, because the box starts off. A duplicated Floor is usually made to try a different
+   * arrangement, and a second copy of every note about the original is not what was asked for. Each
+   * one that comes arrives with a new ID, a new `C-` reference and an Anchor pointing at the
+   * duplicate; a note about a shared Item Design stays where it was written, because the Item Design
+   * is shared and the note is about it.
+   */
+  commentIds: EntityId[]
 }
 
 /** A named Plan View on a Floor (#56). */
@@ -1601,6 +1610,11 @@ export interface PasteFromOtherProject {
   /** The saved view the paste was asked in: it decides the container and the undo target. */
   viewId: EntityId
   copySet: CopySet
+  /**
+   * `Include Comments`, off by default (#80 §13). The preview dialog shows how many Comments the copy
+   * would bring; nothing crosses until the box is checked.
+   */
+  includeComments: boolean
 }
 
 /** Where one source Layer's work goes: onto a Layer this Project has, onto a new one, or nowhere. */
@@ -1950,7 +1964,7 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
   'floor.setLimits': [],
   'floor.setDefaultWallHeight': [],
   'floor.delete': [],
-  'floor.duplicate': ['floorId', 'viewId', 'placedItemId…'],
+  'floor.duplicate': ['floorId', 'viewId', 'placedItemId…', 'commentId…'],
   'view.create': ['viewId'],
   'view.rename': [],
   'view.delete': [],
@@ -2029,8 +2043,11 @@ export function intentIdCount(type: IntentType, payload?: PayloadOf): number {
   const fixed = order.length - 1
   if (payload === undefined) return fixed + VARIADIC_ID_COUNT
   switch (type) {
-    case 'floor.duplicate':
-      return fixed + (payload as DuplicateFloor).placedItemIds.length
+    case 'floor.duplicate': {
+      // One per Placed Item, plus one per Comment `Include Comments` brings across (#80 §13).
+      const duplicate = payload as DuplicateFloor
+      return fixed + duplicate.placedItemIds.length + duplicate.commentIds.length
+    }
     case 'plan.copyToFloor':
       return (payload as CopyPlanObjectsToFloor).placedItemIds.length
     case 'wall.createChain': {
@@ -2069,7 +2086,10 @@ export function intentIdCount(type: IntentType, payload?: PayloadOf): number {
         beamsOf(pasted.entities).length +
         skirtingOf(pasted.entities).length +
         pasted.itemDesigns.length +
-        pasted.layers.length
+        pasted.layers.length +
+        // `Include Comments` (#80 §13) takes one more slot per Comment that crosses, at the tail, so
+        // the blocks `locatePaste` reads from the front are unmoved.
+        ((payload as PasteFromOtherProject).includeComments ? pasted.notes.length : 0)
       )
     }
     default:

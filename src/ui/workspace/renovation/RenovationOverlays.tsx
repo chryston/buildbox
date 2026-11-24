@@ -179,6 +179,7 @@ export function RenovationOverlays(): ReactNode {
             floorId: dialog.floorId,
             viewId: dialog.viewId,
             copySet: clipboard.copy,
+            includeComments: false,
           }),
         ).review,
         options,
@@ -404,12 +405,12 @@ export function RenovationOverlays(): ReactNode {
   if (dialog.kind === 'paste' && shown.review?.kind === 'paste-from-project' && clipboard.copy !== null) {
     const review: PasteReview = shown.review
     const copySet = clipboard.copy
-    const confirm = (resolutions: readonly PasteLayerResolution[], correct: boolean): void => {
+    const confirm = (resolutions: readonly PasteLayerResolution[], correct: boolean, includeComments: boolean): void => {
       setProblem(null)
       const label = RENOVATION_STRINGS.pasteLabel(review.entityCount, review.sourceProjectName)
       const inner = services.intent.build(
         'renovation.pasteFromProject',
-        { floorId: dialog.floorId, viewId: dialog.viewId, copySet },
+        { floorId: dialog.floorId, viewId: dialog.viewId, copySet, includeComments },
         label,
       )
       // A correction spends the ids the paste minted, so the inner Intent travels with none of them

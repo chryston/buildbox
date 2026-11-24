@@ -21,7 +21,8 @@
  * order followed — for a cabinet — by its tree in pre-order (a space, then its dividers,
  * then its accessories, then its left subtree, then its right), then the Placed Items in
  * array order, then the Walls in array order, then the Wall Junctions in array order
- * (#64), then the Openings, then the Rooms (#67), then the warning acknowledgements. Slot 0
+ * (#64), then the Openings, then the Rooms (#67), then the warning acknowledgements, then the Comments
+ * (#80 §1). Slot 0
  * belongs to the Project and is filled by `newId`, which the caller
  * minted; every later slot takes the allocator's ID at the same index. A test that finds
  * one ID it cannot explain can name the position it went wrong at, and remapping the same
@@ -33,6 +34,7 @@
  * corrupt the copy rather than rename it.
  */
 import type { CabinetNode } from './cabinetPayload'
+import type { CommentAnchor } from './comments'
 import { beamsOf, elevationViewsOf, servicesOf, skirtingOf } from './project'
 import type { EntityId, ItemDesign, Project, ProposedModel } from './project'
 
@@ -101,6 +103,35 @@ export function remapIds(project: Project, newId: EntityId, allocate: IdAllocato
       id: next(acknowledgement.id),
       subjectIds: acknowledgement.subjectIds.map(next),
     })),
+    // A Comment travels with the Project it was written in (#80 §1), and its Anchor names records of
+    // that Project, so the copy has to name its own. The `C-` reference is not an ID and does not move:
+    // a whole Project copied under new IDs is a different Project, where `C-004` is nobody else's name.
+    // A Design Option ID is not an entity ID either — the walk does not renumber Options — so an Anchor
+    // or a scope naming one is carried over as it stands, which is the Option the copy also has.
+    comments: project.comments.map((comment) => ({ ...comment, id: next(comment.id), anchor: remapAnchor(comment.anchor, next) })),
+  }
+}
+
+/**
+ * The one place that knows which field of a {@link CommentAnchor} is an entity ID. A Design Option ID
+ * is not one, and neither is a feature ID: `leftFace` is a name the owner's kind registers, not a
+ * record, and a node ID belongs to the Item Design's tree, which the owner field already reaches.
+ */
+export function remapAnchor(anchor: CommentAnchor, next: IdReplacement): CommentAnchor {
+  switch (anchor.kind) {
+    case 'project':
+      return anchor
+    case 'floor':
+    case 'floor_point':
+      return { ...anchor, floorId: next(anchor.floorId) }
+    case 'item_design':
+      return { ...anchor, itemDesignId: next(anchor.itemDesignId) }
+    case 'design_option':
+      return anchor
+    case 'entity':
+      return { ...anchor, entityId: next(anchor.entityId) }
+    case 'feature':
+      return { ...anchor, ownerId: next(anchor.ownerId) }
   }
 }
 
@@ -182,6 +213,8 @@ function entityIds(project: Project): EntityId[] {
   for (const entry of skirtingOf(project.existingModel)) ids.push(entry.id)
   for (const service of servicesOf(project.existingModel)) ids.push(service.id)
   for (const acknowledgement of project.warningAcknowledgements) ids.push(acknowledgement.id)
+  // A Comment has an ID of its own and an Anchor naming one, so it is a record like any other (#80 §1).
+  for (const comment of project.comments) ids.push(comment.id)
   return ids
 }
 

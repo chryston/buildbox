@@ -576,6 +576,7 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
       toIndex: int(g, 0, g.project.floors.length),
       placedItemIds: chosen.map((item) => item.id),
       includePlanImage: bool(g),
+      commentIds: [],
     }, ids)
   },
   (g) => {

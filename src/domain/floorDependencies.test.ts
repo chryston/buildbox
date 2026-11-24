@@ -72,11 +72,11 @@ const textOf = (floorId: string): string[] => summarizeFloorDependencies(project
 
 describe('summarizeFloorDependencies', () => {
   it('counts the Placed Items, the Beams, the Skirting, the Plan Image, the named Plan Views and the Elevation Views of one Floor', () => {
-    expect(textOf('floor-kitchen')).toEqual(['3 Placed Items', '0 Beams', '0 Skirting', '0 Services', '1 Plan Image', '1 named Plan View', '1 Elevation View'])
+    expect(textOf('floor-kitchen')).toEqual(['3 Placed Items', '0 Beams', '0 Skirting', '0 Services', '0 Comments', '1 Plan Image', '1 named Plan View', '1 Elevation View'])
   })
 
   it('reads an empty Floor as having nothing leaning on it', () => {
-    expect(textOf('floor-cellar')).toEqual(['0 Placed Items', '0 Beams', '0 Skirting', '0 Services', '0 Plan Images', '0 named Plan Views', '0 Elevation Views'])
+    expect(textOf('floor-cellar')).toEqual(['0 Placed Items', '0 Beams', '0 Skirting', '0 Services', '0 Comments', '0 Plan Images', '0 named Plan Views', '0 Elevation Views'])
     expect(floorHasDependencies(project(), 'floor-cellar')).toBe(false)
   })
 
@@ -86,12 +86,13 @@ describe('summarizeFloorDependencies', () => {
   })
 
   it('names each kind in registry order, so a dialog can key a row', () => {
-    expect(FLOOR_DEPENDENCY_KINDS.map((kind) => kind.id)).toEqual(['placedItems', 'beams', 'skirting', 'services', 'planImage', 'planViews', 'elevationViews'])
+    expect(FLOOR_DEPENDENCY_KINDS.map((kind) => kind.id)).toEqual(['placedItems', 'beams', 'skirting', 'services', 'comments', 'planImage', 'planViews', 'elevationViews'])
     expect(summarizeFloorDependencies(project(), 'floor-kitchen').map((row) => row.kind.id)).toEqual([
       'placedItems',
       'beams',
       'skirting',
       'services',
+      'comments',
       'planImage',
       'planViews',
       'elevationViews',
@@ -105,6 +106,7 @@ describe('summarizeFloorDependencies', () => {
       '0 Beams',
       '0 Skirting',
       '0 Services',
+      '0 Comments',
       '0 Plan Images',
       '0 named Plan Views',
       '0 Elevation Views',

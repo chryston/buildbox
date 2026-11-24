@@ -13,8 +13,8 @@
  * - **Reordering is not editing.** `floor.reorder` moves one array entry and touches no
  *   geometry, which is what criterion 2 measures byte for byte.
  */
-import { defaultPlanView, defaultPlanViewRange, elevationViewsOf, floorHasDependencies, nextFloorName, viewDesignOptionId, viewRenovationDisplay } from '../../domain'
-import type { EntityId, Floor, PlanView, Project } from '../../domain'
+import { defaultPlanView, defaultPlanViewRange, elevationViewsOf, floorHasDependencies, formatCommentReference, nextFloorName, viewDesignOptionId, viewRenovationDisplay } from '../../domain'
+import type { CommentAnchor, EntityId, Floor, PlanView, Project } from '../../domain'
 import type { FloorIntent, Locator, PlanIntent, TransferPlanObjectsToFloor, ViewIntent } from '../intents'
 import type { Handler, IntentHandler } from './context'
 import { elevationViewPath } from './elevationHandlers'
@@ -51,11 +51,13 @@ function requireView(project: Project, viewId: EntityId): PlanView {
 function requireCopiedIds(
   ids: readonly string[],
   placedItemCount: number,
+  commentCount: number,
   type: string,
-): { floorId: string; viewId: string; placedItemIds: string[] } {
+): { floorId: string; viewId: string; placedItemIds: string[]; commentIds: string[] } {
   const [floorId, viewId] = spendIds(ids, 2, type)
   const placedItemIds = spendIds(ids.slice(2), placedItemCount, type)
-  return { floorId, viewId, placedItemIds }
+  const commentIds = spendIds(ids.slice(2 + placedItemCount), commentCount, type)
+  return { floorId, viewId, placedItemIds, commentIds }
 }
 
 // --- Floors -------------------------------------------------------------------
@@ -164,13 +166,21 @@ const deleteFloor: Handler<'floor.delete'> = (ctx) => {
  * there is nothing to translate them into, and the preview showed them where they are.
  */
 const duplicateFloor: Handler<'floor.duplicate'> = (ctx) => {
-  const { floorId, name, toIndex, placedItemIds, includePlanImage } = ctx.intent.payload
+  const { floorId, name, toIndex, placedItemIds, includePlanImage, commentIds } = ctx.intent.payload
   const source = requireFloor(ctx.project, floorId)
   const selected = new Set(placedItemIds)
   const copied = ctx.project.existingModel.placedItems.filter((item) => item.floorId === floorId && selected.has(item.id))
-  const { floorId: newFloorId, viewId: newViewId, placedItemIds: newPlacedIds } = requireCopiedIds(
+  // The Comments the caller asked to bring across, read out of the Project. An ID that names no Comment
+  // is a caller that has been overtaken by an undo, and is refused rather than quietly skipped.
+  const carried = commentIds.map((id) => {
+    const comment = ctx.project.comments.find((candidate) => candidate.id === id)
+    if (comment === undefined) refuse('unknown-target', `comments[${id}]`, `There is no Comment ${id} to duplicate.`)
+    return comment
+  })
+  const { floorId: newFloorId, viewId: newViewId, placedItemIds: newPlacedIds, commentIds: freshCommentIds } = requireCopiedIds(
     ctx.intent.ids,
     copied.length,
+    carried.length,
     ctx.intent.type,
   )
   if (copied.length !== placedItemIds.length) {
@@ -204,6 +214,43 @@ const duplicateFloor: Handler<'floor.duplicate'> = (ctx) => {
   copied.forEach((item, index) => {
     ctx.draft.existingModel.placedItems.push({ ...item, id: newPlacedIds[index] as string, floorId: newFloorId })
   })
+  // `Include Comments` (#80 §13). What travels is what the duplicate is a copy *of*: a note about the
+  // Floor itself, about a point on it, or about one of the Placed Items coming across. A note about the
+  // Item Design does not — the duplicate shares that design, and a second copy of the same note about
+  // the same shared thing would be a second answer to the same question. Each one arrives under a new
+  // `C-` number, because within one Project a reference names one Comment and only one.
+  const copiedItemIds = new Map<EntityId, EntityId>(
+    copied.map((item, index) => [item.id, newPlacedIds[index] as EntityId]),
+  )
+  carried.forEach((comment, index) => {
+    const id = freshCommentIds[index]
+    if (id === undefined) {
+      refuse('unknown-target', floorPath(floorId), 'This duplicate needs one fresh ID per Comment it brings across.')
+    }
+    ctx.draft.commentReferenceCounter += 1
+    ctx.draft.comments.push({
+      ...comment,
+      id,
+      reference: formatCommentReference(ctx.draft.commentReferenceCounter),
+      anchor: remapCommentOntoFloor(comment.anchor, newFloorId, copiedItemIds),
+    })
+  })
+}
+
+/**
+ * The Anchor of a duplicated Comment, aimed at the duplicate rather than the original (#80 §13). A
+ * Floor anchor follows the new Floor; an entity anchor follows the copy of the thing it named, and an
+ * Anchor whose subject was not part of the copy is left pointing at the original, which is the truth.
+ */
+function remapCommentOntoFloor(
+  anchor: CommentAnchor,
+  newFloorId: EntityId,
+  copiedItemIds: ReadonlyMap<EntityId, EntityId>,
+): CommentAnchor {
+  if (anchor.kind === 'floor' || anchor.kind === 'floor_point') return { ...anchor, floorId: newFloorId }
+  if (anchor.kind !== 'entity') return anchor
+  const copy = copiedItemIds.get(anchor.entityId)
+  return copy === undefined ? anchor : { ...anchor, entityId: copy }
 }
 
 // --- Plan Images on another Floor ---------------------------------------------

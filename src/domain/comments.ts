@@ -25,7 +25,7 @@
  * `domain` never allocates a reference, never reads the clock and never invents an ID (#42 §3): the
  * Intent brings all three.
  */
-import type { EntityId, Point2 } from './project'
+import type { EntityId, Point2, Project } from './project'
 
 /** Whether a Comment is standing or finished (#80 §1). Two states, and no archive beside them. */
 export type CommentStatus = 'open' | 'resolved'
@@ -252,3 +252,24 @@ export const commentIsOpen = (comment: Comment): boolean => comment.status === '
 
 /** The Open Comments of a Project, in the order the Project lists them. */
 export const openComments = (comments: readonly Comment[]): Comment[] => comments.filter(commentIsOpen)
+
+/**
+ * The Comments a duplicated Floor can take with it (#80 §13): the ones anchored to the Floor itself or
+ * to one of the Placed Items being copied.
+ *
+ * A note about a shared Item Design is deliberately absent — the Item Design is shared and the note is
+ * about it, so copying the placement copies the thing the note was already pointing at. A note about
+ * the Project or one of its Design Options is left behind for the same reason: the duplicate is in the
+ * same Project and, usually, the same Option, and a second copy of the note would only double the list.
+ */
+export function duplicateCommentIds(project: Project, floorId: EntityId, placedItemIds: readonly EntityId[]): EntityId[] {
+  const copied = new Set<EntityId>(placedItemIds)
+  return project.comments
+    .filter((comment) => {
+      const anchor = comment.anchor
+      if (anchor.kind === 'floor' || anchor.kind === 'floor_point') return anchor.floorId === floorId
+      if (anchor.kind === 'entity') return copied.has(anchor.entityId)
+      return false
+    })
+    .map((comment) => comment.id)
+}

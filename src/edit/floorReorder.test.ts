@@ -118,7 +118,7 @@ describe('the Floor Datum on every Floor (#56 criterion 4)', () => {
       project,
       intent(
         'floor.duplicate',
-        { floorId: source.id, name: 'Level 2 copy', toIndex: 2, placedItemIds: items.map((item) => item.id), includePlanImage: false },
+        { floorId: source.id, name: 'Level 2 copy', toIndex: 2, placedItemIds: items.map((item) => item.id), includePlanImage: false, commentIds: [] },
         ids,
       ),
     )

@@ -33,7 +33,7 @@ export interface PasteDialogProps {
   /** This Project's layers, in the order the Project keeps them. */
   destinations: readonly PasteDestinationLayer[]
   /** Run the paste. `correct` asks for the wrapper that corrects the Existing Model first. */
-  onConfirm: (resolutions: readonly PasteLayerResolution[], correct: boolean) => void
+  onConfirm: (resolutions: readonly PasteLayerResolution[], correct: boolean, includeComments: boolean) => void
   onCancel: () => void
   /** Why the last paste was refused. The dialog stays open and says it in plain words. */
   problem?: string
@@ -77,6 +77,9 @@ function refsOn(copySet: CopySet, layerId: EntityId): string[] {
 export function PasteFromOtherProjectDialog(props: PasteDialogProps): ReactNode {
   const { review, copySet, destinations, onConfirm, onCancel, problem } = props
   const [answers, setAnswers] = useState<Partial<Record<EntityId, PasteLayerTarget | null>>>({})
+  // `Include Comments` starts off (#80 §13), and the row it sits on says how many there would be, so
+  // the box is answered with the number in front of the person rather than discovered afterwards.
+  const [includeComments, setIncludeComments] = useState(false)
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -215,6 +218,17 @@ export function PasteFromOtherProjectDialog(props: PasteDialogProps): ReactNode 
             {problem}
           </p>
         )}
+        {copySet.notes.length > 0 && (
+          <label className="bb-workspace-check" data-testid="paste-include-comments-row">
+            <input
+              type="checkbox"
+              data-testid="paste-include-comments"
+              checked={includeComments}
+              onChange={(event) => setIncludeComments(event.target.checked)}
+            />
+            {RENOVATION_STRINGS.pasteIncludeComments(copySet.notes.length)}
+          </label>
+        )}
         <div className="bb-workspace-dialog-actions">
           <button
             type="button"
@@ -222,7 +236,7 @@ export function PasteFromOtherProjectDialog(props: PasteDialogProps): ReactNode 
             className="bb-workspace-danger-button"
             disabled={blocked || !ready}
             onClick={() => {
-              onConfirm(resolutions, correct)
+              onConfirm(resolutions, correct, includeComments)
             }}
           >
             {correct ? RENOVATION_STRINGS.pasteCorrectAndPaste : RENOVATION_STRINGS.pasteConfirm}

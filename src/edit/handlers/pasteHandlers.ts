@@ -15,7 +15,7 @@
  * a whole Project with (#72 §4), and an ID the copy names that it did not bring is a refusal rather
  * than a dangling reference.
  */
-import { beamsOf, drawingLayerById, remapEntities, servicesOf, skirtingOf } from '../../domain'
+import { beamsOf, drawingLayerById, formatCommentReference, remapAnchor, remapEntities, servicesOf, skirtingOf } from '../../domain'
 import type { EntityId, Project, ProposedModel } from '../../domain'
 import type { IdReplacement } from '../../domain'
 import type {
@@ -26,6 +26,7 @@ import type {
   PasteReview,
   RenovationIntentType,
 } from '../intents'
+import { anchorResolves } from '../anchoredComments'
 import { pasteReviewOf } from '../pasteReview'
 import type { Handler, IntentHandler } from './context'
 import { checkRoomProposal } from './roomSupport'
@@ -90,7 +91,7 @@ function readMapping(
 }
 
 const pasteFromOtherProject: Handler<'renovation.pasteFromProject'> = (ctx) => {
-  const { floorId, viewId, copySet } = ctx.intent.payload
+  const { floorId, viewId, copySet, includeComments } = ctx.intent.payload
   const view = ctx.project.views.find((candidate) => candidate.id === viewId)
   if (view === undefined) refuse('unknown-target', `views[${viewId}]`, `There is no saved view ${viewId} to paste into.`)
   const review = pasteReviewOf(ctx.project, view, copySet)
@@ -145,6 +146,11 @@ const pasteFromOtherProject: Handler<'renovation.pasteFromProject'> = (ctx) => {
   // One slot per source Layer, spent only by the rows the mapping sends to a Layer made here.
   const layerSlot = new Map<EntityId, EntityId>()
   for (const row of review.rows) layerSlot.set(row.sourceLayerId, nextId())
+  // `Include Comments` (#80 §13). The Copy Set carries the Comments anchored to what it copied; the
+  // checkbox decides whether they cross, and each one that does takes a fresh ID and a fresh `C-`
+  // number in this Project, where the source's numbers may already belong to other Comments.
+  const pastedNotes = includeComments ? copySet.notes : []
+  const noteIds = pastedNotes.map(() => nextId())
 
   const replace: IdReplacement = (id) => {
     const mapped = map.get(id)
@@ -256,6 +262,21 @@ const pasteFromOtherProject: Handler<'renovation.pasteFromProject'> = (ctx) => {
     const id = designIds[index]
     if (id !== undefined) ctx.draft.itemDesigns.push({ ...design, id })
   })
+  // A pasted Comment keeps what was written about the work and takes this Project's name for it: a new
+  // ID, a new `C-` reference off this Project's counter, and an Anchor aimed at the copy through the
+  // same map every other record went through. A Comment whose subject did not cross — a Skirting whose
+  // Wall stayed behind — is dropped with it, because an Anchor that resolves to nothing is a Project the
+  // validator refuses.
+  let commentCounter = ctx.draft.commentReferenceCounter
+  pastedNotes.forEach((comment, index) => {
+    const id = noteIds[index]
+    if (id === undefined) return
+    const anchor = remapAnchor(comment.anchor, replace)
+    if (!anchorResolves(ground, anchor)) return
+    commentCounter += 1
+    ctx.draft.comments.push({ ...comment, id, reference: formatCommentReference(commentCounter), anchor })
+  })
+  ctx.draft.commentReferenceCounter = commentCounter
 
   // A Room is committed only when it overlaps nothing it can see (#67 §7), and borrowed work is no
   // exception: each pasted Room is checked against the Rooms this view stands on and against the

@@ -22,7 +22,7 @@ import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } fro
 import { wallOpenings, drawElevationView } from '../../drawing'
 import type { BadgeSubject, LayerGates, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
 import type { ElevationView, Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
-import { designOptionsOf, elevationViewsOf, allServices, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf } from '../../domain'
+import { designOptionsOf, duplicateCommentIds, elevationViewsOf, allServices, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
@@ -1555,7 +1555,12 @@ export function FloorWorkspace(): ReactNode {
 
   const duplicateFloor = (input: DuplicateFloorInput): void => {
     if (duplicateFloorId === null) return
-    send('floor.duplicate', { floorId: duplicateFloorId, ...input })
+    const { includeComments, ...rest } = input
+    send('floor.duplicate', {
+      floorId: duplicateFloorId,
+      ...rest,
+      commentIds: includeComments ? duplicateCommentIds(project, duplicateFloorId, input.placedItemIds) : [],
+    })
     setDuplicateFloorId(null)
     const after = session.getSnapshot().project
     const created = after.floors.find((candidate) => candidate.name === input.name)

@@ -287,6 +287,7 @@ exports[`the copy > is the whole vocabulary of the interface 1`] = `
   "imageInvalidFile": "Please choose a valid image file.",
   "imageTooLarge": "A Plan Image can be at most 50 MB.",
   "inThisProject": "In this Project",
+  "includeComments": "Include Comments",
   "includePlanImage": "Include Plan Image",
   "insideRoom": [Function],
   "itemDesignOf": [Function],
