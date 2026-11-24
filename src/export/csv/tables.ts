@@ -68,7 +68,7 @@ export interface TableSpec {
 }
 
 /** The tables this build writes. Later issues add rows here, and nowhere else. */
-export type TableId = 'items' | 'cut-list' | 'rooms' | 'walls' | 'openings' | 'beams' | 'skirting' | 'placed-items' | 'warnings'
+export type TableId = 'items' | 'cut-list' | 'rooms' | 'walls' | 'openings' | 'beams' | 'skirting' | 'services' | 'placed-items' | 'warnings'
 
 /**
  * A table's columns, in contract order: the header line supplies the file's words, the pairs
@@ -348,6 +348,45 @@ export const SKIRTING_TABLE: TableSpec = {
 }
 
 /**
+ * The Services table (#79 §8).
+ *
+ * One file for both shapes, and the columns a shape does not have stay empty: `centreline_mm` is
+ * blank for a Riser, which stores a Bottom and a Height, and `width_mm` and `depth_mm` are blank for
+ * a round section. A zero in any of those would be a measurement nobody took. `length_mm` is the plan
+ * length of a Run and the Height of a Riser — the one measurement each shape's inspector offers
+ * under that name. `bottom_mm` and `top_mm` are derived for a Run from its centreline and section,
+ * the same arithmetic every other surface shows.
+ */
+const SERVICES_HEADER =
+  'stable_id,floor_id,floor,design_option_id,design_option,renovation_state,drawing_layer_id,drawing_layer,label,kind,shape,section,outside_diameter_mm,width_mm,depth_mm,length_mm,centreline_mm,bottom_mm,top_mm,predecessor_ids'
+
+export const SERVICES_TABLE: TableSpec = {
+  id: 'services',
+  columns: columnsFor(SERVICES_HEADER, [
+    ['stableId', 'id'],
+    ['floorId', 'id'],
+    ['floor', 'text'],
+    ['designOptionId', 'id'],
+    ['designOption', 'text'],
+    ['renovationState', 'enum', ['existing', 'demolition', 'proposed']],
+    ['drawingLayerId', 'id'],
+    ['drawingLayer', 'text'],
+    ['label', 'text'],
+    ['kind', 'enum', ['water', 'drain', 'gas', 'electrical', 'air_con', 'other']],
+    ['shape', 'enum', ['run', 'riser']],
+    ['section', 'enum', ['round', 'rectangular']],
+    ['outsideDiameterMm', 'length_mm'],
+    ['widthMm', 'length_mm'],
+    ['depthMm', 'length_mm'],
+    ['lengthMm', 'length_mm'],
+    ['centrelineMm', 'length_mm'],
+    ['bottomMm', 'length_mm'],
+    ['topMm', 'length_mm'],
+    ['predecessorIds', 'multi'],
+  ]),
+}
+
+/**
  * The Placed Items table (#68 Scope 3).
  *
  * One row per Placed Item, never one per Item Design — that is the Item List's job, and the two
@@ -424,6 +463,7 @@ export const TABLES: Readonly<Record<TableId, TableSpec>> = {
   openings: OPENINGS_TABLE,
   beams: BEAMS_TABLE,
   skirting: SKIRTING_TABLE,
+  services: SERVICES_TABLE,
   'placed-items': PLACED_ITEMS_TABLE,
   warnings: WARNINGS_TABLE,
 }

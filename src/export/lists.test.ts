@@ -350,6 +350,7 @@ describe('listsSummary', () => {
       openings: 0,
       beams: 0,
       skirting: 0,
+      services: 0,
       warnings: 1,
     })
     expect(summary.rows['cut-list']).toBeGreaterThan(0)

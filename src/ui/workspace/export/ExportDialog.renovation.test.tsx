@@ -65,7 +65,7 @@ const COMPOSITION: RecordedComposition = {
 /** Four Placed Items in scope, all four of them hidden by the view the dialog was opened from. */
 const SUMMARY: ListsSummary = {
   statement: 'Floor plan · Ground Floor · Option A · Existing, Demolition, Proposed · Structure, Unlayered',
-  rows: { items: 4, 'cut-list': 0, rooms: 2, walls: 6, openings: 1, beams: 0, skirting: 0, 'placed-items': 4, warnings: 0 },
+  rows: { items: 4, 'cut-list': 0, rooms: 2, walls: 6, openings: 1, beams: 0, skirting: 0, services: 0, 'placed-items': 4, warnings: 0 },
   cutListCapable: false,
   hiddenInView: { count: 4, refs: ['Sofa', 'Armchair', 'Floor lamp', 'Side table'] },
 }

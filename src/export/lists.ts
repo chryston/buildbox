@@ -92,6 +92,7 @@ export function listsSummary(
       openings: at.openings.length,
       beams: at.beams.length,
       skirting: at.skirting.length,
+      services: at.services.length,
       'placed-items': at.placedItems.length,
       warnings: at.warnings.length,
     },
@@ -148,6 +149,7 @@ export async function exportLists(
     rowsOf.openings = at.openings
     rowsOf.beams = at.beams
     rowsOf.skirting = at.skirting
+    rowsOf.services = at.services
     rowsOf['placed-items'] = at.placedItems
     rowsOf.warnings = at.warnings
   }

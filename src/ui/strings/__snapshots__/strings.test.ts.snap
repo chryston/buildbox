@@ -190,6 +190,7 @@ exports[`the copy > is the whole vocabulary of the interface 1`] = `
   "exportListOpenings": "Openings",
   "exportListPlacedItems": "Placed Items",
   "exportListRooms": "Rooms",
+  "exportListServices": "Services",
   "exportListSkirting": "Skirting",
   "exportListWalls": "Walls",
   "exportListWarnings": "Warnings List",
