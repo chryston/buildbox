@@ -16,6 +16,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import App from '../App'
 import { designHeight } from '../domain'
+import { withComments } from '../domain/testing'
 import type { Project } from '../domain'
 import { PLAN_IMAGE_ACCEPT, WorkspaceProvider, type WorkspaceServices } from '../ui'
 import { workspaceStore } from '../ui'
@@ -27,11 +28,13 @@ import { fileURLToPath } from 'node:url'
 
 const fixturesRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../fixtures')
 
-const scene = (
-  JSON.parse(readFileSync(join(fixturesRoot, 'domain', 'v9', 'plan-range-scene.json'), 'utf8')) as {
-    project: Project
-  }
-).project
+const scene = withComments(
+  (
+    JSON.parse(readFileSync(join(fixturesRoot, 'domain', 'v9', 'plan-range-scene.json'), 'utf8')) as {
+      project: Project
+    }
+  ).project,
+)
 
 const wall = (ref: string) => scene.existingModel.walls.find((each) => each.ref === ref) ?? expect.fail(`no ${ref}`)
 const opening = scene.existingModel.openings[0]!

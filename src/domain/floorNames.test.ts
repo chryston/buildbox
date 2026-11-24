@@ -33,6 +33,8 @@ const projectWith = (floorNames: string[], viewNames: [floorId: string, name: st
     itemDesigns: [],
     existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [] },
     warningAcknowledgements: [],
+    comments: [],
+    commentReferenceCounter: 0,
   }
 }
 

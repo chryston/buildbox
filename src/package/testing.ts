@@ -172,6 +172,8 @@ export function fixtureProject(): Project {
       ],
     },
     warningAcknowledgements: [],
+    comments: [],
+    commentReferenceCounter: 0,
   }
 }
 
@@ -692,5 +694,85 @@ export function servicesFixtureProject(): Project {
           }
         : option,
     ),
+  }
+}
+
+/**
+ * The same Project as the v15 golden file (#80): the v14 scene, plus one Comment of every Anchor kind
+ * and one of them Resolved.
+ *
+ * The targets are read out of the scene rather than written down, so the fixture cannot name a Wall
+ * or a cabinet space the scene does not hold — which is the one thing a Comment golden has to keep
+ * true, because an unresolved Anchor is refused on import and the whole file would stop loading.
+ */
+export function commentsFixtureProject(): Project {
+  const project = servicesFixtureProject()
+  const wall = project.existingModel.walls[0]!
+  const cabinet = project.itemDesigns.find((design) => design.kind === 'cabinet')
+  if (cabinet === undefined || cabinet.kind !== 'cabinet') throw new Error('the package fixture carries no cabinet design')
+  const created = '2026-11-23T09:00:00.000Z'
+  return {
+    ...project,
+    comments: [
+      {
+        id: 'comment-1' as EntityId,
+        reference: 'C-001',
+        title: 'Check the ceiling coordination',
+        body: 'Walk the site before the first drawing is issued.',
+        anchor: { kind: 'project' },
+        status: 'open',
+        priority: 'high',
+        createdAt: created,
+        updatedAt: created,
+        scope: 'all',
+      },
+      {
+        id: 'comment-2' as EntityId,
+        reference: 'C-002',
+        title: 'Notch the base of this Wall',
+        body: 'A duct passes at 100 mm above the Datum.',
+        anchor: { kind: 'entity', entityId: wall.id },
+        status: 'open',
+        priority: 'normal',
+        createdAt: created,
+        updatedAt: created,
+      },
+      {
+        id: 'comment-3' as EntityId,
+        reference: 'C-003',
+        title: 'Clip fixed to this face',
+        body: 'Mid-span, where the face is clear of the opening.',
+        anchor: { kind: 'feature', ownerId: wall.id, featureId: 'leftFace', t: 0.5 },
+        status: 'open',
+        priority: 'low',
+        createdAt: created,
+        updatedAt: created,
+      },
+      {
+        id: 'comment-4' as EntityId,
+        reference: 'C-004',
+        title: 'This space stays unlined',
+        body: 'The client will paint the carcass itself.',
+        anchor: { kind: 'feature', ownerId: cabinet.id, featureId: cabinet.construction.root.id },
+        status: 'resolved',
+        priority: 'normal',
+        createdAt: created,
+        updatedAt: '2026-11-24T02:15:00.000Z',
+        resolvedAt: '2026-11-24T02:15:00.000Z',
+      },
+      {
+        id: 'comment-5' as EntityId,
+        reference: 'C-005',
+        title: 'Floor drain to be confirmed here',
+        body: 'The gully is drawn on the structural plan only.',
+        anchor: { kind: 'floor_point', floorId: 'floor-0' as EntityId, point: { x: 3400, y: 2200 } },
+        status: 'open',
+        priority: 'normal',
+        createdAt: created,
+        updatedAt: created,
+        scope: 'option-1' as EntityId,
+      },
+    ],
+    commentReferenceCounter: 5,
   }
 }

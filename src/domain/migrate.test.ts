@@ -13,6 +13,7 @@ import {
   migrateV10toV11,
   migrateV11toV12,
   migrateV13toV14,
+  migrateV14toV15,
   rectangleFootprint,
   runMigrationChain,
   type IdAllocator,
@@ -67,6 +68,8 @@ function validProject(): Project {
       ],
     },
     warningAcknowledgements: [],
+    comments: [],
+    commentReferenceCounter: 0,
   }
 }
 
@@ -114,7 +117,7 @@ describe('DOMAIN_SCHEMA_VERSION', () => {
   it('is the version this build writes', () => {
     // v14 is production: the Service shipped, so the number the chain ends at and the number this
     // build writes are the same one (#73, #75, #76, #77, #78, #79).
-    expect(DOMAIN_SCHEMA_VERSION).toBe(14)
+    expect(DOMAIN_SCHEMA_VERSION).toBe(15)
   })
 })
 
@@ -948,5 +951,92 @@ describe('migrateV13toV14 — both containers gain the Service collection (#79)'
     expect(migrateV13toV14(null)).toBeNull()
     expect(migrateV13toV14([{ existingModel: {} }])).toEqual([{ existingModel: {} }])
     expect(migrateV13toV14({ designOptions: 'not a list' })).toEqual({ designOptions: 'not a list', existingModel: { services: [] } })
+  })
+})
+
+describe('migrateV14toV15 — the Project gains the Comment collection and its counter (#80)', () => {
+  /** The same Project as its v14 twin: a record written before a Comment existed. */
+  function v14Record(): Record<string, unknown> {
+    const record: Record<string, unknown> = { ...validProject() }
+    delete record.comments
+    delete record.commentReferenceCounter
+    return record
+  }
+
+  it('adds the empty collection and a zero counter, and spends no IDs of its own', () => {
+    const asked: number[] = []
+    const result = migrateProject(v14Record(), 14, (count) => {
+      asked.push(count)
+      return allocator()(count)
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    // Nothing past v14 invents an ID: no legacy notes exist (#20 §7) and a note nobody wrote is not
+    // a record of one, so both fields arrive empty.
+    expect(asked).toEqual([])
+    expect(result.project.comments).toEqual([])
+    // The counter counts what has been handed out, so the first Comment of a migrated Project takes
+    // C-001 rather than C-002.
+    expect(result.project.commentReferenceCounter).toBe(0)
+  })
+
+  it('changes nothing else about any record', () => {
+    const prior = v14Record()
+    const result = migrateProject(prior, 14, allocator())
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    // Two fields and nothing beside them: a Comment points at the record rather than standing in it,
+    // so no Floor, entity or view is rewritten and no warning reopens (#80 acceptance 13).
+    const rest = { ...(result.project as unknown as Record<string, unknown>) }
+    delete rest.comments
+    delete rest.commentReferenceCounter
+    expect(rest).toEqual(prior)
+  })
+
+  it('leaves a v15 Project exactly as it found it', () => {
+    const migrated = migrateProject(v14Record(), 14, allocator())
+    expect(migrated.ok).toBe(true)
+    if (!migrated.ok) return
+    const again = migrateProject(migrated.project, 15, allocator())
+    expect(again.ok && again.project).toEqual(migrated.project)
+  })
+
+  it('keeps the Comments a Project already carries', () => {
+    // A migrator that overwrote the collection it was only meant to add would silently delete
+    // somebody's notes — the one thing this step could get wrong.
+    const carried = {
+      comments: [{ id: 'comment-1', reference: 'C-007' }],
+      commentReferenceCounter: 7,
+    }
+    expect(migrateV14toV15(carried)).toBe(carried)
+  })
+
+  it('adds only the field that is missing, beside one that is already there', () => {
+    // A record half-written by a build that knew one field and not the other still comes out whole.
+    expect(migrateV14toV15({ comments: [{ id: 'comment-1' }] })).toEqual({
+      comments: [{ id: 'comment-1' }],
+      commentReferenceCounter: 0,
+    })
+    expect(migrateV14toV15({ commentReferenceCounter: 4 })).toEqual({
+      comments: [],
+      commentReferenceCounter: 4,
+    })
+  })
+
+  it('hands back the record itself when both fields are already present', () => {
+    // Identity, not equality: the step copies nothing when there is nothing to add.
+    const carried = { comments: [], commentReferenceCounter: 0 }
+    expect(migrateV14toV15(carried)).toBe(carried)
+  })
+
+  it('adds the fields to a record that is not a Project shape, without crashing', () => {
+    expect(migrateV14toV15(null)).toBeNull()
+    expect(migrateV14toV15([{ comments: [] }])).toEqual([{ comments: [] }])
+    expect(migrateV14toV15('a string')).toBe('a string')
+    expect(migrateV14toV15({ designOptions: 'not a list' })).toEqual({
+      designOptions: 'not a list',
+      comments: [],
+      commentReferenceCounter: 0,
+    })
   })
 })

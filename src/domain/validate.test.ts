@@ -85,6 +85,8 @@ function baseProject(): Project {
       ],
     },
     warningAcknowledgements: [],
+    comments: [],
+    commentReferenceCounter: 0,
   }
 }
 

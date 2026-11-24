@@ -36,6 +36,8 @@ const project = (over: Partial<Project> = {}): Project => ({
   itemDesigns: [],
   existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [] },
   warningAcknowledgements: [],
+  comments: [],
+  commentReferenceCounter: 0,
   ...over,
 })
 

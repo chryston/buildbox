@@ -21,6 +21,7 @@
  */
 import type { ClosedPath, Preset, WallSide } from '../geometry'
 import type { CabinetNode, GlobalSettings } from './cabinetPayload'
+import type { Comment } from './comments'
 import type { ElevationView } from './elevationView'
 import { nameKey } from './floorNames'
 import type { PlanViewRange } from './planViewRange'
@@ -100,6 +101,25 @@ export interface Project {
    * warning would be two notes, and the strip shows one.
    */
   warningAcknowledgements: Acknowledgement[]
+  /**
+   * Every Comment of this Project (#80 §1), in the order they were created.
+   *
+   * Project-level rather than filed inside a Floor or a model: a Comment is a note about the record,
+   * not a piece of it, so it belongs to no Drawing Layer, takes no Renovation State and is not
+   * demolished by a Design Option — only its Anchor's own visibility is. The list is canonical and
+   * travels in every Backup; the Notes panel's filters, the overlay and the selected row are
+   * UI-session state and are never stored here.
+   */
+  comments: Comment[]
+  /**
+   * The highest `C-` reference number this Project has ever handed out (#80 §1).
+   *
+   * A counter rather than a scan of the live list, because a reference is never reused: deleting
+   * `C-009` and adding a Comment gives `C-010`, and undoing a creation leaves the number spent. It
+   * only moves forward, so undo never rewinds it and a restored Comment always comes back with the
+   * reference it was born with.
+   */
+  commentReferenceCounter: number
 }
 
 export interface ProjectMeta {
@@ -869,6 +889,20 @@ export interface Wall {
    */
   drawingLayerId?: EntityId | null
 }
+
+/**
+ * The parts of a Wall a later Anchor can name (#80 Decisions).
+ *
+ * The two ends of the reference line and the two faces read in the line's own direction — the same
+ * four the Beam set derives from, spelled the same way, because a Wall and a Beam derive their faces
+ * through one piece of geometry. The midpoint and the Junctions are absent: both move when anything
+ * else does, which is the opposite of what a stable ID is for. The UI never shows these strings; it
+ * labels a face by the Room on that side (#80 §8).
+ */
+export const WALL_FEATURE_IDS = ['start', 'end', 'leftFace', 'rightFace'] as const
+
+/** One stable Wall feature. */
+export type WallFeatureId = (typeof WALL_FEATURE_IDS)[number]
 
 /**
  * A shared connection point where Wall ends meet, or where one Wall attaches to another's

@@ -21,9 +21,12 @@ import { validateProject } from './validate'
 /**
  * The domain schema this build writes and understands at the top of the chain.
  *
- * The fourteenth step (#79 §1) is the Service: the Existing Model gains the Service collection, and
- * so does every Design Option's proposed work. The thirteenth before it (#78 §1) is the Skirting: the
- * Existing Model gains the Skirting collection, and so does every Design Option's proposed work. The
+ * The fifteenth step (#80 §1) is the Comment: the Project gains the `comments` collection and the
+ * `C-` reference counter beside it, both Project-level, because a note belongs to the record rather
+ * than to any one Floor or Design Option. The fourteenth before it (#79 §1) is the Service: the
+ * Existing Model gains the Service collection, and so does every Design Option's proposed work. The
+ * thirteenth before it (#78 §1) is the Skirting: the Existing Model gains the Skirting collection,
+ * and so does every Design Option's proposed work. The
  * twelfth before it (#77 §1) is the Beam: the Existing Model gains the Beam collection, and so does
  * every Design Option's proposed work. The
  * eleventh before that (#76 §4) is the Clearance Envelope: every Item Design gains the one envelope
@@ -32,10 +35,10 @@ import { validateProject } from './validate'
  * predates them. The ninth (#74 §1) is the Plan View Range: every saved view gains the height it
  * draws at. The eighth (#69 §1, #73) is the renovation model: Design Options, the Drawing Layers
  * every Project starts with, and the four settings a saved view gained. A Project saved by an older
- * build carries `schemaVersion: 13` and comes up the chain; a Project saved by a newer one is
- * refused as `newer-schema` rather than opened and quietly stripped of its Services.
+ * build carries `schemaVersion: 14` and comes up the chain; a Project saved by a newer one is
+ * refused as `newer-schema` rather than opened and quietly stripped of its Comments.
  */
-export const DOMAIN_SCHEMA_VERSION = 14
+export const DOMAIN_SCHEMA_VERSION = 15
 
 /**
  * One pure vN → vN+1 step. Its input is already a copy; it never reads the clock, and a
@@ -46,7 +49,9 @@ export type Migrator = (data: unknown, allocateId: IdAllocator) => unknown
 /**
  * `MIGRATORS[i]` migrates v(i+1) → v(i+2), so index 0 is v1 → v2.
  *
- * Fourteen steps, the last of which is the Service collection (#79), the one before it the Skirting
+ * Fifteen steps, the last of which is the Comment collection and its reference counter (#80), the
+ * one before it the Service
+ * collection (#79), the one before it the Skirting
  * collection (#78), the one before that the Beam
  * collection (#77), the one before that the Clearance Envelope field (#76), the one before that the Elevation View list (#75), the one before that the
  * Plan View Range (#74) and the one before that the renovation model (#69, #71, #73).
@@ -65,6 +70,7 @@ export const MIGRATORS: readonly Migrator[] = [
   migrateV11toV12,
   migrateV12toV13,
   migrateV13toV14,
+  migrateV14toV15,
 ]
 
 /**
@@ -498,6 +504,33 @@ export function migrateV13toV14(data: unknown): unknown {
     )
   }
   return next
+}
+
+/**
+ * The Project gains the Comment collection and the `C-` reference counter beside it (#80 §1).
+ *
+ * Both arrive empty and zero. A v14 Project has never seen a Comment, and no legacy notes exist —
+ * the legacy `wall-hack` and `tile-zone` sketches were discarded during migration (#20 §7) — so
+ * there is nothing to translate and nothing to infer: a note nobody wrote is not a record of one.
+ * The counter starts at zero rather than one because it counts what has been *handed out*, and the
+ * first Comment of a migrated Project therefore takes `C-001`.
+ *
+ * Nothing else moves. A Comment points at the record rather than standing in it, so no Floor, entity
+ * or view is rewritten, no ID is spent, and no clock is read: the timestamps of a Comment arrive with
+ * the Intent that creates it (#42 §3). A record that already carries both fields came from a build
+ * that knows Comments and is returned as the same object it arrived as, so the step is idempotent.
+ */
+export function migrateV14toV15(data: unknown): unknown {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return data
+  const record = data as Record<string, unknown>
+  const hasComments = Array.isArray(record.comments)
+  const hasCounter = typeof record.commentReferenceCounter === 'number'
+  if (hasComments && hasCounter) return data
+  return {
+    ...record,
+    ...(hasComments ? {} : { comments: [] }),
+    ...(hasCounter ? {} : { commentReferenceCounter: 0 }),
+  }
 }
 
 /** A saved view that has no Plan View Range yet. */

@@ -572,6 +572,8 @@ export function arbProject(): fc.Arbitrary<Project> {
         itemDesigns: designs,
         existingModel: { placedItems, walls, wallJunctions, openings, rooms: [], beams: [], skirting: [], services: [] },
         warningAcknowledgements: [],
+        comments: [],
+        commentReferenceCounter: 0,
       }
     })
 }
@@ -1124,6 +1126,19 @@ export function currentSchemaOf(record: unknown, fromVersion: number): Project {
   )
   if (!result.ok) throw new Error(`the fixture must migrate: ${result.error.message}`)
   return result.project
+}
+
+/**
+ * An older record with the Comment collection and its counter it predates added, and nothing else
+ * touched (#80).
+ *
+ * The fifteenth step writes one empty list and one zero on the way in, so a test that reads an older
+ * record directly — one that edits the Drawing Layer list, which `currentSchemaOf` would rewrite — has
+ * to say the same thing the step says. A Comment is always one a person typed and a reference is always
+ * one the counter handed out, so neither the list nor a number is invented here.
+ */
+export function withComments(project: Project): Project {
+  return { ...project, comments: project.comments ?? [], commentReferenceCounter: project.commentReferenceCounter ?? 0 }
 }
 
 /**

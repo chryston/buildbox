@@ -20,6 +20,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import type { DesignOption, Project, Skirting } from '../domain'
+import { withComments } from '../domain/testing'
 import { PLAN_IMAGE_ACCEPT, STRINGS, WorkspaceProvider, workspaceStore, type WorkspaceServices } from '../ui'
 import type { Viewport, ViewportCache } from '../ui'
 import { openTestView, renderWithBindings as render, TEST_EXPORT_PORT, type TestView } from '../ui/legacy/testing'
@@ -35,7 +36,7 @@ const STRIP_AT = { x: 5100 * 0.05, y: 492.5 * 0.05 }
 
 function fixtureProject(): Project {
   const text = readFileSync(join(fixturesRoot, 'domain', 'v13', 'skirting.json'), 'utf8')
-  return structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project)
+  return withComments(structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project))
 }
 
 /** The fixture with its Design Option taken out: one Floor, one Wall each, one Skirting. */

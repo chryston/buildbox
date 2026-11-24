@@ -124,6 +124,8 @@ const CROSSING: Project = {
     wallJunctions: [],
   },
   warningAcknowledgements: [],
+  comments: [],
+  commentReferenceCounter: 0,
 }
 
 const RECIPE: Recipe = {

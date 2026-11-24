@@ -182,6 +182,8 @@ const projectOf = (range: PlanViewRange, placements: readonly PlacedItem[]): Pro
     }],
   },
   warningAcknowledgements: [],
+  comments: [],
+  commentReferenceCounter: 0,
 })
 
 /** The gates the workspace hands the canvas: `derive` classifies, the drawing only asks. */

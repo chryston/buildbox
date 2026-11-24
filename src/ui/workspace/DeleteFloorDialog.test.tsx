@@ -42,6 +42,8 @@ const project = (over: Partial<Project> = {}): Project => ({
     ],
   },
   warningAcknowledgements: [],
+  comments: [],
+  commentReferenceCounter: 0,
   ...over,
 })
 

@@ -77,6 +77,8 @@ function projectWithFourPlacements(): Project {
       ],
     },
     warningAcknowledgements: [],
+    comments: [],
+    commentReferenceCounter: 0,
   }
 }
 

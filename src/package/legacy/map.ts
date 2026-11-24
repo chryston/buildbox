@@ -104,6 +104,8 @@ export function projectFromDesign(design: LegacyDesign, newId: () => string): Pr
       services: [],
     },
     warningAcknowledgements: [],
+    comments: [],
+    commentReferenceCounter: 0,
   }
 }
 
