@@ -68,7 +68,7 @@ export interface TableSpec {
 }
 
 /** The tables this build writes. Later issues add rows here, and nowhere else. */
-export type TableId = 'items' | 'cut-list' | 'rooms' | 'walls' | 'openings' | 'placed-items' | 'warnings'
+export type TableId = 'items' | 'cut-list' | 'rooms' | 'walls' | 'openings' | 'beams' | 'placed-items' | 'warnings'
 
 /**
  * A table's columns, in contract order: the header line supplies the file's words, the pairs
@@ -277,6 +277,38 @@ export const OPENINGS_TABLE: TableSpec = {
 }
 
 /**
+ * The Beams table (#77 §5).
+ *
+ * `depth_mm` is the interface's word for the stored Depth and `top_mm` is derived —
+ * `underside_mm + depth_mm` — so a reader can check the file against a drawing without knowing
+ * which of the two numbers BuildBox keeps. `length_mm` is measured along the reference line, never
+ * along a face, which is the same rule the Walls table follows.
+ */
+const BEAMS_HEADER =
+  'stable_id,floor_id,floor,design_option_id,design_option,renovation_state,drawing_layer_id,drawing_layer,label,length_mm,width_mm,depth_mm,underside_mm,top_mm,predecessor_ids'
+
+export const BEAMS_TABLE: TableSpec = {
+  id: 'beams',
+  columns: columnsFor(BEAMS_HEADER, [
+    ['stableId', 'id'],
+    ['floorId', 'id'],
+    ['floor', 'text'],
+    ['designOptionId', 'id'],
+    ['designOption', 'text'],
+    ['renovationState', 'enum', ['existing', 'demolition', 'proposed']],
+    ['drawingLayerId', 'id'],
+    ['drawingLayer', 'text'],
+    ['label', 'text'],
+    ['lengthMm', 'length_mm'],
+    ['widthMm', 'length_mm'],
+    ['depthMm', 'length_mm'],
+    ['undersideMm', 'length_mm'],
+    ['topMm', 'length_mm'],
+    ['predecessorIds', 'multi'],
+  ]),
+}
+
+/**
  * The Placed Items table (#68 Scope 3).
  *
  * One row per Placed Item, never one per Item Design — that is the Item List's job, and the two
@@ -351,6 +383,7 @@ export const TABLES: Readonly<Record<TableId, TableSpec>> = {
   rooms: ROOMS_TABLE,
   walls: WALLS_TABLE,
   openings: OPENINGS_TABLE,
+  beams: BEAMS_TABLE,
   'placed-items': PLACED_ITEMS_TABLE,
   warnings: WARNINGS_TABLE,
 }

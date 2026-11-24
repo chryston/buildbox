@@ -348,6 +348,7 @@ describe('listsSummary', () => {
       rooms: 0,
       walls: 2,
       openings: 0,
+      beams: 0,
       warnings: 1,
     })
     expect(summary.rows['cut-list']).toBeGreaterThan(0)

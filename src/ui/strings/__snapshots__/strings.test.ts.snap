@@ -167,6 +167,7 @@ exports[`the copy > is the whole vocabulary of the interface 1`] = `
   "exportGroupSheet": "Sheet",
   "exportGroupViews": "Views",
   "exportHeading": "Export drawings?",
+  "exportListBeams": "Beams",
   "exportListCutList": "Cut List",
   "exportListItems": "Item List",
   "exportListOpenings": "Openings",
