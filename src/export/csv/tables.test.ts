@@ -138,8 +138,8 @@ describe('the v1.0 tables', () => {
     const codesOf = (id: keyof typeof TABLES, header: string): readonly string[] =>
       TABLES[id].columns.find((column) => column.header === header)?.values ?? []
     expect(codesOf('walls', 'classification')).toEqual(['external', 'internal', 'partition'])
-    expect(codesOf('warnings', 'subject_type')).toEqual(['wall', 'opening', 'room', 'placed_item'])
-    expect(codesOf('warnings', 'other_type')).toEqual(['wall', 'opening', 'room', 'placed_item'])
+    expect(codesOf('warnings', 'subject_type')).toEqual(['wall', 'opening', 'room', 'placed_item', 'beam', 'skirting'])
+    expect(codesOf('warnings', 'other_type')).toEqual(['wall', 'opening', 'room', 'placed_item', 'beam', 'skirting'])
     expect(codesOf('warnings', 'warning_type')).toEqual([
       'wall_crossing',
       'wall_overlap',
@@ -151,6 +151,11 @@ describe('the v1.0 tables', () => {
       'floor_limit_above',
       'floor_limit_below',
       'clearance_envelope_intrusion',
+      'beam_placed_item',
+      'beam_opening',
+      'skirting_placed_item',
+      'skirting_host_above',
+      'skirting_host_below',
     ])
   })
 })

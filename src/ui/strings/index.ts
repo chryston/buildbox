@@ -1141,6 +1141,9 @@ export const WARNING_COPY: Readonly<Record<string, (params: WarningParams) => st
   host_range_below: (params) =>
     `${String(params.a)} ${bottomWord(params.aKind)} is ${vmm(params)} mm below host ${String(params.b)} base.`,
   item_into_wall: (params) => `${String(params.a)} runs ${vmm(params)} mm into ${String(params.b)}.`,
+  // The one Skirting sentence (#78 §6): a body the item cannot stand in, measured perpendicular to
+  // the host face. The Skirting reads first because it is the subject — the cabinet is what has to move.
+  skirting_placed_item: (params) => `${String(params.a)} projects ${vmm(params)} mm into ${String(params.b)}'s footprint.`,
   clearance_envelope_intrusion: (params) =>
     `${String(params.a)} takes up ${Number(params.m2).toFixed(2)} m² (${Math.round(Number(params.pct))}%) of ${String(params.b)}'s Clearance Envelope.`,
 }

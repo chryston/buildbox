@@ -34,10 +34,12 @@ import {
   refPointAt,
   segmentStart,
   spanOf,
+  vertices,
   TOLERANCE_MM,
 } from '../../../geometry'
 import type { ClosedPath, Interval, Pt, WallJustification, WallRefLine } from '../../../geometry'
 import { compareCodePoints } from '../../../lib'
+import { perpendicularOffsetOf } from '../../skirting'
 import {
   chooseVerticalSubject,
   floorLimitCopy,
@@ -55,6 +57,7 @@ import type {
   WarningSubject,
   WarningSubjectKind,
   WarningWall,
+  WarningSkirting,
 } from '../types'
 
 /** Below this overlap area two plan regions are treated as merely touching (#66 §8). */
@@ -394,6 +397,11 @@ const limitedSubjects = (floor: WarningFloor): { subject: VerticalSubject; kind:
     fields: openingFields(opening),
   })),
   ...floor.beams.map((beam) => ({ subject: beamSubject(beam), kind: 'beam' as const, fields: beamFields(beam) })),
+  ...floor.skirtings.map((skirting) => ({
+    subject: skirtingSubject(skirting),
+    kind: 'skirting' as const,
+    fields: skirtingFields(skirting),
+  })),
   ...floor.placements.map((placement) => ({ subject: placementSubject(placement), kind: 'placedItem' as const, fields: placementFields(placement) })),
 ]
 
@@ -626,7 +634,127 @@ const beamEnvelopeIntrusion: WarningProducer = {
   },
 }
 
-/** Every vertical producer, in registration order (#76 §5, #77 §2). */
+/**
+ * The Skirting producers (#78 §6): a body standing in a footprint, and a Vertical Extent reaching
+ * past the host Wall it hangs on.
+ *
+ * `skirtingSubject` and `skirtingFields` are the §3 and signature views of the same record.
+ */
+
+/** The §3 subject view of a Skirting: its Vertical Extent is `bottom..top`. */
+const skirtingSubject = (s: WarningSkirting): VerticalSubject => ({
+  id: s.id,
+  kind: 'skirting',
+  label: s.label,
+  extent: { bottom: s.bottom, top: s.top },
+})
+
+/** The model fields of one Skirting, for a signature: the stored numbers, never a derived body. */
+const skirtingFields = (s: WarningSkirting): unknown => ({
+  id: s.id,
+  hostWallId: s.hostWallId,
+  side: s.side,
+  bottom: s.bottom,
+  height: s.top - s.bottom,
+  thickness: s.thickness,
+})
+
+/**
+ * How deep the body reaches into the footprint, perpendicular to the host face: the perpendicular
+ * extent of the region the two share.
+ *
+ * A cabinet whose back edge is flush with the host face has the whole 15 mm of the body inside it and
+ * has to move 15 mm; one whose back edge is 1 mm off the exposed face shares a 1 mm sliver and has to
+ * move 1 mm. Never more than the thickness, and never a distance between centroids, which would say
+ * something about where the two things sit rather than what has to move (#78 §6).
+ */
+const depthIntoFootprint = (s: WarningSkirting, region: readonly ClosedPath[]): number => {
+  let shallowest = Number.POSITIVE_INFINITY
+  let deepest = Number.NEGATIVE_INFINITY
+  for (const loop of region) {
+    for (const at of vertices(loop)) {
+      const offset = perpendicularOffsetOf(s.hostLine, at)
+      shallowest = Math.min(shallowest, offset)
+      deepest = Math.max(deepest, offset)
+    }
+  }
+  return Math.min(s.thickness, Math.max(0, deepest - shallowest))
+}
+
+/**
+ * A Skirting standing in a Placed Item's footprint (#78 §6).
+ *
+ * The pair is asymmetric and the issue names the Skirting as the subject: the sentence says what the
+ * Skirting does to the cabinet, not what the cabinet does to the Skirting. Two tests, both strict —
+ * the body must cover positive area of the footprint, so a cabinet pushed up against the exposed
+ * face touches and says nothing, and the height ranges must overlap, so a wall cabinet above the
+ * Skirting says nothing either. The measurement is a depth perpendicular to the host face, which is
+ * the one number that says how far the item has to move.
+ *
+ * A Skirting against a Wall, an Opening, another Skirting or a Beam is deliberately absent: the host
+ * relationship is the point of a Skirting, a gap is derived rather than warned about, and two of
+ * them meeting at an inside corner is an ordinary drawing (#78 §6).
+ */
+const skirtingPlacedItem: WarningProducer = {
+  type: 'skirting_placed_item',
+  produce: (floor) => {
+    const candidates: WarningCandidate[] = []
+    for (const skirting of floor.skirtings) {
+      const span = interval(skirting.bottom, skirting.top)
+      for (const placement of floor.placements) {
+        if (overlapLength(placementInterval(placement), span) <= TOLERANCE_MM) continue
+        let depth = 0
+        let met = false
+        for (const body of skirting.bodies) {
+          if (!boxesMeet(bboxOf(placement.worldPath), bboxOf(body))) continue
+          const shared = overlap(placement.worldPath, body)
+          if (shared.kind !== 'positive') continue
+          met = true
+          depth = Math.max(depth, depthIntoFootprint(skirting, shared.region))
+        }
+        if (!met) continue
+        candidates.push({
+          subjects: [{ type: 'skirting', id: skirting.id }, { type: 'placedItem', id: placement.id }],
+          measured: { mm: depth },
+          messageKey: 'skirting_placed_item',
+          params: { a: skirting.label, b: placement.label, mm: depth },
+          signatureInputs: { skirting: skirtingFields(skirting), placement: placementFields(placement) },
+        })
+      }
+    }
+    return candidates
+  },
+}
+
+/** One Skirting host-range producer: the Skirting reaches past the host's top (`above`) or base (`below`). */
+const skirtingHostProducer = (side: 'above' | 'below'): WarningProducer => ({
+  type: `skirting_host_${side}`,
+  messageKeys: [`host_range_${side}`],
+  produce: (floor) => {
+    const candidates: WarningCandidate[] = []
+    for (const skirting of floor.skirtings) {
+      const wall = floor.walls.find((candidate) => candidate.id === skirting.hostWallId)
+      if (wall === undefined) continue
+      const host = { bottom: wall.baseElevation, top: wall.baseElevation + wall.height }
+      const d = side === 'above' ? skirting.top - host.top : host.bottom - skirting.bottom
+      if (d <= TOLERANCE_MM) continue
+      const copy = hostRangeCopy(skirtingSubject(skirting), wallLabel(wall), side, d)
+      candidates.push({
+        subjects: [{ type: 'skirting', id: skirting.id }, { type: 'wall', id: wall.id }],
+        measured: copy.measured,
+        messageKey: copy.messageKey,
+        params: copy.params,
+        signatureInputs: {
+          skirting: skirtingFields(skirting),
+          wall: { id: wall.id, baseElevation: wall.baseElevation, height: wall.height },
+        },
+      })
+    }
+    return candidates
+  },
+})
+
+/** Every vertical producer, in registration order (#76 §5, #77 §2, #78 §6). */
 export const VERTICAL_PRODUCERS: readonly WarningProducer[] = [
   itemItemOverlap,
   itemIntoWall,
@@ -638,4 +766,7 @@ export const VERTICAL_PRODUCERS: readonly WarningProducer[] = [
   beamPairProducer('placedItem'),
   beamPairProducer('opening'),
   beamEnvelopeIntrusion,
+  skirtingPlacedItem,
+  skirtingHostProducer('above'),
+  skirtingHostProducer('below'),
 ]

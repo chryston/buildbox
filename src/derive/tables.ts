@@ -166,7 +166,7 @@ export type PlacedItemsRow = {
 }
 
 /** The Warnings List's word for a subject: `placed_item`, because a CSV column is snake_case. */
-export type WarningSubjectCode = 'wall' | 'opening' | 'room' | 'placed_item' | 'beam'
+export type WarningSubjectCode = 'wall' | 'opening' | 'room' | 'placed_item' | 'beam' | 'skirting'
 
 /** One Warnings List row (export contract §5). */
 export type WarningsRow = {

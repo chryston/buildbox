@@ -94,8 +94,14 @@ const offsetDirection = (line: WallRefLine, along: number): Pt => {
   return { x: (far.x - near.x) / length, y: (far.y - near.y) / length }
 }
 
-/** How far `at` lies from the reference line, signed: positive is the `right` face's side. */
-const signedOffsetOf = (line: WallRefLine, at: Pt): number => {
+/**
+ * How far `at` lies from the reference line, signed: positive is the `right` face's side.
+ *
+ * Exported for the Warnings engine (#78 §6), which measures the depth a Skirting reaches into a
+ * Placed Item's footprint perpendicular to the host face — the same perpendicular this module uses
+ * to decide which face a joined Wall butts against.
+ */
+export const perpendicularOffsetOf = (line: WallRefLine, at: Pt): number => {
   const along = refParamAt(line, at)
   const on = facePointAt(line, 0, along)
   const direction = offsetDirection(line, along)
@@ -159,7 +165,7 @@ const junctionGaps = (
       // meets the host is often exactly on the host's reference line, so the side is read from the
       // far end of the branch, which is unambiguously on one side or the other.
       const away = facePointAt(branch.line, 0, member.end === 'start' ? refLength(branch.line) : 0)
-      const covered = signedOffsetOf(host.line, away) >= 0 ? 'right' : 'left'
+      const covered = perpendicularOffsetOf(host.line, away) >= 0 ? 'right' : 'left'
       if (covered !== side) continue
       const span = interval(refParamAt(host.line, a), refParamAt(host.line, b))
       if (span.hi - span.lo > TOLERANCE_MM) gaps.push({ from: span.lo, to: span.hi, reason: 'junction' })

@@ -22,10 +22,10 @@ import type {
   WallJustification,
   WallRefLine,
 } from '../../domain'
-import type { ClosedPath, Pt } from '../../geometry'
+import type { ClosedPath, Pt, WallSide } from '../../geometry'
 
 /** What kind of entity a warning is about. Later issues extend this list (#76–#79). */
-export type WarningSubjectKind = 'wall' | 'opening' | 'placedItem' | 'room' | 'beam'
+export type WarningSubjectKind = 'wall' | 'opening' | 'placedItem' | 'room' | 'beam' | 'skirting'
 
 /** One entity a warning involves. The primary subject is always first (#66 §1). */
 export interface WarningSubject {
@@ -190,6 +190,7 @@ export interface WarningFloor {
   readonly walls: readonly WarningWall[]
   readonly openings: readonly WarningOpening[]
   readonly beams: readonly WarningBeam[]
+  readonly skirtings: readonly WarningSkirting[]
   readonly junctions: readonly WarningJunction[]
   readonly rooms: readonly WarningRoom[]
   readonly placements: readonly WarningPlacement[]
@@ -217,6 +218,34 @@ export interface WarningBeam {
   readonly justification: WallJustification
   readonly underside: number
   readonly top: number
+}
+
+/**
+ * One Skirting a producer may read (#78 §6).
+ *
+ * The body arrives already derived — the host's tidied face stood off by `thickness`, with every
+ * gap taken out — because a Skirting has no geometry of its own to read: the strip a producer
+ * measures against a Placed Item is the same strip the Plan View paints, and a producer that
+ * rebuilt it from the record would be answering the question a second way.
+ *
+ * `hostLine` and `innerOffset` are here because the one measurement this pair makes is a depth
+ * perpendicular to the host face: how far the body reaches into a footprint it cannot stand in.
+ */
+export interface WarningSkirting {
+  readonly id: EntityId
+  readonly floorId: EntityId
+  /** `Skirting SK-1`, or `Skirting` where nobody named it. */
+  readonly label: string
+  readonly hostWallId: EntityId
+  readonly side: WallSide
+  readonly bottom: number
+  readonly top: number
+  readonly thickness: number
+  readonly hostLine: WallRefLine
+  /** The offset of the host face the body stands off, relative to the host's reference line. */
+  readonly innerOffset: number
+  /** One body per visible run, gaps taken out; empty when the whole range is gapped. */
+  readonly bodies: readonly ClosedPath[]
 }
 
 /**
