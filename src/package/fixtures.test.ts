@@ -31,11 +31,12 @@ import {
   planRangeFixtureProject,
   roomsFixtureProject,
   renovationFixtureProject,
+  skirtingFixtureProject,
 } from './testing'
 
 const ASSET_ENTRY = `assets/${FIXTURE_PLAN_IMAGE_HASH}.png`
 
-type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6' | 'v7' | 'v8' | 'v9' | 'v10' | 'v11' | 'v12'
+type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6' | 'v7' | 'v8' | 'v9' | 'v10' | 'v11' | 'v12' | 'v13'
 
 const fixtureDir = (version: FixtureVersion): URL => new URL(`../../fixtures/package/${version}/`, import.meta.url)
 const readFrom = (version: FixtureVersion) => (relative: string): Uint8Array =>
@@ -53,6 +54,7 @@ const readV9 = readFrom('v9')
 const readV10 = readFrom('v10')
 const readV11 = readFrom('v11')
 const readV12 = readFrom('v12')
+const readV13 = readFrom('v13')
 
 const ARCHIVE_V1 = readV1('reference.buildbox')
 const ARCHIVE_V2 = readV2('reference.buildbox')
@@ -80,6 +82,9 @@ const ARCHIVE_V11 = readV11('clearance.buildbox')
 // The v12 file is named for what the step added, as the five before it were: it is the first Backup
 // whose Project carries a Beam (#77).
 const ARCHIVE_V12 = readV12('beams.buildbox')
+// The v13 file is named for what the step added, as the six before it were: it is the first Backup
+// whose Project carries a Skirting (#78).
+const ARCHIVE_V13 = readV13('skirting.buildbox')
 const ASSET_BYTES = readV2(ASSET_ENTRY)
 
 /** The one Plan Image every fixture carries, served the way the export serves it. */
@@ -119,23 +124,47 @@ function v1StagedAsViews(): Project {
 const canonicalOf = (record: unknown): string => new TextDecoder().decode(canonicalJsonBytes(record))
 
 /**
- * The canonical bytes of a Backup written before the twelfth schema: this build's Project with the
- * Beam collection `migrateV11toV12` adds taken back out again (#77 §1). A superseded golden keeps the
- * bytes it was written from forever, and those bytes predate Beams — the chain grows the empty
- * collection on the way in, which is what the `stages into` assertion beside each of these says.
+ * The canonical bytes of a Backup written before the current schema: this build's Project with the
+ * Beam collection `migrateV11toV12` adds and the Skirting collection `migrateV12toV13` adds taken
+ * back out again (#77 §1, #78 §1). A superseded golden keeps the bytes it was written from forever,
+ * and those bytes predate both collections — the chain grows the empty collections on the way in,
+ * which is what the `stages into` assertion beside each of these says.
  */
-function beforeBeams(record: unknown): unknown {
+function beforeCurrentSchema(record: unknown): unknown {
   const copy = structuredClone(record) as Record<string, unknown>
   const existingModel = copy.existingModel as Record<string, unknown> | undefined
-  if (existingModel !== undefined) delete existingModel.beams
+  if (existingModel !== undefined) {
+    delete existingModel.beams
+    delete existingModel.skirting
+  }
   for (const option of (copy.designOptions as Record<string, unknown>[] | undefined) ?? []) {
     const proposed = option?.proposed as Record<string, unknown> | undefined
-    if (proposed !== undefined) delete proposed.beams
+    if (proposed !== undefined) {
+      delete proposed.beams
+      delete proposed.skirting
+    }
   }
   return copy
 }
 
-const canonicalOfPrior = (record: unknown): string => new TextDecoder().decode(canonicalJsonBytes(beforeBeams(record)))
+const canonicalOfPrior = (record: unknown): string => new TextDecoder().decode(canonicalJsonBytes(beforeCurrentSchema(record)))
+
+/**
+ * The canonical bytes of the v12 Backup: this build's Project with only the Skirting collection
+ * `migrateV12toV13` adds taken out, because the record beside it already holds its Beams (#78 §1).
+ */
+function beforeSkirting(record: unknown): unknown {
+  const copy = structuredClone(record) as Record<string, unknown>
+  const existingModel = copy.existingModel as Record<string, unknown> | undefined
+  if (existingModel !== undefined) delete existingModel.skirting
+  for (const option of (copy.designOptions as Record<string, unknown>[] | undefined) ?? []) {
+    const proposed = option?.proposed as Record<string, unknown> | undefined
+    if (proposed !== undefined) delete proposed.skirting
+  }
+  return copy
+}
+
+const canonicalOfBeforeSkirting = (record: unknown): string => new TextDecoder().decode(canonicalJsonBytes(beforeSkirting(record)))
 
 /**
  * What this build's current schema asks of a Project that has no Design Option of its own: the
@@ -166,6 +195,8 @@ function atCurrentSchema(project: Project, spent = 0): Project {
       // The twelfth step (#77): every model carries the Beam collection, empty for a Project
       // whose Beams nobody has drawn yet — the chain invents no shape, and neither does this.
       beams: [],
+      // The thirteenth step (#78), for the same reason: the Skirting collection, empty here.
+      skirting: [],
     },
     views: project.views.map((view) => ({
       ...view,
@@ -718,33 +749,27 @@ describe('the committed v11 Backup (#76)', () => {
   })
 })
 
-// Criterion 14, the twelfth schema (#77): the Backup this build writes, and what a build one
-// schema behind says when it is handed it.
+// The twelfth schema (#77), now one step behind: the Backup it holds is still read, still byte for
+// byte the record it was written from, and no longer what this build writes.
 describe('the committed v12 Backup (#77)', () => {
-  it('stages into the Project it was written from, unmigrated', async () => {
+  it('stages into the Project it was written from, read forward one step (#78)', async () => {
     const result = await stageImport(ARCHIVE_V12, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
     expect(result.staged.project).toEqual(beamsFixtureProject())
-    expect(result.staged.migratedFrom).toBeNull()
+    expect(result.staged.migratedFrom).toBe(12)
   })
 
-  it('is re-encoded byte for byte by this build', async () => {
-    expect(await encodeProject(beamsFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V12)
-    expect(new TextDecoder().decode(readV12('project.json'))).toBe(`${canonicalOf(beamsFixtureProject())}\n`)
+  it('keeps the canonical record it was written from, which this build no longer writes', () => {
+    // Being re-encoded byte for byte is the property of the Backup at the current schema — the v13
+    // file below. What a superseded file owes forever is that its own bytes are the canonical form
+    // of the Project they were written from, so the step above is the only thing between them.
+    expect(new TextDecoder().decode(readV12('project.json'))).toBe(`${canonicalOfBeforeSkirting(beamsFixtureProject())}\n`)
   })
 
   it('is described by a manifest that names domain schema v12', async () => {
     const staged = await stageImport(ARCHIVE_V12, { acceptPreview: false, allocateId: allocateIds() })
     if (!staged.ok) throw new Error('the fixture must stage')
-    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOf(beamsFixtureProject()), 12))
-  })
-
-  // Criterion 14: a BuildBox that stops at v11 has no twelfth step to read this with.
-  it('is refused by a build one schema behind as saved by a newer BuildBox', () => {
-    const record = JSON.parse(new TextDecoder().decode(readV12('project.json'))) as unknown
-    const v11Reader = migrateDomainProject(record, 12, MIGRATORS.slice(0, 11), 11, allocateIds())
-    if (v11Reader.ok) throw new Error('a build at schema v11 read a v12 Project')
-    expect(v11Reader.problem).toEqual({ code: 'newer-schema', detail: { detected: 12, supported: 11 } })
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOfBeforeSkirting(beamsFixtureProject()), 12))
   })
 
   it('holds one Beam in the Existing Model, and no Beam collection in the record beside it', () => {
@@ -767,5 +792,59 @@ describe('the committed v12 Backup (#77)', () => {
 
   it('carries the same asset, byte for byte', () => {
     expect(readV12(ASSET_ENTRY)).toEqual(ASSET_BYTES)
+  })
+})
+
+// Criterion 14, the thirteenth schema (#78): the Backup this build writes, and what a build one
+// schema behind says when it is handed it.
+describe('the committed v13 Backup (#78)', () => {
+  it('stages into the Project it was written from, unmigrated', async () => {
+    const result = await stageImport(ARCHIVE_V13, { acceptPreview: false, allocateId: allocateIds() })
+    if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
+    expect(result.staged.project).toEqual(skirtingFixtureProject())
+    expect(result.staged.migratedFrom).toBeNull()
+  })
+
+  it('is re-encoded byte for byte by this build', async () => {
+    expect(await encodeProject(skirtingFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V13)
+    expect(new TextDecoder().decode(readV13('project.json'))).toBe(`${canonicalOf(skirtingFixtureProject())}\n`)
+  })
+
+  it('is described by a manifest that names domain schema v13', async () => {
+    const staged = await stageImport(ARCHIVE_V13, { acceptPreview: false, allocateId: allocateIds() })
+    if (!staged.ok) throw new Error('the fixture must stage')
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOf(skirtingFixtureProject()), 13))
+  })
+
+  // Criterion 14: a BuildBox that stops at v12 has no thirteenth step to read this with.
+  it('is refused by a build one schema behind as saved by a newer BuildBox', () => {
+    const record = JSON.parse(new TextDecoder().decode(readV13('project.json'))) as unknown
+    const v12Reader = migrateDomainProject(record, 13, MIGRATORS.slice(0, 12), 12, allocateIds())
+    if (v12Reader.ok) throw new Error('a build at schema v12 read a v13 Project')
+    expect(v12Reader.problem).toEqual({ code: 'newer-schema', detail: { detected: 13, supported: 12 } })
+  })
+
+  it('holds one Skirting in the Existing Model, and no Skirting collection in the record beside it', () => {
+    expect(skirtingFixtureProject().existingModel.skirting).toEqual([
+      {
+        id: 'skirting-1',
+        floorId: 'floor-0',
+        hostWallId: 'wall-1',
+        side: 'left',
+        start: 0,
+        end: 4000,
+        bottom: 0,
+        height: 100,
+        thickness: 15,
+        label: 'Skirting SK-1',
+      },
+    ])
+    // The v12 record beside it has no Skirting collection at all — the step in one comparison.
+    const prior = JSON.parse(new TextDecoder().decode(readV12('project.json'))) as { existingModel: Record<string, unknown> }
+    expect(prior.existingModel).not.toHaveProperty('skirting')
+  })
+
+  it('carries the same asset, byte for byte', () => {
+    expect(readV13(ASSET_ENTRY)).toEqual(ASSET_BYTES)
   })
 })

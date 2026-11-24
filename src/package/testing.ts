@@ -134,6 +134,7 @@ export function fixtureProject(): Project {
       openings: [],
       rooms: [],
       beams: [],
+      skirting: [],
       placedItems: [
         {
           id: 'place-0',
@@ -369,13 +370,13 @@ export function renovationFixtureProject(): Project {
       {
         id: 'option-1',
         name: 'Open plan',
-        proposed: { placedItems: [replacement], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [] },
+        proposed: { placedItems: [replacement], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], skirting: [] },
         demolishedIds: [demolished.id],
       },
       {
         id: 'option-2',
         name: 'Store wall',
-        proposed: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [] },
+        proposed: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], skirting: [] },
         demolishedIds: ['wall-2'],
       },
     ],
@@ -561,6 +562,39 @@ export function beamsFixtureProject(): Project {
           underside: 2300,
           height: 300,
           label: 'Beam B-1',
+        },
+      ],
+    },
+  }
+}
+
+/**
+ * The renovation fixture at the thirteenth schema (#78), with one Skirting: 100 mm of it runs
+ * against the Kitchen wall W-1 from its start to its end, 100 mm tall and 15 mm thick, standing on
+ * the Floor Datum — the shape the Skirting tool draws, spelled out as stored bytes.
+ *
+ * It names the Wall it is drawn against and the side of that Wall it stands off, and it stores no
+ * outline: the body, the gaps the door in W-1 leaves in it and the lengths read from it are all
+ * worked out from these numbers and the Wall's own tidied face.
+ */
+export function skirtingFixtureProject(): Project {
+  const project = beamsFixtureProject()
+  return {
+    ...project,
+    existingModel: {
+      ...project.existingModel,
+      skirting: [
+        {
+          id: 'skirting-1' as EntityId,
+          floorId: 'floor-0' as EntityId,
+          hostWallId: 'wall-1' as EntityId,
+          side: 'left',
+          start: 0,
+          end: 4000,
+          bottom: 0,
+          height: 100,
+          thickness: 15,
+          label: 'Skirting SK-1',
         },
       ],
     },

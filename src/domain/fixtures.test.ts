@@ -113,11 +113,13 @@ describe('domain fixtures (#42 §6)', () => {
       ...('openings' in priorModel ? {} : { openings: [] }),
       ...('rooms' in priorModel ? {} : { rooms: [] }),
       ...('beams' in priorModel ? {} : { beams: [] }),
+      ...('skirting' in priorModel ? {} : { skirting: [] }),
       placedItems: filed(entriesOf('placedItems'), 'Furniture'),
       walls: filed(entriesOf('walls'), 'Structure'),
       openings: filed(entriesOf('openings'), 'Structure'),
       rooms: filed(entriesOf('rooms'), 'Structure'),
       beams: filed(entriesOf('beams'), 'Structure'),
+      skirting: filed(entriesOf('skirting'), 'Structure'),
     })
     expect(identity(result.project.itemDesigns)).toEqual(identity(prior.itemDesigns))
   })

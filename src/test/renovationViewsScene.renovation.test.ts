@@ -177,11 +177,11 @@ describe('the renovation-views scene (#70 criterion 7)', () => {
     expect(named('Option B · Combined').renovationDisplay).toBe('combined')
   })
 
-  it('is the same Project as the v12 domain golden', () => {
+  it('is the same Project as the v13 domain golden', () => {
     const golden = JSON.parse(
-      readFileSync(join(fixturesRoot, 'domain', 'v12', 'renovation-views.json'), 'utf8'),
+      readFileSync(join(fixturesRoot, 'domain', 'v13', 'renovation-views.json'), 'utf8'),
     ) as { domainSchemaVersion: number; project: Project }
-    expect(golden.domainSchemaVersion).toBe(12)
+    expect(golden.domainSchemaVersion).toBe(13)
     expect(validateProject(golden.project).ok).toBe(true)
     expect(golden.project).toEqual(project)
   })

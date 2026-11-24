@@ -141,11 +141,11 @@ const SEGMENT_FIELDS: Record<string, readonly string[]> = {
 }
 const SEGMENT_KINDS = ['line', 'arc', 'ellipticalArc'] as const
 const POINT_FIELDS = ['x', 'y']
-const EXISTING_MODEL_FIELDS = ['placedItems', 'walls', 'wallJunctions', 'openings', 'rooms', 'beams']
+const EXISTING_MODEL_FIELDS = ['placedItems', 'walls', 'wallJunctions', 'openings', 'rooms', 'beams', 'skirting']
 /** A Design Option is a delta over the Existing Model, never a copy of it (#69 §2). */
 const DESIGN_OPTION_FIELDS = ['id', 'name', 'proposed', 'demolishedIds']
-/** The six collections of one Option's proposed work, in the shape the Existing Model uses. */
-const PROPOSED_MODEL_FIELDS = ['walls', 'wallJunctions', 'openings', 'rooms', 'placedItems', 'beams']
+/** The seven collections of one Option's proposed work, in the shape the Existing Model uses. */
+const PROPOSED_MODEL_FIELDS = ['walls', 'wallJunctions', 'openings', 'rooms', 'placedItems', 'beams', 'skirting']
 /**
  * A Beam's own fields (#77 §1). There is no `host`, no `wallId` and no junction among them, and
  * `checkUnknownFields` is what refuses one: a Beam that carried a host would be a Beam that
@@ -167,6 +167,30 @@ const BEAM_FIELDS = [
 const BEAM_LINE_FIELDS = ['kind', 'start', 'end', 'through']
 /** A Beam label this long is a mistake, not a label; the inspector field caps at the same number. */
 const BEAM_LABEL_MAX_LENGTH = 80
+/**
+ * A Skirting's own fields (#78 §1). There is no `line`, no `path` and no polygon among them, and
+ * `checkUnknownFields` is what refuses one: a Skirting that stored its own body would be a Skirting
+ * that disagreed with the Wall it is drawn against the first time that Wall moved. `hostWallId` and
+ * `side` together are the face, and the range is two distances along the host's reference line.
+ */
+const SKIRTING_FIELDS = [
+  'id',
+  'floorId',
+  'hostWallId',
+  'side',
+  'start',
+  'end',
+  'bottom',
+  'height',
+  'thickness',
+  'label',
+  'predecessorIds',
+  'drawingLayerId',
+]
+/** Which face of the host a Skirting stands off; read along the host's own reference line (#67 §1). */
+const SKIRTING_SIDES: readonly WallSide[] = ['left', 'right']
+/** A Skirting label this long is a mistake, not a label; the inspector field caps at the same number. */
+const SKIRTING_LABEL_MAX_LENGTH = 80
 /** A Room's Edges are referenced to a Wall face on one of the reference line's two sides (#67 §1). */
 const ROOM_FACE_SIDES = ['left', 'right']
 const ROOM_FIELDS = ['id', 'floorId', 'name', 'outline', 'wallFaceRefs', 'predecessorIds', 'drawingLayerId']
@@ -2287,6 +2311,9 @@ function validateExistingModel(
   // Beams come last and read nothing: a Beam is checked against the Project's Floors and its own
   // numbers alone, never against the Walls it crosses (#77 §1).
   validateBeams(raw.beams, childPath(path, 'beams'), index, EXISTING_SCOPE, checks, add)
+  // Skirting comes with the Walls, whose tidied faces it is drawn against but whose usable intervals
+  // it is deliberately not measured by (#78 §2 criterion 5).
+  validateSkirtings(raw.skirting, childPath(path, 'skirting'), index, EXISTING_SCOPE, walls, checks, add)
   checkUnknownFields(raw, path, EXISTING_MODEL_FIELDS, add)
   return { walls, junctions, refs, rooms }
 }
@@ -2442,6 +2469,7 @@ function validateDesignOptions(
       placedItems.forEach((item, j) => validatePlacedItem(item, childPath(itemsPath, j), index, scope, add))
     }
     validateBeams(proposed.beams, childPath(proposedPath, 'beams'), index, scope, null, add)
+    validateSkirtings(proposed.skirting, childPath(proposedPath, 'skirting'), index, scope, walls, null, add)
     checkUnknownFields(proposed, proposedPath, PROPOSED_MODEL_FIELDS, add)
     checkUnknownFields(rawOption, at, DESIGN_OPTION_FIELDS, add)
 
@@ -2701,6 +2729,129 @@ function validateBeams(raw: unknown, path: string, index: IdIndex, scope: ModelS
   items.forEach((beam, i) => {
     if (!inScope(checks, beam)) return
     validateBeam(beam, childPath(path, i), index, scope, add)
+  })
+}
+
+/**
+ * One Skirting (#78 §1).
+ *
+ * A host, a face, a range and three vertical numbers. Every refusal is about one of them:
+ *
+ *  - **The host has to be a Wall this model can see.** A Skirting is a range on a face, so a
+ *    missing host, a host another Design Option proposes, a host this Option demolishes and a host
+ *    on another Floor are all a Skirting that is not on anything. `missingWallMessage` says which of
+ *    those it is, because the fix is different each time.
+ *  - **The range has to be a range and lie inside the host.** `end` past `start`, and both within
+ *    the host's own reference length. The *reference* length, deliberately, and not the tidied
+ *    interval: a range that runs under a T-junction is a Skirting with a gap in it, which is legal
+ *    and is what criterion 5 is about, while a range that reaches past the end of the Wall is a
+ *    record of something that cannot be drawn.
+ *  - **The three measurements are measurements.** `height` and `thickness` greater than 0; `bottom`
+ *    any finite number, negative included, because a Skirting recorded from the top of a suspended
+ *    slab downwards, or one whose bottom sits in a floor build-up below the Datum, is a thing people
+ *    draw.
+ *
+ * What is *not* here is any gap. Openings that cut this range, Junctions that cover it, corners that
+ * clip it: all three are derived in `derive` from the tidied model, and a validator that refused a
+ * range an Opening crosses would be a validator that refused the drawing (#78 §2).
+ */
+function validateSkirting(raw: unknown, path: string, index: IdIndex, scope: ModelScope, walls: Map<string, WallShape>, add: Add): void {
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected a Skirting.')
+    return
+  }
+  const idPath = childPath(path, 'id')
+  const id = checkEntityId(raw.id, idPath, 'the Skirting ID', add)
+  if (id !== null) claimId(id, idPath, 'the Skirting ID', index, add)
+
+  const floorPath = childPath(path, 'floorId')
+  const floorId = checkEntityId(raw.floorId, floorPath, 'the Floor this Skirting is on', add)
+  if (floorId !== null && !index.floorIds.has(floorId)) {
+    add(floorPath, DANGLING_REFERENCE, `Expected the Skirting's Floor to be a Floor of this Project — no Floor has ID ${floorId}.`)
+  }
+
+  // Exactly one host Wall, on the same Floor (#78 §1). Never reassigned behind the user's back, so
+  // a Wall that goes away takes its Skirting with it through a review instead.
+  const hostPath = childPath(path, 'hostWallId')
+  const hostId = checkEntityId(raw.hostWallId, hostPath, 'the Wall this Skirting is drawn against', add)
+  let host: WallShape | null = null
+  if (hostId !== null) {
+    host = walls.get(hostId) ?? null
+    if (host === null) {
+      add(
+        hostPath,
+        DANGLING_REFERENCE,
+        missingWallMessage(hostId, index, scope, 'Skirting refers to a Wall that is not in this Project.'),
+      )
+    } else if (floorId !== null && host.floorId !== floorId) {
+      add(hostPath, DANGLING_REFERENCE, 'Skirting and the Wall it is drawn against stand on different Floors.')
+      host = null
+    }
+  }
+
+  checkOneOf(raw.side, childPath(path, 'side'), 'the face of the Wall this Skirting is drawn against', SKIRTING_SIDES, add)
+
+  const startPath = childPath(path, 'start')
+  const start = checkNumber(raw.start, startPath, 'the distance along the Wall to the start of the Skirting', add)
+  const endPath = childPath(path, 'end')
+  const end = checkNumber(raw.end, endPath, 'the distance along the Wall to the end of the Skirting', add)
+  if (start !== null && end !== null && end <= start) {
+    add(endPath, OUT_OF_RANGE, 'Expected the end of the Skirting to be further along the Wall than its start.')
+  }
+  // The range is measured against the host's own reference line, which is what `start` means; the
+  // tidied interval is a question about gaps, and gaps are derived (#78 §2 criterion 5).
+  if (host !== null && start !== null && end !== null && end > start) {
+    const length = refLength(host.line)
+    if (start < -TOLERANCE_MM || end > length + TOLERANCE_MM) {
+      add(
+        start < -TOLERANCE_MM ? startPath : endPath,
+        OUT_OF_RANGE,
+        `Expected the Skirting to lie within the ${length} mm of ${host.ref}, which is the Wall it is drawn against.`,
+      )
+    }
+  }
+
+  // Negative is valid: a Skirting can be recorded from below the Floor Datum, the way a Wall can.
+  checkNumber(raw.bottom, childPath(path, 'bottom'), 'the height of the bottom of the Skirting', add)
+  checkPositive(raw.height, childPath(path, 'height'), 'the Skirting height', add)
+  checkPositive(raw.thickness, childPath(path, 'thickness'), 'the Skirting thickness', add)
+  const label = raw.label
+  if (label !== undefined) {
+    checkText(label, childPath(path, 'label'), 'the Skirting label', add)
+    if (typeof label === 'string' && label.length > SKIRTING_LABEL_MAX_LENGTH) {
+      add(childPath(path, 'label'), OUT_OF_RANGE, `Expected the Skirting label to be at most ${SKIRTING_LABEL_MAX_LENGTH} characters — it is ${label.length}.`)
+    }
+  }
+  checkPredecessorIds(raw.predecessorIds, path, index, scope, add)
+  checkDrawingLayerId(raw.drawingLayerId, path, 'the Skirting Drawing Layer', index, add)
+  checkUnknownFields(raw, path, SKIRTING_FIELDS, add)
+}
+
+/**
+ * Every Skirting of one model (#78 §1).
+ *
+ * Skirtings are checked against their host Wall and nothing else. Two Skirtings on the same face,
+ * one overlapping the other, is a drawing of a wall that was skirting twice — untidy, and never a
+ * reason to refuse a file.
+ */
+function validateSkirtings(
+  raw: unknown,
+  path: string,
+  index: IdIndex,
+  scope: ModelScope,
+  walls: Map<string, WallShape>,
+  checks: Checks,
+  add: Add,
+): void {
+  // An absent collection is a model written before the capability and is valid — the v12 → v13
+  // migrator adds the empty array, and `skirtingOf` is the read — so this checks what is there and
+  // never defaults what is not.
+  if (raw === undefined) return
+  const items = checkArray(raw, path, 'the Skirtings', add)
+  if (items === null) return
+  items.forEach((skirting, i) => {
+    if (!inScope(checks, skirting)) return
+    validateSkirting(skirting, childPath(path, i), index, scope, walls, add)
   })
 }
 

@@ -137,6 +137,23 @@ writes two browser seeds from it: `e2e/preview-seed/beams.json` as it stands, an
 spec uses so each of the Beam's own gestures commits as it always did rather than stopping at the
 locked-baseline review (#70 §7c) that `existingDisplay` tests for every kind.
 
+## `v13/` — the carried-forward goldens, and the first Skirting (#78)
+
+`v13/` holds no new scene: `scripts/make-v13-fixtures.ts` reads each file of `v12/` through
+`migrateProject` and writes it at the thirteenth schema, so the only difference a carry-forward makes
+is the empty `skirting` collection the step writes on both containers — a Skirting is always one a
+person drew against a Wall, so no carry-forward invents one.
+
+It adds one file the earlier folders have no counterpart to: `v13/skirting.json`. It is the
+renovation scene with a Skirting the Existing Model holds — drawn against the scene's first Wall, on
+its left face, over the whole of that Wall, 100 mm tall and 15 mm thick off the Floor Datum — and a
+second Skirting `Option A` proposes against the same Wall on its right face, carrying
+`predecessorIds` and the demolition that makes that predecessor honest. It stores no outline: the
+body, the gaps and the lengths are derived from the Wall's tidied face. It is the first golden whose
+Project holds a Skirting, and the one `#78`'s derive, warnings, tables and screenshots are judged
+against. `v12/` stays committed as the evidence that a Project saved at the twelfth schema still
+opens, and `v13/` is what `DOMAIN_SCHEMA_VERSION` is 13 names as current.
+
 ## How it was produced
 
 Hand-authored as a plain object, then written with `lib.canonicalJson` — keys sorted, no
