@@ -380,6 +380,8 @@ export type SizeRole =
   | 'plan-line'
   | 'plan-line-selected'
   | 'hairline'
+  /** The width of an invisible hit target's stroke (#78 §7). */
+  | 'hit-target'
   /** The dash and the gap of a removed section's lines (#65 §12). */
   | 'opening-dash'
   | 'opening-gap'

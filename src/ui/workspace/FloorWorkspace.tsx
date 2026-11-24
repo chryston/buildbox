@@ -3577,6 +3577,8 @@ export function FloorWorkspace(): ReactNode {
                             selectOpening(id)
                           } else if (beamsOf(project.existingModel).some((beam) => beam.id === id)) {
                             selectBeam(id)
+                          } else if (skirtingOf(project.existingModel).some((strip) => strip.id === id)) {
+                            selectSkirting(id)
                           } else {
                             select(id)
                           }

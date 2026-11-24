@@ -50,6 +50,7 @@ async function pickSkirting(page: Page, body: Locator): Promise<void> {
   // hit path — the wide invisible twin the Plan View puts under every strip for exactly this.
   const id = (await body.getAttribute('data-ref'))!
   const hit = page.locator(`[data-testid="floor-plan-canvas"] [data-ref-role="skirting-hit"][data-ref="${id}"]`).first()
+  await bringIntoView(page, hit)
   const box = (await hit.boundingBox())!
   const cx = box.x + box.width / 2
   const cy = box.y + box.height / 2
@@ -68,13 +69,31 @@ async function openPlan(page: Page): Promise<void> {
   await page.goto('./', { waitUntil: 'networkidle' })
   await openProjectFromLibrary(page, projectName)
   await expect(floorPlanCanvas(page)).toBeVisible()
-  // The Flat is 9 m across and the pane is not, so the opening zoom leaves the far half of `W-1` —
-  // and the strip at its foot — outside the pane, under the split divider. Wheeling out is what a
-  // person does first, and it is what makes the strip's own body clickable.
-  const box = (await floorPlanCanvas(page).boundingBox())!
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-  for (let step = 0; step < 3; step += 1) await page.mouse.wheel(0, 400)
-  await expect(floorPlanCanvas(page)).toBeVisible()
+}
+
+/**
+ * Drag the Plan View with the middle button until `target`'s middle lies inside the pane (#64 §12).
+ *
+ * The Flat is 9 m across and the pane is a column beside the Section, so the opening view leaves the
+ * right-hand Wall — and anything standing on it — outside the pane, where no pointer can reach it.
+ * A person pans; this pans the same way, and it is the same gesture whether the thing is a face the
+ * tool is about to be aimed at or a strip already drawn.
+ */
+async function bringIntoView(page: Page, target: Locator): Promise<void> {
+  const pane = (await floorPlanCanvas(page).boundingBox())!
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const box = (await target.boundingBox())!
+    const cx = box.x + box.width / 2
+    const cy = box.y + box.height / 2
+    if (cx > pane.x + 30 && cx < pane.x + pane.width - 30 && cy > pane.y + 30 && cy < pane.y + pane.height - 30) return
+    const dx = pane.x + pane.width / 2 - cx
+    const dy = pane.y + pane.height / 2 - cy
+    const from = { x: pane.x + pane.width / 2, y: pane.y + pane.height / 2 }
+    await page.mouse.move(from.x, from.y)
+    await page.mouse.down({ button: 'middle' })
+    await page.mouse.move(from.x + dx, from.y + dy)
+    await page.mouse.up({ button: 'middle' })
+  }
 }
 
 test.describe('a Skirting', () => {
@@ -94,6 +113,7 @@ test.describe('a Skirting', () => {
     // One click on the face, and the whole face is skirted — no second click to place an end.
     const face = page.getByTestId(`skirting-face-hit-${BARE}|left`)
     await expect(face).toBeVisible()
+    await bringIntoView(page, face)
     await face.click({ force: true })
     await expect(page.getByTestId('skirting-tool-layer')).toHaveCount(0)
 
