@@ -70,19 +70,6 @@ async function clickInPane(page: Page, target: Locator): Promise<void> {
 }
 
 /**
- * Whether the plan surface offers itself at this screen point, or something drawn over the Plan View
- * — an Elevation View's marker, say — is what a click there would really land on.
- */
-function exposed(page: Page, x: number, y: number): Promise<boolean> {
-  return page.evaluate(([px, py]) => {
-    const top = document.elementFromPoint(px, py)
-    if (top === null) return false
-    if ((top.getAttribute('data-testid') ?? '').startsWith('elevation-')) return false
-    return top.closest('[data-testid="floor-plan-canvas"]') !== null
-  }, [x, y])
-}
-
-/**
  * The strip under the pointer, reached the way a person reaches it: a 15 mm strip lies under the run
  * of the 200 mm Wall it is skirted to, so where they overlap the first click takes the Wall and the
  * cycle moves on (#70 §18). The same point is clicked until the record that answers is `label` — a
@@ -91,6 +78,7 @@ function exposed(page: Page, x: number, y: number): Promise<boolean> {
 async function pickSkirting(page: Page, body: Locator, label: string): Promise<void> {
   const id = (await body.getAttribute('data-ref'))!
   const field = page.getByTestId('skirting-field-label')
+  const pane = (await page.getByTestId('floor-plan-canvas').boundingBox())!
   const bodies = page.locator(`[data-testid="floor-plan-canvas"] [data-ref-role="skirting"][data-ref="${id}"]`)
   const boxes: { x: number; y: number; width: number; height: number }[] = []
   for (let at = 0; at < (await bodies.count()); at += 1) {
@@ -103,7 +91,8 @@ async function pickSkirting(page: Page, body: Locator, label: string): Promise<v
     const y = box.y + box.height / 2
     for (let offset = 30; offset < box.width - 10; offset += 40) {
       const x = box.x + offset
-      if (!(await exposed(page, x, y))) continue
+      // A click outside the pane belongs to whatever pane it lands in, not to this strip.
+      if (x < pane.x || x > pane.x + pane.width) continue
       for (let attempt = 0; attempt < 8; attempt += 1) {
         await page.mouse.click(x, y)
         if ((await field.isVisible()) && (await field.inputValue()) === label) return
@@ -213,6 +202,38 @@ test.describe('a Skirting', () => {
     ).first()
     await pickSkirting(page, copy, 'Skirting SK-2')
     await expect(page.getByTestId('skirting-field-label')).toHaveValue('Skirting SK-2')
+  })
+
+  test('stands under an open Elevation View’s shaded prism and still answers the click', async ({ page }) => {
+    await openPlan(page)
+    const before = await skirtingRecords(page)
+    await page.getByTestId('tool-skirting').click()
+    await clickInPane(page, page.getByTestId(`skirting-face-hit-${BARE_WALL.id}|${BARE_SIDE}`))
+    await expect.poll(() => skirtingRecords(page)).toBe(before + 1)
+
+    // The `Kitchen section` is open, so its shaded prism lies across the face just skirted. The marker
+    // is a note drawn over the Plan View, not a lid on it: a click inside the shaded area belongs to
+    // the Skirting under it, exactly as it does outside the shade (#75 §3, #78 §7).
+    const prism = page.getByTestId(`elevation-prism-${section.id}`)
+    await expect(prism).toBeVisible()
+    const shade = (await prism.boundingBox())!
+    const id = (await skirtingBodies(page).last().getAttribute('data-ref'))!
+    let point: { x: number; y: number } | null = null
+    for (let at = 0; at < (await page.locator(`[data-testid="floor-plan-canvas"] [data-ref-role="skirting"][data-ref="${id}"]`).count()); at += 1) {
+      const box = await page.locator(`[data-testid="floor-plan-canvas"] [data-ref-role="skirting"][data-ref="${id}"]`).nth(at).boundingBox()
+      if (box === null) continue
+      const y = box.y + box.height / 2
+      if (y < shade.y || y > shade.y + shade.height) continue
+      const x = Math.max(box.x + 30, shade.x + 10)
+      if (x <= Math.min(box.x + box.width, shade.x + shade.width)) point = { x, y }
+    }
+    expect(point, 'the strip lies under the shaded prism at the opening zoom').not.toBeNull()
+
+    const field = page.getByTestId('skirting-field-label')
+    for (let attempt = 0; attempt < 8 && !(await field.isVisible()); attempt += 1) {
+      await page.mouse.click(point!.x, point!.y)
+    }
+    await expect(field).toHaveValue('Skirting SK-2')
   })
 
   test('stands in the Section at the Bottom and Top the inspector prints', async ({ page }) => {

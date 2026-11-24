@@ -2484,7 +2484,11 @@ export function FloorWorkspace(): ReactNode {
 
   const planElevationMarkers: ReactNode =
     elevationViews.length === 0 || viewport === undefined ? undefined : (
-      <g data-testid="elevation-markers">
+      <g data-testid="elevation-markers" style={{ pointerEvents: 'none' }}>
+        {/* The marker is a note drawn over the Plan View, not a lid on it: the shaded prism, the view
+            line, the arrow and the name take no pointer at all, so a click on the Wall or Skirting
+            they happen to cover belongs to that Wall and Skirting. Only the handles a person grabs
+            answer the pointer (#75 §3, #78). */}
         {elevationViews.map((entry) => {
           const open = entry.id === elevationView?.id
           const depth = previewDepth?.viewId === entry.id ? previewDepth.depth : entry.depth
@@ -2546,7 +2550,7 @@ export function FloorWorkspace(): ReactNode {
                   fill="var(--bb-accent)"
                   stroke="var(--bb-bg-app)"
                   strokeWidth={hairline}
-                  style={{ cursor: depthDragId === `${entry.id}:${corner}` ? 'grabbing' : 'grab' }}
+                  style={{ cursor: depthDragId === `${entry.id}:${corner}` ? 'grabbing' : 'grab', pointerEvents: 'auto' }}
                   onPointerDown={(event) => beginEndpointDrag(entry.id, corner, event)}
                 />
               ))}
@@ -2559,7 +2563,7 @@ export function FloorWorkspace(): ReactNode {
                   fill="var(--bb-bg-app)"
                   stroke="var(--bb-accent)"
                   strokeWidth={hairline}
-                  style={{ cursor: depthDragId === entry.id ? 'grabbing' : 'grab' }}
+                  style={{ cursor: depthDragId === entry.id ? 'grabbing' : 'grab', pointerEvents: 'auto' }}
                   onPointerDown={(event) => beginDepthDrag(entry.id, event)}
                 />
               )}
