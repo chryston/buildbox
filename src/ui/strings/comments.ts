@@ -79,6 +79,7 @@ export const COMMENT_STRINGS = {
   warningLinkNote: (message: string): string =>
     `Linked from Warning “${message}”. Resolving this does not acknowledge the Warning.`,
   followUpTitle: (message: string): string => `Follow up: ${message}`,
+  createLinked: 'Create linked Comment',
 
   // Inspector.
   onThisPlacement: (n: number): string => `On this placement (${n})`,

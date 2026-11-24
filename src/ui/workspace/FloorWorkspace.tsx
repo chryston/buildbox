@@ -155,7 +155,7 @@ import { TransferToFloorDialog } from './TransferToFloorDialog'
 import type { TransferTarget } from './TransferToFloorDialog'
 import { CalibrationOverlay } from './CalibrationOverlay'
 import { ScaleCalibrationModal } from './ScaleCalibrationModal'
-import { STRINGS } from '../strings'
+import { STRINGS, warningSentence } from '../strings'
 import { ExportDialog } from './export/ExportDialog'
 
 /** The package's per-file limit (#6): the largest Plan Image a file may be. */
@@ -1241,6 +1241,36 @@ export function FloorWorkspace(): ReactNode {
     const commentId = intent.ids[0] ?? null
     if (commentId !== null) notesSessionStore.getState().selectNew(commentId)
     setTool('select')
+  }
+
+  /**
+   * `Create linked Comment` (#80 §11): an Open, High-priority note about the warning's primary
+   * subject, titled after the warning's own sentence and linked back to it.
+   *
+   * The link is one-way on purpose. Resolving or deleting the note never acknowledges the Warning and
+   * acknowledging the Warning never resolves the note — a Warning is a fact the engine measured and
+   * will measure again, a Comment is a person's remark, and neither is allowed to silently settle the
+   * other.
+   */
+  const commentFromWarning = (warning: Warning): void => {
+    const subject = warning.subjects[0]
+    if (subject === undefined || floorId === null) return
+    const message = warningSentence(warning.messageKey, warning.params)
+    const intent = services.intent.build(
+      'comment.create',
+      {
+        anchor: { kind: 'entity', entityId: subject.id },
+        title: COMMENT_STRINGS.followUpTitle(message),
+        body: '',
+        priority: 'high',
+        linkedWarning: { key: warning.key, message },
+        at: services.now(),
+      },
+      COMMENT_STRINGS.commentTool,
+    )
+    sendIntent(intent)
+    const commentId = intent.ids[0] ?? null
+    if (commentId !== null) notesSessionStore.getState().selectNew(commentId)
   }
 
   /**
@@ -4011,6 +4041,7 @@ export function FloorWorkspace(): ReactNode {
                   onEditNote={editWarningNote}
                   focus={warningFocus}
                   suffix={warningLayerSuffix}
+                  onComment={commentFromWarning}
                 />
               )}
             </>
