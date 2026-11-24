@@ -19,7 +19,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import { affineApply, affineInvert, resolveSnap } from '../../derive'
-import type { DerivedFloor, FloorRooms, FloorWalls, RangeClass, RenovationState, SnapCandidate, SnapKind } from '../../derive'
+import type { DerivedFloor, FloorBeams, FloorRooms, FloorWalls, RangeClass, RenovationState, SnapCandidate, SnapKind } from '../../derive'
 import type { DisplayUnit, Point2 } from '../../domain'
 import { footprintPath } from '../../domain'
 import {
@@ -105,6 +105,8 @@ export interface PlanViewCanvasProps {
   angleSnap: AngleSnap
   /** The Floor's tidied Walls, drawn as bands under the footprints (#64 §15). */
   walls?: FloorWalls | null
+  /** The Beams of this Floor (#77 §4), or null for a Floor with none. */
+  beams?: FloorBeams | null
   /**
    * The Renovation Display this canvas is drawing (#70 §F), or nothing at all when the flag is off.
    *
@@ -225,7 +227,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     tool, selection, onSelect, onCursorChange, onCanvasClick, dragPreview, onDragPreview, onMoveItem, onRotateItem,
     editLocked = false,
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
-    angleSnap, overlay, htmlOverlay, screenOverlay, walls, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
+    angleSnap, overlay, htmlOverlay, screenOverlay, walls, beams = null, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
     openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
     rooms = null, selectedRoomId = null, onSelectRoom, roomProposal = null,
     warningSubjects = [], onSelectWarningBadge,
@@ -505,7 +507,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   // thing a sheet may leave out is what a sheet has no pointer for — the selection's measurements,
   // its handles and the Warning badges.
   const view = drawFloorView(
-    { floor, walls, rooms, openings },
+    { floor, walls, rooms, openings, beams },
     {
       sizing,
       renovation: states === null ? null : { states },

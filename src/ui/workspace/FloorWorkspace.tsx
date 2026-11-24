@@ -17,7 +17,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, elevationFrameOf, enabledVerticalSnapKinds, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates, verticalSnapCandidates } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveBeams, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, elevationFrameOf, enabledVerticalSnapKinds, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates, verticalSnapCandidates } from '../../derive'
 import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings, drawElevationView } from '../../drawing'
 import type { BadgeSubject, LayerGates, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
@@ -278,6 +278,15 @@ export function FloorWorkspace(): ReactNode {
       : renovationOptionId === null
         ? session.deriveWalls(floorId, null)
         : deriveWalls(drawingProject, floorId, renovationOptionId)
+  /**
+   * The Floor's Beams (#77 §4): the bodies, faces and snap ends the Plan View draws, from the same
+   * effective model the Walls come from, so a Beam and the Wall standing on it are drawn from one
+   * answer about what is currently standing.
+   */
+  const floorBeams =
+    floorId === null
+      ? null
+      : deriveBeams(drawingProject, floorId, renovationOptionId)
   /**
    * The Floor's Rooms: their areas, label anchors and Placed Item membership, from the same cache
    * (#67 §3). A view drawing a Design Option sees that Option's Rooms standing where its own walls
@@ -3032,6 +3041,7 @@ export function FloorWorkspace(): ReactNode {
               precision={project.preferences.displayPrecision}
               angleSnap={angleSnap}
               walls={floorWalls}
+              beams={floorBeams}
               renovation={
                 entityStates === null
                   ? null
