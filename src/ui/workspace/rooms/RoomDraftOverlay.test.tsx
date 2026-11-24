@@ -38,7 +38,7 @@ const floorWalls: FloorWalls = deriveWalls(
   // A Floor with no Walls: the resolver still answers, and the layer needs the face sources it
   // would snap to. A jsdom module cannot read the fixture files off disk, so the five collections
   // of the model are written out empty rather than left missing (#69 §5 reads all five).
-  { existingModel: { walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [] } } as unknown as Project,
+  { existingModel: { walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], placedItems: [] } } as unknown as Project,
   'floor-main',
 )
 

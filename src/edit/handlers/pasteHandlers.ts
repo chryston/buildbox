@@ -15,7 +15,7 @@
  * a whole Project with (#72 §4), and an ID the copy names that it did not bring is a refusal rather
  * than a dangling reference.
  */
-import { drawingLayerById, remapEntities } from '../../domain'
+import { beamsOf, drawingLayerById, remapEntities } from '../../domain'
 import type { EntityId, Project, ProposedModel } from '../../domain'
 import type { IdReplacement } from '../../domain'
 import type {
@@ -36,7 +36,7 @@ export type PasteIntentType = Extract<RenovationIntentType, 'renovation.pasteFro
 
 /**
  * The IDs a paste spends, in the order it takes them: one per copied record in the copy set's own
- * order — Walls, Junctions, Openings, Rooms, Placed Items — then one per Item Design it brings, then
+ * order — Walls, Junctions, Openings, Rooms, Placed Items, Beams — then one per Item Design it brings, then
  * one per source Layer. `intentIdCount` states the count from the payload alone, which is why the
  * slots exist for records that turn out not to come: a Layer sent onto one this Project already has,
  * and an Opening dropped for want of its Wall, leave their slots unspent rather than shifting the
@@ -115,7 +115,8 @@ const pasteFromOtherProject: Handler<'renovation.pasteFromProject'> = (ctx) => {
   }
 
   const { walls, wallJunctions, openings, rooms, placedItems } = copySet.entities
-  const carried = [...walls, ...wallJunctions, ...openings, ...rooms, ...placedItems]
+  const beams = beamsOf(copySet.entities)
+  const carried = [...walls, ...wallJunctions, ...openings, ...rooms, ...placedItems, ...beams]
   // The identity map: one fresh ID per record, and the Floor the copy stands on, which is this
   // Project's whichever Floor it was copied from.
   const map = new Map<EntityId, EntityId>()
@@ -128,6 +129,7 @@ const pasteFromOtherProject: Handler<'renovation.pasteFromProject'> = (ctx) => {
   claim(openings)
   claim(rooms)
   claim(placedItems)
+  claim(beams)
   // One fresh identity per Item Design, and nothing else about it changes: a cabinet's construction
   // — its spaces, boards and hardware, node IDs included — is not the copy's to renumber (#72 §4).
   const designIds: EntityId[] = []
@@ -161,6 +163,9 @@ const pasteFromOtherProject: Handler<'renovation.pasteFromProject'> = (ctx) => {
       return faces.length === room.wallFaceRefs.length ? room : { ...room, wallFaceRefs: faces }
     }),
     placedItems,
+    // A Beam crosses on its own line (#77 §1): it names no Wall, so nothing about it can be left
+    // behind for want of a host.
+    beams,
   }
   const remapped = remapEntities(crossing, replace)
 
@@ -232,6 +237,8 @@ const pasteFromOtherProject: Handler<'renovation.pasteFromProject'> = (ctx) => {
   for (const opening of remapped.openings) container.openings.push(filed(opening))
   for (const room of remapped.rooms) container.rooms.push(filed(room))
   for (const item of remapped.placedItems) container.placedItems.push(filed(item))
+  const beamContainer = container.beams ??= []
+  for (const beam of beamsOf(remapped)) beamContainer.push(filed(beam))
   copySet.itemDesigns.forEach((design, index) => {
     const id = designIds[index]
     if (id !== undefined) ctx.draft.itemDesigns.push({ ...design, id })

@@ -19,6 +19,7 @@ import { migrateDomainProject, stageImport } from './import'
 import {
   acknowledgementsFixtureProject,
   allocateIds,
+  beamsFixtureProject,
   clearanceFixtureProject,
   elevationFixtureProject,
   FIXTURE_BUILD,
@@ -34,7 +35,7 @@ import {
 
 const ASSET_ENTRY = `assets/${FIXTURE_PLAN_IMAGE_HASH}.png`
 
-type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6' | 'v7' | 'v8' | 'v9' | 'v10' | 'v11'
+type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6' | 'v7' | 'v8' | 'v9' | 'v10' | 'v11' | 'v12'
 
 const fixtureDir = (version: FixtureVersion): URL => new URL(`../../fixtures/package/${version}/`, import.meta.url)
 const readFrom = (version: FixtureVersion) => (relative: string): Uint8Array =>
@@ -51,6 +52,7 @@ const readV8 = readFrom('v8')
 const readV9 = readFrom('v9')
 const readV10 = readFrom('v10')
 const readV11 = readFrom('v11')
+const readV12 = readFrom('v12')
 
 const ARCHIVE_V1 = readV1('reference.buildbox')
 const ARCHIVE_V2 = readV2('reference.buildbox')
@@ -75,6 +77,9 @@ const ARCHIVE_V10 = readV10('elevation.buildbox')
 // The v11 file is named for what the step added, as the four before it were: it is the first
 // Backup whose Project carries a Clearance Envelope (#76).
 const ARCHIVE_V11 = readV11('clearance.buildbox')
+// The v12 file is named for what the step added, as the five before it were: it is the first Backup
+// whose Project carries a Beam (#77).
+const ARCHIVE_V12 = readV12('beams.buildbox')
 const ASSET_BYTES = readV2(ASSET_ENTRY)
 
 /** The one Plan Image every fixture carries, served the way the export serves it. */
@@ -114,6 +119,25 @@ function v1StagedAsViews(): Project {
 const canonicalOf = (record: unknown): string => new TextDecoder().decode(canonicalJsonBytes(record))
 
 /**
+ * The canonical bytes of a Backup written before the twelfth schema: this build's Project with the
+ * Beam collection `migrateV11toV12` adds taken back out again (#77 §1). A superseded golden keeps the
+ * bytes it was written from forever, and those bytes predate Beams — the chain grows the empty
+ * collection on the way in, which is what the `stages into` assertion beside each of these says.
+ */
+function beforeBeams(record: unknown): unknown {
+  const copy = structuredClone(record) as Record<string, unknown>
+  const existingModel = copy.existingModel as Record<string, unknown> | undefined
+  if (existingModel !== undefined) delete existingModel.beams
+  for (const option of (copy.designOptions as Record<string, unknown>[] | undefined) ?? []) {
+    const proposed = option?.proposed as Record<string, unknown> | undefined
+    if (proposed !== undefined) delete proposed.beams
+  }
+  return copy
+}
+
+const canonicalOfPrior = (record: unknown): string => new TextDecoder().decode(canonicalJsonBytes(beforeBeams(record)))
+
+/**
  * What this build's current schema asks of a Project that has no Design Option of its own: the
  * record a Backup holds, plus everything the eighth step adds (#73 criterion 14) — an empty
  * `designOptions`, the three default Drawing Layers, every entity filed on the layer its subtype
@@ -139,6 +163,9 @@ function atCurrentSchema(project: Project, spent = 0): Project {
       walls: filed(project.existingModel.walls, structure!),
       openings: filed(project.existingModel.openings, structure!),
       rooms: filed(project.existingModel.rooms, structure!),
+      // The twelfth step (#77): every model carries the Beam collection, empty for a Project
+      // whose Beams nobody has drawn yet — the chain invents no shape, and neither does this.
+      beams: [],
     },
     views: project.views.map((view) => ({
       ...view,
@@ -226,7 +253,7 @@ describe('the committed v1 Backup', () => {
   })
 
   it('holds the canonical Project record it was written from, and nothing else', () => {
-    const canonical = canonicalOf(v1Record())
+    const canonical = canonicalOfPrior(v1Record())
     // The fixture file carries one trailing newline for a readable diff.
     expect(new TextDecoder().decode(readV1('project.json'))).toBe(`${canonical}\n`)
   })
@@ -234,7 +261,7 @@ describe('the committed v1 Backup', () => {
   it('is described by a manifest that names domain schema v1', async () => {
     const staged = await stageImport(ARCHIVE_V1, { acceptPreview: false, allocateId: allocateIds() })
     if (!staged.ok) throw new Error('the fixture must stage')
-    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOf(v1Record()), 1))
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOfPrior(v1Record()), 1))
   })
 
   it('carries an asset that still hashes to its own name', async () => {
@@ -255,7 +282,7 @@ describe('the committed v2 Backup (#56)', () => {
   it('holds the canonical Project record it was written from, and nothing else', async () => {
     // The pre-v3 record: an Item Footprint was a kind, a width and a depth. The file is
     // compatibility evidence, so it keeps the bytes it was written from.
-    const canonical = canonicalOf(legacyFixtureRecord())
+    const canonical = canonicalOfPrior(legacyFixtureRecord())
     expect(new TextDecoder().decode(readV2('project.json'))).toBe(`${canonical}\n`)
 
     const staged = await stageImport(ARCHIVE_V2, { acceptPreview: false, allocateId: allocateIds() })
@@ -280,7 +307,7 @@ describe('the committed v3 Backup (#58)', () => {
   it('holds the canonical Project record, and nothing else', async () => {
     // The pre-v4 record: no default Wall height and no Wall collections. The file is
     // compatibility evidence, so it keeps the bytes it was written from.
-    const canonical = canonicalOf(v3FixtureRecord())
+    const canonical = canonicalOfPrior(v3FixtureRecord())
     expect(new TextDecoder().decode(readV3('project.json'))).toBe(`${canonical}\n`)
 
     const staged = await stageImport(ARCHIVE_V3, { acceptPreview: false, allocateId: allocateIds() })
@@ -309,7 +336,7 @@ describe('the committed v4 Backup (#64)', () => {
   })
 
   it('holds the canonical Project record, and nothing else', async () => {
-    const canonical = canonicalOf(v4FixtureRecord())
+    const canonical = canonicalOfPrior(v4FixtureRecord())
     expect(new TextDecoder().decode(readV4('project.json'))).toBe(`${canonical}\n`)
 
     const staged = await stageImport(ARCHIVE_V4, { acceptPreview: false, allocateId: allocateIds() })
@@ -344,7 +371,7 @@ describe('the committed v5 Backup (#65)', () => {
   })
 
   it('holds the canonical Project record, and nothing else', async () => {
-    const canonical = canonicalOf(v5FixtureRecord())
+    const canonical = canonicalOfPrior(v5FixtureRecord())
     expect(new TextDecoder().decode(readV5('project.json'))).toBe(`${canonical}\n`)
 
     const staged = await stageImport(ARCHIVE_V5, { acceptPreview: false, allocateId: allocateIds() })
@@ -375,7 +402,7 @@ describe('the committed v6 Backup (#66)', () => {
   })
 
   it('holds the canonical Project record, and nothing else', async () => {
-    const canonical = canonicalOf(v6FixtureRecord())
+    const canonical = canonicalOfPrior(v6FixtureRecord())
     expect(new TextDecoder().decode(readV6('project.json'))).toBe(`${canonical}\n`)
 
     const staged = await stageImport(ARCHIVE_V6, { acceptPreview: false, allocateId: allocateIds() })
@@ -421,12 +448,12 @@ describe('the committed v7 Backup (#67)', () => {
   // What stays true of a v7 Backup is the bytes it holds: a migration reads them and stages a newer
   // Project, it never rewrites the file.
   it('holds the record it was written from, byte for byte', async () => {
-    const canonical = canonicalOf(roomsFixtureProject())
+    const canonical = canonicalOfPrior(roomsFixtureProject())
     expect(new TextDecoder().decode(readV7('project.json'))).toBe(`${canonical}\n`)
   })
 
   it('holds the canonical Project record, and nothing else', async () => {
-    const canonical = canonicalOf(roomsFixtureProject())
+    const canonical = canonicalOfPrior(roomsFixtureProject())
     const staged = await stageImport(ARCHIVE_V7, { acceptPreview: false, allocateId: allocateIds() })
     if (!staged.ok) throw new Error('the fixture must stage')
     expect(staged.staged.manifest).toEqual(await manifestOf(canonical, 7))
@@ -474,14 +501,14 @@ describe('the committed v8 Backup (#69)', () => {
     // Being re-encoded byte for byte is the property of the Backup at the current schema — the v9
     // file below. What a superseded file owes forever is that its own bytes are the canonical form
     // of the Project they were written from, so the step above is the only thing between them.
-    const canonical = canonicalOf(renovationFixtureProject())
+    const canonical = canonicalOfPrior(renovationFixtureProject())
     expect(new TextDecoder().decode(readV8('project.json'))).toBe(`${canonical}\n`)
   })
 
   it('is described by a manifest that names domain schema v8', async () => {
     const staged = await stageImport(ARCHIVE_V8, { acceptPreview: false, allocateId: allocateIds() })
     if (!staged.ok) throw new Error('the fixture must stage')
-    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOf(renovationFixtureProject()), 8))
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOfPrior(renovationFixtureProject()), 8))
   })
 
   it('carries the whole feature in bytes: two Options, a replace, a demolition, four layers, two views', () => {
@@ -548,7 +575,7 @@ describe('the committed v9 Backup (#74)', () => {
   it('holds the bytes it was written with, and this build writes the tenth schema', async () => {
     // The file on disk is the golden and is never rewritten; what this build encodes is a v10
     // Project, so the byte-for-byte round trip belongs to the v10 fixture below.
-    expect(new TextDecoder().decode(readV9('project.json'))).toBe(`${canonicalOf(planRangeFixtureProject())}\n`)
+    expect(new TextDecoder().decode(readV9('project.json'))).toBe(`${canonicalOfPrior(planRangeFixtureProject())}\n`)
     const encoded = await encodeProject(planRangeFixtureProject(), assetSource, FIXTURE_BUILD)
     expect(encoded).not.toBe(ARCHIVE_V9)
   })
@@ -556,7 +583,7 @@ describe('the committed v9 Backup (#74)', () => {
   it('is described by a manifest that names domain schema v9', async () => {
     const staged = await stageImport(ARCHIVE_V9, { acceptPreview: false, allocateId: allocateIds() })
     if (!staged.ok) throw new Error('the fixture must stage')
-    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOf(planRangeFixtureProject()), 9))
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOfPrior(planRangeFixtureProject()), 9))
   })
 
   // Criterion 14: a BuildBox that stops at v8 has no ninth step to read this with.
@@ -597,13 +624,13 @@ describe('the committed v10 Backup (#75)', () => {
     // Being re-encoded byte for byte is the property of the Backup at the current schema — the v11
     // file below. What a superseded file owes forever is that its own bytes are the canonical form
     // of the Project they were written from, so the step above is the only thing between them.
-    expect(new TextDecoder().decode(readV10('project.json'))).toBe(`${canonicalOf(elevationFixtureProject())}\n`)
+    expect(new TextDecoder().decode(readV10('project.json'))).toBe(`${canonicalOfPrior(elevationFixtureProject())}\n`)
   })
 
   it('is described by a manifest that names domain schema v10', async () => {
     const staged = await stageImport(ARCHIVE_V10, { acceptPreview: false, allocateId: allocateIds() })
     if (!staged.ok) throw new Error('the fixture must stage')
-    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOf(elevationFixtureProject()), 10))
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOfPrior(elevationFixtureProject()), 10))
   })
 
   // Criterion 14: a BuildBox that stops at v9 has no tenth step to read this with.
@@ -633,25 +660,27 @@ describe('the committed v10 Backup (#75)', () => {
   })
 })
 
-// Criterion 14, the eleventh schema (#76): the Backup this build writes, and what a build one
-// schema behind says when it is handed it.
+// The eleventh schema (#76), now one step behind: the Backup it holds is still read, still byte for
+// byte the record it was written from, and no longer what this build writes.
 describe('the committed v11 Backup (#76)', () => {
-  it('stages into the Project it was written from, unmigrated', async () => {
+  it('stages into the Project it was written from, read forward one step (#77)', async () => {
     const result = await stageImport(ARCHIVE_V11, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
     expect(result.staged.project).toEqual(clearanceFixtureProject())
-    expect(result.staged.migratedFrom).toBeNull()
+    expect(result.staged.migratedFrom).toBe(11)
   })
 
-  it('is re-encoded byte for byte by this build', async () => {
-    expect(await encodeProject(clearanceFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V11)
-    expect(new TextDecoder().decode(readV11('project.json'))).toBe(`${canonicalOf(clearanceFixtureProject())}\n`)
+  it('keeps the canonical record it was written from, which this build no longer writes', () => {
+    // Being re-encoded byte for byte is the property of the Backup at the current schema — the v12
+    // file below. What a superseded file owes forever is that its own bytes are the canonical form
+    // of the Project they were written from, so the step above is the only thing between them.
+    expect(new TextDecoder().decode(readV11('project.json'))).toBe(`${canonicalOfPrior(clearanceFixtureProject())}\n`)
   })
 
   it('is described by a manifest that names domain schema v11', async () => {
     const staged = await stageImport(ARCHIVE_V11, { acceptPreview: false, allocateId: allocateIds() })
     if (!staged.ok) throw new Error('the fixture must stage')
-    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOf(clearanceFixtureProject()), 11))
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOfPrior(clearanceFixtureProject()), 11))
   })
 
   // Criterion 14: a BuildBox that stops at v10 has no eleventh step to read this with.
@@ -686,5 +715,57 @@ describe('the committed v11 Backup (#76)', () => {
 
   it('carries the same asset, byte for byte', () => {
     expect(readV11(ASSET_ENTRY)).toEqual(ASSET_BYTES)
+  })
+})
+
+// Criterion 14, the twelfth schema (#77): the Backup this build writes, and what a build one
+// schema behind says when it is handed it.
+describe('the committed v12 Backup (#77)', () => {
+  it('stages into the Project it was written from, unmigrated', async () => {
+    const result = await stageImport(ARCHIVE_V12, { acceptPreview: false, allocateId: allocateIds() })
+    if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
+    expect(result.staged.project).toEqual(beamsFixtureProject())
+    expect(result.staged.migratedFrom).toBeNull()
+  })
+
+  it('is re-encoded byte for byte by this build', async () => {
+    expect(await encodeProject(beamsFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V12)
+    expect(new TextDecoder().decode(readV12('project.json'))).toBe(`${canonicalOf(beamsFixtureProject())}\n`)
+  })
+
+  it('is described by a manifest that names domain schema v12', async () => {
+    const staged = await stageImport(ARCHIVE_V12, { acceptPreview: false, allocateId: allocateIds() })
+    if (!staged.ok) throw new Error('the fixture must stage')
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOf(beamsFixtureProject()), 12))
+  })
+
+  // Criterion 14: a BuildBox that stops at v11 has no twelfth step to read this with.
+  it('is refused by a build one schema behind as saved by a newer BuildBox', () => {
+    const record = JSON.parse(new TextDecoder().decode(readV12('project.json'))) as unknown
+    const v11Reader = migrateDomainProject(record, 12, MIGRATORS.slice(0, 11), 11, allocateIds())
+    if (v11Reader.ok) throw new Error('a build at schema v11 read a v12 Project')
+    expect(v11Reader.problem).toEqual({ code: 'newer-schema', detail: { detected: 12, supported: 11 } })
+  })
+
+  it('holds one Beam in the Existing Model, and no Beam collection in the record beside it', () => {
+    expect(beamsFixtureProject().existingModel.beams).toEqual([
+      {
+        id: 'beam-1',
+        floorId: 'floor-0',
+        line: { start: { x: 600, y: 2400 }, end: { x: 3600, y: 2400 } },
+        justification: 'centre',
+        width: 200,
+        underside: 2300,
+        height: 300,
+        label: 'Beam B-1',
+      },
+    ])
+    // The v11 record beside it has no Beam collection at all — the step in one comparison.
+    const prior = JSON.parse(new TextDecoder().decode(readV11('project.json'))) as { existingModel: Record<string, unknown> }
+    expect(prior.existingModel).not.toHaveProperty('beams')
+  })
+
+  it('carries the same asset, byte for byte', () => {
+    expect(readV12(ASSET_ENTRY)).toEqual(ASSET_BYTES)
   })
 })

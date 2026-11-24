@@ -18,7 +18,7 @@ import { workspaceStore } from './workspaceStore'
 const copyFrom = (sourceProjectId: EntityId, sourceProjectName: string): CopySet => ({
   sourceProjectId,
   sourceProjectName,
-  entities: { walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [] },
+  entities: { walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], placedItems: [] },
   itemDesigns: [],
   layers: [],
   demolishedCount: 0,

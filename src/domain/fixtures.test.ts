@@ -112,10 +112,12 @@ describe('domain fixtures (#42 §6)', () => {
       ...('walls' in priorModel ? {} : { walls: [], wallJunctions: [] }),
       ...('openings' in priorModel ? {} : { openings: [] }),
       ...('rooms' in priorModel ? {} : { rooms: [] }),
+      ...('beams' in priorModel ? {} : { beams: [] }),
       placedItems: filed(entriesOf('placedItems'), 'Furniture'),
       walls: filed(entriesOf('walls'), 'Structure'),
       openings: filed(entriesOf('openings'), 'Structure'),
       rooms: filed(entriesOf('rooms'), 'Structure'),
+      beams: filed(entriesOf('beams'), 'Structure'),
     })
     expect(identity(result.project.itemDesigns)).toEqual(identity(prior.itemDesigns))
   })

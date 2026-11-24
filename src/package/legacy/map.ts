@@ -99,6 +99,7 @@ export function projectFromDesign(design: LegacyDesign, newId: () => string): Pr
       wallJunctions: [],
       openings: [],
       rooms: [],
+      beams: [],
     },
     warningAcknowledgements: [],
   }

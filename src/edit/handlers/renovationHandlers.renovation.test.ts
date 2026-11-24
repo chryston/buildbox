@@ -18,7 +18,7 @@ const option = (id: string, name: string): DesignOption => ({
   id,
   name,
   demolishedIds: [],
-  proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [] },
+  proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], placedItems: [] },
 })
 
 /** A decision about the crossing of `wall-1` and `wall-2`, made inside one Option. */

@@ -26,6 +26,7 @@ const delta: DesignOption = {
     wallJunctions: [],
     openings: [entity<Opening>('opening-9', 'floor-0')],
     rooms: [entity<Room>('room-9', 'floor-0')],
+    beams: [],
     placedItems: [entity<PlacedItem>('place-9', 'floor-0')],
   },
 }

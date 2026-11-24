@@ -171,7 +171,7 @@ describe('an entity\'s layer (#71 §1)', () => {
       {
         id: 'option-a',
         name: 'Option A',
-        proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [] },
+        proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], placedItems: [] },
         demolishedIds: [],
       },
     ]

@@ -66,6 +66,7 @@ const copySet = (): CopySet => ({
     wallJunctions: [],
     openings: [{ id: 'opening-3', label: 'Window 3', drawingLayerId: L1 }] as unknown as ProposedModel['openings'],
     rooms: [{ id: 'room-2', name: 'Kitchen', drawingLayerId: L1 }] as unknown as ProposedModel['rooms'],
+    beams: [],
     placedItems: [
       { id: 'placed-9', itemDesignId: 'design-pantry', drawingLayerId: L2 },
       { id: 'placed-10', itemDesignId: 'design-gone', drawingLayerId: L2 },

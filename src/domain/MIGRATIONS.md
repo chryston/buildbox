@@ -230,6 +230,40 @@ BuildBox"** and writes nothing (#20 §5). Old Backups are unaffected: v1 through
 the step that runs on the way in adds one null field to each design and changes no measurement, no
 entity and no existing value.
 
+## What v12 holds (#77)
+
+One thing, an addition to both containers:
+
+* `beams`, the **Beams** of a Floor (#77 §1) — a straight reference line, a `justification` and a
+  `width` that place the two faces, an `underside` and a `height` that place it in the storey, and
+  the optional `label`, `predecessorIds` and `drawingLayerId` every Building Element carries — in the
+  Existing Model and in every Design Option's proposed model. A Beam is an ordinary Building Element:
+  it stands on a Floor, it is demolished by a Design Option like anything else, and it is never a
+  Wall, never an Opening and never something a Wall or an Opening refers to.
+
+`migrateV11toV12` writes `beams: []` on the Existing Model and on every Design Option's proposed
+model that arrives without the collection, and nothing else. It reads no clock, mints no ID and
+touches no other record, because a Beam is always one a person drew over something they measured —
+there is no built-in width to invent and no Wall that implies one. A container that already carries
+the collection comes back untouched, so the step is idempotent and a v12 file is the same object it
+arrived as. No entity moves and no warning reopens on the way in, because no measurement changed.
+
+The strict validator refuses a Beam whose reference line is not straight — an arc is refused by name,
+at the line it sits at — a line whose ends coincide or are no further apart than the drawing
+tolerance, a `width` or a `height` of zero or less, a `justification` outside `left`, `centre` and
+`right`, a `floorId` that names no Floor, and any field a Beam does not have: a host, a junction or a
+face reference is refused as an unknown field, because a Beam attaches to nothing. A negative
+`underside` is a Beam below this Floor's lower limit, which is a thing a person may genuinely draw,
+so it is accepted and warned about rather than refused. Nothing about what a Beam *means* is stored:
+which Placed Items, Openings and Clearance Envelopes it takes space from, and by how much, are
+derived on the way to the warning list and never written down.
+
+**A Backup made by this version cannot be opened by an older one.** It is domain schema v12, and a
+build that stops at v11 has no twelfth step to read it with, so it answers **"saved by a newer
+BuildBox"** and writes nothing (#20 §5). Old Backups are unaffected: v1 through v11 still open, and
+the step that runs on the way in adds one empty list to each container and changes no measurement, no
+entity and no existing value.
+
 ## What this release means for a reader (#73)
 
 In plain words:

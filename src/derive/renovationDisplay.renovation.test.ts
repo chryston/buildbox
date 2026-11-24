@@ -27,6 +27,7 @@ const option: DesignOption = {
     wallJunctions: [],
     openings: [],
     rooms: [],
+    beams: [],
     placedItems: [item('prop-item')],
   },
 }

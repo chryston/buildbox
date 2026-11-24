@@ -30,7 +30,7 @@ const project = (floors: Floor[]): Project => ({
     id: `view-${each.id}`, kind: 'plan', floorId: each.id, name: each.name, isDefault: true, showPlanImage: true, planViewRange: { lowerMm: 0, upperMm: 2600 },
   })),
   itemDesigns: [],
-  existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [] },
+  existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [] },
   warningAcknowledgements: [],
 })
 

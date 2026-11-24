@@ -113,6 +113,22 @@ person made, so no carry-forward invents one. `v10/` is what `DOMAIN_SCHEMA_VERS
 current, and `v9/plan-range-scene.json`, `v9/renovation.json` and their neighbours stay committed as
 the evidence that a Project saved at the ninth schema still opens.
 
+## `v11/` and `v12/` — the carried-forward goldens, and the first Beam (#76, #77)
+
+`v11/` holds no new scene: `scripts/make-v11-fixtures.ts` reads each file of `v10/` through
+`migrateProject` and writes it at the eleventh schema, so the only difference is the
+`clearanceEnvelope: null` the step writes on every Item Design — a Clearance Envelope is always one
+a person drew or measured, so no carry-forward invents a shape.
+
+`v12/` carries the same scenes forward again, and adds one file the earlier folders have no
+counterpart to: `v12/beams.json`, written by `scripts/make-v12-fixtures.ts`. It is the renovation
+scene with a Beam the Existing Model holds — 3 000 mm along the Kitchen, 200 mm wide on its centre
+line, 300 mm deep with its Underside at 2300 mm — and a second Beam `Option A` proposes in its place,
+carrying `predecessorIds` and the demolition that makes that predecessor honest. It is the first
+golden whose Project holds a Beam, and the one `#77`'s warnings, tables and screenshots are judged
+against. `v11/` stays committed as the evidence that a Project saved at the eleventh schema still
+opens, and `v12/` is what `DOMAIN_SCHEMA_VERSION` is 12 names as current.
+
 ## How it was produced
 
 Hand-authored as a plain object, then written with `lib.canonicalJson` — keys sorted, no

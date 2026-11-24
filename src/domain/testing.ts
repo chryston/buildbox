@@ -570,7 +570,7 @@ export function arbProject(): fc.Arbitrary<Project> {
         floors,
         views,
         itemDesigns: designs,
-        existingModel: { placedItems, walls, wallJunctions, openings, rooms: [] },
+        existingModel: { placedItems, walls, wallJunctions, openings, rooms: [], beams: [] },
         warningAcknowledgements: [],
       }
     })
@@ -1167,4 +1167,21 @@ export function withElevationViews(project: Project): Project {
  */
 export function withClearanceEnvelopes(project: Project): Project {
   return { ...project, itemDesigns: project.itemDesigns.map((design) => ({ ...design, clearanceEnvelope: design.clearanceEnvelope ?? null })) }
+}
+
+/**
+ * The same Project as this build's twelfth schema (#77): both containers carry the Beam collection
+ * the step writes.
+ *
+ * The step adds `beams: []` to the Existing Model and to every Design Option's proposed model that
+ * arrives without one, so a test that compares a whole Project read from a pre-v12 record has to say
+ * the same thing the step says. A Beam is always one a person drew, so the collection is empty
+ * everywhere: the step invents no entity, and neither does this.
+ */
+export function withBeams<T extends Project>(project: T): T {
+  return {
+    ...project,
+    existingModel: { ...project.existingModel, beams: project.existingModel.beams ?? [] },
+    designOptions: project.designOptions?.map((option) => ({ ...option, proposed: { ...option.proposed, beams: option.proposed.beams ?? [] } })),
+  }
 }

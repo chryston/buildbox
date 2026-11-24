@@ -141,11 +141,32 @@ const SEGMENT_FIELDS: Record<string, readonly string[]> = {
 }
 const SEGMENT_KINDS = ['line', 'arc', 'ellipticalArc'] as const
 const POINT_FIELDS = ['x', 'y']
-const EXISTING_MODEL_FIELDS = ['placedItems', 'walls', 'wallJunctions', 'openings', 'rooms']
+const EXISTING_MODEL_FIELDS = ['placedItems', 'walls', 'wallJunctions', 'openings', 'rooms', 'beams']
 /** A Design Option is a delta over the Existing Model, never a copy of it (#69 §2). */
 const DESIGN_OPTION_FIELDS = ['id', 'name', 'proposed', 'demolishedIds']
-/** The five collections of one Option's proposed work, in the shape the Existing Model uses. */
-const PROPOSED_MODEL_FIELDS = ['walls', 'wallJunctions', 'openings', 'rooms', 'placedItems']
+/** The six collections of one Option's proposed work, in the shape the Existing Model uses. */
+const PROPOSED_MODEL_FIELDS = ['walls', 'wallJunctions', 'openings', 'rooms', 'placedItems', 'beams']
+/**
+ * A Beam's own fields (#77 §1). There is no `host`, no `wallId` and no junction among them, and
+ * `checkUnknownFields` is what refuses one: a Beam that carried a host would be a Beam that
+ * silently moves when a Wall moves, which is the one thing this element is defined not to be.
+ */
+const BEAM_FIELDS = [
+  'id',
+  'floorId',
+  'line',
+  'justification',
+  'width',
+  'underside',
+  'height',
+  'label',
+  'predecessorIds',
+  'drawingLayerId',
+]
+/** A Beam reference line, straight: `kind` is accepted only to say `line`, and `through` never. */
+const BEAM_LINE_FIELDS = ['kind', 'start', 'end', 'through']
+/** A Beam label this long is a mistake, not a label; the inspector field caps at the same number. */
+const BEAM_LABEL_MAX_LENGTH = 80
 /** A Room's Edges are referenced to a Wall face on one of the reference line's two sides (#67 §1). */
 const ROOM_FACE_SIDES = ['left', 'right']
 const ROOM_FIELDS = ['id', 'floorId', 'name', 'outline', 'wallFaceRefs', 'predecessorIds', 'drawingLayerId']
@@ -2263,6 +2284,9 @@ function validateExistingModel(
   // Rooms come last: a Wall face reference is checked against the Wall's tidied face, so it
   // needs the same Wall map the Openings needed (#67 §1).
   const rooms = validateRooms(raw.rooms, childPath(path, 'rooms'), index, EXISTING_SCOPE, walls, format, checks, add)
+  // Beams come last and read nothing: a Beam is checked against the Project's Floors and its own
+  // numbers alone, never against the Walls it crosses (#77 §1).
+  validateBeams(raw.beams, childPath(path, 'beams'), index, EXISTING_SCOPE, checks, add)
   checkUnknownFields(raw, path, EXISTING_MODEL_FIELDS, add)
   return { walls, junctions, refs, rooms }
 }
@@ -2417,6 +2441,7 @@ function validateDesignOptions(
     if (placedItems !== null) {
       placedItems.forEach((item, j) => validatePlacedItem(item, childPath(itemsPath, j), index, scope, add))
     }
+    validateBeams(proposed.beams, childPath(proposedPath, 'beams'), index, scope, null, add)
     checkUnknownFields(proposed, proposedPath, PROPOSED_MODEL_FIELDS, add)
     checkUnknownFields(rawOption, at, DESIGN_OPTION_FIELDS, add)
 
@@ -2578,6 +2603,105 @@ function validateWalls(raw: unknown, path: string, index: IdIndex, refs: Map<str
     if (shape !== null) walls.set(shape.id, shape)
   })
   return walls
+}
+
+/**
+ * A Beam's reference line (#77 §1): straight, always.
+ *
+ * A Beam borrows the linear-element contract, not the whole of a Wall's reference. There is no arc
+ * in this effort, so `kind` is accepted only when it says `line` — a file that writes `arc` is
+ * refused by name, at the line it sits at, rather than as an unexplained unknown field — and a third
+ * point is refused outright, because an arc is the only thing that ever has one.
+ *
+ * The line has to have a length: two ends 0.01 mm apart describe no member at all, and every
+ * measurement of the Beam — its Length, its faces, the area of an envelope it intrudes into — would
+ * be a number about nothing.
+ */
+function validateBeamLine(raw: unknown, path: string, add: Add): void {
+  if (raw === undefined) {
+    add(path, MISSING, 'Missing the Beam reference line.')
+    return
+  }
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected the Beam reference line.')
+    return
+  }
+  const start = readPoint(raw.start, childPath(path, 'start'), 'the Beam reference line start', add)
+  const end = readPoint(raw.end, childPath(path, 'end'), 'the Beam reference line end', add)
+  if (raw.kind !== undefined && raw.kind !== 'line') {
+    add(childPath(path, 'kind'), NOT_ONE_OF, 'Expected a straight Beam reference line — a Beam has no arc.')
+  }
+  if (raw.through !== undefined) {
+    add(childPath(path, 'through'), UNKNOWN_FIELD, 'Expected no third point on a Beam reference line — only an arc has one, and a Beam has no arc.')
+  }
+  checkUnknownFields(raw, path, BEAM_LINE_FIELDS, add)
+  if (start === null || end === null) return
+  if (distance(start, end) <= TOLERANCE_MM) {
+    add(path, OUT_OF_RANGE, `Expected a Beam reference line more than ${TOLERANCE_MM} mm long.`)
+  }
+}
+
+/**
+ * One Beam (#77 §1).
+ *
+ * Four numbers and a line, and every rule is about one of them: the width and the Depth are
+ * measurements, so both are greater than 0; the Underside is an elevation, so it is any finite
+ * number, negative included, because a Beam hanging below the Floor Datum is a thing people
+ * document. What is *not* here is a relationship: no host, no junction, no reference to a Wall. A
+ * Beam that crossed a Wall is a Beam that crosses a Wall, and the file says nothing more (#77 §1).
+ */
+function validateBeam(raw: unknown, path: string, index: IdIndex, scope: ModelScope, add: Add): void {
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected a Beam.')
+    return
+  }
+  const idPath = childPath(path, 'id')
+  const id = checkEntityId(raw.id, idPath, 'the Beam ID', add)
+  if (id !== null) claimId(id, idPath, 'the Beam ID', index, add)
+
+  const floorPath = childPath(path, 'floorId')
+  const floorId = checkEntityId(raw.floorId, floorPath, 'the Floor this Beam spans', add)
+  if (floorId !== null && !index.floorIds.has(floorId)) {
+    add(floorPath, DANGLING_REFERENCE, `Expected the Beam's Floor to be a Floor of this Project — no Floor has ID ${floorId}.`)
+  }
+
+  validateBeamLine(raw.line, childPath(path, 'line'), add)
+  checkPositive(raw.width, childPath(path, 'width'), 'the Beam width', add)
+  checkOneOf(raw.justification, childPath(path, 'justification'), 'the Beam justification', WALL_JUSTIFICATIONS, add)
+  // Negative is valid: a Beam can hang below the Floor Datum, the way a Placed Item can (#77 §1).
+  checkNumber(raw.underside, childPath(path, 'underside'), 'the Beam Underside above the Floor Datum', add)
+  // `height` is the stored name of what the interface calls Depth (#77 §1).
+  checkPositive(raw.height, childPath(path, 'height'), 'the Beam Depth', add)
+  const label = raw.label
+  if (label !== undefined) {
+    checkText(label, childPath(path, 'label'), 'the Beam label', add)
+    if (typeof label === 'string' && label.length > BEAM_LABEL_MAX_LENGTH) {
+      add(childPath(path, 'label'), OUT_OF_RANGE, `Expected the Beam label to be at most ${BEAM_LABEL_MAX_LENGTH} characters — it is ${label.length}.`)
+    }
+  }
+  checkPredecessorIds(raw.predecessorIds, path, index, scope, add)
+  checkDrawingLayerId(raw.drawingLayerId, path, 'the Beam Drawing Layer', index, add)
+  checkUnknownFields(raw, path, BEAM_FIELDS, add)
+}
+
+/**
+ * Every Beam of one model (#77 §1).
+ *
+ * Beams are checked on their own and never against another entity: there is no cross-check to make,
+ * which is the point of the element. A Beam that overlaps a Wall end, a Beam that overlaps another
+ * Beam, and a Beam that floats in the middle of a room are three ordinary drawings.
+ */
+function validateBeams(raw: unknown, path: string, index: IdIndex, scope: ModelScope, checks: Checks, add: Add): void {
+  // An absent collection is a model written before the capability and is valid — the v11 → v12
+  // migrator adds the empty array, and `beamsOf` is the read — so this checks what is there and
+  // never defaults what is not.
+  if (raw === undefined) return
+  const items = checkArray(raw, path, 'the Beams', add)
+  if (items === null) return
+  items.forEach((beam, i) => {
+    if (!inScope(checks, beam)) return
+    validateBeam(beam, childPath(path, i), index, scope, add)
+  })
 }
 
 /**

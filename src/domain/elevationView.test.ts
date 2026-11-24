@@ -46,7 +46,7 @@ const projectWith = (
     views,
     elevationViews: elevation,
     itemDesigns: [],
-    existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [] },
+    existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [] },
     warningAcknowledgements: [],
   }
 }

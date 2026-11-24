@@ -25,7 +25,7 @@ function scopeFor(project: Project, over: Partial<QuantityScope> = {}): Quantity
   }
 }
 
-const EMPTY_PROPOSED = { walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [] }
+const EMPTY_PROPOSED = { walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], placedItems: [] }
 
 /** The same Project with two Drawing Layers, so a narrowed Layers control has names to print. */
 const layered: Project = {

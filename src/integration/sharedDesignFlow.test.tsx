@@ -209,6 +209,7 @@ describe('the shared-height preview panel (#76 §1)', () => {
           openings: [],
           placedItems: [{ ...placements(wide)[1]!, id: 'place-opt' }],
           rooms: [],
+          beams: [],
           wallJunctions: [],
           walls: [],
         },

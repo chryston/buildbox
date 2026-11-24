@@ -68,6 +68,7 @@ function projectWithFourPlacements(): Project {
       wallJunctions: [],
       openings: [],
       rooms: [],
+      beams: [],
       placedItems: [
         placed('place-0', 'design-0', 1200, 400, 0),
         placed('place-1', 'design-1', 2400, 900, 90),

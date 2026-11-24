@@ -133,6 +133,7 @@ export function fixtureProject(): Project {
       wallJunctions: [],
       openings: [],
       rooms: [],
+      beams: [],
       placedItems: [
         {
           id: 'place-0',
@@ -368,13 +369,13 @@ export function renovationFixtureProject(): Project {
       {
         id: 'option-1',
         name: 'Open plan',
-        proposed: { placedItems: [replacement], walls: [], wallJunctions: [], openings: [], rooms: [] },
+        proposed: { placedItems: [replacement], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [] },
         demolishedIds: [demolished.id],
       },
       {
         id: 'option-2',
         name: 'Store wall',
-        proposed: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [] },
+        proposed: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [] },
         demolishedIds: ['wall-2'],
       },
     ],
@@ -532,5 +533,36 @@ export function clearanceFixtureProject(): Project {
           }
         : design,
     ),
+  }
+}
+
+/**
+ * The renovation fixture at the twelfth schema (#77), with one Beam: 3 000 mm long across the
+ * Kitchen, 200 mm wide on its centre line, 300 mm deep with its Top at the 2600 mm ceiling line, so
+ * its Underside sits at 2300 mm — the shape the Beam tool draws, spelled out as stored bytes.
+ *
+ * The Beam stands on the same Floor as the Cabinets the Clearance Envelope suite measures, so the
+ * round-trip of a Project that holds one, and every warning that reads it, are judged against these
+ * bytes.
+ */
+export function beamsFixtureProject(): Project {
+  const project = clearanceFixtureProject()
+  return {
+    ...project,
+    existingModel: {
+      ...project.existingModel,
+      beams: [
+        {
+          id: 'beam-1' as EntityId,
+          floorId: 'floor-0' as EntityId,
+          line: { start: { x: 600, y: 2400 }, end: { x: 3600, y: 2400 } },
+          justification: 'centre',
+          width: 200,
+          underside: 2300,
+          height: 300,
+          label: 'Beam B-1',
+        },
+      ],
+    },
   }
 }

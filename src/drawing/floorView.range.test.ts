@@ -160,6 +160,7 @@ const projectOf = (range: PlanViewRange, placements: readonly PlacedItem[]): Pro
     walls: WALLS,
     wallJunctions: JUNCTIONS,
     openings: OPENINGS,
+    beams: [],
     rooms: [{
       id: 'room-1',
       floorId: 'floor-1',

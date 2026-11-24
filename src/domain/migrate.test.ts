@@ -11,6 +11,7 @@ import {
   migrateV4toV5,
   migrateV9toV10,
   migrateV10toV11,
+  migrateV11toV12,
   rectangleFootprint,
   runMigrationChain,
   type IdAllocator,
@@ -50,6 +51,7 @@ function validProject(): Project {
       wallJunctions: [],
       openings: [],
       rooms: [],
+      beams: [],
       placedItems: [
         {
           id: 'place-0',
@@ -107,9 +109,9 @@ function withoutTheStep(project: unknown): unknown {
 
 describe('DOMAIN_SCHEMA_VERSION', () => {
   it('is the version this build writes', () => {
-    // v11 is production: the Clearance Envelope shipped, so the number the chain ends at and the
-    // number this build writes are the same one (#73, #75, #76).
-    expect(DOMAIN_SCHEMA_VERSION).toBe(11)
+    // v12 is production: the Beam shipped, so the number the chain ends at and the number this
+    // build writes are the same one (#73, #75, #76, #77).
+    expect(DOMAIN_SCHEMA_VERSION).toBe(12)
   })
 })
 
@@ -759,5 +761,98 @@ describe('migrateV10toV11 — every Item Design gains its Clearance Envelope fie
     expect(migrateV10toV11([{ id: 'design-0' }])).toEqual([{ id: 'design-0' }])
     const empty = { itemDesigns: [] }
     expect(migrateV10toV11(empty)).toBe(empty)
+  })
+})
+
+describe('migrateV11toV12 — both containers gain the Beam collection (#77)', () => {
+  /** The same Project as its v11 twin: models written before the Beam existed. */
+  function v11Record(): Record<string, unknown> {
+    const record: Record<string, unknown> = { ...validProject() }
+    const model = { ...(record.existingModel as Record<string, unknown>) }
+    delete model.beams
+    record.existingModel = model
+    const options = record.designOptions as Record<string, unknown>[] | undefined
+    if (options !== undefined) {
+      record.designOptions = options.map((option) => {
+        const proposed = { ...(option.proposed as Record<string, unknown>) }
+        delete proposed.beams
+        return { ...option, proposed }
+      })
+    }
+    return record
+  }
+
+  it('adds the empty collection to both containers, and spends no IDs of its own', () => {
+    const asked: number[] = []
+    const result = migrateProject(v11Record(), 11, (count) => {
+      asked.push(count)
+      return allocator()(count)
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    // Nothing past v11 invents an ID: a Beam is always one a person drew over something they
+    // measured, so the collection arrives empty and stays empty until a transaction fills it.
+    expect(asked).toEqual([])
+    expect(result.project.existingModel.beams).toEqual([])
+  })
+
+  it('adds the collection to every Design Option as well', () => {
+    const withOptions = v11Record()
+    withOptions.designOptions = [
+      { id: 'option-a', name: 'Option A', proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [] }, demolishedIds: [] },
+      { id: 'option-b', name: 'Option B', proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], placedItems: [] }, demolishedIds: [] },
+    ]
+    const result = migrateProject(withOptions, 11, allocator())
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.project.designOptions?.map((option) => option.proposed.beams)).toEqual([[], []])
+  })
+
+  it('changes nothing else about any record', () => {
+    const prior = v11Record()
+    const result = migrateProject(prior, 11, allocator())
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    // The step adds one collection to each container and touches nothing beside it: no entity moves,
+    // no warning reopens, because no measurement changed (#77 acceptance 15).
+    const rest = { ...(result.project as unknown as Record<string, unknown>) }
+    const priorRest = { ...prior }
+    rest.existingModel = { ...(rest.existingModel as Record<string, unknown>) }
+    delete (rest.existingModel as Record<string, unknown>).beams
+    delete rest.designOptions
+    delete priorRest.designOptions
+    expect(rest).toEqual(priorRest)
+  })
+
+  it('leaves a v12 Project exactly as it found it', () => {
+    const migrated = migrateProject(v11Record(), 11, allocator())
+    expect(migrated.ok).toBe(true)
+    if (!migrated.ok) return
+    const again = migrateProject(migrated.project, 11, allocator())
+    expect(again.ok && again.project).toEqual(migrated.project)
+  })
+
+  it('keeps the Beams a model already carries', () => {
+    // A migrator that overwrote the collection it was only meant to add would silently delete
+    // somebody's Beams — the one thing this step could get wrong.
+    const carried = {
+      existingModel: { beams: [{ id: 'beam-1', floorId: 'floor-0' }] },
+      designOptions: [{ id: 'option-a', proposed: { beams: [{ id: 'beam-2', floorId: 'floor-0' }] } }],
+    }
+    expect(migrateV11toV12(carried)).toBe(carried)
+  })
+
+  it('hands back the record itself when every container already has the collection', () => {
+    // Identity, not equality: the step copies nothing when there is nothing to add.
+    const carried = { existingModel: { beams: [] }, designOptions: [{ id: 'a', proposed: { beams: [] } }] }
+    expect(migrateV11toV12(carried)).toBe(carried)
+  })
+
+  it('adds the collection to a record that is not a Project shape, without crashing', () => {
+    expect(migrateV11toV12(null)).toBeNull()
+    expect(migrateV11toV12([{ existingModel: {} }])).toEqual([{ existingModel: {} }])
+    // A record whose `designOptions` is not a list gets the Existing Model's collection and leaves
+    // the value it cannot read exactly as it found it.
+    expect(migrateV11toV12({ designOptions: 'not a list' })).toEqual({ designOptions: 'not a list', existingModel: { beams: [] } })
   })
 })

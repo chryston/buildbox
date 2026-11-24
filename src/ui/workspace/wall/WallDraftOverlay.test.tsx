@@ -49,7 +49,7 @@ const floorWalls: FloorWalls = deriveWalls(
   // `deriveWalls` reads the model's Walls, Junctions and Rooms, so the test hands it exactly
   // those and nothing else: a jsdom module cannot read the fixture files off disk. The two
   // collections it never measures are still there, because a Project always has five (#69 §5).
-  { existingModel: { walls: [...WALLS], wallJunctions: [], openings: [], rooms: [], placedItems: [] } } as unknown as Project,
+  { existingModel: { walls: [...WALLS], wallJunctions: [], openings: [], rooms: [], beams: [], placedItems: [] } } as unknown as Project,
   'floor-main',
 )
 

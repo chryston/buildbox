@@ -330,7 +330,7 @@ describe('listsSummary', () => {
   test('a Floor with no cabinet on it has no Cut List to offer', () => {
     const empty: Project = {
       ...project,
-      existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [] },
+      existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [] },
     }
     const summary = listsSummary({ project: empty, revision: 1 }, scopeFor(), null)
     expect(summary.cutListCapable).toBe(false)

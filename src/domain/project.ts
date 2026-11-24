@@ -554,6 +554,16 @@ export interface ExistingModel {
    * belongs to exactly one Floor, so it carries its own `floorId` like a Wall does.
    */
   rooms: Room[]
+  /**
+   * Every Beam of every Floor (#77). A Beam stands on its own reference line: it is not hosted by,
+   * joined to, or derived from any Wall, so it is a collection of its own rather than a field of
+   * the Wall set.
+   *
+   * Optional rather than an always-present array for the same reason `elevationViews` is: a Project
+   * written before this capability stays valid without the field, and the validator never defaults
+   * one. {@link beamsOf} is the accessor, and the v11 → v12 migrator adds the empty array.
+   */
+  beams?: Beam[]
 }
 
 /**
@@ -569,14 +579,24 @@ export interface ExistingModel {
  */
 export type PredecessorIds = EntityId[]
 
-/** The five collections one Design Option proposes, in the shape `ExistingModel` uses (#69 §2). */
+/** The six collections one Design Option proposes, in the shape `ExistingModel` uses (#69 §2). */
 export interface ProposedModel {
   walls: Wall[]
   wallJunctions: WallJunction[]
   openings: Opening[]
   rooms: Room[]
   placedItems: PlacedItem[]
+  /** Every Beam this Option introduces (#77), in the same shape the Existing Model stores. */
+  beams?: Beam[]
 }
+
+/**
+ * The Beams of one model — the Existing Model or a Design Option's proposed work — which a Project
+ * written before #77 does not carry.
+ *
+ * Every consumer reads through this rather than the field, so "no Beams" has one spelling.
+ */
+export const beamsOf = (model: { beams?: Beam[] } | undefined): Beam[] => model?.beams ?? []
 
 /**
  * One alternative for the same Existing Model (#69 §2).
@@ -835,6 +855,74 @@ export interface WallJunctionEnd {
   wallId: EntityId
   end: WallEnd
 }
+
+/**
+ * One Beam (#77): a documented horizontal member with a constant section and a constant Vertical
+ * Extent, recorded for coordination and for nothing else.
+ *
+ * A Beam is the second Building Element to use the shared linear-element contract (#20 §7): a
+ * straight reference line, one constant width, a justification, and faces derived through
+ * `geometry.linearElement` exactly as a Wall's are. What it has no room for is a relationship. It
+ * has no host and takes no Junction — moving a Wall never moves a Beam, and two Beams whose ends
+ * overlap are two Beams, not one joint. It hosts nothing either: no Opening is cut into a Beam and
+ * no Room Edge references one. It only ever snaps.
+ *
+ * The two vertical numbers are the ones a person measures: `underside` and `height`, both from the
+ * Floor Datum, both in millimetres, both allowed to be negative. `height` is what the interface
+ * calls **Depth**, and `underside + height` is the **Top** — neither is stored, because a Beam that
+ * remembered its own top could disagree with its own Depth.
+ */
+export interface Beam {
+  id: EntityId
+  floorId: EntityId
+  /**
+   * The reference line, straight: a Beam has no arc. `start` and `end` are Floor-local millimetres,
+   * and the line's own direction is what `left` and `right` of the justification mean.
+   */
+  line: { start: Point2; end: Point2 }
+  /** Where the reference line sits within the width, relative to the line's own direction. */
+  justification: WallJustification
+  /** Millimetres, greater than 0: the constant section width. */
+  width: number
+  /** Millimetres from the Floor Datum; negative is valid. The bottom of the Vertical Extent. */
+  underside: number
+  /**
+   * Millimetres, greater than 0: the constant Vertical Extent, shown to the user as **Depth**
+   * (#77 §1). The Top is `underside + height`, derived and never stored.
+   */
+  height: number
+  /**
+   * The Beam's display name, `Beam B-1` by default, numbered within the Project and renameable.
+   * Absent is legal and says only `Beam`.
+   */
+  label?: string
+  /** The Beam this one came out of (#69 §3); absent on an Existing Model Beam. */
+  predecessorIds?: PredecessorIds
+  /**
+   * The Drawing Layer this Beam belongs to (#71 §1); `null` is Unlayered, and absent is `null`.
+   * New Beams default to `Structure` (#77 §4), and nothing derives one from a Wall it crosses.
+   */
+  drawingLayerId?: EntityId | null
+}
+
+/**
+ * The parts of a Beam a later Anchor can name (#77 §1, for S10).
+ *
+ * These six strings are the whole stable vocabulary: the two ends of the reference line, the two
+ * faces read in the line's own direction, and the two edges of the Vertical Extent. The midpoint of
+ * the line is deliberately absent — it moves whenever either end does, which is the opposite of
+ * what a stable ID is for.
+ */
+export const BEAM_FEATURE_IDS = ['start', 'end', 'leftFace', 'rightFace', 'underside', 'top'] as const
+
+/** One stable Beam feature. */
+export type BeamFeatureId = (typeof BEAM_FEATURE_IDS)[number]
+
+/** The Top of a Beam: its Underside plus its Depth (#77 §1). */
+export const beamTop = (beam: Beam): number => beam.underside + beam.height
+
+/** The name a Beam is called by in a sentence, and on the plan. */
+export const beamLabel = (beam: Beam): string => beam.label ?? 'Beam'
 
 /** A placement of an Item Design: placement context only, never a copy of its dimensions (#16). */
 export interface PlacedItem {
