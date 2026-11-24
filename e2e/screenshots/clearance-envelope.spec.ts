@@ -53,6 +53,9 @@ test('the shared-height panel over the plan, with the dashed preview outlines an
   await page.getByTestId('edit-shared-design').click()
   await page.getByTestId('shared-design-height').fill('2700')
   await expect(page.getByTestId('plan-preview-outlines')).toBeVisible()
+  // The card sits low in the inspector; pull it fully into the viewport so the photograph shows
+  // the whole field, spinner and all, rather than a clipped bottom edge.
+  await page.getByTestId('shared-design-height').scrollIntoViewIfNeeded()
   await waitForStablePaint(canvas.locator('g').first())
   await expect(page).toHaveScreenshot('clearance-shared-design-panel.png')
 })

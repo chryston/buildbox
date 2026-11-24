@@ -55,20 +55,22 @@ test('the Warning strip expanded over a walled plan, with one badge per involved
   const strip = page.getByTestId('warning-strip')
   await expect(strip).toBeVisible()
 
-  // Two of the three are unacknowledged — one never acknowledged, one reopened — and one is
-  // seen, which is the count the collapsed bar carries and the Export notice reads.
-  await expect(page.getByTestId('warning-count')).toHaveText('2 open · 1 seen')
+  // Ten of the eleven are unacknowledged — the two junction rows plus the eight the vertical
+  // producers derive from this scene's furniture (#76 §5) — and one is seen, which is the count
+  // the collapsed bar carries and the Export notice reads.
+  await expect(page.getByTestId('warning-count')).toHaveText('10 open · 1 seen')
 
   // The strip sits in the shell's `warningStrip` slot, overlaid at the bottom of the canvas
   // host (#66 criterion 11): expanding it must not resize the canvas underneath it.
   const before = await canvas.boundingBox()
   await page.getByTestId('warning-toggle').click()
   await expect(page.getByTestId('warning-list')).toBeVisible()
-  await expect(page.getByTestId('warning-list').locator('li')).toHaveCount(3)
+  await expect(page.getByTestId('warning-list').locator('li')).toHaveCount(11)
 
   // The badges are screen chrome over the same scene, so the canvas holds the whole story:
-  // three warnings, four Walls involved, and one badge each.
-  await expect(canvas.locator('[data-testid^="warning-badge-"]')).toHaveCount(4)
+  // eleven warnings, and one badge per entity involved in something unacknowledged — the four
+  // Walls of the junction rows plus the Walls and furniture of the vertical rows (#76 §5).
+  await expect(canvas.locator('[data-testid^="warning-badge-"]')).toHaveCount(11)
 
   await expect(strip).toHaveScreenshot('warnings-strip.png')
   const after = await canvas.boundingBox()
