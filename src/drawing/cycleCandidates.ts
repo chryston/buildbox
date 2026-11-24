@@ -49,6 +49,11 @@ export interface DrawnEntities {
    * can land on, and the cycle says the one under it.
    */
   readonly skirtings: readonly DrawnEntity[]
+  /**
+   * The Services (#79 §6), one entry per Service: a pipe is one thing the pointer means, wherever
+   * along it it lands.
+   */
+  readonly services?: readonly DrawnEntity[]
   /** The Display's state list: an entity absent from it was not drawn. */
   readonly states: ReadonlyMap<string, RenovationState>
 }
@@ -117,5 +122,9 @@ export function candidatesAtPoint(at: Pt, drawn: DrawnEntities, skirtingReachMm 
   gather(found, drawn.beams, 'beams', drawn.states, (beam) => inside(at, beam.outline))
   gather(found, drawn.skirtings, 'skirtings', drawn.states, (strip) =>
     inside(at, strip.outline) || (skirtingReachMm > 0 && nearRing(at, strip.outline, skirtingReachMm)))
+  // A Service is picked the same way a Skirting is: inside its body, or within the reach the canvas
+  // strokes its invisible target with, so the cycle answers where the surface offers it (#79 §6).
+  gather(found, drawn.services ?? [], 'services', drawn.states, (service) =>
+    inside(at, service.outline) || (skirtingReachMm > 0 && nearRing(at, service.outline, skirtingReachMm)))
   return found
 }

@@ -18,8 +18,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
-import { affineApply, affineInvert, resolveSnap } from '../../derive'
-import type { DerivedFloor, FloorBeams, FloorRooms, FloorSkirting, FloorWalls, RangeClass, RenovationState, SnapCandidate, SnapKind } from '../../derive'
+import { affineApply, affineInvert, resolveSnap, serviceHitOutline } from '../../derive'
+import type { DerivedFloor, FloorBeams, FloorRooms, FloorServices, FloorSkirting, FloorWalls, RangeClass, RenovationState, SnapCandidate, SnapKind } from '../../derive'
 import type { DisplayUnit, Point2 } from '../../domain'
 import { footprintPath } from '../../domain'
 import {
@@ -112,6 +112,8 @@ export interface PlanViewCanvasProps {
   selectedBeamId?: string | null
   /** The Skirting of this Floor (#78 §7), or null for a Floor with none. */
   skirting?: FloorSkirting | null
+  /** The Services of this Floor (#79 §6). */
+  services?: FloorServices | null
   /** The selected Skirting, drawn with its own outline (#78 §3). */
   selectedSkirtingId?: string | null
   /**
@@ -188,6 +190,10 @@ export interface PlanViewCanvasProps {
   onSelectBeam?: (id: string) => void
   /** A click on a Skirting strip (#78 §3). */
   onSelectSkirting?: (id: string) => void
+  /** Select a Service by id (#79 §6). */
+  onSelectService?: (id: string) => void
+  /** The selected Service, drawn in the accent (#79 §6). */
+  selectedServiceId?: string | null
   /**
    * The Room being drawn or edited, with every region it shares with another Room. Red and
    * hatched when it cannot be committed, accent while it can (#67 behaviours 20–21).
@@ -238,9 +244,9 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     tool, selection, onSelect, onCursorChange, onCanvasClick, dragPreview, onDragPreview, onMoveItem, onRotateItem,
     editLocked = false,
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
-    angleSnap, overlay, htmlOverlay, screenOverlay, walls, beams = null, selectedBeamId = null, skirting = null, selectedSkirtingId = null, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
+    angleSnap, overlay, htmlOverlay, screenOverlay, walls, beams = null, selectedBeamId = null, skirting = null, selectedSkirtingId = null, services = null, selectedServiceId = null, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
     openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
-    rooms = null, selectedRoomId = null, onSelectRoom, onSelectBeam, onSelectSkirting, roomProposal = null,
+    rooms = null, selectedRoomId = null, onSelectRoom, onSelectBeam, onSelectSkirting, onSelectService, roomProposal = null,
     warningSubjects = [], onSelectWarningBadge,
   } = props
   const [hostSize, setHostSize] = useState({ width: 0, height: 0 })
@@ -518,7 +524,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   // thing a sheet may leave out is what a sheet has no pointer for — the selection's measurements,
   // its handles and the Warning badges.
   const view = drawFloorView(
-    { floor, walls, rooms, openings, beams, skirting },
+    { floor, walls, rooms, openings, beams, skirting, services },
     {
       sizing,
       renovation: states === null ? null : { states },
@@ -529,6 +535,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       selectedWallId,
       selectedBeamId,
       selectedSkirtingId,
+      selectedServiceId,
       selectedOpeningId,
       openingPreview,
       selectedRoomId,
@@ -537,7 +544,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       handles: handlesFor,
     },
   )
-  const { list: painted, floor: drawnFloor, walls: drawnWalls, rooms: drawnRooms, openings: drawnOpenings, beams: drawnBeams, skirting: drawnSkirting } = view
+  const { list: painted, floor: drawnFloor, walls: drawnWalls, rooms: drawnRooms, openings: drawnOpenings, beams: drawnBeams, skirting: drawnSkirting, services: drawnServices } = view
   // The names this view had no room for, keyed by the thing that lost its label (#74 §3): the
   // renderer puts each one on the entity's group, so hovering the footprint says the name the
   // packing could not fit beside it.
@@ -578,6 +585,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     else if (drawnRooms?.rooms.some((room) => room.id === id) === true) onSelectRoom?.(id)
     else if (drawnBeams?.beams.some((beam) => beam.id === id) === true) onSelectBeam?.(id)
     else if (drawnSkirting?.skirting.some((row) => row.id === id) === true) onSelectSkirting?.(id)
+    else if (drawnServices?.services.some((row) => row.id === id) === true) onSelectService?.(id)
     else onSelect(id)
   }
 
@@ -608,6 +616,9 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       // A strip cycles with the Wall it stands on and the cabinet standing in front of it, which is
       // the order the pointer reaches them in (#78 §7, #70 §8).
       skirtings: (drawnSkirting?.skirting ?? []).flatMap((row) => row.runs.map((run) => ({ id: row.id, outline: run.outline }))),
+      // A Service cycles with the Wall it passes through and the cabinet it clashes with, which is
+      // the order the pointer reaches them in (#79 §6, #70 §8).
+      services: (drawnServices?.services ?? []).map((row) => ({ id: row.id, outline: serviceHitOutline(row) })),
       states,
       // Half the width the same canvas strokes the strip's invisible target at, so the pointer
       // answers the Skirting where the surface offers it and the cycle can reach it (#78 §7).
@@ -624,6 +635,20 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
         renovationState: openingState,
         drawOrder: drawOrderOf('wall-openings', candidates.length),
         rangeClass: classOf(clickedId),
+      })
+    }
+    // A Service answers the pointer through the body the canvas painted, and the cycle has to be able
+    // to name it: the hit test measures a closed band, but a Ø50 pipe at plan zoom is a hairline of
+    // ink whose band a pointer misses more often than it hits, so the click on the drawn body is
+    // itself the evidence — the same rule an Opening's symbol follows above (#79 §6, #65 §11).
+    const drawnService = drawnServices?.services.find((row) => row.id === clickedId)
+    const serviceState = drawnService === undefined ? undefined : states.get(drawnService.id)
+    if (drawnService !== undefined && serviceState !== undefined && !candidates.some((one) => one.entityId === drawnService.id)) {
+      candidates.push({
+        entityId: drawnService.id,
+        renovationState: serviceState,
+        drawOrder: drawOrderOf('services', candidates.length),
+        rangeClass: classOf(drawnService.id),
       })
     }
     // #71 criterion 10: content this view will not let be picked is not a candidate at all — the
@@ -709,6 +734,17 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       : (id, event) => {
           // A Skirting is a finish painted over the Wall it stands on, so the Wall takes the first
           // click and the cycle behind the click is what makes the strip reachable (#78 §7).
+          consumedPointer.current = true
+          const answer = pickTarget(id, event.clientX, event.clientY)
+          if (answer === null) consumedPointer.current = false
+          else selectById(answer)
+        },
+    onServicePointerDown: onSelectService === undefined || tool !== 'select'
+      ? undefined
+      : (id, event) => {
+          // A Service is documentation drawn over the Wall it passes through, so the cycle behind the
+          // click is what makes it reachable: the Wall or the cabinet takes the first click and the
+          // second click in the same spot walks the list (#79 §6, #70 §8).
           consumedPointer.current = true
           const answer = pickTarget(id, event.clientX, event.clientY)
           if (answer === null) consumedPointer.current = false

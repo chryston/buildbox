@@ -22,8 +22,8 @@
  * pass applies through the same `LayerGates` a Plan View is painted with, so that a hidden Wall is
  * hidden by one answer and not by two that can disagree (#71 §4).
  */
-import type { Beam, ElevationView, EntityId, Floor, Opening, PlacedItem, Project, Skirting, Wall } from '../domain'
-import { UNLAYERED_LAYER_KEY, beamLabel, beamTop, designHeight, skirtingLabel, skirtingTop, viewDesignOptionId, viewRenovationDisplay } from '../domain'
+import type { Beam, ElevationView, EntityId, Floor, Opening, PlacedItem, Project, Service, Skirting, Wall } from '../domain'
+import { UNLAYERED_LAYER_KEY, beamLabel, beamTop, designHeight, serviceBottom, servicePlanLabel, serviceTop, skirtingLabel, skirtingTop, viewDesignOptionId, viewRenovationDisplay } from '../domain'
 import type { ClosedPath, ElevationFrame, Pt } from '../geometry'
 import { elevationFrame, faceOffsets, linearElement, openingBodyOutline, projectElevationOutline, wallBodyOutline } from '../geometry'
 import { entityLayerKeys } from './drawingLayers'
@@ -32,9 +32,10 @@ import { effectiveModel } from './effectiveModel'
 import { designOutline, placementContext, worldPointOf } from './placement'
 import { displayModel } from './renovationDisplay'
 import { deriveSkirting } from './skirting'
+import { deriveServices, serviceHitOutline } from './services'
 
 /** Which family an Elevation View draws a row as, which decides its style and its handles. */
-export type ElevationRowKind = 'wall' | 'opening' | 'item' | 'beam' | 'skirting'
+export type ElevationRowKind = 'wall' | 'opening' | 'item' | 'beam' | 'skirting' | 'service'
 
 /**
  * One entity's place in one Elevation View: the band it covers and the height it stands at.
@@ -114,7 +115,7 @@ export function elevationScene(project: Project, view: ElevationView): Elevation
 
   /** One projected body, or nothing when the prism holds none of it. */
   const add = (
-    entity: Wall | Opening | PlacedItem | Beam | Skirting,
+    entity: Wall | Opening | PlacedItem | Beam | Skirting | Service,
     kind: ElevationRowKind,
     name: string,
     outline: readonly Pt[],
@@ -201,12 +202,30 @@ export function elevationScene(project: Project, view: ElevationView): Elevation
   // Plan View paints and the same ones `net_length_mm` counts, so an Elevation View of a Wall with a
   // door in it shows a strip broken at the door and nothing else.
   const derivedSkirting = deriveSkirting(project, view.floorId, optionId, viewRenovationDisplay(view))
+  const derivedServices = deriveServices(project, view.floorId, optionId)
   for (const { entity } of display.skirting) {
     const body = derivedSkirting.byId.get(entity.id)
     if (body === undefined) continue
     for (const run of body.runs) {
       add(entity, 'skirting', skirtingLabel(entity), ringOf(run.outline), body.bottom, skirtingTop(entity), entity.hostWallId)
     }
+  }
+
+  // A Service is documentation with a Vertical Extent of its own, so it projects whole in depth like
+  // anything else: a Run's band is its plan body between Bottom and Top, and a Riser is a column as
+  // wide as its diameter standing from Bottom to Top. The plan body of both is the outline the
+  // pointer picks it by in the Plan View, so the two views agree on where the thing is (#79 §6).
+  for (const { entity } of display.services) {
+    const body = derivedServices.byId.get(entity.id)
+    if (body === undefined) continue
+    add(
+      entity,
+      'service',
+      servicePlanLabel(entity),
+      ringOf(serviceHitOutline(body)),
+      serviceBottom(entity),
+      serviceTop(entity),
+    )
   }
 
   return { frame, length: frame.length, floor, rows }

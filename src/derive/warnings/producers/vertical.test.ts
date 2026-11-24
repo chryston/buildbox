@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import type { ClosedPath } from '../../../geometry'
 import type { ClearanceEnvelope, EntityId, ItemFootprint } from '../../../domain'
 import { VERTICAL_PRODUCERS } from './vertical'
-import type { WarningBeam, WarningCandidate, WarningFloor, WarningOpening, WarningPlacement, WarningSkirting, WarningWall } from '../types'
+import type { WarningBeam, WarningCandidate, WarningFloor, WarningOpening, WarningPlacement, WarningService, WarningSkirting, WarningWall } from '../types'
 
 const FLOOR = 'floor-main'
 
@@ -76,6 +76,7 @@ const floorWith = (parts: Partial<Omit<WarningFloor, 'floorId'>> = {}): WarningF
   openings: [],
   beams: [],
   skirtings: [],
+  services: [],
   junctions: [],
   rooms: [],
   placements: [],
@@ -107,6 +108,32 @@ const skirtingOn = (
   hostLine: { kind: 'line', start: { x: 0, y: 0 }, end: { x: 4000, y: 0 } },
   innerOffset: -50,
   bodies: [rect(0, -50 - thickness, 4000, thickness)],
+  ...parts,
+})
+
+/** A Service Run along the x axis from (0,0) to (4000,0), `width` wide and centred on the axis. */
+const runOf = (
+  id: EntityId,
+  label: string,
+  bottom: number,
+  top: number,
+  width = 50,
+  parts: Partial<WarningService> = {},
+): WarningService => ({
+  id,
+  floorId: FLOOR,
+  label,
+  bottom,
+  top,
+  centrelineElevation: (bottom + top) / 2,
+  shape: 'run',
+  kind: 'water',
+  section: 'round',
+  outsideDiameter: width,
+  width: null,
+  depth: null,
+  name: undefined,
+  body: rect(0, -width / 2, 4000, width),
   ...parts,
 })
 
@@ -335,7 +362,7 @@ describe('clearance_envelope_intrusion', () => {
 })
 
 describe('the producer set', () => {
-  it('carries the §5, #77 and #78 types exactly once', () => {
+  it('carries the §5, #77, #78 and #79 types exactly once', () => {
     const types = VERTICAL_PRODUCERS.map((producer) => producer.type)
     expect(types).toEqual([
       'item_item_overlap',
@@ -351,6 +378,20 @@ describe('the producer set', () => {
       'skirting_placed_item',
       'skirting_host_above',
       'skirting_host_below',
+      'service_placed_item',
+      'service_opening',
+      'service_beam',
+      'service_clearance_envelope',
+    ])
+  })
+
+  it('has no Service–Wall, Service–Service or Service–Skirting producer (#79 §6 criterion 26)', () => {
+    const types = VERTICAL_PRODUCERS.map((producer) => producer.type)
+    expect(types.filter((type) => type.startsWith('service_'))).toEqual([
+      'service_placed_item',
+      'service_opening',
+      'service_beam',
+      'service_clearance_envelope',
     ])
   })
 
@@ -512,5 +553,74 @@ describe('the Skirting producers (#78 §6)', () => {
     expect(high[0]!.params).toEqual({ a: 'Skirting SK-1', aKind: 'skirting', mm: 40 })
     const low = produce('floor_limit_below', floorWith({ skirtings: [skirtingOn('sk-1', 'Skirting SK-1', -20, 80)], limits: { lowerMm: 0, upperMm: null } }))
     expect(low[0]!.params).toEqual({ a: 'Skirting SK-1', aKind: 'skirting', mm: 20 })
+  })
+})
+
+describe('the Service producers (#79 §6 criterion 26)', () => {
+  it('says a Service overlaps a Placed Item, naming the Service first', () => {
+    const floor = floorWith({ services: [runOf('sv-1', 'W Ø50', 200, 250)], placements: [box('pl-a', 'Wall cabinet #1', 1000, -100, 600, 600, 0, 400)] })
+    const [candidate] = produce('service_placed_item', floor)
+    expect(candidate!.subjects).toEqual([{ type: 'service', id: 'sv-1' }, { type: 'placedItem', id: 'pl-a' }])
+    expect(candidate!.messageKey).toBe('vertical_overlap_height')
+    expect(candidate!.params).toEqual({ a: 'W Ø50', b: 'Wall cabinet #1', aKind: 'service', bKind: 'placedItem', mm: 50 })
+    expect(candidate!.measured).toEqual({ mm: 50 })
+  })
+
+  it('says nothing for a Service that only touches a Placed Item, or passes beside it', () => {
+    // Extents that meet at 200 and stop: touching, not overlapping.
+    expect(produce('service_placed_item', floorWith({ services: [runOf('sv-1', 'W Ø50', 150, 200)], placements: [box('pl-a', 'C #1', 1000, -100, 600, 600, 200, 400)] }))).toEqual([])
+    // A real height overlap, but the plan bodies are a metre apart in y.
+    expect(produce('service_placed_item', floorWith({ services: [runOf('sv-1', 'W Ø50', 200, 250)], placements: [box('pl-a', 'C #1', 1000, 900, 600, 600, 0, 400)] }))).toEqual([])
+  })
+
+  it('signs a Service pair from the record, never from the measured number', () => {
+    const near = produce('service_placed_item', floorWith({ services: [runOf('sv-1', 'W Ø50', 200, 250)], placements: [box('pl-a', 'C #1', 1000, -100, 600, 600, 0, 400)] }))
+    const far = produce('service_placed_item', floorWith({ services: [runOf('sv-1', 'W Ø50', 200, 250)], placements: [box('pl-a', 'C #1', 3000, -100, 600, 600, 0, 400)] }))
+    expect(JSON.stringify(near[0]!.signatureInputs)).not.toBe(JSON.stringify(far[0]!.signatureInputs))
+    expect(near[0]!.signatureInputs).toMatchObject({ service: { id: 'sv-1', kind: 'water', shape: 'run', outsideDiameter: 50 } })
+  })
+
+  it('says a Service runs through an Opening in its path', () => {
+    const floor = floorWith({
+      walls: [wallAlongX()],
+      openings: [opening('op-1', 'wall-1', 'Window O-1', 1000, 900, 200, 1200)],
+      services: [runOf('sv-1', 'D Ø100', 210, 310)],
+    })
+    const [candidate] = produce('service_opening', floor)
+    expect(candidate!.subjects).toEqual([{ type: 'service', id: 'sv-1' }, { type: 'opening', id: 'op-1' }])
+    expect(candidate!.params.a).toBe('D Ø100')
+    expect(candidate!.params.b).toBe('Window O-1')
+  })
+
+  it('says a Service clashes with a Beam at the same height', () => {
+    const floor = floorWith({ beams: [beamAlongX('beam-1', 'Beam B-1', 4000, 200, 200, 300)], services: [runOf('sv-1', 'AC 80×60', 300, 360)] })
+    const [candidate] = produce('service_beam', floor)
+    expect(candidate!.subjects).toEqual([{ type: 'service', id: 'sv-1' }, { type: 'beam', id: 'beam-1' }])
+    expect(candidate!.params.aKind).toBe('service')
+    expect(candidate!.params.bKind).toBe('beam')
+    // A Beam at ceiling height and a pipe at skirting height simply both exist.
+    expect(produce('service_beam', floorWith({ beams: [beamAlongX('beam-1', 'Beam B-1', 4000, 200, 2300, 300)], services: [runOf('sv-1', 'AC 80×60', 300, 360)] }))).toEqual([])
+  })
+
+  it('says a Service stands in another Item’s Clearance Envelope', () => {
+    const owner = { ...box('pl-a', 'Fridge #1', 1000, -400, 600, 600, 0, 1800), clearanceEnvelope: { path: rect(0, 0, 700, 700), bottomOffset: 0, height: 2000 }, envelopeWorldPath: rect(1000, -400, 700, 700) }
+    const floor = floorWith({ services: [runOf('sv-1', 'W Ø50', 200, 250)], placements: [owner] })
+    const [candidate] = produce('service_clearance_envelope', floor)
+    expect(candidate!.subjects).toEqual([{ type: 'service', id: 'sv-1' }, { type: 'placedItem', id: 'pl-a' }])
+    // A Service outside the envelope's plan region says nothing.
+    expect(produce('service_clearance_envelope', floorWith({ services: [runOf('sv-1', 'W Ø50', 200, 250, 50, { body: rect(0, 5000, 4000, 50) })], placements: [owner] }))).toEqual([])
+  })
+
+  it('carries a Service past the Floor’s own limits in both directions', () => {
+    const high = produce('floor_limit_above', floorWith({ services: [runOf('sv-1', 'E 80×60', 2500, 2680)], limits: { lowerMm: 0, upperMm: 2600 } }))
+    expect(high[0]!.params).toEqual({ a: 'E 80×60', aKind: 'service', mm: 80 })
+    const low = produce('floor_limit_below', floorWith({ services: [runOf('sv-1', 'W Ø50', -125, -75)], limits: { lowerMm: 0, upperMm: null } }))
+    expect(low[0]!.params).toEqual({ a: 'W Ø50', aKind: 'service', mm: 125 })
+  })
+
+  it('warns about nothing when no Service stands on the Floor', () => {
+    for (const type of ['service_placed_item', 'service_opening', 'service_beam', 'service_clearance_envelope']) {
+      expect(produce(type, floorWith({ placements: [box('pl-a', 'C #1', 0, 0, 600, 600)] }))).toEqual([])
+    }
   })
 })

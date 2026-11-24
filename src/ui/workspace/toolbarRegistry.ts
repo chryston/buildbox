@@ -115,6 +115,16 @@ export const WORKSPACE_TOOLS: readonly WorkspaceToolDefinition[] = [
     icon: 'M2 5 H22 M2 5 V10 M22 5 V10 M2 10 H22',
   },
   {
+    id: 'service',
+    label: STRINGS.toolService,
+    testId: 'tool-service',
+    // A Service is measured in millimetres along the centreline a person draws, so it waits for a
+    // calibrated Plan Image on the same rule as the Wall, Beam and Skirting tools (#79 §6).
+    requiresCalibratedFloor: true,
+    // A pipe with a Riser standing through it: the two shapes one button offers.
+    icon: 'M2 12 H16 M16 7 V17 M19 17 A3 3 0 1 0 19 16.9',
+  },
+  {
     id: 'elevation',
     label: STRINGS.newElevationView,
     testId: 'tool-elevation',

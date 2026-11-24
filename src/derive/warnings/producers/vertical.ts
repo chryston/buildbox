@@ -58,6 +58,7 @@ import type {
   WarningSubjectKind,
   WarningWall,
   WarningSkirting,
+  WarningService,
 } from '../types'
 
 /** Below this overlap area two plan regions are treated as merely touching (#66 §8). */
@@ -402,6 +403,9 @@ const limitedSubjects = (floor: WarningFloor): { subject: VerticalSubject; kind:
     kind: 'skirting' as const,
     fields: skirtingFields(skirting),
   })),
+  // A Service crossing the Floor's upper or lower limit is measured, not blocked (#79 §6 criterion 26):
+  // a pipe under the Datum and a duct above the ceiling are both things a person documents.
+  ...floor.services.map((service) => ({ subject: serviceSubject(service), kind: 'service' as const, fields: serviceFields(service) })),
   ...floor.placements.map((placement) => ({ subject: placementSubject(placement), kind: 'placedItem' as const, fields: placementFields(placement) })),
 ]
 
@@ -754,7 +758,138 @@ const skirtingHostProducer = (side: 'above' | 'below'): WarningProducer => ({
   },
 })
 
-/** Every vertical producer, in registration order (#76 §5, #77 §2, #78 §6). */
+/** The §3 subject view of a Service: its Vertical Extent is `bottom..top`. */
+const serviceSubject = (s: WarningService): VerticalSubject => ({
+  id: s.id,
+  kind: 'service',
+  label: s.label,
+  extent: { bottom: s.bottom, top: s.top },
+})
+
+/** The model fields of one Service, for a signature: the stored numbers, never a derived body. */
+const serviceFields = (s: WarningService): unknown => ({
+  id: s.id,
+  kind: s.kind,
+  shape: s.shape,
+  section: s.section,
+  outsideDiameter: s.outsideDiameter,
+  width: s.width,
+  depth: s.depth,
+  bottom: s.bottom,
+  centrelineElevation: s.centrelineElevation,
+  height: s.top - s.bottom,
+  label: s.name,
+})
+
+/**
+ * A Service that runs through something (#79 §6 criterion 26).
+ *
+ * The Service is the subject and reads first — `Service W Ø50 overlaps Wall cabinet #1 over 40 mm of
+ * height` — because the Service is the record being coordinated and the thing it meets is the reason
+ * it was drawn. The plan test is a real overlap of the two bodies, not a bounding box, and it is
+ * strict: a pipe that merely touches a cabinet face is touching, not clashing.
+ *
+ * A Service against a Wall, another Service or a Skirting is deliberately absent. #79 §5 lists no
+ * dependency between a Service and a Wall, so deleting a Wall leaves every Service standing and says
+ * nothing about it; two Services crossing is the normal condition of a services drawing; and a
+ * Skirting runs at the floor while a Service runs above the ceiling, so a pair that met would be a
+ * coincidence worth drawing but not a fault. A warning on any of those would be noise.
+ */
+const servicePairProducer = (kind: 'placedItem' | 'opening' | 'beam'): WarningProducer => ({
+  type: kind === 'placedItem' ? 'service_placed_item' : kind === 'opening' ? 'service_opening' : 'service_beam',
+  messageKeys: ['vertical_above', 'vertical_below', 'vertical_overlap_height'],
+  produce: (floor) => {
+    const candidates: WarningCandidate[] = []
+    const boxes = new Map(floor.services.map((service) => [service.id, bboxOf(service.body)]))
+    const walls = new Map(floor.walls.map((wall) => [wall.id, wall]))
+    const beams = new Map(floor.beams.map((beam) => [beam.id, beam]))
+    for (const service of floor.services) {
+      const body = service.body
+      const box = boxes.get(service.id)!
+      const span = interval(service.bottom, service.top)
+      if (kind === 'placedItem') {
+        for (const placement of floor.placements) {
+          if (!boxesMeet(bboxOf(placement.worldPath), box)) continue
+          if (overlapLength(placementInterval(placement), span) <= TOLERANCE_MM) continue
+          if (overlap(placement.worldPath, body).kind !== 'positive') continue
+          candidates.push(serviceRelation(placementSubject(placement), 'placedItem', placementFields(placement), service))
+        }
+        continue
+      }
+      if (kind === 'opening') {
+        for (const opening of floor.openings) {
+          const host = walls.get(opening.hostWallId)
+          if (host === undefined) continue
+          const hole = openingHole(host.line, opening, host.thickness, host.justification)
+          if (!boxesMeet(bboxOf(hole), box)) continue
+          if (overlapLength(interval(opening.sill, opening.head), span) <= TOLERANCE_MM) continue
+          if (overlap(hole, body).kind !== 'positive') continue
+          candidates.push(
+            serviceRelation(
+              { id: opening.id, kind: 'opening', label: opening.label, extent: { bottom: opening.sill, top: opening.head } },
+              'opening',
+              openingFields(opening),
+              service,
+            ),
+          )
+        }
+        continue
+      }
+      for (const beam of floor.beams) {
+        const other = beamOutline(beams.get(beam.id)!)
+        if (!boxesMeet(bboxOf(other), box)) continue
+        if (overlapLength(interval(beam.underside, beam.top), span) <= TOLERANCE_MM) continue
+        if (overlap(other, body).kind !== 'positive') continue
+        candidates.push(serviceRelation(beamSubject(beam), 'beam', beamFields(beam), service))
+      }
+    }
+    return candidates
+  },
+})
+
+/** One Service-pair candidate, worded by the shared builder with the Service as the subject. */
+const serviceRelation = (other: VerticalSubject, otherKind: WarningSubjectKind, otherFields: unknown, service: WarningService): WarningCandidate => {
+  const copy = verticalRelationCopy(serviceSubject(service), other)
+  return {
+    subjects: [{ type: 'service', id: service.id }, { type: otherKind, id: other.id }],
+    measured: copy.measured,
+    messageKey: copy.messageKey,
+    params: copy.params,
+    signatureInputs: { service: serviceFields(service), entity: otherFields },
+  }
+}
+
+/**
+ * A Service standing inside another Item's Clearance Envelope (#79 §6 criterion 26).
+ *
+ * The envelope is a documented keep-out volume, so anything that occupies part of it at the heights
+ * the envelope covers is a coordination fact worth a row. The Service reads first, as it does in
+ * every other Service sentence, and the measurement is the height overlap — the same number the
+ * Beam-in-envelope warning reports, never an area, because what a person moves is the pipe.
+ */
+const serviceEnvelopeIntrusion: WarningProducer = {
+  type: 'service_clearance_envelope',
+  messageKeys: ['vertical_above', 'vertical_below', 'vertical_overlap_height'],
+  produce: (floor) => {
+    const candidates: WarningCandidate[] = []
+    for (const service of floor.services) {
+      const box = bboxOf(service.body)
+      const span = interval(service.bottom, service.top)
+      for (const owner of floor.placements) {
+        const region = owner.envelopeWorldPath
+        const envelopeSpan = envelopeInterval(owner)
+        if (region === null || envelopeSpan === null) continue
+        if (!boxesMeet(bboxOf(region), box)) continue
+        if (overlapLength(envelopeSpan, span) <= TOLERANCE_MM) continue
+        if (overlap(region, service.body).kind !== 'positive') continue
+        candidates.push(serviceRelation(placementSubject(owner), 'placedItem', placementFields(owner), service))
+      }
+    }
+    return candidates
+  },
+}
+
+/** Every vertical producer, in registration order (#76 §5, #77 §2, #78 §6, #79 §6). */
 export const VERTICAL_PRODUCERS: readonly WarningProducer[] = [
   itemItemOverlap,
   itemIntoWall,
@@ -769,4 +904,8 @@ export const VERTICAL_PRODUCERS: readonly WarningProducer[] = [
   skirtingPlacedItem,
   skirtingHostProducer('above'),
   skirtingHostProducer('below'),
+  servicePairProducer('placedItem'),
+  servicePairProducer('opening'),
+  servicePairProducer('beam'),
+  serviceEnvelopeIntrusion,
 ]

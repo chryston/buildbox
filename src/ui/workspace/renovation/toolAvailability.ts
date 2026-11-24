@@ -22,7 +22,7 @@
 import type { RenovationDisplay } from '../../../domain'
 
 /** The tools the strip can show: the S7 editing tools plus the two renovation ones (#70 §3). */
-export type RenovationToolId = 'select' | 'markDemolition' | 'replace' | 'wall' | 'opening' | 'skirting' | 'room' | 'placeItem' | 'elevation'
+export type RenovationToolId = 'select' | 'markDemolition' | 'replace' | 'wall' | 'opening' | 'skirting' | 'service' | 'room' | 'placeItem' | 'elevation'
 
 /** One row of the table: a tool, and the Displays that allow it. */
 export interface RenovationToolRow {
@@ -52,6 +52,10 @@ export const RENOVATION_TOOL_ROWS: readonly RenovationToolRow[] = [
   // A Skirting is a strip of the same kind of work as an Opening — it hangs off a Wall the same way
   // and is measured in millimetres along it — so it follows the Opening row exactly (#78 §3).
   { id: 'skirting', allowedIn: ['existing', 'proposed', 'combined'], needsDesignOption: true },
+  // A Service is a Building Element like the Skirting beside it: it may be drawn into an Existing
+  // Display or into a Design Option, and drawing one into a Display that shows only Existing content
+  // writes the Existing Model, which is the ordinary rule and needs no exception (#79 §2).
+  { id: 'service', allowedIn: ['existing', 'proposed', 'combined'], needsDesignOption: true },
   { id: 'room', allowedIn: ['existing', 'proposed', 'combined'], needsDesignOption: true },
   { id: 'placeItem', allowedIn: ['existing', 'proposed', 'combined'], needsDesignOption: true },
   // An Elevation View is a way of looking, not model content (#75 §3): it creates a saved view, so

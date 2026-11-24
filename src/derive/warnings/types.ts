@@ -19,13 +19,14 @@ import type {
   EntityId,
   ItemFootprint,
   RoomOutline,
+  ServiceKind,
   WallJustification,
   WallRefLine,
 } from '../../domain'
 import type { ClosedPath, Pt, WallSide } from '../../geometry'
 
 /** What kind of entity a warning is about. Later issues extend this list (#76–#79). */
-export type WarningSubjectKind = 'wall' | 'opening' | 'placedItem' | 'room' | 'beam' | 'skirting'
+export type WarningSubjectKind = 'wall' | 'opening' | 'placedItem' | 'room' | 'beam' | 'skirting' | 'service'
 
 /** One entity a warning involves. The primary subject is always first (#66 §1). */
 export interface WarningSubject {
@@ -191,6 +192,8 @@ export interface WarningFloor {
   readonly openings: readonly WarningOpening[]
   readonly beams: readonly WarningBeam[]
   readonly skirtings: readonly WarningSkirting[]
+  /** Every Service of the Floor (#79 §6), with the body the Plan View paints. */
+  readonly services: readonly WarningService[]
   readonly junctions: readonly WarningJunction[]
   readonly rooms: readonly WarningRoom[]
   readonly placements: readonly WarningPlacement[]
@@ -246,6 +249,35 @@ export interface WarningSkirting {
   readonly innerOffset: number
   /** One body per visible run, gaps taken out; empty when the whole range is gapped. */
   readonly bodies: readonly ClosedPath[]
+}
+
+/**
+ * One Service a producer may read (#79 §6).
+ *
+ * The body arrives already derived — the centreline widened by the section's plan width, or the
+ * Riser's circle — because a producer measures against the same body the Plan View paints. A Service
+ * has no host and takes no connection, so there is nothing here but a footprint and an extent: the
+ * pair measurements are a plan overlap and a height overlap, and nothing else.
+ */
+export interface WarningService {
+  readonly id: EntityId
+  readonly floorId: EntityId
+  /** `W Ø50`, `AC 80×60`, or the label text for an `other` — the words the plan writes. */
+  readonly label: string
+  readonly bottom: number
+  readonly top: number
+  /** The one elevation a Run stores; `null` for a Riser. */
+  readonly centrelineElevation: number | null
+  /** The record's own stored numbers, for a signature. */
+  readonly shape: 'run' | 'riser'
+  readonly kind: ServiceKind
+  readonly section: 'round' | 'rectangular' | null
+  readonly outsideDiameter: number | null
+  readonly width: number | null
+  readonly depth: number | null
+  readonly name: string | undefined
+  /** The plan body: one Run outline, or one Riser circle approximated as its bounding square's disc. */
+  readonly body: ClosedPath
 }
 
 /**

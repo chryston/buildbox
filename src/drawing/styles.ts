@@ -230,6 +230,20 @@ export const STYLES: Record<StyleKey, Style> = {
   // `transparent` is a paint and not `none`, so the stroke is what the pointer lands on.
   'skirting-hit': { fill: 'transparent', stroke: 'transparent', strokeWidth: 'hit-target' },
   'skirting-label': { fill: 'var(--bb-text)', size: 'plan-label', fontFamily: FONT_STACK, hit: 'none' },
+  // A Service is a band along a centreline or a circle at one point. It is never filled solid: a
+  // drawing with six Kinds on it has to stay readable as a drawing of a room, so a pipe reads as an
+  // outline with the lightest wash on it, over the Wall band it passes through (#79 §6).
+  'service': { fill: 'var(--bb-text)', fillAlpha: 0x1a / 0xff, stroke: 'var(--bb-text)', strokeWidth: 'plan-line' },
+  'service:selected': {
+    fill: 'var(--bb-accent)',
+    fillAlpha: 0x3a / 0xff,
+    stroke: 'var(--bb-accent)',
+    strokeWidth: 'plan-line-selected',
+  },
+  // The body again with nothing visible on it, stroked ten device pixels wide: a Ø50 pipe is a
+  // hairline at plan zoom and a pointer cannot be aimed at it (#78 §7, the same rule for #79).
+  'service-hit': { fill: 'transparent', stroke: 'transparent', strokeWidth: 'hit-target' },
+  'service-label': { fill: 'var(--bb-text)', size: 'plan-label', fontFamily: FONT_STACK, hit: 'none' },
   // The renovation overlays (#70 §F): bounded graphics laid over the entity's own layer style,
   // which they never rewrite — the Wall a Design Option demolishes is still drawn in the `walls`
   // layer's colour, and the dashed outline plus 45° hatching is what says it is going. Both are

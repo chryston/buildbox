@@ -60,3 +60,25 @@ export const DEFAULT_BEAM_TOP_MM = DEFAULT_WALL_HEIGHT_MM
 
 /** The `Top at` a Beam drawn on this Floor is offered: its upper limit, else the nominal 2600. */
 export const newBeamTopReference = (floor: Floor): number => floor.limits?.upperMm ?? DEFAULT_BEAM_TOP_MM
+
+/**
+ * The size a new Service starts with (#79 §2): two placeholders the tool panel captions
+ * `measure yours` — `Ø50` for a round Run and every Riser, `80 × 60 mm` for a rectangular one. They
+ * are placeholders and nothing more: the HDB BTO preset pack holds no Service entries, so no Service
+ * string may call either value typical, and switching a Run's section restarts it at these.
+ */
+export const DEFAULT_SERVICE_DIAMETER_MM = 50
+export const DEFAULT_SERVICE_WIDTH_MM = 80
+export const DEFAULT_SERVICE_DEPTH_MM = 60
+
+/**
+ * The `Top at` reference a Riser is offered when the Floor sets no upper limit: the pack's nominal
+ * storey height, used as an input-time reference and for no other purpose (#79 §2). It is never
+ * stored on the Riser and never written to a Floor's limits — the Riser keeps only the Height it
+ * implies. A Run's default centreline is 0, the Floor Datum itself: a pipe drawn with nobody watching
+ * is drawn at the Datum, not at a height the person never typed.
+ */
+export const DEFAULT_SERVICE_TOP_MM = DEFAULT_WALL_HEIGHT_MM
+
+/** The `Top at` a Riser drawn on this Floor is offered: its upper limit, else the nominal 2600. */
+export const newServiceTopReference = (floor: Floor): number => floor.limits?.upperMm ?? DEFAULT_SERVICE_TOP_MM

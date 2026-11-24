@@ -29,8 +29,8 @@
  */
 import { applyPatches, produceWithPatches } from 'immer'
 import type { Patch } from 'immer'
-import { beamLabel, beamsOf, designOptionsOf, skirtingLabel, skirtingOf, validateProject } from '../../domain'
-import type { Beam, DesignOption, EntityId, Opening, PlacedItem, Project, Room, Skirting, Wall, WallJunction } from '../../domain'
+import { beamLabel, beamsOf, designOptionsOf, serviceLabel, servicesOf, skirtingLabel, skirtingOf, validateProject } from '../../domain'
+import type { Beam, DesignOption, EntityId, Opening, PlacedItem, Project, Room, Service, Skirting, Wall, WallJunction } from '../../domain'
 import { canonicalJson } from '../../lib'
 import type {
   CorrectionEffect,
@@ -57,10 +57,10 @@ export type CorrectionIntentType = Extract<
 >
 
 /** One entity of a model, whichever collection it lives in. */
-type AnyEntity = Wall | WallJunction | Opening | Room | PlacedItem | Beam | Skirting
+type AnyEntity = Wall | WallJunction | Opening | Room | PlacedItem | Beam | Skirting | Service
 
 /** The collections a correction can touch, in the order a review reads them. */
-const COLLECTIONS = ['walls', 'wallJunctions', 'openings', 'rooms', 'placedItems', 'beams', 'skirting'] as const
+const COLLECTIONS = ['walls', 'wallJunctions', 'openings', 'rooms', 'placedItems', 'beams', 'skirting', 'services'] as const
 type Collection = (typeof COLLECTIONS)[number]
 
 /** One collection of a model. A container written before #77 spells no Beam list, which is empty. */
@@ -105,6 +105,8 @@ function labelOf(project: Project, id: EntityId): string {
   if (beam !== undefined) return beamLabel(beam)
   const skirting = skirtingOf(model).find((entry) => entry.id === id)
   if (skirting !== undefined) return skirtingLabel(skirting)
+  const service = servicesOf(model).find((entry) => entry.id === id)
+  if (service !== undefined) return serviceLabel(service)
   for (const option of designOptionsOf(project)) {
     const entity = collectionOf(option.proposed, 'walls')
       .concat(...COLLECTIONS.slice(1).map((key) => collectionOf(option.proposed, key)))
@@ -120,6 +122,8 @@ function entityName(project: Project, entity: AnyEntity): string {
   // only it has.
   if ('underside' in entity) return beamLabel(entity)
   if ('side' in entity) return skirtingLabel(entity)
+  // A Service is the third entity whose label is optional, and the only one with a `shape`.
+  if ('shape' in entity) return serviceLabel(entity)
   if ('label' in entity) return entity.label
   if ('name' in entity) return entity.name
   return project.itemDesigns.find((design) => design.id === (entity as PlacedItem).itemDesignId)?.name ?? entity.id
@@ -502,6 +506,7 @@ function runMove(project: Project, draft: Project, payload: MoveToDesignOption, 
   for (const placed of model.placedItems) if (moved.has(placed.id)) proposed.placedItems.push({ ...placed, predecessorIds: [] })
   for (const beam of beamsOf(model)) if (moved.has(beam.id)) (proposed.beams ??= []).push({ ...beam, predecessorIds: [] })
   for (const entry of skirtingOf(model)) if (moved.has(entry.id)) (proposed.skirting ??= []).push({ ...entry, predecessorIds: [] })
+  for (const entry of servicesOf(model)) if (moved.has(entry.id)) (proposed.services ??= []).push({ ...entry, predecessorIds: [] })
 
   model.walls = model.walls.filter((entity) => !moved.has(entity.id))
   model.openings = model.openings.filter((entity) => !moved.has(entity.id))
@@ -510,6 +515,7 @@ function runMove(project: Project, draft: Project, payload: MoveToDesignOption, 
   // A container that spells no Beam list stays that way: re-owning no Beam changes no bytes.
   if (model.beams !== undefined) model.beams = model.beams.filter((entity) => !moved.has(entity.id))
   if (model.skirting !== undefined) model.skirting = model.skirting.filter((entity) => !moved.has(entity.id))
+  if (model.services !== undefined) model.services = model.services.filter((entity) => !moved.has(entity.id))
   model.wallJunctions = model.wallJunctions.filter((junction) => !touchesMoved(junction, moved))
   return { moved: [...moved], perOption }
 }

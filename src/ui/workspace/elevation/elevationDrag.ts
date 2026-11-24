@@ -35,10 +35,13 @@ export interface ElevationEdges {
  * An entity that owns its height — a Wall, an Opening, and later a Beam or a run of Skirting — has
  * three: it can be made taller from either end or moved whole. A Placed Item's size belongs to its
  * Item Design, so it has the move handle and nothing else: dragging its top would edit a number the
- * Design owns, which is the one thing the pane must never do.
+ * Design owns, which is the one thing the pane must never do. A Service is the same case for the same
+ * reason: a Run's section and a Riser's diameter are its size, and #79 §5 behaviour 10 says a Service
+ * is moved in an Elevation View and never resized there — the inspector's size fields are the only
+ * way to change one.
  */
 export function elevationHandleKinds(kind: ElevationRowKind): readonly ElevationDragKind[] {
-  return kind === 'item' ? ['body'] : ['top', 'bottom', 'body']
+  return kind === 'item' || kind === 'service' ? ['body'] : ['top', 'bottom', 'body']
 }
 
 /**

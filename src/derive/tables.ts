@@ -37,7 +37,7 @@
  * that built its own English here would be a second copy of that sentence, and the strip and the
  * CSV would drift the first time one of them was reworded.
  */
-import { beamLabel, beamTop, designHeight, drawingLayerById, entityLayerId, openingHeight, openingSpan, skirtingLabel, skirtingTop, type EntityId, type HingeSide, type OpeningSwing, type Project, type Wall, type WallClassification } from '../domain'
+import { beamLabel, beamTop, designHeight, drawingLayerById, entityLayerId, openingHeight, openingSpan, serviceBottom, serviceTop, skirtingLabel, skirtingTop, type EntityId, type HingeSide, type OpeningSwing, type Project, type ServiceKind, type ServiceSection, type ServiceShape, type Wall, type WallClassification } from '../domain'
 import { arcFromThrough, refLength, type WallSide } from '../geometry'
 import { compareCodePoints, stableSort } from '../lib'
 import { layerMatches, type OptionColumns, type QuantityScope, type RenovationState } from './quantities/scope'
@@ -46,6 +46,7 @@ import { designOptionName, effectiveModel, type EffectiveModel } from './effecti
 import { derivedRoomsOf, deriveRooms, roomMembershipOf, type FloorRooms, type RoomMembership } from './rooms'
 import { deriveWalls, type FloorWalls } from './walls'
 import { deriveBeams, type FloorBeams } from './beams'
+import { deriveServices, type FloorServices } from './services'
 import { deriveSkirting, type FloorSkirting } from './skirting'
 import { deriveWarnings } from './warnings/engine'
 import type { WarningParams, WarningSubjectKind } from './warnings/types'
@@ -167,7 +168,7 @@ export type PlacedItemsRow = {
 }
 
 /** The Warnings List's word for a subject: `placed_item`, because a CSV column is snake_case. */
-export type WarningSubjectCode = 'wall' | 'opening' | 'room' | 'placed_item' | 'beam' | 'skirting'
+export type WarningSubjectCode = 'wall' | 'opening' | 'room' | 'placed_item' | 'beam' | 'skirting' | 'service'
 
 /** One Warnings List row (export contract §5). */
 export type WarningsRow = {
@@ -242,6 +243,41 @@ export type SkirtingRow = {
   readonly topMm: number
 }
 
+/**
+ * One Service row (#79 §8).
+ *
+ * The two shapes share a file and disagree about two columns, which is what the record itself does:
+ * a Run has a centreline and no Bottom, a Riser has a Bottom and a Height and no centreline. The
+ * empty cell is the honest answer, not a zero — a Riser has no centreline to report, and inventing
+ * one would put a number in the file that no screen ever shows. `lengthMm` is the plan length of a
+ * Run and the Height of a Riser, because those are the two measurements of the same name the
+ * inspector offers for the two shapes.
+ */
+export type ServiceRow = {
+  readonly stableId: string
+  readonly floorId: string
+  readonly floor: string
+  readonly designOptionId: string
+  readonly designOption: string
+  readonly renovationState: RenovationState
+  readonly drawingLayerId: string
+  readonly drawingLayer: string
+  readonly predecessorIds: readonly string[]
+  readonly label: string
+  readonly kind: ServiceKind
+  readonly shape: ServiceShape
+  /** `round` or `rectangular` for a Run; empty for a Riser, which is always round. */
+  readonly section: ServiceSection | ''
+  readonly outsideDiameterMm: number | ''
+  readonly widthMm: number | ''
+  readonly depthMm: number | ''
+  readonly lengthMm: number
+  /** Empty for a Riser, which stores a Bottom and a Height instead. */
+  readonly centrelineMm: number | ''
+  readonly bottomMm: number
+  readonly topMm: number
+}
+
 /** A scope's six tables, each in the order its file is written in. */
 export interface Tables {
   readonly rooms: readonly RoomsRow[]
@@ -249,6 +285,7 @@ export interface Tables {
   readonly openings: readonly OpeningsRow[]
   readonly beams: readonly BeamsRow[]
   readonly skirting: readonly SkirtingRow[]
+  readonly services: readonly ServiceRow[]
   readonly placedItems: readonly PlacedItemsRow[]
   readonly warnings: readonly WarningsRow[]
 }
@@ -289,7 +326,7 @@ const UNLAYERED_COLUMNS: LayerColumns = { drawingLayerId: '', drawingLayer: UNLA
  */
 function layerColumnsOf(project: Project, model: EffectiveModel): ReadonlyMap<EntityId, LayerColumns> {
   const layers = new Map<EntityId, LayerColumns>()
-  for (const row of [...model.rooms, ...model.walls, ...model.openings, ...model.beams, ...model.skirting, ...model.placedItems]) {
+  for (const row of [...model.rooms, ...model.walls, ...model.openings, ...model.beams, ...model.skirting, ...model.services, ...model.placedItems]) {
     const layer = drawingLayerById(project, entityLayerId(row.entity))
     layers.set(row.entity.id, layer === null ? UNLAYERED_COLUMNS : { drawingLayerId: layer.id, drawingLayer: layer.name })
   }
@@ -507,6 +544,46 @@ function skirtingsForFloor(
 }
 
 /**
+ * The Services of one Floor (#79 §8).
+ *
+ * Both shapes come out of one file, and the columns they do not have stay empty rather than being
+ * filled with a zero: a Riser has no centreline and no rectangular section, and a Run has no Height
+ * of its own — its `lengthMm` is the plan length and its Bottom and Top are read off the centreline
+ * and the section, which is the same arithmetic the inspector shows.
+ */
+function servicesForFloor(
+  option: OptionColumns,
+  floorId: EntityId,
+  floor: string,
+  model: EffectiveModel,
+  derived: FloorServices,
+  layers: ReadonlyMap<EntityId, LayerColumns>,
+): ServiceRow[] {
+  const rows: ServiceRow[] = []
+  for (const { entity: service, renovationState } of model.services) {
+    const body = derived.byId.get(service.id)
+    if (body === undefined) continue
+    rows.push({
+      ...elementColumns(option, floorId, floor, renovationState, layers.get(service.id) ?? UNLAYERED_COLUMNS),
+      stableId: service.id,
+      predecessorIds: service.predecessorIds ?? [],
+      label: service.label ?? '',
+      kind: service.kind,
+      shape: service.shape,
+      section: service.shape === 'run' ? service.section : '',
+      outsideDiameterMm: service.outsideDiameter ?? '',
+      widthMm: service.shape === 'run' ? (service.width ?? '') : '',
+      depthMm: service.shape === 'run' ? (service.depth ?? '') : '',
+      lengthMm: body.length,
+      centrelineMm: service.shape === 'run' ? service.centrelineElevation : '',
+      bottomMm: serviceBottom(service),
+      topMm: serviceTop(service),
+    })
+  }
+  return rows
+}
+
+/**
  * The Placed Items of one Floor, and how each sits in a Room.
  *
  * `label` is the `Base 600 #2` the strip uses ({@link placementLabels}), so a warning in the
@@ -633,6 +710,7 @@ export function tables(project: Project, scope: QuantityScope, deps: TableDeps):
   const openings: OpeningsRow[] = []
   const beams: BeamsRow[] = []
   const skirting: SkirtingRow[] = []
+  const services: ServiceRow[] = []
   const placedItems: PlacedItemsRow[] = []
   const warnings: WarningsRow[] = []
 
@@ -663,6 +741,7 @@ export function tables(project: Project, scope: QuantityScope, deps: TableDeps):
       openings.push(...inScope(openingsForFloor(option, floorId, floor, model, layers)))
       beams.push(...inScope(beamsForFloor(option, floorId, floor, model, deriveBeams(project, floorId, optionId), layers)))
       skirting.push(...inScope(skirtingsForFloor(option, floorId, floor, model, deriveSkirting(project, floorId, optionId), layers)))
+      services.push(...inScope(servicesForFloor(option, floorId, floor, model, deriveServices(project, floorId, optionId), layers)))
       placedItems.push(...inScope(placedItemsForFloor(option, floorId, floor, project, model, placements, derivedRooms, layers)))
       // The Warnings List is scoped by Floor and Design Option only (export contract §3): no
       // Renovation State and no Layer ever hides a warning.
@@ -692,6 +771,7 @@ export function tables(project: Project, scope: QuantityScope, deps: TableDeps):
     openings: byElement(openings),
     beams: byElement(beams),
     skirting: byElement(skirting),
+    services: byElement(services),
     placedItems: byElement(placedItems),
     warnings: sortedWarnings,
   }

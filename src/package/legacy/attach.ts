@@ -11,7 +11,7 @@
  * the Project that came out — because a legacy floor plan shares no ID namespace with the
  * Project it is being merged into.
  */
-import { beamsOf, defaultPlanView, skirtingOf, validateProject } from '../../domain'
+import { beamsOf, defaultPlanView, servicesOf, skirtingOf, validateProject } from '../../domain'
 import type { EntityId, Floor, GenericItemDesign, PlacedItem, Project } from '../../domain'
 import { problem, type ValidationProblem } from '../../lib'
 import type { IdRegeneration, LegacyFloorPlanContent } from './conversion'
@@ -91,7 +91,7 @@ export function floorPlanAsProject(
       }),
     ],
     itemDesigns: [],
-    existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], skirting: [] },
+    existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], skirting: [], services: [] },
     warningAcknowledgements: [],
   }
   return appendContent(project, content, options.floorId, options.newId)
@@ -142,6 +142,7 @@ function appendContent(
       rooms: project.existingModel.rooms,
       beams: beamsOf(project.existingModel),
       skirting: skirtingOf(project.existingModel),
+      services: servicesOf(project.existingModel),
     },
   }
 

@@ -115,6 +115,7 @@ export function projectFixture(planImageHash: string | null, id: string = PROJEC
       rooms: [],
       beams: [],
       skirting: [],
+      services: [],
       placedItems: [
         {
           id: `${id}-place-1`,

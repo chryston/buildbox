@@ -300,3 +300,86 @@ describe('the Skirting table (#78 §8)', () => {
     expect(rowsOf(SKIRTING_PROJECT, skirtingScope({ drawingLayers: { layerIds: ['layer-nothing'], includeUnlayered: false } }))).toEqual([])
   })
 })
+
+/**
+ * The Services table (#79 §8).
+ *
+ * The v14 fixture is the scene the issue describes: a round water Run at ceiling height, a
+ * rectangular duct, a Drain Riser from the Datum, and an electrical Run under it. The two shapes
+ * disagree about two columns and the file says so by leaving them empty — that emptiness is the
+ * whole point of the table, and a zero in either cell would be a measurement nobody took.
+ */
+describe('the Services table (#79 §8)', () => {
+  const SERVICES_PROJECT = domainFixture('v14/services.json')
+  const SV_FLOOR = 'seed-001'
+  const serviceScope = (over: Partial<QuantityScope> = {}): QuantityScope =>
+    scopeOf({ floorIds: [SV_FLOOR], ...over })
+  const rowsOf = (project: Project, scope: QuantityScope) => tables(project, scope, { warningMessages: null }).services
+
+  it('carries every column of a round Run', () => {
+    const row = rowsOf(SERVICES_PROJECT, serviceScope()).find((each) => each.stableId === 'service-1')
+    expect(row).toEqual({
+      stableId: 'service-1',
+      floorId: SV_FLOOR,
+      floor: 'Floor 1',
+      designOptionId: '',
+      designOption: '',
+      renovationState: 'existing',
+      drawingLayerId: '',
+      drawingLayer: 'Unlayered',
+      label: '',
+      kind: 'water',
+      shape: 'run',
+      section: 'round',
+      outsideDiameterMm: 50,
+      widthMm: '',
+      depthMm: '',
+      lengthMm: 3000,
+      centrelineMm: 2200,
+      bottomMm: 2175,
+      topMm: 2225,
+      predecessorIds: [],
+    })
+  })
+
+  it('carries a rectangular Run with its Width and Depth and no Diameter', () => {
+    const row = rowsOf(SERVICES_PROJECT, serviceScope()).find((each) => each.stableId === 'service-2')!
+    expect([row.section, row.outsideDiameterMm, row.widthMm, row.depthMm]).toEqual(['rectangular', '', 80, 60])
+    expect([row.centrelineMm, row.bottomMm, row.topMm]).toEqual([2500, 2470, 2530])
+    expect(row.label).toBe('')
+  })
+
+  it('leaves the centreline empty for a Riser, which stores a Bottom and a Height', () => {
+    const row = rowsOf(SERVICES_PROJECT, serviceScope()).find((each) => each.stableId === 'service-3')!
+    expect(row.shape).toBe('riser')
+    // A Riser is always round, so `section` is empty too: there is no second answer to give.
+    expect([row.section, row.centrelineMm, row.widthMm, row.depthMm]).toEqual(['', '', '', ''])
+    expect([row.outsideDiameterMm, row.lengthMm, row.bottomMm, row.topMm]).toEqual([100, 2600, 0, 2600])
+  })
+
+  it('keeps a negative elevation negative and writes no negative zero', () => {
+    const row = rowsOf(SERVICES_PROJECT, serviceScope()).find((each) => each.stableId === 'service-4')!
+    expect([row.centrelineMm, row.bottomMm, row.topMm]).toEqual([-100, -150, -50])
+    expect(row.label).toBe('Underfloor trunking')
+    const zero = rowsOf(SERVICES_PROJECT, serviceScope()).find((each) => each.stableId === 'service-3')!
+    expect(Object.is(zero.bottomMm, -0)).toBe(false)
+  })
+
+  it('publishes a proposed Run beside the demolition it follows, with its provenance', () => {
+    const rows = rowsOf(SERVICES_PROJECT, serviceScope({ designOptionIds: ['option-a'] }))
+    expect(rows.map((row) => [row.stableId, row.renovationState, row.designOption])).toEqual([
+      ['service-1', 'existing', 'Option A'],
+      ['service-2', 'existing', 'Option A'],
+      ['service-3', 'existing', 'Option A'],
+      ['service-4', 'existing', 'Option A'],
+      ['service-5', 'proposed', 'Option A'],
+    ])
+    expect(rows.find((row) => row.stableId === 'service-5')!.kind).toBe('gas')
+  })
+
+  it('hides a Service behind a Renovation State or a Layer the scope leaves out', () => {
+    expect(rowsOf(SERVICES_PROJECT, serviceScope({ renovationStates: ['proposed'] }))).toEqual([])
+    expect(rowsOf(SERVICES_PROJECT, serviceScope({ designOptionIds: ['option-a'], renovationStates: ['proposed'] }))).toHaveLength(1)
+    expect(rowsOf(SERVICES_PROJECT, serviceScope({ drawingLayers: { layerIds: ['layer-nothing'], includeUnlayered: false } }))).toEqual([])
+  })
+})
