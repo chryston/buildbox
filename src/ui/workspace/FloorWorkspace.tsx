@@ -92,6 +92,9 @@ import { emptyBeamDraft } from './beam/BeamDraftOverlay'
 import { BeamInspector } from './beam/BeamInspector'
 import { DEFAULT_BEAM_DEPTH_MM, DEFAULT_BEAM_WIDTH_MM } from './beam/beamDefaults'
 import { SkirtingInspector } from './skirting/SkirtingInspector'
+import { ServiceInspector } from './service/ServiceInspector'
+import { ServiceToolLayer, emptyServiceDraft } from './service/ServiceToolLayer'
+import type { ServiceDraft } from './service/ServiceToolLayer'
 import { SkirtingToolLayer, emptySkirtingDraft } from './skirting/SkirtingToolLayer'
 import type { SkirtingDraft } from './skirting/SkirtingToolLayer'
 import type { ElevationDraftResult } from './elevation/ElevationDraftOverlay'
@@ -597,6 +600,18 @@ export function FloorWorkspace(): ReactNode {
     }
   }, [skirtingSelection, floorId, project, renovationOptionId, floorSkirting, skirtingFaceNames])
 
+  /**
+   * The Service the inspector edits (#79 §5): the entity as the Display shows it, with the derived
+   * body that gives the plan label and the pick outline.
+   */
+  const selectedService = useMemo(() => {
+    if (serviceSelection === null || floorId === null) return null
+    const model = effectiveModel(project, floorId, renovationOptionId)
+    const entry = model.services.find((each) => each.entity.id === serviceSelection)
+    if (entry === undefined) return null
+    return { service: entry.entity, derived: floorServices?.byId.get(entry.entity.id) ?? null }
+  }, [serviceSelection, floorId, project, renovationOptionId, floorServices])
+
   const selectedRoom = useMemo(() => {
     if (roomSelection === null || floorRooms === null) return null
     const room = project.existingModel.rooms.find((each) => each.id === roomSelection) ?? null
@@ -710,6 +725,9 @@ export function FloorWorkspace(): ReactNode {
   const [beamDraft, setBeamDraft] = useState<BeamDraft | null>(null)
   /** The `Skirting` tool's three numbers (#78 §3 step 3), held here so Esc cannot lose them mid-gesture. */
   const [skirtingDraft, setSkirtingDraft] = useState<SkirtingDraft | null>(null)
+  /** The `Service` tool's remembered numbers, and the Run end already clicked (#79 §6). */
+  const [serviceDraft, setServiceDraft] = useState<ServiceDraft | null>(null)
+  const [serviceAnchor, setServiceAnchor] = useState<{ x: number; y: number } | null>(null)
   /** The view whose delete is being confirmed, or null when no dialog is open (#75 §3). */
   const [deleteElevationId, setDeleteElevationId] = useState<string | null>(null)
   /** The elevation pane's own host: its `Fit` and its wheel are measured against this box. */
@@ -2748,6 +2766,65 @@ export function FloorWorkspace(): ReactNode {
       />
     ) : undefined
 
+  /**
+   * The `Service` tool's layer (#79 §6). A Riser is one click and is written by that click; a Run
+   * waits for its second end, and the anchor lives in the workspace's own state so Esc between the
+   * two clicks puts the tool down without sending anything.
+   */
+  const serviceToolLayer = tool === 'service' && floorId !== null && viewport !== null && viewport !== undefined ? (
+    <ServiceToolLayer
+      viewport={viewport}
+      draft={serviceDraft ?? emptyServiceDraft()}
+      onDraft={setServiceDraft}
+      onCancel={() => {
+        setServiceDraft(null)
+        setServiceAnchor(null)
+        setTool('select')
+      }}
+      anchor={serviceAnchor}
+      onAnchor={setServiceAnchor}
+      unit={project.preferences.displayUnit}
+      precision={project.preferences.displayPrecision}
+      onClick={(at) => {
+        const numbers = serviceDraft ?? emptyServiceDraft()
+        const target = { designOptionId: renovationOptionId, viewId: view?.id ?? null }
+        if (numbers.shape === 'riser') {
+          send('service.create', {
+            floorId,
+            shape: 'riser',
+            kind: numbers.kind,
+            point: at,
+            outsideDiameter: numbers.outsideDiameter,
+            bottomElevation: numbers.bottomElevation,
+            height: numbers.riserHeight,
+            target,
+          })
+          setServiceAnchor(null)
+          setTool('select')
+          return
+        }
+        if (serviceAnchor === null) {
+          setServiceAnchor(at)
+          return
+        }
+        send('service.create', {
+          floorId,
+          shape: 'run',
+          kind: numbers.kind,
+          line: { start: serviceAnchor, end: at },
+          section: numbers.section,
+          ...(numbers.section === 'round'
+            ? { outsideDiameter: numbers.outsideDiameter }
+            : { width: numbers.width, depth: numbers.depth }),
+          centrelineElevation: numbers.centrelineElevation,
+          target,
+        })
+        setServiceAnchor(null)
+        setTool('select')
+      }}
+    />
+  ) : undefined
+
   return (
     <>
       <WorkspaceShell
@@ -3141,6 +3218,7 @@ export function FloorWorkspace(): ReactNode {
                 }}
               />
             : selectedSkirting === null
+            ? selectedService === null
             ? selectedBeam === null
             ? selectedWall === null
             ? <SelectionInspector
@@ -3261,6 +3339,24 @@ export function FloorWorkspace(): ReactNode {
                   selectBeam(null)
                 }}
                 renovationAction={renovationAction(selectedBeam.beam.id)}
+              />
+            : <ServiceInspector
+                service={selectedService.service}
+                derived={selectedService.derived}
+                unit={project.preferences.displayUnit}
+                precision={project.preferences.displayPrecision}
+                onSetLabel={(label) => send('service.rename', { serviceId: selectedService.service.id, label })}
+                onSetKind={(kind) => send('service.setKind', { serviceId: selectedService.service.id, kind })}
+                onSetSection={(section) => send('service.setSection', { serviceId: selectedService.service.id, section })}
+                onSetOutsideDiameter={(outsideDiameter) => send('service.setOutsideDiameter', { serviceId: selectedService.service.id, outsideDiameter })}
+                onSetWidth={(width) => send('service.setWidth', { serviceId: selectedService.service.id, width })}
+                onSetDepth={(depth) => send('service.setDepth', { serviceId: selectedService.service.id, depth })}
+                onSetVerticalExtent={(field, value) => send('service.setVerticalExtent', { serviceId: selectedService.service.id, field, value })}
+                onDelete={() => {
+                  send('service.delete', { serviceId: selectedService.service.id })
+                  selectService(null)
+                }}
+                renovationAction={renovationAction(selectedService.service.id)}
               />
             : <SkirtingInspector
                 skirting={selectedSkirting.skirting}
@@ -3521,7 +3617,7 @@ export function FloorWorkspace(): ReactNode {
                   unit={project.preferences.displayUnit}
                   precision={project.preferences.displayPrecision}
                 />
-              ) : tool === 'beam' ? beamDraftOverlay : tool === 'skirting' ? skirtingToolLayer : elevationDraftOverlay}
+              ) : tool === 'beam' ? beamDraftOverlay : tool === 'skirting' ? skirtingToolLayer : tool === 'service' ? serviceToolLayer : elevationDraftOverlay}
             />
             )}
             <input
