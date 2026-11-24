@@ -347,7 +347,11 @@ export function drawFloorView(entities: FloorViewEntities, options: FloorViewOpt
     : drawBeams(drawnBeams, { sizing, selectedBeamId: options.selectedBeamId })
   const skirtingList = drawnSkirting === undefined || drawnSkirting === null
     ? null
-    : drawSkirting(drawnSkirting, { sizing, selectedSkirtingId: options.selectedSkirtingId })
+    : drawSkirting(drawnSkirting, {
+        sizing,
+        selectedSkirtingId: options.selectedSkirtingId,
+        keepLabelsWithin: list.bounds,
+      })
   const extra = [beamList, skirtingList, wallList, roomList, overlayList].filter((one): one is DisplayList => one !== null)
   const withWalls: DisplayList = extra.length === 0
     ? list

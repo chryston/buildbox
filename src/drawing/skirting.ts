@@ -27,9 +27,22 @@ export interface SkirtingDrawOptions {
   sizing: Sizing
   /** The selected Skirting, drawn in the accent. */
   selectedSkirtingId?: string | null
+  /**
+   * The picture the Plan View fits to its pane — Walls, Rooms and footprints, but no Skirting label.
+   * A strip on the outermost face has its label centred on a line the picture ends at, so the word
+   * would hang past the drawing and the pane would cut it in half; the label is held inside this rect
+   * instead (#78 §7).
+   */
+  keepLabelsWithin?: Rect | null
 }
 
 const rectOf = (box: Bounds): Rect => ({ x: box.minX, y: box.minY, w: box.maxX - box.minX, h: box.maxY - box.minY })
+
+/** `centre`, moved as little as possible so a box `half` wide about it fits inside `[lo, hi]`. */
+const holdTo = (centre: number, half: number, lo: number, hi: number): number => {
+  if (hi - lo <= half * 2) return (lo + hi) / 2
+  return Math.min(Math.max(centre, lo + half), hi - half)
+}
 
 const union = (a: Rect, b: Rect): Rect => {
   const x = Math.min(a.x, b.x)
@@ -50,7 +63,7 @@ const longestRun = (skirting: DerivedSkirting) =>
  */
 export function drawSkirting(skirting: FloorSkirting, options: SkirtingDrawOptions): DisplayList | null {
   if (skirting.skirting.length === 0) return null
-  const { sizing } = options
+  const { sizing, keepLabelsWithin } = options
   const selectedSkirtingId = options.selectedSkirtingId ?? null
   const shapes: DisplayItem[] = []
   const labels: DisplayItem[] = []
@@ -71,8 +84,21 @@ export function drawSkirting(skirting: FloorSkirting, options: SkirtingDrawOptio
 
     const run = longestRun(body)
     const middle = rectOf(bounds(run.outline))
-    const at = { x: middle.x + middle.w / 2, y: middle.y + middle.h / 2 }
     const layout = layoutText(body.label, sizeMm)
+    // The word is centred on the strip, which for a strip on the outermost face means half of it lies
+    // outside the picture the pane fits. It is pulled back inside that picture, which also lifts it off
+    // the Wall band it was printed across (#78 §7).
+    const at = keepLabelsWithin === undefined || keepLabelsWithin === null
+      ? { x: middle.x + middle.w / 2, y: middle.y + middle.h / 2 }
+      : {
+          x: holdTo(middle.x + middle.w / 2, layout.width / 2, keepLabelsWithin.x, keepLabelsWithin.x + keepLabelsWithin.w),
+          y: holdTo(
+            middle.y + middle.h / 2,
+            (layout.ascent + layout.descent) / 2,
+            keepLabelsWithin.y,
+            keepLabelsWithin.y + keepLabelsWithin.h,
+          ),
+        }
     box = union(box!, { x: at.x - layout.width / 2, y: at.y - layout.ascent, w: layout.width, h: layout.ascent + layout.descent })
     labels.push({
       kind: 'text',

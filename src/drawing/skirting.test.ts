@@ -99,6 +99,18 @@ describe('drawSkirting (#78 §7)', () => {
     expect(label.at).toEqual({ x: 7550, y: 492.5 })
   })
 
+  it('holds the word inside the picture the Plan View fits to its pane (#78 §7)', () => {
+    // The Plan View fits Walls, Rooms and footprints, and a Skirting label is not part of that
+    // picture: a word centred on the outermost face hangs past it and the pane cuts it in half.
+    const picture = { x: 0, y: 0, w: 7200, h: 1000 }
+    const list = drawSkirting(deriveSkirting(withDoor, FLOOR), { sizing, keepLabelsWithin: picture })
+    const label = itemsOf(list, 'skirting-labels')[0]! as Extract<DisplayItem, { kind: 'text' }>
+    expect(label.at.x + label.layout.width / 2).toBeLessThanOrEqual(7200)
+    expect(label.at.x - label.layout.width / 2).toBeGreaterThanOrEqual(0)
+    // The picture is far taller than the word, so nothing moves out of the strip's band.
+    expect(label.at.y).toBe(492.5)
+  })
+
   it('draws the selected Skirting in the accent', () => {
     const list = drawSkirting(deriveSkirting(project, FLOOR), { sizing, selectedSkirtingId: 'skirting-1' })
     expect(bodies(list).every((item) => item.style === 'skirting:selected')).toBe(true)
