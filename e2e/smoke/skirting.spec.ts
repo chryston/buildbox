@@ -33,35 +33,100 @@ const projectName = seed.library.find((record) => record.id === seed.projects[0]
 const scene0 = seed.projects[0]!.data as unknown as Project
 const section = scene0.elevationViews!.find((view) => view.name === 'Kitchen section')!
 const SKIRTING_1 = scene0.existingModel.skirting!.find((each) => each.label === 'Skirting SK-1')!.id
-/** `W-2`, the right-hand Wall of the Flat, which the fixture leaves bare on both faces. */
-const BARE = scene0.existingModel.walls.find((wall) => wall.ref === 'W-2')!.id
+/** Every Skirting the fixture already draws: anything else on the surface was made by the test. */
+const SEEDED_IDS = scene0.existingModel.skirting!.map((each) => each.id)
+/**
+ * The face the tool is aimed at: `W-1`'s other side. `Skirting SK-1` stands on the left side of that
+ * Wall, so the right side is the one the fixture leaves bare — and it is the only bare face the
+ * Plan View's pane reaches at the opening zoom.
+ */
+const BARE_WALL = scene0.existingModel.walls.find((wall) => wall.ref === 'W-1')!
+const BARE_SIDE = 'right'
+const BARE_LENGTH = Math.round(Math.hypot(BARE_WALL.line.end.x - BARE_WALL.line.start.x, BARE_WALL.line.end.y - BARE_WALL.line.start.y))
 
-/** The Plan View's Skirting bodies, which is the record count read off the surface. */
+/** The Plan View's Skirting bodies: one path per derived run, so a broken face gives one record two. */
 const skirtingBodies = (page: Page): Locator =>
   page.locator('[data-testid="floor-plan-canvas"] [data-ref-role="skirting"]')
 
+/** One record's own strip, by id — the leftmost run of it is picked by `pickSkirting`. */
+const skirtingBody = (page: Page, id: string): Locator =>
+  page.locator(`[data-testid="floor-plan-canvas"] [data-ref-role="skirting"][data-ref="${id}"]`).first()
+
+/** How many records the Plan View is drawing, counted by the record each body belongs to. */
+async function skirtingRecords(page: Page): Promise<number> {
+  const refs = await skirtingBodies(page).evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-ref') ?? ''))
+  return new Set(refs).size
+}
+
+/**
+ * One click at the left end of `target`, where the Plan View's pane can reach it.
+ *
+ * The Flat is 9 m across and the pane is the column beside the Section, so a long run's middle lies
+ * outside the pane at the opening zoom. The left end of anything drawn on `W-1` does not.
+ */
+async function clickInPane(page: Page, target: Locator): Promise<void> {
+  const box = (await target.boundingBox())!
+  await page.mouse.click(box.x + 30, box.y + box.height / 2)
+}
+
+/**
+ * Whether the plan surface offers itself at this screen point, or something drawn over the Plan View
+ * — an Elevation View's marker, say — is what a click there would really land on.
+ */
+function exposed(page: Page, x: number, y: number): Promise<boolean> {
+  return page.evaluate(([px, py]) => {
+    const top = document.elementFromPoint(px, py)
+    if (top === null) return false
+    if ((top.getAttribute('data-testid') ?? '').startsWith('elevation-')) return false
+    return top.closest('[data-testid="floor-plan-canvas"]') !== null
+  }, [x, y])
+}
+
 /**
  * The strip under the pointer, reached the way a person reaches it: a 15 mm strip lies under the run
- * of a 200 mm Wall, so where they overlap the first click takes the Wall and the cycle moves on
- * (#70 §18). The same point is clicked until the record that answers is the Skirting.
+ * of the 200 mm Wall it is skirted to, so where they overlap the first click takes the Wall and the
+ * cycle moves on (#70 §18). The same point is clicked until the record that answers is `label` — a
+ * different point starts the cycle again, which is why this never moves the pointer.
  */
-async function pickSkirting(page: Page, body: Locator): Promise<void> {
-  // A 15 mm strip is a pixel and a half wide on the screen, so the click goes to the record's own
-  // hit path — the wide invisible twin the Plan View puts under every strip for exactly this.
+async function pickSkirting(page: Page, body: Locator, label: string): Promise<void> {
   const id = (await body.getAttribute('data-ref'))!
-  const hit = page.locator(`[data-testid="floor-plan-canvas"] [data-ref-role="skirting-hit"][data-ref="${id}"]`).first()
-  await bringIntoView(page, hit)
-  const box = (await hit.boundingBox())!
-  const cx = box.x + box.width / 2
-  const cy = box.y + box.height / 2
-  const points: readonly [number, number][] = [[cx, cy], [cx, box.y + 2], [cx, box.y + box.height - 2], [box.x + 4, cy], [box.x + box.width - 4, cy]]
-  for (const [x, y] of points) {
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      await page.mouse.click(x, y)
-      if (await page.getByTestId('skirting-inspector').isVisible()) return
+  const field = page.getByTestId('skirting-field-label')
+  const bodies = page.locator(`[data-testid="floor-plan-canvas"] [data-ref-role="skirting"][data-ref="${id}"]`)
+  const boxes: { x: number; y: number; width: number; height: number }[] = []
+  for (let at = 0; at < (await bodies.count()); at += 1) {
+    const box = await bodies.nth(at).boundingBox()
+    if (box !== null) boxes.push(box)
+  }
+  // The leftmost run first: it is the one the pane is sure to reach at the opening zoom.
+  boxes.sort((a, b) => a.x - b.x)
+  for (const box of boxes) {
+    const y = box.y + box.height / 2
+    for (let offset = 30; offset < box.width - 10; offset += 40) {
+      const x = box.x + offset
+      if (!(await exposed(page, x, y))) continue
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        await page.mouse.click(x, y)
+        if ((await field.isVisible()) && (await field.inputValue()) === label) return
+      }
     }
   }
-  throw new Error('the Skirting never answered the pointer on its own body')
+  throw new Error(`the Skirting ${id} (${label}) never answered the pointer on its own body`)
+}
+
+/**
+ * The Skirting's row in the Section, reached the same way as in the Plan View: the row is painted at
+ * its host Wall's depth, so the Wall it is skirted to is in the same stack and the cycle walks it
+ * (#70 §18). The same point is clicked until the Skirting answers.
+ */
+async function pickSkirtingInSection(page: Page, row: Locator): Promise<void> {
+  const box = (await row.boundingBox())!
+  const x = box.x + box.width / 2
+  const y = box.y + box.height / 2
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    await page.mouse.click(x, y)
+    if (await page.getByTestId('skirting-inspector').isVisible()) return
+  }
+  throw new Error('the Skirting never answered the pointer on its own Section row')
 }
 
 async function openPlan(page: Page): Promise<void> {
@@ -71,35 +136,10 @@ async function openPlan(page: Page): Promise<void> {
   await expect(floorPlanCanvas(page)).toBeVisible()
 }
 
-/**
- * Drag the Plan View with the middle button until `target`'s middle lies inside the pane (#64 §12).
- *
- * The Flat is 9 m across and the pane is a column beside the Section, so the opening view leaves the
- * right-hand Wall — and anything standing on it — outside the pane, where no pointer can reach it.
- * A person pans; this pans the same way, and it is the same gesture whether the thing is a face the
- * tool is about to be aimed at or a strip already drawn.
- */
-async function bringIntoView(page: Page, target: Locator): Promise<void> {
-  const pane = (await floorPlanCanvas(page).boundingBox())!
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const box = (await target.boundingBox())!
-    const cx = box.x + box.width / 2
-    const cy = box.y + box.height / 2
-    if (cx > pane.x + 30 && cx < pane.x + pane.width - 30 && cy > pane.y + 30 && cy < pane.y + pane.height - 30) return
-    const dx = pane.x + pane.width / 2 - cx
-    const dy = pane.y + pane.height / 2 - cy
-    const from = { x: pane.x + pane.width / 2, y: pane.y + pane.height / 2 }
-    await page.mouse.move(from.x, from.y)
-    await page.mouse.down({ button: 'middle' })
-    await page.mouse.move(from.x + dx, from.y + dy)
-    await page.mouse.up({ button: 'middle' })
-  }
-}
-
 test.describe('a Skirting', () => {
   test('skirts the whole face it was clicked on, and answers a click', async ({ page }) => {
     await openPlan(page)
-    const before = await skirtingBodies(page).count()
+    const before = await skirtingRecords(page)
 
     await page.getByTestId('tool-skirting').click()
     await expect(page.getByTestId('skirting-tool-layer')).toBeVisible()
@@ -111,24 +151,28 @@ test.describe('a Skirting', () => {
     await page.getByTestId('skirting-draft-thickness').fill('20')
 
     // One click on the face, and the whole face is skirted — no second click to place an end.
-    const face = page.getByTestId(`skirting-face-hit-${BARE}|left`)
+    const face = page.getByTestId(`skirting-face-hit-${BARE_WALL.id}|${BARE_SIDE}`)
     await expect(face).toBeVisible()
-    await bringIntoView(page, face)
-    await face.click({ force: true })
+    await clickInPane(page, face)
     await expect(page.getByTestId('skirting-tool-layer')).toHaveCount(0)
 
-    await expect(skirtingBodies(page)).toHaveCount(before + 1)
+    await expect.poll(() => skirtingRecords(page)).toBe(before + 1)
     await expect(page.locator('[data-testid="floor-plan-canvas"] text', { hasText: 'Skirting SK-2' })).toBeVisible()
 
-    await pickSkirting(page, skirtingBodies(page).last())
+    await pickSkirting(page, skirtingBodies(page).last(), 'Skirting SK-2')
     await expect(page.getByTestId('skirting-field-label')).toHaveValue('Skirting SK-2')
-    // The host and the face are named, never `L`/`R`: a Wall reference and the Room the face borders,
-    // or the face's own stable number where no Room claims it.
-    await expect(page.getByTestId('skirting-field-wall')).toContainText('W-2')
-    await expect(page.getByTestId('skirting-field-side')).toContainText('W-2 ·')
-    // The range is the whole tidied face, so it starts at 0 and stops where the Wall does.
-    await expect(page.getByTestId('skirting-field-start')).toHaveValue('0')
-    await expect(page.getByTestId('skirting-field-end')).toHaveValue('6000')
+    // The host and the face are named, never `L`/`R`: the Wall's reference on one row and the Room
+    // the face borders on the next, or the face's own stable number where no Room claims it.
+    await expect(page.getByTestId('skirting-field-wall')).toContainText('W-1')
+    await expect(page.getByTestId('skirting-field-side')).toContainText('Kitchen side')
+    await expect(page.getByTestId('skirting-field-side')).not.toContainText('left')
+    // The range is the whole tidied face — the face as the joined Walls leave it, never a fixed
+    // length — so it lies inside the Wall and gives up only what the Walls returning onto it take.
+    const start = Number(await page.getByTestId('skirting-field-start').inputValue())
+    const end = Number(await page.getByTestId('skirting-field-end').inputValue())
+    expect(start).toBeGreaterThanOrEqual(0)
+    expect(end).toBeLessThanOrEqual(BARE_LENGTH)
+    expect(end - start).toBeGreaterThan(BARE_LENGTH - 400)
     await expect(page.getByTestId('skirting-field-height')).toHaveValue('120')
     await expect(page.getByTestId('skirting-field-thickness')).toHaveValue('20')
     // The Top is the sum of Bottom and Height, printed and never a box of its own.
@@ -140,19 +184,19 @@ test.describe('a Skirting', () => {
 
   test('puts the tool down on Escape with nothing written', async ({ page }) => {
     await openPlan(page)
-    const before = await skirtingBodies(page).count()
+    const before = await skirtingRecords(page)
     await page.getByTestId('tool-skirting').click()
     await expect(page.getByTestId('skirting-tool-layer')).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(page.getByTestId('skirting-tool-layer')).toHaveCount(0)
     await expect(page.getByTestId('tool-skirting')).not.toHaveAttribute('aria-pressed', 'true')
-    await expect(skirtingBodies(page)).toHaveCount(before)
+    await expect.poll(() => skirtingRecords(page)).toBe(before)
   })
 
   test('flips to the other face, and fills the other face with a second record', async ({ page }) => {
     await openPlan(page)
-    const before = await skirtingBodies(page).count()
-    await pickSkirting(page, skirtingBodies(page).first())
+    const before = await skirtingRecords(page)
+    await pickSkirting(page, skirtingBody(page, SKIRTING_1), 'Skirting SK-1')
     await expect(page.getByTestId('skirting-field-label')).toHaveValue('Skirting SK-1')
     const side = (await page.getByTestId('skirting-field-side').textContent())!
 
@@ -161,7 +205,13 @@ test.describe('a Skirting', () => {
 
     // Two faces are two records, never one record with two faces (#78 criterion 6).
     await page.getByTestId('skirting-duplicate-other-side').click()
-    await expect(skirtingBodies(page)).toHaveCount(before + 1)
+    await expect.poll(() => skirtingRecords(page)).toBe(before + 1)
+    // The copy is a record of its own, with the next free label: picked off the surface, because
+    // duplicating leaves the selection where it was.
+    const copy = page.locator(
+      `[data-testid="floor-plan-canvas"] [data-ref-role="skirting"]${SEEDED_IDS.map((id) => `:not([data-ref="${id}"])`).join('')}`,
+    ).first()
+    await pickSkirting(page, copy, 'Skirting SK-2')
     await expect(page.getByTestId('skirting-field-label')).toHaveValue('Skirting SK-2')
   })
 
@@ -172,8 +222,7 @@ test.describe('a Skirting', () => {
 
     // The same record, picked from the Section rather than the Plan View.
     const row = page.locator(`[data-testid="elevation-canvas"] [data-ref="${SKIRTING_1}"]`).first()
-    const rowBox = (await row.boundingBox())!
-    await page.mouse.click(rowBox.x + rowBox.width / 2, rowBox.y + rowBox.height / 2)
+    await pickSkirtingInSection(page, row)
     await expect(page.getByTestId('skirting-inspector')).toBeVisible()
     await expect(page.getByTestId('skirting-field-label')).toHaveValue('Skirting SK-1')
     await expect(page.getByTestId('skirting-field-bottom')).toHaveValue('0')
@@ -191,18 +240,18 @@ test.describe('a Skirting', () => {
     // The Section reaches the strip the Plan View paints under the Wall it is skirted to. Picked after
     // the export closed, because closing the dialog takes the selection back with it.
     await page.getByTestId('elevation-view-picker').selectOption(section.id)
-    const rowBox = (
-      await page.locator(`[data-testid="elevation-canvas"] [data-ref="${SKIRTING_1}"]`).first().boundingBox()
-    )!
-    await page.mouse.click(rowBox.x + rowBox.width / 2, rowBox.y + rowBox.height / 2)
+    await pickSkirtingInSection(
+      page,
+      page.locator(`[data-testid="elevation-canvas"] [data-ref="${SKIRTING_1}"]`).first(),
+    )
     await expect(page.getByTestId('skirting-inspector')).toBeVisible()
 
     await page.getByTestId('skirting-delete').click()
     await expect(page.getByTestId('skirting-inspector')).toHaveCount(0)
-    await expect(skirtingBodies(page)).toHaveCount(1)
+    await expect.poll(() => skirtingRecords(page)).toBe(1)
 
     await page.getByTestId('undo-button').click()
-    await expect(skirtingBodies(page)).toHaveCount(2)
+    await expect.poll(() => skirtingRecords(page)).toBe(2)
     await waitForFonts(page)
   })
 })

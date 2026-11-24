@@ -25,6 +25,7 @@
  * drawn above this list.
  */
 import type { ElevationRow, ElevationScene } from '../derive'
+import { elevationRowDepth } from '../derive'
 import type { Pt } from '../geometry'
 import { layoutText, measureRect } from './font/layoutText'
 import { mmText } from './format'
@@ -190,13 +191,9 @@ export function drawElevationView(scene: ElevationScene, options: ElevationViewO
   // drawing is mirrored and the view line's own start is on the right.
   const xOf = (s: number): number => k * (scene.frame.side === 'left' ? scene.length - s : s)
 
-  // A Skirting is a finish on a face, not a thing standing in the band: its own `distance` is the
-  // host face's, a few tens of millimetres in front of the cut through the Wall, and painting by
-  // that alone buries the strip under the Wall it is skirted to — invisible and unpickable. It
-  // therefore takes its host Wall's depth and `KIND_RANK` puts it over the Wall it stands on.
-  const wallDepth = new Map(scene.rows.filter((row) => row.kind === 'wall').map((row) => [row.id, row.distance]))
-  const depthOf = (row: ElevationRow): number =>
-    row.kind === 'skirting' && row.hostWallId !== null ? wallDepth.get(row.hostWallId) ?? row.distance : row.distance
+  // A Skirting is a finish on a face, so it is painted at its host Wall's depth and the kind rank
+  // puts it over the Wall it stands on — see `elevationRowDepth`.
+  const depthOf = elevationRowDepth(scene.rows)
 
   const painted = scene.rows
     .filter((row) => layers === null || layers.drawn(row.id))

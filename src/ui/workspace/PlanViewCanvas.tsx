@@ -29,6 +29,7 @@ import {
   drawSelectionAnnotations,
   drawWarningBadges,
   displayRects,
+  resolveSize,
 } from '../../drawing'
 import type { BadgeSubject, DisplayList, LayerGates, OpeningPreview, PlanPreview, RangeGates, RoomProposal, Sizing, WallOpenings } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
@@ -608,7 +609,9 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       // the order the pointer reaches them in (#78 §7, #70 §8).
       skirtings: (drawnSkirting?.skirting ?? []).flatMap((row) => row.runs.map((run) => ({ id: row.id, outline: run.outline }))),
       states,
-    }).map((candidate) => ({ ...candidate, rangeClass: classOf(candidate.entityId) }))
+      // Half the width the same canvas strokes the strip's invisible target at, so the pointer
+      // answers the Skirting where the surface offers it and the cycle can reach it (#78 §7).
+    }, resolveSize('hit-target', sizing).mm / 2).map((candidate) => ({ ...candidate, rangeClass: classOf(candidate.entityId) }))
     // An Opening answers the pointer through its own symbol, which the Wall drawing lays above the
     // Wall it is cut in. The symbol's geometry is not a closed path the hit test can take, so the
     // click itself is the evidence that it is drawn and selectable here — and its layer puts it
@@ -696,6 +699,16 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
           // A Beam is documentation drawn under the Wall it usually sits under, so the cycle is
           // what makes it reachable at all: the Wall is on top and takes the first click, and the
           // second click in the same spot walks the list (#77 criteria 16, 18).
+          consumedPointer.current = true
+          const answer = pickTarget(id, event.clientX, event.clientY)
+          if (answer === null) consumedPointer.current = false
+          else selectById(answer)
+        },
+    onSkirtingPointerDown: onSelectSkirting === undefined || tool !== 'select'
+      ? undefined
+      : (id, event) => {
+          // A Skirting is a finish painted over the Wall it stands on, so the Wall takes the first
+          // click and the cycle behind the click is what makes the strip reachable (#78 §7).
           consumedPointer.current = true
           const answer = pickTarget(id, event.clientX, event.clientY)
           if (answer === null) consumedPointer.current = false

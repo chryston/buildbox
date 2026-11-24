@@ -59,6 +59,8 @@ export interface DisplayListInteractions {
   onWallPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
   /** A Beam's body answering the pointer (#77 §3), the same gesture as a Wall's. */
   onBeamPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
+  /** A Skirting's strip or its invisible target answering the pointer (#78 §7), the same gesture. */
+  onSkirtingPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
   /**
    * An Opening's symbol, clicked where it is drawn: it becomes the selected Opening (#65 §11).
    * Every part of the symbol — leaf, swing, glass lines — answers, because a person clicks the
@@ -316,6 +318,17 @@ function renderNode(
       // The body and its invisible width target are the same Beam: a person aiming at a Beam aims
       // at the middle of it, not at the two device pixels of its outline (#77 §3).
       const pick = interactions.onBeamPointerDown
+      props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => {
+        event.stopPropagation()
+        pick(id, event)
+      }) as never
+      props.style = { cursor: 'pointer' }
+    }
+    if ((role === 'skirting' || role === 'skirting-hit') && interactions?.onSkirtingPointerDown !== undefined) {
+      // The strip and its invisible target are the same Skirting, and a 15 mm strip is a pixel and a
+      // half of ink: both answer the pointer, and the cycle behind them decides which of the things
+      // under the click it is (#78 §7).
+      const pick = interactions.onSkirtingPointerDown
       props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => {
         event.stopPropagation()
         pick(id, event)

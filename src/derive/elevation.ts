@@ -82,6 +82,21 @@ export const elevationFrameOf = (view: ElevationView): ElevationFrame => elevati
 const ringOf = (path: ClosedPath): Pt[] => [path.start, ...path.segments.map((segment) => segment.to)]
 
 /**
+ * The depth at which one row is seen, in millimetres from the view line.
+ *
+ * A Skirting is a finish on a face, not a thing standing in the band: its own `distance` is the host
+ * face's, a few tens of millimetres in front of the cut through the Wall. Ordering rows by that alone
+ * — which is what both painting and picking do — buries the strip inside the Wall it is skirted to,
+ * so it is neither seen nor reachable by the pointer. A finish takes the depth of the thing it is a
+ * finish on, and the kind rank in the drawing lifts it above that Wall.
+ */
+export const elevationRowDepth = (rows: readonly ElevationRow[]) => {
+  const walls = new Map(rows.filter((row) => row.kind === 'wall').map((row) => [row.id, row.distance]))
+  return (row: ElevationRow): number =>
+    row.kind === 'skirting' && row.hostWallId !== null ? walls.get(row.hostWallId) ?? row.distance : row.distance
+}
+
+/**
  * Everything one Elevation View shows.
  *
  * The rows are the displayed model of the view's own Floor and Design Option, projected through the

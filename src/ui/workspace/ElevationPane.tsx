@@ -29,7 +29,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 'react'
 import type { ElevationView, Point2, RenovationDisplay } from '../../domain'
-import { elevationFrameOf } from '../../derive'
+import { elevationFrameOf, elevationRowDepth } from '../../derive'
 import type { ElevationScene } from '../../derive'
 import type { DisplayList, Rect, Sizing } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
@@ -244,12 +244,17 @@ export function ElevationPane(props: ElevationPaneProps): ReactNode {
     })
     // An Elevation row carries no Renovation State of its own: `derive` has already drawn the Display's
     // subset, so what is on screen is drawn as what it is.
+    //
+    // The click walks the rows at the depth they are seen at, which is the depth they are painted at
+    // (`elevationRowDepth`): a Skirting stands at its host Wall's depth, so it is reached from the
+    // same point that shows it, and the Wall behind it is one click further on in the cycle.
+    const depthOf = elevationRowDepth(scene.rows)
     return cycleOrder(
       under.map((row, index): CycleCandidate => ({
         entityId: row.id,
         renovationState: 'existing',
         drawOrder: index,
-        distance: row.distance,
+        distance: depthOf(row),
       })),
       'elevation',
     )
