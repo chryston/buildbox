@@ -154,6 +154,14 @@ Project holds a Skirting, and the one `#78`'s derive, warnings, tables and scree
 against. `v12/` stays committed as the evidence that a Project saved at the twelfth schema still
 opens, and `v13/` is what `DOMAIN_SCHEMA_VERSION` is 13 names as current.
 
+`v13/skirting-scene.json`, written by `scripts/make-skirting-seed.ts`, is the same Floor with a second
+strip on the far Wall and the `Kitchen section` Elevation View stood on a line looking at the first —
+the scene `e2e/screenshots/skirting.spec.ts` photographs and `e2e/smoke/skirting.spec.ts` drives. The
+script writes two browser seeds from it: `e2e/preview-seed/skirting.json` as it stands, and
+`e2e/preview-seed/skirting-plain.json` with the Design Options taken out, which is the one the smoke
+spec uses so each of the Skirting's own gestures commits as it always did rather than stopping at the
+locked-baseline review (#70 §7c) that `existingDisplay` tests for every kind.
+
 ## How it was produced
 
 Hand-authored as a plain object, then written with `lib.canonicalJson` — keys sorted, no

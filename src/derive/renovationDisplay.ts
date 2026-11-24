@@ -104,7 +104,7 @@ export function displayModel(model: EffectiveModel, display: RenovationDisplay):
  * Display that does not draw a Wall does not draw what is cut in it either.
  */
 export function displayStates(model: DisplayModel): ReadonlyMap<EntityId, RenovationState> {
-  const rows = [...model.walls, ...model.openings, ...model.rooms, ...model.placedItems, ...model.beams]
+  const rows = [...model.walls, ...model.openings, ...model.rooms, ...model.placedItems, ...model.beams, ...model.skirting]
   return new Map(rows.map((row) => [row.entity.id, row.renovationState]))
 }
 
