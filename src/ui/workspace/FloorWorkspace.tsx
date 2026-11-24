@@ -167,6 +167,7 @@ const DELETES_ARE_DEMOLITIONS: readonly IntentType[] = [
   'opening.delete',
   'plan.removeObject',
   'beam.delete',
+  'skirting.delete',
 ]
 
 /**
@@ -178,6 +179,7 @@ const CREATES_ARE_ANNOUNCED: readonly IntentType[] = [
   'opening.create',
   'room.create',
   'beam.create',
+  'skirting.create',
 ]
 
 /** The last placement on this Floor: the one a just-committed add has made. */

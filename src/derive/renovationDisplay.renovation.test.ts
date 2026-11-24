@@ -90,10 +90,10 @@ describe('the four Displays over one Option (#70 criteria 7, 8)', () => {
 
   it('counts what each Display draws, which is what the strip shows (#70 §5)', () => {
     const model = effectiveModel(project(true), 'floor-0', 'option-a')
-    expect(displayCounts(model, 'existing')).toEqual({ walls: 2, wallJunctions: 0, openings: 1, rooms: 2, placedItems: 3, beams: 0 })
-    expect(displayCounts(model, 'demolition')).toEqual({ walls: 2, wallJunctions: 0, openings: 1, rooms: 2, placedItems: 3, beams: 0 })
-    expect(displayCounts(model, 'proposed')).toEqual({ walls: 2, wallJunctions: 0, openings: 1, rooms: 2, placedItems: 3, beams: 0 })
-    expect(displayCounts(model, 'combined')).toEqual({ walls: 3, wallJunctions: 0, openings: 1, rooms: 2, placedItems: 4, beams: 0 })
+    expect(displayCounts(model, 'existing')).toEqual({ walls: 2, wallJunctions: 0, openings: 1, rooms: 2, placedItems: 3, beams: 0, skirting: 0 })
+    expect(displayCounts(model, 'demolition')).toEqual({ walls: 2, wallJunctions: 0, openings: 1, rooms: 2, placedItems: 3, beams: 0, skirting: 0 })
+    expect(displayCounts(model, 'proposed')).toEqual({ walls: 2, wallJunctions: 0, openings: 1, rooms: 2, placedItems: 3, beams: 0, skirting: 0 })
+    expect(displayCounts(model, 'combined')).toEqual({ walls: 3, wallJunctions: 0, openings: 1, rooms: 2, placedItems: 4, beams: 0, skirting: 0 })
   })
 })
 

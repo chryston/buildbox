@@ -19,7 +19,7 @@
 import { effectiveModel } from '../derive'
 import type { EffectiveEntity } from '../derive'
 import type { DrawingLayer, EntityId, ItemDesign, PlanView, Project, ProposedModel, WallJunction } from '../domain'
-import { beamsOf, viewDesignOptionId } from '../domain'
+import { beamsOf, skirtingOf, viewDesignOptionId } from '../domain'
 
 /**
  * The extension point of #80 and #81: Comments and Annotations travel the same way a Wall does,
@@ -66,6 +66,7 @@ export function captureCopySet(project: Project, view: PlanView, selection: read
   const rooms = model.rooms.filter((row) => chosen.has(row.entity.id))
   const placedItems = model.placedItems.filter((row) => chosen.has(row.entity.id))
   const beams = model.beams.filter((row) => chosen.has(row.entity.id))
+  const skirting = model.skirting.filter((row) => chosen.has(row.entity.id))
 
   /** The Walls of this selection that come across — the only ones a join may stand on. */
   const copiedWallIds = new Set<EntityId>(
@@ -89,6 +90,7 @@ export function captureCopySet(project: Project, view: PlanView, selection: read
     rooms: structuredClone(kept(rooms)),
     placedItems: structuredClone(kept(placedItems)),
     beams: structuredClone(kept(beams)),
+    skirting: structuredClone(kept(skirting)),
   }
 
   const designIds = new Set<EntityId>(entities.placedItems.map((item) => item.itemDesignId))
@@ -97,7 +99,7 @@ export function captureCopySet(project: Project, view: PlanView, selection: read
   // The Project's own layer order, not the order the entities were met in: the mapping dialog lists
   // its rows in the order the source's Layers list shows them.
   const usedLayerIds = new Set<EntityId>(
-    [...entities.walls, ...entities.openings, ...entities.rooms, ...entities.placedItems, ...beamsOf(entities)]
+    [...entities.walls, ...entities.openings, ...entities.rooms, ...entities.placedItems, ...beamsOf(entities), ...skirtingOf(entities)]
       .map((entity) => entity.drawingLayerId)
       .filter((layerId): layerId is EntityId => layerId !== undefined && layerId !== null),
   )
@@ -107,7 +109,7 @@ export function captureCopySet(project: Project, view: PlanView, selection: read
   // counted only when it was selected: one dropped because its Walls stayed behind was never in the
   // selection, and calling it a demolition would tell the person their own list held it.
   const demolishedCount =
-    [...walls, ...openings, ...rooms, ...placedItems, ...beams].filter((row) => row.renovationState === 'demolition').length +
+    [...walls, ...openings, ...rooms, ...placedItems, ...beams, ...skirting].filter((row) => row.renovationState === 'demolition').length +
     model.wallJunctions.filter((row) => chosen.has(row.entity.id) && row.renovationState === 'demolition').length
 
   return {
@@ -128,4 +130,5 @@ export const copySetSize = (copySet: CopySet): number =>
   copySet.entities.openings.length +
   copySet.entities.rooms.length +
   copySet.entities.placedItems.length +
-  beamsOf(copySet.entities).length
+  beamsOf(copySet.entities).length +
+  skirtingOf(copySet.entities).length

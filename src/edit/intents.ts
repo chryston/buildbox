@@ -45,7 +45,7 @@ import type {
   WallJustification,
   WallRefLine,
 } from '../domain'
-import { beamsOf, roomOutlinePath } from '../domain'
+import { beamsOf, roomOutlinePath, skirtingOf } from '../domain'
 import type { KeepFixed, Pt } from '../geometry'
 
 import type { ValidationProblem } from '../lib'
@@ -1811,6 +1811,7 @@ export function intentIdCount(type: IntentType, payload?: PayloadOf): number {
         rooms.length +
         placedItems.length +
         beamsOf(pasted.entities).length +
+        skirtingOf(pasted.entities).length +
         pasted.itemDesigns.length +
         pasted.layers.length
       )

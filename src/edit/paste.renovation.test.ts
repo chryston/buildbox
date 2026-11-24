@@ -16,7 +16,7 @@
 import { describe, expect, it } from 'vitest'
 import layersFixture from '../../fixtures/domain/v9/layers.json?raw'
 import type { DesignOption, EntityId, Project } from '../domain'
-import { validateProject } from '../domain'
+import { skirtingOf, validateProject } from '../domain'
 import { canonicalJson } from '../lib'
 import { applyIntent, captureCopySet, intentIdCount, intentLabel, pasteReviewOf, previewIntent } from './index'
 import type { CopySet, Intent, PasteFromOtherProject, PasteLayerResolution } from './index'
@@ -522,5 +522,77 @@ describe('what a paste refuses (#72 §5, criteria 8, 9, 10)', () => {
     if (preview.review?.kind === 'paste-from-project') expect(preview.review.rows).toHaveLength(2)
     expect(preview.affected.viewId).toBe(DEST_VIEW)
     expect(preview.affected.view).toBe('plan')
+  })
+})
+
+/**
+ * Skirting across a Project (#78 §1): the one kind that crosses only when its host Wall crosses,
+ * because a run with no Wall is a record that refers to nothing.
+ */
+describe('Skirting crossing a Project (#78 §1)', () => {
+  const host = 'seed-wall-002'
+  /** A Wall outside the copy, so a run drawn against it has nothing to come across on. */
+  const other = 'seed-wall-005'
+
+  const run = (id: EntityId, hostWallId: EntityId): Project => {
+    const source = fitout()
+    const wall = base.existingModel.walls.find((entry) => entry.id === hostWallId)
+    if (wall === undefined) throw new Error(`the fixture holds no ${hostWallId}`)
+    // `fitout` keeps only the three Walls of the copy; a run drawn against a Wall outside them is
+    // the stranded case, so that Wall goes back into the source — unselected.
+    if (!source.existingModel.walls.some((entry) => entry.id === hostWallId)) {
+      source.existingModel.walls = [...source.existingModel.walls, { ...wall, drawingLayerId: JOINERY }]
+    }
+    source.existingModel.skirting = [
+      {
+        id,
+        floorId: wall.floorId,
+        hostWallId,
+        side: 'left',
+        start: 0,
+        end: 1000,
+        bottom: 0,
+        height: 100,
+        thickness: 15,
+        drawingLayerId: JOINERY,
+      },
+    ]
+    return source
+  }
+
+  it('comes across with a fresh identity, on the Wall that came with it', () => {
+    const source = run('seed-skirting-1', host)
+    const copySet = captureCopySet(source, source.views[0]!, [...WALL_IDS, 'seed-skirting-1'])
+    expect(skirtingOf(copySet.entities).map((entry) => entry.id)).toEqual(['seed-skirting-1'])
+    const applied = applyIntent(elmSt(), pasteIntent(copySet, mapping))
+    if (!applied.ok) throw new Error(`the paste was refused: ${applied.code}`)
+    const proposed = optionOf(applied.project).proposed
+    const landed = skirtingOf(proposed)
+    expect(landed).toHaveLength(1)
+    expect(landed[0]!.id).not.toBe('seed-skirting-1')
+    // The host reference moved with the host: the run stands on the copied Wall, not the source's.
+    expect(proposed.walls.map((wall) => wall.id)).toContain(landed[0]!.hostWallId)
+    expect(landed[0]!.hostWallId).not.toBe(host)
+    // It rode `Joinery` there, so it rides the layer created for `Joinery` here.
+    const joinery = (applied.project.drawingLayers ?? []).find((layer) => layer.name === 'Joinery')!
+    expect(landed[0]!.drawingLayerId).toBe(joinery.id)
+    expect(validateProject(applied.project).ok).toBe(true)
+  })
+
+  it('is left behind when its Wall stays behind, and is not counted in the copy', () => {
+    const source = run('seed-skirting-2', other)
+    const copySet = captureCopySet(source, source.views[0]!, [...WALL_IDS, 'seed-skirting-2'])
+    // Captured, because it was selected and the view draws it…
+    expect(skirtingOf(copySet.entities).map((entry) => entry.id)).toEqual(['seed-skirting-2'])
+    const review = pasteReviewOf(elmSt(), elmSt().views[0]!, copySet)
+    // …but the count is what is coming, and a run whose Wall is not is not coming.
+    expect(review.kind).toBe('paste-from-project')
+    if (review.kind !== 'paste-from-project') return
+    // 3 Walls + the 2 Joins they close; the run is not counted, because its Wall is not coming.
+    expect(review.entityCount).toBe(5)
+    const applied = applyIntent(elmSt(), pasteIntent(copySet, mapping))
+    if (!applied.ok) throw new Error(`the paste was refused: ${applied.code}`)
+    expect(skirtingOf(optionOf(applied.project).proposed)).toEqual([])
+    expect(validateProject(applied.project).ok).toBe(true)
   })
 })

@@ -29,8 +29,8 @@
  */
 import { applyPatches, produceWithPatches } from 'immer'
 import type { Patch } from 'immer'
-import { beamLabel, beamsOf, designOptionsOf, validateProject } from '../../domain'
-import type { Beam, DesignOption, EntityId, Opening, PlacedItem, Project, Room, Wall, WallJunction } from '../../domain'
+import { beamLabel, beamsOf, designOptionsOf, skirtingLabel, skirtingOf, validateProject } from '../../domain'
+import type { Beam, DesignOption, EntityId, Opening, PlacedItem, Project, Room, Skirting, Wall, WallJunction } from '../../domain'
 import { canonicalJson } from '../../lib'
 import type {
   CorrectionEffect,
@@ -57,10 +57,10 @@ export type CorrectionIntentType = Extract<
 >
 
 /** One entity of a model, whichever collection it lives in. */
-type AnyEntity = Wall | WallJunction | Opening | Room | PlacedItem | Beam
+type AnyEntity = Wall | WallJunction | Opening | Room | PlacedItem | Beam | Skirting
 
-/** The six collections a correction can touch, in the order a review reads them. */
-const COLLECTIONS = ['walls', 'wallJunctions', 'openings', 'rooms', 'placedItems', 'beams'] as const
+/** The collections a correction can touch, in the order a review reads them. */
+const COLLECTIONS = ['walls', 'wallJunctions', 'openings', 'rooms', 'placedItems', 'beams', 'skirting'] as const
 type Collection = (typeof COLLECTIONS)[number]
 
 /** One collection of a model. A container written before #77 spells no Beam list, which is empty. */
@@ -103,6 +103,8 @@ function labelOf(project: Project, id: EntityId): string {
   if (placed !== undefined) return project.itemDesigns.find((d) => d.id === placed.itemDesignId)?.name ?? placed.id
   const beam = beamsOf(model).find((entry) => entry.id === id)
   if (beam !== undefined) return beamLabel(beam)
+  const skirting = skirtingOf(model).find((entry) => entry.id === id)
+  if (skirting !== undefined) return skirtingLabel(skirting)
   for (const option of designOptionsOf(project)) {
     const entity = collectionOf(option.proposed, 'walls')
       .concat(...COLLECTIONS.slice(1).map((key) => collectionOf(option.proposed, key)))
@@ -114,8 +116,10 @@ function labelOf(project: Project, id: EntityId): string {
 
 function entityName(project: Project, entity: AnyEntity): string {
   if ('ref' in entity) return entity.ref
-  // A Beam is the only entity whose label is optional, so it is asked by what only it has.
+  // A Beam and a Skirting are the two entities whose label is optional, so each is asked by what
+  // only it has.
   if ('underside' in entity) return beamLabel(entity)
+  if ('side' in entity) return skirtingLabel(entity)
   if ('label' in entity) return entity.label
   if ('name' in entity) return entity.name
   return project.itemDesigns.find((design) => design.id === (entity as PlacedItem).itemDesignId)?.name ?? entity.id
@@ -497,6 +501,7 @@ function runMove(project: Project, draft: Project, payload: MoveToDesignOption, 
   for (const room of model.rooms) if (moved.has(room.id)) proposed.rooms.push({ ...room, predecessorIds: [] })
   for (const placed of model.placedItems) if (moved.has(placed.id)) proposed.placedItems.push({ ...placed, predecessorIds: [] })
   for (const beam of beamsOf(model)) if (moved.has(beam.id)) (proposed.beams ??= []).push({ ...beam, predecessorIds: [] })
+  for (const entry of skirtingOf(model)) if (moved.has(entry.id)) (proposed.skirting ??= []).push({ ...entry, predecessorIds: [] })
 
   model.walls = model.walls.filter((entity) => !moved.has(entity.id))
   model.openings = model.openings.filter((entity) => !moved.has(entity.id))
@@ -504,6 +509,7 @@ function runMove(project: Project, draft: Project, payload: MoveToDesignOption, 
   model.placedItems = model.placedItems.filter((entity) => !moved.has(entity.id))
   // A container that spells no Beam list stays that way: re-owning no Beam changes no bytes.
   if (model.beams !== undefined) model.beams = model.beams.filter((entity) => !moved.has(entity.id))
+  if (model.skirting !== undefined) model.skirting = model.skirting.filter((entity) => !moved.has(entity.id))
   model.wallJunctions = model.wallJunctions.filter((junction) => !touchesMoved(junction, moved))
   return { moved: [...moved], perOption }
 }

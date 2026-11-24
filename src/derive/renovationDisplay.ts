@@ -27,7 +27,7 @@
  * already holds: the canvas paints a layer at a time, and a re-derive must never reshuffle what the
  * user has been clicking on.
  */
-import type { Beam, EntityId, Opening, PlacedItem, Project, RenovationDisplay, Room, Wall, WallJunction } from '../domain'
+import type { Beam, EntityId, Opening, PlacedItem, Project, RenovationDisplay, Room, Skirting, Wall, WallJunction } from '../domain'
 import { designOptionsOf } from '../domain'
 import type { EffectiveEntity, EffectiveModel } from './effectiveModel'
 import type { RenovationState } from './quantities/scope'
@@ -48,6 +48,7 @@ export interface DisplayModel {
   readonly rooms: readonly DisplayEntity<Room>[]
   readonly placedItems: readonly DisplayEntity<PlacedItem>[]
   readonly beams: readonly DisplayEntity<Beam>[]
+  readonly skirting: readonly DisplayEntity<Skirting>[]
 }
 
 /** Paint order: the layer a Display draws first is the one underneath. */
@@ -90,6 +91,8 @@ export function displayModel(model: EffectiveModel, display: RenovationDisplay):
     placedItems: displayRows(model.placedItems, display),
     // A Beam is built fabric like the Wall it may cross but never hangs from (#77 §4).
     beams: displayRows(model.beams, display),
+    // Skirting is built fabric too, and it is demolished by its own record or with its host Wall (#78 §4).
+    skirting: displayRows(model.skirting, display),
   }
 }
 
@@ -133,5 +136,6 @@ export function displayCounts(model: EffectiveModel, display: RenovationDisplay)
     rooms: drawn.rooms.length,
     placedItems: drawn.placedItems.length,
     beams: drawn.beams.length,
+    skirting: drawn.skirting.length,
   }
 }
