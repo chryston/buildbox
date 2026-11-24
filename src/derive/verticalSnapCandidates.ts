@@ -24,7 +24,7 @@
  * the shelter is left out — it is a fixed whole-flat element whose door is already a door entry.
  */
 import type { ElevationView, EntityId, Project } from '../domain'
-import { UNLAYERED_LAYER_KEY, beamLabel, beamTop, designHeight, getPresetPack, listPresetEntries, skirtingLabel, skirtingTop, viewDesignOptionId, viewRenovationDisplay } from '../domain'
+import { UNLAYERED_LAYER_KEY, beamLabel, beamTop, designHeight, getPresetPack, listPresetEntries, serviceBottom, serviceLabel, serviceTop, skirtingLabel, skirtingTop, viewDesignOptionId, viewRenovationDisplay } from '../domain'
 import type { VerticalSnapCandidate, VerticalSnapKind } from '../geometry'
 import { derivePlacement, placementLabels } from './effective'
 import { effectiveModel } from './effectiveModel'
@@ -113,6 +113,8 @@ export function verticalSnapCandidates(input: VerticalSnapInput): VerticalSnapCa
     for (const { entity } of display.beams) edges(entity.id, `Underside of ${beamLabel(entity)}`, `Top of ${beamLabel(entity)}`, entity.underside, beamTop(entity))
     // A Skirting's ends are a Bottom and a Top, the two words its inspector uses for them (#78 §7).
     for (const { entity } of display.skirting) edges(entity.id, `Bottom of ${skirtingLabel(entity)}`, `Top of ${skirtingLabel(entity)}`, entity.bottom, skirtingTop(entity))
+    // A Service's ends are a Bottom and a Top too, read off the one elevation its shape stores (#79 §7).
+    for (const { entity } of display.services) edges(entity.id, `Bottom of ${serviceLabel(entity)}`, `Top of ${serviceLabel(entity)}`, serviceBottom(entity), serviceTop(entity))
     // An Opening's ends are a sill and a head, which is what the rest of the product calls them.
     for (const { entity } of display.openings) edges(entity.id, `Sill of ${entity.label}`, `Head of ${entity.label}`, entity.sill, entity.head)
     const names = placementLabels(

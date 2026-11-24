@@ -93,6 +93,7 @@ export function entityLayerKeys(project: Project, floorId: EntityId, optionId: E
   for (const { entity } of model.placedItems) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
   for (const { entity } of model.beams) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
   for (const { entity } of model.skirting) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
+  for (const { entity } of model.services) layerOf.set(entity.id, entity.drawingLayerId ?? UNLAYERED_LAYER_KEY)
   return layerOf
 }
 
