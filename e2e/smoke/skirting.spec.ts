@@ -46,13 +46,14 @@ const skirtingBodies = (page: Page): Locator =>
  * (#70 §18). The same point is clicked until the record that answers is the Skirting.
  */
 async function pickSkirting(page: Page, body: Locator): Promise<void> {
-  const box = (await body.boundingBox())!
+  // A 15 mm strip is a pixel and a half wide on the screen, so the click goes to the record's own
+  // hit path — the wide invisible twin the Plan View puts under every strip for exactly this.
+  const id = (await body.getAttribute('data-ref'))!
+  const hit = page.locator(`[data-testid="floor-plan-canvas"] [data-ref-role="skirting-hit"][data-ref="${id}"]`).first()
+  const box = (await hit.boundingBox())!
   const cx = box.x + box.width / 2
   const cy = box.y + box.height / 2
-  // A 15 mm strip lies against the run of a 200 mm Wall, and in a kitchen a cabinet stands in front
-  // of it, so the middle of its box is often the cabinet's. The points on the box's own edges are
-  // the ones furthest from whatever covers the run, and one of them is bare strip.
-  const points: readonly [number, number][] = [[cx, cy], [cx, box.y + 1], [cx, box.y + box.height - 1], [box.x + 1, cy], [box.x + box.width - 1, cy]]
+  const points: readonly [number, number][] = [[cx, cy], [cx, box.y + 2], [cx, box.y + box.height - 2], [box.x + 4, cy], [box.x + box.width - 4, cy]]
   for (const [x, y] of points) {
     for (let attempt = 0; attempt < 4; attempt += 1) {
       await page.mouse.click(x, y)
@@ -66,6 +67,13 @@ async function openPlan(page: Page): Promise<void> {
   await seedPreviewDb(page, seed)
   await page.goto('./', { waitUntil: 'networkidle' })
   await openProjectFromLibrary(page, projectName)
+  await expect(floorPlanCanvas(page)).toBeVisible()
+  // The Flat is 9 m across and the pane is not, so the opening zoom leaves the far half of `W-1` —
+  // and the strip at its foot — outside the pane, under the split divider. Wheeling out is what a
+  // person does first, and it is what makes the strip's own body clickable.
+  const box = (await floorPlanCanvas(page).boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  for (let step = 0; step < 3; step += 1) await page.mouse.wheel(0, 400)
   await expect(floorPlanCanvas(page)).toBeVisible()
 }
 
