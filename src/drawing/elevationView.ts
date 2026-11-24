@@ -190,12 +190,20 @@ export function drawElevationView(scene: ElevationScene, options: ElevationViewO
   // drawing is mirrored and the view line's own start is on the right.
   const xOf = (s: number): number => k * (scene.frame.side === 'left' ? scene.length - s : s)
 
+  // A Skirting is a finish on a face, not a thing standing in the band: its own `distance` is the
+  // host face's, a few tens of millimetres in front of the cut through the Wall, and painting by
+  // that alone buries the strip under the Wall it is skirted to — invisible and unpickable. It
+  // therefore takes its host Wall's depth and `KIND_RANK` puts it over the Wall it stands on.
+  const wallDepth = new Map(scene.rows.filter((row) => row.kind === 'wall').map((row) => [row.id, row.distance]))
+  const depthOf = (row: ElevationRow): number =>
+    row.kind === 'skirting' && row.hostWallId !== null ? wallDepth.get(row.hostWallId) ?? row.distance : row.distance
+
   const painted = scene.rows
     .filter((row) => layers === null || layers.drawn(row.id))
     .slice()
     .sort(
       (a, b) =>
-        b.distance - a.distance ||
+        depthOf(b) - depthOf(a) ||
         KIND_RANK[a.kind] - KIND_RANK[b.kind] ||
         (layers === null ? 0 : layers.orderOf(a.id) - layers.orderOf(b.id)) ||
         (a.id < b.id ? -1 : 1),
