@@ -68,8 +68,14 @@ test('a hidden layer stops being drawn and its warning says why', async ({ page 
   // The Warnings List goes on counting what this canvas stopped drawing (#71 §7), and the row says
   // why its subject is nowhere on screen.
   await page.getByTestId('warning-toggle').click()
-  const sentence = page.locator('[data-testid^="warning-sentence-"]')
+  // Every warning about hidden Furniture carries the suffix — the vertical producers (#76 §5)
+  // added several here — so this pins the Wardrobe's own row by the id in its key.
+  const sentence = page
+    .locator(
+      `[data-testid^="warning-sentence-"][data-testid*="|${WARDROBE},"], [data-testid^="warning-sentence-"][data-testid*=",${WARDROBE}|"]`,
+    )
     .filter({ hasText: '· Furniture hidden in this view — warning still applies' })
+    .first()
   await expect(sentence).toBeVisible()
 
   // Locate finds the thing it warns about without putting it back on screen.

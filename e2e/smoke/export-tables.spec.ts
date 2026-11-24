@@ -189,8 +189,9 @@ test('the five tables come back as one archive whose manifest hashes every entry
   expect(shown.openings).toBe(3)
   expect(shown.rooms).toBe(2)
   expect(shown['placed-items']).toBe(12)
-  // One open, one reopened, one acknowledged: all three are rows (§5 — the list is not the strip).
-  expect(shown.warnings).toBe(3)
+  // One open, one reopened, one acknowledged, plus the eight the vertical producers derive from
+  // this scene's furniture (#76 §5): all eleven are rows (§5 — the list is not the strip).
+  expect(shown.warnings).toBe(11)
 
   const file = await runLists(page)
   expect(file.name).toMatch(new RegExp(`^${SLUG}_lists_\\d{8}\\.zip$`))
@@ -248,8 +249,13 @@ test('the five tables come back as one archive whose manifest hashes every entry
 
   // The Warnings List: unacknowledged first, the acknowledged one last and carrying its note.
   const warnings = csvRows(Buffer.from(entries[`${SLUG}_warnings_${day}.csv`]!))
-  expect(warnings.slice(1).map((one) => one[0])).toEqual(['unacknowledged', 'unacknowledged', 'acknowledged'])
-  expect(warnings[3]![12]).toBe('Builder to check')
+  // Ten unacknowledged — the two junction rows plus the eight the vertical producers add (#76 §5)
+  // — and the acknowledged one last.
+  expect(warnings.slice(1).map((one) => one[0])).toEqual([
+    ...Array.from({ length: 10 }, () => 'unacknowledged'),
+    'acknowledged',
+  ])
+  expect(warnings[11]![12]).toBe('Builder to check')
   // `message` is the strip's own sentence, spelled from the same copy this file reads.
   const sentences = warnings.slice(1).map((one) => one[11])
   expect(sentences.some((one) => one.includes('crosses'))).toBe(true)

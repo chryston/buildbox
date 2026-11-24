@@ -71,7 +71,7 @@ test('a Backup restored into an empty profile is the same Project', async ({ pag
     // Everything the migration cannot invent is still compared byte for byte.
     const restoredRecord = await storedRecord(restored, 'proj-kitchen-wall')
     if (restoredRecord === null) throw new Error('the restore wrote no record')
-    expect(restoredRecord.schemaVersion).toBe(10)
+    expect(restoredRecord.schemaVersion).toBe(11)
     expect(canonical(withoutMintedIds(restoredRecord.data)))
       .toBe(canonical(migratedForComparison(record.data, record.schemaVersion)))
     expect(await storedAssetHashes(restored)).toEqual(originalAssets)
@@ -113,7 +113,7 @@ test('a v7 Backup carrying Rooms is stored as the Project it holds', async ({ br
     // v7 is one step behind this build, so the eighth step ran on the way in: what is stored is the
     // Project at 8, carrying the three starting Drawing Layers. Everything #67 added is compared
     // below, with only the ids that step minted set aside.
-    expect(record.schemaVersion).toBe(10)
+    expect(record.schemaVersion).toBe(11)
     expect(canonical(withoutMintedIds(record.data))).toBe(canonical(migratedForComparison(roomsFixtureProject(), 7)))
 
     // The Rooms themselves, because they are what #67 added and what a careless importer loses:
