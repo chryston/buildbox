@@ -645,6 +645,13 @@ export const STRINGS = {
   /** The dialog says what a fork does before the person asks the model what a fork does. */
   forkDesignNote: 'Only this placement will use the new design.',
   fork: 'Fork',
+  // The undo tooltip of a shared-height change (#76 §2): the catalogue's default cannot name
+  // which design or what moved, so the card composes the whole line and hands it to
+  // `IntentBuilder.build`. The two measurements arrive already formatted in the Project's units.
+  designHeightTransaction: (name: string, from: string, to: string): string =>
+    `Change design height: ${name} ${from} → ${to}`,
+  /** The caption under the Clearance Envelope group: how far the one envelope reaches (#76 §4). */
+  clearanceSharedBy: (n: number): string => `shared by ${n} placements`,
   // The Plan View card (#44, #66 §17).
   planImageUncalibrated: 'Plan Image not calibrated',
   planImageScale: (perPx: string, unit: string): string => `Plan Image scale: 1 px = ${perPx} ${unit}`,

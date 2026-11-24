@@ -16,6 +16,7 @@ import type { Patch } from 'immer'
 import type {
   Accessory,
   CabinetMaterialId,
+  ClearanceEnvelope,
   DrawerConfig,
   DisplayUnit,
   ElementType,
@@ -128,6 +129,9 @@ export type S7IntentType =
   | 'design.update'
   | 'design.setFootprint'
   | 'design.setOrigin'
+  | 'design.setHeight'
+  | 'design.setClearanceEnvelope'
+  | 'design.removeClearanceEnvelope'
   | 'design.fork'
   | 'floor.create'
   | 'floor.rename'
@@ -474,6 +478,32 @@ export interface SetItemDesignOrigin {
 export interface ForkItemDesign {
   placedItemId: EntityId
   name: string
+}
+
+/**
+ * Change the shared Design Height (#76 §2): one number for the Design and every Placed Item
+ * that uses it. For a cabinet this is its construction height, so the Cut List follows; for
+ * anything else it is the design's own `height`.
+ */
+export interface SetDesignHeight {
+  itemDesignId: EntityId
+  /** Millimetres: positive and finite, or the Intent is refused. */
+  heightMm: number
+}
+
+/**
+ * Add or replace the one Clearance Envelope of an Item Design (#76 §4). The path is
+ * footprint-local millimetres, `bottomOffset` is relative to a placement's Base, and `height`
+ * is positive; the shape itself is gated by the strict validator before anything is written.
+ */
+export interface SetDesignClearanceEnvelope {
+  itemDesignId: EntityId
+  envelope: ClearanceEnvelope
+}
+
+/** Remove the Clearance Envelope of an Item Design (#76 §4). */
+export interface RemoveDesignClearanceEnvelope {
+  itemDesignId: EntityId
 }
 
 /** A new Floor (#56). `name` absent means the next free `Floor N`. */
@@ -1240,6 +1270,9 @@ export interface IntentPayloads {
   'design.update': UpdateItemDesign
   'design.setFootprint': SetItemDesignFootprint
   'design.setOrigin': SetItemDesignOrigin
+  'design.setHeight': SetDesignHeight
+  'design.setClearanceEnvelope': SetDesignClearanceEnvelope
+  'design.removeClearanceEnvelope': RemoveDesignClearanceEnvelope
   'design.fork': ForkItemDesign
   'floor.create': CreateFloor
   'floor.rename': RenameFloor
@@ -1400,6 +1433,9 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
   'design.update': [],
   'design.setFootprint': [],
   'design.setOrigin': [],
+  'design.setHeight': [],
+  'design.setClearanceEnvelope': [],
+  'design.removeClearanceEnvelope': [],
   'design.fork': ['itemDesignId'],
   'floor.create': ['floorId', 'viewId'],
   'floor.rename': [],

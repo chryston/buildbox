@@ -26,6 +26,7 @@ export type {
   Unit,
 } from './cabinetPayload'
 export { designFootprintSize, designHeight, designOrigin } from './itemDesign'
+export { zoneOffEdgeEnvelope } from './clearanceEnvelope'
 export {
   footprintArea,
   footprintAsPath,

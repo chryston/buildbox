@@ -13,10 +13,11 @@
  * patch set, so that one undo restores both. The arithmetic itself is `derive`'s, so the
  * preview on screen and the committed result cannot drift apart.
  */
-import { designOrigin, footprintProblems, formatGeometryProblem } from '../../domain'
+import { designHeight, designOrigin, footprintProblems, formatGeometryProblem } from '../../domain'
 import type { DisplayFormat, EntityId, ItemDesign, Project } from '../../domain'
 import { localPointValid, originMoveTranslations } from '../../derive'
 import type { Handler, IntentHandler } from './context'
+import { writeSettings } from './cabinetHandlers'
 import type { IntentType, Locator } from '../intents'
 import {
   designPath,
@@ -152,6 +153,68 @@ const setOrigin: Handler<'design.setOrigin'> = (ctx) => {
   }
 }
 
+/**
+ * Change the shared Design Height (#76 §2).
+ *
+ * One number for the Design and every Placed Item that uses it: a cabinet's height is its
+ * construction height, so `writeSettings` writes it and the Cut List follows; anything else
+ * carries its own `height`. The Design Option copies are untouched — they are the same design.
+ */
+const setHeight: Handler<'design.setHeight'> = (ctx) => {
+  const { itemDesignId, heightMm } = ctx.intent.payload
+  const design = requireDesign(ctx.project, itemDesignId)
+  if (!Number.isFinite(heightMm) || heightMm <= 0) {
+    refuse('invalid-size', designPath(itemDesignId), `A Design Height of ${heightMm} mm is not a positive measurement.`)
+  }
+  if (designHeight(design) === heightMm) {
+    refuse('no-change', designPath(itemDesignId), 'This Item Design already has that height.')
+  }
+  if (design.kind === 'cabinet') {
+    writeSettings(ctx.draft, itemDesignId, { height: heightMm })
+    return
+  }
+  requireGenericDesign(ctx.draft, itemDesignId).height = heightMm
+}
+
+/**
+ * Add or replace the one Clearance Envelope (#76 §4).
+ *
+ * The path passes the same gate the shape editor runs on every keystroke, so an invalid zone
+ * never enters the model or the undo history; `height` is positive by the same argument the
+ * strict validator makes. The envelope belongs to the Design, so this one Transaction reaches
+ * every placement — which is exactly why the inspector says `shared by <N> placements` first.
+ */
+const setClearanceEnvelope: Handler<'design.setClearanceEnvelope'> = (ctx) => {
+  const { itemDesignId, envelope } = ctx.intent.payload
+  const design = requireDesign(ctx.project, itemDesignId)
+  if (!Number.isFinite(envelope.height) || envelope.height <= 0) {
+    refuse('invalid-size', designPath(itemDesignId), `A Clearance Envelope height of ${envelope.height} mm is not a positive measurement.`)
+  }
+  if (!Number.isFinite(envelope.bottomOffset)) {
+    refuse('invalid-size', designPath(itemDesignId), 'A Clearance Envelope bottom offset must be a finite measurement.')
+  }
+  const [first] = footprintProblems({ kind: 'path', path: envelope.path })
+  if (first !== undefined) {
+    refuse('invalid-shape', designPath(itemDesignId), formatGeometryProblem(first, MM))
+  }
+  if (sameJsonValue(design.clearanceEnvelope ?? null, envelope)) {
+    refuse('no-change', designPath(itemDesignId), 'This Item Design already has that Clearance Envelope.')
+  }
+  const draftDesign = requireDesign(ctx.draft, itemDesignId)
+  draftDesign.clearanceEnvelope = structuredClone(envelope)
+}
+
+/** Remove the Clearance Envelope (#76 §4); a design without one has nothing to remove. */
+const removeClearanceEnvelope: Handler<'design.removeClearanceEnvelope'> = (ctx) => {
+  const { itemDesignId } = ctx.intent.payload
+  const design = requireDesign(ctx.project, itemDesignId)
+  if (design.clearanceEnvelope === undefined || design.clearanceEnvelope === null) {
+    refuse('no-change', designPath(itemDesignId), 'This Item Design has no Clearance Envelope.')
+  }
+  const draftDesign = requireDesign(ctx.draft, itemDesignId)
+  draftDesign.clearanceEnvelope = null
+}
+
 /** A deep copy of one design under a new identity, keeping nothing that says where it came from. */
 function copyAsDesign(design: ItemDesign, itemDesignId: EntityId, name: string): ItemDesign {
   const copy = structuredClone(design)
@@ -215,6 +278,21 @@ export const DESIGN_HANDLERS: DesignHandlers = {
   },
   'design.setOrigin': {
     run: setOrigin,
+    locate: (project, intent) =>
+      designLocator(project, intent.payload.itemDesignId, placementsOf(project, intent.payload.itemDesignId).map((item) => item.id)),
+  },
+  'design.setHeight': {
+    run: setHeight,
+    locate: (project, intent) =>
+      designLocator(project, intent.payload.itemDesignId, placementsOf(project, intent.payload.itemDesignId).map((item) => item.id)),
+  },
+  'design.setClearanceEnvelope': {
+    run: setClearanceEnvelope,
+    locate: (project, intent) =>
+      designLocator(project, intent.payload.itemDesignId, placementsOf(project, intent.payload.itemDesignId).map((item) => item.id)),
+  },
+  'design.removeClearanceEnvelope': {
+    run: removeClearanceEnvelope,
     locate: (project, intent) =>
       designLocator(project, intent.payload.itemDesignId, placementsOf(project, intent.payload.itemDesignId).map((item) => item.id)),
   },
