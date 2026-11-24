@@ -27,11 +27,11 @@ import {
   drawFloorView,
   drawOrderOf,
   drawSelectionAnnotations,
-  drawWarningBadges,
+  drawNotes, drawWarningBadges,
   displayRects,
   resolveSize,
 } from '../../drawing'
-import type { BadgeSubject, DisplayList, LayerGates, OpeningPreview, PlanPreview, RangeGates, RoomProposal, Sizing, WallOpenings } from '../../drawing'
+import type { BadgeSubject, DisplayList, NoteBadgeSubject, NotePinSubject, LayerGates, OpeningPreview, PlanPreview, RangeGates, RoomProposal, Sizing, WallOpenings } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
 import { OverlapCycleList } from './renovation/OverlapCycleList'
 import { cycleOrder, nextCycle, reachableCandidates } from './selection/overlapCycle'
@@ -229,8 +229,13 @@ export interface PlanViewCanvasProps {
    * appear on drawings.
    */
   warningSubjects?: readonly BadgeSubject[]
+  /** The Notes overlay's pins and `✎n` badges, already filtered to this view (#80 §7). */
+  notePins?: readonly NotePinSubject[]
+  noteBadges?: readonly NoteBadgeSubject[]
   /** A badge was clicked: open the Warning strip at that entity's first row. */
   onSelectWarningBadge?: (id: string) => void
+  /** A pin or `✎n` badge was clicked: select that note (#80 §7.5). */
+  onNotePointerDown?: (id: string) => void
 }
 
 /**
@@ -249,7 +254,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     angleSnap, overlay, htmlOverlay, screenOverlay, walls, beams = null, selectedBeamId = null, skirting = null, selectedSkirtingId = null, services = null, selectedServiceId = null, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
     openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
     rooms = null, selectedRoomId = null, onSelectRoom, onSelectBeam, onSelectSkirting, onSelectService, roomProposal = null,
-    warningSubjects = [], onSelectWarningBadge,
+    warningSubjects = [], notePins = [], noteBadges = [], onSelectWarningBadge, onNotePointerDown,
   } = props
   const [hostSize, setHostSize] = useState({ width: 0, height: 0 })
   const [dragging, setDragging] = useState(false)
@@ -605,6 +610,19 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     else onSelect(id)
   }
 
+  // The Notes overlay (#80 §7.4): above every model body and below every word, and it avoids the same
+  // boxes a warning badge avoids — plus the badges themselves, because a note never hides a warning.
+  const noteMarks: DisplayList | null = notePins.length === 0 && noteBadges.length === 0
+    ? null
+    : drawNotes(notePins, noteBadges, {
+        sizing,
+        obstacles: [
+          ...(warningBadges === null ? [] : displayRects(warningBadges)),
+          ...displayRects(painted),
+          ...(annotations === null ? [] : displayRects(annotations)),
+        ],
+      })
+
   /**
    * One click on a drawn entity, answered by the cycle (#70 §8, criteria 15–18): the candidates are
    * whatever this Display drew under the point, `nextCycle` picks the top one or walks to the next,
@@ -797,7 +815,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       }
       startRotateDrag(id)
     },
-    onWarningBadgePointerDown: onSelectWarningBadge,
+    onWarningBadgePointerDown: onSelectWarningBadge, onNotePointerDown,
   }
 
   return (
@@ -862,6 +880,20 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
                   />
                 </>
               )}
+            {/* The Notes overlay, above the model and below every word (#80 §7.4). Its own list,
+                keyed by the Comments rather than the revision, and never on an export. */}
+            {noteMarks !== null && (
+              <DisplayListSvg
+                list={noteMarks}
+                sizing={sizing}
+                matrix={matrix}
+                textSpace="screen"
+                textLayerTestId="plan-note-text-layer"
+                screen={{ pxPerUnit: zoom, panX, panY }}
+                resolveAsset={resolveAsset}
+                interactions={interactions}
+              />
+            )}
             {/* Then the warnings, last of all and above every word: a badge is the one mark on
                 this canvas that must never be hidden, and it is keyed by what the engine
                 answered rather than by the revision, so it is its own list and never a layer of

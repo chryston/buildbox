@@ -28,7 +28,8 @@ import { affineApply, affineTranslate } from '../derive'
 import { layoutText, measureRect } from './font/layoutText'
 import { lineCommands, roundedRectCommands } from './path'
 import { resolveSize } from './styles'
-import type { DisplayItem, DisplayList, Rect, Sizing } from './types'
+import type { Affine } from '../derive'
+import type { DisplayItem, DisplayList, Rect, Sizing, StyleKey } from './types'
 
 const IDENTITY: Affine = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
 
@@ -101,7 +102,7 @@ function mark(
   role: string,
   at: { x: number; y: number },
   r: number,
-  style: string,
+  style: StyleKey,
   text: string | null,
   fontSize: number,
   leaderFrom: Rect | null,
@@ -113,7 +114,6 @@ function mark(
       segments: lineCommands({ x: leaderFrom.x + leaderFrom.w / 2, y: leaderFrom.y + leaderFrom.h / 2 }, at),
       closed: false,
       style: 'plan-note-leader',
-      hit: 'none',
     })
   }
   items.push({
@@ -162,15 +162,24 @@ export function drawNotes(
   for (const pin of pins) {
     const seat = { x: pin.at.x - r, y: pin.at.y - r, w: 2 * r, h: 2 * r }
     const fits = !covered(seat, [...obstacles, ...placed])
-    const at = fits ? pin.at : (() => {
+    let at = pin.at
+    let leaderFrom: Rect | null = null
+    if (!fits) {
       const all = candidates(seat, r)
-      const direction = outward(seat, all[0]!)
-      return { x: all[0]!.x + direction.x * 2 * r, y: all[0]!.y + direction.y * 2 * r }
-    })()
+      const free = all.find(
+        (one) => !covered({ x: one.x - r, y: one.y - r, w: 2 * r, h: 2 * r }, [...obstacles, ...placed]),
+      )
+      if (free !== undefined) at = free
+      else {
+        const direction = outward(seat, all[0]!)
+        at = { x: all[0]!.x + direction.x * 2 * r, y: all[0]!.y + direction.y * 2 * r }
+        leaderFrom = seat
+      }
+    }
     const box = { x: at.x - r, y: at.y - r, w: 2 * r, h: 2 * r }
     placed.push(box)
     bounds = union(bounds, box)
-    items.push(mark(pin.id, 'note-pin', at, r, `plan-note-pin-${pin.tone}`, null, fontSize, fits ? null : seat))
+    items.push(mark(pin.id, 'note-pin', at, r, `plan-note-pin-${pin.tone}` as StyleKey, null, fontSize, leaderFrom))
   }
 
   // Then the `✎n` badges, one per placement, avoiding the labels, the handles, the warnings and the

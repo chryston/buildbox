@@ -68,6 +68,11 @@ export const SIZE_ROLES: Record<SizeRole, SizeRow> = {
   // sizes exist so the role is total, but no export ever draws this band (#66 §14).
   'plan-warning-badge': { screen: { px: 7 }, paper: { mm: 3 } },
   'plan-warning-badge-text': { screen: { px: 10 }, paper: { mm: 4 } },
+  // The Notes overlay (#80 §7.4): a pin 18 CSS px across whatever the zoom — wider than the warning
+  // badge, because a pin is the thing a person aims at to open a note — and the `✎n` inside it. Paper
+  // sizes exist so the role is total; no export ever draws this band.
+  'plan-note-pin': { screen: { px: 9 }, paper: { mm: 4 } },
+  'plan-note-pin-text': { screen: { px: 10 }, paper: { mm: 4 } },
   // The cabinet canvas's two `Math.max(n / zoom, m)` sizes.
   'cabinet-dimension': { screen: { px: 12, mm: 8 }, paper: { mm: 2 } },
   'cabinet-space-label': { screen: { px: 10, mm: 6 }, paper: { mm: 2 } },
@@ -346,6 +351,23 @@ export const STYLES: Record<StyleKey, Style> = {
     hit: 'none',
   },
   'plan-warning-badge-leader': { stroke: 'var(--bb-danger-dot)', strokeWidth: 'hairline', hit: 'none' },
+
+  // The Notes overlay (#80 §7.3): the pin is filled by the note's priority, and grey once the note is
+  // Resolved — a resolved note is still somewhere and is no longer something to act on.
+  'plan-note-pin-high': { fill: 'var(--bb-note-high)' },
+  'plan-note-pin-normal': { fill: 'var(--bb-note-normal)' },
+  'plan-note-pin-low': { fill: 'var(--bb-note-low)' },
+  'plan-note-pin-resolved': { fill: 'var(--bb-note-resolved)' },
+  // The `✎n` badge is the Project's own accent with the note-pin text colour on it, so it reads as
+  // Notes chrome and not as another warning.
+  'plan-note-badge': { fill: 'var(--bb-note-pin)' },
+  'plan-note-pin-text': {
+    fill: 'var(--bb-note-pin-text)',
+    size: 'plan-note-pin-text',
+    fontFamily: FONT_STACK,
+    hit: 'none',
+  },
+  'plan-note-leader': { stroke: 'var(--bb-note-resolved)', strokeWidth: 'hairline', hit: 'none' },
 
   'plan-placeholder': {
     fill: 'var(--bb-bg-card)',

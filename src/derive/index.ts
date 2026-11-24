@@ -27,7 +27,7 @@
  * by `session`, never a module-level map.
  */
 export { cabinetSceneUnits } from './cabinetSceneUnits'
-export { commentIsInContext, commentScopeLabel, commentsForItemDetail, commentsForView, effectiveCommentScope } from './commentContext'
+export { commentAnchorPoint, commentIsInContext, commentScopeLabel, commentsForItemDetail, commentsForView, effectiveCommentScope } from './commentContext'
 export type { EffectiveCommentScope } from './commentContext'
 export { SNAP_ROW_KINDS, enabledSnapKinds, snapCandidates } from './snapCandidates'
 export type { SnapGeometry, SnapSettingKinds, SnapSourceInput, WallFaceSource } from './snapCandidates'

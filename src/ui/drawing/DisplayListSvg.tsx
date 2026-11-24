@@ -82,6 +82,8 @@ export interface DisplayListInteractions {
    * scrolls to that entity's first row; the id is the entity's, which is how the row is found.
    */
   onWarningBadgePointerDown?: (id: string) => void
+  /** A Notes overlay pin or `✎n` badge was clicked; the id is the Comment's (#80 §7.5). */
+  onNotePointerDown?: (id: string) => void
   /** A click anywhere on a unit's own box. */
   onUnitClick?: (id: string) => void
   /** A section or a divider, picked where it is drawn: it becomes the selected node. */
@@ -138,6 +140,8 @@ const TEST_IDS: Readonly<Record<string, (id: string) => string>> = {
   'item-label': (id) => `item-label-${id}`,
   'origin-marker': (id) => `origin-marker-${id}`,
   'warning-badge': (id) => `warning-badge-${id}`,
+  'note-pin': (id) => `note-pin-${id}`,
+  'note-badge': (id) => `note-badge-${id}`,
   'origin-preview': (id) => `origin-preview-${id}`,
   'dimension-lines': () => 'dimension-lines',
   'dimension-width-line': () => 'dimension-width-line',
@@ -387,6 +391,17 @@ function renderNode(
       props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => {
         // The badge owns the gesture: the Wall under it is not what was clicked, and the
         // background click that would deselect it must not happen either (#66 §14).
+        event.stopPropagation()
+        pick(id)
+      }) as never
+      props.onClick = ((event: React.MouseEvent) => event.stopPropagation()) as never
+      props.style = { cursor: 'pointer' }
+    }
+    if ((role === 'note-pin' || role === 'note-badge') && interactions?.onNotePointerDown !== undefined) {
+      const pick = interactions.onNotePointerDown
+      props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => {
+        // The mark owns the gesture: the Wall or footprint under it is not what was clicked, and the
+        // background click that would clear the selection must not happen either (#80 §7.5).
         event.stopPropagation()
         pick(id)
       }) as never

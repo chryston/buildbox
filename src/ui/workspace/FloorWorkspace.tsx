@@ -17,12 +17,12 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveBeams, deriveSkirting, deriveServices, skirtingFaceTargets, skirtingSnapSources, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, elevationFrameOf, enabledVerticalSnapKinds, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates, verticalSnapCandidates } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveBeams, deriveSkirting, deriveServices, skirtingFaceTargets, skirtingSnapSources, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, elevationFrameOf, enabledVerticalSnapKinds, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates, verticalSnapCandidates, commentAnchorPoint, commentsForView } from '../../derive'
 import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings, drawElevationView } from '../../drawing'
-import type { BadgeSubject, LayerGates, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
+import type { BadgeSubject, LayerGates, NoteBadgeSubject, NotePinSubject, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
 import type { CommentAnchor, EntityId, ElevationView, Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
-import { DEFAULT_COMMENT_PRIORITY, cabinetFeatureIds, DEFAULT_FEATURE_T, designOptionsOf, duplicateCommentIds, elevationViewsOf, isLinearFeature, ownerKindOfDesign, registeredFeatureIds, allServices, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf } from '../../domain'
+import { commentIsOpen, DEFAULT_COMMENT_PRIORITY, cabinetFeatureIds, DEFAULT_FEATURE_T, designOptionsOf, duplicateCommentIds, elevationViewsOf, isLinearFeature, ownerKindOfDesign, registeredFeatureIds, allServices, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
@@ -75,7 +75,7 @@ import type { Box } from './warnings/locateWarning'
 import { enabledKindsOf, useWorkspace, workspaceStore } from './workspaceStore'
 import { WorkspaceShell } from './WorkspaceShell'
 import { NotesPanel, NotesPanelToggle } from './notes/NotesPanel'
-import { notesSessionStore } from './notes/notesSession'
+import { notesSessionStore, useNotesSession } from './notes/notesSession'
 import { ToolbarMenu, ToolbarMenuItem, WorkspaceToolbar } from './WorkspaceToolbar'
 import type { ToolbarGroup } from './WorkspaceToolbar'
 import { PlanViewCanvas } from './PlanViewCanvas'
@@ -1349,6 +1349,49 @@ export function FloorWorkspace(): ReactNode {
     )
   })()
 
+  /**
+   * The Notes overlay (#80 §7). Off every time a Project or a view opens, never persisted, never an
+   * undo step and never a revision change — it is a way of looking, not an edit.
+   *
+   * With a row selected the overlay shows that one note and nothing else (§7.5): the person asked
+   * "where is this one", and answering it by adding every other pin beside it is a different answer.
+   */
+  const notesOverlayOn = useNotesSession((state) => state.overlayOn)
+  const notesSelectedId = useNotesSession((state) => state.selectedCommentId)
+  const notePins: NotePinSubject[] = (() => {
+    if (!notesOverlayOn || view === null || floorWalls === null) return []
+    const listed = commentsForView(project, view)
+    const shown = notesSelectedId === null ? listed : listed.filter((comment) => comment.id === notesSelectedId)
+    const out: NotePinSubject[] = []
+    for (const comment of shown) {
+      const at = commentAnchorPoint(project, floorWalls, comment.anchor)
+      if (at === null) continue
+      out.push({ id: comment.id, at, tone: commentIsOpen(comment) ? comment.priority : 'resolved', reference: comment.reference })
+    }
+    return out
+  })()
+  /** One `✎n` badge per placement of a Design that has notes — never one pin per copy (§12). */
+  const noteBadges: NoteBadgeSubject[] = (() => {
+    if (!notesOverlayOn || view === null || derivedFloor === null || notesSelectedId !== null) return []
+    const counts = new Map<EntityId, number>()
+    for (const comment of commentsForView(project, view)) {
+      const anchor = comment.anchor
+      const designId =
+        anchor.kind === 'item_design' ? anchor.itemDesignId
+          : anchor.kind === 'feature' && project.itemDesigns.some((row) => row.id === anchor.ownerId) ? anchor.ownerId
+            : null
+      if (designId === null) continue
+      counts.set(designId, (counts.get(designId) ?? 0) + 1)
+    }
+    const out: NoteBadgeSubject[] = []
+    for (const placement of derivedFloor.placements) {
+      const count = counts.get(placement.designId)
+      if (count === undefined) continue
+      out.push({ id: placement.id, bounds: placement.worldBounds, count })
+    }
+    return out
+  })()
+
   /** The ghost for where the pointer stands now, in the shape the Wall list takes (#65 §10). */
   const openingAimNow = aimAtOpening(openingCursor)
   const openingPreview: OpeningPreview | null = openingAimNow === null
@@ -1534,6 +1577,14 @@ export function FloorWorkspace(): ReactNode {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
+        // A note revealed on the overlay is hidden again (#80 §7.5): Esc answers "that's the one I
+        // meant, now show me the drawing again", and it must not also clear the model selection or
+        // disarm a tool, because the person may be about to act on the note.
+        if (notesSessionStore.getState().selectedCommentId !== null) {
+          event.preventDefault()
+          notesSessionStore.getState().clearFocus()
+          return
+        }
         // An unlocked correction is abandoned first: the handles and fields shut again and nothing
         // was written, which is the whole point of the press being reversible (#70 criterion 20).
         if (correctionUnlocked !== null) {
@@ -3003,6 +3054,16 @@ export function FloorWorkspace(): ReactNode {
             </button>
             <span className="bb-workspace-project-name">{project.meta.name}</span>
             <NotesPanelToggle />
+            <button
+              type="button"
+              className="bb-workspace-tool-button bb-notes-overlay-button"
+              aria-pressed={notesOverlayOn}
+              data-testid="notes-overlay-button"
+              title={COMMENT_STRINGS.overlayHint}
+              onClick={() => notesSessionStore.getState().setOverlayOn(!notesOverlayOn)}
+            >
+              {notesOverlayOn ? COMMENT_STRINGS.overlayOn : COMMENT_STRINGS.overlayOff}
+            </button>
             <span className="bb-workspace-spacer" />
             {save !== null && (
               // The legacy shape the S4 specs assert: a `role="status"` span whose failed
@@ -3586,6 +3647,9 @@ export function FloorWorkspace(): ReactNode {
               onCursorChange={setOpeningCursor}
               onCanvasClick={clickOnCanvas}
               onCommentEntity={(entityId) => placeComment({ kind: 'entity', entityId })}
+              notePins={notePins}
+              noteBadges={noteBadges}
+              onNotePointerDown={(id) => notesSessionStore.getState().select(id)}
               warningSubjects={warningSubjects}
               screenOverlay={planPreviewOutlines.length === 0 && planClearanceOutlines.length === 0
                 ? undefined

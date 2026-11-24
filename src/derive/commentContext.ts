@@ -14,8 +14,8 @@
  */
 import { effectiveModel } from './effectiveModel'
 import type { EffectiveModel } from './effectiveModel'
-import type { Comment, CommentScope, EntityId, Project, ProposedModel, SavedViewSettings } from '../domain'
-import { CHOOSING_ANCHOR_KINDS, COMMENT_SCOPE_ALL, compareCommentReferences, isCommentScopeAll, viewDesignOptionId } from '../domain'
+import type { Comment, CommentAnchor, CommentScope, EntityId, Point2, Project, ProposedModel, SavedViewSettings } from '../domain'
+import { CHOOSING_ANCHOR_KINDS, COMMENT_SCOPE_ALL, DEFAULT_FEATURE_T, compareCommentReferences, isCommentScopeAll, viewDesignOptionId } from '../domain'
 
 /** Where a Comment's work stands, found by looking the Anchor's subject up. */
 interface SubjectLocation {
@@ -197,4 +197,49 @@ export function commentsForItemDetail(project: Project, itemDesignId: EntityId, 
       return scope.kind === 'all' || scope.kind === 'existing' || (project.designOptions ?? []).some((option) => option.id === scope.designOptionId)
     })
     .sort((left, right) => compareCommentReferences(left.reference, right.reference))
+}
+
+/**
+ * Where a note's pin stands, in Floor millimetres, or `null` when the note has no place.
+ *
+ * Only an Anchor with a place gets a pin (#80 §7.2): a note about the Project, a Floor, a Design
+ * Option or an Item Design is about something that is not *here*, and a pin dropped on an arbitrary
+ * spot would be a lie about where the note belongs.
+ *
+ * A feature of a Wall face resolves along that face at the Anchor's own `t`, so the pin tracks the
+ * face as the Wall moves and stays at the same fraction of it (criterion 7) — the pin is derived from
+ * the geometry every time, never stored beside the note.
+ */
+export function commentAnchorPoint(
+  project: Project,
+  walls: { byId: ReadonlyMap<EntityId, { faces: readonly [{ from: Point2; to: Point2 }, { from: Point2; to: Point2 }] }> },
+  anchor: CommentAnchor,
+): Point2 | null {
+  if (anchor.kind === 'floor_point') return anchor.point
+  if (anchor.kind === 'entity') {
+    const wall = walls.byId.get(anchor.entityId)
+    if (wall !== undefined) {
+      const [left, right] = wall.faces
+      return { x: (left.from.x + left.to.x + right.from.x + right.to.x) / 4, y: (left.from.y + left.to.y + right.from.y + right.to.y) / 4 }
+    }
+    const placed = project.existingModel.placedItems.find((row) => row.id === anchor.entityId)
+    return placed === undefined ? null : { x: placed.translation.x, y: placed.translation.y }
+  }
+  if (anchor.kind === 'feature') {
+    const wall = walls.byId.get(anchor.ownerId)
+    if (wall === undefined) {
+      // A feature of an Item Design stands on the first placement of it: the note is about the shared
+      // design, and the pin marks one place where that design actually is.
+      const design = project.itemDesigns.find((row) => row.id === anchor.ownerId)
+      if (design === undefined) return null
+      const placed = project.existingModel.placedItems.find((row) => row.itemDesignId === design.id)
+      return placed === undefined ? null : { x: placed.translation.x, y: placed.translation.y }
+    }
+    const t = anchor.t ?? DEFAULT_FEATURE_T
+    const face = anchor.featureId === 'leftFace' ? wall.faces[0] : anchor.featureId === 'rightFace' ? wall.faces[1] : null
+    if (face !== null) return { x: face.from.x + (face.to.x - face.from.x) * t, y: face.from.y + (face.to.y - face.from.y) * t }
+    const end = anchor.featureId === 'start' ? wall.faces[0].from : anchor.featureId === 'end' ? wall.faces[0].to : null
+    return end
+  }
+  return null
 }

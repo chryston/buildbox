@@ -113,6 +113,13 @@
   background: var(--bb-bg-choice);
 }
 
+/* The Notes overlay pill when it is on (#80 §7.1): the Project's own note colour, so it reads as
+   Notes chrome rather than as another tool that happens to be armed. */
+.bb-notes-overlay-button[aria-pressed='true'] {
+  background: var(--bb-note-pin);
+  color: var(--bb-note-pin-text);
+}
+
 .bb-workspace-tool-button:disabled {
   opacity: 0.4;
   cursor: default;

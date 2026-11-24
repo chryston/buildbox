@@ -34,6 +34,17 @@ const PRINT_VARS: Readonly<Record<string, string>> = {
   '--bb-border-card': '#8e8e96',
   '--color-accent': '#1a4f8a',
   '--color-dim-label': '#111114',
+  // The Notes overlay (#80 §7) never reaches a sheet — `compose.ts` builds its sheets from
+  // `drawPlanView` and `drawWalls`, and a note is in neither — but the scan is over every colour any
+  // style can ask for, so an unanswered token here would mean the scan had silently stopped covering
+  // a band rather than that the band was exempt. These are the screen colours darkened to survive a
+  // photocopy, which is what a sheet would show if a note were ever printed.
+  '--bb-note-high': '#8a1a1a',
+  '--bb-note-normal': '#1a4f8a',
+  '--bb-note-low': '#55555e',
+  '--bb-note-resolved': '#6e6e78',
+  '--bb-note-pin': '#8a6a10',
+  '--bb-note-pin-text': '#111114',
 }
 
 /** The custom properties this table answers for, for the drift check. */

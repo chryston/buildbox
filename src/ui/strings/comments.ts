@@ -57,6 +57,7 @@ export const COMMENT_STRINGS = {
   // Overlay.
   overlayOff: 'Notes overlay off',
   overlayOn: 'Notes overlay on',
+  overlayHint: 'Show a pin on the Plan View for every note in this context',
   toolHint: 'Click to place Comment. Click an entity to anchor it.',
   commentTool: '✎ Comment',
 
