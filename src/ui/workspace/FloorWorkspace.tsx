@@ -166,6 +166,18 @@ const DELETES_ARE_DEMOLITIONS: readonly IntentType[] = [
   'wall.delete',
   'opening.delete',
   'plan.removeObject',
+  'beam.delete',
+]
+
+/**
+ * The commands that draw a new record. Their refusal is always said out loud: unlike an edit to a
+ * record already on the screen, there is nothing left behind to show that the press was refused.
+ */
+const CREATES_ARE_ANNOUNCED: readonly IntentType[] = [
+  'wall.createChain',
+  'opening.create',
+  'room.create',
+  'beam.create',
 ]
 
 /** The last placement on this Floor: the one a just-committed add has made. */
@@ -862,6 +874,16 @@ export function FloorWorkspace(): ReactNode {
       const problem = result.problems[0]
       if (problem !== undefined) showHiddenToolNotice(problem.message)
       return
+    }
+    if (CREATES_ARE_ANNOUNCED.includes(intent.type)) {
+      // A drawing tool whose press wrote nothing must say so, whatever the edit layer's reason
+      // (#77): a crosshair still in hand and a Project that did not move is not an answer. The
+      // baseline-correction case below has a better reply of its own, so it is left to that.
+      const problem = result.problems[0]
+      if (problem !== undefined && result.code !== 'baseline-correction-required') {
+        showHiddenToolNotice(problem.message)
+        return
+      }
     }
     if (result.code !== 'baseline-correction-required') return
     const entityId = subjectOfIntent(intent)

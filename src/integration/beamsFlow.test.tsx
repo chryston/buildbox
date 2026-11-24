@@ -19,8 +19,8 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
-import type { Beam, Project } from '../domain'
-import { beamTop } from '../domain'
+import type { Beam, DesignOption, Project } from '../domain'
+import { beamTop, designOptionsOf } from '../domain'
 import { PLAN_IMAGE_ACCEPT, STRINGS, WorkspaceProvider, workspaceStore, type WorkspaceServices } from '../ui'
 import type { Viewport, ViewportCache } from '../ui'
 import { openTestView, renderWithBindings as render, TEST_EXPORT_PORT, type TestView } from '../ui/legacy/testing'
@@ -82,8 +82,8 @@ function testWorkspaceServices(): WorkspaceServices {
 
 let view: TestView
 
-async function renderWorkspace(): Promise<void> {
-  view = await openTestView(sceneProject())
+async function renderWorkspace(project: Project = sceneProject()): Promise<void> {
+  view = await openTestView(project)
   workspaceStore.getState().reset()
   render(
     <WorkspaceProvider
@@ -289,22 +289,58 @@ describe('a Beam in the workspace (#77)', () => {
 
 })
 
-describe('a Beam drawn into a Project that carries Design Options (#77)', () => {
+/**
+ * The fixture's one Plan View bound to `Option A` in a given Renovation Display — the way a person
+ * gets to an Option's display is by opening the Plan View that belongs to it.
+ */
+function projectInOption(display: 'existing' | 'proposed' | 'combined'): Project {
+  const project = fixtureProject()
+  return {
+    ...project,
+    views: project.views.map((each) =>
+      each.id === 'seed-view-001' ? { ...each, designOptionId: 'option-a', renovationDisplay: display } : each,
+    ),
+  }
+}
+
+/**
+ * The same Project with the fixture's own demolition taken back out.
+ *
+ * `Option A` proposes a Beam in the survey's place and has already marked that survey Beam for
+ * demolition, which is a story about a different press than the one under test. The demolition
+ * record this file is about has to be written by the Delete button, so the Project starts with
+ * nothing down.
+ */
+function projectInOptionWithNothingDown(display: 'existing' | 'proposed' | 'combined'): Project {
+  const bound = projectInOption(display)
+  return {
+    ...bound,
+    designOptions: (bound.designOptions ?? []).map((option) => ({
+      ...option,
+      demolishedIds: [],
+      // A proposed successor is honest only against a predecessor the Option takes down, so the
+      // Beam the fixture proposes goes back with the demolition that justified it.
+      proposed: { ...option.proposed, beams: [] },
+    })),
+  }
+}
+
+const optionA = (): DesignOption => {
+  const found = designOptionsOf(view.project()).find((each) => each.name === 'Option A')
+  if (found === undefined) throw new Error('the beams fixture carries no Option A')
+  return found
+}
+
+describe('a Beam drawn in a Design Option\'s Plan View (#77 criterion 18)', () => {
   beforeEach(async () => {
-    await renderWorkspace()
+    await renderWorkspace(projectInOption('proposed'))
   })
+
 
   // Criterion 18: which collection a drawn Beam joins is the view's answer, not the tool's. A Plan
   // View bound to a Design Option proposes; a Project with no Option documents the survey.
-  it('proposes the Beam in the Option whose Plan View it was drawn in (#77 criterion 18)', async () => {
-    const withOption = fixtureProject()
-    const option = withOption.designOptions?.[0]
-    if (option === undefined) throw new Error('the beams fixture carries no Design Option')
-    const bound = withOption.views.map((each) =>
-      each.id === 'seed-view-001' ? { ...each, designOptionId: option.id, renovationDisplay: 'proposed' as const } : each,
-    )
-    view = await openTestView({ ...withOption, views: bound })
-
+  it('proposes the Beam drawn in the Option\'s Plan View, leaving the survey as it was (#77 criterion 18)', async () => {
+    const before = optionA().proposed.beams?.length ?? 0
     const user = userEvent.setup()
     await user.click(screen.getByTestId('tool-beam'))
     expect(await screen.findByTestId('beam-draft-overlay')).toBeInTheDocument()
@@ -313,12 +349,61 @@ describe('a Beam drawn into a Project that carries Design Options (#77)', () => 
     await waitFor(() => expect(screen.getByTestId('beam-draft-done')).toBeEnabled())
     await user.click(screen.getByTestId('beam-draft-done'))
 
-    await waitFor(() => expect(option.proposed.beams ?? []).toHaveLength(1))
+    // The Option proposed one Beam more than it did before the press.
+    await waitFor(() => expect(optionA().proposed.beams ?? []).toHaveLength(before + 1))
     // The survey keeps what it said: the Option proposes, it does not rewrite.
-    expect(view.project().existingModel.beams ?? []).toHaveLength(1)
-    expect((view.project().existingModel.beams ?? [])[0]!.id).toBe(BEAM)
+    expect((view.project().existingModel.beams ?? []).map((each) => each.id)).toEqual([BEAM])
   })
 
+})
 
+describe('a baseline Beam deleted in a Design Option\'s display (#77 criterion 26)', () => {
+  beforeEach(async () => {
+    await renderWorkspace(projectInOptionWithNothingDown('proposed'))
+  })
 
+  // Criterion 26, mirroring `wall.delete`: outside the Existing display a delete of a baseline
+  // record is a demolition record in this Option, not a deletion from the survey.
+  it('demolishes a baseline Beam in the Option that pressed Delete, and one undo puts it back (#77 criterion 26)', async () => {
+    const user = userEvent.setup()
+    // The Option's own display draws the survey's Beam beside what it proposes, under its own id.
+    await pickBeam()
+    const drawnId = BEAM
+    await user.click(screen.getByTestId('beam-delete'))
+
+    await waitFor(() => expect(optionA().demolishedIds).toContain(drawnId))
+    // The survey still holds the record, and the other Option never heard about it.
+    expect((view.project().existingModel.beams ?? []).map((each) => each.id)).toContain(drawnId)
+    expect(
+      designOptionsOf(view.project()).find((each) => each.name === 'Option B')?.demolishedIds ?? [],
+    ).toEqual([])
+
+    await user.click(screen.getByTestId('undo-button'))
+    await waitFor(() => expect(optionA().demolishedIds).not.toContain(drawnId))
+  })
+})
+
+describe('a Beam in a Project that carries Options the view does not (#77 criterion 1)', () => {
+  beforeEach(async () => {
+    await renderWorkspace(fixtureProject())
+  })
+
+  // The record would be written where every Option shares it, so the edit layer refuses it. The
+  // surface owes the person the sentence: a press that does nothing and says nothing is the worst
+  // answer a drawing tool can give.
+  it('says out loud when a drawn Beam has nowhere it is allowed to go (#77 criterion 1)', async () => {
+    const proposedBefore = optionA().proposed.beams?.length ?? 0
+    const user = userEvent.setup()
+    await user.click(screen.getByTestId('tool-beam'))
+    expect(await screen.findByTestId('beam-draft-overlay')).toBeInTheDocument()
+    clickDraft(100, 60)
+    clickDraft(300, 60)
+    await waitFor(() => expect(screen.getByTestId('beam-draft-done')).toBeEnabled())
+    await user.click(screen.getByTestId('beam-draft-done'))
+
+    expect(await screen.findByTestId('hidden-tool-notice')).toBeInTheDocument()
+    // Nothing was written anywhere: neither the survey nor the Option gained a record.
+    expect((view.project().existingModel.beams ?? []).map((each) => each.id)).toEqual([BEAM])
+    expect(optionA().proposed.beams ?? []).toHaveLength(proposedBefore)
+  })
 })
