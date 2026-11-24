@@ -31,6 +31,8 @@ import type {
   OpeningKind,
   OpeningSwing,
   PlanImage,
+  ServiceKind,
+  ServiceSection,
   SkirtingDependency,
   Point2,
   PathRoomOutline,
@@ -147,6 +149,18 @@ export type S7IntentType =
   | 'skirting.setVerticalExtent'
   | 'skirting.rename'
   | 'skirting.delete'
+  | 'service.create'
+  | 'service.dragEndpoint'
+  | 'service.dragBody'
+  | 'service.setLength'
+  | 'service.setKind'
+  | 'service.setSection'
+  | 'service.setOutsideDiameter'
+  | 'service.setWidth'
+  | 'service.setDepth'
+  | 'service.setVerticalExtent'
+  | 'service.rename'
+  | 'service.delete'
   | 'design.update'
   | 'design.setFootprint'
   | 'design.setOrigin'
@@ -1101,6 +1115,134 @@ export interface DeleteSkirting {
 }
 
 /**
+ * Which of a Service's vertical boxes is being set (#79 §4).
+ *
+ * A Run answers to `bottom`, `centre` and `top` — three readings of one centreline and one section —
+ * and a Riser to `bottom`, `height` and `top`, the three its own record holds. Each shape refuses the
+ * field the other owns, so no payload can ask a pipe for a Height it does not store or a Riser for a
+ * centre it would have to invent.
+ */
+export type ServiceVerticalField = 'bottom' | 'centre' | 'top' | 'height'
+
+/**
+ * A new Service (#79 §3): one straight run at one elevation, or one vertical riser at one point.
+ *
+ * The two shapes are one Intent because the tool is one tool and the Kind, the section and the size
+ * travel identically for both; what differs is the geometry and the vertical pair. A Run carries a
+ * `line` and a `centrelineElevation` and **only** the centreline — the `Bottom` and `Top` boxes the
+ * inspector shows are that number read against the section, converted here rather than stored, so a
+ * record can never hold two of the three and disagree with its own Diameter (#79 §4). A Riser carries
+ * a plan `point`, a `bottomElevation` and a `height`, because a Riser owns its height the way a Beam
+ * owns its Depth. The Drawing Layer comes from the tool's saved view, never the payload.
+ */
+export interface CreateService {
+  floorId: EntityId
+  shape: 'run' | 'riser'
+  kind: ServiceKind
+  /** Required for a Run, refused for a Riser. Millimetres, greater than the drawing tolerance apart. */
+  line?: { start: Point2; end: Point2 }
+  /** Required for a Riser, refused for a Run. */
+  point?: Point2
+  /** Required for a Run, refused for a Riser. Millimetres from the Floor Datum; negative is legal. */
+  centrelineElevation?: number
+  /** Required for a Riser, refused for a Run. Millimetres from the Floor Datum; negative is legal. */
+  bottomElevation?: number
+  /** Required for a Riser, refused for a Run. Millimetres, greater than 0. */
+  height?: number
+  /** Required for a Run, refused for a Riser. */
+  section?: ServiceSection
+  /** Round: the outside diameter. Rectangular Run: absent. Riser: always required, a Riser is round. */
+  outsideDiameter?: number
+  /** Rectangular: the Width. Round: absent. */
+  width?: number
+  /** Rectangular: the Depth. Round: absent. */
+  depth?: number
+  /** Absent says only `Service`; the plan label is the Kind code and the size, not this (#79 §Naming). */
+  label?: string
+}
+
+/** Move one end of a Run's centreline (#79 §4). A Riser has no end to move and refuses. */
+export interface DragServiceEndpoint {
+  serviceId: EntityId
+  end: 'start' | 'end'
+  to: Pt
+}
+
+/** Move a whole Service: a Run's two ends, or a Riser's plan point, by the same delta. */
+export interface DragServiceBody {
+  serviceId: EntityId
+  delta: Pt
+}
+
+/** The inspector's `Length`: one end stays while the other moves along the centreline it has. */
+export interface SetServiceLength {
+  serviceId: EntityId
+  /** Millimetres along the centreline. */
+  length: number
+  keepFixed: KeepFixed
+}
+
+/** The inspector's `Kind`. The Kind is never the element's name (#79 §Naming). */
+export interface SetServiceKind {
+  serviceId: EntityId
+  kind: ServiceKind
+}
+
+/**
+ * The inspector's `Section`: round or rectangular, a Run's only shape choice (#79 §4).
+ *
+ * The size does not convert — a Diameter and a Width-plus-Depth pair are different measurements of
+ * different things — so the new section starts at the same placeholder the tool starts a new Service
+ * at, and the centreline stays exactly where it was.
+ */
+export interface SetServiceSection {
+  serviceId: EntityId
+  section: ServiceSection
+}
+
+/** The inspector's `Diameter`: the outside diameter of a round Service, in millimetres. */
+export interface SetServiceOutsideDiameter {
+  serviceId: EntityId
+  outsideDiameter: number
+}
+
+/** The inspector's `Width`: one side of a rectangular Run's section. */
+export interface SetServiceWidth {
+  serviceId: EntityId
+  width: number
+}
+
+/** The inspector's `Depth`: the other side, the one that decides the Run's Bottom and Top. */
+export interface SetServiceDepth {
+  serviceId: EntityId
+  depth: number
+}
+
+/**
+ * One vertical box of a Service (#79 §4), in millimetres from the Floor Datum.
+ *
+ * A Run: `centre` is the centreline, `bottom` and `top` are that number read against half the section
+ * and are converted back to it. A Riser: `bottom` keeps the Height, `height` keeps the Bottom, and
+ * `top` keeps the Bottom by restating the Height — the rule a Beam follows (#77 §3).
+ */
+export interface SetServiceVerticalExtent {
+  serviceId: EntityId
+  field: ServiceVerticalField
+  value: number
+}
+
+/** The inspector's `Label`. An empty string clears it, which says only `Service`. */
+export interface RenameService {
+  serviceId: EntityId
+  label: string
+}
+
+/** Delete one Service. A Service hosts nothing and nothing refers to it (#79 §1). */
+export interface DeleteService {
+  serviceId: EntityId
+}
+
+/**
  * `Acknowledge warning` (#66 §4): the user's decision about one warning, recorded with the
  * note they gave for it.
  *
@@ -1493,6 +1635,18 @@ export interface IntentPayloads {
   'skirting.setVerticalExtent': SetSkirtingVerticalExtent & IntentTarget
   'skirting.rename': RenameSkirting & IntentTarget
   'skirting.delete': DeleteSkirting & IntentTarget
+  'service.create': CreateService & IntentTarget
+  'service.dragEndpoint': DragServiceEndpoint & IntentTarget
+  'service.dragBody': DragServiceBody & IntentTarget
+  'service.setLength': SetServiceLength & IntentTarget
+  'service.setKind': SetServiceKind & IntentTarget
+  'service.setSection': SetServiceSection & IntentTarget
+  'service.setOutsideDiameter': SetServiceOutsideDiameter & IntentTarget
+  'service.setWidth': SetServiceWidth & IntentTarget
+  'service.setDepth': SetServiceDepth & IntentTarget
+  'service.setVerticalExtent': SetServiceVerticalExtent & IntentTarget
+  'service.rename': RenameService & IntentTarget
+  'service.delete': DeleteService & IntentTarget
   'design.update': UpdateItemDesign
   'design.setFootprint': SetItemDesignFootprint
   'design.setOrigin': SetItemDesignOrigin
@@ -1581,6 +1735,8 @@ export type BeamIntent = Intent<Extract<IntentType, `beam.${string}`>>
 
 /** Every Skirting Intent (#78 §3), the same shape as {@link BeamIntent}. */
 export type SkirtingIntent = Intent<Extract<IntentType, `skirting.${string}`>>
+/** Every Service Intent (#79 §3, §4), the same shape as {@link BeamIntent}. */
+export type ServiceIntent = Intent<Extract<IntentType, `service.${string}`>>
 export type DesignIntent = Intent<Extract<IntentType, `design.${string}`>>
 export type FloorIntent = Intent<Extract<IntentType, `floor.${string}`>>
 /**
@@ -1681,6 +1837,19 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
   'skirting.setVerticalExtent': [],
   'skirting.rename': [],
   'skirting.delete': [],
+  // A Service is one record and nothing else: no host, no Junction, no carried entity (#79 §1).
+  'service.create': ['serviceId'],
+  'service.dragEndpoint': [],
+  'service.dragBody': [],
+  'service.setLength': [],
+  'service.setKind': [],
+  'service.setSection': [],
+  'service.setOutsideDiameter': [],
+  'service.setWidth': [],
+  'service.setDepth': [],
+  'service.setVerticalExtent': [],
+  'service.rename': [],
+  'service.delete': [],
   'design.update': [],
   'design.setFootprint': [],
   'design.setOrigin': [],
@@ -1875,6 +2044,8 @@ export type RejectionCode =
   | 'invalid-beam'
   /** A Skirting edit a Skirting cannot represent: an empty range, one off the end of its Wall, a zero Height or Thickness (#78 §1, §3). */
   | 'invalid-skirting'
+  /** A Service edit its shape cannot represent: a Riser asked for a Length, a Run asked for a Height, a section of zero size (#79 §1, §4). */
+  | 'invalid-service'
   /** A Room proposal that overlaps another Room, or a Wall edit a referenced Room edge cannot follow (#67 §7, §12). */
   | 'room-blocked'
   /** A Design Option the Project cannot hold: a name another Option already answers to (#69 §2). */

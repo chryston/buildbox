@@ -11,8 +11,8 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import fc from 'fast-check'
 import { beforeAll, describe, expect, it } from 'vitest'
-import type { Beam, CabinetItemDesign, CabinetNode, GenericItemDesign, ItemDesign, ItemFootprint, Opening, PlacedItem, Project, Room, Skirting, Wall, WallJunction } from '../domain'
-import { beamsOf, footprintSize, nextOpeningLabel, roomFaceCurve, roomOutlineAfterSlide, roomOutlinePath, roomSegments, skirtingOf, skirtingTop, validateProject } from '../domain'
+import type { Beam, CabinetItemDesign, CabinetNode, GenericItemDesign, ItemDesign, ItemFootprint, Opening, PlacedItem, Project, Room, Service, ServiceKind, Skirting, Wall, WallJunction } from '../domain'
+import { SERVICE_KINDS, beamsOf, footprintSize, nextOpeningLabel, roomFaceCurve, roomOutlineAfterSlide, roomOutlinePath, roomSegments, servicesOf, skirtingOf, skirtingTop, validateProject } from '../domain'
 import type { Preset } from '../geometry'
 import { DEG, edgeToFace, normaliseDeg, ontoFaceVector, pt, refLength, refPointAt } from '../geometry'
 import { arbProject } from '../domain/testing'
@@ -136,6 +136,8 @@ const roomList = (g: Gen): Room[] => g.project.existingModel.rooms
 const beamList = (g: Gen): Beam[] => beamsOf(g.project.existingModel)
 /** The Skirtings the survey records, for the same reason (#78). */
 const skirtingList = (g: Gen): Skirting[] => skirtingOf(g.project.existingModel)
+/** The Services the survey records, for the same reason (#79). */
+const serviceList = (g: Gen): Service[] => servicesOf(g.project.existingModel)
 /** The Walls some Room has an Edge lying on. */
 const referencedWalls = (g: Gen): Set<string> =>
   new Set(g.project.existingModel.rooms.flatMap((room) => room.wallFaceRefs.map((reference) => reference.wallId)))
@@ -1015,6 +1017,119 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
     const entry = pick(g, skirtingList(g))
     return entry === undefined ? null : intent('skirting.delete', { skirtingId: entry.id })
   },
+  // #79: a Run along a line long enough to be one, or a Riser at a point, on a Floor the Project has.
+  // The size is the `measure yours` placeholder the tool panel starts with, because that is what a
+  // first Service carries before anyone measures anything.
+  (g) => {
+    const floor = pick(g, g.project.floors)
+    if (floor === undefined) return null
+    const kind = pick(g, SERVICE_KINDS as readonly ServiceKind[])!
+    if (bool(g)) {
+      const start = pt(real(g, -4000, 4000), real(g, -4000, 4000))
+      const rectangular = bool(g)
+      return intent(
+        'service.create',
+        {
+          floorId: floor.id,
+          shape: 'run',
+          kind,
+          line: { start, end: pt(start.x + real(g, 300, 4000), start.y + real(g, -300, 300)) },
+          section: rectangular ? 'rectangular' : 'round',
+          centrelineElevation: real(g, -200, 2500),
+          ...(rectangular ? { width: pick(g, [40, 80, 150, 300])!, depth: pick(g, [40, 60, 100, 250])! } : { outsideDiameter: pick(g, [25, 50, 100, 200])! }),
+          ...(bool(g) ? { label: `Condensate ${int(g, 1, 60)}` } : {}),
+        },
+        g.ids(1),
+      )
+    }
+    return intent(
+      'service.create',
+      {
+        floorId: floor.id,
+        shape: 'riser',
+        kind,
+        point: pt(real(g, -4000, 4000), real(g, -4000, 4000)),
+        outsideDiameter: pick(g, [25, 50, 100, 200])!,
+        bottomElevation: real(g, -200, 1200),
+        height: pick(g, [300, 1000, 2600])!,
+      },
+      g.ids(1),
+    )
+  },
+  (g) => {
+    const service = pick(g, serviceList(g))
+    if (service === undefined || service.shape !== 'run') return null
+    const end = pick(g, ['start', 'end'] as const)!
+    const at = service.line[end]
+    return intent('service.dragEndpoint', {
+      serviceId: service.id,
+      end,
+      to: pt(at.x + real(g, -800, 800), at.y + real(g, -800, 800)),
+    })
+  },
+  (g) => {
+    const service = pick(g, serviceList(g))
+    return service === undefined
+      ? null
+      : intent('service.dragBody', { serviceId: service.id, delta: pt(real(g, -800, 800), real(g, -800, 800)) })
+  },
+  (g) => {
+    const service = pick(g, serviceList(g))
+    if (service === undefined || service.shape !== 'run') return null
+    return intent('service.setLength', {
+      serviceId: service.id,
+      length: Math.max(50, Math.hypot(service.line.end.x - service.line.start.x, service.line.end.y - service.line.start.y) + real(g, -600, 600)),
+      keepFixed: pick(g, ['start', 'end'] as const)!,
+    })
+  },
+  (g) => {
+    const service = pick(g, serviceList(g))
+    return service === undefined
+      ? null
+      : intent('service.setKind', { serviceId: service.id, kind: pick(g, SERVICE_KINDS as readonly ServiceKind[])! })
+  },
+  (g) => {
+    const service = pick(g, serviceList(g))
+    return service === undefined || service.shape !== 'run'
+      ? null
+      : intent('service.setSection', { serviceId: service.id, section: service.section === 'round' ? 'rectangular' : 'round' })
+  },
+  (g) => {
+    const service = pick(g, serviceList(g))
+    return service === undefined
+      ? null
+      : intent('service.setOutsideDiameter', { serviceId: service.id, outsideDiameter: pick(g, [25, 50, 100, 200])! })
+  },
+  (g) => {
+    const service = pick(g, serviceList(g))
+    return service === undefined || service.shape !== 'run' || service.section !== 'rectangular'
+      ? null
+      : intent('service.setWidth', { serviceId: service.id, width: pick(g, [40, 80, 150, 300])! })
+  },
+  (g) => {
+    const service = pick(g, serviceList(g))
+    return service === undefined || service.shape !== 'run' || service.section !== 'rectangular'
+      ? null
+      : intent('service.setDepth', { serviceId: service.id, depth: pick(g, [40, 60, 100, 250])! })
+  },
+  // #79 §4: the vertical boxes over each shape's own pair of elevations, which never move the plan.
+  (g) => {
+    const service = pick(g, serviceList(g))
+    if (service === undefined) return null
+    return intent('service.setVerticalExtent', {
+      serviceId: service.id,
+      field: pick(g, service.shape === 'run' ? (['bottom', 'centre', 'top'] as const) : (['bottom', 'height', 'top'] as const))!,
+      value: real(g, -200, 2800),
+    })
+  },
+  (g) => {
+    const service = pick(g, serviceList(g))
+    return service === undefined ? null : intent('service.rename', { serviceId: service.id, label: `Condensate ${int(g, 1, 60)}` })
+  },
+  (g) => {
+    const service = pick(g, serviceList(g))
+    return service === undefined ? null : intent('service.delete', { serviceId: service.id })
+  },
   // #66: a subject that exists, because an acknowledgement of a warning about something that
   // is not there is pruned by the same step that recorded it, and would never be seen. Any
   // entity will do — the handler addresses a warning by its key, not by what the key names.
@@ -1217,6 +1332,10 @@ function seedRarePreconditions(): void {
   const skirtingIds = g.ids(1)
   const skirtingOtherIds = g.ids(1)
   const skirtingId = skirtingIds[0]!
+  const serviceIds = g.ids(1)
+  const serviceRiserIds = g.ids(1)
+  const serviceId = serviceIds[0]!
+  const serviceRiserId = serviceRiserIds[0]!
   const wall: WallDraft = {
     line: { kind: 'line', start: pt(0, 0), end: pt(4000, 0) },
     thickness: 100,
@@ -1292,6 +1411,58 @@ function seedRarePreconditions(): void {
     intent('skirting.duplicateOtherSide', { skirtingId: skirtingId }, skirtingOtherIds),
     intent('skirting.delete', { skirtingId: skirtingOtherIds[0]! }),
     intent('skirting.delete', { skirtingId }),
+    // #79: a Service needs nothing but a Floor, so a random sequence reaches most of this family —
+    // but not the rectangular-only boxes, which only exist once someone has switched the section.
+    // Walk the whole tool and inspector once, in the order the boxes appear on screen.
+    intent(
+      'service.create',
+      {
+        floorId,
+        shape: 'run' as const,
+        kind: 'water' as const,
+        line: { start: pt(0, 600), end: pt(3000, 600) },
+        section: 'round' as const,
+        centrelineElevation: 2200,
+        outsideDiameter: 50,
+        label: 'Condensate',
+        target: { designOptionId: null, viewId: null },
+      },
+      serviceIds,
+    ),
+    intent('service.dragEndpoint', { serviceId: serviceId, end: 'end' as const, to: pt(3400, 700) }),
+    intent('service.dragBody', { serviceId: serviceId, delta: pt(-200, 100) }),
+    intent('service.setLength', { serviceId: serviceId, length: 2400, keepFixed: 'start' as const }),
+    intent('service.setKind', { serviceId: serviceId, kind: 'air_con' as const }),
+    intent('service.setOutsideDiameter', { serviceId: serviceId, outsideDiameter: 100 }),
+    intent('service.setSection', { serviceId: serviceId, section: 'rectangular' as const }),
+    intent('service.setWidth', { serviceId: serviceId, width: 150 }),
+    intent('service.setDepth', { serviceId: serviceId, depth: 75 }),
+    intent('service.setVerticalExtent', { serviceId: serviceId, field: 'centre' as const, value: 2400 }),
+    intent('service.setVerticalExtent', { serviceId: serviceId, field: 'bottom' as const, value: 2300 }),
+    intent('service.setVerticalExtent', { serviceId: serviceId, field: 'top' as const, value: 2500 }),
+    intent('service.rename', { serviceId: serviceId, label: 'Condensate run' }),
+    intent(
+      'service.create',
+      {
+        floorId,
+        shape: 'riser' as const,
+        kind: 'drain' as const,
+        point: pt(3400, 2200),
+        outsideDiameter: 100,
+        bottomElevation: 0,
+        height: 2600,
+        target: { designOptionId: null, viewId: null },
+      },
+      serviceRiserIds,
+    ),
+    intent('service.dragBody', { serviceId: serviceRiserId, delta: pt(50, -50) }),
+    intent('service.setOutsideDiameter', { serviceId: serviceRiserId, outsideDiameter: 150 }),
+    intent('service.setVerticalExtent', { serviceId: serviceRiserId, field: 'bottom' as const, value: 100 }),
+    intent('service.setVerticalExtent', { serviceId: serviceRiserId, field: 'height' as const, value: 2000 }),
+    intent('service.setVerticalExtent', { serviceId: serviceRiserId, field: 'top' as const, value: 2300 }),
+    intent('service.rename', { serviceId: serviceRiserId, label: 'Stack' }),
+    intent('service.delete', { serviceId: serviceRiserId }),
+    intent('service.delete', { serviceId: serviceId }),
   ]
   for (const next of steps) {
     const tally = seen.get(next.type) ?? { applied: 0, refused: 0 }

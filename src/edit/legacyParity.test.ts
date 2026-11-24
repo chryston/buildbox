@@ -156,6 +156,20 @@ const EXTRA_INTENTS = [
   'skirting.setVerticalExtent',
   'skirting.rename',
   'skirting.delete',
+  // #79: the legacy app had no Services either — a pipe or a duct was a note on the services drawing,
+  // never an element — so there is no store action any of these maps to.
+  'service.create',
+  'service.dragEndpoint',
+  'service.dragBody',
+  'service.setLength',
+  'service.setKind',
+  'service.setSection',
+  'service.setOutsideDiameter',
+  'service.setWidth',
+  'service.setDepth',
+  'service.setVerticalExtent',
+  'service.rename',
+  'service.delete',
   // #66: the legacy app had no warnings at all — an overlap was something the drafter found
   // by eye on the printed plan — so there is no store action either of these maps to.
   'warning.acknowledge',
