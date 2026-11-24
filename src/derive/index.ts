@@ -75,7 +75,7 @@ export {
   affineTranslate,
 } from './affine'
 export type { Affine } from './affine'
-export { effectiveFloor, effectiveItemDetail } from './effective'
+export { effectiveFloor, effectiveItemDetail, placementLabels } from './effective'
 export type {
   DerivedFloor,
   DerivedItemDetail,
@@ -142,6 +142,7 @@ export {
   SNAP_ACQUISITION_PX,
   SNAP_PRIORITY,
   TOLERANCE_MM,
+  applyTransform,
   cornerRadiiOf,
   directionDeg,
   distance,
@@ -160,6 +161,7 @@ export {
   openingEnd,
   presetInBox,
   presetParametersValid,
+  projectElevationOutline,
   pt,
   refDistance,
   refParamAt,
@@ -169,6 +171,7 @@ export {
   segmentStart,
   setFilletRadius,
   toValidationProblems,
+  transformSegment,
   usableIntervals,
   validateLoop,
   verticalBodySnap,
@@ -185,6 +188,7 @@ export type {
   EditResult,
   EllipticalArcChange,
   EllipticalArcSegment,
+  ElevationFrame,
   GeometryProblem,
   GeometryProblemCode,
   KeepFixed,
@@ -200,6 +204,7 @@ export type {
   Snap,
   SnapCandidate,
   SnapKind,
+  Transform,
   UsableGap,
   UsableInterval,
   VerticalBodySnap,

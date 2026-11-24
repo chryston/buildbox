@@ -652,6 +652,31 @@ export const STRINGS = {
     `Change design height: ${name} ${from} → ${to}`,
   /** The caption under the Clearance Envelope group: how far the one envelope reaches (#76 §4). */
   clearanceSharedBy: (n: number): string => `shared by ${n} placements`,
+  // The shared-height preview panel (#76 §1): it opens inside the inspector, changes nothing
+  // until `Apply`, and its table says what the new height would do to every placement.
+  editSharedDesign: 'Edit shared design…',
+  editSharedDesignTitle: (name: string): string => `Edit shared design · ${name}`,
+  designHeightField: 'Design height',
+  designOptionColumn: 'Design Option',
+  existingModel: 'Existing Model',
+  currentTop: 'Current top',
+  newTop: 'New top',
+  warningChange: 'Warning change',
+  warningChangeNew: '+ new',
+  warningChangeCleared: '− cleared',
+  forkOnePlacement: 'Different height for one placement?',
+  applyToPlacedItems: (n: number): string => `Apply to ${plural(n, 'Placed Item', 'Placed Items')}`,
+  cancelChangeNothing: 'Cancel — change nothing',
+  // The Clearance Envelope group (#76 §4): two ways in, three numbers, one removal — and no
+  // number offered as a default, because the measure is the person's own.
+  clearanceEnvelope: 'Clearance Envelope',
+  addClearanceEnvelope: 'Add Clearance Envelope',
+  zoneOffOneEdge: 'Zone off one edge',
+  customPathEditor: 'Custom Path…',
+  depthPlaceholder: 'measure yours (e.g. door swing)',
+  clearanceBottom: 'Bottom',
+  edgeChoice: (index: number, length: string): string => `Edge ${String(index)} — ${length}`,
+  arcEdge: (index: number): string => `Edge ${String(index)} (arc, not pickable)`,
   // The Plan View card (#44, #66 §17).
   planImageUncalibrated: 'Plan Image not calibrated',
   planImageScale: (perPx: string, unit: string): string => `Plan Image scale: 1 px = ${perPx} ${unit}`,

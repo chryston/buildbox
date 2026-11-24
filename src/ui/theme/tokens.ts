@@ -93,6 +93,7 @@ export const TOKEN = {
   previewStroke: "--bb-preview-stroke",
   previewBadgeBg: "--bb-preview-badge-bg",
   previewBadgeText: "--bb-preview-badge-text",
+  clearanceStroke: "--bb-clearance-stroke",
   /* Monogram (the Trash view, #51) */
   monogramBg: "--bb-monogram-bg",
   monogramText: "--bb-monogram-text",
