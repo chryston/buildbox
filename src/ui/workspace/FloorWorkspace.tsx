@@ -67,7 +67,7 @@ import { FacePickLayer } from './rooms/FacePickLayer'
 import type { PathDraft } from './shape/draftPath'
 import { mergeableNeighbour } from './wall/wallDraft'
 import type { WallChainDraft, WallDraft } from './wall/wallDraft'
-import { fitRect, fitViewport } from './viewport'
+import { fitRect, planFitViewport } from './viewport'
 import type { Viewport } from './viewport'
 import { WarningStrip } from './warnings/WarningStrip'
 import { subjectBoxes, warningBox } from './warnings/locateWarning'
@@ -724,7 +724,12 @@ export function FloorWorkspace(): ReactNode {
     if (el === null) return
     const { width, height } = el.getBoundingClientRect()
     if (width <= 0 || height <= 0) return
-    setViewport(fitViewport(width, height, image?.widthMm ?? 800, image?.heightMm ?? 600))
+    setViewport(planFitViewport(
+      width,
+      height,
+      image === null ? null : { w: image.widthMm, h: image.heightMm },
+      derivedFloor?.bounds ?? null,
+    ))
   }
 
   /**

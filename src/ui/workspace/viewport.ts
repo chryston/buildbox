@@ -6,6 +6,8 @@
  * `matrix(zoom,0,0,zoom,panX,panY)`, so `pan` is where the Floor's origin lands in host
  * pixels. That is the shape `ViewportState` has always had in the device-local cache.
  */
+import type { Rect } from '../../derive'
+
 export interface Viewport {
   zoom: number
   panX: number
@@ -90,6 +92,30 @@ export function fitRect(hostW: number, hostH: number, box: { x: number; y: numbe
     panX: (hostW - w * zoom) / 2 - box.x * zoom,
     panY: (hostH - h * zoom) / 2 - box.y * zoom,
   }
+}
+
+/** The box an image-less Floor with nothing on it is fitted to, as the legacy canvas did. */
+export const EMPTY_FLOOR_MM = { w: 800, h: 600 }
+
+/**
+ * The viewport of `Fit` and of the Plan View's first frame (#76).
+ *
+ * With a Plan Image the picture is the image's own millimetre box, anchored at the Floor's
+ * origin as the legacy canvas anchored it. Without one the content is the Floor's derived
+ * bounds — every footprint there is — fitted by its real corner, not by a phantom 800 × 600
+ * box at the origin: a 4 m floor fitted to a placeholder shows its top-left corner at 1× and
+ * hides everything a person came to see. Only an empty Floor with no image keeps the
+ * placeholder.
+ */
+export const planFitViewport = (
+  hostW: number,
+  hostH: number,
+  imageMm: { w: number, h: number } | null,
+  bounds: Rect | null,
+): Viewport => {
+  if (imageMm !== null) return fitViewport(hostW, hostH, imageMm.w, imageMm.h)
+  if (bounds !== null) return fitRect(hostW, hostH, bounds, FIT_PADDING)
+  return fitViewport(hostW, hostH, EMPTY_FLOOR_MM.w, EMPTY_FLOOR_MM.h)
 }
 
 /**
