@@ -94,6 +94,7 @@ function CommentEditor({
   onReopen,
   onDelete,
   onEdit,
+  focusTitle = false,
 }: {
   project: Project
   comment: Comment
@@ -102,6 +103,8 @@ function CommentEditor({
   onReopen(commentId: EntityId): void
   onDelete(commentId: EntityId): void
   onEdit(commentId: EntityId, patch: { title?: string; body?: string; priority?: CommentPriority; scope?: CommentScope }): void
+  /** Focus the title and select its text — set for a note that has just been created. */
+  focusTitle?: boolean
 }): ReactNode {
   const [title, setTitle] = useState(comment.title)
   const [body, setBody] = useState(comment.body)
@@ -110,6 +113,13 @@ function CommentEditor({
     setTitle(comment.title)
     setBody(comment.body)
   }, [comment.id, comment.title, comment.body])
+  // A note that has just been created is titled by the tool, not by the person. The keyboard goes to
+  // the title with the text selected, so the first keystroke replaces it (#80 §9, §10).
+  useEffect(() => {
+    if (!focusTitle) return
+    titleRef.current?.focus()
+    titleRef.current?.select()
+  }, [focusTitle])
 
   const commitTitle = (): void => {
     const next = title.trim()
@@ -293,6 +303,7 @@ export function NotesPanel(props: NotesPanelProps): ReactNode {
   const { project, view, now, onResolve, onReopen, onDelete, onEdit } = props
   const panelOpen = useNotesSession((state) => state.panelOpen)
   const selectedCommentId = useNotesSession((state) => state.selectedCommentId)
+  const titleToFocus = useNotesSession((state) => state.titleToFocus)
   const query = useNotesSession((state) => state.query)
   const currentContext = useNotesSession((state) => state.currentContext)
   const status = useNotesSession((state) => state.status)
@@ -408,6 +419,7 @@ export function NotesPanel(props: NotesPanelProps): ReactNode {
           onReopen={onReopen}
           onDelete={onDelete}
           onEdit={onEdit}
+          focusTitle={titleToFocus === selected.id}
         />
       )}
     </section>

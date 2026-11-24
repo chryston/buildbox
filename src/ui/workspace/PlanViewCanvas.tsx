@@ -76,6 +76,8 @@ export interface PlanViewCanvasProps {
    * its Opening here (#65 criterion 1).
    */
   onCanvasClick?: (point: Point2) => void
+  /** A click on an entity while the `✎ Comment` tool is in hand (#80 §9). */
+  onCommentEntity?: (entityId: string) => void
   dragPreview: ItemDragPreview | null
   onDragPreview: (preview: ItemDragPreview | null) => void
   /** The pointer came up after a real move: commit the whole drag as one Intent. */
@@ -241,7 +243,7 @@ export interface PlanViewCanvasProps {
 export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   const {
     hostRef, svgRef, floor, showPlanImage, imageSrc, viewport, onViewport,
-    tool, selection, onSelect, onCursorChange, onCanvasClick, dragPreview, onDragPreview, onMoveItem, onRotateItem,
+    tool, selection, onSelect, onCursorChange, onCanvasClick, onCommentEntity, dragPreview, onDragPreview, onMoveItem, onRotateItem,
     editLocked = false,
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
     angleSnap, overlay, htmlOverlay, screenOverlay, walls, beams = null, selectedBeamId = null, skirting = null, selectedSkirtingId = null, services = null, selectedServiceId = null, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
@@ -381,10 +383,16 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       if (renovation !== null) renovation.onCycle?.(null, [])
       onSelect(null)
     }
+    if (tool === 'comment') {
+      // Empty Floor: the note is anchored to the point aimed at (#80 §9).
+      const at = toFloor(event.clientX, event.clientY)
+      if (at !== null) onCanvasClick?.(at)
+      return
+    }
     if (tool !== 'opening') return
     const at = toFloor(event.clientX, event.clientY)
     if (at !== null) onCanvasClick?.(at)
-  }, [overlay, htmlOverlay, panMoved, tool, onSelect, onCanvasClick, toFloor])
+  }, [overlay, htmlOverlay, panMoved, tool, onSelect, onCanvasClick, onCommentEntity, toFloor])
 
   function startItemDrag(id: string): void {
     const item = floor.placements.find((p) => p.id === id)
@@ -580,6 +588,14 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
    * selections are four callbacks. Flag-off this is what the canvas already did per entity type.
    */
   function selectById(id: string): void {
+    // The Comment tool in hand: a click on an entity anchors the note to that entity and selects
+    // nothing, because the note is the thing being made, not a selection (#80 §9). The entity is the
+    // one the cycle just resolved under the pointer, so a stack of overlapping content anchors to
+    // the same thing a click would have selected.
+    if (tool === 'comment') {
+      onCommentEntity?.(id)
+      return
+    }
     if (drawnWalls?.walls.some((wall) => wall.id === id) === true) onSelectWall?.(id)
     else if (drawnOpenings.some((host) => host.symbols.some((symbol) => symbol.id === id))) onSelectOpening?.(id)
     else if (drawnRooms?.rooms.some((room) => room.id === id) === true) onSelectRoom?.(id)

@@ -41,6 +41,15 @@ export interface NotesSessionSnapshot {
   /** Turn the overlay off, which is what clearing the focus does too (§7.6). */
   clearFocus(): void
   select(commentId: EntityId | null): void
+  /**
+   * The note a tool or a button has just created: selected, and its title is handed to the keyboard
+   * with the text selected, so the first keystroke replaces `New comment` instead of appending to it
+   * (#80 §9, §10). `null` once the editor has taken the focus.
+   */
+  selectNew(commentId: EntityId): void
+  /** The note whose title the editor should focus and select, or `null`. */
+  titleToFocus: EntityId | null
+  clearTitleFocus(): void
   setQuery(query: string): void
   setCurrentContext(on: boolean): void
   setStatus(status: NotesStatusFilter): void
@@ -58,6 +67,7 @@ const DEFAULTS = {
   panelOpen: true,
   overlayOn: false,
   selectedCommentId: null,
+  titleToFocus: null,
   query: '',
   currentContext: true,
   status: 'open' as NotesStatusFilter,
@@ -71,6 +81,8 @@ export const notesSessionStore = createStore<NotesSessionSnapshot>()((set) => ({
   setOverlayOn: (overlayOn) => set({ overlayOn, selectedCommentId: null }),
   clearFocus: () => set({ selectedCommentId: null }),
   select: (selectedCommentId) => set({ selectedCommentId }),
+  selectNew: (commentId) => set({ selectedCommentId: commentId, titleToFocus: commentId, panelOpen: true }),
+  clearTitleFocus: () => set({ titleToFocus: null }),
   setQuery: (query) => set({ query }),
   setCurrentContext: (currentContext) => set({ currentContext }),
   setStatus: (status) => set({ status }),

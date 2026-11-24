@@ -21,8 +21,8 @@ import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockF
 import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings, drawElevationView } from '../../drawing'
 import type { BadgeSubject, LayerGates, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
-import type { CommentAnchor, ElevationView, Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
-import { DEFAULT_COMMENT_PRIORITY, designOptionsOf, duplicateCommentIds, elevationViewsOf, allServices, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf } from '../../domain'
+import type { CommentAnchor, EntityId, ElevationView, Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
+import { DEFAULT_COMMENT_PRIORITY, cabinetFeatureIds, DEFAULT_FEATURE_T, designOptionsOf, duplicateCommentIds, elevationViewsOf, isLinearFeature, ownerKindOfDesign, registeredFeatureIds, allServices, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
@@ -140,6 +140,7 @@ import type { RenovationInspectorAction, RenovationInspectorLayer, RenovationIns
 import { canPasteHere, pasteClipboardStore, usePasteClipboard } from './pasteClipboard'
 import { RENOVATION_STRINGS } from '../strings/renovation'
 import { COMMENT_STRINGS } from '../strings/comments'
+import { commentFeatureLabel } from './notes/anchorLabel'
 import { FIELDS_UNLOCKED, FieldsLockedContext } from './fieldsLock'
 import type { FieldsLock } from './fieldsLock'
 import { ForkDesignDialog, NewItemDialog } from './ItemDialogs'
@@ -1207,12 +1208,10 @@ export function FloorWorkspace(): ReactNode {
    */
   const clickOnCanvas = (at: Pt): void => {
     if (tool === 'comment') {
-      // #80 §9: an entity under the cursor anchors the note to that entity; a click on empty Floor
-      // anchors it to the point aimed at, in Floor millimetres. The hit target is resolved by the
-      // canvas's own hit list, so the same screen-space minimum that makes a Wall face clickable makes
-      // it anchorable.
-      const hit = commentAnchorAt(at)
-      if (hit !== null) placeComment(hit)
+      // Empty Floor with the tool in hand: the note is anchored to the point aimed at, in Floor
+      // millimetres (#80 §9). An entity under the cursor never reaches here — the canvas routes it
+      // to `onCommentEntity` with the entity the cycle resolved.
+      placeComment({ kind: 'floor_point', floorId: floorId ?? '', point: at })
       return
     }
     if (tool !== 'opening') return
@@ -1240,17 +1239,115 @@ export function FloorWorkspace(): ReactNode {
     )
     sendIntent(intent)
     const commentId = intent.ids[0] ?? null
-    if (commentId !== null) notesSessionStore.getState().select(commentId)
+    if (commentId !== null) notesSessionStore.getState().selectNew(commentId)
     setTool('select')
   }
 
-  /** The Anchor a click at this Floor point takes: the entity under the cursor, else the point. */
-  const commentAnchorAt = (at: Pt): CommentAnchor | null => {
-    if (floorId === null) return null
-    const selected = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? skirtingSelection ?? serviceSelection ?? selection
-    if (selected !== null) return { kind: 'entity', entityId: selected }
-    return { kind: 'floor_point', floorId, point: at }
-  }
+  /**
+   * The inspector's Comments section (#80 §8). One heading per thing the notes are anchored to, and
+   * one button per subject a note could still be started on — including every registered feature of
+   * the subject, because a note about a Wall's Kitchen side face is a different note from one about
+   * the Wall. A linear feature is anchored at its midpoint, the one place on it that is on the
+   * feature; a note about a whole face is a feature Anchor at `t = 0.5`, not an entity Anchor.
+   */
+  const notesInspectorSection: ReactNode = (() => {
+    if (selection === null && wallSelection === null && openingSelection === null && roomSelection === null
+      && beamSelection === null && skirtingSelection === null && serviceSelection === null) return null
+    // The subject the section speaks about: an entity Anchor's id, the Item Design whose features are
+    // offered alongside it, and the words the headings and buttons take.
+    const subject =
+      wallSelection !== null ? { entityId: wallSelection, designId: null as EntityId | null, heading: COMMENT_STRINGS.onThisWall, add: COMMENT_STRINGS.commentOnThisWall, kind: null as string | null }
+        : openingSelection !== null ? { entityId: openingSelection, designId: null, heading: null, add: null, kind: COMMENT_STRINGS.kindOpening }
+          : roomSelection !== null ? { entityId: roomSelection, designId: null, heading: COMMENT_STRINGS.onThisRoom, add: COMMENT_STRINGS.commentOnThisRoom, kind: null }
+            : beamSelection !== null ? { entityId: beamSelection, designId: null, heading: null, add: null, kind: COMMENT_STRINGS.kindBeam }
+              : skirtingSelection !== null ? { entityId: skirtingSelection, designId: null, heading: null, add: null, kind: COMMENT_STRINGS.kindSkirting }
+                : serviceSelection !== null ? { entityId: serviceSelection, designId: null, heading: null, add: null, kind: COMMENT_STRINGS.kindService }
+                  : (() => {
+                      const placed = project.existingModel.placedItems.find((row) => row.id === selection)
+                      return { entityId: selection ?? '', designId: placed?.itemDesignId ?? null, heading: COMMENT_STRINGS.onThisPlacement, add: COMMENT_STRINGS.commentOnThisPlacement, kind: null }
+                    })()
+    const onEntity = project.comments.filter((comment) => comment.anchor.kind === 'entity' && comment.anchor.entityId === subject.entityId)
+    const design = subject.designId === null ? undefined : project.itemDesigns.find((row) => row.id === subject.designId)
+    const onDesign = design === undefined ? [] : project.comments.filter(
+      (comment) => (comment.anchor.kind === 'item_design' && comment.anchor.itemDesignId === design.id)
+        || (comment.anchor.kind === 'feature' && comment.anchor.ownerId === design.id),
+    )
+    // The features a note can be pinned to: the registered list for the owner's kind, or the Cabinet
+    // Item Design's own node ids, which are data rather than a fixed list.
+    const featureIds: readonly string[] = design === undefined
+      ? (wallSelection !== null ? registeredFeatureIds('wall') ?? [] : [])
+      : design.kind === 'cabinet' ? cabinetFeatureIds(design.construction.root) : registeredFeatureIds(ownerKindOfDesign(design)) ?? []
+    const selectNote = (commentId: EntityId): void => notesSessionStore.getState().select(commentId)
+    return (
+      <div className="bb-inspector-notes" data-testid="inspector-notes">
+        <div className="bb-inspector-notes-heading" data-testid="inspector-notes-heading">
+          {subject.heading !== null
+            ? subject.heading(onEntity.length)
+            : subject.kind !== null
+              ? COMMENT_STRINGS.onThisKind(subject.kind, onEntity.length)
+              : null}
+        </div>
+        {onEntity.map((comment) => (
+          <button
+            key={comment.id}
+            type="button"
+            className="bb-inspector-note-row"
+            data-testid={`inspector-note-${comment.reference}`}
+            onClick={() => selectNote(comment.id)}
+          >
+            {comment.reference} · {comment.title}
+          </button>
+        ))}
+        {subject.add !== null && (
+          <button
+            type="button"
+            className="bb-workspace-tool-button"
+            data-testid="inspector-comment-on-entity"
+            onClick={() => placeComment({ kind: 'entity', entityId: subject.entityId })}
+          >
+            {subject.add}
+          </button>
+        )}
+        {featureIds.map((featureId) => (
+          <button
+            key={featureId}
+            type="button"
+            className="bb-workspace-tool-button"
+            data-testid={`inspector-comment-on-feature-${featureId}`}
+            onClick={() => placeComment({ kind: 'feature', ownerId: subject.designId ?? subject.entityId, featureId, ...(isLinearFeature(featureId) ? { t: DEFAULT_FEATURE_T } : {}) })}
+          >
+            {COMMENT_STRINGS.commentOnFeature(commentFeatureLabel(project, subject.designId ?? subject.entityId, featureId))}
+          </button>
+        ))}
+        {design !== undefined && (
+          <>
+            <div className="bb-inspector-notes-heading" data-testid="inspector-notes-design-heading">
+              {COMMENT_STRINGS.onItemDesign(design.name, onDesign.length)}
+            </div>
+            {onDesign.map((comment) => (
+              <button
+                key={comment.id}
+                type="button"
+                className="bb-inspector-note-row"
+                data-testid={`inspector-design-note-${comment.reference}`}
+                onClick={() => selectNote(comment.id)}
+              >
+                {comment.reference} · {comment.title}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="bb-workspace-tool-button"
+              data-testid="inspector-comment-on-design"
+              onClick={() => placeComment({ kind: 'item_design', itemDesignId: design.id })}
+            >
+              {COMMENT_STRINGS.commentOnItemDesign}
+            </button>
+          </>
+        )}
+      </div>
+    )
+  })()
 
   /** The ghost for where the pointer stands now, in the shape the Wall list takes (#65 §10). */
   const openingAimNow = aimAtOpening(openingCursor)
@@ -3288,6 +3385,7 @@ export function FloorWorkspace(): ReactNode {
             ? selectedWall === null
             ? <SelectionInspector
             item={selected}
+            notes={notesInspectorSection}
             renovationAction={renovationAction(selection ?? '')}
             bounds={selection === null || derivedFloor === null
               ? null
@@ -3487,6 +3585,7 @@ export function FloorWorkspace(): ReactNode {
               onSelect={select}
               onCursorChange={setOpeningCursor}
               onCanvasClick={clickOnCanvas}
+              onCommentEntity={(entityId) => placeComment({ kind: 'entity', entityId })}
               warningSubjects={warningSubjects}
               screenOverlay={planPreviewOutlines.length === 0 && planClearanceOutlines.length === 0
                 ? undefined

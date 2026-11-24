@@ -485,6 +485,32 @@
 
 /* ---------------------------------------------------------------- notes */
 
+/* The inspector's Comments section: a heading per subject, a quiet row per note, and the buttons that
+   start one. The rows are buttons because selecting a row reveals its pin (#80 §8). */
+.bb-inspector-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--bb-border-header);
+}
+
+.bb-inspector-notes-heading {
+  color: var(--bb-text-muted);
+  font-size: var(--bb-size-badge);
+}
+
+.bb-inspector-note-row {
+  padding: 3px 6px;
+  border: 0;
+  border-radius: var(--bb-note-row-radius);
+  background: var(--bb-bg-inset);
+  color: var(--bb-text);
+  text-align: left;
+  font-size: var(--bb-size-badge);
+}
+
 /* The hint pill a tool in hand floats over the canvas: the words the tool needs to be usable, and the
    one way out that does not need the keyboard. */
 .bb-workspace-tool-hint {

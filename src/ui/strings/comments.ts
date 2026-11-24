@@ -91,4 +91,12 @@ export const COMMENT_STRINGS = {
   commentOnThisKind: (kind: string): string => `+ Comment on this ${kind}`,
   commentOnItemDesign: '+ Comment on Item Design',
   commentOnFeature: (label: string): string => `+ Comment on ${label}`,
+  /**
+   * The word a note's heading uses for an entity that has no heading of its own. `Wall`, `Room` and a
+   * Placed Item have their own sentence above; these four are named by what they are.
+   */
+  kindOpening: 'Opening',
+  kindBeam: 'Beam',
+  kindSkirting: 'Skirting',
+  kindService: 'Service',
 } as const
