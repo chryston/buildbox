@@ -22,7 +22,7 @@ import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } fro
 import { wallOpenings, drawElevationView } from '../../drawing'
 import type { BadgeSubject, LayerGates, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
 import type { ElevationView, Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
-import { designOptionsOf, elevationViewsOf, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf } from '../../domain'
+import { designOptionsOf, elevationViewsOf, allServices, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
@@ -1918,6 +1918,18 @@ export function FloorWorkspace(): ReactNode {
     // moves the strip and keeps its height, which is the rule the inspector's `Bottom` box follows too
     // (#78 §4).
     else if (row.kind === 'skirting') send('skirting.setVerticalExtent', { skirtingId: row.id, field, value })
+    // A Run's `Bottom`/`Top` handles move it: the size never changes and `centrelineElevation` is what
+    // is written, which is the rule the inspector follows too (#79 §5, behaviour 10). A Riser owns a
+    // Bottom and a Height like a Skirting does.
+    else if (row.kind === 'service')
+      send('service.setVerticalExtent', {
+        serviceId: row.id,
+        // A body drag reports the edge it moved as `base`, which is a Placed Item's word for it. A
+        // Service's own field is `bottom`: for a Riser that is the stored Bottom, and for a Run it is
+        // a position field, which moves the pipe and keeps its section (#79 §5, behaviours 2 and 10).
+        field: field === 'base' ? 'bottom' : field,
+        value,
+      })
     // A Placed Item has no height of its own and no bottom handle, so the only fields that can reach
     // this branch are `base` and `top` — `elevationHandleKinds` is what guarantees it — and the handler
     // reads a `top` back as the base the design's height lands under.
@@ -3586,7 +3598,7 @@ export function FloorWorkspace(): ReactNode {
                             ?.name ?? null
                         }
                         display={viewRenovationDisplay(elevationView)}
-                        selectedIds={[selection, wallSelection, openingSelection, beamSelection]
+                        selectedIds={[selection, wallSelection, openingSelection, beamSelection, serviceSelection]
                           .filter((id): id is string => id !== null)}
                         // The same routing the Plan View gives a click: a Wall, an Opening and a Placed
                         // Item are three different selections, and the inspector edits the one it is
@@ -3603,6 +3615,11 @@ export function FloorWorkspace(): ReactNode {
                             selectBeam(id)
                           } else if (skirtingOf(project.existingModel).some((strip) => strip.id === id)) {
                             selectSkirting(id)
+                          } else if (allServices(project).some((service) => service.id === id)) {
+                            // A Service is its own record in the Section too: picking it there selects it
+                            // everywhere, which is what makes a vertical drag answer to the inspector
+                            // and the warnings at the same moment (#79 §6, criterion 17).
+                            selectService(id)
                           } else {
                             select(id)
                           }
