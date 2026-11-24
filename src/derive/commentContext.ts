@@ -14,7 +14,7 @@
  */
 import { effectiveModel } from './effectiveModel'
 import type { EffectiveModel } from './effectiveModel'
-import type { Comment, CommentAnchor, CommentScope, EntityId, Project, ProposedModel } from '../domain'
+import type { Comment, CommentScope, EntityId, Project, ProposedModel, SavedViewSettings } from '../domain'
 import { CHOOSING_ANCHOR_KINDS, COMMENT_SCOPE_ALL, compareCommentReferences, isCommentScopeAll, viewDesignOptionId } from '../domain'
 
 /** Where a Comment's work stands, found by looking the Anchor's subject up. */
@@ -85,7 +85,8 @@ export function effectiveCommentScope(project: Project, comment: Comment): Effec
     if (scope === undefined || isCommentScopeAll(scope ?? COMMENT_SCOPE_ALL)) return { kind: 'all' }
     return { kind: 'option', designOptionId: scope, inherited: false }
   }
-  const subjectId = anchor.kind === 'entity' ? anchor.entityId : anchor.ownerId
+  const subjectId = anchor.kind === 'entity' ? anchor.entityId : anchor.kind === 'feature' ? anchor.ownerId : null
+  if (subjectId === null) return { kind: 'all' }
   const located = locateSubject(project, subjectId, null)
   if (located === null) return { kind: 'all' }
   return located.optionId === null
@@ -101,9 +102,9 @@ export function effectiveCommentScope(project: Project, comment: Comment): Effec
  */
 export function commentScopeLabel(project: Project, scope: EffectiveCommentScope): string {
   if (scope.kind === 'all') return 'All Options'
+  if (scope.kind === 'existing') return 'Existing Model (inherited)'
   const name = optionName(project, scope.designOptionId)
-  if (!scope.inherited) return name
-  return name === 'Existing Model' ? 'Existing Model (inherited)' : `${name} (inherited)`
+  return scope.inherited ? `${name} (inherited)` : name
 }
 
 /** The Option's name, or `Existing Model` for one the Project no longer has. */
@@ -117,7 +118,7 @@ function optionName(project: Project, optionId: EntityId): string {
  * `model` is the effective model the view is drawing, passed in because a panel listing a hundred
  * Comments asks for it once and every row after the first shares it.
  */
-export function commentIsInContext(project: Project, view: { floorId: EntityId }, comment: Comment, model: EffectiveModel): boolean {
+export function commentIsInContext(project: Project, view: SavedViewSettings & { floorId: EntityId }, comment: Comment, model: EffectiveModel): boolean {
   const anchor = comment.anchor
   const scope = effectiveCommentScope(project, comment)
   // 1. The scope has to be readable through the Option the view is drawn under.
@@ -145,7 +146,8 @@ export function commentIsInContext(project: Project, view: { floorId: EntityId }
 
 /** Whether the subject of an Anchor is one of the records this view is drawing. */
 function locatesIn(model: EffectiveModel, subjectId: EntityId): boolean {
-  const lists: readonly { readonly entity: { readonly id: EntityId } }[][] = [
+  type Row = readonly { readonly entity: { readonly id: EntityId } }[]
+  const lists: readonly Row[] = [
     model.walls,
     model.wallJunctions,
     model.openings,
@@ -164,16 +166,15 @@ function locatesIn(model: EffectiveModel, subjectId: EntityId): boolean {
  * Reference order rather than the order the Project lists them, because the panel is read top to bottom
  * as a list of numbers and `C-999` before `C-1000` is the only order that reads correctly.
  */
-export function commentsForView(project: Project, view: { floorId: EntityId }, comments: readonly Comment[] = project.comments): Comment[] {
-  const model = effectiveModel(project, view.floorId, viewDesignOptionOf(view))
+export function commentsForView(
+  project: Project,
+  view: SavedViewSettings & { floorId: EntityId },
+  comments: readonly Comment[] = project.comments,
+): Comment[] {
+  const model = effectiveModel(project, view.floorId, viewDesignOptionId(view))
   return comments
     .filter((comment) => commentIsInContext(project, view, comment, model))
     .sort((left, right) => compareCommentReferences(left.reference, right.reference))
-}
-
-/** The saved view's own Design Option, which a Plan View and an Elevation View both carry. */
-function viewDesignOptionOf(view: { floorId: EntityId }): EntityId | null {
-  return (view as { designOptionId?: EntityId | null }).designOptionId ?? null
 }
 
 /**
