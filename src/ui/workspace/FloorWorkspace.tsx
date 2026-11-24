@@ -17,7 +17,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveBeams, deriveSkirting, skirtingFaceTargets, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, elevationFrameOf, enabledVerticalSnapKinds, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates, verticalSnapCandidates } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveBeams, deriveSkirting, skirtingFaceTargets, skirtingSnapSources, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, elevationFrameOf, enabledVerticalSnapKinds, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates, verticalSnapCandidates } from '../../derive'
 import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings, drawElevationView } from '../../drawing'
 import type { BadgeSubject, LayerGates, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
@@ -552,6 +552,19 @@ export function FloorWorkspace(): ReactNode {
       ]),
     )
   }, [drawingProject, floorId, renovationOptionId])
+
+  /**
+   * The exposed faces the plan's `Wall faces` snap row offers (#78 §7), joined to the Walls' own
+   * sources at each call site. A strip broken by a door gives two faces, because the doorway is
+   * precisely where there is no Skirting to snap a cabinet face against.
+   */
+  const skirtingSnapSourcesValue = useMemo(() => {
+    if (floorId === null || floorSkirting === null) return []
+    const lines = new Map(
+      effectiveModel(project, floorId, renovationOptionId).standingWalls.map((wall) => [wall.id, wall.line]),
+    )
+    return skirtingSnapSources(floorSkirting.skirting, lines)
+  }, [floorId, project, renovationOptionId, floorSkirting])
 
   /**
    * The selected Skirting, its derived body and the two names the inspector prints (#78 §4). The body
@@ -2572,7 +2585,7 @@ export function FloorWorkspace(): ReactNode {
           const snap = resolveSnap(
             snapCandidates({
               geometry: roomSnapGeometry,
-              walls: floorWalls.snapSources,
+              walls: [...floorWalls.snapSources, ...skirtingSnapSourcesValue],
               cursor: at,
               from,
               gridSpacingMm: snapSettings.gridSpacingMm,
@@ -2621,7 +2634,7 @@ export function FloorWorkspace(): ReactNode {
           const snap = resolveSnap(
             snapCandidates({
               geometry: roomSnapGeometry,
-              walls: floorWalls.snapSources,
+              walls: [...floorWalls.snapSources, ...skirtingSnapSourcesValue],
               cursor: at,
               from,
               gridSpacingMm: snapSettings.gridSpacingMm,

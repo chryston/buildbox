@@ -28,11 +28,15 @@ import {
   faceOffsets,
   facePointAt,
   interval,
+  offsetRefLine,
   overlapLength,
   refLength,
   refParamAt,
+  refPointAt,
+  refSegment,
   reverse,
 } from '../geometry'
+import type { WallFaceSource } from './snapCandidates'
 import { displayModel } from './renovationDisplay'
 import { effectiveModel } from './effectiveModel'
 import { faceRoomNames } from './rooms'
@@ -316,4 +320,42 @@ export function skirtingFaceTargets(
     })
   }
   return targets
+}
+
+/**
+ * The exposed faces the plan can snap to (#78 §7): one face per derived **run**, on the line
+ * `thickness` beyond the host's reference line, which is the line a cabinet face meets.
+ *
+ * These are `WallFaceSource`s rather than a new kind of snap source because that is what they are to
+ * the resolver — corners that are targets and a face to slide along, answered by the `Wall faces` row
+ * and gated by the Skirting's own Drawing Layer. A gap is why a run ends, so a strip broken by a door
+ * offers two faces and the space where the door is offers none.
+ */
+export function skirtingSnapSources(
+  skirting: readonly DerivedSkirting[],
+  lines: ReadonlyMap<EntityId, WallRefLine>,
+): WallFaceSource[] {
+  const sources: WallFaceSource[] = []
+  for (const entry of skirting) {
+    const host = lines.get(entry.hostWallId)
+    if (host === undefined) continue
+    const exposed = offsetRefLine(host, entry.outerOffset)
+    for (const run of entry.runs) {
+      const from = refPointAt(exposed, run.from)
+      const to = refPointAt(exposed, run.to)
+      // A run too short to be a place a cursor can land is not a snap target either.
+      if (Math.hypot(to.x - from.x, to.y - from.y) <= TOLERANCE_MM) continue
+      const { segment } = refSegment(exposed)
+      sources.push({
+        id: entry.id,
+        label: `${entry.label} face`,
+        corners: [
+          { point: from, label: `${entry.label} end` },
+          { point: to, label: `${entry.label} end` },
+        ],
+        faces: [{ from, to, segment, label: `${entry.label} face` }],
+      })
+    }
+  }
+  return sources
 }
