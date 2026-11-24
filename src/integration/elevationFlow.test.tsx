@@ -42,6 +42,7 @@ function testWorkspaceServices(): WorkspaceServices & { pane(): CachedPane | nul
   return {
     intent: view.services.intent,
     assetUrls: view.services.assetUrls,
+    now: () => '2026-01-01T00:00:00.000Z',
     readPlanImage: () => Promise.reject(new Error('jsdom models no file reader')),
     planImageAccept: PLAN_IMAGE_ACCEPT,
     planCatalogue: [

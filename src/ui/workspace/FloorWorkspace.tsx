@@ -74,6 +74,8 @@ import { subjectBoxes, warningBox } from './warnings/locateWarning'
 import type { Box } from './warnings/locateWarning'
 import { enabledKindsOf, useWorkspace, workspaceStore } from './workspaceStore'
 import { WorkspaceShell } from './WorkspaceShell'
+import { NotesPanel, NotesPanelToggle } from './notes/NotesPanel'
+import { notesSessionStore } from './notes/notesSession'
 import { ToolbarMenu, ToolbarMenuItem, WorkspaceToolbar } from './WorkspaceToolbar'
 import type { ToolbarGroup } from './WorkspaceToolbar'
 import { PlanViewCanvas } from './PlanViewCanvas'
@@ -1053,6 +1055,14 @@ export function FloorWorkspace(): ReactNode {
     else if (hit.kind === 'room') selectRoom(hit.id)
     else select(hit.id)
   }, [project])
+
+  // The Notes session is per tab, not per Project or per view (#80 §4.2, criterion 24): a note selected
+  // in one Project is not a note in the next, and a row selected because it was on screen stops being
+  // on screen the moment the person looks through a different view. So both clear it. The overlay is
+  // already off at every open because the store is never persisted.
+  useEffect(() => {
+    notesSessionStore.getState().reset()
+  }, [project, view?.id])
 
   /**
    * The `Move to a Design Option…` action for the Existing entity being inspected (#69 §13).
@@ -2846,6 +2856,7 @@ export function FloorWorkspace(): ReactNode {
               ← Projects
             </button>
             <span className="bb-workspace-project-name">{project.meta.name}</span>
+            <NotesPanelToggle />
             <span className="bb-workspace-spacer" />
             {save !== null && (
               // The legacy shape the S4 specs assert: a `role="status"` span whose failed
@@ -3778,6 +3789,17 @@ export function FloorWorkspace(): ReactNode {
               )}
             </>
           )
+        }
+        notes={
+          <NotesPanel
+            project={project}
+            view={view === null ? null : { ...view, floorId: view.floorId }}
+            now={services.now()}
+            onResolve={(commentId) => send('comment.resolve', { commentId, at: services.now() })}
+            onReopen={(commentId) => send('comment.reopen', { commentId, at: services.now() })}
+            onDelete={(commentId) => send('comment.delete', { commentId })}
+            onEdit={(commentId, patch) => send('comment.edit', { commentId, ...patch, at: services.now() })}
+          />
         }
       />
       {deleteElevationId !== null && (
