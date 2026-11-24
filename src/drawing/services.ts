@@ -58,14 +58,31 @@ const circleCommands = (centre: Pt, radius: number): PathCommand[] => [
 const commandsOf = (service: DerivedService): PathCommand[] =>
   service.shape === 'run' ? pathToCommands(service.outline!) : circleCommands(service.centre!, service.radius!)
 
-/** Where a Service's name goes: the middle of its plan body. */
-const labelAt = (service: DerivedService): Pt =>
-  service.shape === 'riser'
-    ? service.centre!
-    : (() => {
-        const box = rectOf(bounds(service.outline!))
-        return { x: box.x + box.w / 2, y: box.y + box.h / 2 }
-      })()
+/**
+ * Where a Service's name goes: beside the middle of its plan body, clear of the body itself.
+ *
+ * A Run's name sits off its own band, on the side that reads as up, by half the band plus half the
+ * text plus a breath. Centred on the centreline it would be struck through by the two strokes that
+ * make the band — a Ø50 pipe is only a few device pixels tall, and the letters are taller than that,
+ * so the name would be the one thing on the drawing the drawing makes hard to read. A Riser's name
+ * stands above its circle for the same reason.
+ */
+const labelAt = (service: DerivedService, textHalfHeight: number, gap: number): Pt => {
+  const lift = (service.shape === 'riser' ? service.radius! : 0) + textHalfHeight + gap
+  if (service.shape === 'riser') return { x: service.centre!.x, y: service.centre!.y - lift }
+  const from = service.outline!.start
+  const to = service.entity.shape === 'run' ? service.entity.line.end : from
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const length = Math.hypot(dx, dy)
+  // The unit normal of the centreline, tipped to the side that reads as up; a Run drawn left-to-
+  // right and one drawn right-to-left get the same name on the same side of themselves.
+  const nx = length === 0 ? 0 : -dy / length
+  const ny = length === 0 ? -1 : dx / length
+  const up = ny <= 0 ? 1 : -1
+  const box = rectOf(bounds(service.outline!))
+  return { x: box.x + box.w / 2 + nx * lift * up, y: box.y + box.h / 2 + ny * lift * up }
+}
 
 /**
  * The Services of one Floor: each body, an invisible target at least a click wide, and one name.
@@ -92,8 +109,8 @@ export function drawServices(services: FloorServices, options: ServiceDrawOption
     // the same path, stroked at the shared hit-target width, is the target (#65 §11, #78 §7).
     shapes.push({ kind: 'path', ref: { id: service.id, role: 'service-hit' }, segments, closed: true, style: 'service-hit' })
 
-    const middle = labelAt(service)
     const layout = layoutText(service.label, sizeMm)
+    const middle = labelAt(service, (layout.ascent + layout.descent) / 2, sizeMm / 4)
     const at = keepLabelsWithin === undefined || keepLabelsWithin === null
       ? middle
       : {
