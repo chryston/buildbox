@@ -186,6 +186,13 @@ export interface PlanViewCanvasProps {
    * the scene's own `<g>`, so it must be drawn in the Floor's millimetres. */
   overlay?: ReactNode
   /**
+   * Dashed screen-only outlines drawn above everything the Floor is drawn from (#76 §1, §4) —
+   * the shared-height preview and the Clearance Envelope. Unlike `overlay` this takes no pointer:
+   * the canvas under a preview stays fully interactive, and the group itself is
+   * `pointer-events: none`. It lives in the scene's `<g>`, in Floor millimetres.
+   */
+  screenOverlay?: ReactNode
+  /**
    * An HTML layer over the canvas — the Wall draft's bar and chips, which are words and
    * controls, not geometry. It sits on the canvas host, whose box is the same one the scene's
    * matrix is measured from, so a point placed at `x·zoom + panX` lands where the scene draws
@@ -220,7 +227,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     tool, selection, onSelect, onCursorChange, onCanvasClick, dragPreview, onDragPreview, onMoveItem, onRotateItem,
     editLocked = false,
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
-    angleSnap, overlay, htmlOverlay, walls, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
+    angleSnap, overlay, htmlOverlay, screenOverlay, walls, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
     openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
     rooms = null, selectedRoomId = null, onSelectRoom, roomProposal = null,
     warningSubjects = [], onSelectWarningBadge,
@@ -770,6 +777,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
                 interactions={interactions}
               />
             )}
+            {screenOverlay !== undefined && <g transform={matrix}>{screenOverlay}</g>}
           </>
         )}
       </svg>

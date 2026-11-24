@@ -69,11 +69,13 @@ export function sharedDesignRows(
   intent: Intent,
   evaluate: (project: Project, intent: Intent) => Project | null,
 ): readonly SharedDesignRow[] | null {
-  const preview = evaluate(project, intent)
-  if (preview === null) return null
   const design = project.itemDesigns.find((candidate) => candidate.id === itemDesignId)
   if (design === undefined) return null
   const currentHeight = designHeight(design)
+  // The current height needs no answer from the edit layer — the table shows it as it stands,
+  // and every `Warning change` cell is empty because nothing would change.
+  const preview = heightMm === currentHeight ? project : evaluate(project, intent)
+  if (preview === null) return null
   const options: readonly (string | null)[] = [null, ...designOptionsOf(project).map((option) => option.id)]
   const rows: SharedDesignRow[] = []
   for (const floor of project.floors) {

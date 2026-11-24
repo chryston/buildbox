@@ -12,7 +12,7 @@
  * `sharedDesignRows`: the same Intent the Apply button will send, run through the session's
  * `evaluate` against a copy that is thrown away.
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import type { Intent } from '../../edit'
 import type { DisplayUnit, ItemDesign, Project } from '../../domain'
@@ -34,6 +34,11 @@ export interface SharedDesignPanelProps {
   evaluate: (project: Project, intent: Intent) => Project | null
   onApply: (heightMm: number) => void
   onCancel: () => void
+  /**
+   * Every change of the field's valid height (#76 §1): the caller puts it in the store so the
+   * canvases draw their dashed outlines; `null` — invalid, empty, or the panel closing — clears.
+   */
+  onValidHeight: (heightMm: number | null) => void
   /** `Fork design…` — the only route to a different height for one placement (#57). */
   onFork: () => void
 }
@@ -47,7 +52,7 @@ const changeCell = (row: SharedDesignRow): string => {
 }
 
 export function SharedDesignPanel(props: SharedDesignPanelProps): ReactNode {
-  const { design, project, unit, precision, buildIntent, evaluate, onApply, onCancel, onFork } = props
+  const { design, project, unit, precision, buildIntent, evaluate, onApply, onCancel, onValidHeight, onFork } = props
   const current = designHeight(design)
   const [text, setText] = useState<string | null>(null)
   const shown = text ?? formatMm(current, unit, precision)
@@ -55,12 +60,29 @@ export function SharedDesignPanel(props: SharedDesignPanelProps): ReactNode {
   const heightMm = parsed !== null && Number.isFinite(parsed) ? parseToMm(parsed, unit) : null
   const invalid = text !== null && !(heightMm !== null && heightMm > 0)
   const rows = useMemo(
-    () => (heightMm === null || !(heightMm > 0)
-      ? null
-      : sharedDesignRows(project, props.revision, design.id, heightMm, buildIntent(heightMm), evaluate)),
-    [project, props.revision, design.id, heightMm, buildIntent, evaluate],
+    () => sharedDesignRows(
+      project,
+      props.revision,
+      design.id,
+      heightMm !== null && heightMm > 0 ? heightMm : current,
+      buildIntent(heightMm !== null && heightMm > 0 ? heightMm : current),
+      evaluate,
+    ),
+    [project, props.revision, design.id, heightMm, current, buildIntent, evaluate],
   )
-  const canApply = heightMm !== null && heightMm > 0 && rows !== null
+  // `Apply` needs a valid number that is a change: the edit layer refuses the height the design
+  // already has, and the button never offers a Transaction that cannot land.
+  const canApply = heightMm !== null && heightMm > 0 && heightMm !== current && rows !== null
+
+  // The preview follows the field, not the commit: a valid number shows the dashed outlines,
+  // anything else takes them away. The callback is kept in a ref so the effect runs on the
+  // number alone, whatever render happened to pass it in.
+  const onValidHeightRef = useRef(onValidHeight)
+  onValidHeightRef.current = onValidHeight
+  useEffect(() => {
+    onValidHeightRef.current(heightMm !== null && heightMm > 0 ? heightMm : null)
+  }, [heightMm])
+  useEffect(() => () => onValidHeightRef.current(null), [])
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.key === 'Escape') {
@@ -110,14 +132,14 @@ export function SharedDesignPanel(props: SharedDesignPanelProps): ReactNode {
         </thead>
         <tbody>
           {(rows ?? []).map((row) => (
-            <tr key={`${row.optionId ?? 'e'}|${row.placementId}`} data-testid={`shared-design-row-${row.placementId}`}>
+            <tr key={`${row.optionId ?? 'e'}|${row.placementId}`} data-testid={`shared-design-row-${row.optionId ?? 'existing-model'}-${row.placementId}`}>
               <td>{row.label}</td>
               <td>{row.floorName}</td>
               <td>{row.optionId === null ? STRINGS.existingModel : row.optionName}</td>
               <td>{formatMm(row.baseMm, unit, precision)}</td>
               <td>{formatMm(row.currentTopMm, unit, precision)}</td>
               <td>{formatMm(row.newTopMm, unit, precision)}</td>
-              <td data-testid={`shared-design-change-${row.placementId}`}>{changeCell(row)}</td>
+              <td data-testid={`shared-design-change-${row.optionId ?? 'existing-model'}-${row.placementId}`}>{changeCell(row)}</td>
             </tr>
           ))}
         </tbody>

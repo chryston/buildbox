@@ -17,12 +17,12 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, enabledVerticalSnapKinds, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates, verticalSnapCandidates } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, elevationFrameOf, enabledVerticalSnapKinds, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates, verticalSnapCandidates } from '../../derive'
 import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings, drawElevationView } from '../../drawing'
 import type { BadgeSubject, LayerGates, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
 import type { ElevationView, Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
-import { designOptionsOf, elevationViewsOf, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride } from '../../domain'
+import { designOptionsOf, elevationViewsOf, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
@@ -129,6 +129,9 @@ import { RENOVATION_STRINGS } from '../strings/renovation'
 import { FIELDS_UNLOCKED, FieldsLockedContext } from './fieldsLock'
 import type { FieldsLock } from './fieldsLock'
 import { ForkDesignDialog, NewItemDialog } from './ItemDialogs'
+import { SharedDesignPanel } from './SharedDesignPanel'
+import { PlanPreviewOutlines } from './VerticalPreviewOverlay'
+import { elevationEnvelopeBands, elevationHeightBands, envelopePlanOutlines, heightPreviewOutlines } from './verticalPreview'
 import { ManageFloorsDialog } from './ManageFloorsDialog'
 import { DeleteFloorDialog } from './DeleteFloorDialog'
 import { DuplicateFloorDialog } from './DuplicateFloorDialog'
@@ -540,6 +543,8 @@ export function FloorWorkspace(): ReactNode {
   }
   const designPreview = useWorkspace((state) => state.designPreview)
   const setDesignPreview = useWorkspace((state) => state.setDesignPreview)
+  const heightPreview = useWorkspace((state) => state.heightPreview)
+  const setHeightPreview = useWorkspace((state) => state.setHeightPreview)
   const pickingOrigin = useWorkspace((state) => state.pickingOrigin)
   const setPickingOrigin = useWorkspace((state) => state.setPickingOrigin)
   const openItemDetail = useWorkspace((state) => state.openItemDetail)
@@ -584,6 +589,8 @@ export function FloorWorkspace(): ReactNode {
   const [transferOpen, setTransferOpen] = useState(false)
   const [newItemOpen, setNewItemOpen] = useState(false)
   const [forkOpen, setForkOpen] = useState(false)
+  /** The shared-height preview panel of the selected design (#76 §1). */
+  const [sharedDesignOpen, setSharedDesignOpen] = useState(false)
   /** The view line being drawn by the `elevation` tool, or null between presses (#75 §2). */
   const [elevationDraft, setElevationDraft] = useState<ElevationDraft | null>(null)
   /** The view whose delete is being confirmed, or null when no dialog is open (#75 §3). */
@@ -1792,6 +1799,89 @@ export function FloorWorkspace(): ReactNode {
     }
   }, [elevationSceneValue, elevationLayerGates, elevationViewport?.zoom])
 
+  // ---- The shared-height preview panel and the dashed outlines of #76 §1 and §4 ----
+
+  /** The one Intent the panel would commit; stable so the panel's table is not rebuilt per render. */
+  const sharedDesignBuildIntent = useCallback((heightMm: number): Intent =>
+    services.intent.build('design.setHeight', {
+      itemDesignId: selectedDesign?.id ?? '',
+      heightMm,
+    }), [services, selectedDesign?.id])
+
+  /** `Apply`: one labelled transaction, then the panel and every dashed outline are gone. */
+  const applySharedDesign = (heightMm: number): void => {
+    if (selectedDesign === null) return
+    sendLabelled(
+      'design.setHeight',
+      { itemDesignId: selectedDesign.id, heightMm },
+      STRINGS.designHeightTransaction(
+        selectedDesign.name,
+        extentFormat(designHeight(selectedDesign)),
+        extentFormat(heightMm),
+      ),
+    )
+    setSharedDesignOpen(false)
+    setHeightPreview(null)
+  }
+
+  /** `Cancel — change nothing`, and Esc: nothing was ever written. */
+  const cancelSharedDesign = (): void => {
+    setSharedDesignOpen(false)
+    setHeightPreview(null)
+  }
+
+  // The panel edits the design that was selected when it opened; a new selection or Floor ends it,
+  // exactly as a proposal is discarded rather than kept out of sight (#58 criterion 9's rule).
+  useEffect(() => {
+    setSharedDesignOpen(false)
+    setHeightPreview(null)
+  }, [selection, floorId, setHeightPreview])
+
+  /**
+   * Which dashed Clearance Envelopes show (#76 §4): the selected Placed Item's own, and every
+   * envelope an open warning names — the intrusion's owner is the warning's second subject.
+   */
+  const envelopeDisplayIds = useMemo(() => {
+    const ids = new Set<string>()
+    if (selectedPlacement !== null &&
+      (project.itemDesigns.find((design) => design.id === selectedPlacement.itemDesignId)?.clearanceEnvelope ?? null) !== null) {
+      ids.add(selectedPlacement.id)
+    }
+    for (const warning of floorWarnings) {
+      if (warning.type !== 'clearance_envelope_intrusion' || warning.status === 'acknowledged') continue
+      const owner = warning.subjects[1]
+      if (owner !== undefined && owner.type === 'placedItem') ids.add(owner.id)
+    }
+    return ids
+  }, [project, selectedPlacement, floorWarnings])
+
+  const planPreviewOutlines = useMemo(
+    () => heightPreviewOutlines(derivedFloor, heightPreview?.itemDesignId ?? null),
+    [derivedFloor, heightPreview],
+  )
+  const planClearanceOutlines = useMemo(
+    () => (floorId === null ? [] : envelopePlanOutlines(project, floorId, renovationOptionId, envelopeDisplayIds)),
+    [project, floorId, renovationOptionId, envelopeDisplayIds],
+  )
+  const elevationPreviewBands = useMemo(() => (elevationView === null || elevationSceneValue === null || heightPreview === null
+    ? []
+    : elevationHeightBands(
+      elevationSceneValue,
+      new Set(effectiveModel(project, elevationView.floorId, viewDesignOptionId(elevationView)).standingPlacedItems
+        .filter((placed) => placed.itemDesignId === heightPreview.itemDesignId)
+        .map((placed) => placed.id)),
+      heightPreview.heightMm,
+    )), [elevationView, elevationSceneValue, heightPreview, project])
+  const elevationClearanceBands = useMemo(() => (elevationView === null
+    ? []
+    : elevationEnvelopeBands(
+      project,
+      elevationFrameOf(elevationView),
+      elevationView.floorId,
+      viewDesignOptionId(elevationView),
+      envelopeDisplayIds,
+    )), [project, elevationView, envelopeDisplayIds])
+
   /**
    * What the Range gauge has room for (#74 §4): the Floor Datum, this Floor's own limits, every
    * entity's Vertical Extent and the Range itself, plus 5%. Measured over the same effective model the
@@ -2681,6 +2771,7 @@ export function FloorWorkspace(): ReactNode {
           // §7c: the inspector rail reads one flag for whether its fields are shut, instead of a prop
           // threaded through four inspectors that each have to remember to honour it.
           <FieldsLockedContext.Provider value={fieldsLock}>
+          <>
           {selectedRoom !== null
             ? <RoomInspector
                 room={selectedRoom.room}
@@ -2802,14 +2893,24 @@ export function FloorWorkspace(): ReactNode {
                       send('plan.setPlacementVerticalExtent', { placedItemId: selection, field, value: valueMm })
                     }}
                     fork={
-                      <button
-                        type="button"
-                        data-testid="fork-design"
-                        className="bb-workspace-tool-button"
-                        onClick={() => setForkOpen(true)}
-                      >
-                        {STRINGS.forkDesign}
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          data-testid="edit-shared-design"
+                          className="bb-workspace-tool-button"
+                          onClick={() => setSharedDesignOpen(true)}
+                        >
+                          {STRINGS.editSharedDesign}
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="fork-design"
+                          className="bb-workspace-tool-button"
+                          onClick={() => setForkOpen(true)}
+                        >
+                          {STRINGS.forkDesign}
+                        </button>
+                      </>
                     }
                   />
             }
@@ -2854,6 +2955,28 @@ export function FloorWorkspace(): ReactNode {
                 }
               />
           }
+          {/* The shared-height preview panel (#76 §1): inside the inspector, no backdrop, both
+              canvases visible and interactive behind it, nothing committed until `Apply`. */}
+          {sharedDesignOpen && selectedDesign !== null && (
+            <SharedDesignPanel
+              design={selectedDesign}
+              project={project}
+              revision={session.getSnapshot().revision}
+              unit={project.preferences.displayUnit}
+              precision={project.preferences.displayPrecision}
+              buildIntent={sharedDesignBuildIntent}
+              evaluate={services.intent.evaluate}
+              onApply={applySharedDesign}
+              onCancel={cancelSharedDesign}
+              onValidHeight={(heightMm) => setHeightPreview(
+                heightMm === null || selectedDesign === null
+                  ? null
+                  : { itemDesignId: selectedDesign.id, heightMm },
+              )}
+              onFork={() => setForkOpen(true)}
+            />
+          )}
+          </>
           </FieldsLockedContext.Provider>
         }
         canvas={
@@ -2874,6 +2997,22 @@ export function FloorWorkspace(): ReactNode {
               onCursorChange={setOpeningCursor}
               onCanvasClick={clickOnCanvas}
               warningSubjects={warningSubjects}
+              screenOverlay={planPreviewOutlines.length === 0 && planClearanceOutlines.length === 0
+                ? undefined
+                : (
+                  <>
+                    <PlanPreviewOutlines
+                      outlines={planPreviewOutlines}
+                      kind="preview"
+                      testId="plan-preview-outlines"
+                    />
+                    <PlanPreviewOutlines
+                      outlines={planClearanceOutlines}
+                      kind="clearance"
+                      testId="plan-clearance-outlines"
+                    />
+                  </>
+                )}
               onSelectWarningBadge={selectWarningBadge}
               dragPreview={dragPreview}
               onDragPreview={setDragPreview}
@@ -3126,6 +3265,8 @@ export function FloorWorkspace(): ReactNode {
                         }}
                         viewport={elevationViewport}
                         onViewport={setElevationViewport}
+                        previewBands={elevationPreviewBands}
+                        clearanceBands={elevationClearanceBands}
                         dragCandidates={elevationSnapCandidates}
                         onVerticalExtent={commitVerticalExtent}
                         hostRef={elevationHostRef}
