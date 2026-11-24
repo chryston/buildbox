@@ -157,6 +157,8 @@ function walk(source: Project, seed: number, steps: number): { project: Project;
 }
 
 describe('random Intent sequences and acknowledgements (#66 criteria 3, 4)', () => {
+  // Both walk cases re-derive the whole engine on every step of sixty random sequences; under
+  // the full suite's parallel load that is more than vitest's 5 s default, as measured.
   it('never leaves an acknowledgement whose subject has gone, and undoes every step', () => {
     let accepted = 0
     fc.assert(
@@ -168,7 +170,7 @@ describe('random Intent sequences and acknowledgements (#66 criteria 3, 4)', () 
     )
     // A property that never ran is not a property.
     expect(accepted).toBeGreaterThan(20)
-  })
+  }, 20_000)
 
   it('reached both halves of the rule along the way', () => {
     // A property that never ran is not a property: the walk has to have dropped at least one
@@ -186,7 +188,7 @@ describe('random Intent sequences and acknowledgements (#66 criteria 3, 4)', () 
     )
     expect(pruned).toBeGreaterThan(0)
     expect(acknowledged).toBeGreaterThan(0)
-  })
+  }, 20_000)
 })
 
 describe('warnings do not depend on storage order (#66 criterion 8)', () => {
