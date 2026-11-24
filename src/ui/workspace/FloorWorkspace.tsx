@@ -3161,6 +3161,10 @@ export function FloorWorkspace(): ReactNode {
                 selectRoom(id)
                 setTool('select')
               }}
+              onSelectBeam={(id) => {
+                selectBeam(id)
+                setTool('select')
+              }}
               openings={openingLayer}
               selectedOpeningId={openingSelection}
               onSelectOpening={(id) => {

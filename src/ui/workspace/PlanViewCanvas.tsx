@@ -179,6 +179,8 @@ export interface PlanViewCanvasProps {
   selectedRoomId?: string | null
   /** A Room's area was clicked; the selection moves to it (#67 behaviour 3). */
   onSelectRoom?: (id: string) => void
+  /** A Beam's body was clicked; the selection moves to it (#77 §3). */
+  onSelectBeam?: (id: string) => void
   /**
    * The Room being drawn or edited, with every region it shares with another Room. Red and
    * hatched when it cannot be committed, accent while it can (#67 behaviours 20–21).
@@ -231,7 +233,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
     angleSnap, overlay, htmlOverlay, screenOverlay, walls, beams = null, selectedBeamId = null, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
     openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
-    rooms = null, selectedRoomId = null, onSelectRoom, roomProposal = null,
+    rooms = null, selectedRoomId = null, onSelectRoom, onSelectBeam, roomProposal = null,
     warningSubjects = [], onSelectWarningBadge,
   } = props
   const [hostSize, setHostSize] = useState({ width: 0, height: 0 })
@@ -527,7 +529,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       handles: handlesFor,
     },
   )
-  const { list: painted, floor: drawnFloor, walls: drawnWalls, rooms: drawnRooms, openings: drawnOpenings } = view
+  const { list: painted, floor: drawnFloor, walls: drawnWalls, rooms: drawnRooms, openings: drawnOpenings, beams: drawnBeams } = view
   // The names this view had no room for, keyed by the thing that lost its label (#74 §3): the
   // renderer puts each one on the entity's group, so hovering the footprint says the name the
   // packing could not fit beside it.
@@ -566,6 +568,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     if (drawnWalls?.walls.some((wall) => wall.id === id) === true) onSelectWall?.(id)
     else if (drawnOpenings.some((host) => host.symbols.some((symbol) => symbol.id === id))) onSelectOpening?.(id)
     else if (drawnRooms?.rooms.some((room) => room.id === id) === true) onSelectRoom?.(id)
+    else if (drawnBeams?.beams.some((beam) => beam.id === id) === true) onSelectBeam?.(id)
     else onSelect(id)
   }
 
@@ -592,6 +595,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       walls: (drawnWalls?.walls ?? []).map((wall) => ({ id: wall.id, outline: wall.outline })),
       placements: drawnFloor.placements.map((item) => ({ id: item.id, outline: item.worldPath })),
       rooms: (drawnRooms?.rooms ?? []).map((room) => ({ id: room.id, outline: room.path })),
+      beams: (drawnBeams?.beams ?? []).map((beam) => ({ id: beam.id, outline: beam.outline })),
       states,
     }).map((candidate) => ({ ...candidate, rangeClass: classOf(candidate.entityId) }))
     // An Opening answers the pointer through its own symbol, which the Wall drawing lays above the
@@ -670,6 +674,17 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       : (id, event) => {
           // The click that selected this Room must not be answered again as a click on the
           // background, which would deselect it in the same gesture (#64 §15).
+          consumedPointer.current = true
+          const answer = pickTarget(id, event.clientX, event.clientY)
+          if (answer === null) consumedPointer.current = false
+          else selectById(answer)
+        },
+    onBeamPointerDown: onSelectBeam === undefined || tool !== 'select'
+      ? undefined
+      : (id, event) => {
+          // A Beam is documentation drawn under the Wall it usually sits under, so the cycle is
+          // what makes it reachable at all: the Wall is on top and takes the first click, and the
+          // second click in the same spot walks the list (#77 criteria 16, 18).
           consumedPointer.current = true
           const answer = pickTarget(id, event.clientX, event.clientY)
           if (answer === null) consumedPointer.current = false

@@ -57,6 +57,8 @@ export interface DisplayListInteractions {
   onItemPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
   /** A Wall band, clicked where it is drawn: it becomes the selected Wall (#64 §15). */
   onWallPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
+  /** A Beam's body answering the pointer (#77 §3), the same gesture as a Wall's. */
+  onBeamPointerDown?: (id: string, event: React.PointerEvent<SVGGElement>) => void
   /**
    * An Opening's symbol, clicked where it is drawn: it becomes the selected Opening (#65 §11).
    * Every part of the symbol — leaf, swing, glass lines — answers, because a person clicks the
@@ -300,6 +302,16 @@ function renderNode(
     }
     if (role === 'wall' && interactions?.onWallPointerDown !== undefined) {
       const pick = interactions.onWallPointerDown
+      props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => {
+        event.stopPropagation()
+        pick(id, event)
+      }) as never
+      props.style = { cursor: 'pointer' }
+    }
+    if ((role === 'beam' || role === 'beam-hit') && interactions?.onBeamPointerDown !== undefined) {
+      // The body and its invisible width target are the same Beam: a person aiming at a Beam aims
+      // at the middle of it, not at the two device pixels of its outline (#77 §3).
+      const pick = interactions.onBeamPointerDown
       props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => {
         event.stopPropagation()
         pick(id, event)

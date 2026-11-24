@@ -42,6 +42,8 @@ export interface DrawnEntities {
   readonly walls: readonly DrawnEntity[]
   readonly placements: readonly DrawnEntity[]
   readonly rooms: readonly DrawnEntity[]
+  /** The Beams (#77 §3): documentation drawn under the Walls, and cycled in the same order. */
+  readonly beams: readonly DrawnEntity[]
   /** The Display's state list: an entity absent from it was not drawn. */
   readonly states: ReadonlyMap<string, RenovationState>
 }
@@ -86,5 +88,6 @@ export function candidatesAtPoint(at: Pt, drawn: DrawnEntities): DrawnCandidate[
   gather(found, drawn.walls, 'walls', drawn.states, (wall) => inside(at, wall.outline))
   gather(found, drawn.placements, 'placed-items', drawn.states, (item) => inside(at, item.outline))
   gather(found, drawn.rooms, 'rooms', drawn.states, (room) => inside(at, room.outline))
+  gather(found, drawn.beams, 'beams', drawn.states, (beam) => inside(at, beam.outline))
   return found
 }
