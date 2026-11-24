@@ -22,10 +22,10 @@
  * pass applies through the same `LayerGates` a Plan View is painted with, so that a hidden Wall is
  * hidden by one answer and not by two that can disagree (#71 §4).
  */
-import type { ElevationView, EntityId, Floor, Opening, PlacedItem, Project, Wall } from '../domain'
-import { UNLAYERED_LAYER_KEY, designHeight, viewDesignOptionId, viewRenovationDisplay } from '../domain'
+import type { Beam, ElevationView, EntityId, Floor, Opening, PlacedItem, Project, Wall } from '../domain'
+import { UNLAYERED_LAYER_KEY, beamLabel, beamTop, designHeight, viewDesignOptionId, viewRenovationDisplay } from '../domain'
 import type { ClosedPath, ElevationFrame, Pt } from '../geometry'
-import { elevationFrame, faceOffsets, openingBodyOutline, projectElevationOutline, wallBodyOutline } from '../geometry'
+import { elevationFrame, faceOffsets, linearElement, openingBodyOutline, projectElevationOutline, wallBodyOutline } from '../geometry'
 import { entityLayerKeys } from './drawingLayers'
 import { derivePlacement, placementLabels } from './effective'
 import { effectiveModel } from './effectiveModel'
@@ -33,7 +33,7 @@ import { designOutline, placementContext, worldPointOf } from './placement'
 import { displayModel } from './renovationDisplay'
 
 /** Which family an Elevation View draws a row as, which decides its style and its handles. */
-export type ElevationRowKind = 'wall' | 'opening' | 'item'
+export type ElevationRowKind = 'wall' | 'opening' | 'item' | 'beam'
 
 /**
  * One entity's place in one Elevation View: the band it covers and the height it stands at.
@@ -98,7 +98,7 @@ export function elevationScene(project: Project, view: ElevationView): Elevation
 
   /** One projected body, or nothing when the prism holds none of it. */
   const add = (
-    entity: Wall | Opening | PlacedItem,
+    entity: Wall | Opening | PlacedItem | Beam,
     kind: ElevationRowKind,
     name: string,
     outline: readonly Pt[],
@@ -163,6 +163,20 @@ export function elevationScene(project: Project, view: ElevationView): Elevation
       entity.baseElevation + designHeight(design),
       null,
       placement.color,
+    )
+  }
+
+  // A Beam owns its own height, so its band is Underside to Top and its plan body is the outline
+  // `deriveBeams` builds from the same primitive a Wall body comes from. It is documentation drawn
+  // under the Walls, and the painter's order keeps it behind them by distance like anything else.
+  for (const { entity } of display.beams) {
+    add(
+      entity,
+      'beam',
+      beamLabel(entity),
+      ringOf(linearElement({ kind: 'line', to: entity.line.end }, entity.line.start, entity.width, entity.justification).outline),
+      entity.underside,
+      beamTop(entity),
     )
   }
 

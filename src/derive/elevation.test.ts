@@ -185,3 +185,62 @@ describe('elevationScene (#75 criteria 6, 9, 10, 13)', () => {
     expect(away.length).toBe(1000)
   })
 })
+
+/**
+ * A Beam projected into a Section (#77 §4, criterion 17).
+ *
+ * The fixture's view line runs along y = 1 400 across Floor `pr-002`, 20 mm of depth in front of it.
+ * A Beam laid along that line is inside the prism and does not cross it; one run across the line
+ * does, which is the content the pane draws with the heavier outline.
+ */
+describe('elevationScene with a Beam (#77 §4)', () => {
+  const withBeams = (beams: Parameters<typeof Object.assign>[1][]): typeof project => ({
+    ...project,
+    existingModel: { ...project.existingModel, beams: beams as never },
+  })
+  const beam = (id: string, start: Pt, end: Pt, underside: number, height: number) => ({
+    id,
+    floorId: 'pr-002',
+    line: { start, end },
+    justification: 'centre' as const,
+    width: 200,
+    underside,
+    height,
+    label: `Beam B-${id.slice(-1)}`,
+  })
+
+  const scene = elevationScene(
+    withBeams([
+      beam('bm-cross', { x: 2000, y: 400 }, { x: 2000, y: 2400 }, 2160, 300),
+    ]),
+    kitchen(),
+  )
+
+  it('projects a Beam as its own band, Underside to Top', () => {
+    const cross = row(scene.rows, 'bm-cross')
+    expect(cross.kind).toBe('beam')
+    expect(cross.zMin).toBe(2160)
+    expect(cross.zMax).toBe(2460)
+    // The view line runs straight through its body, which is the content drawn with the heavier
+    // outline — the same rule that makes a Wall the Section cuts heavier (#75 §4).
+    expect(cross.crossesLine).toBe(true)
+  })
+
+  it('draws a Beam standing in front of the line without crossing it', () => {
+    const front = elevationScene(withBeams([beam('bm-front', { x: 1000, y: 800 }, { x: 3000, y: 800 }, 2300, 300)]), kitchen())
+    const row2 = row(front.rows, 'bm-front')
+    expect(row2.crossesLine).toBe(false)
+    expect(row2.zMin).toBe(2300)
+    expect(row2.zMax).toBe(2600)
+    // The band runs the length of the reference line, measured along the view line from its start.
+    expect(row2.sMin).toBeCloseTo(1000, 6)
+    expect(row2.sMax).toBeCloseTo(3000, 6)
+  })
+
+  it('leaves a Beam wholly behind the prism out (#75 criterion 9)', () => {
+    // `el-004` looks at −y from its line at y = 1 400, so a Beam whose whole 200 mm body lies at
+    // y = 2 000 stands behind the observer and belongs to no Section.
+    const behind = elevationScene(withBeams([beam('bm-behind', { x: 1000, y: 2000 }, { x: 3000, y: 2000 }, 2300, 300)]), kitchen())
+    expect(behind.rows.some((entry) => entry.id === 'bm-behind')).toBe(false)
+  })
+})

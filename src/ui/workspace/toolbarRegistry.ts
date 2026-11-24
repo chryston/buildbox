@@ -95,6 +95,16 @@ export const WORKSPACE_TOOLS: readonly WorkspaceToolDefinition[] = [
     icon: 'M2 12 H7 M17 12 H22 M7 12 V4 M7 4 A8 8 0 0 1 15 12',
   },
   {
+    id: 'beam',
+    label: STRINGS.toolBeam,
+    testId: 'tool-beam',
+    // A Beam is measured in millimetres like the Wall it usually sits under, so it waits for a
+    // calibrated Plan Image on the same rule (#77 §3).
+    requiresCalibratedFloor: true,
+    // The band and its two ends: what the Plan View draws for a Beam, at button size.
+    icon: 'M2 9 H22 M2 15 H22 M2 9 V15 M22 9 V15',
+  },
+  {
     id: 'elevation',
     label: STRINGS.newElevationView,
     testId: 'tool-elevation',

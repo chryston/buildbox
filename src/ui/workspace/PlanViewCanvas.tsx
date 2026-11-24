@@ -107,6 +107,8 @@ export interface PlanViewCanvasProps {
   walls?: FloorWalls | null
   /** The Beams of this Floor (#77 §4), or null for a Floor with none. */
   beams?: FloorBeams | null
+  /** The selected Beam, drawn with its own outline (#77 §3). */
+  selectedBeamId?: string | null
   /**
    * The Renovation Display this canvas is drawing (#70 §F), or nothing at all when the flag is off.
    *
@@ -227,7 +229,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     tool, selection, onSelect, onCursorChange, onCanvasClick, dragPreview, onDragPreview, onMoveItem, onRotateItem,
     editLocked = false,
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
-    angleSnap, overlay, htmlOverlay, screenOverlay, walls, beams = null, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
+    angleSnap, overlay, htmlOverlay, screenOverlay, walls, beams = null, selectedBeamId = null, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
     openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
     rooms = null, selectedRoomId = null, onSelectRoom, roomProposal = null,
     warningSubjects = [], onSelectWarningBadge,
@@ -516,6 +518,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       showPlanImage,
       preview,
       selectedWallId,
+      selectedBeamId,
       selectedOpeningId,
       openingPreview,
       selectedRoomId,

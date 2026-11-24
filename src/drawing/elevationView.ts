@@ -87,8 +87,12 @@ const WORD_MM = 3
 /** The gap a height's words keep to the line they name, and to the edge of the drawing. */
 const LABEL_MM = 4
 
-/** The painter's tie-break after distance: a Wall, then what is cut in it, then what stands before it. */
-const KIND_RANK: Record<ElevationRow['kind'], number> = { wall: 0, opening: 1, item: 2 }
+/**
+ * The painter's tie-break after distance: a Beam, then a Wall, then what is cut in it, then what
+ * stands before it. A Beam is documentation drawn under the Wall that stands on it, so at one
+ * distance it paints first and the Wall covers it (#77 §4).
+ */
+const KIND_RANK: Record<ElevationRow['kind'], number> = { beam: 0, wall: 1, opening: 2, item: 3 }
 
 /** The rectangle one row covers, in the drawing's own millimetres. */
 const boxOf = (row: ElevationRow, xOf: (s: number) => number, zOf: (z: number) => number): Rect => {
@@ -108,6 +112,7 @@ const outlineOf = (box: Rect): PathCommand[] => [
 const styleOf = (row: ElevationRow, selected: boolean): StyleKey => {
   if (selected) return row.kind === 'item' ? 'plan-item:selected' : 'wall:selected'
   if (row.kind === 'opening') return 'opening'
+  if (row.kind === 'beam') return 'beam'
   return row.kind === 'item' ? 'plan-item' : 'wall'
 }
 
@@ -219,7 +224,7 @@ export function drawElevationView(scene: ElevationScene, options: ElevationViewO
   const content: DisplayItem[] = []
   for (const row of painted) {
     const box = boxOf(row, xOf, zOf)
-    const ref = { id: row.id, role: row.kind === 'opening' ? 'wall-opening' : row.kind === 'item' ? 'placed-item' : 'wall' }
+    const ref = { id: row.id, role: row.kind === 'opening' ? 'wall-opening' : row.kind === 'item' ? 'placed-item' : row.kind === 'beam' ? 'beam' : 'wall' }
     // A Drawing Layer's own colour wins over the entity's, exactly as it does in a Plan View: the
     // layer says what the drawing is *about*, and the entity's colour is what it would otherwise be.
     const colour = (layers === null ? null : layers.colorOf(row.id)) ?? row.color

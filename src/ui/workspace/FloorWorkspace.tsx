@@ -22,7 +22,7 @@ import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } fro
 import { wallOpenings, drawElevationView } from '../../drawing'
 import type { BadgeSubject, LayerGates, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
 import type { ElevationView, Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
-import { designOptionsOf, elevationViewsOf, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight } from '../../domain'
+import { designOptionsOf, elevationViewsOf, nextBeamLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
@@ -86,6 +86,11 @@ import { ElevationViewCard } from './ElevationViewCard'
 import { elevationLineProblem } from './ElevationDefinitionSection'
 import { DeleteElevationViewDialog } from './DeleteElevationViewDialog'
 import { ElevationDraftOverlay } from './elevation/ElevationDraftOverlay'
+import { BeamDraftOverlay } from './beam/BeamDraftOverlay'
+import type { BeamDraft } from './beam/BeamDraftOverlay'
+import { emptyBeamDraft } from './beam/BeamDraftOverlay'
+import { BeamInspector } from './beam/BeamInspector'
+import { DEFAULT_BEAM_DEPTH_MM, DEFAULT_BEAM_WIDTH_MM } from './beam/beamDefaults'
 import type { ElevationDraftResult } from './elevation/ElevationDraftOverlay'
 import type { ElevationDraft } from './elevation/elevationDraft'
 import { clampPointToCanvas, depthDrag, elevationArrowPath, elevationLabelAt, elevationPrismPoints, emptyElevationDraft, farEdgeHandle } from './elevation/elevationDraft'
@@ -451,6 +456,8 @@ export function FloorWorkspace(): ReactNode {
   /** The Opening the inspector edits, or `null` (#65 §11). One thing is inspected at a time. */
   const openingSelection = useWorkspace((state) => state.openingSelection)
   const selectOpening = useWorkspace((state) => state.selectOpening)
+  const beamSelection = useWorkspace((state) => state.beamSelection)
+  const selectBeam = useWorkspace((state) => state.selectBeam)
   /** This Floor's Openings, in the order the Project lists them. */
   const floorOpenings = useMemo(
     () => project.existingModel.openings.filter((opening) => opening.floorId === floorId),
@@ -493,6 +500,17 @@ export function FloorWorkspace(): ReactNode {
   const roomSelection = useWorkspace((state) => state.roomSelection)
   const selectRoom = useWorkspace((state) => state.selectRoom)
   /** The Room and its measurements together: the record names it, the derive measures it. */
+  /**
+   * The selected Beam and the length the Plan View shows for it (#77 §3). The length is measured on
+   * the reference line, which is the one line a Beam has: no join and no clean-up can change it.
+   */
+  const selectedBeam = useMemo(() => {
+    if (beamSelection === null) return null
+    const beam = beamsOf(project.existingModel).find((each) => each.id === beamSelection && each.floorId === floorId)
+    if (beam === undefined) return null
+    return { beam, length: Math.hypot(beam.line.end.x - beam.line.start.x, beam.line.end.y - beam.line.start.y) }
+  }, [beamSelection, project.existingModel, floorId])
+
   const selectedRoom = useMemo(() => {
     if (roomSelection === null || floorRooms === null) return null
     const room = project.existingModel.rooms.find((each) => each.id === roomSelection) ?? null
@@ -602,6 +620,8 @@ export function FloorWorkspace(): ReactNode {
   const [sharedDesignOpen, setSharedDesignOpen] = useState(false)
   /** The view line being drawn by the `elevation` tool, or null between presses (#75 §2). */
   const [elevationDraft, setElevationDraft] = useState<ElevationDraft | null>(null)
+  /** The Beam tool's draft (#77 §3), held here so Esc and a re-render cannot lose it. */
+  const [beamDraft, setBeamDraft] = useState<BeamDraft | null>(null)
   /** The view whose delete is being confirmed, or null when no dialog is open (#75 §3). */
   const [deleteElevationId, setDeleteElevationId] = useState<string | null>(null)
   /** The elevation pane's own host: its `Fit` and its wheel are measured against this box. */
@@ -1284,7 +1304,7 @@ export function FloorWorkspace(): ReactNode {
       // dispatched, so the source Project keeps its revision; with nothing selected the key is left
       // alone, because then it is not the workspace's key to answer.
       if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'c') {
-        const copied = wallSelection ?? openingSelection ?? roomSelection ?? selection
+        const copied = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? selection
         if (copied === null) return
         event.preventDefault()
         copyToClipboard(copied)
@@ -1645,7 +1665,7 @@ export function FloorWorkspace(): ReactNode {
 
   // #70 §3: the two things only this component knows, which the strip cannot derive from the table —
   // whether one thing is named well enough to mark, and which Design Option would own the record.
-  const renovationSelectedIds = [wallSelection, openingSelection, roomSelection, selection].filter((id) => id !== null)
+  const renovationSelectedIds = [wallSelection, openingSelection, roomSelection, beamSelection, selection].filter((id) => id !== null)
   const renovationBlocked: Partial<Record<RenovationToolId, string>> =
     renovationSelectedIds.length === 1 ? {} : { markDemolition: RENOVATION_STRINGS.markDemolitionNeedsOne }
   const markRenovationDemolition = (): void => {
@@ -1763,16 +1783,19 @@ export function FloorWorkspace(): ReactNode {
     // The same three selections the pane is shown: a Wall and an Opening are selected in their own
     // slices, so reading only the Placed Item's would drop the commit for the two entities a vertical
     // drag most often moves.
-    const id = selection ?? wallSelection ?? openingSelection
+    const id = selection ?? wallSelection ?? openingSelection ?? beamSelection
     const row = elevationSceneValue?.rows.find((entry) => entry.id === id) ?? null
     if (row === null) return
     if (row.kind === 'wall') send('wall.setVerticalExtent', { wallId: row.id, field, value })
     else if (row.kind === 'opening') send('opening.setVerticalExtent', { openingId: row.id, field, value })
+    // A Beam owns its height like a Wall does, and its two ends are an Underside and a Top: the same
+    // three handles, the same fields, the Intent that writes them (#77 §3, criterion 17).
+    else if (row.kind === 'beam') send('beam.setVerticalExtent', { beamId: row.id, field, value })
     // A Placed Item has no height of its own and no bottom handle, so the only fields that can reach
     // this branch are `base` and `top` — `elevationHandleKinds` is what guarantees it — and the handler
     // reads a `top` back as the base the design's height lands under.
     else send('plan.setPlacementVerticalExtent', { placedItemId: row.id, field: field === 'base' ? 'base' : 'top', value })
-  }, [selection, wallSelection, openingSelection, elevationSceneValue, send])
+  }, [selection, wallSelection, openingSelection, beamSelection, elevationSceneValue, send])
 
   /**
    * The Elevation View's own layer answers (#71 §4): the view is a saved view like any Plan View, so
@@ -1923,7 +1946,7 @@ export function FloorWorkspace(): ReactNode {
   }, [project, view, entityLayerKey])
 
   /** The entity the inspector is showing, whichever picker named it (#70 §5, #71 §5). */
-  const inspectedEntityId = wallSelection ?? openingSelection ?? roomSelection ?? selection
+  const inspectedEntityId = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? selection
 
   /**
    * The inspector's `Layer` row (#71 §5): every layer in Project order, then `Unlayered`, with this
@@ -1996,7 +2019,7 @@ export function FloorWorkspace(): ReactNode {
    */
   const renovationDisplayNow: RenovationDisplay = view === null ? 'existing' : viewRenovationDisplay(view)
   const renovationTarget = useMemo((): RenovationInspectorTarget | null => {
-    const id = wallSelection ?? openingSelection ?? roomSelection ?? selection
+    const id = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? selection
     if (id === null || renovationStates === null) return null
     const state = renovationStates.get(id)
     if (state === undefined) return null
@@ -2059,9 +2082,9 @@ export function FloorWorkspace(): ReactNode {
       replaces: self.predecessors.map(link).filter((each): each is RenovationInspectorLink => each !== null),
       successors,
     }
-  }, [wallSelection, openingSelection, roomSelection, selection, renovationStates, renovationOptionId, project, view])
+  }, [wallSelection, openingSelection, roomSelection, beamSelection, selection, renovationStates, renovationOptionId, project, view])
 
-  const renovationSubject = wallSelection ?? openingSelection ?? roomSelection ?? selection
+  const renovationSubject = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? selection
   /**
    * §7c: whether the selection is a baseline record being looked at in the Existing display while the
    * Project carries a Design Option — the one case its handles, its grip and its fields stay shut. The
@@ -2087,7 +2110,7 @@ export function FloorWorkspace(): ReactNode {
       : FIELDS_UNLOCKED
 
   const runRenovationAction = (action: RenovationInspectorAction): void => {
-    const id = wallSelection ?? openingSelection ?? roomSelection ?? selection
+    const id = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? selection
     if (id === null) return
     if (action === 'copy') {
       copyToClipboard(id)
@@ -2466,6 +2489,60 @@ export function FloorWorkspace(): ReactNode {
             depth: Math.round(result.depth),
           })
           setElevationDraft(null)
+          setTool('select')
+        }}
+        unit={project.preferences.displayUnit}
+        precision={project.preferences.displayPrecision}
+      />
+    ) : undefined
+
+  /**
+   * The `Beam` tool (#77 §3): two clicks on the reference line and the three numbers a person can
+   * answer for from below. The same plan snap set the Wall and Elevation tools aim with, so a Beam
+   * clicked against a Wall face lands on it.
+   */
+  const beamDraftOverlay: ReactNode =
+    tool === 'beam' && floorId !== null && floorWalls !== null && viewport !== null && viewport !== undefined ? (
+      <BeamDraftOverlay
+        viewport={viewport}
+        draft={beamDraft ?? emptyBeamDraft(DEFAULT_BEAM_WIDTH_MM, DEFAULT_BEAM_DEPTH_MM)}
+        onDraft={setBeamDraft}
+        snapAt={(at, from) => {
+          const snap = resolveSnap(
+            snapCandidates({
+              geometry: roomSnapGeometry,
+              walls: floorWalls.snapSources,
+              cursor: at,
+              from,
+              gridSpacingMm: snapSettings.gridSpacingMm,
+              angleIncrementDeg: snapSettings.angle.incrementDeg,
+              enabled: snapKinds,
+              allowed: snapLayerAllowed,
+            }),
+            at,
+            1 / viewport.zoom,
+            snapKinds,
+          )
+          return snap === null ? at : snap.point
+        }}
+        onCancel={() => {
+          setBeamDraft(null)
+          setTool('select')
+        }}
+        onFinish={(result) => {
+          if (floorId === null) return
+          // One Beam, one Intent, one undo step (#22): the label is the next free `Beam B-n`, which
+          // is the name the tables, the warnings and the inspector will all read back.
+          send('beam.create', {
+            floorId,
+            line: { start: result.start, end: result.end },
+            justification: result.justification,
+            width: result.width,
+            underside: result.underside,
+            height: result.height,
+            label: nextBeamLabel(project),
+          })
+          setBeamDraft(null)
           setTool('select')
         }}
         unit={project.preferences.displayUnit}
@@ -2865,7 +2942,8 @@ export function FloorWorkspace(): ReactNode {
                   selectOpening(null)
                 }}
               />
-            : selectedWall === null
+            : selectedBeam === null
+            ? selectedWall === null
             ? <SelectionInspector
             item={selected}
             renovationAction={renovationAction(selection ?? '')}
@@ -2968,6 +3046,23 @@ export function FloorWorkspace(): ReactNode {
                       />
                 }
               />
+            : <BeamInspector
+                beam={selectedBeam.beam}
+                length={selectedBeam.length}
+                unit={project.preferences.displayUnit}
+                precision={project.preferences.displayPrecision}
+                onSetLabel={(label) => send('beam.rename', { beamId: selectedBeam.beam.id, label })}
+                onSetLength={(length) => send('beam.setLength', { beamId: selectedBeam.beam.id, length, keepFixed: 'start' })}
+                onSetWidth={(width) => send('beam.setWidth', { beamId: selectedBeam.beam.id, width })}
+                onSetDepth={(height) => send('beam.setVerticalExtent', { beamId: selectedBeam.beam.id, field: 'height', value: height })}
+                onSetUnderside={(underside) => send('beam.setVerticalExtent', { beamId: selectedBeam.beam.id, field: 'base', value: underside })}
+                onSetJustification={(justification) => send('beam.setJustification', { beamId: selectedBeam.beam.id, justification })}
+                onDelete={() => {
+                  send('beam.delete', { beamId: selectedBeam.beam.id })
+                  selectBeam(null)
+                }}
+                renovationAction={renovationAction(selectedBeam.beam.id)}
+              />
           }
           {/* The shared-height preview panel (#76 §1): inside the inspector, no backdrop, both
               canvases visible and interactive behind it, nothing committed until `Apply`. */}
@@ -3042,6 +3137,7 @@ export function FloorWorkspace(): ReactNode {
               angleSnap={angleSnap}
               walls={floorWalls}
               beams={floorBeams}
+              selectedBeamId={beamSelection}
               renovation={
                 entityStates === null
                   ? null
@@ -3184,7 +3280,7 @@ export function FloorWorkspace(): ReactNode {
                   unit={project.preferences.displayUnit}
                   precision={project.preferences.displayPrecision}
                 />
-              ) : elevationDraftOverlay}
+              ) : tool === 'beam' ? beamDraftOverlay : elevationDraftOverlay}
             />
             )}
             <input
@@ -3261,7 +3357,7 @@ export function FloorWorkspace(): ReactNode {
                             ?.name ?? null
                         }
                         display={viewRenovationDisplay(elevationView)}
-                        selectedIds={[selection, wallSelection, openingSelection]
+                        selectedIds={[selection, wallSelection, openingSelection, beamSelection]
                           .filter((id): id is string => id !== null)}
                         // The same routing the Plan View gives a click: a Wall, an Opening and a Placed
                         // Item are three different selections, and the inspector edits the one it is
@@ -3274,6 +3370,8 @@ export function FloorWorkspace(): ReactNode {
                             selectWall(id)
                           } else if (project.existingModel.openings.some((opening) => opening.id === id)) {
                             selectOpening(id)
+                          } else if (beamsOf(project.existingModel).some((beam) => beam.id === id)) {
+                            selectBeam(id)
                           } else {
                             select(id)
                           }
