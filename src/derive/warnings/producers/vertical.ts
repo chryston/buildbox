@@ -22,6 +22,7 @@
 import {
   arcFromThrough,
   area,
+  bounds,
   containment,
   faceOffsets,
   interval,
@@ -55,6 +56,26 @@ import type {
 
 /** Below this overlap area two plan regions are treated as merely touching (#66 §8). */
 const MIN_OVERLAP_AREA_MM2 = 0.01
+
+/**
+ * The axis-aligned bounding box of a plan region, and the prefilter it powers: a positive-area
+ * overlap needs the boxes to overlap too, so pairs whose boxes miss never pay for a clip. The
+ * producers only ever act on `positive` results, so the strict comparison loses nothing. The
+ * kernel's own `bounds` is arc-aware, so a bulging Footprint never hides an overlap.
+ */
+interface Box {
+  minX: number
+  minY: number
+  maxX: number
+  maxY: number
+}
+
+const bboxOf = (path: ClosedPath): Box => {
+  const b = bounds(path)
+  return { minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY }
+}
+
+const boxesMeet = (a: Box, b: Box): boolean => a.minX < b.maxX && b.minX < a.maxX && a.minY < b.maxY && b.minY < a.maxY
 
 /** The Vertical Extent of a placement: its Base and the height its Design gives it. */
 const placementInterval = (p: WarningPlacement): Interval => interval(p.baseElevation, p.baseElevation + p.height)
@@ -219,14 +240,17 @@ const itemItemOverlap: WarningProducer = {
   produce: (floor) => {
     const candidates: WarningCandidate[] = []
     const placements = floor.placements
+    const boxes = new Map(placements.map((placement) => [placement.id, bboxOf(placement.worldPath)]))
     for (let i = 0; i < placements.length; i += 1) {
       for (let j = i + 1; j < placements.length; j += 1) {
         const first = placements[i]!
         const second = placements[j]!
-        const shared = overlap(first.worldPath, second.worldPath)
-        if (shared.kind !== 'positive' || shared.area <= MIN_OVERLAP_AREA_MM2) continue
+        // The cheap tests first: heights apart or boxes apart, no clip is ever needed.
         const extents = overlapLength(placementInterval(first), placementInterval(second))
         if (extents <= TOLERANCE_MM) continue
+        if (!boxesMeet(boxes.get(first.id)!, boxes.get(second.id)!)) continue
+        const shared = overlap(first.worldPath, second.worldPath)
+        if (shared.kind !== 'positive' || shared.area <= MIN_OVERLAP_AREA_MM2) continue
         const [subject, other] = chooseVerticalSubject(placementSubject(first), placementSubject(second))
         const copy = verticalRelationCopy(subject, other)
         candidates.push({
@@ -259,10 +283,13 @@ const itemIntoWall: WarningProducer = {
   type: 'item_into_wall',
   produce: (floor) => {
     const candidates: WarningCandidate[] = []
+    const wallBoxes = new Map(floor.walls.map((wall) => [wall.id, bboxOf(wall.outline)]))
     for (const placement of floor.placements) {
       const extent = placementInterval(placement)
+      const placementBox = bboxOf(placement.worldPath)
       for (const wall of floor.walls) {
         if (wallInterval(wall).hi <= extent.lo || wallInterval(wall).lo >= extent.hi) continue
+        if (!boxesMeet(placementBox, wallBoxes.get(wall.id)!)) continue
         const shared = overlap(placement.worldPath, wall.outline)
         if (shared.kind !== 'positive' || shared.area <= MIN_OVERLAP_AREA_MM2) continue
         // The item's extent inside a hosted Opening's height range means the gap is open at the
@@ -405,25 +432,30 @@ const envelopeIntrusion: WarningProducer = {
   type: 'clearance_envelope_intrusion',
   produce: (floor) => {
     const candidates: WarningCandidate[] = []
+    const boxes = new Map(floor.placements.map((placement) => [placement.id, bboxOf(placement.worldPath)]))
+    const wallBoxes = new Map(floor.walls.map((wall) => [wall.id, bboxOf(wall.outline)]))
     for (const owner of floor.placements) {
       const region = owner.envelopeWorldPath
       const span = envelopeInterval(owner)
       if (region === null || span === null) continue
+      const regionBox = bboxOf(region)
       const envelopeArea = Math.abs(area(region))
       if (envelopeArea <= MIN_OVERLAP_AREA_MM2) continue
       for (const intruder of floor.placements) {
         if (intruder.itemDesignId === owner.itemDesignId) continue
+        if (!boxesMeet(boxes.get(intruder.id)!, regionBox)) continue
+        if (overlapLength(placementInterval(intruder), span) <= TOLERANCE_MM) continue
         const shared = overlap(intruder.worldPath, region)
         if (shared.kind !== 'positive' || shared.area <= MIN_OVERLAP_AREA_MM2) continue
-        if (overlapLength(placementInterval(intruder), span) <= TOLERANCE_MM) continue
         candidates.push(
           intrusionCandidate(shared.area, envelopeArea, { type: 'placedItem', id: intruder.id }, intruder.label, owner, placementFields(intruder)),
         )
       }
       for (const wall of floor.walls) {
+        if (!boxesMeet(wallBoxes.get(wall.id)!, regionBox)) continue
+        if (overlapLength(wallInterval(wall), span) <= TOLERANCE_MM) continue
         const shared = overlap(wall.outline, region)
         if (shared.kind !== 'positive' || shared.area <= MIN_OVERLAP_AREA_MM2) continue
-        if (overlapLength(wallInterval(wall), span) <= TOLERANCE_MM) continue
         candidates.push(
           intrusionCandidate(shared.area, envelopeArea, { type: 'wall', id: wall.id }, wallLabel(wall), owner, wallFields(wall)),
         )
