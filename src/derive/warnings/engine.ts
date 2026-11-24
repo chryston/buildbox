@@ -31,6 +31,7 @@ import { roomOutlinePath } from '../../domain'
 import { designHeight } from '../../domain'
 import { placementTransform } from '../placement'
 import { applyTransform, transformSegment } from '../../geometry'
+import { deriveSkirting } from '../skirting'
 import { deriveWalls } from '../walls'
 import { ROOM_PRODUCERS } from './producers/rooms'
 import { VERTICAL_PRODUCERS } from './producers/vertical'
@@ -47,6 +48,7 @@ import type {
   WarningSubject,
   WarningWall,
   WarningBeam,
+  WarningSkirting,
 } from './types'
 
 /**
@@ -167,6 +169,23 @@ export const warningFloorOf = (project: Project, floorId: EntityId, optionId: En
     underside: entity.underside,
     top: beamTop(entity),
   }))
+  // A Skirting's body is derived, so the producer reads the same strip the Plan View paints: the
+  // host's tidied face stood off by `thickness`, with every gap taken out (#78 §6). A Skirting whose
+  // host Wall is not standing derives no body and so warns about nothing.
+  const hostLineOf = new Map(model.standingWalls.map((wall) => [wall.id, wall.line]))
+  const skirtings: WarningSkirting[] = deriveSkirting(project, floorId, optionId).skirting.map((row) => ({
+    id: row.id,
+    floorId,
+    label: row.label,
+    hostWallId: row.hostWallId,
+    side: row.side,
+    bottom: row.bottom,
+    top: row.top,
+    thickness: row.thickness,
+    hostLine: hostLineOf.get(row.hostWallId)!,
+    innerOffset: row.innerOffset,
+    bodies: row.runs.map((run) => run.outline),
+  }))
   const junctions = model.standingWallJunctions
     .map((junction) => ({
       id: junction.id,
@@ -224,6 +243,7 @@ export const warningFloorOf = (project: Project, floorId: EntityId, optionId: En
     walls: stableSort(walls, (a, b) => compareCodePoints(a.id, b.id)),
     openings: stableSort(openings, (a, b) => compareCodePoints(a.id, b.id)),
     beams: stableSort(beams, (a, b) => compareCodePoints(a.id, b.id)),
+    skirtings: stableSort(skirtings, (a, b) => compareCodePoints(a.id, b.id)),
     junctions: stableSort(junctions, (a, b) => compareCodePoints(a.id, b.id)),
     rooms: stableSort(rooms, (a, b) => compareCodePoints(a.id, b.id)),
     placements: stableSort(warningPlacements, (a, b) => compareCodePoints(a.id, b.id)),

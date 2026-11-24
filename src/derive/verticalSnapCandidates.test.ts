@@ -20,7 +20,7 @@ import { getPresetPack, viewRenovationDisplay } from '../domain'
 import type { VerticalSnapCandidate, VerticalSnapKind } from '../geometry'
 import { verticalSnap, verticalTolerance } from '../geometry'
 import { displayModel, effectiveModel, verticalSnapCandidates } from './index'
-import { elevationScene } from './testing'
+import { domainFixture, elevationScene } from './testing'
 
 const RUNS = { numRuns: 1000 }
 
@@ -219,5 +219,34 @@ describe('the candidate list holds its shape (#75 criteria 19–21)', () => {
     expect(JSON.stringify(first)).toBe(JSON.stringify(again))
     const untouched: Project = elevationScene()
     expect(verticalSnapCandidates({ project: untouched, view: kitchen() })).toEqual(first)
+  })
+})
+
+/**
+ * A Skirting's two ends in the vertical snap list (#78 §7): the strip owns its height, so the words
+ * are the two its inspector prints — a Bottom and a Top, never a Sill or an Underside borrowed from
+ * the thing next to it.
+ */
+describe('a Skirting’s two ends (#78 §7)', () => {
+  const SKIRTING = domainFixture('v13/skirting.json')
+  const kitchenSide: ElevationView = {
+    id: 'el-skirting',
+    name: 'Kitchen side elevation',
+    kind: 'elevation',
+    floorId: 'seed-001',
+    designOptionId: null,
+    line: { start: { x: 600, y: 600 }, end: { x: 9600, y: 600 } },
+    side: 'left',
+    depth: 1000,
+    renovationDisplay: 'existing',
+  }
+
+  it('is offered at its own Bottom and Top', () => {
+    const found = verticalSnapCandidates({ project: SKIRTING, view: kitchenSide })
+    expect(labelled(found, 'Bottom of Skirting SK-1').map((candidate) => [candidate.mm, candidate.kind])).toEqual([[0, 'entity']])
+    expect(labelled(found, 'Top of Skirting SK-1').map((candidate) => candidate.mm)).toEqual([100])
+    // The words belong to the record: no other element's vocabulary is borrowed for it.
+    expect(labelled(found, 'Underside of Skirting SK-1')).toEqual([])
+    expect(labelled(found, 'Sill of Skirting SK-1')).toEqual([])
   })
 })

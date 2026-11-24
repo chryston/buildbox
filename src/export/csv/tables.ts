@@ -68,7 +68,7 @@ export interface TableSpec {
 }
 
 /** The tables this build writes. Later issues add rows here, and nowhere else. */
-export type TableId = 'items' | 'cut-list' | 'rooms' | 'walls' | 'openings' | 'beams' | 'placed-items' | 'warnings'
+export type TableId = 'items' | 'cut-list' | 'rooms' | 'walls' | 'openings' | 'beams' | 'skirting' | 'placed-items' | 'warnings'
 
 /**
  * A table's columns, in contract order: the header line supplies the file's words, the pairs
@@ -309,6 +309,45 @@ export const BEAMS_TABLE: TableSpec = {
 }
 
 /**
+ * The Skirting table (#78 §8).
+ *
+ * `side` is the Wall face the body stands on, in the same `left`/`right` words the Room face refs
+ * use — never `L`/`R` and never a Room's name, which a reader cannot check against a file. The two
+ * lengths are the pair the whole element exists for: `gross_length_mm` is the stored range
+ * (`end_mm − start_mm`) and `net_length_mm` is what is left after the corner clips and the derived
+ * gaps, so a buyer and a drawing disagree by exactly the openings in the Wall. `top_mm` is
+ * `bottom_mm + height_mm`, derived and never stored.
+ */
+const SKIRTING_HEADER =
+  'stable_id,floor_id,floor,design_option_id,design_option,renovation_state,drawing_layer_id,drawing_layer,label,host_wall_id,side,start_mm,end_mm,gross_length_mm,net_length_mm,height_mm,thickness_mm,bottom_mm,top_mm,predecessor_ids'
+
+export const SKIRTING_TABLE: TableSpec = {
+  id: 'skirting',
+  columns: columnsFor(SKIRTING_HEADER, [
+    ['stableId', 'id'],
+    ['floorId', 'id'],
+    ['floor', 'text'],
+    ['designOptionId', 'id'],
+    ['designOption', 'text'],
+    ['renovationState', 'enum', ['existing', 'demolition', 'proposed']],
+    ['drawingLayerId', 'id'],
+    ['drawingLayer', 'text'],
+    ['label', 'text'],
+    ['hostWallId', 'id'],
+    ['side', 'enum', ['left', 'right']],
+    ['startMm', 'length_mm'],
+    ['endMm', 'length_mm'],
+    ['grossLengthMm', 'length_mm'],
+    ['netLengthMm', 'length_mm'],
+    ['heightMm', 'length_mm'],
+    ['thicknessMm', 'length_mm'],
+    ['bottomMm', 'length_mm'],
+    ['topMm', 'length_mm'],
+    ['predecessorIds', 'multi'],
+  ]),
+}
+
+/**
  * The Placed Items table (#68 Scope 3).
  *
  * One row per Placed Item, never one per Item Design — that is the Item List's job, and the two
@@ -365,10 +404,10 @@ export const WARNINGS_TABLE: TableSpec = {
     ['floor', 'text'],
     ['designOptionId', 'id'],
     ['designOption', 'text'],
-    ['warningType', 'enum', ['wall_crossing', 'wall_overlap', 'item_crosses_room', 'item_item_overlap', 'item_into_wall', 'opening_host_above', 'opening_host_below', 'floor_limit_above', 'floor_limit_below', 'clearance_envelope_intrusion']],
-    ['subjectType', 'enum', ['wall', 'opening', 'room', 'placed_item']],
+    ['warningType', 'enum', ['wall_crossing', 'wall_overlap', 'item_crosses_room', 'item_item_overlap', 'item_into_wall', 'opening_host_above', 'opening_host_below', 'floor_limit_above', 'floor_limit_below', 'clearance_envelope_intrusion', 'beam_placed_item', 'beam_opening', 'skirting_placed_item', 'skirting_host_above', 'skirting_host_below']],
+    ['subjectType', 'enum', ['wall', 'opening', 'room', 'placed_item', 'beam', 'skirting']],
     ['subjectId', 'id'],
-    ['otherType', 'enum', ['wall', 'opening', 'room', 'placed_item']],
+    ['otherType', 'enum', ['wall', 'opening', 'room', 'placed_item', 'beam', 'skirting']],
     ['otherId', 'id'],
     ['measuredMm', 'length_mm'],
     ['message', 'text'],
@@ -384,6 +423,7 @@ export const TABLES: Readonly<Record<TableId, TableSpec>> = {
   walls: WALLS_TABLE,
   openings: OPENINGS_TABLE,
   beams: BEAMS_TABLE,
+  skirting: SKIRTING_TABLE,
   'placed-items': PLACED_ITEMS_TABLE,
   warnings: WARNINGS_TABLE,
 }

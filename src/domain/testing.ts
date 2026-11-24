@@ -570,7 +570,7 @@ export function arbProject(): fc.Arbitrary<Project> {
         floors,
         views,
         itemDesigns: designs,
-        existingModel: { placedItems, walls, wallJunctions, openings, rooms: [], beams: [] },
+        existingModel: { placedItems, walls, wallJunctions, openings, rooms: [], beams: [], skirting: [] },
         warningAcknowledgements: [],
       }
     })
@@ -1183,5 +1183,25 @@ export function withBeams<T extends Project>(project: T): T {
     ...project,
     existingModel: { ...project.existingModel, beams: project.existingModel.beams ?? [] },
     designOptions: project.designOptions?.map((option) => ({ ...option, proposed: { ...option.proposed, beams: option.proposed.beams ?? [] } })),
+  }
+}
+
+/**
+ * The same Project as this build's thirteenth schema (#78): both containers carry the Skirting
+ * collection the step writes.
+ *
+ * The step adds `skirting: []` to the Existing Model and to every Design Option's proposed model
+ * that arrives without one, so a test that compares a whole Project read from a pre-v13 record has
+ * to say the same thing the step says. A Skirting is always one a person drew, so the collection is
+ * empty everywhere: the step invents no entity, and neither does this.
+ */
+export function withSkirting<T extends Project>(project: T): T {
+  return {
+    ...project,
+    existingModel: { ...project.existingModel, skirting: project.existingModel.skirting ?? [] },
+    designOptions: project.designOptions?.map((option) => ({
+      ...option,
+      proposed: { ...option.proposed, skirting: option.proposed.skirting ?? [] },
+    })),
   }
 }

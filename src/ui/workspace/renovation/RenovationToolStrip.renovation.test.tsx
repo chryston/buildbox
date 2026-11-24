@@ -42,7 +42,7 @@ describe('the tool strip', () => {
         rows: ['select', 'wall', 'opening', 'room', 'placeItem'],
         hidden: 2,
       },
-      { display: 'demolition', hasDesignOption: true, rows: ['select', 'markDemolition', 'replace'], hidden: 4 },
+      { display: 'demolition', hasDesignOption: true, rows: ['select', 'markDemolition', 'replace'], hidden: 5 },
       {
         display: 'proposed',
         hasDesignOption: true,
@@ -57,10 +57,10 @@ describe('the tool strip', () => {
         rows: ['select', 'wall', 'opening', 'room', 'placeItem'],
         hidden: 2,
       },
-      // §6's error state: only Select, and six hidden.
-      { display: 'demolition', hasDesignOption: false, rows: ['select'], hidden: 6 },
-      { display: 'proposed', hasDesignOption: false, rows: ['select'], hidden: 6 },
-      { display: 'combined', hasDesignOption: false, rows: ['select'], hidden: 6 },
+      // §6's error state: only Select, and seven hidden — the Skirting row needs an Option too (#78 §3).
+      { display: 'demolition', hasDesignOption: false, rows: ['select'], hidden: 7 },
+      { display: 'proposed', hasDesignOption: false, rows: ['select'], hidden: 7 },
+      { display: 'combined', hasDesignOption: false, rows: ['select'], hidden: 7 },
     ]
     for (const each of cases) {
       const view = render(

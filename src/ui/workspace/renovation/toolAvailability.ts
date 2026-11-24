@@ -22,7 +22,7 @@
 import type { RenovationDisplay } from '../../../domain'
 
 /** The tools the strip can show: the S7 editing tools plus the two renovation ones (#70 §3). */
-export type RenovationToolId = 'select' | 'markDemolition' | 'replace' | 'wall' | 'opening' | 'room' | 'placeItem' | 'elevation'
+export type RenovationToolId = 'select' | 'markDemolition' | 'replace' | 'wall' | 'opening' | 'skirting' | 'room' | 'placeItem' | 'elevation'
 
 /** One row of the table: a tool, and the Displays that allow it. */
 export interface RenovationToolRow {
@@ -38,8 +38,8 @@ export interface RenovationToolRow {
 
 /**
  * The table of #70 §3, one row per tool. Reading the columns off it gives the hidden counts the
- * strip prints: Existing hides 2, Demolition hides 4, Proposed hides 2, Combined hides 0, and a
- * Display with no Design Option hides 6 of 7.
+ * strip prints: Existing hides 2, Demolition hides 5, Proposed hides 2, Combined hides 0, and a
+ * Display with no Design Option hides 7 of 9.
  */
 export const RENOVATION_TOOL_ROWS: readonly RenovationToolRow[] = [
   { id: 'select', allowedIn: ['existing', 'demolition', 'proposed', 'combined'], needsDesignOption: false },
@@ -49,6 +49,9 @@ export const RENOVATION_TOOL_ROWS: readonly RenovationToolRow[] = [
   // Demolition Display has nothing for them to add — it only says what the Option removes.
   { id: 'wall', allowedIn: ['existing', 'proposed', 'combined'], needsDesignOption: true },
   { id: 'opening', allowedIn: ['existing', 'proposed', 'combined'], needsDesignOption: true },
+  // A Skirting is a strip of the same kind of work as an Opening — it hangs off a Wall the same way
+  // and is measured in millimetres along it — so it follows the Opening row exactly (#78 §3).
+  { id: 'skirting', allowedIn: ['existing', 'proposed', 'combined'], needsDesignOption: true },
   { id: 'room', allowedIn: ['existing', 'proposed', 'combined'], needsDesignOption: true },
   { id: 'placeItem', allowedIn: ['existing', 'proposed', 'combined'], needsDesignOption: true },
   // An Elevation View is a way of looking, not model content (#75 §3): it creates a saved view, so

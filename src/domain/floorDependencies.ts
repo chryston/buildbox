@@ -11,7 +11,7 @@
  * than a dependant of it, so it goes with the Floor in the same transaction and never
  * counts as a reason to refuse.
  */
-import { beamsOf, elevationViewsOf } from './project'
+import { beamsOf, elevationViewsOf, skirtingOf } from './project'
 import type { Project } from './project'
 
 /** One kind of floor-local content, and how many of it a Floor carries. */
@@ -47,6 +47,22 @@ const beams: FloorDependencyKind = {
   labelOne: 'Beam',
   labelMany: 'Beams',
   count: (project, floorId) => beamsOf(project.existingModel).reduce((total, beam) => (beam.floorId === floorId ? total + 1 : total), 0),
+}
+
+/**
+ * The Skirting standing on a Floor (#78 §1).
+ *
+ * A Skirting names its Floor and the one Wall it is drawn against, so a Floor deleted under one
+ * leaves a record that refers to nothing — the Project the validator refuses. It is refused at the
+ * door instead: nothing here deletes a Skirting for you.
+ */
+const skirting: FloorDependencyKind = {
+  id: 'skirting',
+  label: 'Skirting',
+  labelOne: 'Skirting',
+  labelMany: 'Skirting',
+  count: (project, floorId) =>
+    skirtingOf(project.existingModel).reduce((total, entry) => (entry.floorId === floorId ? total + 1 : total), 0),
 }
 
 const planImage: FloorDependencyKind = {
@@ -93,6 +109,7 @@ const elevationViews: FloorDependencyKind = {
 export const FLOOR_DEPENDENCY_KINDS: readonly FloorDependencyKind[] = [
   placedItems,
   beams,
+  skirting,
   planImage,
   planViews,
   elevationViews,

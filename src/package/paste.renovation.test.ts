@@ -11,7 +11,7 @@
  * the e2e asserting a scene that no longer exists, which is worse than no e2e.
  */
 import { describe, expect, it } from 'vitest'
-import { currentSchemaOf, withBeams, withClearanceEnvelopes, withElevationViews } from '../domain/testing'
+import { currentSchemaOf, withBeams, withClearanceEnvelopes, withElevationViews, withSkirting } from '../domain/testing'
 import fitoutFixture from '../../fixtures/domain/v9/paste-fitout.json?raw'
 import elmFixture from '../../fixtures/domain/v9/paste-elm.json?raw'
 import pairSeed from '../../fixtures/e2e/preview-seed/paste-pair.json?raw'
@@ -121,11 +121,11 @@ describe('the pair is the scene the browser tier drives (#72 criterion 1)', () =
   it('carries the same bytes the domain fixtures hold', () => {
     // The e2e and the domain tests read the same Project, or the e2e is testing a different scene
     // than the one the paste was reasoned about against. The domain goldens beside them were written
-    // at v9, before the Elevation View list, the Clearance Envelope field and the Beam collection
-    // existed, so the read-forward carries the empty list, the null fields and the empty collection
-    // the last three steps write (#75, #76, #77).
-    expect(currentSchemaOf(pair.projects[0]!.data, 8)).toEqual(withBeams(withClearanceEnvelopes(withElevationViews(fitout))))
-    expect(currentSchemaOf(pair.projects[1]!.data, 8)).toEqual(withBeams(withClearanceEnvelopes(withElevationViews(elm))))
+    // at v9, before the Elevation View list, the Clearance Envelope field, the Beam collection and
+    // the Skirting collection existed, so the read-forward carries the empty list, the null fields
+    // and the empty collections the last four steps write (#75, #76, #77, #78).
+    expect(currentSchemaOf(pair.projects[0]!.data, 8)).toEqual(withSkirting(withBeams(withClearanceEnvelopes(withElevationViews(fitout)))))
+    expect(currentSchemaOf(pair.projects[1]!.data, 8)).toEqual(withSkirting(withBeams(withClearanceEnvelopes(withElevationViews(elm)))))
     expect(pair.projects.every((record) => record.schemaVersion === 8)).toBe(true)
   })
 

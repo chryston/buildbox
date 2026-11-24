@@ -564,6 +564,16 @@ export interface ExistingModel {
    * one. {@link beamsOf} is the accessor, and the v11 → v12 migrator adds the empty array.
    */
   beams?: Beam[]
+  /**
+   * Every Skirting of every Floor (#78). A Skirting is hosted by one Wall face over one range, so
+   * it is a collection of its own rather than a field of the Wall — but unlike a Beam it stores no
+   * geometry, because its body is derived from the host's tidied face every time it is drawn.
+   *
+   * Optional for the same reason `beams` is: a Project written before this capability stays valid
+   * without the field. {@link skirtingOf} is the accessor, and the v12 → v13 migrator adds the
+   * empty array.
+   */
+  skirting?: Skirting[]
 }
 
 /**
@@ -588,7 +598,17 @@ export interface ProposedModel {
   placedItems: PlacedItem[]
   /** Every Beam this Option introduces (#77), in the same shape the Existing Model stores. */
   beams?: Beam[]
+  /** Every Skirting this Option introduces (#78), in the same shape the Existing Model stores. */
+  skirting?: Skirting[]
 }
+
+/**
+ * The Skirtings of one model — the Existing Model or a Design Option's proposed work — which a
+ * Project written before #78 does not carry.
+ *
+ * Every consumer reads through this rather than the field, so "no Skirting" has one spelling.
+ */
+export const skirtingOf = (model: { skirting?: Skirting[] } | undefined): Skirting[] => model?.skirting ?? []
 
 /**
  * The Beams of one model — the Existing Model or a Design Option's proposed work — which a Project
@@ -923,6 +943,83 @@ export const beamTop = (beam: Beam): number => beam.underside + beam.height
 
 /** The name a Beam is called by in a sentence, and on the plan. */
 export const beamLabel = (beam: Beam): string => beam.label ?? 'Beam'
+
+/**
+ * Which face of the host Wall a Skirting is drawn against (#78 §1).
+ *
+ * This is the same vocabulary a Room Edge uses to say which face it rides (#67 §1) — `left` and
+ * `right` read along the host Wall's own reference line — so one face named by two kinds of record
+ * is one face. There is no `centre`: a Skirting lies flat against one face or the other, and a
+ * record that said `centre` would describe a body buried inside the Wall.
+ */
+export type SkirtingSide = WallFaceSide
+
+/**
+ * One Skirting (#78): a range of one Wall face, recorded so a quantity and a drawing can be read
+ * off it and so the gaps in it are derived rather than remembered.
+ *
+ * A Skirting is the third Building Element and the first one that is *host-parametric* rather than
+ * free-standing: it has no line of its own. Where it is, is its host Wall's face — the tidied face
+ * `deriveWalls` answers after Junctions are resolved, so a Skirting running into a corner stops
+ * where the two Walls actually meet and not where the reference lines cross. What its body is, is
+ * `thickness` millimetres off that face over the range `start`..`end`. The body is therefore never
+ * stored: a Skirting that remembered its own polygon would disagree with the Wall it is drawn on
+ * the first time that Wall is moved, thickened or joined.
+ *
+ * The two horizontal numbers are the range along the host's reference line, in millimetres from its
+ * start — the same coordinates an Opening's `start` uses. The two vertical numbers are read from
+ * the Floor Datum like every other Vertical Extent, and `bottom + height` is the Top, derived and
+ * never stored.
+ */
+export interface Skirting {
+  id: EntityId
+  floorId: EntityId
+  /** The one Wall this Skirting is drawn against. Never reassigned behind the user's back. */
+  hostWallId: EntityId
+  /** Which face of the host the body stands off. */
+  side: SkirtingSide
+  /** Millimetres along the host's reference line; the near end of the range. */
+  start: number
+  /** Millimetres along the host's reference line; the far end. Always greater than `start`. */
+  end: number
+  /** Millimetres from the Floor Datum; negative is valid. The bottom of the Vertical Extent. */
+  bottom: number
+  /** Millimetres, greater than 0. The Top is `bottom + height`, derived and never stored. */
+  height: number
+  /** Millimetres, greater than 0: how far the body stands off the host face. */
+  thickness: number
+  /**
+   * The Skirting's display name, `Skirting SK-1` by default, numbered within the Project and
+   * renameable. Absent is legal and says only `Skirting`.
+   */
+  label?: string
+  /** The Skirting this one came out of (#69 §3); absent on an Existing Model Skirting. */
+  predecessorIds?: PredecessorIds
+  /**
+   * The Drawing Layer this Skirting belongs to (#71 §1); `null` is Unlayered, and absent is `null`.
+   * New Skirtings default to `Structure` (#78 §4), and nothing derives one from the Room it runs in.
+   */
+  drawingLayerId?: EntityId | null
+}
+
+/**
+ * The parts of a Skirting a later Anchor can name (#78 §1).
+ *
+ * `start` and `end` are the two ends of the range along the host's reference line; `face` is the
+ * host face it is drawn against; `bottom` and `top` are the two edges of its Vertical Extent. The
+ * midpoint of the range is absent for the reason it is absent on a Beam: it moves when either end
+ * does.
+ */
+export const SKIRTING_FEATURE_IDS = ['start', 'end', 'face', 'bottom', 'top'] as const
+
+/** One stable Skirting feature. */
+export type SkirtingFeatureId = (typeof SKIRTING_FEATURE_IDS)[number]
+
+/** The Top of a Skirting: its bottom plus its height (#78 §1). */
+export const skirtingTop = (skirting: Skirting): number => skirting.bottom + skirting.height
+
+/** The name a Skirting is called by in a sentence, and on the plan. */
+export const skirtingLabel = (skirting: Skirting): string => skirting.label ?? 'Skirting'
 
 /** A placement of an Item Design: placement context only, never a copy of its dimensions (#16). */
 export interface PlacedItem {

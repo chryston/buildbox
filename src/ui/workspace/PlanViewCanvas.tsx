@@ -19,7 +19,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import { affineApply, affineInvert, resolveSnap } from '../../derive'
-import type { DerivedFloor, FloorBeams, FloorRooms, FloorWalls, RangeClass, RenovationState, SnapCandidate, SnapKind } from '../../derive'
+import type { DerivedFloor, FloorBeams, FloorRooms, FloorSkirting, FloorWalls, RangeClass, RenovationState, SnapCandidate, SnapKind } from '../../derive'
 import type { DisplayUnit, Point2 } from '../../domain'
 import { footprintPath } from '../../domain'
 import {
@@ -29,6 +29,7 @@ import {
   drawSelectionAnnotations,
   drawWarningBadges,
   displayRects,
+  resolveSize,
 } from '../../drawing'
 import type { BadgeSubject, DisplayList, LayerGates, OpeningPreview, PlanPreview, RangeGates, RoomProposal, Sizing, WallOpenings } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
@@ -109,6 +110,10 @@ export interface PlanViewCanvasProps {
   beams?: FloorBeams | null
   /** The selected Beam, drawn with its own outline (#77 §3). */
   selectedBeamId?: string | null
+  /** The Skirting of this Floor (#78 §7), or null for a Floor with none. */
+  skirting?: FloorSkirting | null
+  /** The selected Skirting, drawn with its own outline (#78 §3). */
+  selectedSkirtingId?: string | null
   /**
    * The Renovation Display this canvas is drawing (#70 §F), or nothing at all when the flag is off.
    *
@@ -181,6 +186,8 @@ export interface PlanViewCanvasProps {
   onSelectRoom?: (id: string) => void
   /** A Beam's body was clicked; the selection moves to it (#77 §3). */
   onSelectBeam?: (id: string) => void
+  /** A click on a Skirting strip (#78 §3). */
+  onSelectSkirting?: (id: string) => void
   /**
    * The Room being drawn or edited, with every region it shares with another Room. Red and
    * hatched when it cannot be committed, accent while it can (#67 behaviours 20–21).
@@ -231,9 +238,9 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     tool, selection, onSelect, onCursorChange, onCanvasClick, dragPreview, onDragPreview, onMoveItem, onRotateItem,
     editLocked = false,
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
-    angleSnap, overlay, htmlOverlay, screenOverlay, walls, beams = null, selectedBeamId = null, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
+    angleSnap, overlay, htmlOverlay, screenOverlay, walls, beams = null, selectedBeamId = null, skirting = null, selectedSkirtingId = null, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
     openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
-    rooms = null, selectedRoomId = null, onSelectRoom, onSelectBeam, roomProposal = null,
+    rooms = null, selectedRoomId = null, onSelectRoom, onSelectBeam, onSelectSkirting, roomProposal = null,
     warningSubjects = [], onSelectWarningBadge,
   } = props
   const [hostSize, setHostSize] = useState({ width: 0, height: 0 })
@@ -511,7 +518,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   // thing a sheet may leave out is what a sheet has no pointer for — the selection's measurements,
   // its handles and the Warning badges.
   const view = drawFloorView(
-    { floor, walls, rooms, openings, beams },
+    { floor, walls, rooms, openings, beams, skirting },
     {
       sizing,
       renovation: states === null ? null : { states },
@@ -521,6 +528,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       preview,
       selectedWallId,
       selectedBeamId,
+      selectedSkirtingId,
       selectedOpeningId,
       openingPreview,
       selectedRoomId,
@@ -529,7 +537,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       handles: handlesFor,
     },
   )
-  const { list: painted, floor: drawnFloor, walls: drawnWalls, rooms: drawnRooms, openings: drawnOpenings, beams: drawnBeams } = view
+  const { list: painted, floor: drawnFloor, walls: drawnWalls, rooms: drawnRooms, openings: drawnOpenings, beams: drawnBeams, skirting: drawnSkirting } = view
   // The names this view had no room for, keyed by the thing that lost its label (#74 §3): the
   // renderer puts each one on the entity's group, so hovering the footprint says the name the
   // packing could not fit beside it.
@@ -569,6 +577,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     else if (drawnOpenings.some((host) => host.symbols.some((symbol) => symbol.id === id))) onSelectOpening?.(id)
     else if (drawnRooms?.rooms.some((room) => room.id === id) === true) onSelectRoom?.(id)
     else if (drawnBeams?.beams.some((beam) => beam.id === id) === true) onSelectBeam?.(id)
+    else if (drawnSkirting?.skirting.some((row) => row.id === id) === true) onSelectSkirting?.(id)
     else onSelect(id)
   }
 
@@ -596,8 +605,13 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       placements: drawnFloor.placements.map((item) => ({ id: item.id, outline: item.worldPath })),
       rooms: (drawnRooms?.rooms ?? []).map((room) => ({ id: room.id, outline: room.path })),
       beams: (drawnBeams?.beams ?? []).map((beam) => ({ id: beam.id, outline: beam.outline })),
+      // A strip cycles with the Wall it stands on and the cabinet standing in front of it, which is
+      // the order the pointer reaches them in (#78 §7, #70 §8).
+      skirtings: (drawnSkirting?.skirting ?? []).flatMap((row) => row.runs.map((run) => ({ id: row.id, outline: run.outline }))),
       states,
-    }).map((candidate) => ({ ...candidate, rangeClass: classOf(candidate.entityId) }))
+      // Half the width the same canvas strokes the strip's invisible target at, so the pointer
+      // answers the Skirting where the surface offers it and the cycle can reach it (#78 §7).
+    }, resolveSize('hit-target', sizing).mm / 2).map((candidate) => ({ ...candidate, rangeClass: classOf(candidate.entityId) }))
     // An Opening answers the pointer through its own symbol, which the Wall drawing lays above the
     // Wall it is cut in. The symbol's geometry is not a closed path the hit test can take, so the
     // click itself is the evidence that it is drawn and selectable here — and its layer puts it
@@ -685,6 +699,16 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
           // A Beam is documentation drawn under the Wall it usually sits under, so the cycle is
           // what makes it reachable at all: the Wall is on top and takes the first click, and the
           // second click in the same spot walks the list (#77 criteria 16, 18).
+          consumedPointer.current = true
+          const answer = pickTarget(id, event.clientX, event.clientY)
+          if (answer === null) consumedPointer.current = false
+          else selectById(answer)
+        },
+    onSkirtingPointerDown: onSelectSkirting === undefined || tool !== 'select'
+      ? undefined
+      : (id, event) => {
+          // A Skirting is a finish painted over the Wall it stands on, so the Wall takes the first
+          // click and the cycle behind the click is what makes the strip reachable (#78 §7).
           consumedPointer.current = true
           const answer = pickTarget(id, event.clientX, event.clientY)
           if (answer === null) consumedPointer.current = false

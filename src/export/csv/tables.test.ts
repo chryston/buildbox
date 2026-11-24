@@ -37,6 +37,8 @@ const V1_HEADERS: Readonly<Record<string, string>> = {
     'stable_id,floor_id,floor,design_option_id,design_option,renovation_state,drawing_layer_id,drawing_layer,kind,label,host_wall_id,start_mm,end_mm,width_mm,sill_mm,head_mm,height_mm,hinge_side,swing,predecessor_ids',
   beams:
     'stable_id,floor_id,floor,design_option_id,design_option,renovation_state,drawing_layer_id,drawing_layer,label,length_mm,width_mm,depth_mm,underside_mm,top_mm,predecessor_ids',
+  skirting:
+    'stable_id,floor_id,floor,design_option_id,design_option,renovation_state,drawing_layer_id,drawing_layer,label,host_wall_id,side,start_mm,end_mm,gross_length_mm,net_length_mm,height_mm,thickness_mm,bottom_mm,top_mm,predecessor_ids',
   'placed-items':
     'stable_id,floor_id,floor,design_option_id,design_option,renovation_state,drawing_layer_id,drawing_layer,label,item_design_id,item_design,rotation_deg,bottom_mm,top_mm,room_id,room,room_relation,predecessor_ids',
   warnings:
@@ -75,8 +77,8 @@ describe('the v1.0 tables', () => {
     }
   })
 
-  test('are the eight the contract names, in the order a ZIP writes them', () => {
-    expect(Object.keys(TABLES)).toEqual(['items', 'cut-list', 'rooms', 'walls', 'openings', 'beams', 'placed-items', 'warnings'])
+  test('are the nine the contract names, in the order a ZIP writes them', () => {
+    expect(Object.keys(TABLES)).toEqual(['items', 'cut-list', 'rooms', 'walls', 'openings', 'beams', 'skirting', 'placed-items', 'warnings'])
   })
 
   // #68 Scope 1: the four element tables are the prefix, their own columns, then the suffix. The
@@ -138,8 +140,8 @@ describe('the v1.0 tables', () => {
     const codesOf = (id: keyof typeof TABLES, header: string): readonly string[] =>
       TABLES[id].columns.find((column) => column.header === header)?.values ?? []
     expect(codesOf('walls', 'classification')).toEqual(['external', 'internal', 'partition'])
-    expect(codesOf('warnings', 'subject_type')).toEqual(['wall', 'opening', 'room', 'placed_item'])
-    expect(codesOf('warnings', 'other_type')).toEqual(['wall', 'opening', 'room', 'placed_item'])
+    expect(codesOf('warnings', 'subject_type')).toEqual(['wall', 'opening', 'room', 'placed_item', 'beam', 'skirting'])
+    expect(codesOf('warnings', 'other_type')).toEqual(['wall', 'opening', 'room', 'placed_item', 'beam', 'skirting'])
     expect(codesOf('warnings', 'warning_type')).toEqual([
       'wall_crossing',
       'wall_overlap',
@@ -151,6 +153,11 @@ describe('the v1.0 tables', () => {
       'floor_limit_above',
       'floor_limit_below',
       'clearance_envelope_intrusion',
+      'beam_placed_item',
+      'beam_opening',
+      'skirting_placed_item',
+      'skirting_host_above',
+      'skirting_host_below',
     ])
   })
 })

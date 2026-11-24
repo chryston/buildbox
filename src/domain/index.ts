@@ -42,6 +42,7 @@ export {
 } from './footprint'
 export { PRESET_NAMES, convertWarningFor, lostParametersOf } from './convert'
 export { BEAM_LABEL_PREFIX, nextBeamLabel } from './beams'
+export { SKIRTING_LABEL_PREFIX, nextSkirtingLabel, skirtingDependencies, type SkirtingDependency } from './skirting'
 export {
   FLOOR_DEPENDENCY_KINDS,
   floorHasDependencies,
@@ -98,6 +99,7 @@ export {
   migrateV9toV10,
   migrateV10toV11,
   migrateV11toV12,
+  migrateV12toV13,
   runMigrationChain,
   type Migrator,
   type MigrateError,
@@ -177,6 +179,9 @@ export type {
   RoomWallFaceRef,
   SavedView,
   SavedViewSettings,
+  Skirting,
+  SkirtingFeatureId,
+  SkirtingSide,
   Wall,
   WallClassification,
   WallEnd,
@@ -197,6 +202,7 @@ export {
   DEFAULT_LAYER_SETTING,
   NEW_LAYER_COLOR,
   RENOVATION_DISPLAYS,
+  SKIRTING_FEATURE_IDS,
   UNLAYERED_LAYER_KEY,
   beamLabel,
   beamTop,
@@ -209,6 +215,9 @@ export {
   elevationViewsOf,
   savedViewById,
   savedViewsOf,
+  skirtingLabel,
+  skirtingOf,
+  skirtingTop,
   viewActiveLayerId,
   viewDesignOptionId,
   viewLayerOrder,

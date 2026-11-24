@@ -442,6 +442,7 @@ export const STRINGS = {
   exportListWalls: 'Walls',
   exportListOpenings: 'Openings',
   exportListBeams: 'Beams',
+  exportListSkirting: 'Skirting',
   exportListPlacedItems: 'Placed Items',
   exportListWarnings: 'Warnings List',
   /** Why the State and Layer controls go grey: that table is scoped by Floor and option only. */
@@ -541,6 +542,13 @@ export const STRINGS = {
   /** Deleting a Wall takes its Openings with it, and the button says so rather than hiding it. */
   wallDeleteWithOpenings: (openings: number): string =>
     `Delete wall and ${plural(openings, 'opening', 'openings')}`,
+  /** The same answer when the Wall also carries Skirting (#78 §5): both counts are said. */
+  wallDeleteWithDependencies: (openings: number, skirtings: number): string =>
+    openings === 0
+      ? `Delete wall and ${plural(skirtings, 'skirting', 'skirtings')}`
+      : skirtings === 0
+        ? `Delete wall and ${plural(openings, 'opening', 'openings')}`
+        : `Delete wall, ${plural(openings, 'opening', 'openings')} and ${plural(skirtings, 'skirting', 'skirtings')}`,
   // The Door / window inspector and its draft (#65's components, #66 §17).
   openingLabel: 'Label',
   openingKind: 'Kind',
@@ -742,6 +750,37 @@ export const STRINGS = {
   beamLength: 'Length',
   beamSectionTitle: 'Beam',
   beamEmptyHint: 'No Beams on this Floor yet.',
+  // The Skirting tool, its panel and its inspector (#78 §3–§4). A face is named by the Room it
+  // borders — `W-1 · Kitchen side` — and by a plain number when no Room adjoins it: the words
+  // `left` and `right` never reach the screen, because nobody measures a skirting from a side they
+  // cannot name.
+  toolSkirting: 'Skirting',
+  skirtingHeight: 'Height',
+  skirtingThickness: 'Thickness',
+  skirtingBottom: 'Bottom',
+  /** `measure yours` — the caption that keeps a placeholder from being read as a standard. */
+  skirtingMeasureYours: 'measure yours',
+  skirtingPickFace: 'Click a Wall face to skirt it.',
+  skirtingCancel: 'Cancel (Esc)',
+  skirtingDone: 'Add Skirting',
+  skirtingFaceLabel: (wall: string, side: string): string => `${wall} · ${side}`,
+  skirtingSideNumber: (n: number): string => `side ${n}`,
+  skirtingSectionTitle: 'Skirting',
+  skirtingWall: 'Wall',
+  skirtingSide: 'Side',
+  skirtingStart: 'Start',
+  skirtingEnd: 'End',
+  skirtingGrossLength: 'Gross length',
+  skirtingNetLength: 'Net length',
+  skirtingLabelField: 'Label',
+  skirtingFlipSide: 'Flip side',
+  skirtingDuplicateOtherSide: 'Duplicate to other side',
+  skirtingDelete: 'Delete Skirting',
+  skirtingDeleteConfirm: 'Delete this Skirting?',
+  // Said by the range box whose number the record would not take (#78 §4): the box is marked and
+  // names what a range has to satisfy, rather than silently returning to the number it had.
+  skirtingRangeInvalid: 'Enter a range the Wall’s face holds, with End beyond Start.',
+  skirtingEmptyHint: 'No Skirting on this Floor yet.',
   elevationNameRequired: 'Give this Elevation View a name',
   elevationNameTaken: (name: string): string =>
     `Another Elevation View on this Floor is already called ${name}`,
@@ -1134,6 +1173,9 @@ export const WARNING_COPY: Readonly<Record<string, (params: WarningParams) => st
   host_range_below: (params) =>
     `${String(params.a)} ${bottomWord(params.aKind)} is ${vmm(params)} mm below host ${String(params.b)} base.`,
   item_into_wall: (params) => `${String(params.a)} runs ${vmm(params)} mm into ${String(params.b)}.`,
+  // The one Skirting sentence (#78 §6): a body the item cannot stand in, measured perpendicular to
+  // the host face. The Skirting reads first because it is the subject — the cabinet is what has to move.
+  skirting_placed_item: (params) => `${String(params.a)} projects ${vmm(params)} mm into ${String(params.b)}'s footprint.`,
   clearance_envelope_intrusion: (params) =>
     `${String(params.a)} takes up ${Number(params.m2).toFixed(2)} m² (${Math.round(Number(params.pct))}%) of ${String(params.b)}'s Clearance Envelope.`,
 }

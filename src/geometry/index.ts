@@ -57,6 +57,7 @@ export {
 } from './segment'
 export {
   distanceBetweenSegments,
+  distanceToSegment,
   intersectSegments,
   nearestOnSegment,
   paramForPoint,

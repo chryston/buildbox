@@ -11,8 +11,8 @@
  * A Junction is created only by an explicit target (#64 §20 criterion 4): ending a Wall 30 mm
  * short of another creates nothing. Nothing here infers a join from proximity.
  */
-import type { EntityId, Project, Wall, WallEnd, WallJunction, WallJunctionEnd, WallRefLine } from '../../domain'
-import { designOptionsOf, openingDependencies } from '../../domain'
+import type { EntityId, ExistingModel, Project, ProposedModel, Skirting, Wall, WallEnd, WallJunction, WallJunctionEnd, WallRefLine } from '../../domain'
+import { designOptionsOf, openingDependencies, skirtingDependencies, skirtingLabel, skirtingOf } from '../../domain'
 import {
   DEG,
   TOLERANCE_MM,
@@ -508,7 +508,7 @@ const splitWall: Handler<'wall.split'> = (ctx) => {
       )
     }
   }
-  const [newId, junctionId] = spendIds(ctx.intent.ids, 2, 'wall.split')
+  const [newId, junctionId, skirtingId] = spendIds(ctx.intent.ids, 3, 'wall.split')
   // Each Opening goes to the piece it lies on, its `start` measured from the new seam
   // (#65 §7). One that straddles the seam blocks the split outright: the two pieces would
   // each be left holding part of a hole that neither of them has.
@@ -521,6 +521,38 @@ const splitWall: Handler<'wall.split'> = (ctx) => {
     if (opening.start >= at) {
       opening.hostWallId = newId
       opening.start -= at
+    }
+  }
+  // A Skirting follows the piece it lies on, and one that runs across the seam becomes two records
+  // meeting at it (#78 §5): the start-side piece keeps the ID and the range up to the seam, the
+  // end-side piece is a new record on the new Wall. Splitting never lengthens a run and never
+  // merges two of them, so the two pieces add up to exactly what was there before.
+  for (const entry of [...skirtingOf(ctx.draft.existingModel)]) {
+    if (entry.hostWallId !== wallId) continue
+    if (entry.start >= at - TOLERANCE_MM) {
+      entry.hostWallId = newId
+      entry.start -= at
+      entry.end -= at
+    } else if (entry.end > at + TOLERANCE_MM) {
+      const farEnd = entry.end
+      entry.end = at
+      const pieces = (ctx.draft.existingModel.skirting ??= [])
+      // Written field by field rather than cloned: `entry` is a draft, and the new record has to be
+      // a plain one the Project can hold. An Existing Skirting has no provenance to carry.
+      const piece: Skirting = {
+        id: skirtingId,
+        floorId: entry.floorId,
+        hostWallId: newId,
+        side: entry.side,
+        start: 0,
+        end: farEnd - at,
+        bottom: entry.bottom,
+        height: entry.height,
+        thickness: entry.thickness,
+        ...(entry.label === undefined ? {} : { label: entry.label }),
+        ...(entry.drawingLayerId === undefined ? {} : { drawingLayerId: entry.drawingLayerId }),
+      }
+      pieces.push(piece)
     }
   }
   const cut = refPointAt(wall.line, at)
@@ -676,6 +708,10 @@ const mergeWalls: Handler<'wall.merge'> = (ctx) => {
   // own Openings shift by the same amount the other's do.
   rehostOpenings(container.openings, first, firstId, line)
   rehostOpenings(container.openings, second, firstId, line)
+  // The same for Skirting, and for the same reason: the merged line may start further back than
+  // either piece did, so both runs are re-read against it. Two runs, two records (#78 §5).
+  rehostSkirtings(container.skirting, first, firstId, line)
+  rehostSkirtings(container.skirting, second, firstId, line)
   container.wallJunctions = container.wallJunctions.filter((junction) => junction.id !== shared.id)
   container.walls = container.walls.filter((wall) => wall.id !== secondId)
   // The merged Wall is longer than either piece and both pieces' Openings moved onto it: the fit
@@ -709,12 +745,36 @@ const rehostOpenings = (
  * deleting this Wall would then take something the homeowner never saw.
  */
 const deleteWall: Handler<'wall.delete'> = (ctx) => {
-  const { wallId, openings: agreed } = ctx.intent.payload
+  const { wallId, openings: agreed, skirting: agreedSkirting } = ctx.intent.payload
   const host = requireWall(ctx.project, wallId)
   // A Room standing on this Wall comes first (#67 §12): detaching a Room is the homeowner's
   // decision, and it is asked before the question of what the delete costs in Openings.
   if (faceRefsOn(ctx.project, wallId).length > 0) refuseReferencedWall(ctx.project, host)
   const hosted = ctx.project.existingModel.openings.filter((opening) => opening.hostWallId === wallId)
+  // The Skirting drawn against this Wall's faces goes with it for the same reason an Opening does:
+  // it is a range along one of its faces, and there is no face left to stand off (#78 §5).
+  const skirted = skirtingOf(ctx.project.existingModel).filter((entry) => entry.hostWallId === wallId)
+  if (skirted.length > 0) {
+    if (agreedSkirting === undefined) {
+      refuse(
+        'has-dependants',
+        wallPath(wallId),
+        `${host.ref} has ${skirted.length === 1 ? 'skirting' : `${skirted.length} skirtings`} drawn against it. Deleting the wall deletes them too — nothing here does that for you.`,
+      )
+    }
+    const now = skirted.map((entry) => entry.id).sort()
+    const given = [...agreedSkirting].sort()
+    if (now.length !== given.length || now.some((id, index) => id !== given[index])) {
+      refuse(
+        'dependency-changed',
+        wallPath(wallId),
+        `${host.ref} does not have the same skirting as when you asked. Check the list again.`,
+      )
+    }
+    ctx.draft.existingModel.skirting = skirtingOf(ctx.draft.existingModel).filter(
+      (entry) => entry.hostWallId !== wallId,
+    )
+  }
   if (hosted.length > 0) {
     if (agreed === undefined) {
       refuse(
@@ -749,6 +809,9 @@ const deleteWall: Handler<'wall.delete'> = (ctx) => {
 /** `1 opening` / `3 openings` — the count the refusal gives. */
 const count = (n: number): string => `${n} ${n === 1 ? 'opening' : 'openings'}`
 
+/** `1 skirting` / `3 skirtings` — the same for the runs drawn against the faces (#78 §5). */
+const skirtCount = (n: number): string => `${n} ${n === 1 ? 'skirting' : 'skirtings'}`
+
 /**
  * The review a delete of a Wall with Openings has to be answered before it runs (#65 §8).
  * Nothing is thrown here: a Wall that is not there has nothing to list, and the Intent is
@@ -758,13 +821,21 @@ const deleteWallReview = (project: Project, wallId: EntityId): DependencyReview 
   const wall = project.existingModel.walls.find((candidate) => candidate.id === wallId)
   if (wall === undefined) return null
   const openings = openingDependencies(project, wallId)
-  if (openings.length === 0) return null
+  const skirting = skirtingDependencies(project, wallId)
+  if (openings.length === 0 && skirting.length === 0) return null
+  const tail =
+    skirting.length === 0
+      ? `its ${count(openings.length)}`
+      : openings.length === 0
+        ? `its ${skirtCount(skirting.length)}`
+        : `its ${count(openings.length)} and its ${skirtCount(skirting.length)}`
   return {
     kind: 'delete-wall',
     wallId,
     wallRef: wall.ref,
     openings,
-    message: `Delete ${wall.ref} and its ${count(openings.length)}?`,
+    skirting,
+    message: `Delete ${wall.ref} and ${tail}?`,
   }
 }
 
@@ -790,6 +861,58 @@ const junctionFloor = (project: Project, junctionId: EntityId): EntityId | null 
 type WallHandlers = { [T in WallIntent['type']]: IntentHandler<T> }
 
 /**
+ * Keep every Skirting inside the Wall it stands on (#78 §5 "Shorten the host"). A Wall that came
+ * out shorter clips the runs drawn against it in the same transaction as the Wall — a Skirting is a
+ * range along a face, so a face that ended takes the end of the range with it. Growing a Wall never
+ * lengthens a Skirting, which is why this only ever pulls the two ends back.
+ *
+ * A run the edit pushes entirely off the Wall is refused rather than removed: deleting Skirting the
+ * homeowner never asked to delete is the dependency review's decision, not this pass's.
+ */
+const clipHostedSkirting = (draft: Project): void => {
+  const lengths = new Map<EntityId, number>()
+  for (const wall of draft.existingModel.walls) lengths.set(wall.id, refLength(wall.line))
+  for (const option of designOptionsOf(draft))
+    for (const wall of option.proposed.walls) lengths.set(wall.id, refLength(wall.line))
+  const containers: (ExistingModel | ProposedModel)[] = [
+    draft.existingModel,
+    ...designOptionsOf(draft).map((option) => option.proposed),
+  ]
+  for (const container of containers) {
+    for (const entry of skirtingOf(container)) {
+      const length = lengths.get(entry.hostWallId)
+      // A host this Project no longer has is the validator's to refuse, not this pass's to clip.
+      if (length === undefined) continue
+      if (entry.start >= length - TOLERANCE_MM) {
+        const host =
+          draft.existingModel.walls.find((wall) => wall.id === entry.hostWallId) ??
+          designOptionsOf(draft)
+            .flatMap((option) => option.proposed.walls)
+            .find((wall) => wall.id === entry.hostWallId)
+        refuse(
+          'has-dependants',
+          host === undefined ? 'existingModel.walls' : wallPath(host.id),
+          `${skirtingLabel(entry)} stands on ${host === undefined ? 'this wall' : host.ref}, which is now too short to carry it. Shorten the skirting first, or delete it.`,
+        )
+      }
+      entry.end = Math.min(entry.end, length)
+      entry.start = Math.min(entry.start, length)
+    }
+  }
+}
+
+/** Both pieces' Skirting moves to the Wall that survives a merge, read at the same point of the
+ * longer line (#78 §5). Two runs stay two records: merging Walls never merges Skirting. */
+const rehostSkirtings = (skirting: Skirting[] | undefined, from: Wall, onto: EntityId, line: WallRefLine): void => {
+  for (const entry of skirting ?? []) {
+    if (entry.hostWallId !== from.id) continue
+    entry.start = refParamAt(line, refPointAt(from.line, entry.start))
+    entry.end = refParamAt(line, refPointAt(from.line, entry.end))
+    entry.hostWallId = onto
+  }
+}
+
+/**
  * The Wall edits a Project's Openings have to survive (#65 §7): the edit runs, then every
  * Opening is measured against the Wall it is cut into as that Wall now is. One that no longer
  * fits refuses the whole edit with its own sentence, so a drag that would swallow a window is
@@ -801,11 +924,14 @@ type WallHandlers = { [T in WallIntent['type']]: IntentHandler<T> }
  *
  * Between the two sits #67 §12: a Room Edge referenced to one of the Walls this edit moved
  * follows the face it was riding, and the edit is refused when the face turned into something
- * the Edge cannot lie on or when following it would push a Room into another.
+ * the Edge cannot lie on or when following it would push a Room into another. And after both
+ * sits #78 §5: a Skirting drawn against a face that got shorter is clipped to it, or the edit is
+ * refused when the run would be left with no Wall at all.
  */
 const withOpeningsChecked = <T extends WallIntent['type']>(run: Handler<T>): Handler<T> => (ctx) => {
   run(ctx)
   followWallFaces(ctx.project, ctx.draft)
+  clipHostedSkirting(ctx.draft)
 }
 
 /** Every Wall edit that can move a host's ends, with the fit check owed on the finished Project. */

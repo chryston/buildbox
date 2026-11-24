@@ -74,7 +74,7 @@ describe('Restore undoes Replace (#69 acceptance 5)', () => {
               if (result.ok) current = result.project
             }
             const optionA = designOptionsOf(current).find((entry) => entry.id === A)!
-            expect(optionA.proposed).toEqual({ walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], placedItems: [] })
+            expect(optionA.proposed).toEqual({ walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], skirting: [], placedItems: [] })
             expect(optionA.demolishedIds).toEqual([])
             expect(canonicalJson(effectiveModel(current, FLOOR, A))).toBe(canonicalJson(effectiveModel(before, FLOOR, A)))
             expect(canonicalJson(current.existingModel)).toBe(canonicalJson(before.existingModel))

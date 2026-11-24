@@ -375,6 +375,7 @@ export function effectiveView(project: Project, floorId: EntityId | null, design
       rooms: [...model.standingRooms],
       placedItems: [...model.standingPlacedItems],
       beams: [...model.standingBeams],
+      skirting: [...model.standingSkirting],
     },
   }
 }

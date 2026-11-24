@@ -80,6 +80,11 @@ export const SIZE_ROLES: Record<SizeRole, SizeRow> = {
   'plan-line': { screen: { px: 1 }, paper: { mm: 0.25 } },
   'plan-line-selected': { screen: { px: 2 }, paper: { mm: 0.25 } },
   hairline: { screen: { px: 1 }, paper: { mm: 0.18 } },
+  // The width of an invisible target's stroke (#78 §7). A 15 mm Skirting is a pixel and a half at
+  // the zoom a whole Flat is read at, and a pointer cannot be aimed at a pixel and a half — and a
+  // stroke-only path thinner than a device pixel is one Firefox will not hit-test at all (#65 §11).
+  // Ten device pixels is what the Plan View's other targets are about as wide as they get to be.
+  'hit-target': { screen: { px: 10 }, paper: { mm: 2 } },
   // A removed section's dashed lines are drawn in the Floor's own millimetres, so the dash
   // stays one dash whether the plan is at zoom 0.1 or printed at 1:100 (#65 §12).
   'opening-dash': { screen: { mm: 150 }, paper: { mm: 3 } },
@@ -210,6 +215,21 @@ export const STYLES: Record<StyleKey, Style> = {
   // at, and Firefox delivers no `pointerdown` for a stroke-only path at all (#65 §11).
   'beam-hit': { fill: 'transparent', stroke: 'none' },
   'beam-label': { fill: 'var(--bb-text)', size: 'plan-label', fontFamily: FONT_STACK, hit: 'none' },
+  // A Skirting is a 15 mm strip standing on a Wall face, so it is painted solidly enough to read at
+  // a room's scale and thin enough never to be mistaken for the Wall it leans on (#78 §7). It draws
+  // over the Wall band on purpose: the strip is on the face, not inside the Wall.
+  'skirting': { fill: 'var(--bb-text)', fillAlpha: 0x2e / 0xff, stroke: 'var(--bb-text)', strokeWidth: 'plan-line' },
+  'skirting:selected': {
+    fill: 'var(--bb-accent)',
+    fillAlpha: 0x4a / 0xff,
+    stroke: 'var(--bb-accent)',
+    strokeWidth: 'plan-line-selected',
+  },
+  // The strip again with nothing visible on it, stroked ten device pixels wide: 15 mm of plan is a
+  // pixel and a half at the zoom a Flat is read at, and a pointer cannot be aimed at that (#78 §7).
+  // `transparent` is a paint and not `none`, so the stroke is what the pointer lands on.
+  'skirting-hit': { fill: 'transparent', stroke: 'transparent', strokeWidth: 'hit-target' },
+  'skirting-label': { fill: 'var(--bb-text)', size: 'plan-label', fontFamily: FONT_STACK, hit: 'none' },
   // The renovation overlays (#70 §F): bounded graphics laid over the entity's own layer style,
   // which they never rewrite — the Wall a Design Option demolishes is still drawn in the `walls`
   // layer's colour, and the dashed outline plus 45° hatching is what says it is going. Both are

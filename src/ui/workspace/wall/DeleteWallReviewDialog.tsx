@@ -50,6 +50,10 @@ export function DeleteWallReviewDialog(props: DeleteWallReviewDialogProps): Reac
           {review.openings.map((opening) => (
             <li key={opening.id} data-testid="delete-wall-review-row">{opening.text}</li>
           ))}
+          {/* The runs drawn against this Wall's faces, listed beside the openings it carries (#78 §5). */}
+          {review.skirting.map((entry) => (
+            <li key={entry.id} data-testid="delete-wall-review-row">{entry.text}</li>
+          ))}
         </ul>
         <div className="bb-workspace-dialog-actions">
           <button
@@ -58,7 +62,7 @@ export function DeleteWallReviewDialog(props: DeleteWallReviewDialogProps): Reac
             className="bb-workspace-primary-button"
             onClick={onConfirm}
           >
-            {STRINGS.wallDeleteWithOpenings(review.openings.length)}
+            {STRINGS.wallDeleteWithDependencies(review.openings.length, review.skirting.length)}
           </button>
           <button
             type="button"

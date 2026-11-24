@@ -22,8 +22,8 @@
  * pass applies through the same `LayerGates` a Plan View is painted with, so that a hidden Wall is
  * hidden by one answer and not by two that can disagree (#71 §4).
  */
-import type { Beam, ElevationView, EntityId, Floor, Opening, PlacedItem, Project, Wall } from '../domain'
-import { UNLAYERED_LAYER_KEY, beamLabel, beamTop, designHeight, viewDesignOptionId, viewRenovationDisplay } from '../domain'
+import type { Beam, ElevationView, EntityId, Floor, Opening, PlacedItem, Project, Skirting, Wall } from '../domain'
+import { UNLAYERED_LAYER_KEY, beamLabel, beamTop, designHeight, skirtingLabel, skirtingTop, viewDesignOptionId, viewRenovationDisplay } from '../domain'
 import type { ClosedPath, ElevationFrame, Pt } from '../geometry'
 import { elevationFrame, faceOffsets, linearElement, openingBodyOutline, projectElevationOutline, wallBodyOutline } from '../geometry'
 import { entityLayerKeys } from './drawingLayers'
@@ -31,9 +31,10 @@ import { derivePlacement, placementLabels } from './effective'
 import { effectiveModel } from './effectiveModel'
 import { designOutline, placementContext, worldPointOf } from './placement'
 import { displayModel } from './renovationDisplay'
+import { deriveSkirting } from './skirting'
 
 /** Which family an Elevation View draws a row as, which decides its style and its handles. */
-export type ElevationRowKind = 'wall' | 'opening' | 'item' | 'beam'
+export type ElevationRowKind = 'wall' | 'opening' | 'item' | 'beam' | 'skirting'
 
 /**
  * One entity's place in one Elevation View: the band it covers and the height it stands at.
@@ -81,6 +82,21 @@ export const elevationFrameOf = (view: ElevationView): ElevationFrame => elevati
 const ringOf = (path: ClosedPath): Pt[] => [path.start, ...path.segments.map((segment) => segment.to)]
 
 /**
+ * The depth at which one row is seen, in millimetres from the view line.
+ *
+ * A Skirting is a finish on a face, not a thing standing in the band: its own `distance` is the host
+ * face's, a few tens of millimetres in front of the cut through the Wall. Ordering rows by that alone
+ * — which is what both painting and picking do — buries the strip inside the Wall it is skirted to,
+ * so it is neither seen nor reachable by the pointer. A finish takes the depth of the thing it is a
+ * finish on, and the kind rank in the drawing lifts it above that Wall.
+ */
+export const elevationRowDepth = (rows: readonly ElevationRow[]) => {
+  const walls = new Map(rows.filter((row) => row.kind === 'wall').map((row) => [row.id, row.distance]))
+  return (row: ElevationRow): number =>
+    row.kind === 'skirting' && row.hostWallId !== null ? walls.get(row.hostWallId) ?? row.distance : row.distance
+}
+
+/**
  * Everything one Elevation View shows.
  *
  * The rows are the displayed model of the view's own Floor and Design Option, projected through the
@@ -98,7 +114,7 @@ export function elevationScene(project: Project, view: ElevationView): Elevation
 
   /** One projected body, or nothing when the prism holds none of it. */
   const add = (
-    entity: Wall | Opening | PlacedItem | Beam,
+    entity: Wall | Opening | PlacedItem | Beam | Skirting,
     kind: ElevationRowKind,
     name: string,
     outline: readonly Pt[],
@@ -178,6 +194,19 @@ export function elevationScene(project: Project, view: ElevationView): Elevation
       entity.underside,
       beamTop(entity),
     )
+  }
+
+  // A Skirting owns its height too, so its band is Bottom to Top. It is drawn as one row per run:
+  // the gaps `deriveSkirting` cuts for an Opening, a branch Wall and a corner are the same holes the
+  // Plan View paints and the same ones `net_length_mm` counts, so an Elevation View of a Wall with a
+  // door in it shows a strip broken at the door and nothing else.
+  const derivedSkirting = deriveSkirting(project, view.floorId, optionId, viewRenovationDisplay(view))
+  for (const { entity } of display.skirting) {
+    const body = derivedSkirting.byId.get(entity.id)
+    if (body === undefined) continue
+    for (const run of body.runs) {
+      add(entity, 'skirting', skirtingLabel(entity), ringOf(run.outline), body.bottom, skirtingTop(entity), entity.hostWallId)
+    }
   }
 
   return { frame, length: frame.length, floor, rows }

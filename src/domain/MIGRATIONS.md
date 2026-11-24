@@ -264,6 +264,43 @@ BuildBox"** and writes nothing (#20 §5). Old Backups are unaffected: v1 through
 the step that runs on the way in adds one empty list to each container and changes no measurement, no
 entity and no existing value.
 
+## What v13 holds (#78)
+
+One thing, an addition to both containers:
+
+* `skirting`, the **Skirtings** of a Floor (#78 §1) — the `hostWallId` of the Wall it is drawn
+  against and the `side` of that Wall it stands off, a `start` and an `end` measured along the Wall's
+  reference line, a `bottom` and a `height` that place it against the storey, and a `thickness` that
+  stands it off the face — plus the optional `label`, `predecessorIds` and `drawingLayerId` every
+  Building Element carries — in the Existing Model and in every Design Option's proposed model. A
+  Skirting is the first element *hosted* on another: it names one Wall and one face of it, and it
+  stores no outline. The body it draws, the gaps the doorways and the junctions leave in it and the
+  lengths read from it are derived from the host Wall's tidied face and never written down.
+
+`migrateV12toV13` writes `skirting: []` on the Existing Model and on every Design Option's proposed
+model that arrives without the collection, and nothing else. It reads no clock, mints no ID and
+touches no other record, because a Skirting is always one a person drew against a Wall they had
+already placed — there is no built-in height to invent and no Wall that implies one. A container that
+already carries the collection comes back untouched, so the step is idempotent and a v13 file is the
+same object it arrived as. No entity moves and no warning reopens on the way in, because no
+measurement changed.
+
+The strict validator refuses a Skirting whose `hostWallId` names no Wall in the Project, or a Wall on
+a different Floor from the Skirting's own; a range whose `end` is not further along the Wall than its
+`start`; a range that runs past either end of the Wall it is drawn against; a `side` outside `left`
+and `right`; a `height` or `thickness` of zero or less; and any field a Skirting does not have — a
+polygon, a line or a list of gaps is refused as an unknown field, because the shape is derived. A
+negative `bottom` is a Skirting below this Floor's lower limit, which is a thing a person may
+genuinely draw, so it is accepted and warned about rather than refused. A range that runs under a
+junction is a legal Skirting with a derived gap, not an error: only the Wall's own length bounds what
+may be stored.
+
+**A Backup made by this version cannot be opened by an older one.** It is domain schema v13, and a
+build that stops at v12 has no thirteenth step to read it with, so it answers **"saved by a newer
+BuildBox"** and writes nothing (#20 §5). Old Backups are unaffected: v1 through v12 still open, and
+the step that runs on the way in adds one empty list to each container and changes no measurement, no
+entity and no existing value.
+
 ## What this release means for a reader (#73)
 
 In plain words:

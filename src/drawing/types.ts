@@ -67,6 +67,9 @@ export type LayerKey =
   | 'walls'
   /** The symbols inside a Wall's gaps (#65 §12), above the band they are cut into. */
   | 'wall-openings'
+  /** The Skirting strips (#78 §7): a 15 mm band standing on a Wall face, so it paints over the Wall
+      band it leans on and under the footprint of the cabinet standing in front of it. */
+  | 'skirtings'
   | 'placed-items'
   | 'plan-annotations'
   | 'placed-item-labels'
@@ -75,6 +78,9 @@ export type LayerKey =
   /** The Beam names (#77 §4), after the Wall references: a `Beam B-1` is the shorter string and a
       Wall reference is the one a reader follows along a run. */
   | 'beam-labels'
+  /** The Skirting names (#78 §7), after the Beam names: a strip is the shorter string of the two and
+      the one a reader finds by following the Wall it stands on. */
+  | 'skirting-labels'
   /** The `Kitchen · 13.08 m²` labels (#67 behaviour 35), after the Wall references because a
       Room's name is the longer string and the one a person is looking for. */
   | 'room-labels'
@@ -121,11 +127,13 @@ export const LAYER_ORDER: readonly LayerKey[] = [
   'beams',
   'walls',
   'wall-openings',
+  'skirtings',
   'placed-items',
   'plan-annotations',
   'placed-item-labels',
   'wall-labels',
   'beam-labels',
+  'skirting-labels',
   'room-labels',
   'plan-dimensions',
   'plan-chip',
@@ -237,6 +245,11 @@ export type StyleKey =
   | 'beam:selected'
   | 'beam-hit'
   | 'beam-label'
+  /** The Skirting strip, its invisible target and its name (#78 §7). */
+  | 'skirting'
+  | 'skirting:selected'
+  | 'skirting-hit'
+  | 'skirting-label'
   /** The leaf, panels or window mullion of an Opening — the part a click selects (#65 §12). */
   | 'opening'
   | 'opening:selected'
@@ -367,6 +380,8 @@ export type SizeRole =
   | 'plan-line'
   | 'plan-line-selected'
   | 'hairline'
+  /** The width of an invisible hit target's stroke (#78 §7). */
+  | 'hit-target'
   /** The dash and the gap of a removed section's lines (#65 §12). */
   | 'opening-dash'
   | 'opening-gap'

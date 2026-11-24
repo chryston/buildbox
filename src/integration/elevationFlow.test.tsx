@@ -255,6 +255,20 @@ describe('Elevation Views in the split workspace', () => {
     expect(screen.getByTestId(`elevation-depth-handle-${id}`)).toBeInTheDocument()
   })
 
+  it('draws the marker so it takes no click the Plan View needs', async () => {
+    await renderWorkspace()
+    const id = await createView('Kitchen')
+    await screen.findByTestId(`split-pane-${id}`)
+    // The marker is a note drawn over the Plan View, not a lid on it: the group that carries the
+    // shaded prism, the line, the arrow and the name answers no pointer at all, so a click on the
+    // Wall or Skirting they happen to cover belongs to that Wall and Skirting. Only the handles a
+    // person grabs stay live (#75 §3, #78).
+    expect(screen.getByTestId('elevation-markers')).toHaveStyle({ pointerEvents: 'none' })
+    expect(screen.getByTestId(`elevation-depth-handle-${id}`)).toHaveStyle({ pointerEvents: 'auto' })
+    expect(screen.getByTestId(`elevation-endpoint-start-${id}`)).toHaveStyle({ pointerEvents: 'auto' })
+    expect(screen.getByTestId(`elevation-endpoint-end-${id}`)).toHaveStyle({ pointerEvents: 'auto' })
+  })
+
   it('sends nothing when the tool is left with a half-drawn line', async () => {
     await renderWorkspace()
     const user = userEvent.setup()

@@ -12,11 +12,11 @@
  * So the expectations spell that arithmetic out rather than calling the function that implements it.
  */
 import { describe, expect, it } from 'vitest'
-import type { ElevationView, ItemDesign, PlacedItem } from '../domain'
+import type { ElevationView, ItemDesign, Opening, PlacedItem, Project } from '../domain'
 import type { Pt } from '../geometry'
-import { elevationScene } from './index'
+import { elevationRowDepth, elevationScene } from './index'
 import { designOutline, worldPoint } from './placement'
-import { elevationScene as elevationSceneFixture } from './testing'
+import { domainFixture, elevationScene as elevationSceneFixture } from './testing'
 
 const project = elevationSceneFixture()
 const view = (id: string): ElevationView => {
@@ -242,5 +242,98 @@ describe('elevationScene with a Beam (#77 §4)', () => {
     // y = 2 000 stands behind the observer and belongs to no Section.
     const behind = elevationScene(withBeams([beam('bm-behind', { x: 1000, y: 2000 }, { x: 3000, y: 2000 }, 2300, 300)]), kitchen())
     expect(behind.rows.some((entry) => entry.id === 'bm-behind')).toBe(false)
+  })
+})
+
+/**
+ * A Skirting's rows in the prism (#78 §4, §7).
+ *
+ * The v13 Skirting fixture is the scene: `Skirting SK-1` stands on `W-1`'s left face — the face a
+ * view looking from that side sees — for 0 to 9 000 mm at 0 to 100 mm. The strip owns its height, so
+ * its band is Bottom to Top, and it is broken wherever the derivation cuts a gap: an Opening whose
+ * sill is below its top is a hole in the strip, exactly the hole the Plan View paints and the one
+ * `net_length_mm` counts.
+ */
+describe('the Skirting rows of an Elevation View (#78 §4)', () => {
+  const skirtingProject = domainFixture('v13/skirting.json')
+  /** Looking along `W-1` from its kitchen side: the prism covers y 600 down to y −400. */
+  const kitchenSide = (over: Partial<ElevationView> = {}): ElevationView => ({
+    id: 'el-skirting',
+    name: 'Kitchen side elevation',
+    kind: 'elevation',
+    floorId: 'seed-001',
+    designOptionId: null,
+    line: { start: { x: 600, y: 600 }, end: { x: 9600, y: 600 } },
+    side: 'left',
+    depth: 1000,
+    renovationDisplay: 'existing',
+    ...over,
+  })
+  /** A door straight through the Wall at 4 000 to 4 900, sill on the floor. */
+  const door: Opening = {
+    id: 'el-door',
+    floorId: 'seed-001',
+    hostWallId: 'seed-wall-002',
+    kind: 'door',
+    label: 'Door to utility',
+    start: 4000,
+    width: 900,
+    sill: 0,
+    head: 2100,
+    hingeSide: 'start',
+    swing: 'left',
+  }
+  const withDoor: Project = {
+    ...skirtingProject,
+    existingModel: { ...skirtingProject.existingModel, openings: [...skirtingProject.existingModel.openings, door] },
+  }
+
+  it('stands at its own bottom and top, on the face the view looks at', () => {
+    const rows = elevationScene(skirtingProject, kitchenSide()).rows.filter((each) => each.kind === 'skirting')
+    expect(rows).toHaveLength(1)
+    const strip = rows[0]!
+    expect([strip.id, strip.name, strip.hostWallId]).toEqual(['skirting-1', 'Skirting SK-1', 'seed-wall-002'])
+    expect([strip.zMin, strip.zMax]).toEqual([0, 100])
+    // The view line runs along the Wall's reference line, so the strip's 15 mm of body sits at the
+    // host face: 100 mm of the 1 000 mm prism, and nearer than the Wall's far face.
+    expect(strip.distance).toBeCloseTo(100, 6)
+    expect(strip.crossesLine).toBe(false)
+  })
+
+  it('breaks into one row per run where an Opening cuts it', () => {
+    const rows = elevationScene(withDoor, kitchenSide()).rows.filter(
+      (each) => each.kind === 'skirting' && each.id === 'skirting-1',
+    )
+    expect(rows).toHaveLength(2)
+    const sMin = Math.min(...rows.map((each) => each.sMin))
+    expect(sMin).toBeCloseTo(0, 6)
+    // The door is 4 000 to 4 900 along the Wall, which is the same distance along the view line: the
+    // two rows meet its two jambs and nothing else.
+    expect(Math.max(...rows.map((each) => each.sMax))).toBeCloseTo(9000, 6)
+    expect(rows.map((each) => each.sMax).sort((a, b) => a - b)[0]).toBeCloseTo(4000, 6)
+    expect(rows.map((each) => each.sMin).sort((a, b) => a - b)[1]).toBeCloseTo(4900, 6)
+  })
+
+  it('is absent when the view looks at the other face', () => {
+    // The strip stands on the left face; a view from the right side has the Wall's 200 mm of body in
+    // front of it and the strip itself beyond the prism's far plane.
+    const rows = elevationScene(skirtingProject, kitchenSide({ side: 'right' })).rows.filter(
+      (each) => each.kind === 'skirting',
+    )
+    expect(rows).toEqual([])
+  })
+
+  it('is painted and picked at its host Wall’s depth, not its own', () => {
+    // The strip's own `distance` is the face it stands off — 100 mm in front of the Wall it is skirted
+    // to. A Skirting is a finish on that Wall, so the Section puts it where the Wall is and lifts it
+    // above the Wall in the stack: the same rule the Plan View paints by, one helper for both (#78 §7).
+    const rows = elevationScene(skirtingProject, kitchenSide()).rows
+    const depthOf = elevationRowDepth(rows)
+    const host = rows.find((each) => each.kind === 'wall' && each.id === 'seed-wall-002')!
+    const strip = rows.find((each) => each.kind === 'skirting' && each.id === 'skirting-1')!
+    expect(depthOf(strip)).toBe(depthOf(host))
+    expect(depthOf(strip)).not.toBe(strip.distance)
+    // A Wall keeps its own distance: the helper widens nothing that is not a Skirting.
+    expect(depthOf(host)).toBe(host.distance)
   })
 })

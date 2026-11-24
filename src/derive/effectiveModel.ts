@@ -19,7 +19,7 @@
  * Order is Existing-Model order, then the Option's, so a re-derive never reorders what is on screen
  * and a Floor with no Option is the same array `project.existingModel` already holds.
  */
-import { beamsOf, designOptionsOf, type Beam, type EntityId, type Opening, type PlacedItem, type Project, type Room, type Wall, type WallJunction } from '../domain'
+import { beamsOf, designOptionsOf, type Beam, type EntityId, type Opening, type PlacedItem, type Project, type Room, type Skirting, type Wall, type WallJunction, skirtingOf } from '../domain'
 import type { RenovationState } from './quantities/scope'
 
 /** One entity of the effective model, and the Renovation State it is seen in. */
@@ -39,6 +39,8 @@ export interface EffectiveModel {
   readonly placedItems: readonly EffectiveEntity<PlacedItem>[]
   /** Every Beam of the Floor (#77 §4), an ordinary Building Element under the same three rules. */
   readonly beams: readonly EffectiveEntity<Beam>[]
+  /** Every Skirting of the Floor (#78 §4), under the same three rules. */
+  readonly skirting: readonly EffectiveEntity<Skirting>[]
   /** The entities that are not Demolition: what every measurement, warning and count runs on. */
   readonly standingWalls: readonly Wall[]
   readonly standingWallJunctions: readonly WallJunction[]
@@ -46,6 +48,7 @@ export interface EffectiveModel {
   readonly standingRooms: readonly Room[]
   readonly standingPlacedItems: readonly PlacedItem[]
   readonly standingBeams: readonly Beam[]
+  readonly standingSkirting: readonly Skirting[]
 }
 
 /** Every collection has an `id` and the `Floor` it belongs to; that is all the funnel needs to know. */
@@ -122,6 +125,7 @@ export function effectiveModel(
     proposed === undefined ? [] : onFloor(proposed.placedItems, floorId),
   )
   const beams = tag(onFloor(beamsOf(project.existingModel), floorId), demolished, proposed === undefined ? [] : onFloor(beamsOf(proposed), floorId))
+  const skirting = tag(onFloor(skirtingOf(project.existingModel), floorId), demolished, proposed === undefined ? [] : onFloor(skirtingOf(proposed), floorId))
   return {
     optionId: option?.id ?? null,
     walls,
@@ -130,12 +134,14 @@ export function effectiveModel(
     rooms,
     placedItems,
     beams,
+    skirting,
     standingWalls: standing(walls),
     standingWallJunctions: standingJunctions(wallJunctions, demolished),
     standingOpenings: standing(openings),
     standingRooms: standing(rooms),
     standingPlacedItems: standing(placedItems),
     standingBeams: standing(beams),
+    standingSkirting: standing(skirting),
   }
 }
 

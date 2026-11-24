@@ -338,7 +338,7 @@ describe('listsSummary', () => {
     expect(summary.rows['cut-list']).toBe(0)
   })
 
-  test('counts the five tables of #68 beside the two that were here first', () => {
+  test('counts the seven element tables beside the two lists that were here first', () => {
     const summary = listsSummary({ project: crossing, revision: 1 }, scopeFor(), null)
     expect({ ...summary.rows, 'cut-list': 0 }).toEqual({
       items: 3,
@@ -349,6 +349,7 @@ describe('listsSummary', () => {
       walls: 2,
       openings: 0,
       beams: 0,
+      skirting: 0,
       warnings: 1,
     })
     expect(summary.rows['cut-list']).toBeGreaterThan(0)

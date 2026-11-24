@@ -52,6 +52,7 @@ function validProject(): Project {
       openings: [],
       rooms: [],
       beams: [],
+      skirting: [],
       placedItems: [
         {
           id: 'place-0',
@@ -109,9 +110,9 @@ function withoutTheStep(project: unknown): unknown {
 
 describe('DOMAIN_SCHEMA_VERSION', () => {
   it('is the version this build writes', () => {
-    // v12 is production: the Beam shipped, so the number the chain ends at and the number this
-    // build writes are the same one (#73, #75, #76, #77).
-    expect(DOMAIN_SCHEMA_VERSION).toBe(12)
+    // v13 is production: the Skirting shipped, so the number the chain ends at and the number this
+    // build writes are the same one (#73, #75, #76, #77, #78).
+    expect(DOMAIN_SCHEMA_VERSION).toBe(13)
   })
 })
 

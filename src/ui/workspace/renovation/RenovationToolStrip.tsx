@@ -41,6 +41,7 @@ const TOOL_LABELS: { [T in RenovationToolId]: string } = {
   opening: STRINGS.toolOpening,
   room: STRINGS.room,
   placeItem: RENOVATION_STRINGS.toolPlaceItem,
+  skirting: STRINGS.toolSkirting,
   elevation: STRINGS.newElevationView,
 }
 
@@ -53,6 +54,7 @@ const TOOL_KEYS: { [T in RenovationToolId]: string } = {
   opening: 'o',
   room: 'm',
   placeItem: 'i',
+  skirting: 'k',
   elevation: 'e',
 }
 
@@ -68,6 +70,9 @@ const ROW_OF_TOOL: { [T in WorkspaceTool]: RenovationToolId | null } = {
   // A Beam documents work that already exists, so no Display has a reason to forbid drawing one:
   // the tool belongs to no row, the same way `Pan` belongs to none (#77 §1).
   beam: null,
+  // A Skirting is new work on a Wall face, so it belongs to the same row as an Opening: a Display
+  // that cannot own new work cannot offer the tool (#78 §3).
+  skirting: 'skirting',
   line: 'room',
   arc: 'room',
   ellipticalArc: 'room',

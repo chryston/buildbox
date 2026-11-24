@@ -31,6 +31,7 @@ import type {
   OpeningKind,
   OpeningSwing,
   PlanImage,
+  SkirtingDependency,
   Point2,
   PathRoomOutline,
   PlacedItem,
@@ -44,7 +45,7 @@ import type {
   WallJustification,
   WallRefLine,
 } from '../domain'
-import { beamsOf, roomOutlinePath } from '../domain'
+import { beamsOf, roomOutlinePath, skirtingOf } from '../domain'
 import type { KeepFixed, Pt } from '../geometry'
 
 import type { ValidationProblem } from '../lib'
@@ -135,6 +136,17 @@ export type S7IntentType =
   | 'beam.rename'
   | 'beam.setVerticalExtent'
   | 'beam.delete'
+  | 'skirting.create'
+  | 'skirting.dragEndpoint'
+  | 'skirting.setRange'
+  | 'skirting.flipSide'
+  | 'skirting.duplicateOtherSide'
+  | 'skirting.setBottom'
+  | 'skirting.setHeight'
+  | 'skirting.setThickness'
+  | 'skirting.setVerticalExtent'
+  | 'skirting.rename'
+  | 'skirting.delete'
   | 'design.update'
   | 'design.setFootprint'
   | 'design.setOrigin'
@@ -763,6 +775,13 @@ export interface DeleteWall {
    * is a stale answer and is refused too.
    */
   openings?: readonly EntityId[]
+  /**
+   * The Skirting the same review listed and the homeowner agreed to lose (#78 §5). A Skirting is a
+   * range along one face of this Wall, so it goes with the Wall — and, like an Opening, never
+   * quietly: absent means the review was never answered, and a list that no longer matches what the
+   * Wall carries is a stale answer.
+   */
+  skirting?: readonly EntityId[]
 }
 
 /**
@@ -983,6 +1002,102 @@ export interface SetBeamVerticalExtent {
 /** Delete one Beam. A Beam hosts nothing, so nothing else goes with it (#77 §1). */
 export interface DeleteBeam {
   beamId: EntityId
+}
+
+/**
+ * A new Skirting (#78 §3): one face of one Wall, over a range along that Wall's reference line.
+ *
+ * There is no line and no polygon here — the host Wall owns the geometry, and the body the plan
+ * draws is the host's tidied face offset by `thickness`, derived on read (#78 §1). `start` and `end`
+ * are millimetres along the host's reference line, `bottom` is millimetres from the Floor Datum
+ * (negative is a Skirting recorded from below the Datum), and `side` is relative to the host's
+ * reference-line direction. The Drawing Layer comes from the tool's saved view, never the payload.
+ */
+export interface CreateSkirting {
+  floorId: EntityId
+  hostWallId: EntityId
+  side: WallFaceSide
+  /** Millimetres along the host's reference line. */
+  start: number
+  /** Millimetres along the host's reference line, greater than `start`. */
+  end: number
+  /** Millimetres from the Floor Datum; the tool's secondary field, default 0. */
+  bottom: number
+  /** Millimetres, greater than 0 — pre-filled 100 and captioned `measure yours`. */
+  height: number
+  /** Millimetres, greater than 0 — how far the Skirting stands off the face. */
+  thickness: number
+  /** Absent says only `Skirting`; the tool pre-fills the next free `Skirting SK-n`. */
+  label?: string
+}
+
+/** Move one end of the range (#78 §3 "move an end"), the other end and the face untouched. */
+export interface DragSkirtingEndpoint {
+  skirtingId: EntityId
+  end: 'start' | 'end'
+  /** Millimetres along the host's reference line. */
+  to: number
+}
+
+/** The inspector's `Start` and `End`, both written at once so one commit moves the range. */
+export interface SetSkirtingRange {
+  skirtingId: EntityId
+  start: number
+  end: number
+}
+
+/** `Flip side`: the same range on the other face of the same Wall (#78 §3). */
+export interface FlipSkirtingSide {
+  skirtingId: EntityId
+}
+
+/**
+ * `Duplicate to other side` (#78 §3 criterion 6): a second element on the opposite face, which is
+ * what a Wall skirted on both sides is — two records, never one with two faces.
+ */
+export interface DuplicateSkirtingOtherSide {
+  skirtingId: EntityId
+}
+
+/** The inspector's `Bottom`: moves the Skirting and keeps its Height (#78 §4 criterion 7). */
+export interface SetSkirtingBottom {
+  skirtingId: EntityId
+  bottom: number
+}
+
+/** The inspector's `Height`: changes the Top and keeps the Bottom (#78 §4). */
+export interface SetSkirtingHeight {
+  skirtingId: EntityId
+  height: number
+}
+
+/** The inspector's `Thickness`: how far the body stands off the host face (#78 §4). */
+export interface SetSkirtingThickness {
+  skirtingId: EntityId
+  thickness: number
+}
+
+/**
+ * One Vertical Extent box of a Skirting (#78 §4 "Elevation View"), in millimetres from the Floor
+ * Datum. A Skirting owns its height, so `Top` restates the Height and keeps the Bottom, while both
+ * `base` and `bottom` move the Skirting and keep the Height — the same rule the inspector's `Bottom`
+ * follows. Nothing here touches the range or the face.
+ */
+export interface SetSkirtingVerticalExtent {
+  skirtingId: EntityId
+  field: VerticalExtentField
+  value: number
+}
+
+/** The inspector's `Label`. An empty string clears it, which says only `Skirting`. */
+export interface RenameSkirting {
+  skirtingId: EntityId
+  label: string
+}
+
+/** Delete one Skirting. A Skirting hosts nothing, so nothing else goes with it (#78 §1). */
+export interface DeleteSkirting {
+  skirtingId: EntityId
 }
 
 /**
@@ -1367,6 +1482,17 @@ export interface IntentPayloads {
   'beam.rename': RenameBeam & IntentTarget
   'beam.setVerticalExtent': SetBeamVerticalExtent & IntentTarget
   'beam.delete': DeleteBeam & IntentTarget
+  'skirting.create': CreateSkirting & IntentTarget
+  'skirting.dragEndpoint': DragSkirtingEndpoint & IntentTarget
+  'skirting.setRange': SetSkirtingRange & IntentTarget
+  'skirting.flipSide': FlipSkirtingSide & IntentTarget
+  'skirting.duplicateOtherSide': DuplicateSkirtingOtherSide & IntentTarget
+  'skirting.setBottom': SetSkirtingBottom & IntentTarget
+  'skirting.setHeight': SetSkirtingHeight & IntentTarget
+  'skirting.setThickness': SetSkirtingThickness & IntentTarget
+  'skirting.setVerticalExtent': SetSkirtingVerticalExtent & IntentTarget
+  'skirting.rename': RenameSkirting & IntentTarget
+  'skirting.delete': DeleteSkirting & IntentTarget
   'design.update': UpdateItemDesign
   'design.setFootprint': SetItemDesignFootprint
   'design.setOrigin': SetItemDesignOrigin
@@ -1452,6 +1578,9 @@ export type WallIntent = Intent<Extract<IntentType, `wall.${string}`>>
 export type RoomIntent = Intent<Extract<IntentType, `room.${string}`>>
 export type OpeningIntent = Intent<Extract<IntentType, `opening.${string}`>>
 export type BeamIntent = Intent<Extract<IntentType, `beam.${string}`>>
+
+/** Every Skirting Intent (#78 §3), the same shape as {@link BeamIntent}. */
+export type SkirtingIntent = Intent<Extract<IntentType, `skirting.${string}`>>
 export type DesignIntent = Intent<Extract<IntentType, `design.${string}`>>
 export type FloorIntent = Intent<Extract<IntentType, `floor.${string}`>>
 /**
@@ -1514,7 +1643,7 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
   'wall.setThickness': [],
   'wall.setVerticalExtent': [],
   'wall.offset': [],
-  'wall.split': ['wallId', 'junctionId'],
+  'wall.split': ['wallId', 'junctionId', 'skirtingId'],
   'wall.merge': [],
   'wall.delete': [],
   'room.create': ['roomId', 'segmentId…'],
@@ -1541,6 +1670,17 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
   'beam.rename': [],
   'beam.setVerticalExtent': [],
   'beam.delete': [],
+  'skirting.create': ['skirtingId'],
+  'skirting.dragEndpoint': [],
+  'skirting.setRange': [],
+  'skirting.flipSide': [],
+  'skirting.duplicateOtherSide': ['skirtingId'],
+  'skirting.setBottom': [],
+  'skirting.setHeight': [],
+  'skirting.setThickness': [],
+  'skirting.setVerticalExtent': [],
+  'skirting.rename': [],
+  'skirting.delete': [],
   'design.update': [],
   'design.setFootprint': [],
   'design.setOrigin': [],
@@ -1671,6 +1811,7 @@ export function intentIdCount(type: IntentType, payload?: PayloadOf): number {
         rooms.length +
         placedItems.length +
         beamsOf(pasted.entities).length +
+        skirtingOf(pasted.entities).length +
         pasted.itemDesigns.length +
         pasted.layers.length
       )
@@ -1732,6 +1873,8 @@ export type RejectionCode =
   | 'invalid-opening'
   /** A Beam edit a Beam cannot represent: a line with no length, a section of zero width or Depth (#77 §1, §3). */
   | 'invalid-beam'
+  /** A Skirting edit a Skirting cannot represent: an empty range, one off the end of its Wall, a zero Height or Thickness (#78 §1, §3). */
+  | 'invalid-skirting'
   /** A Room proposal that overlaps another Room, or a Wall edit a referenced Room edge cannot follow (#67 §7, §12). */
   | 'room-blocked'
   /** A Design Option the Project cannot hold: a name another Option already answers to (#69 §2). */
@@ -1761,6 +1904,8 @@ export interface DeleteWallReview {
   readonly wallRef: string
   /** Every Opening that goes with it, in the order the dialog lists them. */
   readonly openings: readonly OpeningDependency[]
+  /** Every Skirting drawn against its faces, listed beside the Openings (#78 §5 criterion 8). */
+  readonly skirting: readonly SkirtingDependency[]
   /** `Delete W-3 and its openings?` — the question the dialog asks. */
   readonly message: string
 }

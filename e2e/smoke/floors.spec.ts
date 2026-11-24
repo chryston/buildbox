@@ -322,8 +322,9 @@ test('a Project with two Floors and two Plan Images survives Backup and Restore'
   // default Wall height, 5 since #65 gave it Openings, 6 since #66 gave it acknowledgements,
   // 7 since #67 gave it Rooms, 8 since #69/#71 gave it Design Options and Drawing Layers,
   // 9 and 10 since #74/#75 gave it Vertical Extents and Elevation Views, 11 since #76 gave Item
-  // Designs a Clearance Envelope, and 12 since #77 gave the Existing Model its Beams.
-  expect(before.schemaVersion).toBe(12)
+  // Designs a Clearance Envelope, 12 since #77 gave the Existing Model its Beams, and 13 since #78
+  // gave the Walls their Skirting.
+  expect(before.schemaVersion).toBe(13)
   expect(last(floorsOf(before.data)).planImage?.pixelsPerMm).toBeGreaterThan(0)
 
   await returnToProjects(page)
@@ -340,7 +341,7 @@ test('a Project with two Floors and two Plan Images survives Backup and Restore'
     if (after === null) throw new Error('the restore wrote no record')
     // Both sides are the version the app writes, so this is byte for byte: Floors and their
     // order, both Plan Images with their calibration, and every Plan View id.
-    expect(after.schemaVersion).toBe(12)
+    expect(after.schemaVersion).toBe(13)
     expect(canonical(after.data)).toBe(canonical(before.data))
   } finally {
     await fresh.close()

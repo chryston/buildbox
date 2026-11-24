@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import type { ClosedPath } from '../../../geometry'
 import type { ClearanceEnvelope, EntityId, ItemFootprint } from '../../../domain'
 import { VERTICAL_PRODUCERS } from './vertical'
-import type { WarningBeam, WarningCandidate, WarningFloor, WarningOpening, WarningPlacement, WarningWall } from '../types'
+import type { WarningBeam, WarningCandidate, WarningFloor, WarningOpening, WarningPlacement, WarningSkirting, WarningWall } from '../types'
 
 const FLOOR = 'floor-main'
 
@@ -75,10 +75,38 @@ const floorWith = (parts: Partial<Omit<WarningFloor, 'floorId'>> = {}): WarningF
   walls: [],
   openings: [],
   beams: [],
+  skirtings: [],
   junctions: [],
   rooms: [],
   placements: [],
   limits: { lowerMm: null, upperMm: null },
+  ...parts,
+})
+
+/**
+ * A Skirting on the `left` face of `wallAlongX` — the face at y = −50 — with a body of `thickness`
+ * stood off it. `bodies` defaults to one strip over the whole Wall, which is what a whole-face
+ * Skirting derives to when nothing gaps it.
+ */
+const skirtingOn = (
+  id: EntityId,
+  label: string,
+  bottom: number,
+  top: number,
+  thickness = 15,
+  parts: Partial<WarningSkirting> = {},
+): WarningSkirting => ({
+  id,
+  floorId: FLOOR,
+  label,
+  hostWallId: 'wall-1',
+  side: 'left',
+  bottom,
+  top,
+  thickness,
+  hostLine: { kind: 'line', start: { x: 0, y: 0 }, end: { x: 4000, y: 0 } },
+  innerOffset: -50,
+  bodies: [rect(0, -50 - thickness, 4000, thickness)],
   ...parts,
 })
 
@@ -307,7 +335,7 @@ describe('clearance_envelope_intrusion', () => {
 })
 
 describe('the producer set', () => {
-  it('carries the ten §5 and #77 types exactly once', () => {
+  it('carries the §5, #77 and #78 types exactly once', () => {
     const types = VERTICAL_PRODUCERS.map((producer) => producer.type)
     expect(types).toEqual([
       'item_item_overlap',
@@ -320,6 +348,9 @@ describe('the producer set', () => {
       'beam_placed_item',
       'beam_opening',
       'beam_clearance_envelope_intrusion',
+      'skirting_placed_item',
+      'skirting_host_above',
+      'skirting_host_below',
     ])
   })
 
@@ -427,5 +458,59 @@ describe('the Beam producers (#77 §2 criterion 5)', () => {
     expect(low[0]!.params).toEqual({ a: 'Beam B-1', aKind: 'beam', mm: 30 })
     // A Floor with no limit set invents no rule.
     expect(produce('floor_limit_above', floorWith({ beams: [beamAlongX()], limits: { lowerMm: null, upperMm: null } }))).toEqual([])
+  })
+})
+
+describe('the Skirting producers (#78 §6)', () => {
+  it('says how far the body stands in a footprint it cannot stand in', () => {
+    // The cabinet's back edge lies on the host face at y = −50 and runs into the room, so the whole
+    // 15 mm of the body is inside it.
+    const floor = floorWith({ skirtings: [skirtingOn('sk-1', 'Skirting SK-1', 0, 100)], placements: [box('pl-a', 'Base cabinet #1', 0, -650, 2000, 600)] })
+    const [candidate] = produce('skirting_placed_item', floor)
+    expect(candidate).toBeDefined()
+    expect(candidate!.messageKey).toBe('skirting_placed_item')
+    expect(candidate!.params).toEqual({ a: 'Skirting SK-1', b: 'Base cabinet #1', mm: 15 })
+    expect(candidate!.measured).toEqual({ mm: 15 })
+    expect(candidate!.subjects.map((subject) => subject.type)).toEqual(['skirting', 'placedItem'])
+  })
+
+  it('measures the depth actually inside, never more than the thickness', () => {
+    // The cabinet only reaches 6 mm past the face: 6 mm of the 15 mm body is inside it.
+    const floor = floorWith({ skirtings: [skirtingOn('sk-1', 'Skirting SK-1', 0, 100)], placements: [box('pl-a', 'Base cabinet #1', 0, -56, 2000, 6)] })
+    expect(produce('skirting_placed_item', floor)[0]!.params.mm).toBeCloseTo(6, 9)
+  })
+
+  it('says nothing where the cabinet is off the face, above the Skirting, or beside it', () => {
+    const skirtings = [skirtingOn('sk-1', 'Skirting SK-1', 0, 100)]
+    // 15 mm off the face: the back edge lies on the exposed face, which is touching, not overlapping.
+    expect(produce('skirting_placed_item', floorWith({ skirtings, placements: [box('pl-a', 'Base cabinet #1', 0, -665, 2000, 600)] }))).toEqual([])
+    // A wall cabinet that starts at the Skirting's top: touching in height is no warning either.
+    expect(produce('skirting_placed_item', floorWith({ skirtings, placements: [box('pl-a', 'Wall cabinet #1', 0, -650, 2000, 600, 100, 2000)] }))).toEqual([])
+    // A cabinet that runs past the end of the Skirting's body in plan.
+    expect(produce('skirting_placed_item', floorWith({ skirtings, placements: [box('pl-a', 'Base cabinet #1', 4200, -650, 600, 600)] }))).toEqual([])
+  })
+
+  it('warns once per pair, over the deepest run', () => {
+    const skirtings = [skirtingOn('sk-1', 'Skirting SK-1', 0, 100, 15, { bodies: [rect(0, -65, 1000, 15), rect(1200, -60, 1000, 10)] })]
+    const candidates = produce('skirting_placed_item', floorWith({ skirtings, placements: [box('pl-a', 'Base cabinet #1', 0, -650, 3000, 600)] }))
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0]!.params.mm).toBeCloseTo(15, 9)
+  })
+
+  it('words a Skirting reaching past its host with the shared host-range copy', () => {
+    const floor = floorWith({ walls: [wallAlongX()], skirtings: [skirtingOn('sk-1', 'Skirting SK-1', -20, 80)] })
+    expect(produce('skirting_host_below', floor)[0]!.params).toEqual({ a: 'Skirting SK-1', aKind: 'skirting', b: 'Wall W-1', mm: 20 })
+    const tall = floorWith({ walls: [wallAlongX('wall-1', 'W-1', 4000, 100, 0, 100)], skirtings: [skirtingOn('sk-1', 'Skirting SK-1', 0, 130)] })
+    expect(produce('skirting_host_above', tall)[0]!.params).toEqual({ a: 'Skirting SK-1', aKind: 'skirting', b: 'Wall W-1', mm: 30 })
+    // A Skirting inside its host says nothing, and one with no host to measure against says nothing.
+    expect(produce('skirting_host_below', floorWith({ walls: [wallAlongX()], skirtings: [skirtingOn('sk-2', 'Skirting SK-2', 0, 100)] }))).toEqual([])
+    expect(produce('skirting_host_below', floorWith({ skirtings: [skirtingOn('sk-1', 'Skirting SK-1', -20, 80)] }))).toEqual([])
+  })
+
+  it('carries a Skirting past the Floor’s own limits in both directions', () => {
+    const high = produce('floor_limit_above', floorWith({ skirtings: [skirtingOn('sk-1', 'Skirting SK-1', 0, 100)], limits: { lowerMm: 0, upperMm: 60 } }))
+    expect(high[0]!.params).toEqual({ a: 'Skirting SK-1', aKind: 'skirting', mm: 40 })
+    const low = produce('floor_limit_below', floorWith({ skirtings: [skirtingOn('sk-1', 'Skirting SK-1', -20, 80)], limits: { lowerMm: 0, upperMm: null } }))
+    expect(low[0]!.params).toEqual({ a: 'Skirting SK-1', aKind: 'skirting', mm: 20 })
   })
 })

@@ -19,6 +19,7 @@ const review = (over: Partial<DeleteWallReview> = {}): DeleteWallReview => ({
     { id: 'o1', label: 'Door 1', kind: 'door', text: 'Door 1 · door' },
     { id: 'o2', label: 'Window 1', kind: 'window', text: 'Window 1 · window' },
   ],
+  skirting: [],
   message: 'Delete W-3 and its 2 openings?',
   ...over,
 })
