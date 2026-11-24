@@ -132,6 +132,17 @@ const EXTRA_INTENTS = [
   'opening.flipSwing',
   'opening.rename',
   'opening.delete',
+  // #77: the legacy app had no structural documentation at all — a beam was a note on a printed
+  // plan — so there is no store action any of these maps to.
+  'beam.create',
+  'beam.dragEndpoint',
+  'beam.dragBody',
+  'beam.setLength',
+  'beam.setWidth',
+  'beam.setJustification',
+  'beam.rename',
+  'beam.setVerticalExtent',
+  'beam.delete',
   // #66: the legacy app had no warnings at all — an overlap was something the drafter found
   // by eye on the printed plan — so there is no store action either of these maps to.
   'warning.acknowledge',

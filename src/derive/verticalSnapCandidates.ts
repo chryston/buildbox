@@ -24,7 +24,7 @@
  * the shelter is left out — it is a fixed whole-flat element whose door is already a door entry.
  */
 import type { ElevationView, EntityId, Project } from '../domain'
-import { UNLAYERED_LAYER_KEY, designHeight, getPresetPack, listPresetEntries, viewDesignOptionId, viewRenovationDisplay } from '../domain'
+import { UNLAYERED_LAYER_KEY, beamLabel, beamTop, designHeight, getPresetPack, listPresetEntries, viewDesignOptionId, viewRenovationDisplay } from '../domain'
 import type { VerticalSnapCandidate, VerticalSnapKind } from '../geometry'
 import { derivePlacement, placementLabels } from './effective'
 import { effectiveModel } from './effectiveModel'
@@ -109,6 +109,8 @@ export function verticalSnapCandidates(input: VerticalSnapInput): VerticalSnapCa
       out.push({ id, mm: upper, kind: 'entity', label: top })
     }
     for (const { entity } of display.walls) edges(entity.id, `Base of ${entity.ref}`, `Top of ${entity.ref}`, entity.baseElevation, entity.baseElevation + entity.height)
+    // A Beam's ends are an Underside and a Top, the two words the inspector uses for them (#77 §3).
+    for (const { entity } of display.beams) edges(entity.id, `Underside of ${beamLabel(entity)}`, `Top of ${beamLabel(entity)}`, entity.underside, beamTop(entity))
     // An Opening's ends are a sill and a head, which is what the rest of the product calls them.
     for (const { entity } of display.openings) edges(entity.id, `Sill of ${entity.label}`, `Head of ${entity.label}`, entity.sill, entity.head)
     const names = placementLabels(

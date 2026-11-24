@@ -126,6 +126,15 @@ export type S7IntentType =
   | 'opening.flipSwing'
   | 'opening.rename'
   | 'opening.delete'
+  | 'beam.create'
+  | 'beam.dragEndpoint'
+  | 'beam.dragBody'
+  | 'beam.setLength'
+  | 'beam.setWidth'
+  | 'beam.setJustification'
+  | 'beam.rename'
+  | 'beam.setVerticalExtent'
+  | 'beam.delete'
   | 'design.update'
   | 'design.setFootprint'
   | 'design.setOrigin'
@@ -895,6 +904,88 @@ export interface DeleteOpening {
 }
 
 /**
+ * A new Beam (#77 §2): one straight reference line, one constant section, one Vertical Extent.
+ *
+ * The line is `{ start, end }` and nothing else — a Beam has no arc, so there is no `kind` to state
+ * and no `through` to carry. `underside` and `height` are millimetres from the Floor Datum, and the
+ * `Top at` value the tool panel offers is deliberately absent: it is an input-time reference that
+ * decides the underside and is then thrown away (#77 §2 criterion 4). The Drawing Layer comes from
+ * the tool's saved view, never from the payload, so a Beam cannot be filed somewhere a Wall crossing
+ * it would have to be consulted about.
+ */
+export interface CreateBeam {
+  floorId: EntityId
+  line: { start: Point2; end: Point2 }
+  justification: WallJustification
+  /** Millimetres, greater than 0. */
+  width: number
+  /** Millimetres from the Floor Datum; negative is a Beam a person may genuinely draw. */
+  underside: number
+  /** Millimetres, greater than 0 — the field the inspector calls **Depth**. */
+  height: number
+  /** Absent says only `Beam`; the tool pre-fills the next free `Beam B-n`. */
+  label?: string
+}
+
+/** Move one end of the reference line (#77 §2 "move an end"). A Beam has no Junction to move. */
+export interface DragBeamEndpoint {
+  beamId: EntityId
+  end: 'start' | 'end'
+  to: Pt
+}
+
+/** Move a whole Beam: both ends by the same delta, the section and the elevations untouched. */
+export interface DragBeamBody {
+  beamId: EntityId
+  delta: Pt
+}
+
+/** The inspector's `Length`: one end stays where it is while the other moves along the line. */
+export interface SetBeamLength {
+  beamId: EntityId
+  /** Millimetres along the reference line. */
+  length: number
+  keepFixed: KeepFixed
+}
+
+/** The inspector's `Width`: the constant section, which moves both faces off the reference line. */
+export interface SetBeamWidth {
+  beamId: EntityId
+  width: number
+}
+
+/** The inspector's `Justification`: where the reference line sits within the width. */
+export interface SetBeamJustification {
+  beamId: EntityId
+  justification: WallJustification
+}
+
+/** The inspector's `Label`. An empty string clears it, which says only `Beam`. */
+export interface RenameBeam {
+  beamId: EntityId
+  label: string
+}
+
+/**
+ * One Vertical Extent box of a Beam (#77 §3), in millimetres from the Floor Datum.
+ *
+ * The same four fields a Wall has, read against a Beam's own pair of elevations: `base` is
+ * `Underside` and carries the Depth with it, `height` is `Depth` and keeps the Underside, `top` is
+ * `Top` and keeps the Underside by restating the Depth, and `bottom` — the Elevation View's bottom
+ * handle (#75 §6) — keeps the Top and restates the Depth. Nothing here moves the reference line.
+ */
+export interface SetBeamVerticalExtent {
+  beamId: EntityId
+  field: VerticalExtentField
+  value: number
+}
+
+/** Delete one Beam. A Beam hosts nothing, so nothing else goes with it (#77 §1). */
+export interface DeleteBeam {
+  beamId: EntityId
+}
+
+/**
  * `Acknowledge warning` (#66 §4): the user's decision about one warning, recorded with the
  * note they gave for it.
  *
@@ -1267,6 +1358,15 @@ export interface IntentPayloads {
   'opening.flipSwing': FlipOpeningSwing & IntentTarget
   'opening.rename': RenameOpening & IntentTarget
   'opening.delete': DeleteOpening & IntentTarget
+  'beam.create': CreateBeam & IntentTarget
+  'beam.dragEndpoint': DragBeamEndpoint & IntentTarget
+  'beam.dragBody': DragBeamBody & IntentTarget
+  'beam.setLength': SetBeamLength & IntentTarget
+  'beam.setWidth': SetBeamWidth & IntentTarget
+  'beam.setJustification': SetBeamJustification & IntentTarget
+  'beam.rename': RenameBeam & IntentTarget
+  'beam.setVerticalExtent': SetBeamVerticalExtent & IntentTarget
+  'beam.delete': DeleteBeam & IntentTarget
   'design.update': UpdateItemDesign
   'design.setFootprint': SetItemDesignFootprint
   'design.setOrigin': SetItemDesignOrigin
@@ -1351,6 +1451,7 @@ export type PlanIntent = Intent<Extract<IntentType, `plan.${string}`>>
 export type WallIntent = Intent<Extract<IntentType, `wall.${string}`>>
 export type RoomIntent = Intent<Extract<IntentType, `room.${string}`>>
 export type OpeningIntent = Intent<Extract<IntentType, `opening.${string}`>>
+export type BeamIntent = Intent<Extract<IntentType, `beam.${string}`>>
 export type DesignIntent = Intent<Extract<IntentType, `design.${string}`>>
 export type FloorIntent = Intent<Extract<IntentType, `floor.${string}`>>
 /**
@@ -1430,6 +1531,16 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
   'opening.flipSwing': [],
   'opening.rename': [],
   'opening.delete': [],
+  // A Beam is one record and nothing else: no Junction, no Edge, no carried entity (#77 §1).
+  'beam.create': ['beamId'],
+  'beam.dragEndpoint': [],
+  'beam.dragBody': [],
+  'beam.setLength': [],
+  'beam.setWidth': [],
+  'beam.setJustification': [],
+  'beam.rename': [],
+  'beam.setVerticalExtent': [],
+  'beam.delete': [],
   'design.update': [],
   'design.setFootprint': [],
   'design.setOrigin': [],
@@ -1619,6 +1730,8 @@ export type RejectionCode =
   | 'dependency-changed'
   /** An Opening edit this Opening cannot represent: a window has no hinge, a sliding door no side (#65 §6). */
   | 'invalid-opening'
+  /** A Beam edit a Beam cannot represent: a line with no length, a section of zero width or Depth (#77 §1, §3). */
+  | 'invalid-beam'
   /** A Room proposal that overlaps another Room, or a Wall edit a referenced Room edge cannot follow (#67 §7, §12). */
   | 'room-blocked'
   /** A Design Option the Project cannot hold: a name another Option already answers to (#69 §2). */

@@ -27,7 +27,7 @@
  * already holds: the canvas paints a layer at a time, and a re-derive must never reshuffle what the
  * user has been clicking on.
  */
-import type { EntityId, Opening, PlacedItem, Project, RenovationDisplay, Room, Wall, WallJunction } from '../domain'
+import type { Beam, EntityId, Opening, PlacedItem, Project, RenovationDisplay, Room, Wall, WallJunction } from '../domain'
 import { designOptionsOf } from '../domain'
 import type { EffectiveEntity, EffectiveModel } from './effectiveModel'
 import type { RenovationState } from './quantities/scope'
@@ -38,7 +38,7 @@ export interface DisplayEntity<T> {
   readonly renovationState: RenovationState
 }
 
-/** The five collections a Display draws, in paint order. */
+/** The six collections a Display draws, in paint order. */
 export interface DisplayModel {
   readonly optionId: EntityId | null
   readonly display: RenovationDisplay
@@ -47,6 +47,7 @@ export interface DisplayModel {
   readonly openings: readonly DisplayEntity<Opening>[]
   readonly rooms: readonly DisplayEntity<Room>[]
   readonly placedItems: readonly DisplayEntity<PlacedItem>[]
+  readonly beams: readonly DisplayEntity<Beam>[]
 }
 
 /** Paint order: the layer a Display draws first is the one underneath. */
@@ -87,6 +88,8 @@ export function displayModel(model: EffectiveModel, display: RenovationDisplay):
     openings: displayRows(model.openings, display),
     rooms: displayRows(model.rooms, display),
     placedItems: displayRows(model.placedItems, display),
+    // A Beam is built fabric like the Wall it may cross but never hangs from (#77 §4).
+    beams: displayRows(model.beams, display),
   }
 }
 
@@ -98,7 +101,7 @@ export function displayModel(model: EffectiveModel, display: RenovationDisplay):
  * Display that does not draw a Wall does not draw what is cut in it either.
  */
 export function displayStates(model: DisplayModel): ReadonlyMap<EntityId, RenovationState> {
-  const rows = [...model.walls, ...model.openings, ...model.rooms, ...model.placedItems]
+  const rows = [...model.walls, ...model.openings, ...model.rooms, ...model.placedItems, ...model.beams]
   return new Map(rows.map((row) => [row.entity.id, row.renovationState]))
 }
 
@@ -129,5 +132,6 @@ export function displayCounts(model: EffectiveModel, display: RenovationDisplay)
     openings: drawn.openings.length,
     rooms: drawn.rooms.length,
     placedItems: drawn.placedItems.length,
+    beams: drawn.beams.length,
   }
 }
