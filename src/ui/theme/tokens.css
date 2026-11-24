@@ -113,6 +113,10 @@
   --bb-preview-badge-bg: #111b;
   --bb-preview-badge-text: #b8cde0;
 
+  /* Clearance Envelope (#76 §4): a violet no other surface claims, so a dashed envelope reads
+     as itself in a plan already full of blues, reds and the item's own colours. */
+  --bb-clearance-stroke: #b48ead;
+
   /* Monogram (the Trash view, #51) */
   --bb-monogram-bg: #dce8ef;
   --bb-monogram-text: #34576b;

@@ -28,13 +28,18 @@ import { canonicalJson, compareCodePoints, stableHash, stableSort } from '../../
 import { effectiveFloor, placementLabels } from '../effective'
 import { effectiveModel } from '../effectiveModel'
 import { roomOutlinePath } from '../../domain'
+import { designHeight } from '../../domain'
+import { placementTransform } from '../placement'
+import { applyTransform, transformSegment } from '../../geometry'
 import { deriveWalls } from '../walls'
 import { ROOM_PRODUCERS } from './producers/rooms'
+import { VERTICAL_PRODUCERS } from './producers/vertical'
 import { WALL_PRODUCERS } from './producers/walls'
 import type {
   FloorWarnings,
   Warning,
   WarningFloor,
+  WarningOpening,
   WarningPlacement,
   WarningProducer,
   WarningRoom,
@@ -51,7 +56,7 @@ import type {
  * (#68) would sort differently from the strip that fed it. A new producer is one entry here
  * and one file beside it.
  */
-export const WARNING_PRODUCERS: readonly WarningProducer[] = [...WALL_PRODUCERS, ...ROOM_PRODUCERS]
+export const WARNING_PRODUCERS: readonly WarningProducer[] = [...WALL_PRODUCERS, ...ROOM_PRODUCERS, ...VERTICAL_PRODUCERS]
 
 /**
  * The measurement signature of one candidate: `stableHash` of the canonical JSON of its
@@ -135,9 +140,20 @@ export const warningFloorOf = (project: Project, floorId: EntityId, optionId: En
           thickness: wall.thickness,
           justification: wall.justification,
           outline,
+          baseElevation: wall.baseElevation,
+          height: wall.height,
         },
       ]
     })
+  const openings: WarningOpening[] = model.standingOpenings.map((opening) => ({
+    id: opening.id,
+    hostWallId: opening.hostWallId,
+    label: opening.label,
+    sill: opening.sill,
+    head: opening.head,
+    start: opening.start,
+    width: opening.width,
+  }))
   const junctions = model.standingWallJunctions
     .map((junction) => ({
       id: junction.id,
@@ -153,10 +169,27 @@ export const warningFloorOf = (project: Project, floorId: EntityId, optionId: En
     }))
   const placements = effectiveFloor(project, 0, floorId, optionId).placements
   const designs = new Map(project.itemDesigns.map((design) => [design.id, design]))
+  // The stored Placed Items behind the derived placements: the Base elevation is the placement's
+  // own field, and the Vertical Extent is read from it through the Design (#74 §1).
+  const stored = new Map(model.standingPlacedItems.map((placed) => [placed.id, placed]))
   // `Base 600 #2` — the one label rule the Placed Items table shares with this strip (#67 §16).
   const labels = placementLabels(placements)
   const warningPlacements: WarningPlacement[] = placements.map((placement) => {
     const design = designs.get(placement.designId)
+    const placed = stored.get(placement.id)
+    const envelope = design?.clearanceEnvelope ?? null
+    // The envelope through the very transform the footprint arrived by, so the region the
+    // intrusion producer measures is the outline the Plan View draws (#76 §4).
+    const envelopeWorldPath =
+      envelope !== null && placed !== undefined && design !== undefined
+        ? (() => {
+            const transform = placementTransform(design, placed)
+            return {
+              start: applyTransform(envelope.path.start, transform),
+              segments: envelope.path.segments.map((segment) => transformSegment(segment, transform)),
+            }
+          })()
+        : null
     return {
       id: placement.id,
       itemDesignId: placement.designId,
@@ -166,14 +199,21 @@ export const warningFloorOf = (project: Project, floorId: EntityId, optionId: En
       rotationDeg: placement.rotationDeg,
       footprint: design === undefined || design.kind !== 'generic' ? null : design.footprint,
       origin: placement.origin,
+      baseElevation: placed?.baseElevation ?? 0,
+      height: design === undefined ? 0 : designHeight(design),
+      clearanceEnvelope: envelope,
+      envelopeWorldPath,
     }
   })
+  const floorLimits = project.floors.find((floor) => floor.id === floorId)?.limits
   return {
     floorId,
     walls: stableSort(walls, (a, b) => compareCodePoints(a.id, b.id)),
+    openings: stableSort(openings, (a, b) => compareCodePoints(a.id, b.id)),
     junctions: stableSort(junctions, (a, b) => compareCodePoints(a.id, b.id)),
     rooms: stableSort(rooms, (a, b) => compareCodePoints(a.id, b.id)),
     placements: stableSort(warningPlacements, (a, b) => compareCodePoints(a.id, b.id)),
+    limits: { lowerMm: floorLimits?.lowerMm ?? null, upperMm: floorLimits?.upperMm ?? null },
   }
 }
 

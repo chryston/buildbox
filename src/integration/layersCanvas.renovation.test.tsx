@@ -243,15 +243,23 @@ describe('a saved view’s Drawing Layers on its Plan View', () => {
   })
 
   it('keeps the warning row and says why its subject is nowhere on screen (#71 criterion 9)', async () => {
-    // `Option A · Proposed` has Furniture's Visible box unchecked, and the one warning this fixture
-    // earns is about a wardrobe standing on Furniture.
+    // `Option A · Proposed` has Furniture's Visible box unchecked. The wardrobe's Room-crossing
+    // warning is about a wardrobe standing on Furniture; #76's vertical warnings add rows beside
+    // it, but the wardrobe's is the one this case follows.
     await openView(PROPOSED)
-    expect(badged()).toEqual([WARDROBE])
+    expect(badged()).toContain(WARDROBE)
     await userEvent.setup().click(screen.getByTestId('warning-toggle'))
 
+    // #76's vertical warnings fire beside the wardrobe too — this fixture's furniture overlaps
+    // in plan and in height — so the case follows the one row it is about: the wardrobe's
+    // Room-crossing warning, picked out of the strip by the type in its key.
     const rows = screen.getAllByTestId(/warning-sentence-/)
-    expect(rows.filter((row) => (row.getAttribute('data-testid') ?? '').includes(WARDROBE))).toHaveLength(1)
-    const row = rows.find((each) => (each.getAttribute('data-testid') ?? '').includes(WARDROBE))
+    const wardrobeRows = rows.filter((row) => {
+      const key = row.getAttribute('data-testid') ?? ''
+      return key.includes(WARDROBE) && key.includes('item_crosses_room')
+    })
+    expect(wardrobeRows).toHaveLength(1)
+    const row = wardrobeRows[0]
     // The row stays — the warning is a fact about the model — and the words say why its subject is
     // nowhere on this canvas.
     expect(row?.textContent ?? '').toContain('· Furniture hidden in this view — warning still applies')

@@ -39,6 +39,8 @@ import { displayLabel } from './renovation/displayTheme'
 import { cycleOrder, isSameSpot } from './selection/overlapCycle'
 import type { VerticalSnapCandidate } from '../../derive'
 import { ElevationDragLayer } from './elevation/ElevationDragLayer'
+import { ElevationPreviewBands } from './VerticalPreviewOverlay'
+import type { PreviewBand } from './verticalPreview'
 import type { ElevationExtentField } from './elevation/elevationDrag'
 import type { CanvasPoint, CycleCandidate } from './selection/overlapCycle'
 import { clampZoom, fitViewport, zoomAround } from './viewport'
@@ -88,6 +90,13 @@ export interface ElevationPaneProps {
   dragCandidates?: readonly VerticalSnapCandidate[] | null
   /** One finished drag, in the field of the canonical entity the caller's Intent writes. */
   onVerticalExtent?: (field: ElevationExtentField, value: number) => void
+  /**
+   * The dashed new-top/bottom rectangles of the shared-height preview (#76 §1), in the view's own
+   * millimetres. Screen-only, pointer-transparent, never part of the Display List.
+   */
+  previewBands?: readonly PreviewBand[]
+  /** The dashed projected Clearance Envelope bands (#76 §4), same rules. */
+  clearanceBands?: readonly PreviewBand[]
   children?: never
 }
 
@@ -118,6 +127,7 @@ export function ElevationPane(props: ElevationPaneProps): ReactNode {
   const {
     view, scene, list, area, topMm, sizing, optionName, display, selectedIds, onPick,
     viewport, onViewport, hostRef, resolveAsset, dragCandidates = null, onVerticalExtent,
+    previewBands, clearanceBands,
   } = props
   const svgRef = useRef<SVGSVGElement>(null)
   const panning = useRef(false)
@@ -345,6 +355,15 @@ export function ElevationPane(props: ElevationPaneProps): ReactNode {
             candidates={dragCandidates}
             onCommit={(field, value) => onVerticalExtent?.(field, value)}
           />
+        )}
+        {/* The dashed outlines of #76, last and above every row: the shared-height preview in the
+            preview token, the Clearance Envelope in its own. Screen-only and pointer-transparent —
+            the pane under a preview still pans, zooms and picks. */}
+        {matrix !== undefined && (
+          <>
+            <ElevationPreviewBands bands={previewBands ?? []} scene={scene} topMm={topMm} kind="preview" testId="elevation-preview-bands" />
+            <ElevationPreviewBands bands={clearanceBands ?? []} scene={scene} topMm={topMm} kind="clearance" testId="elevation-clearance-bands" />
+          </>
         )}
       </svg>
       {/* Which way the view stands: the glyph points into the band the drawing was made of. */}

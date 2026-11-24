@@ -146,6 +146,16 @@ export interface DesignEditPreview {
   readonly color: string | null
 }
 
+/**
+ * A shared height awaiting `Apply` (#76 §1): the dashed preview outlines on both canvases read
+ * this, and nothing else does. The panel owns its lifecycle — `Apply`, `Cancel` and Esc all
+ * clear it — and the Project never sees it until one Intent commits it.
+ */
+export interface HeightPreview {
+  readonly itemDesignId: string
+  readonly heightMm: number
+}
+
 /** Where Item Detail was opened from, so `← Back` returns to exactly that (#57). */
 export interface ItemDetailReturn {
   readonly floorId: string
@@ -254,6 +264,7 @@ export interface WorkspaceState {
    * replaces the pending one rather than stacking previews.
    */
   designPreview: DesignEditPreview | null
+  heightPreview: HeightPreview | null
   /**
    * `Pick on canvas` is armed: the next click on the selected placement sets the Item Origin
    * preview rather than selecting anything (#57 §5).
@@ -353,6 +364,7 @@ export interface WorkspaceActions {
   setPickingOrigin(picking: boolean): void
   /** The pending design edit, or `null` to drop it. */
   setDesignPreview(preview: DesignEditPreview | null): void
+  setHeightPreview(preview: HeightPreview | null): void
   /** Open the Item Detail View of one Item Design. Navigation, never history (#26). */
   openItemDetail(itemDesignId: string, from: ItemDetailReturn): void
   /** Back to the Floor, the view and the Placed Item Item Detail came from. */
@@ -444,6 +456,7 @@ const INITIAL: WorkspaceState = {
   verticalSnapSettings: { floorHeights: true, entities: true, presetHeights: true },
   shapeSelection: null,
   designPreview: null,
+  heightPreview: null,
   pickingOrigin: false,
   itemDetail: null,
   shapeDraft: null,
@@ -551,6 +564,7 @@ export const workspaceStore = createStore<WorkspaceSnapshot>()((set) => ({
   setPickingOrigin: (pickingOrigin) =>
     set(pickingOrigin ? { pickingOrigin, designPreview: null } : { pickingOrigin }),
   setDesignPreview: (designPreview) => set({ designPreview }),
+  setHeightPreview: (heightPreview) => set({ heightPreview }),
   openItemDetail: (itemDesignId, from) => set({ itemDetail: { itemDesignId, from } }),
   // Leaving Item Detail takes the draft with it: a proposal is not something to come back to,
   // and a shape that failed validation must not be waiting on the next design opened.

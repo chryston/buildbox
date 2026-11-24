@@ -39,14 +39,12 @@ import type { DisplayListInteractions } from '../drawing/DisplayListSvg'
 import { roomLabel } from '../../export'
 import { formatMm } from './displayUnits'
 import { rotationFromPointer } from './rotateHandle'
-import { fitViewport, zoomAround } from './viewport'
+import { planFitViewport, zoomAround } from './viewport'
 import type { Viewport } from './viewport'
 import type { AngleSnap, DesignEditPreview, ItemDragPreview, WorkspaceTool } from './workspaceStore'
 
 const WHEEL_IN = 1.25
 const WHEEL_OUT = 0.8
-/** The sheet drawn behind a Floor with no Plan Image, in millimetres. */
-const PLACEHOLDER_MM = { w: 800, h: 600 }
 
 export interface PlanViewCanvasProps {
   hostRef: RefObject<HTMLDivElement | null>
@@ -186,6 +184,13 @@ export interface PlanViewCanvasProps {
    * the scene's own `<g>`, so it must be drawn in the Floor's millimetres. */
   overlay?: ReactNode
   /**
+   * Dashed screen-only outlines drawn above everything the Floor is drawn from (#76 §1, §4) —
+   * the shared-height preview and the Clearance Envelope. Unlike `overlay` this takes no pointer:
+   * the canvas under a preview stays fully interactive, and the group itself is
+   * `pointer-events: none`. It lives in the scene's `<g>`, in Floor millimetres.
+   */
+  screenOverlay?: ReactNode
+  /**
    * An HTML layer over the canvas — the Wall draft's bar and chips, which are words and
    * controls, not geometry. It sits on the canvas host, whose box is the same one the scene's
    * matrix is measured from, so a point placed at `x·zoom + panX` lands where the scene draws
@@ -220,7 +225,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     tool, selection, onSelect, onCursorChange, onCanvasClick, dragPreview, onDragPreview, onMoveItem, onRotateItem,
     editLocked = false,
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
-    angleSnap, overlay, htmlOverlay, walls, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
+    angleSnap, overlay, htmlOverlay, screenOverlay, walls, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
     openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
     rooms = null, selectedRoomId = null, onSelectRoom, roomProposal = null,
     warningSubjects = [], onSelectWarningBadge,
@@ -242,10 +247,10 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   const lastPointer = useRef<Point2 | null>(null)
 
   const contentW = floor.planImage === null
-    ? PLACEHOLDER_MM.w
+    ? 0
     : floor.planImage.widthPx * Math.hypot(floor.planImage.pxToFloor.a, floor.planImage.pxToFloor.b)
   const contentH = floor.planImage === null
-    ? PLACEHOLDER_MM.h
+    ? 0
     : floor.planImage.heightPx * Math.hypot(floor.planImage.pxToFloor.c, floor.planImage.pxToFloor.d)
   const pixelsPerMm = floor.planImage === null
     ? null
@@ -262,11 +267,17 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     return () => observer.disconnect()
   }, [hostRef])
 
-  // No cached viewport for this view: `Fit` once the host has a size.
+  // No cached viewport for this view: `Fit` once the host has a size — to the Plan Image when
+  // there is one, to the Floor's own bounds when there is not (#76).
   useEffect(() => {
     if (viewport !== null || hostSize.width <= 0 || hostSize.height <= 0) return
-    onViewport(fitViewport(hostSize.width, hostSize.height, contentW, contentH))
-  }, [viewport, hostSize, contentW, contentH, onViewport])
+    onViewport(planFitViewport(
+      hostSize.width,
+      hostSize.height,
+      floor.planImage === null ? null : { w: contentW, h: contentH },
+      floor.bounds,
+    ))
+  }, [viewport, hostSize, contentW, contentH, floor.planImage, floor.bounds, onViewport])
 
   // Wheel zoom needs a non-passive listener to keep the page from scrolling. It goes on the
   // canvas host rather than the `<svg>`, because an HTML overlay over the canvas — the Wall
@@ -765,11 +776,13 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
                 sizing={sizing}
                 matrix={matrix}
                 textSpace="screen"
+                textLayerTestId="plan-warning-badge-text-layer"
                 screen={{ pxPerUnit: zoom, panX, panY }}
                 resolveAsset={resolveAsset}
                 interactions={interactions}
               />
             )}
+            {screenOverlay !== undefined && <g transform={matrix}>{screenOverlay}</g>}
           </>
         )}
       </svg>

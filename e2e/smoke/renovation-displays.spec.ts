@@ -111,7 +111,9 @@ test("a baseline edit in a Design Option's display asks the forced choice, repla
   // moved geometry (#70 criterion 21). W-1 leaves the Proposed display as its successor arrives.
   await page.getByTestId('forced-choice-replace').click()
   await expect(dialog).toHaveCount(0)
-  await expect(page.locator(`[data-ref="${W_1}"]`)).toHaveCount(0)
+  // The Wall's own ink is gone; the badge of the baseline warning that names it is a separate
+  // layer keyed by the baseline (#66 §14), and it stays until the baseline itself changes.
+  await expect(page.locator(`[data-ref-role="wall"][data-ref="${W_1}"]`)).toHaveCount(0)
   const replaced = await wallRefs(page)
   expect(replaced).not.toContain(W_1)
   expect(replaced.length).toBe(before.length)

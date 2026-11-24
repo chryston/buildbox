@@ -135,8 +135,8 @@ describe('the Floor workspace', () => {
     // not where it is (#58 §2), so the rail does not say `Position X` twice with two meanings.
     // The card's two Plan View Range fields and the item's two Vertical Extent rows carry it too
     // (#74 §4, §5): a range and a Base are lengths like any other, shown in the unit the whole
-    // Project is being read in.
-    expect(screen.getAllByText('(cm)')).toHaveLength(8)
+    // Project is being read in — and so does the Clearance Envelope group's Depth field (#76 §4).
+    expect(screen.getAllByText('(cm)')).toHaveLength(9)
     const width = screen.getByTestId('shape-width')
     expect(width).not.toHaveValue(mmWidth)
     expect(width).not.toHaveValue('')

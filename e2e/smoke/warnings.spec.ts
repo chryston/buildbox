@@ -75,7 +75,9 @@ async function openWarnedPlan(page: Page): Promise<Locator> {
   const canvas = floorPlanCanvas(page)
   await expect(canvas).toBeVisible()
   await page.getByTestId('warning-toggle').click()
-  await expect(rows(page)).toHaveCount(3)
+  // The three junction rows of #66, plus the eight the vertical producers derive from this
+  // scene's furniture (#76 §5).
+  await expect(rows(page)).toHaveCount(11)
   return canvas
 }
 
@@ -91,11 +93,12 @@ test('the warnings come from the model: three unjoined pairs speak, thirteen joi
   // The same Floor holds a closed ring, four hosted partitions, an arc and a four-way cross:
   // thirteen Junctions, and not one warning among them. A join is the answer to the warning, and
   // BuildBox never infers one, so the count is the producer's whole contract in one number.
-  await expect(count(page)).toHaveText('2 open · 1 seen')
+  await expect(count(page)).toHaveText('10 open · 1 seen')
 
-  // One `!` badge per Wall involved in something unacknowledged — four Walls, whatever the number
-  // of warnings each is in the middle of.
-  await expect(page.getByTestId('floor-plan-canvas').locator('[data-testid^="warning-badge-"]')).toHaveCount(4)
+  // One `!` badge per entity involved in something unacknowledged: the four Walls of the two
+  // junction rows, plus the five Walls and six furniture pieces of the eight vertical rows
+  // (#76 §5) — eleven entities, whatever the number of warnings each is in the middle of.
+  await expect(page.getByTestId('floor-plan-canvas').locator('[data-testid^="warning-badge-"]')).toHaveCount(11)
 })
 
 test('the three statuses are three rows, and a reopened one keeps its note', async ({ page }) => {
@@ -121,10 +124,12 @@ test('the three statuses are three rows, and a reopened one keeps its note', asy
   await expect(seen.getByRole('button', { name: 'Acknowledge' })).toHaveCount(0)
   await expect(seen.getByRole('button', { name: 'Note' })).toBeVisible()
 
-  // Open and reopened rows come first, and within each group the rows follow engine order.
-  await expect(rows(page).nth(0)).toContainText(OPEN_ROW)
-  await expect(rows(page).nth(1)).toContainText(REOPENED_ROW)
-  await expect(rows(page).nth(2)).toContainText(SEEN_ROW)
+  // Open and reopened rows come first, and within each group the rows follow engine order. The
+  // vertical rows (#76 §5) join the open group, so the three junction rows are located by name.
+  const texts = await rows(page).allInnerTexts()
+  const indexOf = (sentence: string): number => texts.findIndex((text) => text.includes(sentence))
+  expect(indexOf(OPEN_ROW)).toBeLessThan(indexOf(REOPENED_ROW))
+  expect(indexOf(SEEN_ROW)).toBe(texts.length - 1)
 })
 
 test('looking at the plan never reopens a warning', async ({ page }) => {
@@ -156,7 +161,7 @@ test('looking at the plan never reopens a warning', async ({ page }) => {
   await expect(rowFor(page, SEEN_ROW).locator('[data-testid^="warning-status-"]')).toHaveText(
     `Seen ✓ · ${SEEN_NOTE}`,
   )
-  await expect(count(page)).toHaveText('2 open · 1 seen')
+  await expect(count(page)).toHaveText('10 open · 1 seen')
 })
 
 test('Acknowledge and Note are Edit Transactions: undo takes them back, redo puts them back', async ({ page }) => {
@@ -174,14 +179,14 @@ test('Acknowledge and Note are Edit Transactions: undo takes them back, redo put
   await expect(open.locator('[data-testid^="warning-status-"]')).toHaveText(
     'Seen ✓ · Left open deliberately: the client will confirm.',
   )
-  await expect(count(page)).toHaveText('1 open · 2 seen')
+  await expect(count(page)).toHaveText('9 open · 2 seen')
   await expect(saveStatus(page)).toContainText('Saved locally')
 
   // One undo takes the decision back, note and all — it was one transaction, not two.
   await undoButton(page).click()
   await expect(open).toHaveAttribute('data-status', 'open')
   await expect(open.locator('[data-testid^="warning-status-"]')).toHaveCount(0)
-  await expect(count(page)).toHaveText('2 open · 1 seen')
+  await expect(count(page)).toHaveText('10 open · 1 seen')
 
   // Redo restores the acknowledgement exactly as it was made.
   await redoButton(page).click()
@@ -189,7 +194,7 @@ test('Acknowledge and Note are Edit Transactions: undo takes them back, redo put
   await expect(open.locator('[data-testid^="warning-status-"]')).toHaveText(
     'Seen ✓ · Left open deliberately: the client will confirm.',
   )
-  await expect(count(page)).toHaveText('1 open · 2 seen')
+  await expect(count(page)).toHaveText('9 open · 2 seen')
 })
 
 test('deleting a Wall takes its warning and its acknowledgement in one transaction', async ({ page }) => {
@@ -209,19 +214,19 @@ test('deleting a Wall takes its warning and its acknowledgement in one transacti
   await page.getByTestId('wall-delete').click()
   await page.getByTestId('warning-toggle').click()
 
-  await expect(rows(page)).toHaveCount(2)
+  await expect(rows(page)).toHaveCount(10)
   await expect(page.getByText(SEEN_ROW, { exact: false })).toHaveCount(0)
   // The note went with it: nothing anywhere still claims the overlap was seen.
   await expect(page.getByText(SEEN_NOTE, { exact: false })).toHaveCount(0)
-  await expect(count(page)).toHaveText('2 open · 0 seen')
+  await expect(count(page)).toHaveText('10 open · 0 seen')
 
   // One undo, not two: the Wall, the warning and the acknowledgement with its note.
   await undoButton(page).click()
-  await expect(rows(page)).toHaveCount(3)
+  await expect(rows(page)).toHaveCount(11)
   await expect(rowFor(page, SEEN_ROW)).toHaveAttribute('data-status', 'acknowledged')
   await expect(rowFor(page, SEEN_ROW).locator('[data-testid^="warning-status-"]')).toHaveText(
     `Seen ✓ · ${SEEN_NOTE}`,
   )
-  await expect(count(page)).toHaveText('2 open · 1 seen')
+  await expect(count(page)).toHaveText('10 open · 1 seen')
   await expect(strip(page)).toBeVisible()
 })

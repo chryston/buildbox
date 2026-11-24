@@ -1783,3 +1783,62 @@
   padding: 0 8px;
   font-size: 12px;
 }
+
+/* #76 §1, §4: the dashed outlines that live above a canvas — the shared-height preview in the
+   preview token, the Clearance Envelope in its own. `vector-effect: non-scaling-stroke` is set
+   on the elements, so the dash and the line are screen pixels at every zoom, and the group
+   takes no pointer: the canvas under a preview stays fully interactive. */
+.bb-preview-outline {
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+.bb-preview-outline--preview {
+  stroke: var(--bb-preview-stroke);
+}
+
+.bb-preview-outline--clearance {
+  stroke: var(--bb-clearance-stroke);
+}
+
+/* The shared-height panel (#76 §1) is a card in the inspector rail, and its table is the
+   promise: seven columns in 340 px, so the numbers are the quiet ones and the words are small. */
+.bb-shared-design-panel {
+  margin-top: 12px;
+}
+
+/* The Clearance Envelope group (#76 §4): a titled block in the same card, its fields stacked in
+   the narrow inspector and its caption the quiet line about who else it reaches. */
+.bb-clearance-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.bb-clearance-caption {
+  margin: 4px 0 0;
+  color: var(--bb-ink-muted);
+  font-size: 11px;
+}
+
+.bb-shared-design-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 8px 0;
+}
+
+.bb-shared-design-table th,
+.bb-shared-design-table td {
+  padding: 3px 4px;
+  text-align: left;
+  border-bottom: 1px solid var(--bb-border-inset);
+  white-space: nowrap;
+}
+
+.bb-shared-design-table th {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--bb-text-subtle);
+}

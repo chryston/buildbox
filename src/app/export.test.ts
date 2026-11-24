@@ -114,6 +114,9 @@ const CROSSING: Project = {
   ...domainFixture('v4/project-basic.json'),
   existingModel: {
     ...domainFixture('v4/project-basic.json').existingModel,
+    // Lift the Placed Items off y = 0, where these Walls run: the #76 item-into-wall producer
+    // would otherwise answer beside the one wall_crossing this fixture is about.
+    placedItems: domainFixture('v4/project-basic.json').existingModel.placedItems.map((placed) => ({ ...placed, translation: { x: placed.translation.x, y: placed.translation.y + 2000 } })),
     walls: [
       wall('w-a', 'W-2', { x: 0, y: 0 }, { x: 4000, y: 0 }),
       wall('w-b', 'W-5', { x: 2000, y: -500 }, { x: 2000, y: 500 }),
@@ -211,9 +214,16 @@ describe('the view list', () => {
   })
 
   it('counts the warnings nobody has acknowledged, and none once they all have', () => {
-    // The reference Project is a joined-up kitchen: nothing in it is worth warning about, so
-    // the line reads 0 because there is nothing to count rather than because nothing is wired.
-    expect(portFor().port.unacknowledgedWarnings()).toBe(0)
+    // The reference Project scatters six hundred and thirty generic pieces of furniture, and
+    // #76's vertical extents make many of them genuinely overlap: the count is that real number,
+    // computed the same way the port computes it, not a wired zero.
+    const reference = referenceProject()
+    const scattered = reference.floors.reduce(
+      (sum, floor) => sum + deriveWarnings(reference, floor.id, null).warnings.length,
+      0,
+    )
+    expect(scattered).toBeGreaterThan(0)
+    expect(portFor().port.unacknowledgedWarnings()).toBe(scattered)
 
     const open = deriveWarnings(CROSSING, FLOOR, null).warnings
     expect(portWithProject(CROSSING).unacknowledgedWarnings()).toBe(1)

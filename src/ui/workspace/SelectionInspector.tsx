@@ -24,6 +24,7 @@ import { useFieldsLocked } from './fieldsLock'
 import type { PlanItemView } from './planModel'
 import { quarterTurn } from './rotateHandle'
 import { ShapeEditor } from './shape/ShapeEditor'
+import { ClearanceEnvelopeSection } from './ClearanceEnvelopeSection'
 import type { DesignEditPreview } from './workspaceStore'
 
 /**
@@ -337,6 +338,9 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
               membership={props.membership}
             />
           </div>
+          {/* The Clearance Envelope of the Design this placement shares (#76 §4): added,
+              measured and removed here, and its caption says who else it reaches. */}
+          <ClearanceEnvelopeSection itemDesignId={item.designId} design={design} layout="stacked" />
           {/* A cabinet's footprint, origin and colour are its construction (#42 §2), so the
               rows that would edit them are not offered — Item Detail edits the cabinet. */}
           {!isCabinet && (

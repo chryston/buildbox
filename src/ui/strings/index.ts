@@ -645,6 +645,38 @@ export const STRINGS = {
   /** The dialog says what a fork does before the person asks the model what a fork does. */
   forkDesignNote: 'Only this placement will use the new design.',
   fork: 'Fork',
+  // The undo tooltip of a shared-height change (#76 §2): the catalogue's default cannot name
+  // which design or what moved, so the card composes the whole line and hands it to
+  // `IntentBuilder.build`. The two measurements arrive already formatted in the Project's units.
+  designHeightTransaction: (name: string, from: string, to: string): string =>
+    `Change design height: ${name} ${from} → ${to}`,
+  /** The caption under the Clearance Envelope group: how far the one envelope reaches (#76 §4). */
+  clearanceSharedBy: (n: number): string => `shared by ${n} placements`,
+  // The shared-height preview panel (#76 §1): it opens inside the inspector, changes nothing
+  // until `Apply`, and its table says what the new height would do to every placement.
+  editSharedDesign: 'Edit shared design…',
+  editSharedDesignTitle: (name: string): string => `Edit shared design · ${name}`,
+  designHeightField: 'Design height',
+  designOptionColumn: 'Design Option',
+  existingModel: 'Existing Model',
+  currentTop: 'Current top',
+  newTop: 'New top',
+  warningChange: 'Warning change',
+  warningChangeNew: '+ new',
+  warningChangeCleared: '− cleared',
+  forkOnePlacement: 'Different height for one placement?',
+  applyToPlacedItems: (n: number): string => `Apply to ${plural(n, 'Placed Item', 'Placed Items')}`,
+  cancelChangeNothing: 'Cancel — change nothing',
+  // The Clearance Envelope group (#76 §4): two ways in, three numbers, one removal — and no
+  // number offered as a default, because the measure is the person's own.
+  clearanceEnvelope: 'Clearance Envelope',
+  addClearanceEnvelope: 'Add Clearance Envelope',
+  zoneOffOneEdge: 'Zone off one edge',
+  customPathEditor: 'Custom Path…',
+  depthPlaceholder: 'measure yours (e.g. door swing)',
+  clearanceBottom: 'Bottom',
+  edgeChoice: (index: number, length: string): string => `Edge ${String(index)} — ${length}`,
+  arcEdge: (index: number): string => `Edge ${String(index)} (arc, not pickable)`,
   // The Plan View card (#44, #66 §17).
   planImageUncalibrated: 'Plan Image not calibrated',
   planImageScale: (perPx: string, unit: string): string => `Plan Image scale: 1 px = ${perPx} ${unit}`,
@@ -1004,6 +1036,29 @@ export { fitProblem, openingNoun } from '../../domain'
 /** Millimetres in a sentence: whole when they are whole, one decimal when they are not. */
 const mmWords = (mm: number): string => `${Math.round(mm * 10) / 10}`
 
+/**
+ * The word for the bottom edge of each kind of thing (#76 §3).
+ *
+ * A Placed Item has a bottom; a Wall stands on a base; a Beam is under-something, so its low edge
+ * is an underside. The top edge is always a top, which is why only the bottom words are a table.
+ * The vertical copy rows below read this, so #77–#79 widen one table rather than re-word one
+ * sentence — the same rule that keeps the sentences themselves in one builder in `derive`.
+ */
+export const VERTICAL_EDGE_WORDS: Readonly<Record<string, string>> = {
+  placedItem: 'bottom',
+  opening: 'bottom',
+  skirting: 'bottom',
+  service: 'bottom',
+  wall: 'base',
+  beam: 'underside',
+}
+
+/** The bottom word of a kind, as the vertical sentences say it. */
+const bottomWord = (kind: unknown): string => VERTICAL_EDGE_WORDS[String(kind)] ?? 'bottom'
+
+/** Millimetres as the vertical sentences say them: the same rounding, always. */
+const vmm = (params: WarningParams): string => mmWords(Number(params.mm))
+
 /** Why this preset will not fit where the pointer is standing (#65 §10). */
 export function placementFitMessage(
   presetName: string,
@@ -1042,6 +1097,23 @@ export const WARNING_COPY: Readonly<Record<string, (params: WarningParams) => st
     `${String(params.a)} runs along ${String(params.b)} for ${mmWords(Number(params.mm))} mm without a join.`,
   item_crosses_room: (params) =>
     `${String(params.a)} crosses ${String(params.b)}: ${Number(params.m2).toFixed(2)} m² (${Math.round(Number(params.pct))}%) of its footprint is outside.`,
+  // The #76 §3 relation sentences: the builder in `derive` picks the branch and the raw
+  // millimetres; the edge words and the rounding are here, where every measurement becomes a word.
+  vertical_above: (params) =>
+    `${String(params.a)} top is ${vmm(params)} mm above ${String(params.b)} ${bottomWord(params.bKind)}.`,
+  vertical_below: (params) =>
+    `${String(params.a)} ${bottomWord(params.aKind)} is ${vmm(params)} mm below ${String(params.b)} top.`,
+  vertical_overlap_height: (params) =>
+    `${String(params.a)} overlaps ${String(params.b)} over ${vmm(params)} mm of height.`,
+  floor_limit_above: (params) => `${String(params.a)} top is ${vmm(params)} mm above this Floor's upper limit.`,
+  floor_limit_below: (params) =>
+    `${String(params.a)} ${bottomWord(params.aKind)} is ${vmm(params)} mm below this Floor's lower limit.`,
+  host_range_above: (params) => `${String(params.a)} top is ${vmm(params)} mm above host ${String(params.b)} top.`,
+  host_range_below: (params) =>
+    `${String(params.a)} ${bottomWord(params.aKind)} is ${vmm(params)} mm below host ${String(params.b)} base.`,
+  item_into_wall: (params) => `${String(params.a)} runs ${vmm(params)} mm into ${String(params.b)}.`,
+  clearance_envelope_intrusion: (params) =>
+    `${String(params.a)} takes up ${Number(params.m2).toFixed(2)} m² (${Math.round(Number(params.pct))}%) of ${String(params.b)}'s Clearance Envelope.`,
 }
 
 /** The sentence one warning says. */

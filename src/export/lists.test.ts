@@ -69,6 +69,9 @@ const crossing: Project = {
   ...project,
   existingModel: {
     ...project.existingModel,
+    // Lift the Placed Items off y = 0, where these Walls run: the #76 item-into-wall producer
+    // would otherwise answer beside the one wall_crossing this fixture is about.
+    placedItems: project.existingModel.placedItems.map((placed) => ({ ...placed, translation: { x: placed.translation.x, y: placed.translation.y + 2000 } })),
     walls: [wall('wall-a', 'W-A', 0, 0, 4000, 0), wall('wall-b', 'W-B', 2000, -500, 2000, 500)],
   },
 }

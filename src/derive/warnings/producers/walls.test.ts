@@ -37,7 +37,14 @@ const model = (walls: readonly Wall[], junctions: readonly WallJunction[] = []):
   const base = domainFixture('v4/project-basic.json')
   return {
     ...base,
-    existingModel: { ...base.existingModel, walls: [...walls], wallJunctions: [...junctions] },
+    // The fixture's Placed Items sit on y = 0, which is where these Walls run: lift them clear,
+    // or the #76 item-into-wall producer answers every case below beside the Walls it is about.
+    existingModel: {
+      ...base.existingModel,
+      placedItems: base.existingModel.placedItems.map((placed) => ({ ...placed, translation: { x: placed.translation.x, y: placed.translation.y + 2000 } })),
+      walls: [...walls],
+      wallJunctions: [...junctions],
+    },
     warningAcknowledgements: [],
   }
 }

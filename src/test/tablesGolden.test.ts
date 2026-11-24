@@ -248,10 +248,12 @@ describe('the S7 defaults (#68 criterion 3)', () => {
 
 describe('the Warnings List (#68 criterion 5)', () => {
   const warnings = deriveWarnings(project, floorId, null).warnings
-  const rows = cellsOf('warnings')
+  // The scene earns #76's vertical warnings beside the two Room crossings it was drawn to prove;
+  // this block is about the crossings — the vertical rows are the golden's and the shuffle's.
+  const allRows = cellsOf('warnings')
+  const rows = allRows.filter((row) => cell('warnings', row, 'warning_type') === 'item_crosses_room')
 
   it('holds one acknowledged warning with its note, one reopened and one open', () => {
-    expect(warnings).toHaveLength(3)
     expect(rows).toHaveLength(3)
     expect(rows.map((row) => cell('warnings', row, 'status'))).toEqual([
       'unacknowledged',
@@ -273,7 +275,7 @@ describe('the Warnings List (#68 criterion 5)', () => {
 
   it('writes the strip sentence byte for byte, and no millimetres for a percentage', () => {
     for (const row of rows) {
-      const warning = warnings.find((each) => each.subjects[0]?.id === cell('warnings', row, 'subject_id'))!
+      const warning = warnings.find((each) => each.type === 'item_crosses_room' && each.subjects[0]?.id === cell('warnings', row, 'subject_id'))!
       expect(cell('warnings', row, 'message')).toBe(quote(neutralise(warningSentence(warning.messageKey, warning.params))))
       // Every warning here was measured in square metres and a percentage, so the column is empty
       // and the sentence carries the number (#68 Scope 3).
@@ -316,7 +318,7 @@ describe('the tables of a shuffled scene (property)', { timeout: 60_000 }, () =>
     walls: project.existingModel.walls.filter((wall) => wall.floorId === floorId).length,
     openings: project.existingModel.openings.filter((opening) => opening.floorId === floorId).length,
     'placed-items': project.existingModel.placedItems.filter((placed) => placed.floorId === floorId).length,
-    warnings: 3,
+    warnings: deriveWarnings(project, floorId, null).warnings.length,
   }
 
   /**

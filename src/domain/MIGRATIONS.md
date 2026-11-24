@@ -201,6 +201,35 @@ BuildBox"** and writes nothing (#20 §5). Old Backups are unaffected: v1 through
 step that runs on the way in adds one empty list and changes no measurement, no entity and no existing
 value.
 
+## What v11 holds (#76)
+
+One thing, an addition to every Item Design:
+
+* `clearanceEnvelope`, the design's **Clearance Envelope** (#76 §4) — a closed path in the design's
+  own local coordinates, a `bottomOffset` measured from each placement's Base and a `height` greater
+  than 0 — or `null` for the designs that carry none. Absent and `null` mean the same thing: the
+  design asks nothing of the space around it.
+
+`migrateV10toV11` writes `clearanceEnvelope: null` on every design that arrives without the field
+and nothing else. It reads no clock, mints no ID and touches no other record, because a Clearance
+Envelope is always one a person drew or measured — there is no built-in depth to invent and no kind
+of item that implies one. A design that already carries the field, `null` or an envelope, comes back
+untouched, so the step is idempotent and a v11 file is the same object it arrived as. No placement
+moves and no warning reopens on the way in, because no measurement changed.
+
+The strict validator refuses an envelope whose path is not a closed loop the geometry kernel accepts
+— a self-intersecting or open path is refused with the kernel's own sentence, at the path it sits at
+— a `height` of zero or less, a `bottomOffset` that is not a finite number, and, written as a list,
+a design carrying more than one envelope. Nothing about what an envelope *means* is stored: which
+placements intrude into one, and by how much, are derived on the way to the warning list and never
+written down.
+
+**A Backup made by this version cannot be opened by an older one.** It is domain schema v11, and a
+build that stops at v10 has no eleventh step to read it with, so it answers **"saved by a newer
+BuildBox"** and writes nothing (#20 §5). Old Backups are unaffected: v1 through v10 still open, and
+the step that runs on the way in adds one null field to each design and changes no measurement, no
+entity and no existing value.
+
 ## What this release means for a reader (#73)
 
 In plain words:

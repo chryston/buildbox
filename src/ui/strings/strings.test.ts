@@ -78,7 +78,9 @@ describe('the copy', () => {
     // the strip will be asked to say. A producer added by #67 or #76–#79 without a row fails
     // this test rather than meeting the user with a sentence that says it has no wording.
     for (const producer of WARNING_PRODUCERS) {
-      expect(WARNING_COPY[producer.type], `${producer.type} has no copy`).toBeTypeOf('function')
+      for (const key of producer.messageKeys ?? [producer.type]) {
+        expect(WARNING_COPY[key], `${producer.type} has no copy for ${key}`).toBeTypeOf('function')
+      }
     }
     expect(WARNING_PRODUCERS.length).toBeGreaterThan(0)
   })

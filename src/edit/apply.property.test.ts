@@ -413,6 +413,41 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
       origin: { x: real(g, 0, footprintSize(design.footprint).width), y: real(g, 0, footprintSize(design.footprint).depth) },
     })
   },
+  // The shared height (#76 §2): always a fresh positive number, so it is never a no-change.
+  (g) => {
+    const design = pick(g, [...generics(g), ...cabinets(g)])
+    if (design === undefined) return null
+    return intent('design.setHeight', { itemDesignId: design.id, heightMm: real(g, 100, 3000) })
+  },
+  // A Clearance Envelope (#76 §4): always a plain rectangle, always a new size, so the one
+  // refusal this generator can hit is the no-change the next run of it will not repeat.
+  (g) => {
+    const design = pick(g, [...generics(g), ...cabinets(g)])
+    if (design === undefined) return null
+    const w = real(g, 10, 900)
+    const d = real(g, 10, 900)
+    return intent('design.setClearanceEnvelope', {
+      itemDesignId: design.id,
+      envelope: {
+        path: {
+          start: { x: 0, y: 0 },
+          segments: [
+            { kind: 'line', to: { x: w, y: 0 } },
+            { kind: 'line', to: { x: w, y: d } },
+            { kind: 'line', to: { x: 0, y: d } },
+            { kind: 'line', to: { x: 0, y: 0 } },
+          ],
+        },
+        bottomOffset: real(g, 0, 100),
+        height: real(g, 100, 2400),
+      },
+    })
+  },
+  (g) => {
+    const withZone = [...generics(g), ...cabinets(g)].filter((design) => design.clearanceEnvelope != null)
+    const design = pick(g, withZone)
+    return design === undefined ? null : intent('design.removeClearanceEnvelope', { itemDesignId: design.id })
+  },
   (g) => {
     const placed = pick(g, placements(g))
     if (placed === undefined) return null

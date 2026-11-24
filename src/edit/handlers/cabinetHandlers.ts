@@ -193,7 +193,7 @@ const removeSpaceAccessory: Handler<'cabinet.removeAccessory'> = (ctx) => {
  * unit's top-left corner: keeping that corner still under a new width or depth means the
  * centre moves by half the difference.
  */
-function writeSettings(draft: Project, itemDesignId: EntityId, patch: Partial<GlobalSettings>): void {
+export function writeSettings(draft: Project, itemDesignId: EntityId, patch: Partial<GlobalSettings>): void {
   const settings = requireCabinetDesign(draft, itemDesignId).construction.settings
   const deltaWidth = typeof patch.width === 'number' ? patch.width - settings.width : 0
   const deltaDepth = typeof patch.depth === 'number' ? patch.depth - settings.depth : 0

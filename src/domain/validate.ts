@@ -27,6 +27,7 @@ import {
   distance,
   TOLERANCE_MM,
   usableIntervals,
+  validateLoop,
 } from '../geometry'
 import type { ClosedPath, CornerRadii, JoinJunction, JoinWall, Preset, Pt, Segment, UsableInterval } from '../geometry'
 import { ROOT_PATH, childPath, compareCodePoints, problem, type ValidationProblem } from '../lib'
@@ -111,11 +112,12 @@ const DRAWING_LAYER_FIELDS = ['id', 'name', 'color']
 /** What one saved view says about one layer (#71 §3); `color` is the only field that may be absent. */
 const LAYER_SETTING_FIELDS = ['visible', 'selectable', 'editable', 'color']
 const PLAN_IMAGE_FIELDS = ['assetHash', 'mediaType', 'widthPx', 'heightPx', 'pixelsPerMm']
-const CABINET_DESIGN_FIELDS = ['id', 'kind', 'name', 'construction']
+const CABINET_DESIGN_FIELDS = ['id', 'kind', 'name', 'construction', 'clearanceEnvelope']
 const GENERIC_DESIGN_FIELDS = [
   'id', 'kind', 'name', 'footprint', 'origin', 'height', 'heightIsTypical', 'color',
-  'catalogKey', 'isCustom',
+  'catalogKey', 'isCustom', 'clearanceEnvelope',
 ]
+const CLEARANCE_ENVELOPE_FIELDS = ['path', 'bottomOffset', 'height']
 // The Item Footprint of #58: a preset with parameters, or a Custom Path. Each preset kind
 // has its own list, because `unknown-field` is what catches a radius left on a Rectangle.
 const PRESET_FOOTPRINT_FIELDS = ['kind', 'preset', 'centre', 'orientationDeg']
@@ -1753,6 +1755,36 @@ function validateItemDesign(raw: unknown, path: string, index: IdIndex, format: 
     validateGenericDesign(raw, path, format, add)
     checkUnknownFields(raw, path, GENERIC_DESIGN_FIELDS, add)
   }
+  validateClearanceEnvelope(raw.clearanceEnvelope, childPath(path, 'clearanceEnvelope'), format, add)
+}
+
+/**
+ * The Clearance Envelope of #76 §4: zero or one per design, and the one is a shape.
+ *
+ * Absent and `null` both mean none — the same convention the Drawing Layer field uses — and an
+ * array is refused as the more-than-one it is: a design carries one envelope or none, and a list
+ * of two is a file that cannot say which one a placement shares. The `path` is checked the way
+ * every stored loop is: structurally first, then through the kernel's own `validateLoop`, so a
+ * self-intersecting envelope is refused with the same sentence the editor would have said before
+ * letting it be drawn, at the path it sits at.
+ */
+function validateClearanceEnvelope(raw: unknown, path: string, format: DisplayFormat, add: Add): void {
+  if (raw === undefined || raw === null) return
+  if (Array.isArray(raw)) {
+    add(path, WRONG_TYPE, 'Expected one Clearance Envelope or none; this Item Design carries a list of them.')
+    return
+  }
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected the Clearance Envelope.')
+    return
+  }
+  const closed = validateClosedPath(raw.path, childPath(path, 'path'), add)
+  checkNumber(raw.bottomOffset, childPath(path, 'bottomOffset'), 'the Clearance Envelope bottom offset', add)
+  checkPositive(raw.height, childPath(path, 'height'), 'the Clearance Envelope height', add)
+  checkUnknownFields(raw, path, CLEARANCE_ENVELOPE_FIELDS, add)
+  if (closed === null) return
+  const problems = toValidationProblems(validateLoop(closed), path, (one) => formatGeometryProblem(one, format))
+  for (const one of problems) add(one.path, one.code, one.message)
 }
 
 function validateItemDesigns(

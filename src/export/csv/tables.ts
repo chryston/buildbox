@@ -333,7 +333,7 @@ export const WARNINGS_TABLE: TableSpec = {
     ['floor', 'text'],
     ['designOptionId', 'id'],
     ['designOption', 'text'],
-    ['warningType', 'enum', ['wall_crossing', 'wall_overlap', 'item_crosses_room']],
+    ['warningType', 'enum', ['wall_crossing', 'wall_overlap', 'item_crosses_room', 'item_item_overlap', 'item_into_wall', 'opening_host_above', 'opening_host_below', 'floor_limit_above', 'floor_limit_below', 'clearance_envelope_intrusion']],
     ['subjectType', 'enum', ['wall', 'opening', 'room', 'placed_item']],
     ['subjectId', 'id'],
     ['otherType', 'enum', ['wall', 'opening', 'room', 'placed_item']],

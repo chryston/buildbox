@@ -320,8 +320,10 @@ test('a Project with two Floors and two Plan Images survives Backup and Restore'
   if (before === null) throw new Error('the session wrote no record')
   // The version this build writes: 4 since #64 gave a Project Walls, Wall Junctions and a
   // default Wall height, 5 since #65 gave it Openings, 6 since #66 gave it acknowledgements,
-  // 7 since #67 gave it Rooms, and 8 since #69/#71 gave it Design Options and Drawing Layers.
-  expect(before.schemaVersion).toBe(10)
+  // 7 since #67 gave it Rooms, 8 since #69/#71 gave it Design Options and Drawing Layers,
+  // 9 and 10 since #74/#75 gave it Vertical Extents and Elevation Views, and 11 since #76 gave
+  // Item Designs a Clearance Envelope.
+  expect(before.schemaVersion).toBe(11)
   expect(last(floorsOf(before.data)).planImage?.pixelsPerMm).toBeGreaterThan(0)
 
   await returnToProjects(page)
@@ -338,7 +340,7 @@ test('a Project with two Floors and two Plan Images survives Backup and Restore'
     if (after === null) throw new Error('the restore wrote no record')
     // Both sides are the version the app writes, so this is byte for byte: Floors and their
     // order, both Plan Images with their calibration, and every Plan View id.
-    expect(after.schemaVersion).toBe(10)
+    expect(after.schemaVersion).toBe(11)
     expect(canonical(after.data)).toBe(canonical(before.data))
   } finally {
     await fresh.close()

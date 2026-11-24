@@ -1155,3 +1155,16 @@ export function withPlanViewRanges(project: Project): Project {
 export function withElevationViews(project: Project): Project {
   return { ...project, elevationViews: project.elevationViews ?? [] }
 }
+
+/**
+ * The same Project as this build's eleventh schema (#76): every Item Design carries the Clearance
+ * Envelope field the step writes.
+ *
+ * The step adds `clearanceEnvelope: null` to every design that arrives without one, so a test that
+ * compares a whole Project read from a pre-v11 record has to say the same thing the step says. An
+ * envelope is always one a person drew, so the field is null everywhere: the step invents no shape,
+ * and neither does this.
+ */
+export function withClearanceEnvelopes(project: Project): Project {
+  return { ...project, itemDesigns: project.itemDesigns.map((design) => ({ ...design, clearanceEnvelope: design.clearanceEnvelope ?? null })) }
+}

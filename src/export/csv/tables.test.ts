@@ -138,7 +138,18 @@ describe('the v1.0 tables', () => {
     expect(codesOf('walls', 'classification')).toEqual(['external', 'internal', 'partition'])
     expect(codesOf('warnings', 'subject_type')).toEqual(['wall', 'opening', 'room', 'placed_item'])
     expect(codesOf('warnings', 'other_type')).toEqual(['wall', 'opening', 'room', 'placed_item'])
-    expect(codesOf('warnings', 'warning_type')).toEqual(['wall_crossing', 'wall_overlap', 'item_crosses_room'])
+    expect(codesOf('warnings', 'warning_type')).toEqual([
+      'wall_crossing',
+      'wall_overlap',
+      'item_crosses_room',
+      'item_item_overlap',
+      'item_into_wall',
+      'opening_host_above',
+      'opening_host_below',
+      'floor_limit_above',
+      'floor_limit_below',
+      'clearance_envelope_intrusion',
+    ])
   })
 })
 

@@ -105,6 +105,10 @@ const EXTRA_INTENTS = [
   'view.setPlanViewRange',
   // #58: the Item Design editor restates a footprint wholesale; no legacy action did.
   'design.setFootprint',
+  // #76: the shared height and the Clearance Envelope are Design fields no legacy action touched.
+  'design.setHeight',
+  'design.setClearanceEnvelope',
+  'design.removeClearanceEnvelope',
   // #64: Walls have no legacy equivalent at all — the old store kept no wall geometry — so the
   // whole family is new rather than a split of an action.
   'wall.createChain',

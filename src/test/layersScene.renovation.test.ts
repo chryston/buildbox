@@ -37,7 +37,7 @@ interface Envelope {
 }
 
 const read = (name: string): { text: string; project: Project } => {
-  const text = readFileSync(join(fixturesRoot, 'domain', 'v10', name), 'utf8')
+  const text = readFileSync(join(fixturesRoot, 'domain', 'v11', name), 'utf8')
   return { text, project: (JSON.parse(text) as Envelope).project }
 }
 

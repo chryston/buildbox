@@ -47,6 +47,7 @@ export type {
   WarningFloor,
   WarningJunction,
   WarningMeasured,
+  WarningOpening,
   WarningParams,
   WarningProducer,
   WarningStatus,
@@ -54,6 +55,15 @@ export type {
   WarningSubjectKind,
   WarningWall,
 } from './warnings/types'
+export {
+  chooseVerticalSubject,
+  floorLimitCopy,
+  hostRangeCopy,
+  verticalOverlap,
+  verticalRelationCopy,
+  VERTICAL_MESSAGE_KEYS,
+} from './warnings/verticalCopy'
+export type { VerticalCopy, VerticalExtent, VerticalKind, VerticalSubject } from './warnings/verticalCopy'
 export {
   AFFINE_IDENTITY,
   affineApply,
@@ -65,7 +75,7 @@ export {
   affineTranslate,
 } from './affine'
 export type { Affine } from './affine'
-export { effectiveFloor, effectiveItemDetail } from './effective'
+export { effectiveFloor, effectiveItemDetail, placementLabels } from './effective'
 export type {
   DerivedFloor,
   DerivedItemDetail,
@@ -132,6 +142,7 @@ export {
   SNAP_ACQUISITION_PX,
   SNAP_PRIORITY,
   TOLERANCE_MM,
+  applyTransform,
   cornerRadiiOf,
   directionDeg,
   distance,
@@ -150,6 +161,7 @@ export {
   openingEnd,
   presetInBox,
   presetParametersValid,
+  projectElevationOutline,
   pt,
   refDistance,
   refParamAt,
@@ -159,6 +171,7 @@ export {
   segmentStart,
   setFilletRadius,
   toValidationProblems,
+  transformSegment,
   usableIntervals,
   validateLoop,
   verticalBodySnap,
@@ -175,6 +188,7 @@ export type {
   EditResult,
   EllipticalArcChange,
   EllipticalArcSegment,
+  ElevationFrame,
   GeometryProblem,
   GeometryProblemCode,
   KeepFixed,
@@ -190,6 +204,7 @@ export type {
   Snap,
   SnapCandidate,
   SnapKind,
+  Transform,
   UsableGap,
   UsableInterval,
   VerticalBodySnap,
