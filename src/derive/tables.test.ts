@@ -224,3 +224,79 @@ describe('the element rows of a hand-built Floor (#68 criteria 1, 3)', () => {
     expect(both.map((row) => `${row.floor}/${row.subjectId}`)).toEqual(['Floor 1/wall-2', 'Mezzanine/wall-6'])
   })
 })
+
+/**
+ * The Skirting table (#78 §8, criterion 17).
+ *
+ * The v13 fixture is the scene the issue describes: `Skirting SK-1` along `W-1`'s kitchen face for
+ * the whole 9 m, and Option A proposing a second one on the other face. The two rows differ in one
+ * pair of numbers, and that pair is the whole point of the table — the gross is the range drawn, the
+ * net is what is left after the corners are clipped and the T-junction is gapped out.
+ */
+describe('the Skirting table (#78 §8)', () => {
+  const SKIRTING_PROJECT = domainFixture('v13/skirting.json')
+  const SK_FLOOR = 'seed-001'
+  const skirtingScope = (over: Partial<QuantityScope> = {}): QuantityScope =>
+    scopeOf({ floorIds: [SK_FLOOR], ...over })
+  const rowsOf = (project: Project, scope: QuantityScope) => tables(project, scope, { warningMessages: null }).skirting
+
+  it('carries every column of one whole-face Skirting', () => {
+    const [row] = rowsOf(SKIRTING_PROJECT, skirtingScope())
+    expect(row).toEqual({
+      stableId: 'skirting-1',
+      floorId: SK_FLOOR,
+      floor: 'Floor 1',
+      designOptionId: '',
+      designOption: '',
+      renovationState: 'existing',
+      drawingLayerId: '',
+      drawingLayer: 'Unlayered',
+      label: 'Skirting SK-1',
+      hostWallId: 'seed-wall-002',
+      side: 'left',
+      startMm: 0,
+      endMm: 9000,
+      grossLengthMm: 9000,
+      netLengthMm: 9000,
+      heightMm: 100,
+      thicknessMm: 15,
+      bottomMm: 0,
+      topMm: 100,
+      predecessorIds: [],
+    })
+    // The face the branch Wall butts against is the right one, so the left face keeps its 9 m: a
+    // junction gap belongs to the face the branch covers, not to the Wall as a whole.
+    expect(row!.netLengthMm).toBe(row!.grossLengthMm)
+  })
+
+  it('publishes the net after the corner clips and the junction gap, beside the demolition it replaces', () => {
+    const rows = rowsOf(SKIRTING_PROJECT, skirtingScope({ designOptionIds: ['option-a'] }))
+    expect(rows.map((row) => [row.stableId, row.renovationState, row.side, row.predecessorIds])).toEqual([
+      ['skirting-1', 'demolition', 'left', []],
+      ['skirting-2', 'proposed', 'right', ['skirting-1']],
+    ])
+    const proposed = rows.find((row) => row.stableId === 'skirting-2')!
+    // 9 000 drawn, less 100 clipped at each end where the Wall turns and 150 where W-5 butts onto
+    // this face: the number a buyer orders, and the number the Plan View paints.
+    expect(proposed.grossLengthMm).toBe(9000)
+    expect(proposed.netLengthMm).toBe(8650)
+    expect(proposed.topMm).toBe(proposed.bottomMm + proposed.heightMm)
+  })
+
+  it('has no row for a Skirting whose host Wall is not standing', () => {
+    const project: Project = {
+      ...SKIRTING_PROJECT,
+      existingModel: {
+        ...SKIRTING_PROJECT.existingModel,
+        walls: SKIRTING_PROJECT.existingModel.walls.filter((wall) => wall.id !== 'seed-wall-002'),
+      },
+    }
+    expect(rowsOf(project, skirtingScope())).toEqual([])
+  })
+
+  it('hides a Skirting behind a Renovation State or a Layer the scope leaves out', () => {
+    expect(rowsOf(SKIRTING_PROJECT, skirtingScope({ renovationStates: ['proposed'] }))).toEqual([])
+    expect(rowsOf(SKIRTING_PROJECT, skirtingScope({ designOptionIds: ['option-a'], renovationStates: ['demolition'] }))).toHaveLength(1)
+    expect(rowsOf(SKIRTING_PROJECT, skirtingScope({ drawingLayers: { layerIds: ['layer-nothing'], includeUnlayered: false } }))).toEqual([])
+  })
+})

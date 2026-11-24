@@ -62,6 +62,8 @@ function rowsOf(at: Tables, id: TableId): readonly CsvRow[] {
   if (id === 'rooms') return at.rooms
   if (id === 'walls') return at.walls
   if (id === 'openings') return at.openings
+  if (id === 'beams') return at.beams
+  if (id === 'skirting') return at.skirting
   if (id === 'placed-items') return at.placedItems
   return at.warnings
 }

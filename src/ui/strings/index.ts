@@ -442,6 +442,7 @@ export const STRINGS = {
   exportListWalls: 'Walls',
   exportListOpenings: 'Openings',
   exportListBeams: 'Beams',
+  exportListSkirting: 'Skirting',
   exportListPlacedItems: 'Placed Items',
   exportListWarnings: 'Warnings List',
   /** Why the State and Layer controls go grey: that table is scoped by Floor and option only. */

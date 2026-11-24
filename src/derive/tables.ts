@@ -37,8 +37,8 @@
  * that built its own English here would be a second copy of that sentence, and the strip and the
  * CSV would drift the first time one of them was reworded.
  */
-import { beamLabel, beamTop, designHeight, drawingLayerById, entityLayerId, openingHeight, openingSpan, type EntityId, type HingeSide, type OpeningSwing, type Project, type Wall, type WallClassification } from '../domain'
-import { arcFromThrough, refLength } from '../geometry'
+import { beamLabel, beamTop, designHeight, drawingLayerById, entityLayerId, openingHeight, openingSpan, skirtingLabel, skirtingTop, type EntityId, type HingeSide, type OpeningSwing, type Project, type Wall, type WallClassification } from '../domain'
+import { arcFromThrough, refLength, type WallSide } from '../geometry'
 import { compareCodePoints, stableSort } from '../lib'
 import { layerMatches, type OptionColumns, type QuantityScope, type RenovationState } from './quantities/scope'
 import { derivePlacement, effectiveFloor, placementLabels, type DerivedPlacement } from './effective'
@@ -46,6 +46,7 @@ import { designOptionName, effectiveModel, type EffectiveModel } from './effecti
 import { derivedRoomsOf, deriveRooms, roomMembershipOf, type FloorRooms, type RoomMembership } from './rooms'
 import { deriveWalls, type FloorWalls } from './walls'
 import { deriveBeams, type FloorBeams } from './beams'
+import { deriveSkirting, type FloorSkirting } from './skirting'
 import { deriveWarnings } from './warnings/engine'
 import type { WarningParams, WarningSubjectKind } from './warnings/types'
 
@@ -211,12 +212,43 @@ export type BeamsRow = {
   readonly topMm: number
 }
 
+/**
+ * One Skirting row (#78 §8).
+ *
+ * The two lengths are the pair the element exists for: `grossLengthMm` is the stored range and
+ * `netLengthMm` is what {@link deriveSkirting} leaves after the corner clips and the derived gaps.
+ * `topMm` is `bottomMm + heightMm`, derived and never stored.
+ */
+export type SkirtingRow = {
+  readonly stableId: string
+  readonly floorId: string
+  readonly floor: string
+  readonly designOptionId: string
+  readonly designOption: string
+  readonly renovationState: RenovationState
+  readonly drawingLayerId: string
+  readonly drawingLayer: string
+  readonly predecessorIds: readonly string[]
+  readonly label: string
+  readonly hostWallId: string
+  readonly side: WallSide
+  readonly startMm: number
+  readonly endMm: number
+  readonly grossLengthMm: number
+  readonly netLengthMm: number
+  readonly heightMm: number
+  readonly thicknessMm: number
+  readonly bottomMm: number
+  readonly topMm: number
+}
+
 /** A scope's six tables, each in the order its file is written in. */
 export interface Tables {
   readonly rooms: readonly RoomsRow[]
   readonly walls: readonly WallsRow[]
   readonly openings: readonly OpeningsRow[]
   readonly beams: readonly BeamsRow[]
+  readonly skirting: readonly SkirtingRow[]
   readonly placedItems: readonly PlacedItemsRow[]
   readonly warnings: readonly WarningsRow[]
 }
@@ -257,7 +289,7 @@ const UNLAYERED_COLUMNS: LayerColumns = { drawingLayerId: '', drawingLayer: UNLA
  */
 function layerColumnsOf(project: Project, model: EffectiveModel): ReadonlyMap<EntityId, LayerColumns> {
   const layers = new Map<EntityId, LayerColumns>()
-  for (const row of [...model.rooms, ...model.walls, ...model.openings, ...model.beams, ...model.placedItems]) {
+  for (const row of [...model.rooms, ...model.walls, ...model.openings, ...model.beams, ...model.skirting, ...model.placedItems]) {
     const layer = drawingLayerById(project, entityLayerId(row.entity))
     layers.set(row.entity.id, layer === null ? UNLAYERED_COLUMNS : { drawingLayerId: layer.id, drawingLayer: layer.name })
   }
@@ -434,6 +466,47 @@ function beamsForFloor(
 }
 
 /**
+ * The Skirting of one Floor (#78 §8).
+ *
+ * Both lengths come from the same `deriveSkirting` the Plan View paints with, so the file and the
+ * drawing can never disagree about what was bought: the gross is the range the user drew, the net is
+ * what is left after the corners are clipped and the Openings and T-junctions are gapped out. A
+ * Skirting whose host Wall is not standing has no derived body and so no row — the same rule the
+ * Beams table follows for a Beam with nothing to hang from.
+ */
+function skirtingsForFloor(
+  option: OptionColumns,
+  floorId: EntityId,
+  floor: string,
+  model: EffectiveModel,
+  derived: FloorSkirting,
+  layers: ReadonlyMap<EntityId, LayerColumns>,
+): SkirtingRow[] {
+  const rows: SkirtingRow[] = []
+  for (const { entity: skirting, renovationState } of model.skirting) {
+    const body = derived.byId.get(skirting.id)
+    if (body === undefined) continue
+    rows.push({
+      ...elementColumns(option, floorId, floor, renovationState, layers.get(skirting.id) ?? UNLAYERED_COLUMNS),
+      stableId: skirting.id,
+      predecessorIds: skirting.predecessorIds ?? [],
+      label: skirtingLabel(skirting),
+      hostWallId: skirting.hostWallId,
+      side: skirting.side,
+      startMm: skirting.start,
+      endMm: skirting.end,
+      grossLengthMm: body.grossLength,
+      netLengthMm: body.netLength,
+      heightMm: skirting.height,
+      thicknessMm: skirting.thickness,
+      bottomMm: skirting.bottom,
+      topMm: skirtingTop(skirting),
+    })
+  }
+  return rows
+}
+
+/**
  * The Placed Items of one Floor, and how each sits in a Room.
  *
  * `label` is the `Base 600 #2` the strip uses ({@link placementLabels}), so a warning in the
@@ -559,6 +632,7 @@ export function tables(project: Project, scope: QuantityScope, deps: TableDeps):
   const walls: WallsRow[] = []
   const openings: OpeningsRow[] = []
   const beams: BeamsRow[] = []
+  const skirting: SkirtingRow[] = []
   const placedItems: PlacedItemsRow[] = []
   const warnings: WarningsRow[] = []
 
@@ -588,6 +662,7 @@ export function tables(project: Project, scope: QuantityScope, deps: TableDeps):
       walls.push(...inScope(wallsForFloor(option, floorId, floor, model, derivedWalls, layers)))
       openings.push(...inScope(openingsForFloor(option, floorId, floor, model, layers)))
       beams.push(...inScope(beamsForFloor(option, floorId, floor, model, deriveBeams(project, floorId, optionId), layers)))
+      skirting.push(...inScope(skirtingsForFloor(option, floorId, floor, model, deriveSkirting(project, floorId, optionId), layers)))
       placedItems.push(...inScope(placedItemsForFloor(option, floorId, floor, project, model, placements, derivedRooms, layers)))
       // The Warnings List is scoped by Floor and Design Option only (export contract §3): no
       // Renovation State and no Layer ever hides a warning.
@@ -616,6 +691,7 @@ export function tables(project: Project, scope: QuantityScope, deps: TableDeps):
     walls: byElement(walls),
     openings: byElement(openings),
     beams: byElement(beams),
+    skirting: byElement(skirting),
     placedItems: byElement(placedItems),
     warnings: sortedWarnings,
   }
