@@ -485,6 +485,19 @@
 
 /* ---------------------------------------------------------------- notes */
 
+/* The hint pill a tool in hand floats over the canvas: the words the tool needs to be usable, and the
+   one way out that does not need the keyboard. */
+.bb-workspace-tool-hint {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: var(--bb-radius-small-button);
+  background: var(--bb-bg-modal);
+  box-shadow: var(--bb-lift);
+  font-size: var(--bb-size-badge);
+}
+
 .bb-workspace-notes {
   width: var(--bb-workspace-notes-width);
   flex: none;

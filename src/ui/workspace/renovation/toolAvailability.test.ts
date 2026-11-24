@@ -34,8 +34,18 @@ describe('the tool table of #70 §3', () => {
     // exception: a Project with no Options at all is still drawn and edited on it, exactly as it was
     // before any of this existed.
     for (const display of ['demolition', 'proposed', 'combined'] as const)
-      expect(availableTools(display, false)).toEqual(['select', 'elevation'])
-    expect(availableTools('existing', false)).toEqual(['select', 'wall', 'opening', 'skirting', 'service', 'room', 'placeItem', 'elevation'])
+      expect(availableTools(display, false)).toEqual(['select', 'elevation', 'comment'])
+    expect(availableTools('existing', false)).toEqual(['select', 'wall', 'opening', 'skirting', 'service', 'room', 'placeItem', 'elevation', 'comment'])
+  })
+
+  it('offers the Comment tool everywhere, including the error state (#80 §9)', () => {
+    // A Comment writes no geometry and no Design Option owns it, so the row is never hidden — not by
+    // the Display, and not by a missing Option. The hidden counts above are unchanged by its presence.
+    for (const display of displays) {
+      expect(toolIsAvailable('comment', display, true)).toBe(true)
+      expect(toolIsAvailable('comment', display, false)).toBe(true)
+    }
+    expect(displaysAllowing('comment')).toEqual(displays)
   })
 
   it('puts the renovation tools in Demolition and Combined only', () => {
@@ -61,7 +71,7 @@ describe('the tool table of #70 §3', () => {
   })
 
   it('is one row per tool, each reachable somewhere — so #81 adds a row and nothing else', () => {
-    expect(RENOVATION_TOOL_ROWS).toHaveLength(10)
+    expect(RENOVATION_TOOL_ROWS).toHaveLength(11)
     for (const row of RENOVATION_TOOL_ROWS) {
       expect(row.allowedIn.length).toBeGreaterThan(0)
       expect(displaysAllowing(row.id)).toEqual(row.allowedIn)

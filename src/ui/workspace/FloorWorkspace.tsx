@@ -21,8 +21,8 @@ import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockF
 import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings, drawElevationView } from '../../drawing'
 import type { BadgeSubject, LayerGates, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
-import type { ElevationView, Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
-import { designOptionsOf, duplicateCommentIds, elevationViewsOf, allServices, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf } from '../../domain'
+import type { CommentAnchor, ElevationView, Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
+import { DEFAULT_COMMENT_PRIORITY, designOptionsOf, duplicateCommentIds, elevationViewsOf, allServices, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
@@ -139,6 +139,7 @@ import {
 import type { RenovationInspectorAction, RenovationInspectorLayer, RenovationInspectorLink, RenovationInspectorTarget, RenovationToolId, LayerSettingPatch } from './renovation'
 import { canPasteHere, pasteClipboardStore, usePasteClipboard } from './pasteClipboard'
 import { RENOVATION_STRINGS } from '../strings/renovation'
+import { COMMENT_STRINGS } from '../strings/comments'
 import { FIELDS_UNLOCKED, FieldsLockedContext } from './fieldsLock'
 import type { FieldsLock } from './fieldsLock'
 import { ForkDesignDialog, NewItemDialog } from './ItemDialogs'
@@ -1205,9 +1206,50 @@ export function FloorWorkspace(): ReactNode {
    * the move that preceded it has been rendered.
    */
   const clickOnCanvas = (at: Pt): void => {
+    if (tool === 'comment') {
+      // #80 §9: an entity under the cursor anchors the note to that entity; a click on empty Floor
+      // anchors it to the point aimed at, in Floor millimetres. The hit target is resolved by the
+      // canvas's own hit list, so the same screen-space minimum that makes a Wall face clickable makes
+      // it anchorable.
+      const hit = commentAnchorAt(at)
+      if (hit !== null) placeComment(hit)
+      return
+    }
     if (tool !== 'opening') return
     const aimed = aimAtOpening(at)
     if (aimed !== null && aimed.fits) placeOpening(aimed)
+  }
+
+  /**
+   * One new Comment, one Intent, one undo step (#80 §9). It starts Open and Normal with the neutral
+   * title, is selected in the panel, and its title is focused with the text selected so the first
+   * keystroke replaces `New comment` rather than appending to it.
+   */
+  const placeComment = (anchor: CommentAnchor): void => {
+    if (floorId === null) return
+    const intent = services.intent.build(
+      'comment.create',
+      {
+        anchor,
+        title: COMMENT_STRINGS.newCommentTitle,
+        body: '',
+        priority: DEFAULT_COMMENT_PRIORITY,
+        at: services.now(),
+      },
+      COMMENT_STRINGS.commentTool,
+    )
+    sendIntent(intent)
+    const commentId = intent.ids[0] ?? null
+    if (commentId !== null) notesSessionStore.getState().select(commentId)
+    setTool('select')
+  }
+
+  /** The Anchor a click at this Floor point takes: the entity under the cursor, else the point. */
+  const commentAnchorAt = (at: Pt): CommentAnchor | null => {
+    if (floorId === null) return null
+    const selected = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? skirtingSelection ?? serviceSelection ?? selection
+    if (selected !== null) return { kind: 'entity', entityId: selected }
+    return { kind: 'floor_point', floorId, point: at }
   }
 
   /** The ghost for where the pointer stands now, in the shape the Wall list takes (#65 §10). */
@@ -1440,6 +1482,13 @@ export function FloorWorkspace(): ReactNode {
           // is sent, and the tool goes with them so no face band keeps following the cursor.
           event.preventDefault()
           setSkirtingDraft(null)
+          setTool('select')
+          return
+        }
+        if (tool === 'comment') {
+          // The same backing out (#80 §9): Esc leaves the tool with nothing sent and nothing selected,
+          // because a note nobody meant to start is not a note.
+          event.preventDefault()
           setTool('select')
           return
         }
@@ -3633,6 +3682,20 @@ export function FloorWorkspace(): ReactNode {
                   unit={project.preferences.displayUnit}
                   precision={project.preferences.displayPrecision}
                 />
+              ) : tool === 'comment' ? (
+                <div className="bb-workspace-tool-hint" data-testid="comment-tool-hint" role="status">
+                  {COMMENT_STRINGS.toolHint}
+                  <button
+                    type="button"
+                    className="bb-workspace-tool-button"
+                    data-testid="comment-tool-cancel"
+                    onClick={() => {
+                      setTool('select')
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
               ) : tool === 'beam' ? beamDraftOverlay : tool === 'skirting' ? skirtingToolLayer : tool === 'service' ? serviceToolLayer : elevationDraftOverlay}
             />
             )}
