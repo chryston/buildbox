@@ -125,7 +125,7 @@ describe('a Wall that moves takes its Openings with it', () => {
 describe('splitting a Wall that has Openings', () => {
   it('moves an Opening past the seam onto the new piece, measured from the seam', () => {
     const { project, wall } = withTwo()
-    const applied = expectRoundTrip(project, intent('wall.split', { wallId: wall.id, at: 1000 }, source(2)))
+    const applied = expectRoundTrip(project, intent('wall.split', { wallId: wall.id, at: 1000 }, source(3)))
     const pieces = applied.project.existingModel.walls
     expect(pieces).toHaveLength(2)
     const [first, second] = [wallOf(applied.project, wall.id), wallOf(applied.project, pieces.find((piece) => piece.id !== wall.id)!.id)]
@@ -142,7 +142,7 @@ describe('splitting a Wall that has Openings', () => {
     const drawn = draw(newProject(), [line(0, 0, 6000, 0)])
     const wall = wallOf(drawn.project, drawn.ids[0]!)
     const project = place(drawn.project, wall, { kind: 'door', label: 'Door 1', start: 500, width: 900, sill: 0, head: 2100, swing: 'left', hingeSide: 'start' })
-    const applied = expectApplied(project, intent('wall.split', { wallId: wall.id, at: 2000 }, source(2)))
+    const applied = expectApplied(project, intent('wall.split', { wallId: wall.id, at: 2000 }, source(3)))
     const kept = openingsOf(applied.project)
     expect(kept).toHaveLength(1)
     expect(kept[0]).toMatchObject({ hostWallId: wall.id, start: 500 })
@@ -150,13 +150,13 @@ describe('splitting a Wall that has Openings', () => {
 
   it('refuses a split inside an Opening, naming it', () => {
     const { project, wall } = withTwo()
-    const rejection = expectRejection(project, intent('wall.split', { wallId: wall.id, at: 2000 }, source(2)), 'split-blocked')
+    const rejection = expectRejection(project, intent('wall.split', { wallId: wall.id, at: 2000 }, source(3)), 'split-blocked')
     expect(rejection.problems[0]!.message).toBe('The split point is inside Door 1.')
   })
 
   it('refuses a split inside the other Opening too', () => {
     const { project, wall } = withTwo()
-    const rejection = expectRejection(project, intent('wall.split', { wallId: wall.id, at: 4500 }, source(2)), 'split-blocked')
+    const rejection = expectRejection(project, intent('wall.split', { wallId: wall.id, at: 4500 }, source(3)), 'split-blocked')
     expect(rejection.problems[0]!.message).toBe('The split point is inside Window 2.')
   })
 })
@@ -190,6 +190,7 @@ describe('deleting the host Wall (#65 §7)', () => {
         { id: door.id, kind: 'door', label: 'Door 1', text: 'Door 1 · door' },
         { id: window.id, kind: 'window', label: 'Window 2', text: 'Window 2 · window' },
       ],
+      skirting: [],
       message: 'Delete W-1 and its 2 openings?',
     })
   })

@@ -8,7 +8,7 @@
  * *means* against a host that has been joined, split or shortened is a `derive` question, and a
  * `domain` module that guessed at it would be a second answer.
  */
-import { skirtingOf, type Project, type Skirting } from './project'
+import { skirtingLabel, skirtingOf, type Project, type Skirting } from './project'
 
 /** The prefix every default Skirting label carries, before its number. */
 export const SKIRTING_LABEL_PREFIX = 'Skirting SK-'
@@ -43,3 +43,28 @@ export function nextSkirtingLabel(project: Project): string {
  * and Junctions that cut them are visible.
  */
 export const skirtingGrossLength = (skirting: Skirting): number => skirting.end - skirting.start
+
+/**
+ * One Skirting that a Wall's delete has to talk about (#78 §5). The shape is the Opening
+ * dependency's: a row the review dialog lists, and the words that row reads.
+ */
+export interface SkirtingDependency {
+  readonly id: string
+  /** `Skirting SK-1` — what the row names. */
+  readonly label: string
+  /** `Skirting SK-1 · Skirting` — the row's whole right-hand side. */
+  readonly text: string
+}
+
+/**
+ * The Skirting that goes with a Wall when it is deleted. A Skirting is a range along one face of
+ * one Wall, so with the Wall gone there is no face left for it to stand off — it goes with the
+ * Wall, listed beside the Openings rather than removed behind the review.
+ */
+export const skirtingDependencies = (project: Project, wallId: string): SkirtingDependency[] =>
+  skirtingOf(project.existingModel)
+    .filter((entry) => entry.hostWallId === wallId)
+    .map((entry) => {
+      const label = skirtingLabel(entry)
+      return { id: entry.id, label, text: `${label} · Skirting` }
+    })

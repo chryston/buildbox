@@ -143,6 +143,19 @@ const EXTRA_INTENTS = [
   'beam.rename',
   'beam.setVerticalExtent',
   'beam.delete',
+  // #78: the legacy app had no Skirting either — a skirting run was a note on the tiling schedule —
+  // so there is no store action any of these maps to.
+  'skirting.create',
+  'skirting.dragEndpoint',
+  'skirting.setRange',
+  'skirting.flipSide',
+  'skirting.duplicateOtherSide',
+  'skirting.setBottom',
+  'skirting.setHeight',
+  'skirting.setThickness',
+  'skirting.setVerticalExtent',
+  'skirting.rename',
+  'skirting.delete',
   // #66: the legacy app had no warnings at all — an overlap was something the drafter found
   // by eye on the printed plan — so there is no store action either of these maps to.
   'warning.acknowledge',

@@ -23,6 +23,7 @@ import { PROJECT_HANDLERS } from './handlers/projectHandlers'
 import { RENOVATION_EDIT_HANDLERS } from './handlers/renovationEdits'
 import { RENOVATION_HANDLERS } from './handlers/renovationHandlers'
 import { ROOM_HANDLERS } from './handlers/roomHandlers'
+import { SKIRTING_HANDLERS } from './handlers/skirtingHandlers'
 import { WALL_HANDLERS } from './handlers/wallHandlers'
 import { WARNING_HANDLERS } from './handlers/warningHandlers'
 import { installCatalogue } from './handlers/support'
@@ -43,6 +44,7 @@ export const INTENT_HANDLERS: { [T in S7IntentType]: IntentHandler<T> } & {
   ...ROOM_HANDLERS,
   ...OPENING_HANDLERS,
   ...BEAM_HANDLERS,
+  ...SKIRTING_HANDLERS,
   ...DESIGN_HANDLERS,
   ...PLAN_FLOOR_HANDLERS,
   ...FLOOR_HANDLERS,

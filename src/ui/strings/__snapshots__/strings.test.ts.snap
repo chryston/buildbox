@@ -592,6 +592,7 @@ exports[`the copy > is the whole vocabulary of the interface 1`] = `
   "wallClassificationNone": "None",
   "wallConstructionLabel": "Construction label",
   "wallCustom": "Custom…",
+  "wallDeleteWithDependencies": [Function],
   "wallDeleteWithOpenings": [Function],
   "wallFinish": "Finish",
   "wallHeight": "Height",

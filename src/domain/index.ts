@@ -42,7 +42,7 @@ export {
 } from './footprint'
 export { PRESET_NAMES, convertWarningFor, lostParametersOf } from './convert'
 export { BEAM_LABEL_PREFIX, nextBeamLabel } from './beams'
-export { SKIRTING_LABEL_PREFIX, nextSkirtingLabel } from './skirting'
+export { SKIRTING_LABEL_PREFIX, nextSkirtingLabel, skirtingDependencies, type SkirtingDependency } from './skirting'
 export {
   FLOOR_DEPENDENCY_KINDS,
   floorHasDependencies,

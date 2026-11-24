@@ -24,7 +24,7 @@
  * a Wall, and what is standing in the way.
  */
 import { effectiveModel } from '../../derive'
-import { beamLabel, beamsOf, designOptionsOf, roomSegments } from '../../domain'
+import { beamLabel, beamsOf, designOptionsOf, roomSegments, skirtingLabel, skirtingOf } from '../../domain'
 import type {
   DesignOption,
   EntityId,
@@ -89,6 +89,8 @@ function nameOf(project: Project, option: DesignOption, id: EntityId): string {
     return project.itemDesigns.find((design) => design.id === placed.itemDesignId)?.name ?? placed.id
   const beam = [...beamsOf(model), ...beamsOf(proposed)].find((entry) => entry.id === id)
   if (beam !== undefined) return beamLabel(beam)
+  const skirting = [...skirtingOf(model), ...skirtingOf(proposed)].find((entry) => entry.id === id)
+  if (skirting !== undefined) return skirtingLabel(skirting)
   return id
 }
 
@@ -104,6 +106,7 @@ function locateSubject(
     ...option.proposed.rooms,
     ...option.proposed.placedItems,
     ...beamsOf(option.proposed),
+    ...skirtingOf(option.proposed),
   ].find((entry) => entry.id === id)
   if (mine !== undefined) return { floorId: mine.floorId, proposed: true }
   const model = project.existingModel
@@ -114,6 +117,7 @@ function locateSubject(
     ...model.rooms,
     ...model.placedItems,
     ...beamsOf(model),
+    ...skirtingOf(model),
   ].find((entry) => entry.id === id)
   return existing === undefined ? null : { floorId: existing.floorId, proposed: false }
 }
@@ -205,12 +209,24 @@ const knockThrough: Handler<'renovation.knockThrough'> = (ctx) => {
   placeProposedOpening(ctx, { kind: 'removed_section', label, start, width, sill: 0, head: host?.height ?? 0 })
 }
 
-/** The Openings a Wall demolition takes with it: Existing, still standing, hosted on it. */
-function dependantsOf(project: Project, option: DesignOption, wallId: EntityId): Opening[] {
+/**
+ * What stands on this Wall and comes down with it: its Existing Openings, and the Existing Skirting
+ * drawn against one of its faces (#78 §5). Both are records of the survey, so both are demolition
+ * records rather than deletions, and both are listed to the homeowner before anything goes.
+ */
+function dependantsOf(project: Project, option: DesignOption, wallId: EntityId): { id: EntityId; label: string }[] {
   const demolished = new Set<EntityId>(option.demolishedIds)
-  return project.existingModel.openings.filter(
-    (opening) => opening.hostWallId === wallId && !demolished.has(opening.id) && !demolished.has(opening.hostWallId),
-  )
+  const standing = <T extends { id: EntityId }>(records: readonly T[]): T[] =>
+    records.filter((entry) => !demolished.has(entry.id) && !demolished.has(wallId))
+  return [
+    ...standing(project.existingModel.openings.filter((opening) => opening.hostWallId === wallId)).map(
+      (opening) => ({ id: opening.id, label: opening.label }),
+    ),
+    ...standing(skirtingOf(project.existingModel).filter((entry) => entry.hostWallId === wallId)).map((entry) => ({
+      id: entry.id,
+      label: skirtingLabel(entry),
+    })),
+  ]
 }
 
 /** The Junctions of this Option that lean a proposed Wall on `wallId`. */
@@ -279,13 +295,17 @@ function reviewDemolition(project: Project, option: DesignOption, entityId: Enti
   // Deleting the Option's own work is an edit to `proposed`, and its Openings, Junctions and joins
   // go with it in the same transaction — nothing to confirm, and nothing to block it.
   const blockers: string[] = []
-  const willDemolish: Opening[] = []
+  const willDemolish: { id: EntityId; label: string }[] = []
   if (!subject.proposed && isWallId(project, option, entityId)) {
     willDemolish.push(...dependantsOf(project, option, entityId))
     // Proposed Openings the Option itself cut into this Wall: it has to let go of its own work
     // before the Wall they were cut into can come down.
     for (const opening of option.proposed.openings.filter((entry) => entry.hostWallId === entityId))
       blockers.push(`Remove ${opening.label} from this option first.`)
+    // The same for a Skirting this Option drew against the Wall it is taking down (#78 §5): the
+    // message names both, because the homeowner has to know which run loses which Wall.
+    for (const entry of skirtingOf(option.proposed).filter((candidate) => candidate.hostWallId === entityId))
+      blockers.push(`Remove ${skirtingLabel(entry)} from ${entityRef}, or re-host it on another Wall, first.`)
     for (const other of joinsOf(option, entityId))
       blockers.push(
         `${nameOf(project, option, other)} is joined to ${entityRef}, which this option demolishes. Detach or re-host ${nameOf(project, option, other)} first.`,
@@ -297,7 +317,7 @@ function reviewDemolition(project: Project, option: DesignOption, entityId: Enti
     kind: 'demolish',
     entityId,
     entityRef,
-    willDemolish: willDemolish.map((opening) => ({ id: opening.id, label: opening.label })),
+    willDemolish: willDemolish.map((entry) => ({ id: entry.id, label: entry.label })),
     blockers,
     message: `Demolish ${entityRef}?`,
   }
@@ -324,6 +344,9 @@ function deleteProposed(option: DesignOption, id: EntityId): void {
   proposed.placedItems = drop(proposed.placedItems)
   // A container that spells no Beam list stays that way: deleting no Beam changes no bytes.
   if (proposed.beams !== undefined) proposed.beams = drop(proposed.beams)
+  // The same for a Skirting (#78 §5): removing the one this Option proposed leaves the survey's
+  // own records untouched, and a container that spells no list still spells none.
+  if (proposed.skirting !== undefined) proposed.skirting = drop(proposed.skirting)
   proposed.wallJunctions = proposed.wallJunctions.filter(
     (junction) =>
       !gone.has(junction.id) &&
@@ -469,6 +492,21 @@ const replace: Handler<'renovation.replace'> = (ctx) => {
   // own ID in them.
   const hosted = wall === undefined ? [] : model.openings.filter((found) => found.hostWallId === entityId)
   const copies = hosted.filter((found) => found.predecessorIds === undefined)
+  // The Skirting drawn against this Wall's faces comes with it (#78 §5): the Existing run comes
+  // down and a Proposed copy stands on the successor, pointing back at the record it came from.
+  const skirted = wall === undefined ? [] : skirtingOf(model).filter((found) => found.hostWallId === entityId)
+  const skirtCopies = skirted.filter((found) => found.predecessorIds === undefined)
+  const successorLength = wall === undefined ? 0 : refLength(line)
+  for (const found of skirtCopies) {
+    // A successor shorter than the run it replaces clips it, which is the same rule a plain shorten
+    // follows. One that leaves nothing standing is the homeowner's decision, not a silent delete.
+    if (found.start >= successorLength - TOLERANCE_MM)
+      refuse(
+        'has-dependants',
+        'designOptions',
+        `${skirtingLabel(found)} stands on ${wall === undefined ? '' : wall.ref}, which the new Wall is too short to carry. Shorten the Skirting first.`,
+      )
+  }
   // A Room standing on the Wall's faces follows the successor under the #67 compatible-edit rules:
   // the Edge slides onto the face it is referenced to and the outline follows. A Room that cannot
   // follow — a face that turned, an outline that would stop being a shape, a neighbour it would
@@ -505,13 +543,26 @@ const replace: Handler<'renovation.replace'> = (ctx) => {
           })
   const spent = spendIds(
     ctx.intent.ids,
-    1 + copies.length + survivors.length + followers.length,
+    1 + copies.length + skirtCopies.length + survivors.length + followers.length,
     'renovation.replace',
   )
+  // The ID ranges, so each carry writes into its own slice of what was spent.
+  const skirtingAt = 1 + copies.length
+  const junctionAt = skirtingAt + skirtCopies.length
+  const roomAt = junctionAt + survivors.length
   const container = option.proposed
   // What was there comes down: one demolition record for the Wall, for every Existing Opening cut
-  // into it that the successor takes over, and for every Room whose edge follows the face (#69 §4).
-  demolishRecords(option, [entityId, ...copies.map((found) => found.id), ...followers.map((entry) => entry.room.id)])
+  // into it that the successor takes over, for every Existing Skirting standing on it, and for every
+  // Room whose edge follows the face (#69 §4).
+  demolishRecords(
+    option,
+    [
+      entityId,
+      ...copies.map((found) => found.id),
+      ...skirtCopies.map((found) => found.id),
+      ...followers.map((entry) => entry.room.id),
+    ],
+  )
   if (wall !== undefined) {
     const successor: Wall = {
       ...wall,
@@ -556,6 +607,26 @@ const replace: Handler<'renovation.replace'> = (ctx) => {
       const live = container.openings.find((candidate) => candidate.id === found.id)
       if (live !== undefined) live.hostWallId = successor.id
     }
+    // The same for Skirting: the Existing runs become Proposed copies of the successor, and a run
+    // this Option drew itself follows the Wall it was drawn against (#78 §5). A successor shorter
+    // than the run clips it, which is the shorten rule read from the other side.
+    skirtCopies.forEach((found, at) => {
+      container.skirting ??= []
+      container.skirting.push({
+        ...found,
+        id: spent[skirtingAt + at] as string,
+        ...(found.label === undefined ? {} : { label: primed(found.label) }),
+        hostWallId: successor.id,
+        start: Math.min(found.start, successorLength - TOLERANCE_MM),
+        end: Math.min(found.end, successorLength),
+        predecessorIds: [found.id],
+      })
+    })
+    for (const found of skirted) {
+      if (found.predecessorIds === undefined) continue
+      const live = skirtingOf(container).find((candidate) => candidate.id === found.id)
+      if (live !== undefined) live.hostWallId = successor.id
+    }
     // The joins this Wall made belong to the Option from now on: its own Junctions that leaned on
     // the Wall are dropped, and every join the successor still makes is written down afresh (#69 §4).
     container.wallJunctions = container.wallJunctions.filter(
@@ -567,7 +638,7 @@ const replace: Handler<'renovation.replace'> = (ctx) => {
       const rebuilt = carriedJunction(survivor.junction, entityId, successor.id, line, wallOf)
       if (rebuilt === null) return
       container.wallJunctions.push({
-        id: spent[1 + copies.length + at] as string,
+        id: spent[junctionAt + at] as string,
         floorId: subject.floorId,
         ends: rebuilt.ends,
         ...(rebuilt.host === undefined ? {} : { host: rebuilt.host }),
@@ -582,7 +653,7 @@ const replace: Handler<'renovation.replace'> = (ctx) => {
     followers.forEach((entry, at) => {
       container.rooms.push({
         ...entry.room,
-        id: spent[1 + copies.length + survivors.length + at] as string,
+        id: spent[roomAt + at] as string,
         name: primed(entry.room.name),
         outline: entry.outline,
         wallFaceRefs: entry.room.wallFaceRefs.map((ref) =>
@@ -660,6 +731,7 @@ function successorsOf(option: DesignOption, seed: EntityId): ProposedRecord[] {
   const all: ProposedRecord[] = [
     ...proposed.walls,
     ...proposed.openings,
+    ...skirtingOf(proposed),
     ...proposed.rooms,
     ...proposed.placedItems,
   ]

@@ -11,8 +11,8 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import fc from 'fast-check'
 import { beforeAll, describe, expect, it } from 'vitest'
-import type { Beam, CabinetItemDesign, CabinetNode, GenericItemDesign, ItemDesign, ItemFootprint, Opening, PlacedItem, Project, Room, Wall, WallJunction } from '../domain'
-import { beamsOf, footprintSize, nextOpeningLabel, roomFaceCurve, roomOutlineAfterSlide, roomOutlinePath, roomSegments, validateProject } from '../domain'
+import type { Beam, CabinetItemDesign, CabinetNode, GenericItemDesign, ItemDesign, ItemFootprint, Opening, PlacedItem, Project, Room, Skirting, Wall, WallJunction } from '../domain'
+import { beamsOf, footprintSize, nextOpeningLabel, roomFaceCurve, roomOutlineAfterSlide, roomOutlinePath, roomSegments, skirtingOf, skirtingTop, validateProject } from '../domain'
 import type { Preset } from '../geometry'
 import { DEG, edgeToFace, normaliseDeg, ontoFaceVector, pt, refLength, refPointAt } from '../geometry'
 import { arbProject } from '../domain/testing'
@@ -134,6 +134,8 @@ const hingedDoors = (g: Gen): Opening[] =>
 const roomList = (g: Gen): Room[] => g.project.existingModel.rooms
 /** The Beams the survey records; a Beam this Option drew is not what these Intents address. */
 const beamList = (g: Gen): Beam[] => beamsOf(g.project.existingModel)
+/** The Skirtings the survey records, for the same reason (#78). */
+const skirtingList = (g: Gen): Skirting[] => skirtingOf(g.project.existingModel)
 /** The Walls some Room has an Edge lying on. */
 const referencedWalls = (g: Gen): Set<string> =>
   new Set(g.project.existingModel.rooms.flatMap((room) => room.wallFaceRefs.map((reference) => reference.wallId)))
@@ -712,7 +714,7 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
   (g) => {
     const wall = pick(g, wallList(g).filter((candidate) => refLength(candidate.line) > 600))
     if (wall === undefined) return null
-    return intent('wall.split', { wallId: wall.id, at: refLength(wall.line) * 0.37 }, g.ids(2))
+    return intent('wall.split', { wallId: wall.id, at: refLength(wall.line) * 0.37 }, g.ids(3))
   },
   (g) => {
     // Two Walls meeting at a junction of their own, with nothing that differs between them,
@@ -911,6 +913,104 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
   (g) => {
     const beam = pick(g, beamList(g))
     return beam === undefined ? null : intent('beam.delete', { beamId: beam.id })
+  },
+  // #78: a Skirting over the whole face of a Wall the survey has, at the numbers the tool panel
+  // starts with. The range is the Wall's own length, which is the one range that is always legal —
+  // and the click the tool makes really does ask for the whole face.
+  (g) => {
+    const host = pick(g, g.project.existingModel.walls)
+    if (host === undefined) return null
+    const length = refLength(host.line)
+    if (!(length > 100)) return null
+    return intent(
+      'skirting.create',
+      {
+        floorId: host.floorId,
+        hostWallId: host.id,
+        side: pick(g, ['left', 'right'] as const)!,
+        start: 0,
+        end: length,
+        bottom: pick(g, [0, 0, 0, -50, 20])!,
+        height: pick(g, [100, 150, 900, 2600])!,
+        thickness: pick(g, [15, 25])!,
+        ...(bool(g) ? { label: `Skirting SK-${int(g, 1, 60)}` } : {}),
+      },
+      g.ids(1),
+    )
+  },
+  // An end stays inside the Wall and inside the other end, so the range it leaves is a range.
+  (g) => {
+    const entry = pick(g, skirtingList(g))
+    if (entry === undefined) return null
+    const host = g.project.existingModel.walls.find((wall) => wall.id === entry.hostWallId)
+    if (host === undefined) return null
+    const length = refLength(host.line)
+    const end = pick(g, ['start', 'end'] as const)!
+    const to =
+      end === 'start'
+        ? Math.min(entry.end - 50, Math.max(0, entry.start + real(g, -600, 600)))
+        : Math.max(entry.start + 50, Math.min(length, entry.end + real(g, -600, 600)))
+    return intent('skirting.dragEndpoint', { skirtingId: entry.id, end, to })
+  },
+  (g) => {
+    const entry = pick(g, skirtingList(g))
+    if (entry === undefined) return null
+    const host = g.project.existingModel.walls.find((wall) => wall.id === entry.hostWallId)
+    if (host === undefined) return null
+    const length = refLength(host.line)
+    if (!(length > 200)) return null
+    const start = real(g, 0, length - 100)
+    return intent('skirting.setRange', { skirtingId: entry.id, start, end: real(g, start + 100, length) })
+  },
+  (g) => {
+    const entry = pick(g, skirtingList(g))
+    return entry === undefined ? null : intent('skirting.flipSide', { skirtingId: entry.id })
+  },
+  // A second element on the other face, which is what a Wall skirted on both sides is (#78 §1).
+  (g) => {
+    const entry = pick(g, skirtingList(g))
+    return entry === undefined
+      ? null
+      : intent('skirting.duplicateOtherSide', { skirtingId: entry.id }, g.ids(1))
+  },
+  (g) => {
+    const entry = pick(g, skirtingList(g))
+    return entry === undefined
+      ? null
+      : intent('skirting.setBottom', { skirtingId: entry.id, bottom: entry.bottom + pick(g, [-200, -50, 20, 200])! })
+  },
+  (g) => {
+    const entry = pick(g, skirtingList(g))
+    return entry === undefined
+      ? null
+      : intent('skirting.setHeight', { skirtingId: entry.id, height: entry.height === 100 ? 150 : 100 })
+  },
+  (g) => {
+    const entry = pick(g, skirtingList(g))
+    return entry === undefined
+      ? null
+      : intent('skirting.setThickness', { skirtingId: entry.id, thickness: entry.thickness === 15 ? 25 : 15 })
+  },
+  // #78 §4: the four boxes over a Skirting's own pair of elevations, which never move the range.
+  (g) => {
+    const entry = pick(g, skirtingList(g))
+    if (entry === undefined) return null
+    const field = pick(g, ['base', 'height', 'top', 'bottom'] as const)!
+    const value =
+      field === 'height'
+        ? entry.height === 100 ? 150 : 100
+        : field === 'top'
+          ? skirtingTop(entry) + pick(g, [1, 50, 500])!
+          : entry.bottom + pick(g, [-200, -50, 20, 200])!
+    return intent('skirting.setVerticalExtent', { skirtingId: entry.id, field, value })
+  },
+  (g) => {
+    const entry = pick(g, skirtingList(g))
+    return entry === undefined ? null : intent('skirting.rename', { skirtingId: entry.id, label: `Base skirting ${int(g, 1, 999)}` })
+  },
+  (g) => {
+    const entry = pick(g, skirtingList(g))
+    return entry === undefined ? null : intent('skirting.delete', { skirtingId: entry.id })
   },
   // #66: a subject that exists, because an acknowledgement of a warning about something that
   // is not there is pruned by the same step that recorded it, and would never be seen. Any

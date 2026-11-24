@@ -1136,6 +1136,7 @@ export function FloorWorkspace(): ReactNode {
     send('wall.delete', {
       wallId: deleteReview.wallId,
       openings: deleteReview.openings.map((opening) => opening.id),
+      skirting: deleteReview.skirting.map((entry) => entry.id),
     })
     setDeleteReview(null)
     selectWall(null)

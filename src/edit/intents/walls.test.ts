@@ -440,15 +440,15 @@ describe('the numeric edits', () => {
 
 /** One split, with exactly the two IDs it spends. */
 function splitAt(project: Project, wallId: string, at: number): { project: Project; newId: string; seam: string } {
-  const [newId, seam] = source(2)
-  const applied = expectApplied(project, intent('wall.split', { wallId, at }, [newId, seam]))
+  const [newId, seam, skirtingId] = source(3)
+  const applied = expectApplied(project, intent('wall.split', { wallId, at }, [newId, seam, skirtingId]))
   return { project: applied.project, newId, seam }
 }
 
 describe('wall.split', () => {
   it('keeps the ID and the reference for the start piece and gives the next one to the rest', () => {
     const { project, wall } = withWall()
-    const applied = expectRoundTrip(project, intent('wall.split', { wallId: wall, at: 1000 }, source(2)))
+    const applied = expectRoundTrip(project, intent('wall.split', { wallId: wall, at: 1000 }, source(3)))
     const kept = wallByRef(applied.project, 'W-1')
     const added = wallByRef(applied.project, 'W-2')
     expect(kept.id).toBe(wall)
@@ -498,13 +498,13 @@ describe('wall.split', () => {
 
   it('blocks a split exactly where another Wall attaches', () => {
     const { project, host } = withT()
-    const rejection = expectRejection(project, intent('wall.split', { wallId: host, at: 1200 }, source(2)), 'split-blocked')
+    const rejection = expectRejection(project, intent('wall.split', { wallId: host, at: 1200 }, source(3)), 'split-blocked')
     expect(rejection.problems[0]!.message).toContain('Move the attachment first')
   })
 
   it('refuses a split at an end', () => {
     const { project, wall } = withWall()
-    expectRejection(project, intent('wall.split', { wallId: wall, at: 3000 }, source(2)), 'invalid-wall')
+    expectRejection(project, intent('wall.split', { wallId: wall, at: 3000 }, source(3)), 'invalid-wall')
   })
 })
 

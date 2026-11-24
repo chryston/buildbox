@@ -541,6 +541,13 @@ export const STRINGS = {
   /** Deleting a Wall takes its Openings with it, and the button says so rather than hiding it. */
   wallDeleteWithOpenings: (openings: number): string =>
     `Delete wall and ${plural(openings, 'opening', 'openings')}`,
+  /** The same answer when the Wall also carries Skirting (#78 §5): both counts are said. */
+  wallDeleteWithDependencies: (openings: number, skirtings: number): string =>
+    openings === 0
+      ? `Delete wall and ${plural(skirtings, 'skirting', 'skirtings')}`
+      : skirtings === 0
+        ? `Delete wall and ${plural(openings, 'opening', 'openings')}`
+        : `Delete wall, ${plural(openings, 'opening', 'openings')} and ${plural(skirtings, 'skirting', 'skirtings')}`,
   // The Door / window inspector and its draft (#65's components, #66 §17).
   openingLabel: 'Label',
   openingKind: 'Kind',
