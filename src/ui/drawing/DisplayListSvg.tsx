@@ -153,6 +153,9 @@ const TEST_IDS: Readonly<Record<string, (id: string) => string>> = {
   // means the same thing: select it (#77 §3).
   'beam': (id) => `beam-${id}`,
   'beam-hit': (id) => `beam-${id}`,
+  // The strip's body and its invisible click target are one Skirting, for the same reason (#78 §7).
+  'skirting': (id) => `skirting-${id}`,
+  'skirting-hit': (id) => `skirting-${id}`,
   // Every mark of an Opening *is* the Opening: the leaf, a panel, an arrow, a window line or a
   // removed section's dash all select the same one (#65 §11). The role is part of the name because
   // one Opening draws several of them under one id, and a suite that clicked `opening-x` could not

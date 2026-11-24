@@ -13,6 +13,7 @@
  * millimetres, and an unparseable box marks itself and sends nothing — the same rule every other
  * number field follows.
  */
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { DerivedSkirting } from '../../../derive'
 import type { DisplayUnit, Skirting } from '../../../domain'
@@ -64,6 +65,16 @@ export function SkirtingInspector(props: SkirtingInspectorProps): ReactNode {
   const { skirting, derived, hostRef, sideName, unit, precision } = props
   const { locked } = useFieldsLocked()
   const mm = (value: number): string => `${grouped.format(value)} mm`
+  /**
+   * The range box whose last commit the record did not take, and the number it asked for. A refused
+   * edit leaves the stored number in the box, which on its own reads as a stuck keyboard: the box is
+   * marked and says what a range has to satisfy (#78 §4).
+   */
+  const [refused, setRefused] = useState<{ field: 'start' | 'end', mm: number } | null>(null)
+  useEffect(() => {
+    if (refused === null) return
+    if ((refused.field === 'start' ? skirting.start : skirting.end) === refused.mm) setRefused(null)
+  }, [skirting.start, skirting.end, refused])
 
   return (
     <section className="bb-skirting-inspector" data-testid="skirting-inspector" aria-label={STRINGS.skirtingSectionTitle}>
@@ -105,7 +116,11 @@ export function SkirtingInspector(props: SkirtingInspectorProps): ReactNode {
         unit={unit}
         precision={precision}
         kind="mm"
-        onCommit={props.onSetStart}
+        invalidMessage={refused?.field === 'start' ? STRINGS.skirtingRangeInvalid : null}
+        onCommit={(value) => {
+          setRefused({ field: 'start', mm: value })
+          props.onSetStart(value)
+        }}
       />
       <NumberField
         testId="skirting-field-end"
@@ -114,7 +129,11 @@ export function SkirtingInspector(props: SkirtingInspectorProps): ReactNode {
         unit={unit}
         precision={precision}
         kind="mm"
-        onCommit={props.onSetEnd}
+        invalidMessage={refused?.field === 'end' ? STRINGS.skirtingRangeInvalid : null}
+        onCommit={(value) => {
+          setRefused({ field: 'end', mm: value })
+          props.onSetEnd(value)
+        }}
       />
 
       {/* Read-only on purpose: both lengths are answered by the Wall the strip stands on, and the

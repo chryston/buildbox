@@ -552,6 +552,7 @@ exports[`the copy > is the whole vocabulary of the interface 1`] = `
   "skirtingMeasureYours": "measure yours",
   "skirtingNetLength": "Net length",
   "skirtingPickFace": "Click a Wall face to skirt it.",
+  "skirtingRangeInvalid": "Enter a range the Wall’s face holds, with End beyond Start.",
   "skirtingSectionTitle": "Skirting",
   "skirtingSide": "Side",
   "skirtingSideNumber": [Function],

@@ -103,9 +103,14 @@ export function NumberField(props: {
   unit: DisplayUnit
   precision: number
   min?: number
+  /**
+   * Set when the value the person last committed was refused: the field is marked and says why,
+   * because a number that silently returns to what it was reads as a stuck keyboard (#78 §4).
+   */
+  invalidMessage?: string | null
   onCommit: (value: number) => void
 }): ReactNode {
-  const { label, testId, value, kind, unit, precision, min, onCommit } = props
+  const { label, testId, value, kind, unit, precision, min, onCommit, invalidMessage = null } = props
   const { locked, notice } = useFieldsLocked()
   const shown = kind === 'mm' ? formatMm(value, unit, precision) : trimNumber(value)
   const [text, setText] = useState<string | null>(null)
@@ -150,7 +155,13 @@ export function NumberField(props: {
         onKeyDown={(event) => {
           if (event.key === 'Enter') commit()
         }}
+        aria-invalid={invalidMessage === null ? undefined : 'true'}
       />
+      {invalidMessage === null ? null : (
+        <p className="bb-workspace-field-error" data-testid={`${testId}-error`} role="alert">
+          {invalidMessage}
+        </p>
+      )}
     </>
   )
 }

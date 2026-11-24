@@ -777,6 +777,9 @@ export const STRINGS = {
   skirtingDuplicateOtherSide: 'Duplicate to other side',
   skirtingDelete: 'Delete Skirting',
   skirtingDeleteConfirm: 'Delete this Skirting?',
+  // Said by the range box whose number the record would not take (#78 §4): the box is marked and
+  // names what a range has to satisfy, rather than silently returning to the number it had.
+  skirtingRangeInvalid: 'Enter a range the Wall’s face holds, with End beyond Start.',
   skirtingEmptyHint: 'No Skirting on this Floor yet.',
   elevationNameRequired: 'Give this Elevation View a name',
   elevationNameTaken: (name: string): string =>
