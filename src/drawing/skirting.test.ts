@@ -9,6 +9,7 @@ import { deriveSkirting, deriveWalls, effectiveFloor, type RenovationState } fro
 import { domainFixture } from '../derive/testing'
 import type { Opening, Project } from '../domain'
 import { drawSkirting } from './skirting'
+import { resolveSize, resolveStyle } from './styles'
 import { drawFloorView } from './floorView'
 import { LAYER_ORDER } from './types'
 import type { DisplayItem, DisplayList } from './types'
@@ -138,5 +139,16 @@ describe('the Skirting band of a Floor View (#78 §7)', () => {
     const drawn = view({ states: new Map() })
     expect(drawn.skirting?.skirting).toEqual([])
     expect(drawn.list.layers.some((layer) => layer.key === 'skirtings')).toBe(false)
+  })
+})
+
+describe('the width a Skirting can be clicked at (#78 §7)', () => {
+  it('strokes its invisible target at the aimable size, not at the body’s hairline', () => {
+    // The pick in the Plan View widens its test by half this role's width, so the target the pointer
+    // lands on and the target the click is measured against are the same number by construction.
+    expect(resolveStyle('skirting-hit').strokeWidth).toBe('hit-target')
+    expect(resolveStyle('skirting-hit').stroke).toBe('transparent')
+    expect(resolveSize('hit-target', { kind: 'screen', pxPerMm: 0.1 }).px).toBeGreaterThanOrEqual(10)
+    expect(resolveSize('hit-target', { kind: 'paper', scale: 1 / 100 }).mm).toBeGreaterThanOrEqual(2)
   })
 })

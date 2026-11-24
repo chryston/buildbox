@@ -9,8 +9,8 @@
 import { describe, expect, it } from 'vitest'
 import { elevationScene } from '../derive'
 import type { ElevationRow } from '../derive'
-import { elevationScene as fixture } from '../derive/testing'
-import type { Project } from '../domain'
+import { domainFixture, elevationScene as fixture } from '../derive/testing'
+import type { ElevationView, Project } from '../domain'
 import { measureRect } from './font/layoutText'
 import { drawElevationView } from './elevationView'
 import type { LayerGates } from './floorView'
@@ -319,5 +319,45 @@ describe('drawElevationView: a Beam (#77 §4)', () => {
     expect(paths(hidden.list, 'beam').some((item) => item.ref?.id === 'bm-1')).toBe(false)
     const tinted = drawElevationView(scene, { sizing: SCREEN, layers: gatesTinting('#123456') })
     expect(paths(tinted.list, 'beam').some((item) => item.ref?.id === 'bm-1')).toBe(true)
+  })
+})
+
+/**
+ * A Skirting in the Section picture (#78 §7): a finish on a face, so it stands where its host Wall
+ * stands and lies over it — the same rule the Plan View paints and picks by.
+ */
+describe('a Skirting in the Section picture (#78 §7)', () => {
+  const SKIRTING = domainFixture('v13/skirting.json')
+  const kitchenSide: ElevationView = {
+    id: 'el-skirting',
+    name: 'Kitchen side elevation',
+    kind: 'elevation',
+    floorId: 'seed-001',
+    designOptionId: null,
+    line: { start: { x: 600, y: 600 }, end: { x: 9600, y: 600 } },
+    side: 'left',
+    depth: 1000,
+    renovationDisplay: 'existing',
+  }
+  const scene = elevationScene(SKIRTING, kitchenSide)
+
+  it('paints the strip after the Wall it is skirted to, so the Wall does not hide it', () => {
+    const { rows, list } = drawElevationView(scene, { sizing: SCREEN })
+    const at = rows.findIndex((entry) => entry.id === 'seed-wall-002')
+    expect(at).toBeGreaterThanOrEqual(0)
+    expect(rows.findIndex((entry) => entry.id === 'skirting-1')).toBeGreaterThan(at)
+    // The ink follows the rows: the strip's body is laid down after the Wall's own.
+    const order = items(list)
+      .filter((item) => item.kind === 'path' && (item.ref?.id === 'skirting-1' || item.ref?.id === 'seed-wall-002'))
+      .map((item) => (item.kind === 'path' ? item.ref?.id : ''))
+    expect(order.indexOf('skirting-1')).toBeGreaterThan(order.indexOf('seed-wall-002'))
+  })
+
+  it('draws the strip in its own style and answers the pick list by its own id', () => {
+    const { list } = drawElevationView(scene, { sizing: SCREEN })
+    const strip = paths(list, 'skirting').filter((item) => item.kind === 'path' && item.ref?.id === 'skirting-1')
+    expect(strip.length).toBeGreaterThan(0)
+    // The row answers the pointer as the record it belongs to, not as its host Wall.
+    expect(strip.every((item) => item.kind === 'path' && item.ref?.role === 'skirting')).toBe(true)
   })
 })

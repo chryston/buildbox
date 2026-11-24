@@ -8,9 +8,10 @@
  */
 import { describe, expect, it } from 'vitest'
 import skirtingFixture from '../../fixtures/domain/v13/skirting.json?raw'
-import type { Opening, Project, Skirting, WallJunction } from '../domain'
+import type { Opening, Project, Skirting, WallJunction, WallRefLine } from '../domain'
 import { canonicalJson } from '../lib'
-import { deriveSkirting } from './skirting'
+import { effectiveModel } from './effectiveModel'
+import { deriveSkirting, skirtingSnapSources } from './skirting'
 
 const FLOOR = 'seed-001'
 const HOST = 'seed-wall-002'
@@ -216,5 +217,44 @@ describe('deriveSkirting (#78 §1 criterion 1, §4)', () => {
       },
     ]
     expect(deriveSkirting(project, FLOOR, 'option-y').skirting).toEqual([])
+  })
+})
+
+/**
+ * The exposed faces the plan snaps to (#78 §7): the line a cabinet face meets is the Skirting's outer
+ * face, `thickness` beyond the host Wall's face — never the Wall's own line, which is 15 mm short of
+ * where the finish ends up.
+ */
+describe('skirtingSnapSources (#78 §7)', () => {
+  const linesOf = (project: Project): Map<string, WallRefLine> =>
+    new Map(effectiveModel(project, FLOOR, null).standingWalls.map((wall) => [wall.id, wall.line]))
+
+  it('offers the exposed face, thickness beyond the host face, for the whole run', () => {
+    const project = base()
+    const sources = skirtingSnapSources(deriveSkirting(project, FLOOR).skirting, linesOf(project))
+    expect(sources).toHaveLength(1)
+    expect(sources[0]!.id).toBe(skirtingOfOne(project).id)
+    // `W-1`'s reference line is y = 600, half its 200 mm of body is 100, and the strip adds 15.
+    const face = sources[0]!.faces[0]!
+    expect([face.from.y, face.to.y]).toEqual([485, 485])
+    expect([face.from.x, face.to.x]).toEqual([600, 9600])
+    expect(sources[0]!.corners).toHaveLength(2)
+  })
+
+  it('offers two faces where a door breaks the strip, and none in the doorway', () => {
+    const project = withOpenings(base(), [opening({ kind: 'door', start: 4000, width: 900 })])
+    const sources = skirtingSnapSources(deriveSkirting(project, FLOOR).skirting, linesOf(project))
+    expect(sources).toHaveLength(2)
+    const spans = sources
+      .map((source) => source.faces[0]!)
+      .map((face) => [Math.min(face.from.x, face.to.x), Math.max(face.from.x, face.to.x)])
+      .sort((a, b) => a[0] - b[0])
+    // The doorway is exactly where there is no Skirting to snap a cabinet face against.
+    expect(spans).toEqual([[600, 4600], [5500, 9600]])
+  })
+
+  it('offers nothing for a strip whose Wall is not in what is being shown', () => {
+    const project = base()
+    expect(skirtingSnapSources(deriveSkirting(project, FLOOR).skirting, new Map())).toEqual([])
   })
 })

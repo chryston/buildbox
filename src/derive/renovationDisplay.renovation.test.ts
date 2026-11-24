@@ -9,8 +9,10 @@
 import { describe, expect, it } from 'vitest'
 import roomsFixture from '../../fixtures/domain/v7/rooms.json?raw'
 import type { DesignOption, PlacedItem, Project, RenovationDisplay, Wall } from '../domain'
-import { effectiveModel } from './index'
-import { displayCounts, displayModel } from './index'
+import { UNLAYERED_LAYER_KEY } from '../domain'
+import { effectiveModel, entityLayerKeys } from './index'
+import { displayCounts, displayModel, displayStates } from './index'
+import { domainFixture } from './testing'
 
 const envelope = JSON.parse(roomsFixture) as { project: Project }
 
@@ -129,5 +131,47 @@ describe('a Display never reorders what the model holds', () => {
       const existing = drawn.filter((row) => row.renovationState === 'existing').map((row) => row.entity.id)
       expect(existing).toEqual([...existing].sort())
     }
+  })
+})
+
+/**
+ * A Skirting in the Display's own two lists (#78 §5, §7): the map that says what is painted and in
+ * which State, and the map that files each entity on its Drawing Layer. A strip left out of either is
+ * a strip the canvas cannot paint, cannot hide, and cannot offer to the cycle.
+ */
+describe('a Skirting in the Display’s lists (#78 §5, §7)', () => {
+  const SKIRTING = domainFixture('v13/skirting.json')
+  const FLOOR = 'seed-001'
+  const STRIP = 'skirting-1'
+
+  it('carries its record’s Renovation State into the list the canvas paints from', () => {
+    const states = displayStates(displayModel(effectiveModel(SKIRTING, FLOOR, null), 'existing'))
+    expect(states.get(STRIP)).toBe('existing')
+    // A strip an Option took down is still drawn, in the demolition overlay, so it is still in the
+    // list — with the State that says so, which is what paints the hatching on it.
+    const demolished: Project = {
+      ...SKIRTING,
+      designOptions: [{
+        id: 'option-a',
+        name: 'Option A',
+        demolishedIds: [STRIP],
+        proposed: { walls: [], wallJunctions: [], openings: [], rooms: [], beams: [], skirting: [], placedItems: [] },
+      }],
+    }
+    expect(displayStates(displayModel(effectiveModel(demolished, FLOOR, 'option-a'), 'combined')).get(STRIP)).toBe(
+      'demolition',
+    )
+  })
+
+  it('is filed on its own Drawing Layer, and on the unlayered key when it has none', () => {
+    expect(entityLayerKeys(SKIRTING, FLOOR, null).get(STRIP)).toBe(UNLAYERED_LAYER_KEY)
+    const filed: Project = {
+      ...SKIRTING,
+      existingModel: {
+        ...SKIRTING.existingModel,
+        skirting: SKIRTING.existingModel.skirting!.map((each) => (each.id === STRIP ? { ...each, drawingLayerId: 'layer-finishes' } : each)),
+      },
+    }
+    expect(entityLayerKeys(filed, FLOOR, null).get(STRIP)).toBe('layer-finishes')
   })
 })

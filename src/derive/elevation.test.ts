@@ -14,7 +14,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ElevationView, ItemDesign, Opening, PlacedItem, Project } from '../domain'
 import type { Pt } from '../geometry'
-import { elevationScene } from './index'
+import { elevationRowDepth, elevationScene } from './index'
 import { designOutline, worldPoint } from './placement'
 import { domainFixture, elevationScene as elevationSceneFixture } from './testing'
 
@@ -321,5 +321,19 @@ describe('the Skirting rows of an Elevation View (#78 §4)', () => {
       (each) => each.kind === 'skirting',
     )
     expect(rows).toEqual([])
+  })
+
+  it('is painted and picked at its host Wall’s depth, not its own', () => {
+    // The strip's own `distance` is the face it stands off — 100 mm in front of the Wall it is skirted
+    // to. A Skirting is a finish on that Wall, so the Section puts it where the Wall is and lifts it
+    // above the Wall in the stack: the same rule the Plan View paints by, one helper for both (#78 §7).
+    const rows = elevationScene(skirtingProject, kitchenSide()).rows
+    const depthOf = elevationRowDepth(rows)
+    const host = rows.find((each) => each.kind === 'wall' && each.id === 'seed-wall-002')!
+    const strip = rows.find((each) => each.kind === 'skirting' && each.id === 'skirting-1')!
+    expect(depthOf(strip)).toBe(depthOf(host))
+    expect(depthOf(strip)).not.toBe(strip.distance)
+    // A Wall keeps its own distance: the helper widens nothing that is not a Skirting.
+    expect(depthOf(host)).toBe(host.distance)
   })
 })
