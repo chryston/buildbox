@@ -44,6 +44,11 @@ export interface DrawnEntities {
   readonly rooms: readonly DrawnEntity[]
   /** The Beams (#77 §3): documentation drawn under the Walls, and cycled in the same order. */
   readonly beams: readonly DrawnEntity[]
+  /**
+   * The Skirting (#78 §7), one entry per **run**: a strip broken by a door is two places the pointer
+   * can land on, and the cycle says the one under it.
+   */
+  readonly skirtings: readonly DrawnEntity[]
   /** The Display's state list: an entity absent from it was not drawn. */
   readonly states: ReadonlyMap<string, RenovationState>
 }
@@ -89,5 +94,6 @@ export function candidatesAtPoint(at: Pt, drawn: DrawnEntities): DrawnCandidate[
   gather(found, drawn.placements, 'placed-items', drawn.states, (item) => inside(at, item.outline))
   gather(found, drawn.rooms, 'rooms', drawn.states, (room) => inside(at, room.outline))
   gather(found, drawn.beams, 'beams', drawn.states, (beam) => inside(at, beam.outline))
+  gather(found, drawn.skirtings, 'skirtings', drawn.states, (strip) => inside(at, strip.outline))
   return found
 }

@@ -933,6 +933,9 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
         bottom: pick(g, [0, 0, 0, -50, 20])!,
         height: pick(g, [100, 150, 900, 2600])!,
         thickness: pick(g, [15, 25])!,
+        // The survey's own strip: the Intents below address existing records only, so a strip written
+        // into whichever Option happens to be active would never be one of them (#78 §5).
+        target: { designOptionId: null, viewId: null },
         ...(bool(g) ? { label: `Skirting SK-${int(g, 1, 60)}` } : {}),
       },
       g.ids(1),

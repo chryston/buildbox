@@ -750,6 +750,34 @@ export const STRINGS = {
   beamLength: 'Length',
   beamSectionTitle: 'Beam',
   beamEmptyHint: 'No Beams on this Floor yet.',
+  // The Skirting tool, its panel and its inspector (#78 §3–§4). A face is named by the Room it
+  // borders — `W-1 · Kitchen side` — and by a plain number when no Room adjoins it: the words
+  // `left` and `right` never reach the screen, because nobody measures a skirting from a side they
+  // cannot name.
+  toolSkirting: 'Skirting',
+  skirtingHeight: 'Height',
+  skirtingThickness: 'Thickness',
+  skirtingBottom: 'Bottom',
+  /** `measure yours` — the caption that keeps a placeholder from being read as a standard. */
+  skirtingMeasureYours: 'measure yours',
+  skirtingPickFace: 'Click a Wall face to skirt it.',
+  skirtingCancel: 'Cancel (Esc)',
+  skirtingDone: 'Add Skirting',
+  skirtingFaceLabel: (wall: string, side: string): string => `${wall} · ${side}`,
+  skirtingSideNumber: (n: number): string => `side ${n}`,
+  skirtingSectionTitle: 'Skirting',
+  skirtingWall: 'Wall',
+  skirtingSide: 'Side',
+  skirtingStart: 'Start',
+  skirtingEnd: 'End',
+  skirtingGrossLength: 'Gross length',
+  skirtingNetLength: 'Net length',
+  skirtingLabelField: 'Label',
+  skirtingFlipSide: 'Flip side',
+  skirtingDuplicateOtherSide: 'Duplicate to other side',
+  skirtingDelete: 'Delete Skirting',
+  skirtingDeleteConfirm: 'Delete this Skirting?',
+  skirtingEmptyHint: 'No Skirting on this Floor yet.',
   elevationNameRequired: 'Give this Elevation View a name',
   elevationNameTaken: (name: string): string =>
     `Another Elevation View on this Floor is already called ${name}`,

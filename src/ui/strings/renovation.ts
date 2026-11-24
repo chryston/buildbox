@@ -219,6 +219,8 @@ export const RENOVATION_STRINGS = {
   kindRoom: 'Room',
   /** The Renovation inspector's `Kind` for a Beam (#77 §3): the record's own word for itself. */
   kindBeam: 'Beam',
+  /** The Renovation inspector's `Kind` for a Skirting (#78 §5). */
+  kindSkirting: 'Skirting',
   kindPlacedItem: 'Placed Item',
   actionMove: 'Move',
   actionRestore: 'Restore',

@@ -11,7 +11,7 @@ import type { Opening, Project } from '../domain'
 import { drawSkirting } from './skirting'
 import { drawFloorView } from './floorView'
 import { LAYER_ORDER } from './types'
-import type { DisplayItem, DisplayList, PathCommand, StyleKey } from './types'
+import type { DisplayItem, DisplayList } from './types'
 
 const sizing = { kind: 'screen', pxPerMm: 1 } as const
 

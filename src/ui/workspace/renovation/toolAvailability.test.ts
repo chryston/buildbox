@@ -11,15 +11,16 @@ const displays: RenovationDisplay[] = ['existing', 'demolition', 'proposed', 'co
 describe('the tool table of #70 §3', () => {
   it('hides the number of tools each Display says it hides', () => {
     expect(hiddenToolCount('existing', true)).toBe(2)
-    expect(hiddenToolCount('demolition', true)).toBe(4)
+    expect(hiddenToolCount('demolition', true)).toBe(5)
     expect(hiddenToolCount('proposed', true)).toBe(2)
     expect(hiddenToolCount('combined', true)).toBe(0)
     // §6: Demolition, Proposed or Combined with no Design Option — everything but looking is hidden.
-    // Still six with the view tool in the table, because the row the eighth one adds is never among
-    // the hidden: an Elevation View is a way of looking, so the error state keeps it (#75 §3).
-    expect(hiddenToolCount('demolition', false)).toBe(6)
-    expect(hiddenToolCount('proposed', false)).toBe(6)
-    expect(hiddenToolCount('combined', false)).toBe(6)
+    // Still seven with the Skirting row in the table, because the two rows the ninth one adds are
+    // never among the hidden: an Elevation View is a way of looking, so the error state keeps it
+    // (#75 §3), and Select needs nothing.
+    expect(hiddenToolCount('demolition', false)).toBe(7)
+    expect(hiddenToolCount('proposed', false)).toBe(7)
+    expect(hiddenToolCount('combined', false)).toBe(7)
     // The Existing Display never needs an Option: the shared baseline is always there to survey.
     expect(hiddenToolCount('existing', false)).toBe(2)
   })
@@ -33,7 +34,7 @@ describe('the tool table of #70 §3', () => {
     // before any of this existed.
     for (const display of ['demolition', 'proposed', 'combined'] as const)
       expect(availableTools(display, false)).toEqual(['select', 'elevation'])
-    expect(availableTools('existing', false)).toEqual(['select', 'wall', 'opening', 'room', 'placeItem', 'elevation'])
+    expect(availableTools('existing', false)).toEqual(['select', 'wall', 'opening', 'skirting', 'room', 'placeItem', 'elevation'])
   })
 
   it('puts the renovation tools in Demolition and Combined only', () => {
@@ -49,7 +50,7 @@ describe('the tool table of #70 §3', () => {
   })
 
   it('keeps the shape tools for surveying and for new work, and off the Demolition Display', () => {
-    for (const tool of ['wall', 'opening', 'room', 'placeItem'] as const) {
+    for (const tool of ['wall', 'opening', 'skirting', 'room', 'placeItem'] as const) {
       expect(displaysAllowing(tool)).toEqual(['existing', 'proposed', 'combined'])
       expect(toolIsAvailable(tool, 'demolition', true)).toBe(false)
       expect(toolIsAvailable(tool, 'existing', true)).toBe(true)
@@ -59,7 +60,7 @@ describe('the tool table of #70 §3', () => {
   })
 
   it('is one row per tool, each reachable somewhere — so #81 adds a row and nothing else', () => {
-    expect(RENOVATION_TOOL_ROWS).toHaveLength(8)
+    expect(RENOVATION_TOOL_ROWS).toHaveLength(9)
     for (const row of RENOVATION_TOOL_ROWS) {
       expect(row.allowedIn.length).toBeGreaterThan(0)
       expect(displaysAllowing(row.id)).toEqual(row.allowedIn)

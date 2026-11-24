@@ -35,6 +35,7 @@ import {
 } from '../geometry'
 import { displayModel } from './renovationDisplay'
 import { effectiveModel } from './effectiveModel'
+import { faceRoomNames } from './rooms'
 import { deriveWalls } from './walls'
 
 /** Why a piece of the range is not Skirting. */
@@ -253,4 +254,66 @@ export function deriveSkirting(
     rows.push(deriveOne(entry, host, openings, junctions, wallById, faces))
   }
   return { skirting: rows, byId: new Map(rows.map((row) => [row.id, row])) }
+}
+
+/**
+ * One Wall face the Skirting tool can be pointed at (#78 §3 step 1), with the range a click on it
+ * means. The range is the **tidied** face, so a click at a corner creates Skirting that stops at the
+ * corner instead of reaching into the junction it shares with the next Wall.
+ */
+export interface SkirtingFaceTarget {
+  readonly wallId: EntityId
+  readonly side: WallSide
+  /** `W-1`, the same reference every other label of this Wall uses. */
+  readonly ref: string
+  /** The Room whose side this face is, or `null` when no Room adjoins it. */
+  readonly roomName: string | null
+  /**
+   * 1 or 2, the wording for a face with no Room — `W-1 · side 1`. It is a name for the face, not a
+   * compass bearing: which of the two is 1 never changes and never says left or right (#78 §3).
+   */
+  readonly sideNumber: 1 | 2
+  /** Millimetres along the host's reference line — the `start` a click sends. */
+  readonly start: number
+  /** Millimetres along the host's reference line — the `end` a click sends. */
+  readonly end: number
+  /** The face's own ends, on the real line: an arc Wall is highlighted along the arc (#78 §7). */
+  readonly from: Pt
+  readonly to: Pt
+}
+
+/**
+ * Every face of every standing Wall of one Floor, in Wall order then side order (#78 §3). The tool
+ * picks the nearest of these to the pointer, which is what makes "the nearer face" the same answer
+ * for the highlight, the label and the record that gets written.
+ */
+export function skirtingFaceTargets(
+  project: Project,
+  floorId: EntityId,
+  optionId: EntityId | null = null,
+): SkirtingFaceTarget[] {
+  const model = effectiveModel(project, floorId, optionId)
+  const derived = deriveWalls(project, floorId, optionId)
+  const refOf = new Map(derived.walls.map((wall) => [wall.id, wall.ref]))
+  const lineOf = new Map(model.standingWalls.map((wall) => [wall.id, wall.line]))
+  const roomNames = faceRoomNames(derived.faces, model.standingRooms)
+  const targets: SkirtingFaceTarget[] = []
+  for (const face of derived.faces) {
+    const line = lineOf.get(face.wallId)
+    const ref = refOf.get(face.wallId)
+    if (line === undefined || ref === undefined) continue
+    const span = interval(refParamAt(line, face.from), refParamAt(line, face.to))
+    targets.push({
+      wallId: face.wallId,
+      side: face.side,
+      ref,
+      roomName: roomNames.get(`${face.wallId}|${face.side}`) ?? null,
+      sideNumber: face.side === 'left' ? 1 : 2,
+      start: span.lo,
+      end: span.hi,
+      from: face.from,
+      to: face.to,
+    })
+  }
+  return targets
 }

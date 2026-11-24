@@ -17,12 +17,12 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveBeams, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, elevationFrameOf, enabledVerticalSnapKinds, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates, verticalSnapCandidates } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveBeams, deriveSkirting, skirtingFaceTargets, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, elevationFrameOf, enabledVerticalSnapKinds, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates, verticalSnapCandidates } from '../../derive'
 import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings, drawElevationView } from '../../drawing'
 import type { BadgeSubject, LayerGates, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
 import type { ElevationView, Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
-import { designOptionsOf, elevationViewsOf, nextBeamLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf } from '../../domain'
+import { designOptionsOf, elevationViewsOf, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
@@ -91,6 +91,9 @@ import type { BeamDraft } from './beam/BeamDraftOverlay'
 import { emptyBeamDraft } from './beam/BeamDraftOverlay'
 import { BeamInspector } from './beam/BeamInspector'
 import { DEFAULT_BEAM_DEPTH_MM, DEFAULT_BEAM_WIDTH_MM } from './beam/beamDefaults'
+import { SkirtingInspector } from './skirting/SkirtingInspector'
+import { SkirtingToolLayer, emptySkirtingDraft } from './skirting/SkirtingToolLayer'
+import type { SkirtingDraft } from './skirting/SkirtingToolLayer'
 import type { ElevationDraftResult } from './elevation/ElevationDraftOverlay'
 import type { ElevationDraft } from './elevation/elevationDraft'
 import { clampPointToCanvas, depthDrag, elevationArrowPath, elevationLabelAt, elevationPrismPoints, emptyElevationDraft, farEdgeHandle } from './elevation/elevationDraft'
@@ -307,6 +310,14 @@ export function FloorWorkspace(): ReactNode {
       ? null
       : deriveBeams(drawingProject, floorId, renovationOptionId)
   /**
+   * The Floor's Skirting (#78 §2): each strip's body, gaps and two lengths, as the Renovation Display
+   * in use shows them — which is also what decides whether a proposed door cuts a gap in it.
+   */
+  const floorSkirting =
+    floorId === null
+      ? null
+      : deriveSkirting(drawingProject, floorId, renovationOptionId, view === null ? 'existing' : viewRenovationDisplay(view))
+  /**
    * The Floor's Rooms: their areas, label anchors and Placed Item membership, from the same cache
    * (#67 §3). A view drawing a Design Option sees that Option's Rooms standing where its own walls
    * put them, which is what `optionId` is for (#69).
@@ -472,6 +483,8 @@ export function FloorWorkspace(): ReactNode {
   const selectOpening = useWorkspace((state) => state.selectOpening)
   const beamSelection = useWorkspace((state) => state.beamSelection)
   const selectBeam = useWorkspace((state) => state.selectBeam)
+  const skirtingSelection = useWorkspace((state) => state.skirtingSelection)
+  const selectSkirting = useWorkspace((state) => state.selectSkirting)
   /** This Floor's Openings, in the order the Project lists them. */
   const floorOpenings = useMemo(
     () => project.existingModel.openings.filter((opening) => opening.floorId === floorId),
@@ -524,6 +537,40 @@ export function FloorWorkspace(): ReactNode {
     if (beam === undefined) return null
     return { beam, length: Math.hypot(beam.line.end.x - beam.line.start.x, beam.line.end.y - beam.line.start.y) }
   }, [beamSelection, project.existingModel, floorId])
+
+  /**
+   * The face names the Skirting tool and inspector both read (#78 §3 step 1), keyed `wallId|side`.
+   * One call to the same derivation the tool aims with, so the label beside the cursor and the one in
+   * the inspector can never disagree.
+   */
+  const skirtingFaceNames = useMemo(() => {
+    if (floorId === null) return new Map<string, string>()
+    return new Map(
+      skirtingFaceTargets(drawingProject, floorId, renovationOptionId).map((target) => [
+        `${target.wallId}|${target.side}`,
+        target.roomName === null ? STRINGS.skirtingSideNumber(target.sideNumber) : `${target.roomName} side`,
+      ]),
+    )
+  }, [drawingProject, floorId, renovationOptionId])
+
+  /**
+   * The selected Skirting, its derived body and the two names the inspector prints (#78 §4). The body
+   * is `null` when the host Wall does not stand in what is being shown, in which case the two lengths
+   * have no answer and say so rather than inventing one.
+   */
+  const selectedSkirting = useMemo(() => {
+    if (skirtingSelection === null || floorId === null) return null
+    const model = effectiveModel(project, floorId, renovationOptionId)
+    const entry = model.skirting.find((each) => each.entity.id === skirtingSelection)
+    if (entry === undefined) return null
+    const host = model.standingWalls.find((wall) => wall.id === entry.entity.hostWallId)
+    return {
+      skirting: entry.entity,
+      derived: floorSkirting?.byId.get(entry.entity.id) ?? null,
+      hostRef: host?.ref ?? STRINGS.skirtingSectionTitle,
+      sideName: skirtingFaceNames.get(`${entry.entity.hostWallId}|${entry.entity.side}`) ?? STRINGS.skirtingSideNumber(entry.entity.side === 'left' ? 1 : 2),
+    }
+  }, [skirtingSelection, floorId, project, renovationOptionId, floorSkirting, skirtingFaceNames])
 
   const selectedRoom = useMemo(() => {
     if (roomSelection === null || floorRooms === null) return null
@@ -636,6 +683,8 @@ export function FloorWorkspace(): ReactNode {
   const [elevationDraft, setElevationDraft] = useState<ElevationDraft | null>(null)
   /** The Beam tool's draft (#77 §3), held here so Esc and a re-render cannot lose it. */
   const [beamDraft, setBeamDraft] = useState<BeamDraft | null>(null)
+  /** The `Skirting` tool's three numbers (#78 §3 step 3), held here so Esc cannot lose them mid-gesture. */
+  const [skirtingDraft, setSkirtingDraft] = useState<SkirtingDraft | null>(null)
   /** The view whose delete is being confirmed, or null when no dialog is open (#75 §3). */
   const [deleteElevationId, setDeleteElevationId] = useState<string | null>(null)
   /** The elevation pane's own host: its `Fit` and its wheel are measured against this box. */
@@ -1333,6 +1382,14 @@ export function FloorWorkspace(): ReactNode {
           setTool('select')
           return
         }
+        if (tool === 'skirting') {
+          // The same backing out (#78 §3 "Esc cancels a gesture"): the numbers are dropped and nothing
+          // is sent, and the tool goes with them so no face band keeps following the cursor.
+          event.preventDefault()
+          setSkirtingDraft(null)
+          setTool('select')
+          return
+        }
         if (designPreview === null && !pickingOrigin) return
         event.preventDefault()
         setDesignPreview(null)
@@ -1345,7 +1402,7 @@ export function FloorWorkspace(): ReactNode {
       // dispatched, so the source Project keeps its revision; with nothing selected the key is left
       // alone, because then it is not the workspace's key to answer.
       if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'c') {
-        const copied = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? selection
+        const copied = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? skirtingSelection ?? selection
         if (copied === null) return
         event.preventDefault()
         copyToClipboard(copied)
@@ -1706,7 +1763,7 @@ export function FloorWorkspace(): ReactNode {
 
   // #70 §3: the two things only this component knows, which the strip cannot derive from the table —
   // whether one thing is named well enough to mark, and which Design Option would own the record.
-  const renovationSelectedIds = [wallSelection, openingSelection, roomSelection, beamSelection, selection].filter((id) => id !== null)
+  const renovationSelectedIds = [wallSelection, openingSelection, roomSelection, beamSelection, skirtingSelection, selection].filter((id) => id !== null)
   const renovationBlocked: Partial<Record<RenovationToolId, string>> =
     renovationSelectedIds.length === 1 ? {} : { markDemolition: RENOVATION_STRINGS.markDemolitionNeedsOne }
   const markRenovationDemolition = (): void => {
@@ -1824,7 +1881,7 @@ export function FloorWorkspace(): ReactNode {
     // The same three selections the pane is shown: a Wall and an Opening are selected in their own
     // slices, so reading only the Placed Item's would drop the commit for the two entities a vertical
     // drag most often moves.
-    const id = selection ?? wallSelection ?? openingSelection ?? beamSelection
+    const id = selection ?? wallSelection ?? openingSelection ?? beamSelection ?? skirtingSelection
     const row = elevationSceneValue?.rows.find((entry) => entry.id === id) ?? null
     if (row === null) return
     if (row.kind === 'wall') send('wall.setVerticalExtent', { wallId: row.id, field, value })
@@ -1832,11 +1889,15 @@ export function FloorWorkspace(): ReactNode {
     // A Beam owns its height like a Wall does, and its two ends are an Underside and a Top: the same
     // three handles, the same fields, the Intent that writes them (#77 §3, criterion 17).
     else if (row.kind === 'beam') send('beam.setVerticalExtent', { beamId: row.id, field, value })
+    // A Skirting owns its height the same way, and `Bottom` is its base: dragging the lower handle
+    // moves the strip and keeps its height, which is the rule the inspector's `Bottom` box follows too
+    // (#78 §4).
+    else if (row.kind === 'skirting') send('skirting.setVerticalExtent', { skirtingId: row.id, field, value })
     // A Placed Item has no height of its own and no bottom handle, so the only fields that can reach
     // this branch are `base` and `top` — `elevationHandleKinds` is what guarantees it — and the handler
     // reads a `top` back as the base the design's height lands under.
     else send('plan.setPlacementVerticalExtent', { placedItemId: row.id, field: field === 'base' ? 'base' : 'top', value })
-  }, [selection, wallSelection, openingSelection, beamSelection, elevationSceneValue, send])
+  }, [selection, wallSelection, openingSelection, beamSelection, skirtingSelection, elevationSceneValue, send])
 
   /**
    * The Elevation View's own layer answers (#71 §4): the view is a saved view like any Plan View, so
@@ -1987,7 +2048,7 @@ export function FloorWorkspace(): ReactNode {
   }, [project, view, entityLayerKey])
 
   /** The entity the inspector is showing, whichever picker named it (#70 §5, #71 §5). */
-  const inspectedEntityId = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? selection
+  const inspectedEntityId = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? skirtingSelection ?? selection
 
   /**
    * The inspector's `Layer` row (#71 §5): every layer in Project order, then `Unlayered`, with this
@@ -2060,7 +2121,7 @@ export function FloorWorkspace(): ReactNode {
    */
   const renovationDisplayNow: RenovationDisplay = view === null ? 'existing' : viewRenovationDisplay(view)
   const renovationTarget = useMemo((): RenovationInspectorTarget | null => {
-    const id = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? selection
+    const id = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? skirtingSelection ?? selection
     if (id === null || renovationStates === null) return null
     const state = renovationStates.get(id)
     if (state === undefined) return null
@@ -2080,6 +2141,11 @@ export function FloorWorkspace(): ReactNode {
       const beam = beamsOf(model).find((each) => each.id === entityId)
       if (beam !== undefined)
         return { ref: beam.label ?? STRINGS.beamSectionTitle, kind: RENOVATION_STRINGS.kindBeam, predecessors: beam.predecessorIds ?? [] }
+      // A Skirting is named by its own label and by nothing else; its host Wall is a separate row of
+      // the dependency review, not a name this one borrows (#78 §5).
+      const skirting = [...skirtingOf(model), ...(proposed === null ? [] : skirtingOf(proposed))].find((each) => each.id === entityId)
+      if (skirting !== undefined)
+        return { ref: skirtingLabel(skirting), kind: RENOVATION_STRINGS.kindSkirting, predecessors: skirting.predecessorIds ?? [] }
       const placed = [...model.placedItems, ...(proposed?.placedItems ?? [])].find((each) => each.id === entityId)
       if (placed !== undefined) {
         const design = project.itemDesigns.find((each) => each.id === placed.itemDesignId)
@@ -2126,9 +2192,9 @@ export function FloorWorkspace(): ReactNode {
       replaces: self.predecessors.map(link).filter((each): each is RenovationInspectorLink => each !== null),
       successors,
     }
-  }, [wallSelection, openingSelection, roomSelection, beamSelection, selection, renovationStates, renovationOptionId, project, view])
+  }, [wallSelection, openingSelection, roomSelection, beamSelection, skirtingSelection, selection, renovationStates, renovationOptionId, project, view])
 
-  const renovationSubject = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? selection
+  const renovationSubject = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? skirtingSelection ?? selection
   /**
    * §7c: whether the selection is a baseline record being looked at in the Existing display while the
    * Project carries a Design Option — the one case its handles, its grip and its fields stay shut. The
@@ -2154,7 +2220,7 @@ export function FloorWorkspace(): ReactNode {
       : FIELDS_UNLOCKED
 
   const runRenovationAction = (action: RenovationInspectorAction): void => {
-    const id = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? selection
+    const id = wallSelection ?? openingSelection ?? roomSelection ?? beamSelection ?? skirtingSelection ?? selection
     if (id === null) return
     if (action === 'copy') {
       copyToClipboard(id)
@@ -2598,6 +2664,49 @@ export function FloorWorkspace(): ReactNode {
       />
     ) : undefined
 
+  /**
+   * The `Skirting` tool (#78 §3): hover a Wall face to name it, click to skirt the whole face. The
+   * three numbers ride on the bar and default to 100 and 15, both captioned `measure yours` — the
+   * tool never claims a height somebody else measured.
+   */
+  const skirtingToolLayer: ReactNode =
+    tool === 'skirting' && floorId !== null && viewport !== null && viewport !== undefined ? (
+      <SkirtingToolLayer
+        viewport={viewport}
+        targets={skirtingFaceTargets(drawingProject, floorId, renovationOptionId)}
+        draft={skirtingDraft ?? emptySkirtingDraft()}
+        onDraft={setSkirtingDraft}
+        onCancel={() => {
+          setSkirtingDraft(null)
+          setTool('select')
+        }}
+        onCreate={(target, numbers) => {
+          if (floorId === null) return
+          // One Skirting, one Intent, one undo step (#22). The range is the whole tidied face, so a
+          // corner stops the strip where the Wall does; the label is the next free `Skirting SK-n`;
+          // and the view the tool was used in travels with it, so a strip drawn in a Design Option's
+          // Plan View is Proposed work in that Option and one drawn with no Option open documents the
+          // survey (#78 §5, #69 §7).
+          send('skirting.create', {
+            floorId,
+            hostWallId: target.wallId,
+            side: target.side,
+            start: target.start,
+            end: target.end,
+            bottom: numbers.bottom,
+            height: numbers.height,
+            thickness: numbers.thickness,
+            label: nextSkirtingLabel(project),
+            target: { designOptionId: renovationOptionId, viewId: view?.id ?? null },
+          })
+          setSkirtingDraft(null)
+          setTool('select')
+        }}
+        unit={project.preferences.displayUnit}
+        precision={project.preferences.displayPrecision}
+      />
+    ) : undefined
+
   return (
     <>
       <WorkspaceShell
@@ -2990,7 +3099,8 @@ export function FloorWorkspace(): ReactNode {
                   selectOpening(null)
                 }}
               />
-            : selectedBeam === null
+            : selectedSkirting === null
+            ? selectedBeam === null
             ? selectedWall === null
             ? <SelectionInspector
             item={selected}
@@ -3111,6 +3221,28 @@ export function FloorWorkspace(): ReactNode {
                 }}
                 renovationAction={renovationAction(selectedBeam.beam.id)}
               />
+            : <SkirtingInspector
+                skirting={selectedSkirting.skirting}
+                derived={selectedSkirting.derived}
+                hostRef={selectedSkirting.hostRef}
+                sideName={selectedSkirting.sideName}
+                unit={project.preferences.displayUnit}
+                precision={project.preferences.displayPrecision}
+                onSelectHost={() => selectWall(selectedSkirting.skirting.hostWallId)}
+                onSetLabel={(label) => send('skirting.rename', { skirtingId: selectedSkirting.skirting.id, label })}
+                onSetStart={(start) => send('skirting.setRange', { skirtingId: selectedSkirting.skirting.id, start, end: selectedSkirting.skirting.end })}
+                onSetEnd={(end) => send('skirting.setRange', { skirtingId: selectedSkirting.skirting.id, start: selectedSkirting.skirting.start, end })}
+                onSetBottom={(bottom) => send('skirting.setBottom', { skirtingId: selectedSkirting.skirting.id, bottom })}
+                onSetHeight={(height) => send('skirting.setHeight', { skirtingId: selectedSkirting.skirting.id, height })}
+                onSetThickness={(thickness) => send('skirting.setThickness', { skirtingId: selectedSkirting.skirting.id, thickness })}
+                onFlipSide={() => send('skirting.flipSide', { skirtingId: selectedSkirting.skirting.id })}
+                onDuplicateOtherSide={() => send('skirting.duplicateOtherSide', { skirtingId: selectedSkirting.skirting.id })}
+                onDelete={() => {
+                  send('skirting.delete', { skirtingId: selectedSkirting.skirting.id })
+                  selectSkirting(null)
+                }}
+                renovationAction={renovationAction(selectedSkirting.skirting.id)}
+              />
           }
           {/* The shared-height preview panel (#76 §1): inside the inspector, no backdrop, both
               canvases visible and interactive behind it, nothing committed until `Apply`. */}
@@ -3186,6 +3318,8 @@ export function FloorWorkspace(): ReactNode {
               walls={floorWalls}
               beams={floorBeams}
               selectedBeamId={beamSelection}
+              skirting={floorSkirting}
+              selectedSkirtingId={skirtingSelection}
               renovation={
                 entityStates === null
                   ? null
@@ -3211,6 +3345,12 @@ export function FloorWorkspace(): ReactNode {
               }}
               onSelectBeam={(id) => {
                 selectBeam(id)
+                setTool('select')
+              }}
+              onSelectSkirting={(id) => {
+                // A strip is its own record: clicking it selects it and puts the tool down, and it
+                // never takes the Wall it stands on with it (#78 §3).
+                selectSkirting(id)
                 setTool('select')
               }}
               openings={openingLayer}
@@ -3332,7 +3472,7 @@ export function FloorWorkspace(): ReactNode {
                   unit={project.preferences.displayUnit}
                   precision={project.preferences.displayPrecision}
                 />
-              ) : tool === 'beam' ? beamDraftOverlay : elevationDraftOverlay}
+              ) : tool === 'beam' ? beamDraftOverlay : tool === 'skirting' ? skirtingToolLayer : elevationDraftOverlay}
             />
             )}
             <input

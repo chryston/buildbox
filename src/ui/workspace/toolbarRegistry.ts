@@ -105,6 +105,16 @@ export const WORKSPACE_TOOLS: readonly WorkspaceToolDefinition[] = [
     icon: 'M2 9 H22 M2 15 H22 M2 9 V15 M22 9 V15',
   },
   {
+    id: 'skirting',
+    label: STRINGS.toolSkirting,
+    testId: 'tool-skirting',
+    // A Skirting is measured in millimetres along the Wall face it stands on, so it waits for a
+    // calibrated Plan Image on the same rule as the Wall and Opening tools (#78 §3).
+    requiresCalibratedFloor: true,
+    // The strip against a Wall line: what the Plan View draws, at the size a 24-unit button holds.
+    icon: 'M2 5 H22 M2 5 V10 M22 5 V10 M2 10 H22',
+  },
+  {
     id: 'elevation',
     label: STRINGS.newElevationView,
     testId: 'tool-elevation',
