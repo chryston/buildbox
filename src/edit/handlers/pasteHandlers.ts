@@ -15,7 +15,7 @@
  * a whole Project with (#72 §4), and an ID the copy names that it did not bring is a refusal rather
  * than a dangling reference.
  */
-import { beamsOf, drawingLayerById, formatCommentReference, remapAnchor, remapEntities, servicesOf, skirtingOf } from '../../domain'
+import { ANNOTATION_SCOPE_ALL, beamsOf, drawingLayerById, formatAnnotationReference, formatCommentReference, remapAnchor, remapEntities, remapMarkAnchor, servicesOf, skirtingOf } from '../../domain'
 import type { EntityId, Project, ProposedModel } from '../../domain'
 import type { IdReplacement } from '../../domain'
 import type {
@@ -91,7 +91,7 @@ function readMapping(
 }
 
 const pasteFromOtherProject: Handler<'renovation.pasteFromProject'> = (ctx) => {
-  const { floorId, viewId, copySet, includeComments } = ctx.intent.payload
+  const { floorId, viewId, copySet, includeComments, includeAnnotations } = ctx.intent.payload
   const view = ctx.project.views.find((candidate) => candidate.id === viewId)
   if (view === undefined) refuse('unknown-target', `views[${viewId}]`, `There is no saved view ${viewId} to paste into.`)
   const review = pasteReviewOf(ctx.project, view, copySet)
@@ -151,6 +151,9 @@ const pasteFromOtherProject: Handler<'renovation.pasteFromProject'> = (ctx) => {
   // number in this Project, where the source's numbers may already belong to other Comments.
   const pastedNotes = includeComments ? copySet.notes : []
   const noteIds = pastedNotes.map(() => nextId())
+  // `Include Annotations`, off by default (#81 §9), spending its slots at the tail like the Comments.
+  const pastedMarks = includeAnnotations ? copySet.annotations : []
+  const markIds = pastedMarks.map(() => nextId())
 
   const replace: IdReplacement = (id) => {
     const mapped = map.get(id)
@@ -277,6 +280,31 @@ const pasteFromOtherProject: Handler<'renovation.pasteFromProject'> = (ctx) => {
     ctx.draft.comments.push({ ...comment, id, reference: formatCommentReference(commentCounter), anchor })
   })
   ctx.draft.commentReferenceCounter = commentCounter
+  // A pasted Annotation (#81 §9) draws in the view the paste was asked in, takes a new `A-` number off
+  // this Project's counter and rides the Layer the mapping answered for the Layer it rode there. Its
+  // endpoint follows the copy through the same map; one whose subject did not cross is dropped with it,
+  // and a scope that named one of the source's Design Options becomes this paste's destination Option
+  // — or `All Options`, when the work arrives in the Existing Model.
+  let annotationCounter = ctx.draft.annotationReferenceCounter
+  pastedMarks.forEach((annotation, index) => {
+    const id = markIds[index]
+    if (id === undefined) return
+    if (annotation.targetViewId !== undefined) return // a Reference Marker points at a view of the source; nothing crosses
+    if (annotation.endpoint === undefined || !('anchor' in annotation.endpoint)) return // the capture only sends anchored ones
+    const anchor = remapMarkAnchor(annotation.endpoint.anchor, replace)
+    if (!anchorResolves(ground, anchor)) return
+    annotationCounter += 1
+    ctx.draft.annotations.push({
+      ...annotation,
+      id,
+      viewId,
+      reference: formatAnnotationReference(annotationCounter),
+      layerId: layerField(annotation.layerId).drawingLayerId ?? null,
+      scope: annotation.scope === ANNOTATION_SCOPE_ALL ? ANNOTATION_SCOPE_ALL : designOptionId ?? ANNOTATION_SCOPE_ALL,
+      endpoint: { anchor },
+    })
+  })
+  ctx.draft.annotationReferenceCounter = annotationCounter
 
   // A Room is committed only when it overlaps nothing it can see (#67 §7), and borrowed work is no
   // exception: each pasted Room is checked against the Rooms this view stands on and against the

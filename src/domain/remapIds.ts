@@ -22,7 +22,7 @@
  * then its accessories, then its left subtree, then its right), then the Placed Items in
  * array order, then the Walls in array order, then the Wall Junctions in array order
  * (#64), then the Openings, then the Rooms (#67), then the warning acknowledgements, then the Comments
- * (#80 §1). Slot 0
+ * (#80 §1), then the Annotations (#81 §9). Slot 0
  * belongs to the Project and is filled by `newId`, which the caller
  * minted; every later slot takes the allocator's ID at the same index. A test that finds
  * one ID it cannot explain can name the position it went wrong at, and remapping the same
@@ -34,7 +34,7 @@
  * corrupt the copy rather than rename it.
  */
 import type { CabinetNode } from './cabinetPayload'
-import type { CommentAnchor } from './comments'
+import type { CommentAnchor, EntityAnchor, FeatureAnchor } from './comments'
 import { beamsOf, elevationViewsOf, servicesOf, skirtingOf } from './project'
 import type { EntityId, ItemDesign, Project, ProposedModel } from './project'
 
@@ -109,6 +109,21 @@ export function remapIds(project: Project, newId: EntityId, allocate: IdAllocato
     // A Design Option ID is not an entity ID either — the walk does not renumber Options — so an Anchor
     // or a scope naming one is carried over as it stands, which is the Option the copy also has.
     comments: project.comments.map((comment) => ({ ...comment, id: next(comment.id), anchor: remapAnchor(comment.anchor, next) })),
+    // An Annotation travels the same way (#81 §9): its own ID, its owning view and its Marker target
+    // are all records of this Project, so the copy names its own, and an anchored endpoint follows
+    // the entity it points at through the same map. The `A-` reference is not an ID and does not
+    // move, and neither the Design Option in a scope nor the Drawing Layer is renumbered by the walk.
+    annotations: project.annotations.map((annotation) => ({
+      ...annotation,
+      id: next(annotation.id),
+      viewId: next(annotation.viewId),
+      ...(annotation.targetViewId === undefined ? {} : { targetViewId: next(annotation.targetViewId) }),
+      ...(annotation.endpoint === undefined
+        ? {}
+        : 'anchor' in annotation.endpoint
+          ? { endpoint: { anchor: remapMarkAnchor(annotation.endpoint.anchor, next) } }
+          : {}),
+    })),
   }
 }
 
@@ -133,6 +148,14 @@ export function remapAnchor(anchor: CommentAnchor, next: IdReplacement): Comment
     case 'feature':
       return { ...anchor, ownerId: next(anchor.ownerId) }
   }
+}
+
+/**
+ * The same walk for an Annotation's anchored endpoint (#81 §9), which is only ever an entity or a
+ * feature — the two kinds that name a record — so the answer keeps that narrower type.
+ */
+export function remapMarkAnchor(anchor: EntityAnchor | FeatureAnchor, next: IdReplacement): EntityAnchor | FeatureAnchor {
+  return anchor.kind === 'entity' ? { ...anchor, entityId: next(anchor.entityId) } : { ...anchor, ownerId: next(anchor.ownerId) }
 }
 
 /**
@@ -215,6 +238,8 @@ function entityIds(project: Project): EntityId[] {
   for (const acknowledgement of project.warningAcknowledgements) ids.push(acknowledgement.id)
   // A Comment has an ID of its own and an Anchor naming one, so it is a record like any other (#80 §1).
   for (const comment of project.comments) ids.push(comment.id)
+  // An Annotation likewise: its own ID, and the view it draws in is already claimed by the view walk (#81 §9).
+  for (const annotation of project.annotations) ids.push(annotation.id)
   return ids
 }
 

@@ -85,6 +85,7 @@ const duplicate = (project: Project, commentIds: readonly EntityId[], ids: strin
         .map((item) => item.id),
       includePlanImage: false,
       commentIds: [...commentIds],
+      annotationIds: [],
     },
     ids,
   )

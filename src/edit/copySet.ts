@@ -18,7 +18,7 @@
  */
 import { effectiveModel } from '../derive'
 import type { EffectiveEntity } from '../derive'
-import type { Comment, DrawingLayer, EntityId, ItemDesign, PlanView, Project, ProposedModel, WallJunction } from '../domain'
+import type { Annotation, Comment, DrawingLayer, EntityId, ItemDesign, PlanView, Project, ProposedModel, WallJunction } from '../domain'
 import { beamsOf, servicesOf, skirtingOf, viewDesignOptionId } from '../domain'
 
 /**
@@ -48,6 +48,12 @@ export interface CopySet {
    * Comment, which is about the shared design rather than about this placement of it.
    */
   readonly notes: readonly Comment[]
+  /**
+   * The Annotations whose anchored endpoint names a copied entity (#81 §9), which the destination's
+   * `Include Annotations` checkbox decides whether to bring across. A free-ended or plain Annotation
+   * is a mark on the source's drawing, not a mark on the copied thing, and stays where it was drawn.
+   */
+  readonly annotations: readonly Annotation[]
 }
 
 /** The Walls one Junction claims: its ends, and the Wall it is hosted on when it has one. */
@@ -105,11 +111,42 @@ export function captureCopySet(project: Project, view: PlanView, selection: read
   const itemDesigns = structuredClone(project.itemDesigns.filter((design) => designIds.has(design.id)))
 
   // The Project's own layer order, not the order the entities were met in: the mapping dialog lists
-  // its rows in the order the source's Layers list shows them.
+  // its rows in the order the source's Layers list shows them. An Annotation that comes with the copy
+  // rides a Layer the copy must bring too (#81 §9), even when no copied entity rides it.
+  const copiedEntityIds = new Set<EntityId>([
+    ...entities.walls,
+    ...entities.wallJunctions,
+    ...entities.openings,
+    ...entities.rooms,
+    ...entities.placedItems,
+    ...beamsOf(entities),
+    ...skirtingOf(entities),
+    ...servicesOf(entities),
+  ].map((entity) => entity.id))
+  // The Annotations that come with this selection (#81 §9): the ones whose one anchored endpoint
+  // names a copied entity. A Leader anchored to a copied Sink is a mark about that Sink; a Text or a
+  // free-ended Leader is a mark on the source's drawing, and the drawing does not travel.
+  const marks = structuredClone(
+    project.annotations.filter((annotation) => {
+      const endpoint = annotation.endpoint
+      if (endpoint === undefined || !('anchor' in endpoint)) return false
+      const subject = endpoint.anchor.kind === 'entity' ? endpoint.anchor.entityId : endpoint.anchor.kind === 'feature' ? endpoint.anchor.ownerId : null
+      return subject !== null && copiedEntityIds.has(subject)
+    }),
+  )
   const usedLayerIds = new Set<EntityId>(
-    [...entities.walls, ...entities.openings, ...entities.rooms, ...entities.placedItems, ...beamsOf(entities), ...skirtingOf(entities), ...servicesOf(entities)]
+    [
+      ...entities.walls,
+      ...entities.openings,
+      ...entities.rooms,
+      ...entities.placedItems,
+      ...beamsOf(entities),
+      ...skirtingOf(entities),
+      ...servicesOf(entities),
+    ]
       .map((entity) => entity.drawingLayerId)
-      .filter((layerId): layerId is EntityId => layerId !== undefined && layerId !== null),
+      .filter((layerId): layerId is EntityId => layerId !== undefined && layerId !== null)
+      .concat(marks.map((annotation) => annotation.layerId).filter((layerId): layerId is EntityId => layerId !== null)),
   )
   const layers = structuredClone((project.drawingLayers ?? []).filter((layer) => usedLayerIds.has(layer.id)))
 
@@ -125,16 +162,6 @@ export function captureCopySet(project: Project, view: PlanView, selection: read
   // written — a note about the source Project, its Floor or one of its Design Options names things the
   // copy does not carry, and a note about an Item Design is about the shared design, which the copy
   // reuses rather than duplicates.
-  const copiedEntityIds = new Set<EntityId>([
-    ...entities.walls,
-    ...entities.wallJunctions,
-    ...entities.openings,
-    ...entities.rooms,
-    ...entities.placedItems,
-    ...beamsOf(entities),
-    ...skirtingOf(entities),
-    ...servicesOf(entities),
-  ].map((entity) => entity.id))
   const notes = structuredClone(
     project.comments.filter((comment) => {
       const subject = comment.anchor.kind === 'entity' ? comment.anchor.entityId : comment.anchor.kind === 'feature' ? comment.anchor.ownerId : null
@@ -150,6 +177,7 @@ export function captureCopySet(project: Project, view: PlanView, selection: read
     layers,
     demolishedCount,
     notes,
+    annotations: marks,
   }
 }
 

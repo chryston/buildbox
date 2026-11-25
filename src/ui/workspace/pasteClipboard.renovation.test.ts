@@ -23,6 +23,7 @@ const copyFrom = (sourceProjectId: EntityId, sourceProjectName: string): CopySet
   layers: [],
   demolishedCount: 0,
   notes: [],
+  annotations: [],
 })
 
 const FITOUT = copyFrom('project-fitout', 'Unit 4 Fitout')

@@ -180,6 +180,7 @@ export function RenovationOverlays(): ReactNode {
             viewId: dialog.viewId,
             copySet: clipboard.copy,
             includeComments: false,
+            includeAnnotations: false,
           }),
         ).review,
         options,
@@ -410,7 +411,7 @@ export function RenovationOverlays(): ReactNode {
       const label = RENOVATION_STRINGS.pasteLabel(review.entityCount, review.sourceProjectName)
       const inner = services.intent.build(
         'renovation.pasteFromProject',
-        { floorId: dialog.floorId, viewId: dialog.viewId, copySet, includeComments },
+        { floorId: dialog.floorId, viewId: dialog.viewId, copySet, includeComments, includeAnnotations: false },
         label,
       )
       // A correction spends the ids the paste minted, so the inner Intent travels with none of them

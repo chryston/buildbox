@@ -350,7 +350,7 @@ export type {
   DrawingLayer,
   LayerSetting,
 } from './project'
-export { remapAnchor, remapEntities, remapIds, type IdAllocator, type IdReplacement } from './remapIds'
+export { remapAnchor, remapEntities, remapIds, remapMarkAnchor, type IdAllocator, type IdReplacement } from './remapIds'
 export { ACKNOWLEDGEMENT_NOTE_MAX_LENGTH, warningKey } from './warnings'
 export {
   MAX_OUTLINE_RECTS,

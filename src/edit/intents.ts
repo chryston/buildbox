@@ -56,7 +56,7 @@ import type {
   WallJustification,
   WallRefLine,
 } from '../domain'
-import { beamsOf, roomOutlinePath, skirtingOf } from '../domain'
+import { beamsOf, roomOutlinePath, servicesOf, skirtingOf } from '../domain'
 import type { KeepFixed, Pt } from '../geometry'
 
 import type { ValidationProblem } from '../lib'
@@ -608,6 +608,13 @@ export interface DuplicateFloor {
    * is shared and the note is about it.
    */
   commentIds: EntityId[]
+  /**
+   * The Annotations `Include Annotations` covers (#81 §9), already resolved by the dialog and **empty
+   * by default**, like the Comments box. Each one that comes arrives with a new ID, a new `A-`
+   * reference and its view aimed at the duplicate's own default Plan View; an Annotation drawn in a
+   * named view the duplicate does not have stays where it was drawn.
+   */
+  annotationIds: EntityId[]
 }
 
 /** A named Plan View on a Floor (#56). */
@@ -1694,6 +1701,11 @@ export interface PasteFromOtherProject {
    * would bring; nothing crosses until the box is checked.
    */
   includeComments: boolean
+  /**
+   * `Include Annotations`, off by default (#81 §9). The preview dialog shows how many Annotations the
+   * copy would bring; nothing crosses until the box is checked.
+   */
+  includeAnnotations: boolean
 }
 
 /** Where one source Layer's work goes: onto a Layer this Project has, onto a new one, or nowhere. */
@@ -2057,7 +2069,7 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
   'floor.setLimits': [],
   'floor.setDefaultWallHeight': [],
   'floor.delete': [],
-  'floor.duplicate': ['floorId', 'viewId', 'placedItemId…', 'commentId…'],
+  'floor.duplicate': ['floorId', 'viewId', 'placedItemId…', 'commentId…', 'annotationId…'],
   'view.create': ['viewId'],
   'view.rename': [],
   'view.delete': [],
@@ -2137,9 +2149,10 @@ export function intentIdCount(type: IntentType, payload?: PayloadOf): number {
   if (payload === undefined) return fixed + VARIADIC_ID_COUNT
   switch (type) {
     case 'floor.duplicate': {
-      // One per Placed Item, plus one per Comment `Include Comments` brings across (#80 §13).
+      // One per Placed Item, plus one per Comment `Include Comments` brings across (#80 §13), plus
+      // one per Annotation `Include Annotations` brings across (#81 §9).
       const duplicate = payload as DuplicateFloor
-      return fixed + duplicate.placedItemIds.length + duplicate.commentIds.length
+      return fixed + duplicate.placedItemIds.length + duplicate.commentIds.length + duplicate.annotationIds.length
     }
     case 'plan.copyToFloor':
       return (payload as CopyPlanObjectsToFloor).placedItemIds.length
@@ -2178,11 +2191,16 @@ export function intentIdCount(type: IntentType, payload?: PayloadOf): number {
         placedItems.length +
         beamsOf(pasted.entities).length +
         skirtingOf(pasted.entities).length +
+        // Services were claimed by the handler from #79 on but never counted here; a copy that
+        // brought one would have spent the Item Designs' slots. Found by the #81 paste tests.
+        servicesOf(pasted.entities).length +
         pasted.itemDesigns.length +
         pasted.layers.length +
         // `Include Comments` (#80 §13) takes one more slot per Comment that crosses, at the tail, so
-        // the blocks `locatePaste` reads from the front are unmoved.
-        ((payload as PasteFromOtherProject).includeComments ? pasted.notes.length : 0)
+        // the blocks `locatePaste` reads from the front are unmoved. `Include Annotations` (#81 §9)
+        // sits after it for the same reason.
+        ((payload as PasteFromOtherProject).includeComments ? pasted.notes.length : 0) +
+        ((payload as PasteFromOtherProject).includeAnnotations ? pasted.annotations.length : 0)
       )
     }
     default:

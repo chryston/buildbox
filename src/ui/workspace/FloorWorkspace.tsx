@@ -1818,6 +1818,7 @@ export function FloorWorkspace(): ReactNode {
       floorId: duplicateFloorId,
       ...rest,
       commentIds: includeComments ? duplicateCommentIds(project, duplicateFloorId, input.placedItemIds) : [],
+      annotationIds: [],
     })
     setDuplicateFloorId(null)
     const after = session.getSnapshot().project

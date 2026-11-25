@@ -76,6 +76,7 @@ const copySet = (): CopySet => ({
   layers: [],
   demolishedCount: 0,
   notes: [],
+  annotations: [],
 })
 
 const DESTINATIONS = [
