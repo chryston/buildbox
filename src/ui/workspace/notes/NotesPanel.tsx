@@ -19,7 +19,7 @@ import { COMMENT_SCOPE_ALL, compareCommentReferences, designOptionsOf, isComment
 import { commentIsInContext, commentScopeLabel, effectiveCommentScope, effectiveModel } from '../../../derive'
 import { COMMENT_PRIORITY_LABELS, COMMENT_STATUS_FILTERS, COMMENT_STATUS_LABELS, COMMENT_STRINGS, COMMENT_TARGET_LABELS } from '../../strings/comments'
 import { formatSince } from '../../library/formatSince'
-import { commentAnchorLabel, commentScopeText } from './anchorLabel'
+import { commentAnchorLabel } from './anchorLabel'
 import { useNotesSession } from './notesSession'
 import type { NotesPriorityFilter, NotesStatusFilter, NotesTargetFilter } from './notesSession'
 
@@ -134,7 +134,7 @@ function CommentEditor({
     onEdit(comment.id, { body })
   }
   const scope = effectiveCommentScope(project, comment)
-  const scopeText = commentScopeText(commentScopeLabel(project, scope), scope.kind !== 'all' && scope.inherited)
+  const scopeText = commentScopeLabel(project, scope)
   const options = designOptionsOf(project)
 
   return (
@@ -255,7 +255,7 @@ function CommentRow({
   onToggle(): void
 }): ReactNode {
   const scope = effectiveCommentScope(project, comment)
-  const scopeText = commentScopeText(commentScopeLabel(project, scope), scope.kind !== 'all' && scope.inherited)
+  const scopeText = commentScopeLabel(project, scope)
   return (
     <li
       className="bb-note-row"

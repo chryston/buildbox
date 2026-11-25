@@ -71,7 +71,6 @@ export const COMMENT_STRINGS = {
   status: 'Status',
   scopeAllOptions: 'All Options',
   scopeExisting: 'Existing Model',
-  inheritedSuffix: ' (inherited)',
   bodyPlaceholder: 'Plain-text body',
   newCommentTitle: 'New comment',
   editorEyebrow: (reference: string): string => `Comment ${reference}`,

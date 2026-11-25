@@ -41,7 +41,7 @@ export interface NotePinSubject {
   readonly id: string
   readonly at: { x: number; y: number }
   readonly tone: NotePinTone
-  /** The note's reference, for the caller's accessible name; the pin itself draws no text. */
+  /** The note's reference: the accessible name of the mark, and the text the pin wears. */
   readonly reference: string
 }
 
@@ -179,7 +179,7 @@ export function drawNotes(
     const box = { x: at.x - r, y: at.y - r, w: 2 * r, h: 2 * r }
     placed.push(box)
     bounds = union(bounds, box)
-    items.push(mark(pin.id, 'note-pin', at, r, `plan-note-pin-${pin.tone}` as StyleKey, null, fontSize, leaderFrom))
+    items.push(mark(pin.id, 'note-pin', at, r, `plan-note-pin-${pin.tone}` as StyleKey, pin.reference, fontSize, leaderFrom))
   }
 
   // Then the `✎n` badges, one per placement, avoiding the labels, the handles, the warnings and the

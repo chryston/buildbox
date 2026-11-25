@@ -42,6 +42,14 @@ describe('the Notes overlay', () => {
     expect(tones).toEqual(['plan-note-pin-high', 'plan-note-pin-normal', 'plan-note-pin-low', 'plan-note-pin-resolved'])
   })
 
+  it('writes the reference on the pin, so a person can tell one note from another (#80 §7.4)', () => {
+    const list = drawNotes([pin('a', 0, 0, 'normal')], [], { sizing: SCREEN })!
+    const texts = list.layers[0]!.items.flatMap((item) =>
+      item.kind === 'group' ? item.items.filter((one) => one.kind === 'text').map((one) => (one.kind === 'text' ? one.text : '')) : [],
+    )
+    expect(texts).toEqual(['C-a'])
+  })
+
   it('writes the count on the badge, one badge per placement (#80 §12)', () => {
     const list = drawNotes([], [badge('p', { x: 0, y: 0, w: 600, h: 600 }, 2)], { sizing: SCREEN })!
     const texts = list.layers[0]!.items.flatMap((item) =>

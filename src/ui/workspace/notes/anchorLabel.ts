@@ -12,7 +12,7 @@
  * it cannot name what it is about.
  */
 import type { CommentAnchor, EntityId, Project, ProposedModel } from '../../../domain'
-import { COMMENT_KIND_LABELS, COMMENT_STRINGS } from '../../strings/comments'
+import { COMMENT_KIND_LABELS } from '../../strings/comments'
 import { derivePlacement, placementLabels } from '../../../derive'
 
 /** A subject that no longer exists, which the row says so about. */
@@ -130,7 +130,3 @@ export function commentAnchorLabel(project: Project, anchor: CommentAnchor): str
   return `${COMMENT_KIND_LABELS[anchor.kind]} · ${commentAnchorSubject(project, anchor)}`
 }
 
-/** The scope half of the row's second line, with the inherited marker the editor also writes. */
-export function commentScopeText(scopeLabel: string, inherited: boolean): string {
-  return inherited ? `${scopeLabel}${COMMENT_STRINGS.inheritedSuffix}` : scopeLabel
-}

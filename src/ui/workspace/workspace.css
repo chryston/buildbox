@@ -593,6 +593,13 @@
 
 .bb-notes-filter {
   font-size: var(--bb-size-badge);
+  /* A bare `<select>` paints the platform's light form control, which is unreadable on this panel.
+     It takes the same colours the workspace's own selects use, at the width the filter row has. */
+  padding: 4px 8px;
+  border: 1px solid var(--bb-select-border);
+  border-radius: var(--bb-radius-button);
+  background: var(--bb-select-bg);
+  color: var(--bb-text);
 }
 
 .bb-note-rows {
