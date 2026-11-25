@@ -1534,6 +1534,11 @@
   padding: 6px 16px;
   border-bottom: 1px solid var(--bb-border-card);
   background: var(--bb-bg-header);
+  /* The strip is one row and stays one row however many tools a Display offers (#81 §3.1): the
+   * Plan View's height is fixed by the header, so a crowded strip scrolls sideways rather than
+   * growing a second row and stealing canvas. */
+  flex-wrap: nowrap;
+  overflow-x: auto;
 }
 
 .bb-renovation-tool {
@@ -1543,6 +1548,8 @@
   border: 1px solid var(--bb-border-card);
   background: var(--bb-bg-app);
   color: var(--bb-text-line);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .bb-renovation-tool[aria-pressed='true'] {
@@ -1558,6 +1565,23 @@
 .bb-renovation-hidden-count {
   font-size: 12px;
   color: var(--bb-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* The Annotation group is a tight cluster of glyphs (#81 §3.1): the five tools sit closer than the
+ * strip's usual gap and carry no word, so the group costs the strip a few dozen pixels instead of
+ * five labels and keeps the one row the Plan View's height depends on. */
+.bb-renovation-annotation-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 2px;
+  flex-shrink: 0;
+}
+
+.bb-renovation-annotation-group .bb-renovation-tool {
+  padding: 4px 6px;
 }
 
 .bb-renovation-pick {

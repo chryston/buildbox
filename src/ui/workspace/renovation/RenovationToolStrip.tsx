@@ -54,13 +54,18 @@ const TOOL_LABELS: { [T in RenovationToolId]: string } = {
   annotationMarker: ANNOTATION_STRINGS.toolMarker,
 }
 
-/** The five Annotation rows, which the Notes overlay gates out of the strip when it is off (#81 §3.2). */
-const ANNOTATION_TOOL_IDS: Partial<Record<RenovationToolId, true>> = {
-  annotationText: true,
-  annotationLeader: true,
-  annotationArrow: true,
-  annotationCloud: true,
-  annotationMarker: true,
+/**
+ * The five Annotation rows draw as a glyph, not a word (#81 §3.1). The prototype's group is a glyph
+ * per tool; production keeps the glyph on the button and moves the full name to the accessible label
+ * and the hover title, so the group stays scannable and the one-row strip never wraps to make room
+ * for five words. The overlay-off tooltip overrides the name in the title while the group is disabled.
+ */
+const ANNOTATION_GLYPHS: Partial<Record<RenovationToolId, string>> = {
+  annotationText: 'T',
+  annotationLeader: '↖T',
+  annotationArrow: '↗',
+  annotationCloud: '☁',
+  annotationMarker: '◎',
 }
 
 /** The strip's own shortcut per row. No workspace tool shortcut exists today, so these are new keys. */
@@ -149,8 +154,6 @@ export interface RenovationToolStripProps {
   onMarkDemolition(): void
   onTogglePick(state: RenovationState): void
   onNotice(notice: string | null): void
-  /** Whether the Notes overlay is on; off, the five Annotation rows are absent, not merely disabled (#81 §3.2). */
-  overlayOn: boolean
 }
 
 /** Whether a keystroke belongs to a field rather than to the workspace. */
@@ -160,15 +163,9 @@ const isTyping = (target: EventTarget | null): boolean => {
 }
 
 export function RenovationToolStrip(props: RenovationToolStripProps): ReactNode {
-  const { display, hasDesignOption, activeTool, pickStates, notice, blocked, onTool, onMarkDemolition, onTogglePick, onNotice, overlayOn } = props
+  const { display, hasDesignOption, activeTool, pickStates, notice, blocked, onTool, onMarkDemolition, onTogglePick, onNotice } = props
   const reasons = { ...DEFAULT_BLOCKED, ...blocked }
   const hidden = hiddenToolCount(display, hasDesignOption)
-  // The Notes overlay is the Annotation group's gate (#81 §3.2). Off, the five rows are absent from
-  // the strip entirely — a default-off overlay reserves no layout, so the Plan View keeps the width
-  // and height #55 gave it and the strip stays the one row it was before Annotations existed.
-  const shownRows = RENOVATION_TOOL_ROWS.filter(
-    (row) => toolIsAvailable(row.id, display, hasDesignOption) && (overlayOn || ANNOTATION_TOOL_IDS[row.id] === undefined),
-  )
 
   const run = (tool: RenovationToolId): void => {
     if (tool === 'markDemolition') onMarkDemolition()
@@ -232,28 +229,38 @@ export function RenovationToolStrip(props: RenovationToolStripProps): ReactNode 
     }
   }, [notice, onNotice])
 
+  const toolButton = (row: (typeof RENOVATION_TOOL_ROWS)[number]): ReactNode => {
+    const reason = reasons[row.id]
+    const glyph = ANNOTATION_GLYPHS[row.id]
+    const name = TOOL_LABELS[row.id]
+    return (
+      <button
+        key={row.id}
+        type="button"
+        data-testid={`renovation-tool-${row.id}`}
+        className="bb-renovation-tool"
+        aria-pressed={ROW_OF_TOOL[activeTool] === row.id ? 'true' : 'false'}
+        disabled={reason !== undefined}
+        title={reason ?? (glyph !== undefined ? name : undefined)}
+        aria-label={glyph !== undefined ? name : undefined}
+        onClick={() => {
+          onNotice(null)
+          run(row.id)
+        }}
+      >
+        {glyph ?? name}
+      </button>
+    )
+  }
+
+  const shown = RENOVATION_TOOL_ROWS.filter((row) => toolIsAvailable(row.id, display, hasDesignOption))
+  const markRows = shown.filter((row) => ANNOTATION_GLYPHS[row.id] !== undefined)
+  const otherRows = shown.filter((row) => ANNOTATION_GLYPHS[row.id] === undefined)
+
   return (
     <div className="bb-renovation-tool-strip" data-testid="renovation-tool-strip" data-display={display}>
-      {shownRows.map((row) => {
-        const reason = reasons[row.id]
-        return (
-          <button
-            key={row.id}
-            type="button"
-            data-testid={`renovation-tool-${row.id}`}
-            className="bb-renovation-tool"
-            aria-pressed={ROW_OF_TOOL[activeTool] === row.id ? 'true' : 'false'}
-            disabled={reason !== undefined}
-            title={reason}
-            onClick={() => {
-              onNotice(null)
-              run(row.id)
-            }}
-          >
-            {TOOL_LABELS[row.id]}
-          </button>
-        )
-      })}
+      {otherRows.map(toolButton)}
+      {markRows.length > 0 && <span className="bb-renovation-annotation-group">{markRows.map(toolButton)}</span>}
       {hidden > 0 && (
         <span className="bb-renovation-hidden-count" data-testid="hidden-tool-count">
           {RENOVATION_STRINGS.toolsHidden(hidden)}
