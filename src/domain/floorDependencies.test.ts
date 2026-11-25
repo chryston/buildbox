@@ -74,11 +74,11 @@ const textOf = (floorId: string): string[] => summarizeFloorDependencies(project
 
 describe('summarizeFloorDependencies', () => {
   it('counts the Placed Items, the Beams, the Skirting, the Plan Image, the named Plan Views and the Elevation Views of one Floor', () => {
-    expect(textOf('floor-kitchen')).toEqual(['3 Placed Items', '0 Beams', '0 Skirting', '0 Services', '0 Comments', '1 Plan Image', '1 named Plan View', '1 Elevation View'])
+    expect(textOf('floor-kitchen')).toEqual(['3 Placed Items', '0 Beams', '0 Skirting', '0 Services', '0 Comments', '0 Annotations', '1 Plan Image', '1 named Plan View', '1 Elevation View'])
   })
 
   it('reads an empty Floor as having nothing leaning on it', () => {
-    expect(textOf('floor-cellar')).toEqual(['0 Placed Items', '0 Beams', '0 Skirting', '0 Services', '0 Comments', '0 Plan Images', '0 named Plan Views', '0 Elevation Views'])
+    expect(textOf('floor-cellar')).toEqual(['0 Placed Items', '0 Beams', '0 Skirting', '0 Services', '0 Comments', '0 Annotations', '0 Plan Images', '0 named Plan Views', '0 Elevation Views'])
     expect(floorHasDependencies(project(), 'floor-cellar')).toBe(false)
   })
 
@@ -88,13 +88,14 @@ describe('summarizeFloorDependencies', () => {
   })
 
   it('names each kind in registry order, so a dialog can key a row', () => {
-    expect(FLOOR_DEPENDENCY_KINDS.map((kind) => kind.id)).toEqual(['placedItems', 'beams', 'skirting', 'services', 'comments', 'planImage', 'planViews', 'elevationViews'])
+    expect(FLOOR_DEPENDENCY_KINDS.map((kind) => kind.id)).toEqual(['placedItems', 'beams', 'skirting', 'services', 'comments', 'annotations', 'planImage', 'planViews', 'elevationViews'])
     expect(summarizeFloorDependencies(project(), 'floor-kitchen').map((row) => row.kind.id)).toEqual([
       'placedItems',
       'beams',
       'skirting',
       'services',
       'comments',
+      'annotations',
       'planImage',
       'planViews',
       'elevationViews',
@@ -109,6 +110,7 @@ describe('summarizeFloorDependencies', () => {
       '0 Skirting',
       '0 Services',
       '0 Comments',
+      '0 Annotations',
       '0 Plan Images',
       '0 named Plan Views',
       '0 Elevation Views',
@@ -169,6 +171,25 @@ describe('summarizeFloorDependencies', () => {
     ]
     expect(floorHasDependencies(one, 'floor-kitchen')).toBe(true)
     expect(summarizeFloorDependencies(one, 'floor-kitchen')[3]?.text).toBe('1 Service')
+    expect(floorHasDependencies(one, 'floor-cellar')).toBe(false)
+  })
+
+  it('refuses a Floor whose view still carries an Annotation, because it draws in exactly one view (#81 §5.1)', () => {
+    const one = project()
+    one.annotations = [
+      {
+        id: 'annotation-1',
+        reference: 'A-001',
+        type: 'text',
+        viewId: 'view-kitchen-evening',
+        position: { x: 1000, y: 2000 },
+        text: 'Set out from here',
+        layerId: null,
+        scope: 'all',
+      },
+    ]
+    expect(floorHasDependencies(one, 'floor-kitchen')).toBe(true)
+    expect(summarizeFloorDependencies(one, 'floor-kitchen')[5]?.text).toBe('1 Annotation')
     expect(floorHasDependencies(one, 'floor-cellar')).toBe(false)
   })
 

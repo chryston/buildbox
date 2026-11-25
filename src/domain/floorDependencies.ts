@@ -12,7 +12,7 @@
  * counts as a reason to refuse.
  */
 import { commentAnchorFloorId } from './comments'
-import { beamsOf, elevationViewsOf, servicesOf, skirtingOf } from './project'
+import { beamsOf, elevationViewsOf, savedViewsOf, servicesOf, skirtingOf } from './project'
 import type { Project } from './project'
 
 /** One kind of floor-local content, and how many of it a Floor carries. */
@@ -99,6 +99,25 @@ const comments: FloorDependencyKind = {
     project.comments.reduce((total, comment) => (commentAnchorFloorId(comment.anchor) === floorId ? total + 1 : total), 0),
 }
 
+/**
+ * The Annotations drawn in a Floor's saved views (#81 §5.1).
+ *
+ * An Annotation belongs to exactly one view, so it leans on a Floor through that view — Plan and
+ * Elevation alike. One drawn in an Item Detail belongs to no Floor and counts nowhere. Deleting the
+ * Floor would leave the record pointing at a view that is not there, which is the Project the
+ * validator refuses; it is refused at the door instead, and nothing here deletes an Annotation.
+ */
+const annotations: FloorDependencyKind = {
+  id: 'annotations',
+  label: 'Annotations',
+  labelOne: 'Annotation',
+  labelMany: 'Annotations',
+  count: (project, floorId) => {
+    const viewIds = new Set(savedViewsOf(project).filter((view) => view.floorId === floorId).map((view) => view.id))
+    return project.annotations.reduce((total, annotation) => (viewIds.has(annotation.viewId) ? total + 1 : total), 0)
+  },
+}
+
 const planImage: FloorDependencyKind = {
   id: 'planImage',
   label: 'Plan Image',
@@ -146,6 +165,7 @@ export const FLOOR_DEPENDENCY_KINDS: readonly FloorDependencyKind[] = [
   skirting,
   services,
   comments,
+  annotations,
   planImage,
   planViews,
   elevationViews,

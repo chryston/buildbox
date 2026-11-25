@@ -177,6 +177,12 @@ const EXTRA_INTENTS = [
   'comment.resolve',
   'comment.reopen',
   'comment.delete',
+  // #81: the legacy app had no Annotations either — a cloud, a leader and a revision triangle were
+  // drawn on the printed plan in ink — so there is no store action any of these maps to.
+  'annotation.create',
+  'annotation.edit',
+  'annotation.move',
+  'annotation.delete',
   // #66: the legacy app had no warnings at all — an overlap was something the drafter found
   // by eye on the printed plan — so there is no store action either of these maps to.
   'warning.acknowledge',

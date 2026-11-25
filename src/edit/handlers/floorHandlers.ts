@@ -18,7 +18,7 @@ import type { CommentAnchor, EntityId, Floor, PlanView, Project } from '../../do
 import type { FloorIntent, Locator, PlanIntent, TransferPlanObjectsToFloor, ViewIntent } from '../intents'
 import type { Handler, IntentHandler } from './context'
 import { elevationViewPath } from './elevationHandlers'
-import { floorPath, refuse, requireFloor, requirePlacement, spendIds } from './support'
+import { floorPath, guardViewAnnotations, refuse, requireFloor, requirePlacement, spendIds } from './support'
 
 /** The path of one saved Plan View, in the validator's vocabulary. */
 export const viewPath = (viewId: EntityId): string => `views[${viewId}]`
@@ -393,6 +393,9 @@ const deletePlanView: Handler<'view.delete'> = (ctx) => {
       'This is the Floor’s own Plan View. It goes when the Floor does, and not before.',
     )
   }
+  // #81 §8.1: Annotations draw in this view and Reference Markers navigate into it; nothing here
+  // retargets or deletes them for the user.
+  guardViewAnnotations(ctx.project, viewId, view.name, viewPath(viewId))
   ctx.draft.views = ctx.draft.views.filter((candidate) => candidate.id !== viewId)
 }
 

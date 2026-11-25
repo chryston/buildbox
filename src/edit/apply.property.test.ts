@@ -1218,6 +1218,51 @@ const GENERATORS: ((g: Gen) => Intent | null)[] = [
     const comment = pick(g, g.project.comments)
     return comment === undefined ? null : intent('comment.delete', { commentId: comment.id })
   },
+  // #81: a view that exists, a position the type asks for, and the one field each type owes. A
+  // Reference Marker needs a second view to navigate into, so it is only drawn when the Project has
+  // one; endpoints are free points, because an anchored one would make every later entity delete a
+  // coin toss on this guard (#81 §8.1 has its own test).
+  (g) => {
+    const view = pick(g, g.project.views)
+    if (view === undefined) return null
+    const other = pick(g, g.project.views.filter((each) => each.id !== view.id))
+    const types = ['text', 'leader', 'arrow', 'revision_cloud', ...(other === undefined ? [] : (['reference_marker'] as const))] as const
+    const type = pick(g, types)!
+    const a = pt(real(g, -5000, 5000), real(g, -5000, 5000))
+    const position = type === 'revision_cloud' ? { a, b: pt(a.x + real(g, 100, 2000), a.y + real(g, 100, 2000)) } : a
+    return intent(
+      'annotation.create',
+      {
+        viewId: view.id,
+        type,
+        position,
+        text: `Note ${int(g, 1, 900)}`,
+        layerId: null,
+        scope: commentScope(g),
+        ...(type === 'leader' || type === 'arrow' ? { endpoint: { free: pt(real(g, -5000, 5000), real(g, -5000, 5000)) } } : {}),
+        ...(type === 'reference_marker' ? { targetViewId: other!.id } : {}),
+      },
+      g.ids(2),
+    )
+  },
+  // Always a new text: an edit that changes nothing is refused `no-change`, and the tally would
+  // never see the box work.
+  (g) => {
+    const annotation = pick(g, g.project.annotations)
+    if (annotation === undefined) return null
+    return intent('annotation.edit', { annotationId: annotation.id, text: `Revised note ${int(g, 1, 900)}` })
+  },
+  (g) => {
+    const annotation = pick(g, g.project.annotations)
+    if (annotation === undefined) return null
+    const a = pt(real(g, -5000, 5000), real(g, -5000, 5000))
+    const position = annotation.type === 'revision_cloud' ? { a, b: pt(a.x + real(g, 100, 2000), a.y + real(g, 100, 2000)) } : a
+    return intent('annotation.move', { annotationId: annotation.id, position })
+  },
+  (g) => {
+    const annotation = pick(g, g.project.annotations)
+    return annotation === undefined ? null : intent('annotation.delete', { annotationId: annotation.id })
+  },
   // #66: a subject that exists, because an acknowledgement of a warning about something that
   // is not there is pruned by the same step that recorded it, and would never be seen. Any
   // entity will do — the handler addresses a warning by its key, not by what the key names.
@@ -1385,13 +1430,13 @@ function runSequence(start: Project, seed: number, steps: number): Project {
     expect(result.patches.length, `${next.type} was accepted with no patches`).toBeGreaterThan(0)
     expect(validateProject(result.project).ok, `${next.type} produced an invalid Project`).toBe(true)
     const undone = applyPatches(result.project, result.inversePatches)
-    // One field is deliberately not restored by undo: the Comment reference counter counts numbers
-    // that have already been handed out, so it only ever goes up (#80 §1 criterion 2). Everything else
-    // comes back byte for byte.
+    // Two fields are deliberately not restored by undo: the Comment and Annotation reference counters
+    // count numbers that have already been handed out, so they only ever go up (#80 §1 criterion 2,
+    // #81 §1). Everything else comes back byte for byte.
     const restorable =
-      undone.commentReferenceCounter === current.commentReferenceCounter
+      undone.commentReferenceCounter === current.commentReferenceCounter && undone.annotationReferenceCounter === current.annotationReferenceCounter
         ? undone
-        : { ...undone, commentReferenceCounter: current.commentReferenceCounter }
+        : { ...undone, commentReferenceCounter: current.commentReferenceCounter, annotationReferenceCounter: current.annotationReferenceCounter }
     expect(canonicalJson(restorable), `${next.type} did not undo to the Project it started from`).toBe(canonicalJson(current))
     current = result.project
   }
