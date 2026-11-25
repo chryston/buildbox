@@ -170,6 +170,13 @@ const EXTRA_INTENTS = [
   'service.setVerticalExtent',
   'service.rename',
   'service.delete',
+  // #80: the legacy app had no Comments either — a note about the job was written on the printed plan
+  // in pencil — so there is no store action any of these maps to.
+  'comment.create',
+  'comment.edit',
+  'comment.resolve',
+  'comment.reopen',
+  'comment.delete',
   // #66: the legacy app had no warnings at all — an overlap was something the drafter found
   // by eye on the printed plan — so there is no store action either of these maps to.
   'warning.acknowledge',

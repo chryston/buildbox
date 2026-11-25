@@ -46,6 +46,8 @@ const model = (walls: readonly Wall[], junctions: readonly WallJunction[] = []):
       wallJunctions: [...junctions],
     },
     warningAcknowledgements: [],
+    comments: [],
+    commentReferenceCounter: 0,
   }
 }
 

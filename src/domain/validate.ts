@@ -32,7 +32,22 @@ import {
 import type { ClosedPath, CornerRadii, JoinJunction, JoinWall, Preset, Pt, Segment, UsableInterval } from '../geometry'
 import { ROOT_PATH, childPath, compareCodePoints, problem, type ValidationProblem } from '../lib'
 import { MAX_TREE_DEPTH } from './cabinetPayload'
+import type { CabinetNode } from './cabinetPayload'
+import {
+  anchorChoosesScope,
+  COMMENT_ANCHOR_KINDS,
+  COMMENT_BODY_MAX_LENGTH,
+  COMMENT_PRIORITIES,
+  COMMENT_REFERENCE_PATTERN,
+  COMMENT_STATUSES,
+  COMMENT_TITLE_MAX_LENGTH,
+  commentReferenceNumber,
+  isCommentScopeAll,
+} from './comments'
+import type { CommentAnchorKind } from './comments'
 import { ELEVATION_VIEW_SIDES } from './elevationView'
+import { cabinetFeatureIds, ENTITY_COLLECTION_KEYS, ownerKindOfCollection, ownerKindOfDesign, registeredFeatureIds } from './features'
+import type { EntityCollectionKey, FeatureOwnerKind } from './features'
 import { formatGeometryProblem, type DisplayFormat } from './formatGeometryProblem'
 import { footprintProblems } from './footprint'
 import { nameKey, viewNameKey } from './floorNames'
@@ -96,7 +111,7 @@ const ACCESSORY_TYPES = ['door', 'drawer-front', 'pull', 'hinge'] as const
 
 // The field lists of §2, one per object level. `unknown-field` is reported against
 // anything else the input carries at that level.
-const PROJECT_FIELDS = ['id', 'meta', 'preferences', 'floors', 'views', 'elevationViews', 'drawingLayers', 'itemDesigns', 'existingModel', 'designOptions', 'warningAcknowledgements']
+const PROJECT_FIELDS = ['id', 'meta', 'preferences', 'floors', 'views', 'elevationViews', 'drawingLayers', 'itemDesigns', 'existingModel', 'designOptions', 'warningAcknowledgements', 'comments', 'commentReferenceCounter']
 const META_FIELDS = ['name', 'address']
 const PREFERENCES_FIELDS = ['displayUnit', 'displayPrecision', 'defaultWallHeight']
 const FLOOR_FIELDS = ['id', 'name', 'planImage', 'limits', 'defaultWallHeight']
@@ -141,11 +156,17 @@ const SEGMENT_FIELDS: Record<string, readonly string[]> = {
 }
 const SEGMENT_KINDS = ['line', 'arc', 'ellipticalArc'] as const
 const POINT_FIELDS = ['x', 'y']
-const EXISTING_MODEL_FIELDS = ['placedItems', 'walls', 'wallJunctions', 'openings', 'rooms', 'beams', 'skirting', 'services']
+/**
+ * The eight collections of one model, read from the feature registry (#80 §2 rule 3).
+ *
+ * The registry is the enumeration the exhaustiveness test walks, so naming the collections here as
+ * well would let the two lists drift and a new entity kind slip past unregistered.
+ */
+const EXISTING_MODEL_FIELDS: readonly string[] = ENTITY_COLLECTION_KEYS
 /** A Design Option is a delta over the Existing Model, never a copy of it (#69 §2). */
 const DESIGN_OPTION_FIELDS = ['id', 'name', 'proposed', 'demolishedIds']
 /** The eight collections of one Option's proposed work, in the shape the Existing Model uses. */
-const PROPOSED_MODEL_FIELDS = ['walls', 'wallJunctions', 'openings', 'rooms', 'placedItems', 'beams', 'skirting', 'services']
+const PROPOSED_MODEL_FIELDS: readonly string[] = ENTITY_COLLECTION_KEYS
 /**
  * A Beam's own fields (#77 §1). There is no `host`, no `wallId` and no junction among them, and
  * `checkUnknownFields` is what refuses one: a Beam that carried a host would be a Beam that
@@ -273,6 +294,41 @@ const ACKNOWLEDGEMENT_FIELDS = [
 ]
 /** A producer's stable code (#66 §1): `wall_crossing`, `wall_overlap`, … never `Wall Crossing`. */
 const WARNING_TYPE = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/
+/**
+ * A Comment's own fields (#80 §1).
+ *
+ * This list is also the single-user boundary: `author`, `authorName`, `assignee`, `dueDate`,
+ * `replies`, `mentions`, `reactions` and every other field of a conversation is not in it, so
+ * `checkUnknownFields` refuses it by name at the field it sits at. The boundary is a schema rule,
+ * not a UI habit, and a Backup written by something that invented an author is refused rather than
+ * quietly stripped.
+ */
+const COMMENT_FIELDS = [
+  'id',
+  'reference',
+  'title',
+  'body',
+  'anchor',
+  'status',
+  'priority',
+  'createdAt',
+  'updatedAt',
+  'resolvedAt',
+  'scope',
+  'linkedWarning',
+]
+/** The two halves of a Warning link (#80 §11): the key it was acknowledged under, and the words. */
+const COMMENT_LINK_FIELDS = ['key', 'message']
+/** The fields of each Anchor kind (#80 §2). Anything else at that level is `unknown-field`. */
+const ANCHOR_FIELDS: Record<CommentAnchorKind, readonly string[]> = {
+  project: ['kind'],
+  floor: ['kind', 'floorId'],
+  design_option: ['kind', 'designOptionId'],
+  item_design: ['kind', 'itemDesignId'],
+  entity: ['kind', 'entityId'],
+  feature: ['kind', 'ownerId', 'featureId', 't'],
+  floor_point: ['kind', 'floorId', 'point'],
+}
 const CONSTRUCTION_FIELDS = ['settings', 'root']
 const SETTINGS_FIELDS = [
   'unit', 'height', 'width', 'depth', 'thickness', 'backThickness', 'toeKick', 'material',
@@ -632,6 +688,14 @@ function indexIds(root: Rec): IdIndex {
       if (isRecord(acknowledgement)) {
         claim(acknowledgement.id, childPath(childPath('warningAcknowledgements', i), 'id'))
       }
+    })
+  }
+
+  // Comment IDs (#80 §1) join the one Project-wide namespace: a Comment that borrowed a Wall's ID
+  // would make an Anchor's `ownerId` ambiguous about which thing it points at.
+  if (Array.isArray(root.comments)) {
+    root.comments.forEach((comment, i) => {
+      if (isRecord(comment)) claim(comment.id, childPath(childPath('comments', i), 'id'))
     })
   }
 
@@ -3395,6 +3459,338 @@ function validateAcknowledgements(raw: unknown, path: string, index: IdIndex, op
 }
 
 /**
+ * Every Comment of the Project, and the counter beside it (#80 §1, §2, §15).
+ *
+ * The strict-import list of #80 §15 is exactly what this refuses, and each refusal is worth saying
+ * the reason for once here rather than in a message:
+ *
+ *  - **An unknown Anchor kind, or an unresolved Anchor target.** An Anchor is the whole record's
+ *    meaning; one that points at nothing is a note nobody can find again. `edit` refuses the Intent
+ *    that would create such a state (#80 §14), so one that arrives in a file was written by something
+ *    else.
+ *  - **A feature ID not registered for its owner's kind, or a `t` outside [0, 1].** The registry in
+ *    `features.ts` is the only source of feature names, so a feature ID outside it can never be
+ *    drawn, never be labelled, and never follow the geometry it claims to sit on.
+ *  - **A duplicate `id` or `reference`, or a reference outside `^C-\d{3,}$`.** The reference is what
+ *    a row, a pin and a sentence show; two Comments answering to `C-004` would make the Warning
+ *    strip's message and the panel's search lie.
+ *  - **A counter not ahead of every used reference.** The counter is the promise that a number is
+ *    never handed out twice (#80 §1); a file that rewound it has broken the one rule undo cannot be
+ *    allowed to break.
+ *  - **`resolvedAt` inconsistent with `status`.** Two sources for one fact, and they disagree.
+ *  - **A stored scope on an inheriting Anchor, or no scope on a choosing one.** The Anchor already
+ *    says which Design Option it belongs to for three of the seven kinds; a second answer there is a
+ *    Comment that reads as Open kitchen in one place and Island in another.
+ *  - **A scope naming a missing Design Option.** The same reason as an unresolved Anchor.
+ *  - **An author-like field.** Refused by `checkUnknownFields` against `COMMENT_FIELDS`, which is
+ *    why that list is stated as the boundary rather than as a convenience.
+ *
+ * The owner of a `feature` Anchor is resolved against both models and the Item Designs, because a
+ * feature may belong to a Wall, to a Beam a Design Option is proposing, or to one cabinet's tree.
+ * That owner index is built once per pass and only when a Comment actually asks for it: a Project
+ * with no Comments, or none anchored to a part, pays nothing for the walk.
+ */
+function validateComments(
+  raw: unknown,
+  counterRaw: unknown,
+  path: string,
+  counterPath: string,
+  index: IdIndex,
+  root: Rec,
+  add: Add,
+): void {
+  const items = checkArray(raw, path, 'the Comments', add)
+
+  /** The registered features of one owner, resolved lazily and then shared by every Anchor. */
+  let owners: Map<string, { kind: FeatureOwnerKind; nodeIds?: string[] }> | null = null
+  const ownerIndex = (): Map<string, { kind: FeatureOwnerKind; nodeIds?: string[] }> => {
+    if (owners !== null) return owners
+    const built = new Map<string, { kind: FeatureOwnerKind; nodeIds?: string[] }>()
+    const models: Rec[] = []
+    if (isRecord(root.existingModel)) models.push(root.existingModel)
+    if (Array.isArray(root.designOptions)) {
+      for (const option of root.designOptions) if (isRecord(option) && isRecord(option.proposed)) models.push(option.proposed)
+    }
+    for (const model of models) {
+      for (const key of ENTITY_COLLECTION_KEYS) {
+        const list = model[key]
+        if (!Array.isArray(list)) continue
+        for (const entry of list) {
+          if (!isRecord(entry) || typeof entry.id !== 'string') continue
+          const shape = entry.shape === 'riser' ? 'riser' : 'run'
+          built.set(entry.id, { kind: ownerKindOfCollection(key as EntityCollectionKey, shape) })
+        }
+      }
+    }
+    if (Array.isArray(root.itemDesigns)) {
+      for (const design of root.itemDesigns) {
+        if (!isRecord(design) || typeof design.id !== 'string') continue
+        const kind = ownerKindOfDesign(design)
+        const construction = isRecord(design.construction) ? design.construction : undefined
+        built.set(design.id, {
+          kind,
+          ...(kind === 'cabinetDesign' && construction !== undefined
+            ? { nodeIds: cabinetFeatureIds(construction.root as CabinetNode) }
+            : {}),
+        })
+      }
+    }
+    owners = built
+    return built
+  }
+
+  const references = new Map<string, string>()
+
+  if (items !== null) {
+    items.forEach((item, i) => {
+      const here = childPath(path, i)
+      if (!isRecord(item)) {
+        add(here, WRONG_TYPE, 'Expected a Comment.')
+        return
+      }
+
+      const id = checkEntityId(item.id, childPath(here, 'id'), 'the Comment ID', add)
+      if (id !== null) claimId(id, childPath(here, 'id'), 'the Comment ID', index, add)
+
+      const reference = checkFilledText(item.reference, childPath(here, 'reference'), 'the Comment reference', add)
+      if (reference !== null) {
+        if (!COMMENT_REFERENCE_PATTERN.test(reference)) {
+          add(
+            childPath(here, 'reference'),
+            BAD_FORMAT,
+            `Expected the Comment reference as "C-" and at least three digits — "${reference}" is not one.`,
+          )
+        } else {
+          const first = references.get(reference)
+          if (first !== undefined) {
+            add(childPath(here, 'reference'), DUPLICATE_ID, `Expected one Comment per reference — ${first} already uses ${reference}.`)
+          } else {
+            references.set(reference, here)
+          }
+        }
+      }
+
+      const title = checkFilledText(item.title, childPath(here, 'title'), 'the Comment title', add)
+      if (title !== null) {
+        if (title.length > COMMENT_TITLE_MAX_LENGTH) {
+          add(childPath(here, 'title'), OUT_OF_RANGE, `Expected the Comment title to be at most ${COMMENT_TITLE_MAX_LENGTH} characters.`)
+        }
+        if (hasControlCharacter(title)) {
+          add(childPath(here, 'title'), BAD_FORMAT, 'Expected the Comment title to be one line of text.')
+        }
+      }
+
+      const body = checkText(item.body, childPath(here, 'body'), 'the Comment body', add)
+      if (body !== null) {
+        if (body.length > COMMENT_BODY_MAX_LENGTH) {
+          add(childPath(here, 'body'), OUT_OF_RANGE, `Expected the Comment body to be at most ${COMMENT_BODY_MAX_LENGTH} characters.`)
+        }
+        // A body is plain text and may hold a paragraph break or a tab; nothing else below 0x20 has
+        // a way to arrive from a keyboard, and a stray control character would be drawn as a box.
+        for (let c = 0; c < body.length; c += 1) {
+          const code = body.charCodeAt(c)
+          if (code <= 0x1f && code !== 0x09 && code !== 0x0a && code !== 0x0d) {
+            add(childPath(here, 'body'), BAD_FORMAT, 'Expected the Comment body as plain text, without control characters.')
+            break
+          }
+        }
+      }
+
+      validateCommentAnchor(item.anchor, childPath(here, 'anchor'), index, ownerIndex, add)
+
+      checkOneOf(item.status, childPath(here, 'status'), 'the Comment status', COMMENT_STATUSES, add)
+      checkOneOf(item.priority, childPath(here, 'priority'), 'the Comment priority', COMMENT_PRIORITIES, add)
+      checkFilledText(item.createdAt, childPath(here, 'createdAt'), 'the Comment creation time', add)
+      checkFilledText(item.updatedAt, childPath(here, 'updatedAt'), 'the Comment update time', add)
+
+      // `resolvedAt` exists exactly while the Comment is Resolved: a Resolved Comment without one
+      // cannot say when it stopped mattering, and an Open one with one is two answers to that.
+      const status = item.status
+      if (status === 'resolved' && item.resolvedAt === undefined) {
+        add(childPath(here, 'resolvedAt'), MISSING, 'Missing the time a Resolved Comment was resolved.')
+      }
+      if (status === 'open' && item.resolvedAt !== undefined) {
+        add(childPath(here, 'resolvedAt'), UNKNOWN_FIELD, 'Expected no resolution time on an Open Comment — Reopen clears it.')
+      }
+      if (item.resolvedAt !== undefined) checkFilledText(item.resolvedAt, childPath(here, 'resolvedAt'), 'the resolution time', add)
+
+      validateCommentScope(item, here, index, add)
+
+      if (item.linkedWarning !== undefined) {
+        const linkPath = childPath(here, 'linkedWarning')
+        if (!isRecord(item.linkedWarning)) {
+          add(linkPath, WRONG_TYPE, 'Expected the linked Warning as a key and the message it was written with.')
+        } else {
+          checkFilledText(item.linkedWarning.key, childPath(linkPath, 'key'), 'the linked Warning key', add)
+          checkFilledText(item.linkedWarning.message, childPath(linkPath, 'message'), 'the linked Warning message', add)
+          checkUnknownFields(item.linkedWarning, linkPath, COMMENT_LINK_FIELDS, add)
+        }
+      }
+
+      checkUnknownFields(item, here, COMMENT_FIELDS, add)
+    })
+  }
+
+  // The counter is the promise that a reference is never handed out twice (#80 §1), so it has to sit
+  // at or ahead of every number the Project is using — equal, because the counter IS the highest
+  // number handed out and the next Comment takes one more. Zero is a legal start: a Project with no
+  // Comments has handed out nothing. A whole number keeps `C-` + digits well-defined.
+  const counter = checkNumber(counterRaw, counterPath, 'the Comment reference counter', add)
+  if (counter !== null) {
+    if (!Number.isInteger(counter) || counter < 0) {
+      add(counterPath, OUT_OF_RANGE, 'Expected the Comment reference counter to be a whole number of 0 or more.')
+    } else {
+      for (const at of items ?? []) {
+        if (!isRecord(at) || typeof at.reference !== 'string') continue
+        const value = commentReferenceNumber(at.reference)
+        if (value !== null && counter < value) {
+          add(
+            counterPath,
+            OUT_OF_RANGE,
+            `Expected the Comment reference counter at or ahead of every reference in use — ${at.reference} has already used ${value}.`,
+          )
+          break
+        }
+      }
+    }
+  }
+}
+
+/**
+ * The one Anchor of one Comment (#80 §2), resolved against the record it claims to point at.
+ *
+ * Each kind resolves against its own namespace: a Floor against the Floors, a Design Option against
+ * the Options, an Item Design against the Designs, an entity against both models (a Comment may be
+ * anchored to work a Design Option is proposing), a feature against its owner's registered set, and
+ * a Floor Point against a Floor plus two finite numbers. Nothing here guesses: an Anchor that does
+ * not resolve is refused, never snapped to the nearest thing that would have worked.
+ */
+function validateCommentAnchor(
+  raw: unknown,
+  path: string,
+  index: IdIndex,
+  ownerIndex: () => Map<string, { kind: FeatureOwnerKind; nodeIds?: string[] }>,
+  add: Add,
+): void {
+  if (raw === undefined) {
+    add(path, MISSING, 'Missing the Anchor a Comment is attached to.')
+    return
+  }
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected the Comment Anchor as one typed pointer.')
+    return
+  }
+  const kind = checkOneOf(raw.kind, childPath(path, 'kind'), 'the Anchor kind', COMMENT_ANCHOR_KINDS, add)
+  if (kind === null) {
+    checkUnknownFields(raw, path, ['kind'], add)
+    return
+  }
+  const anchorKind = kind as CommentAnchorKind
+
+  switch (anchorKind) {
+    case 'project':
+      break
+    case 'floor': {
+      const floorId = checkEntityId(raw.floorId, childPath(path, 'floorId'), 'the Anchor Floor ID', add)
+      if (floorId !== null && !index.floorIds.has(floorId)) {
+        add(childPath(path, 'floorId'), DANGLING_REFERENCE, 'Expected the Anchor Floor to be a Floor of this Project.')
+      }
+      break
+    }
+    case 'design_option': {
+      const optionId = checkEntityId(raw.designOptionId, childPath(path, 'designOptionId'), 'the Anchor Design Option ID', add)
+      if (optionId !== null && !index.optionIds.has(optionId)) {
+        add(childPath(path, 'designOptionId'), DANGLING_REFERENCE, 'Expected the Anchor Design Option to be a Design Option of this Project.')
+      }
+      break
+    }
+    case 'item_design': {
+      const designId = checkEntityId(raw.itemDesignId, childPath(path, 'itemDesignId'), 'the Anchor Item Design ID', add)
+      if (designId !== null && !index.designIds.has(designId)) {
+        add(childPath(path, 'itemDesignId'), DANGLING_REFERENCE, 'Expected the Anchor Item Design to be an Item Design of this Project.')
+      }
+      break
+    }
+    case 'entity': {
+      const entityId = checkEntityId(raw.entityId, childPath(path, 'entityId'), 'the Anchor entity ID', add)
+      if (entityId !== null && !index.existingIds.has(entityId) && !index.proposedIds.has(entityId)) {
+        add(childPath(path, 'entityId'), DANGLING_REFERENCE, 'Expected the Anchor to name a Room, a Building Element or a Placed Item of this Project.')
+      }
+      break
+    }
+    case 'feature': {
+      const ownerId = checkEntityId(raw.ownerId, childPath(path, 'ownerId'), 'the Anchor owner ID', add)
+      const featureId = checkFilledText(raw.featureId, childPath(path, 'featureId'), 'the Anchor feature ID', add)
+      if (ownerId !== null) {
+        const owner = ownerIndex().get(ownerId)
+        if (owner === undefined) {
+          add(childPath(path, 'ownerId'), DANGLING_REFERENCE, 'Expected a feature Anchor to name an entity or an Item Design of this Project.')
+        } else if (featureId !== null) {
+          const registered = owner.kind === 'cabinetDesign' ? owner.nodeIds ?? [] : undefined
+          if (!isRegisteredFeatureFor(owner.kind, featureId, registered)) {
+            add(
+              childPath(path, 'featureId'),
+              NOT_ONE_OF,
+              registered === undefined
+                ? `Expected a feature ID registered for a ${owner.kind}; "${featureId}" is not one.`
+                : `Expected one of this Item Design's spaces as the feature ID; "${featureId}" is not one of them.`,
+            )
+          }
+        }
+      }
+      if (raw.t !== undefined) {
+        checkRange(raw.t, childPath(path, 't'), 'the Anchor position along the feature', add, (n) => n >= 0 && n <= 1, 'between 0 and 1')
+      }
+      break
+    }
+    case 'floor_point': {
+      const floorId = checkEntityId(raw.floorId, childPath(path, 'floorId'), 'the Anchor Floor ID', add)
+      if (floorId !== null && !index.floorIds.has(floorId)) {
+        add(childPath(path, 'floorId'), DANGLING_REFERENCE, 'Expected the Anchor Floor of a Floor Point to be a Floor of this Project.')
+      }
+      readPoint(raw.point, childPath(path, 'point'), 'the Anchor point', add)
+      break
+    }
+  }
+
+  checkUnknownFields(raw, path, ANCHOR_FIELDS[anchorKind], add)
+}
+
+/** Whether one feature ID is registered for one owner kind, cabinet trees answered by their own list. */
+function isRegisteredFeatureFor(kind: FeatureOwnerKind, featureId: string, cabinetNodeIds: readonly string[] | undefined): boolean {
+  if (kind === 'cabinetDesign') return cabinetNodeIds?.includes(featureId) ?? false
+  const registered = registeredFeatureIds(kind)
+  return registered !== null && registered.includes(featureId)
+}
+
+/**
+ * The scope rule of #80 §1, read off the Anchor the Comment actually carries.
+ *
+ * A choosing Anchor (Project, Floor, Item Design, Floor Point) has to say `all` or name one Design
+ * Option of this Project; an inheriting one (entity, feature, Design Option) has to say nothing,
+ * because its target already answers the question and a second answer would be a row that reads one
+ * thing in the panel and draws another on the canvas.
+ */
+function validateCommentScope(item: Rec, here: string, index: IdIndex, add: Add): void {
+  const scopePath = childPath(here, 'scope')
+  const anchor = item.anchor
+  const kind = isRecord(anchor) && typeof anchor.kind === 'string' ? (anchor.kind as CommentAnchorKind) : null
+  // An Anchor this pass could not read says nothing about scope either way; the Anchor problem is
+  // already on the list, and inventing a second one about a field it cannot place would mislead.
+  if (kind === null || !COMMENT_ANCHOR_KINDS.includes(kind)) return
+  if (anchorChoosesScope(kind)) {
+    const scope = checkFilledText(item.scope, scopePath, 'the Comment scope', add)
+    if (scope !== null && !isCommentScopeAll(scope) && !index.optionIds.has(scope)) {
+      add(scopePath, DANGLING_REFERENCE, 'Expected the Comment scope to be "all" or a Design Option of this Project.')
+    }
+    return
+  }
+  if (item.scope !== undefined) {
+    add(scopePath, UNKNOWN_FIELD, 'Expected no stored scope on an Anchor that inherits one from its target.')
+  }
+}
+
+/**
  * The Project's own display settings, for the words around a geometry problem.
  *
  * Validity never depends on this — only the numbers in the message do — so a Project whose
@@ -3475,6 +3871,15 @@ export function validateProject(value: unknown, checks: ValidationScope | null =
     add,
   )
   validateAcknowledgements(value.warningAcknowledgements, childPath(ROOT_PATH, 'warningAcknowledgements'), index, index.optionIds, add)
+  validateComments(
+    value.comments,
+    value.commentReferenceCounter,
+    childPath(ROOT_PATH, 'comments'),
+    childPath(ROOT_PATH, 'commentReferenceCounter'),
+    index,
+    value,
+    add,
+  )
   checkUnknownFields(value, ROOT_PATH, PROJECT_FIELDS, add)
 
   return problems.length === 0 ? { ok: true, project: source as Project } : { ok: false, problems }

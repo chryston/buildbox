@@ -75,6 +75,10 @@ export type LayerKey =
   | 'services'
   | 'placed-items'
   | 'plan-annotations'
+  /** The Notes overlay (#80 §7.4): pins and `✎n` badges, above every model body — the Walls, the
+      Openings, the strips, the pipes and the footprints — and below every label, handle and warning,
+      because a mark that hides a measurement is a mark that damages the drawing. */
+  | 'plan-notes'
   | 'placed-item-labels'
   /** The `W-n` references (#64 §15), in the same untransformed text half as the item labels. */
   | 'wall-labels'
@@ -137,6 +141,7 @@ export const LAYER_ORDER: readonly LayerKey[] = [
   'services',
   'placed-items',
   'plan-annotations',
+  'plan-notes',
   'placed-item-labels',
   'wall-labels',
   'beam-labels',
@@ -304,6 +309,15 @@ export type StyleKey =
   | 'plan-warning-badge'
   | 'plan-warning-badge-text'
   | 'plan-warning-badge-leader'
+  /** The Notes overlay: a pin filled by priority or Resolved grey, its `✎n` badge, the text inside
+      either, and the hairline that joins a mark back when nothing free was left to sit on (#80 §7). */
+  | 'plan-note-pin-high'
+  | 'plan-note-pin-normal'
+  | 'plan-note-pin-low'
+  | 'plan-note-pin-resolved'
+  | 'plan-note-badge'
+  | 'plan-note-pin-text'
+  | 'plan-note-leader'
   | 'plan-placeholder'
   /** The demolition overlay: a dashed outline in the demolition colour, hatched inside (#70 §F). */
   | 'renovation-demolition'
@@ -390,6 +404,9 @@ export type SizeRole =
   | 'cabinet-dimension'
   | 'cabinet-space-label'
   | 'cabinet-lock-icon'
+  /** The Notes overlay's pin radius and the `✎n` inside it (#80 §7.4). */
+  | 'plan-note-pin'
+  | 'plan-note-pin-text'
   | 'plan-line'
   | 'plan-line-selected'
   | 'hairline'

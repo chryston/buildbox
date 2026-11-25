@@ -113,6 +113,13 @@
   background: var(--bb-bg-choice);
 }
 
+/* The Notes overlay pill when it is on (#80 §7.1): the Project's own note colour, so it reads as
+   Notes chrome rather than as another tool that happens to be armed. */
+.bb-notes-overlay-button[aria-pressed='true'] {
+  background: var(--bb-note-pin);
+  color: var(--bb-note-pin-text);
+}
+
 .bb-workspace-tool-button:disabled {
   opacity: 0.4;
   cursor: default;
@@ -485,12 +492,293 @@
 
 /* ---------------------------------------------------------------- notes */
 
+/* The inspector's Comments section: a heading per subject, a quiet row per note, and the buttons that
+   start one. The rows are buttons because selecting a row reveals its pin (#80 §8). */
+.bb-inspector-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--bb-border-header);
+}
+
+.bb-inspector-notes-heading {
+  color: var(--bb-text-muted);
+  font-size: var(--bb-size-badge);
+}
+
+.bb-inspector-note-row {
+  padding: 3px 6px;
+  border: 0;
+  border-radius: var(--bb-note-row-radius);
+  background: var(--bb-bg-inset);
+  color: var(--bb-text);
+  text-align: left;
+  font-size: var(--bb-size-badge);
+}
+
+/* The hint pill a tool in hand floats over the canvas: the words the tool needs to be usable, and the
+   one way out that does not need the keyboard. */
+.bb-workspace-tool-hint {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: var(--bb-radius-small-button);
+  background: var(--bb-bg-modal);
+  box-shadow: var(--bb-lift);
+  font-size: var(--bb-size-badge);
+}
+
 .bb-workspace-notes {
   width: var(--bb-workspace-notes-width);
   flex: none;
   overflow-y: auto;
   background: var(--bb-bg-header);
   border-left: 1px solid var(--bb-border-header);
+}
+
+/* The panel owns its column top to bottom: tabs, filters, the list that scrolls, then the editor
+   pinned at the bottom so selecting a row never moves the editor out of reach. */
+.bb-notes {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  gap: 8px;
+  padding: 10px;
+}
+
+.bb-notes-collapsed {
+  display: none;
+}
+
+.bb-notes-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--bb-border-header);
+}
+
+.bb-notes-tab {
+  padding: 4px 8px;
+  font-size: var(--bb-size-badge);
+  color: var(--bb-text-muted);
+  border-bottom: 2px solid transparent;
+}
+
+.bb-notes-tab[data-active='true'] {
+  color: var(--bb-text);
+  border-bottom-color: var(--bb-accent);
+  font-weight: 600;
+}
+
+.bb-notes-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.bb-notes-search {
+  flex: 1 1 100%;
+}
+
+.bb-notes-chip {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  font-size: var(--bb-size-badge);
+  color: var(--bb-text-muted);
+}
+
+.bb-notes-filter {
+  font-size: var(--bb-size-badge);
+  /* A bare `<select>` paints the platform's light form control, which is unreadable on this panel.
+     It takes the same colours the workspace's own selects use, at the width the filter row has. */
+  padding: 4px 8px;
+  border: 1px solid var(--bb-select-border);
+  border-radius: var(--bb-radius-button);
+  background: var(--bb-select-bg);
+  color: var(--bb-text);
+}
+
+.bb-note-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.bb-note-row {
+  display: flex;
+  gap: 4px;
+  align-items: flex-start;
+  padding: 6px;
+  border-radius: var(--bb-note-row-radius);
+  background: var(--bb-bg-inset);
+}
+
+.bb-note-row[data-selected='true'] {
+  outline: 2px solid var(--bb-accent);
+}
+
+.bb-note-row-main {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 6px;
+  align-items: flex-start;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.bb-note-row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.bb-note-row-title {
+  font-size: var(--bb-size-badge);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* Resolved is struck through and greyed, never hidden: a resolved note is still part of the record
+   and its absence would read as a deleted one. */
+.bb-note-row-title[data-struck='true'] {
+  color: var(--bb-note-resolved);
+  text-decoration: line-through;
+}
+
+.bb-note-row-anchor {
+  font-size: var(--bb-size-badge);
+  color: var(--bb-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.bb-note-row-warning {
+  margin-left: 4px;
+  color: var(--bb-text-muted);
+  font-weight: 400;
+}
+
+.bb-note-row-toggle {
+  flex: none;
+  font-size: var(--bb-size-badge);
+  color: var(--bb-text-muted);
+  background: none;
+  border: 1px solid var(--bb-border-header);
+  border-radius: var(--bb-note-row-radius);
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.bb-note-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--bb-note-normal);
+}
+
+.bb-note-dot[data-role='high'] {
+  background: var(--bb-note-high);
+}
+
+.bb-note-dot[data-role='low'] {
+  background: var(--bb-note-low);
+}
+
+.bb-note-dot[data-role='resolved'] {
+  background: var(--bb-note-resolved);
+}
+
+.bb-notes-empty {
+  margin: 8px 0;
+  color: var(--bb-text-muted);
+  font-size: var(--bb-size-badge);
+}
+
+.bb-note-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--bb-border-header);
+  border-radius: var(--bb-note-row-radius);
+  background: var(--bb-bg-inset);
+}
+
+.bb-note-editor-eyebrow {
+  font-size: var(--bb-size-badge);
+  color: var(--bb-text-muted);
+}
+
+.bb-note-editor-title {
+  font-weight: 600;
+}
+
+.bb-note-editor-title,
+.bb-note-editor-body {
+  /* An unstyled `<input>` paints the platform's white field while inheriting this panel's light
+     text, which is unreadable. The fields take the workspace's own field colours. */
+  padding: 6px 8px;
+  border: 1px solid var(--bb-select-border);
+  border-radius: var(--bb-radius-button);
+  background: var(--bb-select-bg);
+  color: var(--bb-text);
+}
+
+.bb-note-editor-body {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.bb-note-editor-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+
+.bb-note-editor-field {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: var(--bb-size-badge);
+}
+
+.bb-note-editor-field dt {
+  flex: none;
+  width: 64px;
+  color: var(--bb-text-muted);
+}
+
+.bb-note-editor-field dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.bb-note-editor-warning {
+  margin: 0;
+  font-size: var(--bb-size-badge);
+  color: var(--bb-text-muted);
+}
+
+.bb-note-editor-actions {
+  display: flex;
+  gap: 6px;
 }
 
 /* ---------------------------------------------------------------- dialogs */

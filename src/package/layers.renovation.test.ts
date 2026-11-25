@@ -18,6 +18,7 @@ import layeredFixture from '../../fixtures/domain/v9/layers.json?raw'
 import zeroFixture from '../../fixtures/domain/v9/layers-zero.json?raw'
 import planImageSeed from '../../fixtures/e2e/preview-seed/renovation-views.json?raw'
 import type { Project } from '../domain'
+import { currentSchemaOf } from '../domain/testing'
 import { drawingLayersOf, entityLayerId, UNLAYERED_LAYER_KEY } from '../domain'
 import { canonicalJson } from '../lib'
 import { referencedAssetHashes } from './assets'
@@ -25,8 +26,10 @@ import { encodeProject, type AssetSource } from './encode'
 import { stageImport } from './import'
 import { allocateIds, FIXTURE_BUILD } from './testing'
 
-const layered = (JSON.parse(layeredFixture) as { project: Project }).project
-const zero = (JSON.parse(zeroFixture) as { project: Project }).project
+// Both fixtures were written at the ninth schema and are compatibility evidence, so a round-trip
+// through the codec reads them the way the app does: through the migrator (#80).
+const layered = currentSchemaOf((JSON.parse(layeredFixture) as { project: unknown }).project, 9)
+const zero = currentSchemaOf((JSON.parse(zeroFixture) as { project: unknown }).project, 9)
 
 /**
  * The Plan Image the fixtures reference, as the bytes that hash to it. The store is

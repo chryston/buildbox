@@ -18,6 +18,7 @@ import type { Project } from '../domain'
 import { designOptionsOf } from '../domain'
 import { problem } from '../lib'
 import { validationScopeFor } from './validationScope'
+import { guardAnchoredComments } from './anchoredComments'
 import type { Applied, DependencyReview, Intent, IntentType, Locator, Rejection, RejectionCode } from './intents'
 import { IntentRejection } from './handlers/support'
 import { pruneStaleAcknowledgements } from './handlers/warningHandlers'
@@ -90,10 +91,28 @@ export function applyIntent(project: Project, intent: Intent): Applied | Rejecti
     throw error
   }
 
+  // The Comment reference counter is monotonic, and undo does not rewind it (#80 §1 criterion 2). The
+  // number a Comment was shown has been read out loud, so handing it to a later one would give two
+  // records the same name — the same reason the ID allocator lives outside the Project and is not
+  // rewound either (#42 §3). The counter itself has to live in the Project, because a Backup has to
+  // arrive with a number nothing may reuse, so the forward patch stays (a replay, a redo and a Backup
+  // all see it) and only its inverse is dropped.
+  inversePatches = inversePatches.filter((patch) => patch.path[0] !== 'commentReferenceCounter')
+
   // What the finished Project owes the rules a handler could not check from inside the draft
   // (#65 §7): the plain result, not a proxy, so a sweep of the Floor costs what it reads.
   try {
     handler.after?.(project, next)
+  } catch (error) {
+    if (error instanceof IntentRejection) return { ok: false, code: error.code, problems: error.problems }
+    throw error
+  }
+
+  // No Comment may outlive the thing it is about (#80 §14). Judged on the finished Project rather than
+  // per Intent, so a deletion, a Floor removal, an Option demolition and a cabinet edit that drops a
+  // node are all refused by the same rule — and so is any command the catalogue gains later.
+  try {
+    guardAnchoredComments(project, next)
   } catch (error) {
     if (error instanceof IntentRejection) return { ok: false, code: error.code, problems: error.problems }
     throw error

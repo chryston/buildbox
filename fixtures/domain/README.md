@@ -180,6 +180,27 @@ first golden whose Project holds a Service, and the one `#79`'s derive, warnings
 screenshots are judged against. `v13/` stays committed as the evidence that a Project saved at the
 thirteenth schema still opens, and `v14/` is what `DOMAIN_SCHEMA_VERSION` is 14 names as current.
 
+## `v15/` — the carried-forward goldens, and the first Comment (#80)
+
+`v15/` holds no new scene: `scripts/make-v15-fixtures.ts` reads each file of `v14/` through
+`migrateProject` and writes it at the fifteenth schema, so the only difference a carry-forward makes is
+the empty `comments` list and the zero `commentReferenceCounter` the step writes on the Project — a
+Comment is always one a person typed, and no legacy notes exist, so no carry-forward invents one.
+
+It adds one file the earlier folders have no counterpart to: `v15/comments.json`. It is the renovation
+scene with one Comment of every Anchor kind — a Project note at `high`, a Floor note, a note about
+Design Option `Option A`, a note about a cabinet's Design rather than one placement of it, a note on
+one Wall, a note on that Wall's `leftFace` at `t` 0.5, a note on one space inside a cabinet's own tree,
+and a Floor Point note scoped to `Option A` — plus a ninth that has been Resolved and keeps the key and
+the message of the Warning it was written from. Every target those Anchors name is read out of the
+scene rather than written down, so the golden cannot point at a Wall or a space the record does not
+hold, which is the one thing a Comment golden has to keep true: an unresolved Anchor is refused on
+import and the whole file would stop loading. Its counter is 9, equal to the highest reference in use,
+because the counter is the highest number handed out and the next Comment takes one more. It is the
+first golden whose Project holds a Comment, and the one `#80`'s derive, panel, package and screenshots
+are judged against. `v14/` stays committed as the evidence that a Project saved at the fourteenth
+schema still opens, and `v15/` is what `DOMAIN_SCHEMA_VERSION` is 15 names as current.
+
 ## How it was produced
 
 Hand-authored as a plain object, then written with `lib.canonicalJson` — keys sorted, no

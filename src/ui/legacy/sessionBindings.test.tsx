@@ -61,6 +61,7 @@ const noAssets: AssetUrlSource = {
 const services: SessionViewServices = {
   intent: testIntents,
   assetUrls: noAssets,
+  now: () => '2026-11-18T09:00:00.000Z',
 }
 
 /** The bindings a rendered view is holding, which is the only set worth testing. */

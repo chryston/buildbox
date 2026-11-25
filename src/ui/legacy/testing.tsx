@@ -77,6 +77,7 @@ export async function openTestView(project: Project = testProject('p-1')): Promi
     services: {
       intent,
       assetUrls: noAssets,
+      now: () => clock.now(),
     },
     returnToProjects: vi.fn(),
     showSaveFailure: vi.fn(),
@@ -149,6 +150,7 @@ export function renderWithBindings(
   const workspaceServices: WorkspaceServices = {
     intent: view.services.intent,
     assetUrls: view.services.assetUrls,
+    now: () => '2026-01-01T00:00:00.000Z',
     readPlanImage: () => Promise.reject(new Error('jsdom models no file reader')),
     planImageAccept: PLAN_IMAGE_ACCEPT,
     planCatalogue: [{ key: 'sofa-2', label: 'Sofa 2-seater' }],

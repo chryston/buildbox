@@ -91,6 +91,8 @@ const model = (items: readonly PlacedItem[], rooms: readonly Room[] = [KITCHEN, 
       rooms: [...rooms],
     },
     warningAcknowledgements: [],
+    comments: [],
+    commentReferenceCounter: 0,
   }
 }
 

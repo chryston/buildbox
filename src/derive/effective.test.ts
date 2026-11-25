@@ -93,6 +93,8 @@ const projectWith = (
   itemDesigns: designs,
   existingModel: { placedItems: placements, walls: [], wallJunctions: [], openings: [], rooms: [], beams: [] },
   warningAcknowledgements: [],
+  comments: [],
+  commentReferenceCounter: 0,
 })
 
 /** The corners of a closed path, the start included: the points a renderer draws through. */

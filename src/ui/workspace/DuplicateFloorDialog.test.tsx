@@ -45,6 +45,8 @@ const project = (): Project => ({
     ],
   },
   warningAcknowledgements: [],
+  comments: [],
+  commentReferenceCounter: 0,
 })
 
 const open = (sourceFloorId = 'floor-1') => {
@@ -66,12 +68,14 @@ describe('the checklist', () => {
     expect(screen.getByTestId('duplicate-group-d-sofa')).toBeChecked()
     expect(screen.getByTestId('duplicate-group-d-fridge')).toBeChecked()
     expect(screen.getByTestId('duplicate-include-plan-image')).not.toBeChecked()
+    expect(screen.getByTestId('duplicate-include-comments')).not.toBeChecked()
     fireEvent.click(screen.getByTestId('duplicate-confirm'))
     expect(props.onConfirm).toHaveBeenCalledWith({
       name: 'Kitchen level copy',
       toIndex: 1,
       placedItemIds: ['p1', 'p2', 'p3'],
       includePlanImage: false,
+      includeComments: false,
     })
   })
 
@@ -87,6 +91,13 @@ describe('the checklist', () => {
     fireEvent.click(screen.getByTestId('duplicate-include-plan-image'))
     fireEvent.click(screen.getByTestId('duplicate-confirm'))
     expect(props.onConfirm).toHaveBeenCalledWith(expect.objectContaining({ includePlanImage: true }))
+  })
+
+  it('copies the Comments only when asked (#80 §13)', () => {
+    const props = open()
+    fireEvent.click(screen.getByTestId('duplicate-include-comments'))
+    fireEvent.click(screen.getByTestId('duplicate-confirm'))
+    expect(props.onConfirm).toHaveBeenCalledWith(expect.objectContaining({ includeComments: true }))
   })
 })
 

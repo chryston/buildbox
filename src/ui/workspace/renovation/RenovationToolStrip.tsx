@@ -27,6 +27,7 @@ import { RENOVATION_STATES } from '../../../derive'
 import type { RenovationDisplay } from '../../../domain'
 import { STRINGS } from '../../strings'
 import { RENOVATION_STRINGS } from '../../strings/renovation'
+import { COMMENT_STRINGS } from '../../strings/comments'
 import type { WorkspaceTool } from '../workspaceStore'
 import { displayLabel, swatchClass } from './displayTheme'
 import type { RenovationToolId } from './toolAvailability'
@@ -44,6 +45,7 @@ const TOOL_LABELS: { [T in RenovationToolId]: string } = {
   skirting: STRINGS.toolSkirting,
   service: STRINGS.toolService,
   elevation: STRINGS.newElevationView,
+  comment: COMMENT_STRINGS.commentTool,
 }
 
 /** The strip's own shortcut per row. No workspace tool shortcut exists today, so these are new keys. */
@@ -58,6 +60,7 @@ const TOOL_KEYS: { [T in RenovationToolId]: string } = {
   skirting: 'k',
   service: 's',
   elevation: 'e',
+  comment: 'c',
 }
 
 /**
@@ -82,6 +85,9 @@ const ROW_OF_TOOL: { [T in WorkspaceTool]: RenovationToolId | null } = {
   arc: 'room',
   ellipticalArc: 'room',
   elevation: 'elevation',
+  // A Comment belongs to its own row, which every Display allows — so a Display change never drops
+  // the tool out from under a person mid-note (#80 §9).
+  comment: 'comment',
   pan: null,
 }
 
@@ -134,6 +140,7 @@ export function RenovationToolStrip(props: RenovationToolStripProps): ReactNode 
     else if (tool === 'opening') onTool('opening')
     else if (tool === 'room') onTool('line')
     else if (tool === 'select') onTool('select')
+    else if (tool === 'comment') onTool('comment')
   }
 
   // Criterion 6: a Display that hides the tool in hand returns to Select, the one row every Display

@@ -147,6 +147,10 @@ export function createSessionServices(
   return {
     intent: createIntentFactory(clock, ids),
     assetUrls,
+    // A Comment payload carries the instant the person committed (#80 §3). Only `app` holds the
+    // clock: a pure module never reads it, and a UI that read it itself would be a second clock that
+    // could disagree with the one the Intent is stamped with.
+    now: () => clock.now(),
     async readPlanImage(file: File): Promise<PlanImageRead> {
       const read = await readPlanImageFile(file)
       if (!read.ok) return { message: read.error }
@@ -713,6 +717,10 @@ function FlaggedRoot({ deps, legacyPending = false }: { deps: FlaggedDeps; legac
   const workspaceServices = useMemo<WorkspaceServices>(() => ({
     intent: sessionServices.intent,
     assetUrls: sessionServices.assetUrls,
+    // A Comment payload carries the instant the person committed (#80 §3), and the panel's `updated
+    // <time>` needs one too. Only `app` holds the clock: a pure module never reads it, and a UI that
+    // read it itself would be a second clock that could disagree with the one the Intent is stamped with.
+    now: () => clock.now(),
     readPlanImage: sessionServices.readPlanImage,
     planImageAccept: PLAN_IMAGE_ACCEPT,
     planCatalogue: Object.entries(PLAN_CATALOGUE)

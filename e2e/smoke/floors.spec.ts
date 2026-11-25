@@ -324,7 +324,7 @@ test('a Project with two Floors and two Plan Images survives Backup and Restore'
   // 9 and 10 since #74/#75 gave it Vertical Extents and Elevation Views, 11 since #76 gave Item
   // Designs a Clearance Envelope, 12 since #77 gave the Existing Model its Beams, 13 since #78
   // gave the Walls their Skirting, and 14 since #79 gave it Services.
-  expect(before.schemaVersion).toBe(14)
+  expect(before.schemaVersion).toBe(15)
   expect(last(floorsOf(before.data)).planImage?.pixelsPerMm).toBeGreaterThan(0)
 
   await returnToProjects(page)
@@ -341,7 +341,7 @@ test('a Project with two Floors and two Plan Images survives Backup and Restore'
     if (after === null) throw new Error('the restore wrote no record')
     // Both sides are the version the app writes, so this is byte for byte: Floors and their
     // order, both Plan Images with their calibration, and every Plan View id.
-    expect(after.schemaVersion).toBe(14)
+    expect(after.schemaVersion).toBe(15)
     expect(canonical(after.data)).toBe(canonical(before.data))
   } finally {
     await fresh.close()

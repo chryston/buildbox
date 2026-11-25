@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import App from '../App'
 import { designHeight } from '../domain'
+import { withComments } from '../domain/testing'
 import type { Project } from '../domain'
 import { PLAN_IMAGE_ACCEPT, WorkspaceProvider, type WorkspaceServices } from '../ui'
 import { workspaceStore } from '../ui'
@@ -25,11 +26,13 @@ import { openTestView, renderWithBindings as render, TEST_EXPORT_PORT, type Test
 
 const fixturesRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../fixtures')
 
-const scene = (
-  JSON.parse(readFileSync(join(fixturesRoot, 'domain', 'v11', 'clearance.json'), 'utf8')) as {
-    project: Project
-  }
-).project
+const scene = withComments(
+  (
+    JSON.parse(readFileSync(join(fixturesRoot, 'domain', 'v11', 'clearance.json'), 'utf8')) as {
+      project: Project
+    }
+  ).project,
+)
 
 const design = (name: string) => scene.itemDesigns.find((each) => each.name === name) ?? expect.fail(`no ${name}`)
 const cabinet = () => design('Base cabinet')
@@ -52,6 +55,7 @@ function testWorkspaceServices(): WorkspaceServices {
   return {
     intent: view.services.intent,
     assetUrls: view.services.assetUrls,
+    now: () => '2026-01-01T00:00:00.000Z',
     readPlanImage: () => Promise.reject(new Error('jsdom models no file reader')),
     planImageAccept: PLAN_IMAGE_ACCEPT,
     planCatalogue: [],

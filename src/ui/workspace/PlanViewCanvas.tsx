@@ -27,11 +27,11 @@ import {
   drawFloorView,
   drawOrderOf,
   drawSelectionAnnotations,
-  drawWarningBadges,
+  drawNotes, drawWarningBadges,
   displayRects,
   resolveSize,
 } from '../../drawing'
-import type { BadgeSubject, DisplayList, LayerGates, OpeningPreview, PlanPreview, RangeGates, RoomProposal, Sizing, WallOpenings } from '../../drawing'
+import type { BadgeSubject, DisplayList, NoteBadgeSubject, NotePinSubject, LayerGates, OpeningPreview, PlanPreview, RangeGates, RoomProposal, Sizing, WallOpenings } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
 import { OverlapCycleList } from './renovation/OverlapCycleList'
 import { cycleOrder, nextCycle, reachableCandidates } from './selection/overlapCycle'
@@ -76,6 +76,8 @@ export interface PlanViewCanvasProps {
    * its Opening here (#65 criterion 1).
    */
   onCanvasClick?: (point: Point2) => void
+  /** A click on an entity while the `✎ Comment` tool is in hand (#80 §9). */
+  onCommentEntity?: (entityId: string) => void
   dragPreview: ItemDragPreview | null
   onDragPreview: (preview: ItemDragPreview | null) => void
   /** The pointer came up after a real move: commit the whole drag as one Intent. */
@@ -227,8 +229,22 @@ export interface PlanViewCanvasProps {
    * appear on drawings.
    */
   warningSubjects?: readonly BadgeSubject[]
+  /** The Notes overlay's pins and `✎n` badges, already filtered to this view (#80 §7). */
+  notePins?: readonly NotePinSubject[]
+  noteBadges?: readonly NoteBadgeSubject[]
   /** A badge was clicked: open the Warning strip at that entity's first row. */
   onSelectWarningBadge?: (id: string) => void
+  /** A pin or `✎n` badge was clicked: select that note (#80 §7.5). */
+  onNotePointerDown?: (id: string) => void
+  /**
+   * Pan so this Floor point stands at the centre (#80 §7.5): selecting a row reveals that one note,
+   * and a pin revealed off the edge of the screen has not been revealed.
+   *
+   * The nonce is what makes it work twice — selecting the same row again has to pan there again, and a
+   * prop that compared equal to the last one would leave the effect asleep. The canvas owns the pan
+   * because it owns its own size; the workspace knows where a note is and nothing about pixels.
+   */
+  focusPoint?: { point: Point2; nonce: number } | null
 }
 
 /**
@@ -241,13 +257,13 @@ export interface PlanViewCanvasProps {
 export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
   const {
     hostRef, svgRef, floor, showPlanImage, imageSrc, viewport, onViewport,
-    tool, selection, onSelect, onCursorChange, onCanvasClick, dragPreview, onDragPreview, onMoveItem, onRotateItem,
+    tool, selection, onSelect, onCursorChange, onCanvasClick, onCommentEntity, dragPreview, onDragPreview, onMoveItem, onRotateItem,
     editLocked = false,
     designPreview, pickingOrigin, originCandidates, snapKinds, onPickOrigin, unit, precision,
     angleSnap, overlay, htmlOverlay, screenOverlay, walls, beams = null, selectedBeamId = null, skirting = null, selectedSkirtingId = null, services = null, selectedServiceId = null, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
     openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
     rooms = null, selectedRoomId = null, onSelectRoom, onSelectBeam, onSelectSkirting, onSelectService, roomProposal = null,
-    warningSubjects = [], onSelectWarningBadge,
+    warningSubjects = [], notePins = [], noteBadges = [], onSelectWarningBadge, onNotePointerDown, focusPoint = null,
   } = props
   const [hostSize, setHostSize] = useState({ width: 0, height: 0 })
   const [dragging, setDragging] = useState(false)
@@ -285,6 +301,20 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     observer.observe(el)
     return () => observer.disconnect()
   }, [hostRef])
+
+  // A revealed note is panned to (#80 §7.5). The zoom is left alone: the person chose it, and a
+  // reveal that also changes how much of the Floor is visible is answering a different question.
+  useEffect(() => {
+    if (focusPoint === null || viewport === null) return
+    if (hostSize.width <= 0 || hostSize.height <= 0) return
+    onViewport({
+      zoom: viewport.zoom,
+      panX: hostSize.width / 2 - focusPoint.point.x * viewport.zoom,
+      panY: hostSize.height / 2 - focusPoint.point.y * viewport.zoom,
+    })
+    // The zoom and the host size are read, not depended on: panning must fire once per request, not
+    // once per pixel the host happens to change by.
+  }, [focusPoint])
 
   // No cached viewport for this view: `Fit` once the host has a size — to the Plan Image when
   // there is one, to the Floor's own bounds when there is not (#76).
@@ -381,10 +411,16 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       if (renovation !== null) renovation.onCycle?.(null, [])
       onSelect(null)
     }
+    if (tool === 'comment') {
+      // Empty Floor: the note is anchored to the point aimed at (#80 §9).
+      const at = toFloor(event.clientX, event.clientY)
+      if (at !== null) onCanvasClick?.(at)
+      return
+    }
     if (tool !== 'opening') return
     const at = toFloor(event.clientX, event.clientY)
     if (at !== null) onCanvasClick?.(at)
-  }, [overlay, htmlOverlay, panMoved, tool, onSelect, onCanvasClick, toFloor])
+  }, [overlay, htmlOverlay, panMoved, tool, onSelect, onCanvasClick, onCommentEntity, toFloor])
 
   function startItemDrag(id: string): void {
     const item = floor.placements.find((p) => p.id === id)
@@ -580,6 +616,14 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
    * selections are four callbacks. Flag-off this is what the canvas already did per entity type.
    */
   function selectById(id: string): void {
+    // The Comment tool in hand: a click on an entity anchors the note to that entity and selects
+    // nothing, because the note is the thing being made, not a selection (#80 §9). The entity is the
+    // one the cycle just resolved under the pointer, so a stack of overlapping content anchors to
+    // the same thing a click would have selected.
+    if (tool === 'comment') {
+      onCommentEntity?.(id)
+      return
+    }
     if (drawnWalls?.walls.some((wall) => wall.id === id) === true) onSelectWall?.(id)
     else if (drawnOpenings.some((host) => host.symbols.some((symbol) => symbol.id === id))) onSelectOpening?.(id)
     else if (drawnRooms?.rooms.some((room) => room.id === id) === true) onSelectRoom?.(id)
@@ -588,6 +632,19 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     else if (drawnServices?.services.some((row) => row.id === id) === true) onSelectService?.(id)
     else onSelect(id)
   }
+
+  // The Notes overlay (#80 §7.4): above every model body and below every word, and it avoids the same
+  // boxes a warning badge avoids — plus the badges themselves, because a note never hides a warning.
+  const noteMarks: DisplayList | null = notePins.length === 0 && noteBadges.length === 0
+    ? null
+    : drawNotes(notePins, noteBadges, {
+        sizing,
+        obstacles: [
+          ...(warningBadges === null ? [] : displayRects(warningBadges)),
+          ...displayRects(painted),
+          ...(annotations === null ? [] : displayRects(annotations)),
+        ],
+      })
 
   /**
    * One click on a drawn entity, answered by the cycle (#70 §8, criteria 15–18): the candidates are
@@ -754,6 +811,12 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       lastClient.current = { x: event.clientX, y: event.clientY }
       lastPointer.current = toFloor(event.clientX, event.clientY)
       event.stopPropagation()
+      // The Comment tool in hand: the Item under the pointer is what the note is about, and a press is
+      // not the start of a drag (#80 §9). Without this the tool would move the cabinet it was naming.
+      if (tool === 'comment') {
+        onCommentEntity?.(id)
+        return
+      }
       // A click that the cycle answers with a *different* entity is not a drag of the thing under
       // the pointer: walking down a stack selects, it does not move (#70 criterion 15).
       const picked = cyclePick(id, event.clientX, event.clientY)
@@ -781,7 +844,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       }
       startRotateDrag(id)
     },
-    onWarningBadgePointerDown: onSelectWarningBadge,
+    onWarningBadgePointerDown: onSelectWarningBadge, onNotePointerDown,
   }
 
   return (
@@ -846,6 +909,20 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
                   />
                 </>
               )}
+            {/* The Notes overlay, above the model and below every word (#80 §7.4). Its own list,
+                keyed by the Comments rather than the revision, and never on an export. */}
+            {noteMarks !== null && (
+              <DisplayListSvg
+                list={noteMarks}
+                sizing={sizing}
+                matrix={matrix}
+                textSpace="screen"
+                textLayerTestId="plan-note-text-layer"
+                screen={{ pxPerUnit: zoom, panX, panY }}
+                resolveAsset={resolveAsset}
+                interactions={interactions}
+              />
+            )}
             {/* Then the warnings, last of all and above every word: a badge is the one mark on
                 this canvas that must never be hidden, and it is keyed by what the engine
                 answered rather than by the revision, so it is its own list and never a layer of

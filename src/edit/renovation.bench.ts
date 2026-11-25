@@ -35,7 +35,7 @@
  */
 import { bench, describe } from 'vitest'
 import { effectiveFloor } from '../derive'
-import { designOptionsOf, validateProject } from '../domain'
+import { designOptionsOf, migrateProject, validateProject } from '../domain'
 import type { Project, Wall } from '../domain'
 import { applyIntent } from './apply'
 import type { Intent } from './intents'
@@ -56,7 +56,14 @@ const raw = Object.values(SOURCES)[0]
 if (raw === undefined) throw new Error('fixtures/bench/renovation-reference.json is missing')
 const envelope = JSON.parse(raw) as { domainSchemaVersion: number; project: Project }
 if (envelope.domainSchemaVersion !== 8) throw new Error(`unsupported domainSchemaVersion ${String(envelope.domainSchemaVersion)}`)
-const project = envelope.project
+// The fixture is a v8 document and the bench measures the domain as it is now, so the Project goes
+// through the same migration opening a Project does — the only way a v8 document can satisfy the
+// fields the current schema requires (since #80, the Comments and their reference counter).
+let issuedViews = 0
+const migrated = migrateProject(envelope.project, envelope.domainSchemaVersion, (count = 1) =>
+  Array.from({ length: count }, () => `bench-renovation-view-${String(++issuedViews)}`))
+if (!migrated.ok) throw new Error(`renovation-reference.json: ${migrated.error.message}`)
+const project = migrated.project
 if (!validateProject(project).ok) throw new Error('the renovation reference Project does not validate')
 
 const NOW = '2026-11-18T00:00:00.000Z'

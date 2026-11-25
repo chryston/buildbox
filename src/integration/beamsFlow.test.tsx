@@ -21,6 +21,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import type { Beam, DesignOption, Project } from '../domain'
 import { beamTop, designOptionsOf } from '../domain'
+import { withComments } from '../domain/testing'
 import { PLAN_IMAGE_ACCEPT, STRINGS, WorkspaceProvider, workspaceStore, type WorkspaceServices } from '../ui'
 import type { Viewport, ViewportCache } from '../ui'
 import { openTestView, renderWithBindings as render, TEST_EXPORT_PORT, type TestView } from '../ui/legacy/testing'
@@ -50,7 +51,7 @@ const HIGH = 2600
  */
 function fixtureProject(): Project {
   const text = readFileSync(join(fixturesRoot, 'domain', 'v12', 'beams.json'), 'utf8')
-  return structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project)
+  return withComments(structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project))
 }
 
 function sceneProject(): Project {
@@ -72,6 +73,7 @@ function testWorkspaceServices(): WorkspaceServices {
   return {
     intent: view.services.intent,
     assetUrls: view.services.assetUrls,
+    now: () => '2026-01-01T00:00:00.000Z',
     readPlanImage: () => Promise.reject(new Error('jsdom models no file reader')),
     planImageAccept: PLAN_IMAGE_ACCEPT,
     planCatalogue: [{ key: 'sofa-2', label: 'Sofa 2-seater' }],

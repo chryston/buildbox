@@ -131,6 +131,8 @@ const projectOf = (designs: ItemDesign[], placements: PlacedItem[]): Project => 
   itemDesigns: designs,
   existingModel: { placedItems: placements, walls: [], wallJunctions: [], openings: [], rooms: [], beams: [] },
   warningAcknowledgements: [],
+  comments: [],
+  commentReferenceCounter: 0,
 })
 
 /**

@@ -84,6 +84,12 @@ export interface SelectionInspectorProps {
    * two belong together rather than at opposite ends of the rail.
    */
   extent?: ReactNode
+  /**
+   * The Comments section (#80 §8): the notes anchored to what is selected, grouped by what they are
+   * anchored to, and the buttons that start a note on each of those subjects. Built by the workspace,
+   * which is where the Intents live.
+   */
+  notes?: ReactNode
 }
 
 export function SelectionInspector(props: SelectionInspectorProps): ReactNode {
@@ -208,7 +214,7 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
   const {
     item, bounds, design, unit, precision, canTransfer, preview, pickingOrigin,
     onSetPosition, onSetRotation, onEditDesign, onPreviewOrigin, onApplyPreview,
-    onCancelPreview, onTogglePick, onOpenDetail, onDelete, onTransfer, renovationAction, extent,
+    onCancelPreview, onTogglePick, onOpenDetail, onDelete, onTransfer, renovationAction, extent, notes,
   } = props
   const { locked, notice } = useFieldsLocked()
   const isCabinet = design === null || design.kind === 'cabinet'
@@ -428,6 +434,7 @@ function ItemEditor(props: SelectionInspectorProps & { item: PlanItemView }): Re
           )}
         </div>
       )}
+      {notes}
     </section>
   )
 }

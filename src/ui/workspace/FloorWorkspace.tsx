@@ -17,12 +17,12 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveBeams, deriveSkirting, deriveServices, skirtingFaceTargets, skirtingSnapSources, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, elevationFrameOf, enabledVerticalSnapKinds, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates, verticalSnapCandidates } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveBeams, deriveSkirting, deriveServices, skirtingFaceTargets, skirtingSnapSources, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, elevationFrameOf, enabledVerticalSnapKinds, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates, verticalSnapCandidates, commentAnchorPoint, commentsForView } from '../../derive'
 import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings, drawElevationView } from '../../drawing'
-import type { BadgeSubject, LayerGates, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
-import type { ElevationView, Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
-import { designOptionsOf, elevationViewsOf, allServices, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf } from '../../domain'
+import type { BadgeSubject, LayerGates, NoteBadgeSubject, NotePinSubject, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
+import type { CommentAnchor, EntityId, ElevationView, Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
+import { anchorChoosesScope, COMMENT_SCOPE_ALL, commentIsOpen, DEFAULT_COMMENT_PRIORITY, cabinetFeatureIds, DEFAULT_FEATURE_T, designOptionsOf, duplicateCommentIds, elevationViewsOf, isLinearFeature, ownerKindOfDesign, registeredFeatureIds, allServices, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
@@ -74,6 +74,8 @@ import { subjectBoxes, warningBox } from './warnings/locateWarning'
 import type { Box } from './warnings/locateWarning'
 import { enabledKindsOf, useWorkspace, workspaceStore } from './workspaceStore'
 import { WorkspaceShell } from './WorkspaceShell'
+import { NotesPanel, NotesPanelToggle } from './notes/NotesPanel'
+import { notesSessionStore, useNotesSession } from './notes/notesSession'
 import { ToolbarMenu, ToolbarMenuItem, WorkspaceToolbar } from './WorkspaceToolbar'
 import type { ToolbarGroup } from './WorkspaceToolbar'
 import { PlanViewCanvas } from './PlanViewCanvas'
@@ -137,6 +139,8 @@ import {
 import type { RenovationInspectorAction, RenovationInspectorLayer, RenovationInspectorLink, RenovationInspectorTarget, RenovationToolId, LayerSettingPatch } from './renovation'
 import { canPasteHere, pasteClipboardStore, usePasteClipboard } from './pasteClipboard'
 import { RENOVATION_STRINGS } from '../strings/renovation'
+import { COMMENT_STRINGS } from '../strings/comments'
+import { commentFeatureLabel } from './notes/anchorLabel'
 import { FIELDS_UNLOCKED, FieldsLockedContext } from './fieldsLock'
 import type { FieldsLock } from './fieldsLock'
 import { ForkDesignDialog, NewItemDialog } from './ItemDialogs'
@@ -151,7 +155,7 @@ import { TransferToFloorDialog } from './TransferToFloorDialog'
 import type { TransferTarget } from './TransferToFloorDialog'
 import { CalibrationOverlay } from './CalibrationOverlay'
 import { ScaleCalibrationModal } from './ScaleCalibrationModal'
-import { STRINGS } from '../strings'
+import { STRINGS, warningSentence } from '../strings'
 import { ExportDialog } from './export/ExportDialog'
 
 /** The package's per-file limit (#6): the largest Plan Image a file may be. */
@@ -1054,6 +1058,23 @@ export function FloorWorkspace(): ReactNode {
     else select(hit.id)
   }, [project])
 
+  // The Notes session is per tab, not per Project or per view (#80 §4.2, criterion 24): a note selected
+  // in one Project is not a note in the next, and a row selected because it was on screen stops being
+  // on screen the moment the person looks through a different view. So both clear it. The overlay is
+  // already off at every open because the store is never persisted.
+  //
+  // The Project's *identity*, not its reference: every edit makes a new object, and clearing the
+  // selection there would wipe the one the edit itself just made — including the note the Comment tool
+  // has just placed and is about to open.
+  const notesProjectId = project.id
+  useEffect(() => {
+    notesSessionStore.getState().reset()
+  }, [notesProjectId, view?.id])
+  // The shell's notes slot is a fixed-width column, so it must be absent, not empty: an `<aside>` that
+  // holds a collapsed rail still takes `--bb-workspace-notes-width` away from the canvas host, and the
+  // split host stacks the Plan and Section below 960 px of host. Closed means the slot is not rendered.
+  const notesPanelOpen = useNotesSession((state) => state.panelOpen)
+
   /**
    * The `Move to a Design Option…` action for the Existing entity being inspected (#69 §13).
    *
@@ -1195,10 +1216,232 @@ export function FloorWorkspace(): ReactNode {
    * the move that preceded it has been rendered.
    */
   const clickOnCanvas = (at: Pt): void => {
+    if (tool === 'comment') {
+      // Empty Floor with the tool in hand: the note is anchored to the point aimed at, in Floor
+      // millimetres (#80 §9). An entity under the cursor never reaches here — the canvas routes it
+      // to `onCommentEntity` with the entity the cycle resolved.
+      placeComment({ kind: 'floor_point', floorId: floorId ?? '', point: at })
+      return
+    }
     if (tool !== 'opening') return
     const aimed = aimAtOpening(at)
     if (aimed !== null && aimed.fits) placeOpening(aimed)
   }
+
+  /**
+   * One new Comment, one Intent, one undo step (#80 §9). It starts Open and Normal with the neutral
+   * title, is selected in the panel, and its title is focused with the text selected so the first
+   * keystroke replaces `New comment` rather than appending to it.
+   */
+  const placeComment = (anchor: CommentAnchor): void => {
+    if (floorId === null) return
+    const intent = services.intent.build(
+      'comment.create',
+      {
+        anchor,
+        title: COMMENT_STRINGS.newCommentTitle,
+        body: '',
+        priority: DEFAULT_COMMENT_PRIORITY,
+        // An Anchor that names no Design Option has to say which Option the note applies to (#80 §1).
+        // The honest answer is the one the person is standing in; the Existing Model has none, and the
+        // note then applies to all of them.
+        ...(anchorChoosesScope(anchor.kind) ? { scope: renovationOptionId ?? COMMENT_SCOPE_ALL } : {}),
+        at: services.now(),
+      },
+      COMMENT_STRINGS.commentTool,
+    )
+    sendIntent(intent)
+    const commentId = intent.ids[0] ?? null
+    if (commentId !== null) notesSessionStore.getState().selectNew(commentId)
+    setTool('select')
+  }
+
+  /**
+   * `Create linked Comment` (#80 §11): an Open, High-priority note about the warning's primary
+   * subject, titled after the warning's own sentence and linked back to it.
+   *
+   * The link is one-way on purpose. Resolving or deleting the note never acknowledges the Warning and
+   * acknowledging the Warning never resolves the note — a Warning is a fact the engine measured and
+   * will measure again, a Comment is a person's remark, and neither is allowed to silently settle the
+   * other.
+   */
+  const commentFromWarning = (warning: Warning): void => {
+    const subject = warning.subjects[0]
+    if (subject === undefined || floorId === null) return
+    const message = warningSentence(warning.messageKey, warning.params)
+    const intent = services.intent.build(
+      'comment.create',
+      {
+        anchor: { kind: 'entity', entityId: subject.id },
+        title: COMMENT_STRINGS.followUpTitle(message),
+        body: '',
+        priority: 'high',
+        linkedWarning: { key: warning.key, message },
+        at: services.now(),
+      },
+      COMMENT_STRINGS.commentTool,
+    )
+    sendIntent(intent)
+    const commentId = intent.ids[0] ?? null
+    if (commentId !== null) notesSessionStore.getState().selectNew(commentId)
+  }
+
+  /**
+   * The inspector's Comments section (#80 §8). One heading per thing the notes are anchored to, and
+   * one button per subject a note could still be started on — including every registered feature of
+   * the subject, because a note about a Wall's Kitchen side face is a different note from one about
+   * the Wall. A linear feature is anchored at its midpoint, the one place on it that is on the
+   * feature; a note about a whole face is a feature Anchor at `t = 0.5`, not an entity Anchor.
+   */
+  const notesInspectorSection: ReactNode = (() => {
+    if (selection === null && wallSelection === null && openingSelection === null && roomSelection === null
+      && beamSelection === null && skirtingSelection === null && serviceSelection === null) return null
+    // The subject the section speaks about: an entity Anchor's id, the Item Design whose features are
+    // offered alongside it, and the words the headings and buttons take.
+    const subject =
+      wallSelection !== null ? { entityId: wallSelection, designId: null as EntityId | null, heading: COMMENT_STRINGS.onThisWall, add: COMMENT_STRINGS.commentOnThisWall, kind: null as string | null }
+        : openingSelection !== null ? { entityId: openingSelection, designId: null, heading: null, add: null, kind: COMMENT_STRINGS.kindOpening }
+          : roomSelection !== null ? { entityId: roomSelection, designId: null, heading: COMMENT_STRINGS.onThisRoom, add: COMMENT_STRINGS.commentOnThisRoom, kind: null }
+            : beamSelection !== null ? { entityId: beamSelection, designId: null, heading: null, add: null, kind: COMMENT_STRINGS.kindBeam }
+              : skirtingSelection !== null ? { entityId: skirtingSelection, designId: null, heading: null, add: null, kind: COMMENT_STRINGS.kindSkirting }
+                : serviceSelection !== null ? { entityId: serviceSelection, designId: null, heading: null, add: null, kind: COMMENT_STRINGS.kindService }
+                  : (() => {
+                      const placed = project.existingModel.placedItems.find((row) => row.id === selection)
+                      return { entityId: selection ?? '', designId: placed?.itemDesignId ?? null, heading: COMMENT_STRINGS.onThisPlacement, add: COMMENT_STRINGS.commentOnThisPlacement, kind: null }
+                    })()
+    const onEntity = project.comments.filter((comment) => comment.anchor.kind === 'entity' && comment.anchor.entityId === subject.entityId)
+    const design = subject.designId === null ? undefined : project.itemDesigns.find((row) => row.id === subject.designId)
+    const onDesign = design === undefined ? [] : project.comments.filter(
+      (comment) => (comment.anchor.kind === 'item_design' && comment.anchor.itemDesignId === design.id)
+        || (comment.anchor.kind === 'feature' && comment.anchor.ownerId === design.id),
+    )
+    // The features a note can be pinned to: the registered list for the owner's kind, or the Cabinet
+    // Item Design's own node ids, which are data rather than a fixed list.
+    const featureIds: readonly string[] = design === undefined
+      ? (wallSelection !== null ? registeredFeatureIds('wall') ?? [] : [])
+      : design.kind === 'cabinet' ? cabinetFeatureIds(design.construction.root) : registeredFeatureIds(ownerKindOfDesign(design)) ?? []
+    const selectNote = (commentId: EntityId): void => notesSessionStore.getState().select(commentId)
+    return (
+      <div className="bb-inspector-notes" data-testid="inspector-notes">
+        <div className="bb-inspector-notes-heading" data-testid="inspector-notes-heading">
+          {subject.heading !== null
+            ? subject.heading(onEntity.length)
+            : subject.kind !== null
+              ? COMMENT_STRINGS.onThisKind(subject.kind, onEntity.length)
+              : null}
+        </div>
+        {onEntity.map((comment) => (
+          <button
+            key={comment.id}
+            type="button"
+            className="bb-inspector-note-row"
+            data-testid={`inspector-note-${comment.reference}`}
+            onClick={() => selectNote(comment.id)}
+          >
+            {comment.reference} · {comment.title}
+          </button>
+        ))}
+        {subject.add !== null && (
+          <button
+            type="button"
+            className="bb-workspace-tool-button"
+            data-testid="inspector-comment-on-entity"
+            onClick={() => placeComment({ kind: 'entity', entityId: subject.entityId })}
+          >
+            {subject.add}
+          </button>
+        )}
+        {featureIds.map((featureId) => (
+          <button
+            key={featureId}
+            type="button"
+            className="bb-workspace-tool-button"
+            data-testid={`inspector-comment-on-feature-${featureId}`}
+            onClick={() => placeComment({ kind: 'feature', ownerId: subject.designId ?? subject.entityId, featureId, ...(isLinearFeature(featureId) ? { t: DEFAULT_FEATURE_T } : {}) })}
+          >
+            {COMMENT_STRINGS.commentOnFeature(commentFeatureLabel(project, subject.designId ?? subject.entityId, featureId))}
+          </button>
+        ))}
+        {design !== undefined && (
+          <>
+            <div className="bb-inspector-notes-heading" data-testid="inspector-notes-design-heading">
+              {COMMENT_STRINGS.onItemDesign(design.name, onDesign.length)}
+            </div>
+            {onDesign.map((comment) => (
+              <button
+                key={comment.id}
+                type="button"
+                className="bb-inspector-note-row"
+                data-testid={`inspector-design-note-${comment.reference}`}
+                onClick={() => selectNote(comment.id)}
+              >
+                {comment.reference} · {comment.title}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="bb-workspace-tool-button"
+              data-testid="inspector-comment-on-design"
+              onClick={() => placeComment({ kind: 'item_design', itemDesignId: design.id })}
+            >
+              {COMMENT_STRINGS.commentOnItemDesign}
+            </button>
+          </>
+        )}
+      </div>
+    )
+  })()
+
+  /**
+   * The Notes overlay (#80 §7). Off every time a Project or a view opens, never persisted, never an
+   * undo step and never a revision change — it is a way of looking, not an edit.
+   *
+   * With a row selected the overlay shows that one note and nothing else (§7.5): the person asked
+   * "where is this one", and answering it by adding every other pin beside it is a different answer.
+   */
+  const notesOverlayOn = useNotesSession((state) => state.overlayOn)
+  const notesSelectedId = useNotesSession((state) => state.selectedCommentId)
+  const notePins: NotePinSubject[] = (() => {
+    if (!notesOverlayOn || view === null || floorWalls === null) return []
+    const listed = commentsForView(project, view)
+    const shown = notesSelectedId === null ? listed : listed.filter((comment) => comment.id === notesSelectedId)
+    const out: NotePinSubject[] = []
+    for (const comment of shown) {
+      const at = commentAnchorPoint(project, floorWalls, comment.anchor)
+      if (at === null) continue
+      out.push({ id: comment.id, at, tone: commentIsOpen(comment) ? comment.priority : 'resolved', reference: comment.reference })
+    }
+    return out
+  })()
+  /** One `✎n` badge per placement of a Design that has notes — never one pin per copy (§12). */
+  const noteBadges: NoteBadgeSubject[] = (() => {
+    if (!notesOverlayOn || view === null || derivedFloor === null || notesSelectedId !== null) return []
+    const counts = new Map<EntityId, number>()
+    for (const comment of commentsForView(project, view)) {
+      const anchor = comment.anchor
+      const designId =
+        anchor.kind === 'item_design' ? anchor.itemDesignId
+          : anchor.kind === 'feature' && project.itemDesigns.some((row) => row.id === anchor.ownerId) ? anchor.ownerId
+            : null
+      if (designId === null) continue
+      counts.set(designId, (counts.get(designId) ?? 0) + 1)
+    }
+    const out: NoteBadgeSubject[] = []
+    for (const placement of derivedFloor.placements) {
+      const count = counts.get(placement.designId)
+      if (count === undefined) continue
+      out.push({ id: placement.id, bounds: placement.worldBounds, count })
+    }
+    return out
+  })()
+
+  /** The revealed note's pin, in the shape the canvas pans to (§7.5). */
+  const notesRevealNonce = useNotesSession((state) => state.revealNonce)
+  const notesFocusPoint = (() => {
+    if (!notesOverlayOn || notesSelectedId === null) return null
+    const pin = notePins.find((one) => one.id === notesSelectedId)
+    return pin === undefined ? null : { point: pin.at, nonce: notesRevealNonce }
+  })()
 
   /** The ghost for where the pointer stands now, in the shape the Wall list takes (#65 §10). */
   const openingAimNow = aimAtOpening(openingCursor)
@@ -1385,6 +1628,14 @@ export function FloorWorkspace(): ReactNode {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
+        // A note revealed on the overlay is hidden again (#80 §7.5): Esc answers "that's the one I
+        // meant, now show me the drawing again", and it must not also clear the model selection or
+        // disarm a tool, because the person may be about to act on the note.
+        if (notesSessionStore.getState().selectedCommentId !== null) {
+          event.preventDefault()
+          notesSessionStore.getState().clearFocus()
+          return
+        }
         // An unlocked correction is abandoned first: the handles and fields shut again and nothing
         // was written, which is the whole point of the press being reversible (#70 criterion 20).
         if (correctionUnlocked !== null) {
@@ -1430,6 +1681,13 @@ export function FloorWorkspace(): ReactNode {
           // is sent, and the tool goes with them so no face band keeps following the cursor.
           event.preventDefault()
           setSkirtingDraft(null)
+          setTool('select')
+          return
+        }
+        if (tool === 'comment') {
+          // The same backing out (#80 §9): Esc leaves the tool with nothing sent and nothing selected,
+          // because a note nobody meant to start is not a note.
+          event.preventDefault()
           setTool('select')
           return
         }
@@ -1555,7 +1813,12 @@ export function FloorWorkspace(): ReactNode {
 
   const duplicateFloor = (input: DuplicateFloorInput): void => {
     if (duplicateFloorId === null) return
-    send('floor.duplicate', { floorId: duplicateFloorId, ...input })
+    const { includeComments, ...rest } = input
+    send('floor.duplicate', {
+      floorId: duplicateFloorId,
+      ...rest,
+      commentIds: includeComments ? duplicateCommentIds(project, duplicateFloorId, input.placedItemIds) : [],
+    })
     setDuplicateFloorId(null)
     const after = session.getSnapshot().project
     const created = after.floors.find((candidate) => candidate.name === input.name)
@@ -2841,6 +3104,17 @@ export function FloorWorkspace(): ReactNode {
               ← Projects
             </button>
             <span className="bb-workspace-project-name">{project.meta.name}</span>
+            <NotesPanelToggle />
+            <button
+              type="button"
+              className="bb-workspace-tool-button bb-notes-overlay-button"
+              aria-pressed={notesOverlayOn}
+              data-testid="notes-overlay-button"
+              title={COMMENT_STRINGS.overlayHint}
+              onClick={() => notesSessionStore.getState().setOverlayOn(!notesOverlayOn)}
+            >
+              {notesOverlayOn ? COMMENT_STRINGS.overlayOn : COMMENT_STRINGS.overlayOff}
+            </button>
             <span className="bb-workspace-spacer" />
             {save !== null && (
               // The legacy shape the S4 specs assert: a `role="status"` span whose failed
@@ -3223,6 +3497,7 @@ export function FloorWorkspace(): ReactNode {
             ? selectedWall === null
             ? <SelectionInspector
             item={selected}
+            notes={notesInspectorSection}
             renovationAction={renovationAction(selection ?? '')}
             bounds={selection === null || derivedFloor === null
               ? null
@@ -3422,6 +3697,11 @@ export function FloorWorkspace(): ReactNode {
               onSelect={select}
               onCursorChange={setOpeningCursor}
               onCanvasClick={clickOnCanvas}
+              onCommentEntity={(entityId) => placeComment({ kind: 'entity', entityId })}
+              notePins={notePins}
+              noteBadges={noteBadges}
+              onNotePointerDown={(id) => notesSessionStore.getState().select(id)}
+              focusPoint={notesFocusPoint}
               warningSubjects={warningSubjects}
               screenOverlay={planPreviewOutlines.length === 0 && planClearanceOutlines.length === 0
                 ? undefined
@@ -3617,6 +3897,20 @@ export function FloorWorkspace(): ReactNode {
                   unit={project.preferences.displayUnit}
                   precision={project.preferences.displayPrecision}
                 />
+              ) : tool === 'comment' ? (
+                <div className="bb-workspace-tool-hint" data-testid="comment-tool-hint" role="status">
+                  {COMMENT_STRINGS.toolHint}
+                  <button
+                    type="button"
+                    className="bb-workspace-tool-button"
+                    data-testid="comment-tool-cancel"
+                    onClick={() => {
+                      setTool('select')
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
               ) : tool === 'beam' ? beamDraftOverlay : tool === 'skirting' ? skirtingToolLayer : tool === 'service' ? serviceToolLayer : elevationDraftOverlay}
             />
             )}
@@ -3700,6 +3994,22 @@ export function FloorWorkspace(): ReactNode {
                         // Item are three different selections, and the inspector edits the one it is
                         // told about. Picking a Wall here must select it there too, or criterion 11 is
                         // only half true — the pane would hold a selection nothing else can see.
+                        // An empty click with the Comment tool armed anchors a Floor Point at the plan
+                        // point on the view line under the pointer (#80 §12). The drawing's own x is the
+                        // distance along the line, so the plan point is the frame's start walked by it —
+                        // the note is about a place on the Floor, not about a place on this sheet.
+                        onEmptyClick={(at) => {
+                          if (tool !== 'comment' || elevationSceneValue === null) return
+                          const frame = elevationSceneValue.frame
+                          placeComment({
+                            kind: 'floor_point',
+                            floorId: elevationView.floorId,
+                            point: {
+                              x: frame.start.x + frame.u.x * at.x,
+                              y: frame.start.y + frame.u.y * at.x,
+                            },
+                          })
+                        }}
                         onPick={(id) => {
                           if (id === null) {
                             select(null)
@@ -3769,10 +4079,24 @@ export function FloorWorkspace(): ReactNode {
                   onEditNote={editWarningNote}
                   focus={warningFocus}
                   suffix={warningLayerSuffix}
+                  onComment={commentFromWarning}
                 />
               )}
             </>
           )
+        }
+        notes={
+          notesPanelOpen ? (
+            <NotesPanel
+            project={project}
+            view={view === null ? null : { ...view, floorId: view.floorId }}
+            now={services.now()}
+            onResolve={(commentId) => send('comment.resolve', { commentId, at: services.now() })}
+            onReopen={(commentId) => send('comment.reopen', { commentId, at: services.now() })}
+            onDelete={(commentId) => send('comment.delete', { commentId })}
+            onEdit={(commentId, patch) => send('comment.edit', { commentId, ...patch, at: services.now() })}
+            />
+          ) : null
         }
       />
       {deleteElevationId !== null && (

@@ -24,6 +24,7 @@ import type { ReactNode } from 'react'
 import type { Warning } from '../../../derive'
 import { ACKNOWLEDGEMENT_NOTE_MAX_LENGTH } from '../../../domain'
 import { STRINGS, warningSentence } from '../../strings'
+import { COMMENT_STRINGS } from '../../strings/comments'
 
 export interface WarningStripProps {
   /** The active Floor and option's warnings, in engine order. */
@@ -51,6 +52,13 @@ export interface WarningStripProps {
    * the suffix says why the thing it warns about is nowhere on screen.
    */
   suffix?(warning: Warning): string
+  /**
+   * `Create linked Comment` (#80 §11): a High-priority note about this warning's primary subject,
+   * titled after the warning's own sentence and linked back to it. Independent of Acknowledge — a
+   * comment is a note on the drawing, an acknowledgement is a decision about the model, and neither
+   * implies the other.
+   */
+  onComment?(warning: Warning): void
 }
 
 /** Open and reopened rows come first; within each group the engine's order stands (#66 §11). */
@@ -64,7 +72,7 @@ const subjectLabel = (warning: Warning): string =>
   String(warning.params.a ?? warning.subjects[0]?.id ?? '')
 
 export function WarningStrip(props: WarningStripProps): ReactNode {
-  const { warnings, onLocate, onAcknowledge, onEditNote, focus = null, suffix } = props
+  const { warnings, onLocate, onAcknowledge, onEditNote, focus = null, suffix, onComment } = props
   const [expanded, setExpanded] = useState(false)
   // A badge opened the strip; the row is not in the document until it has, so the scroll waits
   // for the render the open causes rather than reaching for an element that is not there yet.
@@ -187,9 +195,18 @@ export function WarningStrip(props: WarningStripProps): ReactNode {
                     {STRINGS.warningNote}
                   </button>
                 )}
-                {/* `Create linked Comment` (#80) will take its own button here, independent of
-                    Acknowledge: a comment is a note on the drawing, an acknowledgement is a
-                    decision about the model, and neither implies the other. */}
+                {onComment !== undefined && warning.subjects.length > 0 && (
+                  <button
+                    type="button"
+                    className="bb-workspace-tool-button"
+                    data-testid={`warning-comment-${warning.key}`}
+                    onClick={() => {
+                      onComment(warning)
+                    }}
+                  >
+                    {COMMENT_STRINGS.createLinked}
+                  </button>
+                )}
               </span>
               {drafting?.key === warning.key && (
                 <span className="bb-warnings-note" onClick={(event) => event.stopPropagation()}>

@@ -30,6 +30,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import type { EntityId, Project } from '../domain'
 import { entityLayerId } from '../domain'
+import { withComments } from '../domain/testing'
 import { pasteClipboardStore, PLAN_IMAGE_ACCEPT, WorkspaceProvider, workspaceStore, type WorkspaceServices } from '../ui'
 import { openTestView, renderWithBindings as render, TEST_EXPORT_PORT, type TestView } from '../ui/legacy/testing'
 
@@ -50,7 +51,7 @@ const DINING_CHAIR = 'fp-sofa'
 
 const readProject = (name: string): Project => {
   const text = readFileSync(join(fixturesRoot, 'domain', 'v9', name), 'utf8')
-  return structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project)
+  return withComments(structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project))
 }
 
 let view: TestView
@@ -60,6 +61,7 @@ function testWorkspaceServices(): WorkspaceServices {
   return {
     intent: view.services.intent,
     assetUrls: view.services.assetUrls,
+    now: () => '2026-01-01T00:00:00.000Z',
     readPlanImage: () => Promise.reject(new Error('jsdom models no file reader')),
     planImageAccept: PLAN_IMAGE_ACCEPT,
     planCatalogue: [{ key: 'sofa-2', label: 'Sofa 2-seater' }],

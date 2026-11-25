@@ -104,6 +104,8 @@ export interface PlanCatalogueOption {
 export interface WorkspaceServices {
   readonly intent: WorkspaceIntentBuilder
   readonly assetUrls: WorkspaceAssetUrls
+  /** The current instant, ISO 8601, from the app's one clock (#80 §3). */
+  now(): string
   readPlanImage(file: File): Promise<PlanImageRead>
   /** What the file input accepts (#49 deviation 4: PNG, JPEG, WebP). */
   readonly planImageAccept: string

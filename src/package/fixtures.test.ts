@@ -21,6 +21,7 @@ import {
   allocateIds,
   beamsFixtureProject,
   clearanceFixtureProject,
+  commentsFixtureProject,
   elevationFixtureProject,
   FIXTURE_BUILD,
   FIXTURE_EXPORTED_AT,
@@ -37,7 +38,7 @@ import {
 
 const ASSET_ENTRY = `assets/${FIXTURE_PLAN_IMAGE_HASH}.png`
 
-type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6' | 'v7' | 'v8' | 'v9' | 'v10' | 'v11' | 'v12' | 'v13' | 'v14'
+type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6' | 'v7' | 'v8' | 'v9' | 'v10' | 'v11' | 'v12' | 'v13' | 'v14' | 'v15'
 
 const fixtureDir = (version: FixtureVersion): URL => new URL(`../../fixtures/package/${version}/`, import.meta.url)
 const readFrom = (version: FixtureVersion) => (relative: string): Uint8Array =>
@@ -57,6 +58,7 @@ const readV11 = readFrom('v11')
 const readV12 = readFrom('v12')
 const readV13 = readFrom('v13')
 const readV14 = readFrom('v14')
+const readV15 = readFrom('v15')
 
 const ARCHIVE_V1 = readV1('reference.buildbox')
 const ARCHIVE_V2 = readV2('reference.buildbox')
@@ -90,6 +92,9 @@ const ARCHIVE_V13 = readV13('skirting.buildbox')
 // The v14 file is named for what the step added, as the seven before it were: it is the first Backup
 // whose Project carries a Service (#79).
 const ARCHIVE_V14 = readV14('services.buildbox')
+// The v15 file is named for what the step added, as the eight before it were: it is the first Backup
+// whose Project carries a Comment (#80).
+const ARCHIVE_V15 = readV15('comments.buildbox')
 const ASSET_BYTES = readV2(ASSET_ENTRY)
 
 /** The one Plan Image every fixture carries, served the way the export serves it. */
@@ -130,14 +135,17 @@ const canonicalOf = (record: unknown): string => new TextDecoder().decode(canoni
 
 /**
  * The canonical bytes of a Backup written before the current schema: this build's Project with the
- * named collections taken out of both containers, because the record beside it was written before the
- * steps that added them (#77 §1, #78 §1, #79 §1). A superseded golden keeps the bytes it was written
- * from forever, and those bytes predate the collections the chain grows on the way in — which is what
- * the `stages into` assertion beside each of these says.
+ * named fields taken out — from the Project itself and from both model containers — because the record
+ * beside it was written before the steps that added them (#77 §1, #78 §1, #79 §1, #80 §1). A
+ * superseded golden keeps the bytes it was written from forever, and those bytes predate the fields the
+ * chain grows on the way in — which is what the `stages into` assertion beside each of these says.
+ *
+ * The three newest steps add a model collection to both containers; the fifteenth adds two fields to
+ * the Project itself, so the names are looked for in both places.
  */
-function withoutCollections(record: unknown, ...names: string[]): unknown {
+function withoutFields(record: unknown, ...names: string[]): unknown {
   const copy = structuredClone(record) as Record<string, unknown>
-  const containers = [copy.existingModel as Record<string, unknown> | undefined, ...((copy.designOptions as Record<string, unknown>[] | undefined) ?? []).map((option) => option?.proposed as Record<string, unknown> | undefined)]
+  const containers = [copy, copy.existingModel as Record<string, unknown> | undefined, ...((copy.designOptions as Record<string, unknown>[] | undefined) ?? []).map((option) => option?.proposed as Record<string, unknown> | undefined)]
   for (const container of containers) {
     if (container === undefined) continue
     for (const name of names) delete container[name]
@@ -146,11 +154,17 @@ function withoutCollections(record: unknown, ...names: string[]): unknown {
 }
 
 const canonicalWithout = (record: unknown, ...names: string[]): string =>
-  new TextDecoder().decode(canonicalJsonBytes(withoutCollections(record, ...names)))
+  new TextDecoder().decode(canonicalJsonBytes(withoutFields(record, ...names)))
 
-/** Every collection the three newest steps add, which is what a Backup predating all of them lacks. */
-const PRIOR_COLLECTIONS = ['beams', 'skirting', 'services']
-const canonicalOfPrior = (record: unknown): string => canonicalWithout(record, ...PRIOR_COLLECTIONS)
+/** The two fields the fifteenth step adds to the Project itself (#80 §1). */
+const COMMENT_FIELDS = ['comments', 'commentReferenceCounter'] as const
+
+/**
+ * What a Backup predating the four newest steps lacks: the model collections the three before it grow
+ * (#77, #78, #79) and the Comment fields the fifteenth adds (#80).
+ */
+const PRIOR_FIELDS = ['beams', 'skirting', 'services', ...COMMENT_FIELDS]
+const canonicalOfPrior = (record: unknown): string => canonicalWithout(record, ...PRIOR_FIELDS)
 
 /**
  * What this build's current schema asks of a Project that has no Design Option of its own: the
@@ -199,6 +213,10 @@ function atCurrentSchema(project: Project, spent = 0): Project {
     // The eleventh step (#76): every design carries the Clearance Envelope field, null for the
     // designs that have none — the chain invents no shape, and neither does this.
     itemDesigns: project.itemDesigns.map((design) => ({ ...design, clearanceEnvelope: null })),
+    // The fifteenth step (#80): every Project carries the Comment collection and its reference
+    // counter, both empty — the chain invents no note, and neither does this.
+    comments: [],
+    commentReferenceCounter: 0,
   }
 }
 
@@ -751,13 +769,13 @@ describe('the committed v12 Backup (#77)', () => {
     // Being re-encoded byte for byte is the property of the Backup at the current schema — the v13
     // file below. What a superseded file owes forever is that its own bytes are the canonical form
     // of the Project they were written from, so the step above is the only thing between them.
-    expect(new TextDecoder().decode(readV12('project.json'))).toBe(`${canonicalWithout(beamsFixtureProject(), 'skirting', 'services')}\n`)
+    expect(new TextDecoder().decode(readV12('project.json'))).toBe(`${canonicalWithout(beamsFixtureProject(), 'skirting', 'services', ...COMMENT_FIELDS)}\n`)
   })
 
   it('is described by a manifest that names domain schema v12', async () => {
     const staged = await stageImport(ARCHIVE_V12, { acceptPreview: false, allocateId: allocateIds() })
     if (!staged.ok) throw new Error('the fixture must stage')
-    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalWithout(beamsFixtureProject(), 'skirting', 'services'), 12))
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalWithout(beamsFixtureProject(), 'skirting', 'services', ...COMMENT_FIELDS), 12))
   })
 
   it('holds one Beam in the Existing Model, and no Beam collection in the record beside it', () => {
@@ -797,13 +815,13 @@ describe('the committed v13 Backup (#78)', () => {
     // Being re-encoded byte for byte is the property of the Backup at the current schema — the v14
     // file below. What a superseded file owes forever is that its own bytes are the canonical form of
     // the Project they were written from, minus the Service collection the fourteenth step adds.
-    expect(new TextDecoder().decode(readV13('project.json'))).toBe(`${canonicalWithout(skirtingFixtureProject(), 'services')}\n`)
+    expect(new TextDecoder().decode(readV13('project.json'))).toBe(`${canonicalWithout(skirtingFixtureProject(), 'services', ...COMMENT_FIELDS)}\n`)
   })
 
   it('is described by a manifest that names domain schema v13', async () => {
     const staged = await stageImport(ARCHIVE_V13, { acceptPreview: false, allocateId: allocateIds() })
     if (!staged.ok) throw new Error('the fixture must stage')
-    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalWithout(skirtingFixtureProject(), 'services'), 13))
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalWithout(skirtingFixtureProject(), 'services', ...COMMENT_FIELDS), 13))
   })
 
   // Criterion 14: a BuildBox that stops at v12 has no thirteenth step to read this with.
@@ -842,22 +860,27 @@ describe('the committed v13 Backup (#78)', () => {
 // Criterion 26, the fourteenth schema (#79): the Backup this build writes, and what a build one
 // schema behind says when it is handed it.
 describe('the committed v14 Backup (#79)', () => {
-  it('stages into the Project it was written from, unmigrated', async () => {
+  it('stages into the Project it was written from, read forward one step (#80)', async () => {
     const result = await stageImport(ARCHIVE_V14, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
+    // The fifteenth step invents no note: the Project that comes forward has the Comment fields and
+    // nothing in them.
     expect(result.staged.project).toEqual(servicesFixtureProject())
-    expect(result.staged.migratedFrom).toBeNull()
+    expect(result.staged.migratedFrom).toBe(14)
   })
 
-  it('is re-encoded byte for byte by this build', async () => {
-    expect(await encodeProject(servicesFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V14)
-    expect(new TextDecoder().decode(readV14('project.json'))).toBe(`${canonicalOf(servicesFixtureProject())}\n`)
+  it('keeps the canonical record it was written from, which this build no longer writes', () => {
+    // Being re-encoded byte for byte is the property of the Backup at the current schema — the v15
+    // file below. What a superseded file owes forever is that its own bytes are the canonical form of
+    // the Project they were written from, minus the Comment collection and its counter that the
+    // fifteenth step adds.
+    expect(new TextDecoder().decode(readV14('project.json'))).toBe(`${canonicalWithout(servicesFixtureProject(), ...COMMENT_FIELDS)}\n`)
   })
 
   it('is described by a manifest that names domain schema v14', async () => {
     const staged = await stageImport(ARCHIVE_V14, { acceptPreview: false, allocateId: allocateIds() })
     if (!staged.ok) throw new Error('the fixture must stage')
-    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOf(servicesFixtureProject()), 14))
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalWithout(servicesFixtureProject(), ...COMMENT_FIELDS), 14))
   })
 
   // A BuildBox that stops at v13 has no fourteenth step to read this with.
@@ -892,5 +915,55 @@ describe('the committed v14 Backup (#79)', () => {
 
   it('carries the same asset, byte for byte', () => {
     expect(readV14(ASSET_ENTRY)).toEqual(ASSET_BYTES)
+  })
+})
+
+// The fifteenth schema (#80): the Backup this build writes, and what a build one schema behind says
+// when it is handed it.
+describe('the committed v15 Backup (#80)', () => {
+  it('stages into the Project it was written from, unmigrated', async () => {
+    const result = await stageImport(ARCHIVE_V15, { acceptPreview: false, allocateId: allocateIds() })
+    if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
+    expect(result.staged.project).toEqual(commentsFixtureProject())
+    expect(result.staged.migratedFrom).toBeNull()
+  })
+
+  it('is re-encoded byte for byte by this build', async () => {
+    expect(await encodeProject(commentsFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V15)
+    expect(new TextDecoder().decode(readV15('project.json'))).toBe(`${canonicalOf(commentsFixtureProject())}\n`)
+  })
+
+  it('is described by a manifest that names domain schema v15', async () => {
+    const staged = await stageImport(ARCHIVE_V15, { acceptPreview: false, allocateId: allocateIds() })
+    if (!staged.ok) throw new Error('the fixture must stage')
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOf(commentsFixtureProject()), 15))
+  })
+
+  // A BuildBox that stops at v14 has no fifteenth step to read this with.
+  it('is refused by a build one schema behind as saved by a newer BuildBox', () => {
+    const record = JSON.parse(new TextDecoder().decode(readV15('project.json'))) as unknown
+    const v14Reader = migrateDomainProject(record, 15, MIGRATORS.slice(0, 14), 14, allocateIds())
+    if (v14Reader.ok) throw new Error('a build at schema v14 read a v15 Project')
+    expect(v14Reader.problem).toEqual({ code: 'newer-schema', detail: { detected: 15, supported: 14 } })
+  })
+
+  it('holds one Comment of every Anchor kind it names, and no Comment field in the record beside it', () => {
+    const comments = commentsFixtureProject().comments
+    // One reference per Comment, in order, and the counter ahead of every one of them (#80 §1).
+    expect(comments.map((comment) => comment.reference)).toEqual(['C-001', 'C-002', 'C-003', 'C-004', 'C-005'])
+    expect(commentsFixtureProject().commentReferenceCounter).toBe(5)
+    expect(comments.map((comment) => comment.anchor.kind)).toEqual(['project', 'entity', 'feature', 'feature', 'floor_point'])
+    // Only the two choosing Anchors store a scope; the three inheriting ones say nothing (#80 §1).
+    expect(comments.map((comment) => comment.scope ?? null)).toEqual(['all', null, null, null, 'option-1'])
+    // `resolvedAt` exists exactly while the Comment is Resolved.
+    expect(comments.filter((comment) => comment.resolvedAt !== undefined).map((comment) => comment.reference)).toEqual(['C-004'])
+    // The v14 record beside it has no Comment field at all — the step in one comparison.
+    const prior = JSON.parse(new TextDecoder().decode(readV14('project.json'))) as Record<string, unknown>
+    expect(prior).not.toHaveProperty('comments')
+    expect(prior).not.toHaveProperty('commentReferenceCounter')
+  })
+
+  it('carries the same asset, byte for byte', () => {
+    expect(readV15(ASSET_ENTRY)).toEqual(ASSET_BYTES)
   })
 })

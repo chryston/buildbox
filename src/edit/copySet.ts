@@ -18,7 +18,7 @@
  */
 import { effectiveModel } from '../derive'
 import type { EffectiveEntity } from '../derive'
-import type { DrawingLayer, EntityId, ItemDesign, PlanView, Project, ProposedModel, WallJunction } from '../domain'
+import type { Comment, DrawingLayer, EntityId, ItemDesign, PlanView, Project, ProposedModel, WallJunction } from '../domain'
 import { beamsOf, servicesOf, skirtingOf, viewDesignOptionId } from '../domain'
 
 /**
@@ -41,7 +41,13 @@ export interface CopySet {
   readonly layers: readonly DrawingLayer[]
   /** The copied entities that were in Demolition state and so came across as nothing. */
   readonly demolishedCount: number
-  readonly notes: readonly []
+  /**
+   * The Comments anchored to a copied entity (#80 §13), which the destination's `Include Comments`
+   * checkbox decides whether to bring across. An Anchor that names the source Project, its Floor or a
+   * Design Option stays behind — those are not things the copy carries — and so does an Item Design
+   * Comment, which is about the shared design rather than about this placement of it.
+   */
+  readonly notes: readonly Comment[]
 }
 
 /** The Walls one Junction claims: its ends, and the Wall it is hosted on when it has one. */
@@ -114,6 +120,28 @@ export function captureCopySet(project: Project, view: PlanView, selection: read
     [...walls, ...openings, ...rooms, ...placedItems, ...beams, ...skirting, ...services].filter((row) => row.renovationState === 'demolition').length +
     model.wallJunctions.filter((row) => chosen.has(row.entity.id) && row.renovationState === 'demolition').length
 
+  // The Comments that come with this selection (#80 §13): the ones anchored to one of the copied
+  // entities, either to the entity itself or to a feature of it. Everything else stays where it was
+  // written — a note about the source Project, its Floor or one of its Design Options names things the
+  // copy does not carry, and a note about an Item Design is about the shared design, which the copy
+  // reuses rather than duplicates.
+  const copiedEntityIds = new Set<EntityId>([
+    ...entities.walls,
+    ...entities.wallJunctions,
+    ...entities.openings,
+    ...entities.rooms,
+    ...entities.placedItems,
+    ...beamsOf(entities),
+    ...skirtingOf(entities),
+    ...servicesOf(entities),
+  ].map((entity) => entity.id))
+  const notes = structuredClone(
+    project.comments.filter((comment) => {
+      const subject = comment.anchor.kind === 'entity' ? comment.anchor.entityId : comment.anchor.kind === 'feature' ? comment.anchor.ownerId : null
+      return subject !== null && copiedEntityIds.has(subject)
+    }),
+  )
+
   return {
     sourceProjectId: project.id,
     sourceProjectName: project.meta.name,
@@ -121,7 +149,7 @@ export function captureCopySet(project: Project, view: PlanView, selection: read
     itemDesigns,
     layers,
     demolishedCount,
-    notes: [],
+    notes,
   }
 }
 

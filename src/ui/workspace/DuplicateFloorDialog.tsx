@@ -49,6 +49,8 @@ export interface DuplicateFloorInput {
   toIndex: number
   placedItemIds: EntityId[]
   includePlanImage: boolean
+  /** `Include Comments`, off by default (#80 §13). */
+  includeComments: boolean
 }
 
 export interface DuplicateFloorDialogProps {
@@ -67,6 +69,7 @@ export function DuplicateFloorDialog(props: DuplicateFloorDialogProps): ReactNod
   const [toIndex, setToIndex] = useState(sourceIndex + 1)
   const [unchecked, setUnchecked] = useState<ReadonlySet<EntityId>>(new Set())
   const [includePlanImage, setIncludePlanImage] = useState(false)
+  const [includeComments, setIncludeComments] = useState(false)
 
   if (source === undefined) return null
   const trimmed = name.trim()
@@ -141,13 +144,25 @@ export function DuplicateFloorDialog(props: DuplicateFloorDialogProps): ReactNod
             {STRINGS.includePlanImage}
           </label>
         )}
+        {/* `Include Comments` starts off, like `Include Plan Image` (#80 §13): a duplicate is usually
+            made to try a different arrangement, and a second copy of every note about the original is
+            not what was asked for. */}
+        <label className="bb-workspace-check" data-testid="duplicate-comments-row">
+          <input
+            type="checkbox"
+            data-testid="duplicate-include-comments"
+            checked={includeComments}
+            onChange={(event) => setIncludeComments(event.target.checked)}
+          />
+          {STRINGS.includeComments}
+        </label>
         <div className="bb-workspace-dialog-actions">
           <button
             type="button"
             data-testid="duplicate-confirm"
             className="bb-workspace-primary-button"
             disabled={nameError !== null}
-            onClick={() => onConfirm({ name: trimmed, toIndex, placedItemIds: chosen, includePlanImage })}
+            onClick={() => onConfirm({ name: trimmed, toIndex, placedItemIds: chosen, includePlanImage, includeComments })}
           >
             {STRINGS.duplicate}
           </button>

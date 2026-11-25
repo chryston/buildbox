@@ -11,13 +11,20 @@
  */
 import { describe, expect, it } from 'vitest'
 import skirtingFixture from '../../fixtures/domain/v13/skirting.json?raw'
-import { validateProject } from './index'
+import { migrateProject, validateProject } from './index'
 
 type Rec = Record<string, unknown>
 
 function base(): Rec {
   const envelope = JSON.parse(skirtingFixture) as { domainSchemaVersion: number; project: Rec }
-  return structuredClone(envelope.project)
+  // The base is the #78 scene fixture migrated up, as every strict-import test reads one: the file was
+  // written at the thirteenth schema and the validator judges whatever the current schema requires.
+  let issued = 0
+  const result = migrateProject(envelope.project, envelope.domainSchemaVersion, (count) =>
+    Array.from({ length: count }, () => `fixture-skirt-${(issued += 1)}`),
+  )
+  if (!result.ok) throw new Error(`The skirting fixture no longer migrates: ${result.error.message}`)
+  return structuredClone(result.project) as unknown as Rec
 }
 
 function problemsOf(value: unknown): { path: string; code: string }[] {

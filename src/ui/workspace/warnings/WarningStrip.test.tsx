@@ -239,4 +239,62 @@ describe('a badge clicked on the canvas', () => {
     expect(screen.queryByTestId(`warning-row-${warnings[0]!.key}`)).toBeNull()
     expect(scrollIntoView).not.toHaveBeenCalled()
   })
+
+  it('offers `Create linked Comment` beside Acknowledge, and only when asked (#80 §11.1)', () => {
+    render(
+      <WarningStrip
+        warnings={[warning()]}
+        onLocate={vi.fn()}
+        onAcknowledge={vi.fn()}
+        onEditNote={vi.fn()}
+        onComment={vi.fn()}
+      />,
+    )
+    fireEvent.click(screen.getByTestId('warning-toggle'))
+    const button = screen.getByTestId(`warning-comment-${warning().key}`)
+    expect(button.textContent).toBe('Create linked Comment')
+    expect(screen.getByTestId(`warning-acknowledge-${warning().key}`)).not.toBeNull()
+  })
+
+  it('hands the whole Warning over, so the note can carry its sentence and key (#80 §11.2)', () => {
+    const onComment = vi.fn()
+    render(
+      <WarningStrip
+        warnings={[warning()]}
+        onLocate={vi.fn()}
+        onAcknowledge={vi.fn()}
+        onEditNote={vi.fn()}
+        onComment={onComment}
+      />,
+    )
+    fireEvent.click(screen.getByTestId('warning-toggle'))
+    fireEvent.click(screen.getByTestId(`warning-comment-${warning().key}`))
+    expect(onComment).toHaveBeenCalledTimes(1)
+    expect(onComment.mock.calls[0]![0].key).toBe('wall_crossing|w-a,w-b|existing')
+  })
+
+  it('links a Comment to a Warning without letting either settle the other (#80 §11.3)', () => {
+    // The two are separate Intents over separate collections: `comment.create` writes
+    // `project.comments` and nothing else, `warning.acknowledge` writes the Warning's
+    // acknowledgement and nothing else. Neither path can reach the other, which is what the
+    // criterion is really about — and the round-trip below is the guard against someone wiring
+    // them together later because it looked convenient.
+    const onComment = vi.fn()
+    const onAcknowledge = vi.fn()
+    render(
+      <WarningStrip
+        warnings={[warning()]}
+        onLocate={vi.fn()}
+        onAcknowledge={onAcknowledge}
+        onEditNote={vi.fn()}
+        onComment={onComment}
+      />,
+    )
+    fireEvent.click(screen.getByTestId('warning-toggle'))
+    fireEvent.click(screen.getByTestId(`warning-comment-${warning().key}`))
+    expect(onAcknowledge).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByTestId(`warning-acknowledge-${warning().key}`))
+    expect(onComment).toHaveBeenCalledTimes(1)
+  })
+
 })

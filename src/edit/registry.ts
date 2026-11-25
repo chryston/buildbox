@@ -11,6 +11,7 @@ import type { IntentType, RenovationIntentType, S7IntentType } from './intents'
 import type { IntentHandler } from './handlers/context'
 import { CABINET_HANDLERS } from './handlers/cabinetHandlers'
 import { BEAM_HANDLERS } from './handlers/beamHandlers'
+import { COMMENT_HANDLERS } from './handlers/commentHandlers'
 import { CORRECTION_HANDLERS } from './handlers/correctionHandlers'
 import { DESIGN_HANDLERS } from './handlers/designHandlers'
 import { FLOOR_HANDLERS, PLAN_FLOOR_HANDLERS, VIEW_HANDLERS } from './handlers/floorHandlers'
@@ -47,6 +48,7 @@ export const INTENT_HANDLERS: { [T in S7IntentType]: IntentHandler<T> } & {
   ...BEAM_HANDLERS,
   ...SKIRTING_HANDLERS,
   ...SERVICE_HANDLERS,
+  ...COMMENT_HANDLERS,
   ...DESIGN_HANDLERS,
   ...PLAN_FLOOR_HANDLERS,
   ...FLOOR_HANDLERS,

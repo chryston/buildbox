@@ -22,7 +22,7 @@
 import type { RenovationDisplay } from '../../../domain'
 
 /** The tools the strip can show: the S7 editing tools plus the two renovation ones (#70 §3). */
-export type RenovationToolId = 'select' | 'markDemolition' | 'replace' | 'wall' | 'opening' | 'skirting' | 'service' | 'room' | 'placeItem' | 'elevation'
+export type RenovationToolId = 'select' | 'markDemolition' | 'replace' | 'wall' | 'opening' | 'skirting' | 'service' | 'room' | 'placeItem' | 'elevation' | 'comment'
 
 /** One row of the table: a tool, and the Displays that allow it. */
 export interface RenovationToolRow {
@@ -38,8 +38,8 @@ export interface RenovationToolRow {
 
 /**
  * The table of #70 §3, one row per tool. Reading the columns off it gives the hidden counts the
- * strip prints: Existing hides 2, Demolition hides 5, Proposed hides 2, Combined hides 0, and a
- * Display with no Design Option hides 7 of 9.
+ * strip prints: Existing hides 2, Demolition hides 6, Proposed hides 2, Combined hides 0, and a
+ * Display with no Design Option hides 8 of 11. The Comment row is in none of those counts (#80 §9).
  */
 export const RENOVATION_TOOL_ROWS: readonly RenovationToolRow[] = [
   { id: 'select', allowedIn: ['existing', 'demolition', 'proposed', 'combined'], needsDesignOption: false },
@@ -61,6 +61,10 @@ export const RENOVATION_TOOL_ROWS: readonly RenovationToolRow[] = [
   // An Elevation View is a way of looking, not model content (#75 §3): it creates a saved view, so
   // every Display can hold the tool and none of them needs a Design Option to answer for it.
   { id: 'elevation', allowedIn: ['existing', 'demolition', 'proposed', 'combined'], needsDesignOption: false },
+  // A Comment writes no geometry and no Design Option owns it, so every Display offers it — including a
+  // Display with no Design Option, where every other row but Select and Elevation is hidden. It is the
+  // first row of the Notes group and is never counted among the tools a Display hides (#80 §9).
+  { id: 'comment', allowedIn: ['existing', 'demolition', 'proposed', 'combined'], needsDesignOption: false },
 ]
 
 /**

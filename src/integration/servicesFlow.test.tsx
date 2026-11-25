@@ -19,6 +19,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import type { DesignOption, Project, Service, ServiceRiser, ServiceRun } from '../domain'
+import { withComments } from '../domain/testing'
 import { PLAN_IMAGE_ACCEPT, STRINGS, WorkspaceProvider, workspaceStore, type WorkspaceServices } from '../ui'
 import type { Viewport, ViewportCache } from '../ui'
 import { openTestView, renderWithBindings as render, TEST_EXPORT_PORT, type TestView } from '../ui/legacy/testing'
@@ -36,7 +37,7 @@ const RISER_AT = { x: 3400 * 0.05, y: 2200 * 0.05 }
 
 function fixtureProject(): Project {
   const text = readFileSync(join(fixturesRoot, 'domain', 'v14', 'services.json'), 'utf8')
-  return structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project)
+  return withComments(structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project))
 }
 
 /** The fixture with its Design Options taken out: five Services, all in the Existing Model. */
@@ -61,6 +62,7 @@ function testWorkspaceServices(): WorkspaceServices {
   return {
     intent: view.services.intent,
     assetUrls: view.services.assetUrls,
+    now: () => '2026-01-01T00:00:00.000Z',
     readPlanImage: () => Promise.reject(new Error('jsdom models no file reader')),
     planImageAccept: PLAN_IMAGE_ACCEPT,
     planCatalogue: [{ key: 'sofa-2', label: 'Sofa 2-seater' }],

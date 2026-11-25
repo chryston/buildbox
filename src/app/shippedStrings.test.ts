@@ -28,7 +28,7 @@ import { RENOVATION_STRINGS, STRINGS, WARNING_COPY } from '../ui'
 const srcRoot = fileURLToPath(new URL('../../src', import.meta.url))
 
 /** The tables the words are held in, scanned as values below rather than as source. */
-const TABLES_SHIPPED = ['ui/strings/index.ts', 'ui/strings/renovation.ts', 'export/strings.ts', 'export/csv/tables.ts']
+const TABLES_SHIPPED = ['ui/strings/index.ts', 'ui/strings/renovation.ts', 'ui/strings/comments.ts', 'export/strings.ts', 'export/csv/tables.ts']
 
 /**
  * The source the backstop reads.

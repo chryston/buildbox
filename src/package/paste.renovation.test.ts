@@ -11,7 +11,7 @@
  * the e2e asserting a scene that no longer exists, which is worse than no e2e.
  */
 import { describe, expect, it } from 'vitest'
-import { currentSchemaOf, withBeams, withClearanceEnvelopes, withElevationViews, withServices, withSkirting } from '../domain/testing'
+import { currentSchemaOf, withComments } from '../domain/testing'
 import fitoutFixture from '../../fixtures/domain/v9/paste-fitout.json?raw'
 import elmFixture from '../../fixtures/domain/v9/paste-elm.json?raw'
 import pairSeed from '../../fixtures/e2e/preview-seed/paste-pair.json?raw'
@@ -24,8 +24,10 @@ import { stageImport } from './import'
 import { allocateIds, FIXTURE_BUILD } from './testing'
 
 const project = (raw: string): Project => (JSON.parse(raw) as { domainSchemaVersion: number; project: Project }).project
-const fitout = project(fitoutFixture)
-const elm = project(elmFixture)
+// Both goldens were written at the ninth schema, before the Comment collection existed, and are
+// encoded as they stand, so they arrive with the two fields the fifteenth step would have written.
+const fitout = withComments(project(fitoutFixture))
+const elm = withComments(project(elmFixture))
 
 interface Seed {
   dbName: string
@@ -121,11 +123,11 @@ describe('the pair is the scene the browser tier drives (#72 criterion 1)', () =
   it('carries the same bytes the domain fixtures hold', () => {
     // The e2e and the domain tests read the same Project, or the e2e is testing a different scene
     // than the one the paste was reasoned about against. The domain goldens beside them were written
-    // at v9, before the Elevation View list, the Clearance Envelope field, the Beam collection and
-    // the Skirting collection existed, so the read-forward carries the empty list, the null fields
-    // and the empty collections the last four steps write (#75, #76, #77, #78).
-    expect(currentSchemaOf(pair.projects[0]!.data, 8)).toEqual(withServices(withSkirting(withBeams(withClearanceEnvelopes(withElevationViews(fitout))))))
-    expect(currentSchemaOf(pair.projects[1]!.data, 8)).toEqual(withServices(withSkirting(withBeams(withClearanceEnvelopes(withElevationViews(elm))))))
+    // at v9 and the e2e seed at v8, before the Elevation View list, the Clearance Envelope field, the
+    // Beam, Skirting, Service and Comment collections existed, so each side is carried forward to the
+    // current schema and the two are compared there (#75, #76, #77, #78, #79, #80).
+    expect(currentSchemaOf(pair.projects[0]!.data, 8)).toEqual(currentSchemaOf(fitout, 9))
+    expect(currentSchemaOf(pair.projects[1]!.data, 8)).toEqual(currentSchemaOf(elm, 9))
     expect(pair.projects.every((record) => record.schemaVersion === 8)).toBe(true)
   })
 

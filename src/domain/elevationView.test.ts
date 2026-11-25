@@ -48,6 +48,8 @@ const projectWith = (
     itemDesigns: [],
     existingModel: { placedItems: [], walls: [], wallJunctions: [], openings: [], rooms: [], beams: [] },
     warningAcknowledgements: [],
+    comments: [],
+    commentReferenceCounter: 0,
   }
 }
 

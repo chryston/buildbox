@@ -169,7 +169,7 @@ describe('a new Plan View copies the view it was made from (#70 §1)', () => {
 })
 
 describe('floor.duplicate carries the source Floor’s view settings (#70 §1)', () => {
-  const payload = { name: 'Kitchen level 2', toIndex: 1, placedItemIds: [], includePlanImage: false }
+  const payload = { name: 'Kitchen level 2', toIndex: 1, placedItemIds: [], includePlanImage: false, commentIds: [] }
 
   it('gives the duplicate the Option and Display the original was being looked at through', () => {
     const applied = apply(project(), 'floor.duplicate', { floorId: 'floor-1', ...payload }, ['floor-new', 'view-new'])

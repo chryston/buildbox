@@ -15,7 +15,7 @@
  * The gate is re-baselined to 100 ms (target 50 ms) rather than the fixture being softened back.
  */
 import { bench, describe } from 'vitest'
-import { migrateProject } from '../domain'
+import { migrateProject, validateProject } from '../domain'
 import type { CabinetNode, Project } from '../domain'
 import { applyIntent } from './apply'
 import type { Intent } from './intents'
@@ -160,4 +160,89 @@ describe('applyIntent on the reference project', () => {
     throw new Error(`${over?.name ?? 'a case'}: ${worst.toFixed(2)} ms mean, above the ${String(FAIL_ABOVE_MS)} ms limit`)
   }
   if (worst > TARGET_MEAN_MS) console.warn(`over the ${String(TARGET_MEAN_MS)} ms target: ${worst.toFixed(2)} ms mean`)
+})
+
+/**
+ * #80's own budget: a Project carrying 500 Comments still applies and validates one more note in
+ * 30 ms. A Comment is a small record, but every one of them is walked by the validator (unique ids,
+ * monotonic references, live Anchors) and copied by every edit, so the number that matters is the
+ * whole round trip on a Project that has been written in for years, not on the empty fixture.
+ */
+const NOTES_TARGET_MS = 30
+const NOTES_FAIL_ABOVE_MS = 100
+const NOTES_BEFORE = 500
+
+function projectWithComments(count: number): Project {
+  let loaded = project
+  for (let index = 0; index < count; index += 1) {
+    const result = applyIntent(loaded, {
+      type: 'comment.create',
+      payload: {
+        anchor: { kind: 'floor_point', floorId: loaded.floors[0]!.id, point: { x: index * 10, y: index * 7 } },
+        title: `Bench note ${String(index)}`,
+        body: '',
+        priority: index % 3 === 0 ? 'high' : 'normal',
+        scope: 'all',
+        at: NOW,
+      },
+      label: INTENT_LABELS['comment.create'],
+      ids: [`bench-note-${String(index)}`],
+      now: NOW,
+    })
+    if (!result.ok) throw new Error(`seeding note ${String(index)}: refused with ${result.code}`)
+    loaded = result.project
+  }
+  return loaded
+}
+
+const crowded = projectWithComments(NOTES_BEFORE)
+if (crowded.comments.length !== NOTES_BEFORE) throw new Error(`expected ${String(NOTES_BEFORE)} notes, have ${String(crowded.comments.length)}`)
+
+/** One timed apply-and-validate round trip, in milliseconds. */
+function runNoteOnce(index: number): number {
+  const started = performance.now()
+  const result = applyIntent(crowded, {
+    type: 'comment.create',
+    payload: {
+      anchor: { kind: 'floor_point', floorId: crowded.floors[0]!.id, point: { x: 10, y: 20 } },
+      title: 'One more note',
+      body: '',
+      priority: 'normal',
+      scope: 'all',
+      at: NOW,
+    },
+    label: INTENT_LABELS['comment.create'],
+    ids: [`bench-extra-${String(index)}`],
+    now: NOW,
+  })
+  if (!result.ok) throw new Error(`apply: refused with ${result.code}`)
+  const checked = validateProject(result.project)
+  const elapsed = performance.now() - started
+  if (!checked.ok) throw new Error(`validate: ${JSON.stringify(checked.problems.slice(0, 2))}`)
+  return elapsed
+}
+
+function noteMean(): number {
+  for (let index = 0; index < WARMUP; index += 1) runNoteOnce(index)
+  let total = 0
+  for (let index = 0; index < ITERATIONS; index += 1) total += runNoteOnce(WARMUP + index)
+  return total / ITERATIONS
+}
+
+const noteMeanMs = noteMean()
+console.info(`#80 budget: target ${String(NOTES_TARGET_MS)} ms mean, fail above ${String(NOTES_FAIL_ABOVE_MS)} ms\n  comment.create apply+validate with ${String(NOTES_BEFORE)} Comments: ${noteMeanMs.toFixed(2)} ms mean`)
+
+describe('applyIntent and validateProject on a Project with 500 Comments', () => {
+  let index = 0
+  bench('comment.create with 500 Comments', () => {
+    index += 1
+    runNoteOnce(index)
+  }, { iterations: ITERATIONS, time: 0, warmupIterations: 2, warmupTime: 0 })
+
+  if (noteMeanMs > NOTES_FAIL_ABOVE_MS) {
+    throw new Error(`comment.create with ${String(NOTES_BEFORE)} Comments: ${noteMeanMs.toFixed(2)} ms mean, above the ${String(NOTES_FAIL_ABOVE_MS)} ms limit`)
+  }
+  if (noteMeanMs > NOTES_TARGET_MS) {
+    console.warn(`over the ${String(NOTES_TARGET_MS)} ms target: ${noteMeanMs.toFixed(2)} ms mean`)
+  }
 })

@@ -39,6 +39,8 @@ const projectWith = (walls: readonly Wall[], junctions: readonly WallJunction[] 
       wallJunctions: [...junctions],
     },
     warningAcknowledgements: [],
+    comments: [],
+    commentReferenceCounter: 0,
   }
 }
 
@@ -276,6 +278,8 @@ describe('warningFloorOf', () => {
       ...base,
       existingModel: { ...base.existingModel, walls: [...CROSSING_WALLS, foreign], wallJunctions: [] },
       warningAcknowledgements: [],
+      comments: [],
+      commentReferenceCounter: 0,
     }
     const floor: WarningFloor = warningFloorOf(project, FLOOR)
     expect(floor.floorId).toBe(FLOOR)

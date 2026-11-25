@@ -342,6 +342,51 @@ BuildBox"** and writes nothing (#20 §5). Old Backups are unaffected: v1 through
 the step that runs on the way in adds one empty list to each container and changes no measurement, no
 entity and no existing value.
 
+## What v15 holds (#80)
+
+One thing, an addition to the Project itself:
+
+* `comments`, the **Comments** of a Project (#80 §1) — an `id`, a `reference` (`C-` and at least three
+  digits, unique, and never handed out twice), a one-line `title`, a plain-text `body`, exactly one
+  typed `anchor`, a `status` (`open` or `resolved`), a `priority` (`low`, `normal` or `high`), a
+  `createdAt` and an `updatedAt`, the `resolvedAt` that exists exactly while the Comment is Resolved,
+  the `scope` that says which Design Option an inheriting Anchor does not, and the `linkedWarning`
+  that keeps the key and the message of the Warning a Comment was created from. Beside it,
+  `commentReferenceCounter`: the highest reference number ever handed out.
+* An `anchor` is one of seven kinds — `project`, `floor`, `design_option`, `item_design`, `entity`,
+  `feature`, `floor_point` — and each resolves against its own namespace. A Comment is Project-level,
+  not Floor-level: a note about the job has no Floor to belong to, and a note about a Design is
+  anchored to the Design rather than to whichever Floor a copy of it happens to stand on.
+
+`migrateV14toV15` writes `comments: []` and `commentReferenceCounter: 0` on a record that arrives
+without them, and nothing else. It reads no clock, mints no ID and touches no other record: no legacy
+notes exist (#20 §7), and a note nobody wrote is not a record of one, so there is nothing to translate
+and nothing to infer. The counter starts at zero rather than one because it counts what has been
+*handed out*, so the first Comment of a migrated Project takes `C-001`. A record that already carries
+both fields comes back as the same object it arrived as, so the step is idempotent and a v15 file is
+the same object it arrived as. No entity moves and no warning reopens on the way in, because no
+measurement changed: a Comment points at the record rather than standing in it.
+
+The strict validator refuses an Anchor kind outside the seven, and an Anchor whose target the Project
+does not hold — a Floor, Design Option, Item Design or entity that is not there, each refused as a
+dangling reference rather than snapped to the nearest thing that would have worked; a `feature` ID its
+owner's kind does not register, where the registry in `features.ts` is the only source of feature
+names and a cabinet's registered set is that one design's own node IDs; a `t` outside 0 to 1; a
+duplicate `id` or `reference`, and a reference outside `^C-\d{3,}$`; a `commentReferenceCounter` behind
+a reference already in use, which is the promise that a number is never handed out twice; a
+`resolvedAt` that disagrees with the `status`; a scope stored on an Anchor that inherits one, or
+missing from one that chooses; a scope naming a Design Option that is not there; and any field beside
+the ones a Comment stores, which is what refuses an `author` — a Comment records the work, not the
+person who typed it. A Comment with no body is accepted, and a body holding a paragraph break or a tab
+is accepted: the body is the optional half, and a note somebody wrote is not thrown away for its
+punctuation.
+
+**A Backup made by this version cannot be opened by an older one.** It is domain schema v15, and a
+build that stops at v14 has no fifteenth step to read it with, so it answers **"saved by a newer
+BuildBox"** and writes nothing (#20 §5). Old Backups are unaffected: v1 through v14 still open, and
+the step that runs on the way in adds one empty list and one zero to the Project and changes no
+measurement, no entity and no existing value.
+
 ## What this release means for a reader (#73)
 
 In plain words:

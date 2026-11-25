@@ -85,8 +85,10 @@ const angled = frameOf('Angled elevation')
 
 describe('the committed scene (#75, the Fixture scene)', () => {
   it('is a v10 Project the validator accepts', () => {
+    // The bytes stay at v10 forever as compatibility evidence, so what the validator judges is the
+    // Project the app actually holds after reading them forward to the current schema (#80).
     expect(envelope.domainSchemaVersion).toBe(10)
-    expect(validateProject(envelope.project).ok).toBe(true)
+    expect(validateProject(scene).ok).toBe(true)
   })
 
   it('stands one Floor whose limits have an upper end and no lower one', () => {
