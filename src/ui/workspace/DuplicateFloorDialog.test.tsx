@@ -47,6 +47,8 @@ const project = (): Project => ({
   warningAcknowledgements: [],
   comments: [],
   commentReferenceCounter: 0,
+  annotations: [],
+  annotationReferenceCounter: 0,
 })
 
 const open = (sourceFloorId = 'floor-1') => {

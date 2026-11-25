@@ -49,6 +49,8 @@ describe('encodeProject determinism', () => {
         id: project.id,
         comments: project.comments,
         commentReferenceCounter: project.commentReferenceCounter,
+        annotations: project.annotations,
+        annotationReferenceCounter: project.annotationReferenceCounter,
         warningAcknowledgements: project.warningAcknowledgements,
       }),
     )

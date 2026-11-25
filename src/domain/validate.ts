@@ -31,6 +31,20 @@ import {
 } from '../geometry'
 import type { ClosedPath, CornerRadii, JoinJunction, JoinWall, Preset, Pt, Segment, UsableInterval } from '../geometry'
 import { ROOT_PATH, childPath, compareCodePoints, problem, type ValidationProblem } from '../lib'
+import {
+  ANNOTATION_MARKER_SHAPES,
+  ANNOTATION_PALETTE,
+  ANNOTATION_REFERENCE_PATTERN,
+  ANNOTATION_SIZES,
+  ANNOTATION_TEXT_MAX_LENGTH,
+  ANNOTATION_TYPES,
+  ANNOTATION_WEIGHTS,
+  annotationReferenceNumber,
+  annotationTypeHasEndpoint,
+  annotationTypeHasTarget,
+  isAnnotationScopeAll,
+} from './annotations'
+import type { AnnotationType } from './annotations'
 import { MAX_TREE_DEPTH } from './cabinetPayload'
 import type { CabinetNode } from './cabinetPayload'
 import {
@@ -111,7 +125,7 @@ const ACCESSORY_TYPES = ['door', 'drawer-front', 'pull', 'hinge'] as const
 
 // The field lists of §2, one per object level. `unknown-field` is reported against
 // anything else the input carries at that level.
-const PROJECT_FIELDS = ['id', 'meta', 'preferences', 'floors', 'views', 'elevationViews', 'drawingLayers', 'itemDesigns', 'existingModel', 'designOptions', 'warningAcknowledgements', 'comments', 'commentReferenceCounter']
+const PROJECT_FIELDS = ['id', 'meta', 'preferences', 'floors', 'views', 'elevationViews', 'drawingLayers', 'itemDesigns', 'existingModel', 'designOptions', 'warningAcknowledgements', 'comments', 'commentReferenceCounter', 'annotations', 'annotationReferenceCounter']
 const META_FIELDS = ['name', 'address']
 const PREFERENCES_FIELDS = ['displayUnit', 'displayPrecision', 'defaultWallHeight']
 const FLOOR_FIELDS = ['id', 'name', 'planImage', 'limits', 'defaultWallHeight']
@@ -593,6 +607,8 @@ interface IdIndex {
   optionIds: Set<string>
   /** Every Drawing Layer ID (#71 §1), which is what an entity, a view setting and an order name. */
   layerIds: Set<string>
+  /** Every saved Plan and Elevation View ID (#81 §1), which is what an Annotation's owner names. */
+  savedViewIds: Set<string>
 }
 
 function indexIds(root: Rec): IdIndex {
@@ -604,6 +620,7 @@ function indexIds(root: Rec): IdIndex {
   const proposedWallIds = new Set<string>()
   const optionIds = new Set<string>()
   const layerIds = new Set<string>()
+  const savedViewIds = new Set<string>()
   const claim = (value: unknown, path: string): void => {
     if (typeof value === 'string' && !first.has(value)) first.set(value, path)
   }
@@ -632,6 +649,7 @@ function indexIds(root: Rec): IdIndex {
     root.views.forEach((view, i) => {
       if (!isRecord(view)) return
       claim(view.id, childPath(childPath('views', i), 'id'))
+      if (typeof view.id === 'string') savedViewIds.add(view.id)
     })
   }
   // An Elevation View holds an ID of the same kind as every other entity (#75 §1): it borrows no
@@ -640,6 +658,7 @@ function indexIds(root: Rec): IdIndex {
     root.elevationViews.forEach((view, i) => {
       if (!isRecord(view)) return
       claim(view.id, childPath(childPath('elevationViews', i), 'id'))
+      if (typeof view.id === 'string') savedViewIds.add(view.id)
     })
   }
   if (Array.isArray(root.itemDesigns)) {
@@ -692,14 +711,20 @@ function indexIds(root: Rec): IdIndex {
   }
 
   // Comment IDs (#80 §1) join the one Project-wide namespace: a Comment that borrowed a Wall's ID
-  // would make an Anchor's `ownerId` ambiguous about which thing it points at.
+  // would make an Anchor's `ownerId` ambiguous about which thing it points at. Annotation IDs
+  // (#81 §1) join it for the same reason — an endpoint's `ownerId` has to answer to exactly one thing.
   if (Array.isArray(root.comments)) {
     root.comments.forEach((comment, i) => {
       if (isRecord(comment)) claim(comment.id, childPath(childPath('comments', i), 'id'))
     })
   }
+  if (Array.isArray(root.annotations)) {
+    root.annotations.forEach((annotation, i) => {
+      if (isRecord(annotation)) claim(annotation.id, childPath(childPath('annotations', i), 'id'))
+    })
+  }
 
-  return { first, designIds, floorIds, existingIds, proposedIds, proposedWallIds, optionIds, layerIds }
+  return { first, designIds, floorIds, existingIds, proposedIds, proposedWallIds, optionIds, layerIds, savedViewIds }
 }
 
 /** Rule 5: reported on every occurrence after the first, naming the first path. */
@@ -3458,6 +3483,53 @@ function validateAcknowledgements(raw: unknown, path: string, index: IdIndex, op
   })
 }
 
+/** One owner's registered feature set, answered by its own tree when it is a cabinet design. */
+interface FeatureOwnerEntry {
+  kind: FeatureOwnerKind
+  nodeIds?: string[]
+}
+
+/**
+ * Every entity and Item Design of the record, mapped to the features it registers (#80 §2).
+ *
+ * Built once per validation pass and shared by the Comment Anchors and the Annotation endpoints,
+ * which resolve against the same registry: one Wall face is one feature, whether a note is pinned
+ * to it or a Leader points at it.
+ */
+function buildFeatureOwnerIndex(root: Rec): Map<string, FeatureOwnerEntry> {
+  const built = new Map<string, FeatureOwnerEntry>()
+  const models: Rec[] = []
+  if (isRecord(root.existingModel)) models.push(root.existingModel)
+  if (Array.isArray(root.designOptions)) {
+    for (const option of root.designOptions) if (isRecord(option) && isRecord(option.proposed)) models.push(option.proposed)
+  }
+  for (const model of models) {
+    for (const key of ENTITY_COLLECTION_KEYS) {
+      const list = model[key]
+      if (!Array.isArray(list)) continue
+      for (const entry of list) {
+        if (!isRecord(entry) || typeof entry.id !== 'string') continue
+        const shape = entry.shape === 'riser' ? 'riser' : 'run'
+        built.set(entry.id, { kind: ownerKindOfCollection(key as EntityCollectionKey, shape) })
+      }
+    }
+  }
+  if (Array.isArray(root.itemDesigns)) {
+    for (const design of root.itemDesigns) {
+      if (!isRecord(design) || typeof design.id !== 'string') continue
+      const kind = ownerKindOfDesign(design)
+      const construction = isRecord(design.construction) ? design.construction : undefined
+      built.set(design.id, {
+        kind,
+        ...(kind === 'cabinetDesign' && construction !== undefined
+          ? { nodeIds: cabinetFeatureIds(construction.root as CabinetNode) }
+          : {}),
+      })
+    }
+  }
+  return built
+}
+
 /**
  * Every Comment of the Project, and the counter beside it (#80 §1, §2, §15).
  *
@@ -3502,41 +3574,10 @@ function validateComments(
   const items = checkArray(raw, path, 'the Comments', add)
 
   /** The registered features of one owner, resolved lazily and then shared by every Anchor. */
-  let owners: Map<string, { kind: FeatureOwnerKind; nodeIds?: string[] }> | null = null
-  const ownerIndex = (): Map<string, { kind: FeatureOwnerKind; nodeIds?: string[] }> => {
-    if (owners !== null) return owners
-    const built = new Map<string, { kind: FeatureOwnerKind; nodeIds?: string[] }>()
-    const models: Rec[] = []
-    if (isRecord(root.existingModel)) models.push(root.existingModel)
-    if (Array.isArray(root.designOptions)) {
-      for (const option of root.designOptions) if (isRecord(option) && isRecord(option.proposed)) models.push(option.proposed)
-    }
-    for (const model of models) {
-      for (const key of ENTITY_COLLECTION_KEYS) {
-        const list = model[key]
-        if (!Array.isArray(list)) continue
-        for (const entry of list) {
-          if (!isRecord(entry) || typeof entry.id !== 'string') continue
-          const shape = entry.shape === 'riser' ? 'riser' : 'run'
-          built.set(entry.id, { kind: ownerKindOfCollection(key as EntityCollectionKey, shape) })
-        }
-      }
-    }
-    if (Array.isArray(root.itemDesigns)) {
-      for (const design of root.itemDesigns) {
-        if (!isRecord(design) || typeof design.id !== 'string') continue
-        const kind = ownerKindOfDesign(design)
-        const construction = isRecord(design.construction) ? design.construction : undefined
-        built.set(design.id, {
-          kind,
-          ...(kind === 'cabinetDesign' && construction !== undefined
-            ? { nodeIds: cabinetFeatureIds(construction.root as CabinetNode) }
-            : {}),
-        })
-      }
-    }
-    owners = built
-    return built
+  let owners: Map<string, FeatureOwnerEntry> | null = null
+  const ownerIndex = (): Map<string, FeatureOwnerEntry> => {
+    if (owners === null) owners = buildFeatureOwnerIndex(root)
+    return owners
   }
 
   const references = new Map<string, string>()
@@ -3654,6 +3695,296 @@ function validateComments(
       }
     }
   }
+}
+
+/** The field list of one Annotation (#81 §1) — the boundary that refuses a `renovationState`. */
+const ANNOTATION_FIELDS = ['id', 'reference', 'type', 'viewId', 'position', 'endpoint', 'text', 'targetViewId', 'layerId', 'scope', 'style']
+const ANNOTATION_STYLE_FIELDS = ['size', 'colour', 'weight', 'dashed', 'arrowhead', 'cloudTint', 'markerShape']
+const ANNOTATION_RECT_FIELDS = ['a', 'b']
+
+/**
+ * Every Annotation of the Project, and the counter beside it (#81 §1, §10).
+ *
+ * The strict-import list of #81 §10 is exactly what this refuses: an unknown type; a missing or
+ * non-existent owning view; an endpoint on a type other than Leader or Arrow; an unresolved
+ * endpoint anchor or unknown feature; a `targetViewId` on a non-marker, or a marker whose target is
+ * missing, its own view, or not a saved view; a dangling `layerId`; a scope naming a missing
+ * option; style values outside the bounded sets; a duplicate ID or reference; a reference outside
+ * `^A-\d{3,}$`; a counter not at or ahead of every used number; and any phase-like field, refused
+ * by `checkUnknownFields` against `ANNOTATION_FIELDS` — an Annotation carries no Renovation State.
+ *
+ * An owning view resolves against the saved Plan and Elevation Views and, for an Item Detail View,
+ * against the Item Design whose detail it is: the Item Detail view is addressed by its design, the
+ * only stable ID it has, so `viewId` and `targetViewId` answer to that union.
+ */
+function validateAnnotations(
+  raw: unknown,
+  counterRaw: unknown,
+  path: string,
+  counterPath: string,
+  index: IdIndex,
+  root: Rec,
+  add: Add,
+): void {
+  const items = checkArray(raw, path, 'the Annotations', add)
+
+  let owners: Map<string, FeatureOwnerEntry> | null = null
+  const ownerIndex = (): Map<string, FeatureOwnerEntry> => {
+    if (owners === null) owners = buildFeatureOwnerIndex(root)
+    return owners
+  }
+
+  /** A saved view — Plan, Elevation, or the Item Detail of an Item Design (#81 §1). */
+  const resolvesView = (id: string): boolean => index.savedViewIds.has(id) || index.designIds.has(id)
+
+  const references = new Map<string, string>()
+
+  if (items !== null) {
+    items.forEach((item, i) => {
+      const here = childPath(path, i)
+      if (!isRecord(item)) {
+        add(here, WRONG_TYPE, 'Expected an Annotation.')
+        return
+      }
+
+      const id = checkEntityId(item.id, childPath(here, 'id'), 'the Annotation ID', add)
+      if (id !== null) claimId(id, childPath(here, 'id'), 'the Annotation ID', index, add)
+
+      const reference = checkFilledText(item.reference, childPath(here, 'reference'), 'the Annotation reference', add)
+      if (reference !== null) {
+        if (!ANNOTATION_REFERENCE_PATTERN.test(reference)) {
+          add(
+            childPath(here, 'reference'),
+            BAD_FORMAT,
+            `Expected the Annotation reference as "A-" and at least three digits — "${reference}" is not one.`,
+          )
+        } else {
+          const first = references.get(reference)
+          if (first !== undefined) {
+            add(childPath(here, 'reference'), DUPLICATE_ID, `Expected one Annotation per reference — ${first} already uses ${reference}.`)
+          } else {
+            references.set(reference, here)
+          }
+        }
+      }
+
+      const typeRaw = checkOneOf(item.type, childPath(here, 'type'), 'the Annotation type', ANNOTATION_TYPES, add)
+      const type = typeRaw as AnnotationType | null
+
+      const viewId = checkEntityId(item.viewId, childPath(here, 'viewId'), 'the owning view ID', add)
+      if (viewId !== null && !resolvesView(viewId)) {
+        add(childPath(here, 'viewId'), DANGLING_REFERENCE, 'Expected the owning view to be a saved Plan, Elevation or Item Detail view of this Project.')
+      }
+
+      // The position takes the shape the type asks for: two corners for a cloud, one point for the
+      // rest (#81 §1). A point read for a cloud would silently draw a zero-area cloud.
+      const positionPath = childPath(here, 'position')
+      if (type === 'revision_cloud') {
+        if (!isRecord(item.position)) {
+          add(positionPath, WRONG_TYPE, 'Expected the Revision Cloud as a rectangle of two corners.')
+        } else {
+          readPoint(item.position.a, childPath(positionPath, 'a'), 'the cloud corner', add)
+          readPoint(item.position.b, childPath(positionPath, 'b'), 'the cloud corner', add)
+          checkUnknownFields(item.position, positionPath, ANNOTATION_RECT_FIELDS, add)
+        }
+      } else if (type !== null) {
+        readPoint(item.position, positionPath, 'the Annotation position', add)
+      } else if (item.position !== undefined) {
+        // An unreadable type says nothing about the shape; still refuse a non-object position.
+        if (!isRecord(item.position)) readPoint(item.position, positionPath, 'the Annotation position', add)
+      }
+
+      const text = checkFilledText(item.text, childPath(here, 'text'), 'the Annotation text', add)
+      if (text !== null) {
+        if (text.length > ANNOTATION_TEXT_MAX_LENGTH) {
+          add(childPath(here, 'text'), OUT_OF_RANGE, `Expected the Annotation text to be at most ${ANNOTATION_TEXT_MAX_LENGTH} characters.`)
+        }
+        for (let c = 0; c < text.length; c += 1) {
+          const code = text.charCodeAt(c)
+          if (code <= 0x1f && code !== 0x09 && code !== 0x0a && code !== 0x0d) {
+            add(childPath(here, 'text'), BAD_FORMAT, 'Expected the Annotation text as plain text, without control characters.')
+            break
+          }
+        }
+      }
+
+      // The endpoint exists exactly for a Leader or an Arrow (#81 §1).
+      const endpointPath = childPath(here, 'endpoint')
+      if (type !== null && !annotationTypeHasEndpoint(type)) {
+        if (item.endpoint !== undefined) add(endpointPath, UNKNOWN_FIELD, 'Expected no endpoint on an Annotation that is not a Leader or an Arrow.')
+      } else if (type !== null) {
+        if (item.endpoint === undefined) {
+          add(endpointPath, MISSING, 'Missing the endpoint of a Leader or Arrow.')
+        } else if (!isRecord(item.endpoint)) {
+          add(endpointPath, WRONG_TYPE, 'Expected the endpoint as an anchored pointer or a free point.')
+        } else if (item.endpoint.anchor !== undefined) {
+          if (item.endpoint.free !== undefined) {
+            add(childPath(endpointPath, 'free'), UNKNOWN_FIELD, 'Expected an anchored endpoint to carry no free point.')
+          }
+          validateAnnotationEndpointAnchor(item.endpoint.anchor, childPath(endpointPath, 'anchor'), ownerIndex, index, add)
+          checkUnknownFields(item.endpoint, endpointPath, ['anchor', 'free'], add)
+        } else if (item.endpoint.free !== undefined) {
+          readPoint(item.endpoint.free, childPath(endpointPath, 'free'), 'the free endpoint', add)
+          checkUnknownFields(item.endpoint, endpointPath, ['free'], add)
+        } else {
+          add(endpointPath, WRONG_TYPE, 'Expected the endpoint as an anchored pointer or a free point.')
+        }
+      }
+
+      // The target view exists exactly for a Reference Marker, and is never the owning view (#81 §1).
+      const targetPath = childPath(here, 'targetViewId')
+      if (type !== null && !annotationTypeHasTarget(type)) {
+        if (item.targetViewId !== undefined) add(targetPath, UNKNOWN_FIELD, 'Expected no target view on an Annotation that is not a Reference Marker.')
+      } else if (type !== null) {
+        const targetId = checkEntityId(item.targetViewId, targetPath, 'the target view ID', add)
+        if (targetId !== null) {
+          if (!resolvesView(targetId)) {
+            add(targetPath, DANGLING_REFERENCE, 'Expected the target of a Reference Marker to be a saved Plan, Elevation or Item Detail view.')
+          } else if (targetId === viewId) {
+            add(targetPath, DANGLING_REFERENCE, 'Expected the target of a Reference Marker to be another view, never the one it stands in.')
+          }
+        }
+      }
+
+      // A layer ID or the written-down absence that is Unlayered (#81 §1).
+      if (item.layerId === null) {
+        // Unlayered — always legal, never a missing field.
+      } else {
+        const layerId = checkEntityId(item.layerId, childPath(here, 'layerId'), 'the Drawing Layer ID', add)
+        if (layerId !== null && !index.layerIds.has(layerId)) {
+          add(childPath(here, 'layerId'), DANGLING_REFERENCE, 'Expected the Annotation layer to be a Drawing Layer of this Project, or null for Unlayered.')
+        }
+      }
+
+      const scope = checkFilledText(item.scope, childPath(here, 'scope'), 'the Annotation scope', add)
+      if (scope !== null && !isAnnotationScopeAll(scope) && !index.optionIds.has(scope)) {
+        add(childPath(here, 'scope'), DANGLING_REFERENCE, 'Expected the Annotation scope to be "all" or a Design Option of this Project.')
+      }
+
+      if (item.style !== undefined) validateAnnotationStyle(item.style, childPath(here, 'style'), type, add)
+
+      checkUnknownFields(item, here, ANNOTATION_FIELDS, add)
+    })
+  }
+
+  // The counter is the promise that an `A-` number is never handed out twice (#81 §1), so it sits at
+  // or ahead of every number in use. Zero is a legal start: a Project with no Annotations has handed
+  // out nothing.
+  const counter = checkNumber(counterRaw, counterPath, 'the Annotation reference counter', add)
+  if (counter !== null) {
+    if (!Number.isInteger(counter) || counter < 0) {
+      add(counterPath, OUT_OF_RANGE, 'Expected the Annotation reference counter to be a whole number of 0 or more.')
+    } else {
+      for (const at of items ?? []) {
+        if (!isRecord(at) || typeof at.reference !== 'string') continue
+        const value = annotationReferenceNumber(at.reference)
+        if (value !== null && counter < value) {
+          add(
+            counterPath,
+            OUT_OF_RANGE,
+            `Expected the Annotation reference counter at or ahead of every reference in use — ${at.reference} has already used ${value}.`,
+          )
+          break
+        }
+      }
+    }
+  }
+}
+
+/**
+ * The endpoint anchor of a Leader or Arrow (#81 §1): an entity or a registered feature, never any
+ * other Anchor kind. A Text does not point at things, and a marker that followed a Floor would
+ * navigate to a place that is not a view.
+ */
+function validateAnnotationEndpointAnchor(
+  raw: unknown,
+  path: string,
+  ownerIndex: () => Map<string, FeatureOwnerEntry>,
+  index: IdIndex,
+  add: Add,
+): void {
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected the endpoint anchor as an entity or feature pointer.')
+    return
+  }
+  const kind = raw.kind
+  if (kind === 'entity') {
+    const entityId = checkEntityId(raw.entityId, childPath(path, 'entityId'), 'the endpoint entity ID', add)
+    if (entityId !== null && !index.existingIds.has(entityId) && !index.proposedIds.has(entityId)) {
+      add(childPath(path, 'entityId'), DANGLING_REFERENCE, 'Expected the endpoint to name a Room, a Building Element or a Placed Item of this Project.')
+    }
+    checkUnknownFields(raw, path, ['kind', 'entityId'], add)
+    return
+  }
+  if (kind === 'feature') {
+    const ownerId = checkEntityId(raw.ownerId, childPath(path, 'ownerId'), 'the endpoint owner ID', add)
+    const featureId = checkFilledText(raw.featureId, childPath(path, 'featureId'), 'the endpoint feature ID', add)
+    if (ownerId !== null) {
+      const owner = ownerIndex().get(ownerId)
+      if (owner === undefined) {
+        add(childPath(path, 'ownerId'), DANGLING_REFERENCE, 'Expected a feature endpoint to name an entity or an Item Design of this Project.')
+      } else if (featureId !== null) {
+        const registered = owner.kind === 'cabinetDesign' ? owner.nodeIds ?? [] : undefined
+        if (!isRegisteredFeatureFor(owner.kind, featureId, registered)) {
+          add(
+            childPath(path, 'featureId'),
+            NOT_ONE_OF,
+            registered === undefined
+              ? `Expected a feature ID registered for a ${owner.kind}; "${featureId}" is not one.`
+              : `Expected one of this Item Design's spaces as the feature ID; "${featureId}" is not one of them.`,
+          )
+        }
+      }
+    }
+    if (raw.t !== undefined) {
+      checkRange(raw.t, childPath(path, 't'), 'the endpoint position along the feature', add, (n) => n >= 0 && n <= 1, 'between 0 and 1')
+    }
+    checkUnknownFields(raw, path, ['kind', 'ownerId', 'featureId', 't'], add)
+    return
+  }
+  add(childPath(path, 'kind'), NOT_ONE_OF, 'Expected the endpoint anchor to be an entity or a feature.')
+  checkUnknownFields(raw, path, ['kind'], add)
+}
+
+/** The bounded style overrides (#81 §1): every value from its small set, every control from its types. */
+function validateAnnotationStyle(raw: unknown, path: string, type: AnnotationType | null, add: Add): void {
+  if (!isRecord(raw)) {
+    add(path, WRONG_TYPE, 'Expected the Annotation style as a set of optional overrides.')
+    return
+  }
+  if (raw.size !== undefined) checkOneOf(raw.size, childPath(path, 'size'), 'the Annotation size', ANNOTATION_SIZES, add)
+  if (raw.colour !== undefined) {
+    const colour = checkFilledText(raw.colour, childPath(path, 'colour'), 'the Annotation colour', add)
+    if (colour !== null && !ANNOTATION_PALETTE.includes(colour.toLowerCase())) {
+      add(childPath(path, 'colour'), NOT_ONE_OF, `Expected a colour from the five-colour palette; "${colour}" is not one of them.`)
+    }
+  }
+  if (raw.weight !== undefined) {
+    const weight = checkNumber(raw.weight, childPath(path, 'weight'), 'the Annotation line weight', add)
+    if (weight !== null && !ANNOTATION_WEIGHTS.includes(weight)) {
+      add(childPath(path, 'weight'), NOT_ONE_OF, 'Expected the line weight to be 1, 2 or 3.')
+    }
+  }
+  if (raw.dashed !== undefined) checkBoolean(raw.dashed, childPath(path, 'dashed'), 'the dashed flag', add)
+  if (raw.arrowhead !== undefined) {
+    checkBoolean(raw.arrowhead, childPath(path, 'arrowhead'), 'the arrowhead flag', add)
+    if (type !== null && !annotationTypeHasEndpoint(type)) {
+      add(childPath(path, 'arrowhead'), UNKNOWN_FIELD, 'Expected no arrowhead on an Annotation that is not a Leader or an Arrow.')
+    }
+  }
+  if (raw.cloudTint !== undefined) {
+    checkBoolean(raw.cloudTint, childPath(path, 'cloudTint'), 'the cloud tint flag', add)
+    if (type !== null && type !== 'revision_cloud') {
+      add(childPath(path, 'cloudTint'), UNKNOWN_FIELD, 'Expected no cloud tint on an Annotation that is not a Revision Cloud.')
+    }
+  }
+  if (raw.markerShape !== undefined) {
+    checkOneOf(raw.markerShape, childPath(path, 'markerShape'), 'the marker shape', ANNOTATION_MARKER_SHAPES, add)
+    if (type !== null && type !== 'reference_marker') {
+      add(childPath(path, 'markerShape'), UNKNOWN_FIELD, 'Expected no marker shape on an Annotation that is not a Reference Marker.')
+    }
+  }
+  checkUnknownFields(raw, path, ANNOTATION_STYLE_FIELDS, add)
 }
 
 /**
@@ -3876,6 +4207,15 @@ export function validateProject(value: unknown, checks: ValidationScope | null =
     value.commentReferenceCounter,
     childPath(ROOT_PATH, 'comments'),
     childPath(ROOT_PATH, 'commentReferenceCounter'),
+    index,
+    value,
+    add,
+  )
+  validateAnnotations(
+    value.annotations,
+    value.annotationReferenceCounter,
+    childPath(ROOT_PATH, 'annotations'),
+    childPath(ROOT_PATH, 'annotationReferenceCounter'),
     index,
     value,
     add,

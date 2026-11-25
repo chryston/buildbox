@@ -56,6 +56,8 @@ const project = (parts: Partial<Project>): Project => ({
   warningAcknowledgements: [],
   comments: [],
   commentReferenceCounter: 0,
+  annotations: [],
+  annotationReferenceCounter: 0,
   ...parts,
 })
 

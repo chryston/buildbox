@@ -35,6 +35,8 @@ const projectWith = (floorNames: string[], viewNames: [floorId: string, name: st
     warningAcknowledgements: [],
     comments: [],
     commentReferenceCounter: 0,
+    annotations: [],
+    annotationReferenceCounter: 0,
   }
 }
 

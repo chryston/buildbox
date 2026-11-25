@@ -19,7 +19,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import type { DesignOption, Project, Service, ServiceRiser, ServiceRun } from '../domain'
-import { withComments } from '../domain/testing'
+import { withAnnotations, withComments } from '../domain/testing'
 import { PLAN_IMAGE_ACCEPT, STRINGS, WorkspaceProvider, workspaceStore, type WorkspaceServices } from '../ui'
 import type { Viewport, ViewportCache } from '../ui'
 import { openTestView, renderWithBindings as render, TEST_EXPORT_PORT, type TestView } from '../ui/legacy/testing'
@@ -37,7 +37,7 @@ const RISER_AT = { x: 3400 * 0.05, y: 2200 * 0.05 }
 
 function fixtureProject(): Project {
   const text = readFileSync(join(fixturesRoot, 'domain', 'v14', 'services.json'), 'utf8')
-  return withComments(structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project))
+  return withAnnotations(withComments(structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project)))
 }
 
 /** The fixture with its Design Options taken out: five Services, all in the Existing Model. */

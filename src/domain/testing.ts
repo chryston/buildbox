@@ -574,6 +574,8 @@ export function arbProject(): fc.Arbitrary<Project> {
         warningAcknowledgements: [],
         comments: [],
         commentReferenceCounter: 0,
+        annotations: [],
+        annotationReferenceCounter: 0,
       }
     })
 }
@@ -1139,6 +1141,18 @@ export function currentSchemaOf(record: unknown, fromVersion: number): Project {
  */
 export function withComments(project: Project): Project {
   return { ...project, comments: project.comments ?? [], commentReferenceCounter: project.commentReferenceCounter ?? 0 }
+}
+
+/**
+ * An older record with the Annotation collection and its counter it predates added, and nothing
+ * else touched (#81).
+ *
+ * The sixteenth step writes one empty list and one zero on the way in, so a test that reads an older
+ * record directly has to say the same thing the step says. An Annotation is always one a person drew
+ * and a reference is always one the counter handed out, so neither is invented here.
+ */
+export function withAnnotations(project: Project): Project {
+  return { ...project, annotations: project.annotations ?? [], annotationReferenceCounter: project.annotationReferenceCounter ?? 0 }
 }
 
 /**

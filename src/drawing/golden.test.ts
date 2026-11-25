@@ -133,6 +133,8 @@ const projectOf = (designs: ItemDesign[], placements: PlacedItem[]): Project => 
   warningAcknowledgements: [],
   comments: [],
   commentReferenceCounter: 0,
+  annotations: [],
+  annotationReferenceCounter: 0,
 })
 
 /**

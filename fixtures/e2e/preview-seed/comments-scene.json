@@ -5,7 +5,7 @@
     {
       "id": "proj-kitchen-wall",
       "revision": 1,
-      "schemaVersion": 15,
+      "schemaVersion": 16,
       "savedAt": "2026-11-18T09:00:00.000Z",
       "data": {
         "designOptions": [
@@ -1245,7 +1245,9 @@
             "resolvedAt": "2026-11-18T09:00:00.000Z"
           }
         ],
-        "commentReferenceCounter": 9
+        "commentReferenceCounter": 9,
+        "annotations": [],
+        "annotationReferenceCounter": 0
       }
     }
   ],
@@ -1256,8 +1258,8 @@
       "address": null,
       "revision": 1,
       "savedAt": "2026-11-18T09:00:00.000Z",
-      "schemaVersion": 15,
-      "sizeBytes": 16169,
+      "schemaVersion": 16,
+      "sizeBytes": 16217,
       "lastBackupInitiatedAt": null,
       "lastBackupRevision": null,
       "trashedAt": null,

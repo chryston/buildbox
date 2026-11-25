@@ -14,6 +14,7 @@ import {
   migrateV11toV12,
   migrateV13toV14,
   migrateV14toV15,
+  migrateV15toV16,
   rectangleFootprint,
   runMigrationChain,
   type IdAllocator,
@@ -70,6 +71,8 @@ function validProject(): Project {
     warningAcknowledgements: [],
     comments: [],
     commentReferenceCounter: 0,
+    annotations: [],
+    annotationReferenceCounter: 0,
   }
 }
 
@@ -115,9 +118,9 @@ function withoutTheStep(project: unknown): unknown {
 
 describe('DOMAIN_SCHEMA_VERSION', () => {
   it('is the version this build writes', () => {
-    // v14 is production: the Service shipped, so the number the chain ends at and the number this
-    // build writes are the same one (#73, #75, #76, #77, #78, #79).
-    expect(DOMAIN_SCHEMA_VERSION).toBe(15)
+    // v15 is production: the Comment shipped, so the number the chain ends at and the number this
+    // build writes are the same one (#73, #75, #76, #77, #78, #79, #80).
+    expect(DOMAIN_SCHEMA_VERSION).toBe(16)
   })
 })
 
@@ -1037,6 +1040,93 @@ describe('migrateV14toV15 — the Project gains the Comment collection and its c
       designOptions: 'not a list',
       comments: [],
       commentReferenceCounter: 0,
+    })
+  })
+})
+
+describe('migrateV15toV16 — the Project gains the Annotation collection and its counter (#81)', () => {
+  /** The same Project as its v15 twin: a record written before an Annotation was drawn. */
+  function v15Record(): Record<string, unknown> {
+    const record: Record<string, unknown> = { ...validProject() }
+    delete record.annotations
+    delete record.annotationReferenceCounter
+    return record
+  }
+
+  it('adds the empty collection and a zero counter, and spends no IDs of its own', () => {
+    const asked: number[] = []
+    const result = migrateProject(v15Record(), 15, (count) => {
+      asked.push(count)
+      return allocator()(count)
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    // Nothing past v15 invents an ID: no legacy drawing existed and a mark nobody drew is not a
+    // record of one, so both fields arrive empty.
+    expect(asked).toEqual([])
+    expect(result.project.annotations).toEqual([])
+    // The counter counts what has been handed out, so the first Annotation of a migrated Project
+    // takes A-001 rather than A-002.
+    expect(result.project.annotationReferenceCounter).toBe(0)
+  })
+
+  it('changes nothing else about any record', () => {
+    const prior = v15Record()
+    const result = migrateProject(prior, 15, allocator())
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    // Two fields and nothing beside them: an Annotation points at the record rather than standing
+    // in it, so no Floor, entity or view is rewritten and no warning reopens (#81 acceptance 13).
+    const rest = { ...(result.project as unknown as Record<string, unknown>) }
+    delete rest.annotations
+    delete rest.annotationReferenceCounter
+    expect(rest).toEqual(prior)
+  })
+
+  it('leaves a v16 Project exactly as it found it', () => {
+    const migrated = migrateProject(v15Record(), 15, allocator())
+    expect(migrated.ok).toBe(true)
+    if (!migrated.ok) return
+    const again = migrateProject(migrated.project, 16, allocator())
+    expect(again.ok && again.project).toEqual(migrated.project)
+  })
+
+  it('keeps the Annotations a Project already carries', () => {
+    // A migrator that overwrote the collection it was only meant to add would silently delete
+    // somebody's drawing — the one thing this step could get wrong.
+    const carried = {
+      annotations: [{ id: 'annotation-1', reference: 'A-007' }],
+      annotationReferenceCounter: 7,
+    }
+    expect(migrateV15toV16(carried)).toBe(carried)
+  })
+
+  it('adds only the field that is missing, beside one that is already there', () => {
+    // A record half-written by a build that knew one field and not the other still comes out whole.
+    expect(migrateV15toV16({ annotations: [{ id: 'annotation-1' }] })).toEqual({
+      annotations: [{ id: 'annotation-1' }],
+      annotationReferenceCounter: 0,
+    })
+    expect(migrateV15toV16({ annotationReferenceCounter: 4 })).toEqual({
+      annotations: [],
+      annotationReferenceCounter: 4,
+    })
+  })
+
+  it('hands back the record itself when both fields are already present', () => {
+    // Identity, not equality: the step copies nothing when there is nothing to add.
+    const carried = { annotations: [], annotationReferenceCounter: 0 }
+    expect(migrateV15toV16(carried)).toBe(carried)
+  })
+
+  it('adds the fields to a record that is not a Project shape, without crashing', () => {
+    expect(migrateV15toV16(null)).toBeNull()
+    expect(migrateV15toV16([{ annotations: [] }])).toEqual([{ annotations: [] }])
+    expect(migrateV15toV16('a string')).toBe('a string')
+    expect(migrateV15toV16({ designOptions: 'not a list' })).toEqual({
+      designOptions: 'not a list',
+      annotations: [],
+      annotationReferenceCounter: 0,
     })
   })
 })

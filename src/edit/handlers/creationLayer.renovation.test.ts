@@ -11,7 +11,7 @@
  * is written by the same spread that builds the record.
  */
 import { describe, expect, it } from 'vitest'
-import { withComments, withElevationViews, withPlanViewRanges } from '../../domain/testing'
+import { withAnnotations, withComments, withElevationViews, withPlanViewRanges } from '../../domain/testing'
 import layersFixture from '../../../fixtures/domain/v7/rooms.json?raw'
 import type { DrawingLayer, LayerSetting, PlanView, Project } from '../../domain'
 import type { ClosedPath } from '../../geometry'
@@ -20,7 +20,7 @@ import { canonicalJson } from '../../lib'
 import { applyIntent, previewIntent, type Intent } from '../index'
 import { expectRoundTrip, intent } from '../testing'
 
-const base = withComments(withElevationViews(withPlanViewRanges((JSON.parse(layersFixture) as { project: Project }).project)))
+const base = withAnnotations(withComments(withElevationViews(withPlanViewRanges((JSON.parse(layersFixture) as { project: Project }).project))))
 
 const STRUCTURE = 'layer-structure'
 const SERVICES = 'layer-services'

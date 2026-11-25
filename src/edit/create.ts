@@ -102,5 +102,8 @@ export function createProject({ ids, name }: CreateProjectArgs): Project {
     warningAcknowledgements: [],
     comments: [],
     commentReferenceCounter: 0,
+    // A new Project has drawn nothing yet, and has handed out no `A-` number (#81 §1).
+    annotations: [],
+    annotationReferenceCounter: 0,
   }
 }

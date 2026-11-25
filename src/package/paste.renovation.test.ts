@@ -11,7 +11,7 @@
  * the e2e asserting a scene that no longer exists, which is worse than no e2e.
  */
 import { describe, expect, it } from 'vitest'
-import { currentSchemaOf, withComments } from '../domain/testing'
+import { currentSchemaOf, withAnnotations, withComments } from '../domain/testing'
 import fitoutFixture from '../../fixtures/domain/v9/paste-fitout.json?raw'
 import elmFixture from '../../fixtures/domain/v9/paste-elm.json?raw'
 import pairSeed from '../../fixtures/e2e/preview-seed/paste-pair.json?raw'
@@ -26,8 +26,8 @@ import { allocateIds, FIXTURE_BUILD } from './testing'
 const project = (raw: string): Project => (JSON.parse(raw) as { domainSchemaVersion: number; project: Project }).project
 // Both goldens were written at the ninth schema, before the Comment collection existed, and are
 // encoded as they stand, so they arrive with the two fields the fifteenth step would have written.
-const fitout = withComments(project(fitoutFixture))
-const elm = withComments(project(elmFixture))
+const fitout = withAnnotations(withComments(project(fitoutFixture)))
+const elm = withAnnotations(withComments(project(elmFixture)))
 
 interface Seed {
   dbName: string

@@ -21,6 +21,7 @@
  */
 import type { ClosedPath, Preset, WallSide } from '../geometry'
 import type { CabinetNode, GlobalSettings } from './cabinetPayload'
+import type { Annotation } from './annotations'
 import type { Comment } from './comments'
 import type { ElevationView } from './elevationView'
 import { nameKey } from './floorNames'
@@ -120,6 +121,22 @@ export interface Project {
    * reference it was born with.
    */
   commentReferenceCounter: number
+  /**
+   * Every Annotation of this Project (#81 §1), in the order they were created.
+   *
+   * Project-level rather than filed inside a view: an Annotation draws in exactly one saved view,
+   * but the record belongs to the Project, so a Backup, an undo and a strict import all read one
+   * flat list. It carries no Renovation State and appears in no table; only its view, its Drawing
+   * Layer and its scope say where it shows.
+   */
+  annotations: Annotation[]
+  /**
+   * The highest `A-` reference number this Project has ever handed out (#81 §1).
+   *
+   * The same promise the Comment counter makes: a reference is never reused, undo rewinds the
+   * Annotation and never the counter, and a restored Annotation keeps the number it was born with.
+   */
+  annotationReferenceCounter: number
 }
 
 export interface ProjectMeta {

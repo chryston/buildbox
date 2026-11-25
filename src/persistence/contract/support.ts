@@ -138,6 +138,8 @@ export function projectFixture(planImageHash: string | null, id: string = PROJEC
     warningAcknowledgements: [],
     comments: [],
     commentReferenceCounter: 0,
+    annotations: [],
+    annotationReferenceCounter: 0,
   }
 }
 

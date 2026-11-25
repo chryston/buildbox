@@ -65,6 +65,8 @@ function project(): Project {
     warningAcknowledgements: [],
     comments: [],
     commentReferenceCounter: 0,
+    annotations: [],
+    annotationReferenceCounter: 0,
   }
 }
 
