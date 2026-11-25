@@ -66,12 +66,26 @@ function extraCollections(model: ProposedModel): readonly unknown[] {
   return [record['beams'], record['skirting'], record['services']].flatMap((rows) => (Array.isArray(rows) ? rows : []))
 }
 
-/** The cabinet node a feature Anchor names, by the name the tree editor gives it. */
+type NodeLike = { id: string; name?: string; spaceLabel?: string; children?: unknown[] }
+
+/** The cabinet node a feature Anchor names, by the words the node itself carries. */
 function nodeName(project: Project, itemDesignId: EntityId, featureId: string): string | null {
   const design = project.itemDesigns.find((row) => row.id === itemDesignId)
   if (design === undefined || design.kind !== 'cabinet') return null
-  const found = (design.construction.root.children ?? []).find((node) => node.id === featureId) as { name?: string } | undefined
-  return found?.name ?? null
+  // The feature list is the whole construction, shelves and carcasses included; a label that only
+  // looked at the top level named every deep node after its design, so ten buttons read `Base Unit`.
+  const stack = [...(design.construction.root.children ?? [])] as NodeLike[]
+  while (stack.length > 0) {
+    const node = stack.shift()!
+    if (node.id === featureId) {
+      // A node says what it is in `spaceLabel` (`Side-mount drawers`); the id's last segment is the
+      // fallback, humanised, because §8.3 forbids showing the code itself.
+      const words = node.name ?? node.spaceLabel ?? node.id.split('-').slice(-1)[0] ?? null
+      return words === null ? null : words.charAt(0).toUpperCase() + words.slice(1)
+    }
+    stack.push(...((node.children ?? []) as NodeLike[]))
+  }
+  return null
 }
 
 /**

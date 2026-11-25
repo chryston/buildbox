@@ -224,3 +224,25 @@ describe('the browser seed (#80)', () => {
     expect(validateProject(seed.projects[0]!.data).ok).toBe(true)
   })
 })
+
+describe('the inspector feature buttons (#80 §8.3)', () => {
+  it('names each feature by what it is, not by the design that contains it', async () => {
+    const project = view.project()
+    const designOf = (each: { itemDesignId: string }) => project.itemDesigns.find((row) => row.id === each.itemDesignId)
+    const placed = project.existingModel.placedItems.find((each) => designOf(each)?.kind === 'cabinet')
+    if (placed === undefined) throw new Error('the fixture has no cabinet placement to select')
+    const designName = designOf(placed)!.name
+    act(() => workspaceStore.getState().select(placed.id))
+    const section = screen.getByTestId('inspector-notes')
+    const labels = Array.from(section.querySelectorAll('[data-testid^="inspector-comment-on-feature-"]')).map(
+      (button) => button.textContent ?? '',
+    )
+    expect(labels.length).toBeGreaterThan(1)
+    // Ten buttons reading `+ Comment on Base Unit` say nothing about which part of the cabinet the
+    // note is about; §8.3 asks for the plain label of the feature itself.
+    expect(new Set(labels).size).toBe(labels.length)
+    // The unit as a whole is honestly named after its design; every part of it has to be named after
+    // the part, so a person can tell which button writes the note about the shelf.
+    expect(labels.filter((label) => label !== `+ Comment on ${designName}`)).toHaveLength(labels.length - 1)
+  })
+})

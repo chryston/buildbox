@@ -10,8 +10,8 @@
  *     under the middle of the canvas (§7.5);
  *   - the overlay switched on: a pin per anchored note, each carrying its reference, and the pill
  *     pressed (§7.2–7.4);
- *   - a Wall selected: the inspector's Comments section naming the notes about that Wall and offering a
- *     note on each of its faces (§8);
+ *   - a placement selected: the inspector's `On this placement (N)` section, with the button that starts
+ *     a note on the thing itself (§8);
  *   - the resolved filter: the settled note struck through, which is how a person tells "done" from
  *     "still open" at a glance (§5.3);
  *   - the Warning strip opened with its `Create linked Comment` button, the one place a note can be
@@ -77,13 +77,16 @@ test.describe('the Notes panel', () => {
     await expect(page).toHaveScreenshot('comments-overlay-on.png')
   })
 
-  // The inspector's own Comments section is covered by `src/integration/commentsFlow.test.tsx`; a real
-  // browser cannot reach it here because selecting a placement needs a hit target this scene's zoom
-  // does not give one, so this shot records the docked panel with every note listed instead.
-  test('the panel lists every note once Current context is off', async ({ page }) => {
+  test('the inspector names the notes about the thing selected', async ({ page }) => {
     await openCommentsPlan(page)
-    await page.getByTestId('notes-current-context').uncheck()
-    await expect(page.locator('[data-testid="note-rows"] > li')).toHaveCount(7)
+    // §8: the left inspector carries `On this placement (N)` with an explicit button for starting a
+    // note on it. Selecting a placement is what brings it up; nothing is inferred from labels.
+    await page.locator('[data-testid="floor-plan-canvas"] [data-ref-role="placed-item"]').first().click()
+    const notes = page.getByTestId('inspector-notes')
+    await expect(notes).toBeVisible()
+    // The inspector's sidebar scrolls, and the Comments section sits below the Floor and Display cards,
+    // so a photograph of the top of the column would show nothing of it.
+    await notes.scrollIntoViewIfNeeded()
     await waitForStablePaint(floorPlanCanvas(page))
     await expect(page).toHaveScreenshot('comments-inspector-notes.png')
   })

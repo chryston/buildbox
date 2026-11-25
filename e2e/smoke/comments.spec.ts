@@ -2,9 +2,10 @@
  * Comments through the real browser (#80 criteria 11–24, 29–32).
  *
  * The panel's own gestures, in order: the eight seeded notes are listed; a filter narrows the list; the
- * overlay is switched on and the pins appear; a pin is clicked and its row takes the focus; the Comment
- * tool anchors a note where the click landed and the inline editor gives it a Title; and Undo takes that
- * note away without moving anything else.
+ * overlay is switched on and the pins appear; a pin is clicked and its row takes the focus. Then the two
+ * paths that need a real drawing: the Comment tool anchors a note on the placement it was clicked on and
+ * the inline editor gives it a Title (§9, §10), and selecting that placement brings up the inspector's
+ * `On this placement (N)` section with the button that starts a note on the thing itself (§8).
  *
  * The scene is the services scene migrated to v15 and given eight notes, one per Anchor kind
  * (`scripts/make-comments-seed.ts`). It carries Design Options, so the panel's context rules have a real
