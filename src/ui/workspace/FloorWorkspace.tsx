@@ -1070,6 +1070,10 @@ export function FloorWorkspace(): ReactNode {
   useEffect(() => {
     notesSessionStore.getState().reset()
   }, [notesProjectId, view?.id])
+  // The shell's notes slot is a fixed-width column, so it must be absent, not empty: an `<aside>` that
+  // holds a collapsed rail still takes `--bb-workspace-notes-width` away from the canvas host, and the
+  // split host stacks the Plan and Section below 960 px of host. Closed means the slot is not rendered.
+  const notesPanelOpen = useNotesSession((state) => state.panelOpen)
 
   /**
    * The `Move to a Design Option…` action for the Existing entity being inspected (#69 §13).
@@ -4082,7 +4086,8 @@ export function FloorWorkspace(): ReactNode {
           )
         }
         notes={
-          <NotesPanel
+          notesPanelOpen ? (
+            <NotesPanel
             project={project}
             view={view === null ? null : { ...view, floorId: view.floorId }}
             now={services.now()}
@@ -4090,7 +4095,8 @@ export function FloorWorkspace(): ReactNode {
             onReopen={(commentId) => send('comment.reopen', { commentId, at: services.now() })}
             onDelete={(commentId) => send('comment.delete', { commentId })}
             onEdit={(commentId, patch) => send('comment.edit', { commentId, ...patch, at: services.now() })}
-          />
+            />
+          ) : null
         }
       />
       {deleteElevationId !== null && (

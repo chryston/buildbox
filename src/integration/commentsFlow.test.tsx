@@ -100,7 +100,9 @@ describe('the Notes panel (#80 §4, §5)', () => {
   it('starts as a rail and opens from the toolbar control', async () => {
     // The panel starts closed so the canvas keeps the width #55 gave it (§4.1, §4.3); the control in
     // §4.2 is what brings it back, and it says which way it will go.
-    expect(screen.getByTestId('notes-panel-collapsed')).toBeTruthy()
+    // Closed means the shell's notes slot is not rendered at all, so the canvas keeps its width.
+    expect(screen.queryByTestId('notes-panel')).toBeNull()
+    expect(screen.queryByTestId('workspace-notes')).toBeNull()
     const toggle = screen.getByTestId('notes-panel-toggle')
     const closedLabel = toggle.textContent
     await userEvent.click(toggle)
@@ -135,7 +137,8 @@ describe('the Notes panel (#80 §4, §5)', () => {
     await userEvent.click(screen.getByTestId('notes-panel-toggle'))
     expect(screen.getByTestId('notes-panel')).toBeTruthy()
     await userEvent.click(screen.getByTestId('notes-panel-toggle'))
-    expect(screen.getByTestId('notes-panel-collapsed')).toBeTruthy()
+    expect(screen.queryByTestId('notes-panel')).toBeNull()
+    expect(screen.queryByTestId('workspace-notes')).toBeNull()
   })
 })
 
