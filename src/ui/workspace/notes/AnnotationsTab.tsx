@@ -123,8 +123,10 @@ function AnnotationRow({
   selected: boolean
   onSelect(): void
 }): ReactNode {
-  const anchored = annotation.endpoint !== undefined && endpointIsAnchored(annotation.endpoint)
-  const anchorText = anchored ? ANNOTATION_STRINGS.anchoredSuffix(commentAnchorSubject(project, annotation.endpoint as never)) : ''
+  const endpoint = annotation.endpoint
+  const anchorText = endpoint !== undefined && endpointIsAnchored(endpoint)
+    ? ANNOTATION_STRINGS.anchoredSuffix(commentAnchorSubject(project, endpoint.anchor as never))
+    : ''
   const layerText = annotation.layerId === null ? ANNOTATION_STRINGS.unlayeredSuffix : ANNOTATION_STRINGS.layerSuffix(layerLabel(project, annotation.layerId))
   return (
     <li className="bb-note-row" data-testid={`annotation-row-${annotation.reference}`} data-selected={selected ? 'true' : 'false'}>
