@@ -20,6 +20,7 @@ import App from '../App'
 import type { Comment, Project } from '../domain'
 import { withComments } from '../domain/testing'
 import { validateProject } from '../domain'
+import { flush } from '../session/testing'
 import { notesSessionStore, PLAN_IMAGE_ACCEPT, WorkspaceProvider, workspaceStore, type WorkspaceServices } from '../ui'
 import type { Viewport, ViewportCache } from '../ui'
 import { openTestView, renderWithBindings as render, TEST_EXPORT_PORT, type TestView } from '../ui/legacy/testing'
@@ -210,6 +211,11 @@ describe('the inspector and the Warning strip (#80 §8, §11)', () => {
     expect(stored()).toHaveLength(before)
     // The counter does not rewind: a number once handed out is never handed out twice.
     expect(counter()).toBe(10)
+    // Every Intent above started a write, and the session notifies when that write settles. A test
+    // that returns first leaves the notification landing outside act(), which CI counts as a failure.
+    await act(async () => {
+      await flush()
+    })
   })
 })
 
