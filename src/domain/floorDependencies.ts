@@ -23,6 +23,12 @@ export interface FloorDependencyKind {
   readonly label: string
   readonly labelOne: string
   readonly labelMany: string
+  /**
+   * `true` for a kind a deletion asks about instead of refusing for (#82 §1.4). Notes are answered
+   * row by row in the dependency review, so they still appear in the summary — a Floor with a Comment
+   * on it is not empty — but they are no longer a reason the Delete button cannot be pressed.
+   */
+  readonly reviewed?: true
   count(project: Project, floorId: string): number
 }
 
@@ -95,6 +101,7 @@ const comments: FloorDependencyKind = {
   label: 'Comments',
   labelOne: 'Comment',
   labelMany: 'Comments',
+  reviewed: true,
   count: (project, floorId) =>
     project.comments.reduce((total, comment) => (commentAnchorFloorId(comment.anchor) === floorId ? total + 1 : total), 0),
 }
@@ -112,6 +119,7 @@ const annotations: FloorDependencyKind = {
   label: 'Annotations',
   labelOne: 'Annotation',
   labelMany: 'Annotations',
+  reviewed: true,
   count: (project, floorId) => {
     const viewIds = new Set(savedViewsOf(project).filter((view) => view.floorId === floorId).map((view) => view.id))
     return project.annotations.reduce((total, annotation) => (viewIds.has(annotation.viewId) ? total + 1 : total), 0)
@@ -193,5 +201,5 @@ export function summarizeFloorDependencies(project: Project, floorId: string): F
 
 /** Whether anything still leans on this Floor, which is what keeps `Delete Floor` disabled. */
 export function floorHasDependencies(project: Project, floorId: string): boolean {
-  return FLOOR_DEPENDENCY_KINDS.some((kind) => kind.count(project, floorId) > 0)
+  return FLOOR_DEPENDENCY_KINDS.some((kind) => kind.reviewed !== true && kind.count(project, floorId) > 0)
 }

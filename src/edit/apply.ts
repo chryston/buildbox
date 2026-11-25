@@ -14,13 +14,23 @@
 import { applyPatches as applyImmerPatches, enablePatches, produceWithPatches, setAutoFreeze } from 'immer'
 import type { Patch } from 'immer'
 import { validateProject } from '../domain'
-import type { Project } from '../domain'
+import type { EntityId, Project } from '../domain'
 import { designOptionsOf } from '../domain'
 import { problem } from '../lib'
 import { validationScopeFor } from './validationScope'
 import { guardAnchoredComments } from './anchoredComments'
 import { guardAnchoredAnnotations } from './anchoredAnnotations'
-import type { Applied, DependencyReview, Intent, IntentType, Locator, Rejection, RejectionCode } from './intents'
+import { applyNotesResolutions, notesDependencyReport, notesReviewMessage } from './notesDependencies'
+import type {
+  Applied,
+  DependencyReview,
+  Intent,
+  IntentType,
+  Locator,
+  NotesDependencyReport,
+  Rejection,
+  RejectionCode,
+} from './intents'
 import { IntentRejection } from './handlers/support'
 import { pruneStaleAcknowledgements } from './handlers/warningHandlers'
 import { INTENT_HANDLERS } from './registry'
@@ -66,11 +76,21 @@ const isLayerReassignment = (patch: Patch): boolean =>
  * `Applied` carries the next Project, the patches that got there, the inverse patches that
  * undo it, and where the edit landed. `Rejection` carries a code and at least one problem
  * that says why — and the caller's Project is untouched either way.
+ *
+ * `mode` is why the same run answers two questions (#82 §1). Applying needs the user's answer to
+ * every note the edit strands, and refuses the Intent when one of them has gone stale. Previewing
+ * asks the question instead: it drops the stranded notes from the probe so the validator has a
+ * Project to judge, and returns the report the dialog is built from, because a question is not a
+ * Rejection.
  */
-export function applyIntent(project: Project, intent: Intent): Applied | Rejection {
+function runIntent(
+  project: Project,
+  intent: Intent,
+  mode: 'apply' | 'preview',
+): { outcome: Applied | Rejection; notes: NotesDependencyReport | null } {
   const handler = handlerFor(intent.type)
   if (handler === undefined) {
-    return rejected('unknown-target', 'type', `No Intent type ${intent.type} is in the catalogue.`)
+    return { outcome: rejected('unknown-target', 'type', `No Intent type ${intent.type} is in the catalogue.`), notes: null }
   }
   const affected = handler.locate(project, intent)
 
@@ -88,7 +108,39 @@ export function applyIntent(project: Project, intent: Intent): Applied | Rejecti
       pruneStaleAcknowledgements(draft)
     })
   } catch (error) {
-    if (error instanceof IntentRejection) return { ok: false, code: error.code, problems: error.problems }
+    if (error instanceof IntentRejection) return { outcome: { ok: false, code: error.code, problems: error.problems }, notes: null }
+    throw error
+  }
+
+  // What this edit strands, and what the user said about each note (#82). The deletion and every
+  // decision about what hung off it are one command: a second producer over the same draft, whose
+  // patches join the first's, so the history entry is one step and one undo restores the target,
+  // the notes and their original Anchors together.
+  let notes: NotesDependencyReport | null = null
+  try {
+    const report = notesDependencyReport(project, next)
+    if (report !== null) {
+      notes = report
+      if (mode === 'preview') {
+        ;[next] = produceWithPatches(next, (draft) => {
+          for (const row of report.rows) removeDependent(draft, row.dependentId)
+        })
+      } else {
+        const resolutions = intent.notesResolutions
+        if (resolutions === undefined) {
+          return { outcome: rejected('has-dependants', `notes[${report.rows[0]!.dependentId}]`, notesReviewMessage(report)), notes }
+        }
+        let notesPatches: Patch[]
+        let notesInverse: Patch[]
+        ;[next, notesPatches, notesInverse] = produceWithPatches(next, (draft) => {
+          applyNotesResolutions(project, draft, report, resolutions, intent.now)
+        })
+        patches = [...patches, ...notesPatches]
+        inversePatches = [...notesInverse, ...inversePatches]
+      }
+    }
+  } catch (error) {
+    if (error instanceof IntentRejection) return { outcome: { ok: false, code: error.code, problems: error.problems }, notes }
     throw error
   }
 
@@ -105,19 +157,21 @@ export function applyIntent(project: Project, intent: Intent): Applied | Rejecti
   try {
     handler.after?.(project, next)
   } catch (error) {
-    if (error instanceof IntentRejection) return { ok: false, code: error.code, problems: error.problems }
+    if (error instanceof IntentRejection) return { outcome: { ok: false, code: error.code, problems: error.problems }, notes }
     throw error
   }
 
   // No Comment may outlive the thing it is about (#80 §14), and no Annotation may outlive the thing
   // its endpoint is anchored to (#81 §8.1). Judged on the finished Project rather than per Intent, so
   // a deletion, a Floor removal, an Option demolition and a cabinet edit that drops a node are all
-  // refused by the same rule — and so is any command the catalogue gains later.
+  // refused by the same rule — and so is any command the catalogue gains later. After #82 they are the
+  // last line rather than the only one: an Intent that came through the dependency review has already
+  // moved or deleted everything they would catch.
   try {
     guardAnchoredComments(project, next)
     guardAnchoredAnnotations(project, next)
   } catch (error) {
-    if (error instanceof IntentRejection) return { ok: false, code: error.code, problems: error.problems }
+    if (error instanceof IntentRejection) return { outcome: { ok: false, code: error.code, problems: error.problems }, notes }
     throw error
   }
 
@@ -131,19 +185,40 @@ export function applyIntent(project: Project, intent: Intent): Applied | Rejecti
     intent.type !== 'renovation.correctExistingModel' &&
     patches.some((patch) => patch.path[0] === 'existingModel' && !isLayerReassignment(patch))
   ) {
-    return rejected(
-      'baseline-correction-required',
-      'existingModel',
-      'Design Options are drawn against this baseline, so this edit changes the record they all share. Correct the existing model to make it.',
-    )
+    return {
+      outcome: rejected(
+        'baseline-correction-required',
+        'existingModel',
+        'Design Options are drawn against this baseline, so this edit changes the record they all share. Correct the existing model to make it.',
+      ),
+      notes,
+    }
   }
 
   const result = validateProject(next, validationScopeFor(patches, project, next))
-  if (!result.ok) return { ok: false, code: 'invalid-project', problems: result.problems }
+  if (!result.ok) return { outcome: { ok: false, code: 'invalid-project', problems: result.problems }, notes }
   if (patches.length === 0) {
-    return rejected('no-change', 'type', `${intent.type} left the Project exactly as it was.`)
+    return { outcome: rejected('no-change', 'type', `${intent.type} left the Project exactly as it was.`), notes }
   }
-  return { ok: true, project: next, patches, inversePatches, affected }
+  return { outcome: { ok: true, project: next, patches, inversePatches, affected }, notes }
+}
+
+/** Take one dependent note out of a draft, which is all the preview needs from an unanswered row. */
+function removeDependent(draft: Project, dependentId: EntityId): void {
+  const comment = draft.comments.findIndex((each) => each.id === dependentId)
+  if (comment >= 0) draft.comments.splice(comment, 1)
+  else {
+    const annotation = draft.annotations.findIndex((each) => each.id === dependentId)
+    if (annotation >= 0) draft.annotations.splice(annotation, 1)
+  }
+}
+
+/**
+ * Run one Intent against a Project: {@link runIntent} in apply mode, whose Notes dependency report
+ * the caller does not read — the answer it asks for has already arrived inside the Intent.
+ */
+export function applyIntent(project: Project, intent: Intent): Applied | Rejection {
+  return runIntent(project, intent, 'apply').outcome
 }
 
 /**
@@ -154,20 +229,27 @@ export function applyIntent(project: Project, intent: Intent): Applied | Rejecti
  * the user commits to the gesture. The Locator is the same best-effort one a rejection
  * would have carried, so a greyed-out button still knows what it was pointing at. `review`
  * is the dependency report of #65 §8: `null` for everything the user may do without being
- * asked first, and the list of what would go with the edit when they may not.
+ * asked first, and the list of what would go with the edit when they may not. `notes` is the
+ * same answer for the Notes of #82, and the two share one dialog because they share one
+ * operation: a Wall review that also strands three Comments is one question, not two.
  */
 export function previewIntent(
   project: Project,
   intent: Intent,
-): { affected: Locator; rejection: Rejection | null; review: DependencyReview | null } {
+): {
+  affected: Locator
+  rejection: Rejection | null
+  review: DependencyReview | null
+  notes: NotesDependencyReport | null
+} {
   const handler = handlerFor(intent.type)
   const affected: Locator =
     handler === undefined
       ? { floorId: null, viewId: null, view: 'cabinet', itemDesignIds: [], placedItemIds: [] }
       : handler.locate(project, intent)
   const review = handler?.review?.(project, intent) ?? null
-  const result = applyIntent(project, intent)
-  return { affected, rejection: result.ok ? null : result, review }
+  const { outcome, notes } = runIntent(project, intent, 'preview')
+  return { affected, rejection: outcome.ok ? null : outcome, review, notes }
 }
 
 /** Replay a recorded step forward, or an inverse patch backward. #48's undo is this. */

@@ -25,7 +25,7 @@ export interface DeleteFloorDialogProps {
 }
 
 export function deleteFloorIsBlocked(rows: readonly FloorDependency[]): boolean {
-  return rows.some((row) => row.count > 0)
+  return rows.some((row) => row.count > 0 && row.kind.reviewed !== true)
 }
 
 export function DeleteFloorDialog(props: DeleteFloorDialogProps): ReactNode {

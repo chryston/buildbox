@@ -61,7 +61,7 @@ function findEntity(project: Project, entityId: EntityId): EntityHit | null {
 }
 
 /** The name a record answers to, in the order the house uses for a label. */
-function nameOf(record: Record<string, unknown>): string | null {
+export function nameOf(record: Record<string, unknown>): string | null {
   for (const field of ['name', 'ref', 'label'] as const) {
     const value = record[field]
     if (typeof value === 'string' && value.trim() !== '') return value

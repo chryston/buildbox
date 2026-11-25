@@ -40,7 +40,10 @@ const testIntents: IntentBuilder = {
   },
   // The same report the real Intent consults, so a test that deletes a Wall with Openings sees
   // the review the app would show rather than one this file invented (#65 §8).
-  preview: (project, intent) => ({ review: previewIntent(project, intent).review }),
+  preview: (project, intent) => {
+    const { review, notes } = previewIntent(project, intent)
+    return { review, notes }
+  },
   evaluate: (project, intent) => {
     const result = applyIntent({ ...project, designOptions: [] }, intent)
     return result.ok ? result.project : null
