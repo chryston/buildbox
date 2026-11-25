@@ -39,8 +39,16 @@ test.describe('Comments (#80)', () => {
   test('lists the seeded notes, filters them, and reveals one from its pin', async ({ page }) => {
     await openScene(page)
 
-    // --- the panel lists every note the Project holds ------------------------------------------
+    // --- the panel lists the notes the context allows, and all of them without it --------
+    // Two rules are on by default: the context rules (#80 §6) and the `Open` status filter (§5.3), which
+    // hides the scene's one resolved note. Switching both off is what shows all eight.
     await expect(page.getByTestId('notes-panel')).toBeVisible()
+    const inContext = await rows(page).count()
+    expect(inContext).toBeGreaterThan(0)
+    expect(inContext).toBeLessThanOrEqual(7)
+    await page.getByTestId('notes-current-context').uncheck()
+    await expect(rows(page)).toHaveCount(7)
+    await page.getByTestId('notes-status-filter').selectOption('any')
     await expect(rows(page)).toHaveCount(8)
 
     // --- the overlay is off by default, and the pill turns it on (#80 §7.1) --------------------
@@ -57,7 +65,7 @@ test.describe('Comments (#80)', () => {
     await expect(rows(page)).toHaveCount(1)
     await page.getByTestId('notes-status-filter').selectOption('open')
     await expect(rows(page)).toHaveCount(7)
-    await page.getByTestId('notes-status-filter').selectOption('all')
+    await page.getByTestId('notes-status-filter').selectOption('any')
     await expect(rows(page)).toHaveCount(8)
 
     // --- clicking a pin takes the focus to its row (#80 §7.5) ----------------------------------
@@ -68,7 +76,7 @@ test.describe('Comments (#80)', () => {
   test('the Comment tool anchors a note where the click landed, and the editor titles it', async ({ page }) => {
     await openScene(page)
 
-    await page.getByTestId('tool-comment').click()
+    await page.getByTestId('renovation-tool-comment').click()
     await expect(page.getByTestId('comment-tool-hint')).toBeVisible()
 
     // A click on empty canvas anchors a Floor Point, so the new note is about a place (#80 §9).

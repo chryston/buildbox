@@ -22,7 +22,7 @@ import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } fro
 import { wallOpenings, drawElevationView } from '../../drawing'
 import type { BadgeSubject, LayerGates, NoteBadgeSubject, NotePinSubject, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
 import type { CommentAnchor, EntityId, ElevationView, Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
-import { commentIsOpen, DEFAULT_COMMENT_PRIORITY, cabinetFeatureIds, DEFAULT_FEATURE_T, designOptionsOf, duplicateCommentIds, elevationViewsOf, isLinearFeature, ownerKindOfDesign, registeredFeatureIds, allServices, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf } from '../../domain'
+import { anchorChoosesScope, COMMENT_SCOPE_ALL, commentIsOpen, DEFAULT_COMMENT_PRIORITY, cabinetFeatureIds, DEFAULT_FEATURE_T, designOptionsOf, duplicateCommentIds, elevationViewsOf, isLinearFeature, ownerKindOfDesign, registeredFeatureIds, allServices, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
@@ -1062,9 +1062,14 @@ export function FloorWorkspace(): ReactNode {
   // in one Project is not a note in the next, and a row selected because it was on screen stops being
   // on screen the moment the person looks through a different view. So both clear it. The overlay is
   // already off at every open because the store is never persisted.
+  //
+  // The Project's *identity*, not its reference: every edit makes a new object, and clearing the
+  // selection there would wipe the one the edit itself just made — including the note the Comment tool
+  // has just placed and is about to open.
+  const notesProjectId = project.id
   useEffect(() => {
     notesSessionStore.getState().reset()
-  }, [project, view?.id])
+  }, [notesProjectId, view?.id])
 
   /**
    * The `Move to a Design Option…` action for the Existing entity being inspected (#69 §13).
@@ -1233,6 +1238,10 @@ export function FloorWorkspace(): ReactNode {
         title: COMMENT_STRINGS.newCommentTitle,
         body: '',
         priority: DEFAULT_COMMENT_PRIORITY,
+        // An Anchor that names no Design Option has to say which Option the note applies to (#80 §1).
+        // The honest answer is the one the person is standing in; the Existing Model has none, and the
+        // note then applies to all of them.
+        ...(anchorChoosesScope(anchor.kind) ? { scope: renovationOptionId ?? COMMENT_SCOPE_ALL } : {}),
         at: services.now(),
       },
       COMMENT_STRINGS.commentTool,

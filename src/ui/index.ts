@@ -24,6 +24,7 @@ export { STRINGS, WARNING_COPY, warningSentence } from './strings'
 // banned-word scan in `app` reads this table with the others, which is why it is exported rather
 // than read off the filesystem.
 export { RENOVATION_STRINGS } from './strings/renovation'
+export { COMMENT_STRINGS } from './strings/comments'
 // #69's renovation surface. It is exported here because #20 §2 makes a module's `index.ts` the only
 // way in; `FloorWorkspace` imports the folder directly, as the one consumer.
 export {

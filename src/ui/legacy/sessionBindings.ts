@@ -20,10 +20,11 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import type { CabinetMaterialId, DrawerConfig, ElementType, EntityId, GlobalSettings, PlanView, Project } from '../../domain'
+import { anchorChoosesScope, COMMENT_SCOPE_ALL } from '../../domain'
 import type { CopySet, DependencyReview, Intent, IntentType, PayloadOf } from '../../edit'
 import type { ProjectSession, SaveState, SessionAsset } from '../../session'
 import { useProject, useProjectSelector, useSession } from './useProject'
-import { STRINGS } from '..'
+import { COMMENT_STRINGS, STRINGS } from '..'
 import { useUi } from './uiStore'
 import type { LegacyBindings } from './bindings'
 import { projectUnits } from './projectView'
@@ -208,10 +209,18 @@ export function useSessionBindings(services: SessionViewServices, host: SessionH
     unpinNode: (nodeId) => onUnit('cabinet.unpinNode', (itemDesignId) => ({ itemDesignId, nodeId })),
     // The legacy store's `unlockNode` was `unpinNode` under another name; domain v1 has the one.
     unlockNode: (nodeId) => onUnit('cabinet.unpinNode', (itemDesignId) => ({ itemDesignId, nodeId })),
-    // A note about the cabinet on screen. The title starts empty on purpose: §10 requires a Title
-    // before the note can be saved, and a made-up one would let an empty note through the door.
+    // A note about the cabinet on screen. An Item Design is a shared definition rather than one
+    // Option's content, so the note applies to every Option that uses it (#80 §1). The neutral Title
+    // is what the Plan View's tool starts with too, and the editor will not let it stand (§10).
     createComment: (anchor) => {
-      send('comment.create', { anchor, title: '', body: '', priority: 'normal', at: services.now() })
+      send('comment.create', {
+        anchor,
+        title: COMMENT_STRINGS.newCommentTitle,
+        body: '',
+        priority: 'normal',
+        ...(anchorChoosesScope(anchor.kind) ? { scope: COMMENT_SCOPE_ALL } : {}),
+        at: services.now(),
+      })
     },
     setNodeLabel: (nodeId, label) => onUnit('cabinet.setNodeLabel', (itemDesignId) => ({
       itemDesignId,
