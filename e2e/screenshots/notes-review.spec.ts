@@ -58,7 +58,7 @@ test.describe('the dependency review', () => {
     await placedObject(page, 'seed-item-029').click()
     await page.getByTestId('delete-object').click()
     await page.getByTestId('notes-review-choice-reanchor').click()
-    await page.getByTestId('notes-review-target').selectOption({ label: 'Base 600 #1' })
+    await page.getByTestId('notes-review-target').selectOption({ value: '{"kind":"entity","entityId":"seed-item-028"}' })
     await expect(page.getByTestId('notes-review-confirm')).toBeEnabled()
     await waitForStablePaint(page.getByTestId('notes-review'))
     await expect(page).toHaveScreenshot('notes-review-reanchor-target.png')

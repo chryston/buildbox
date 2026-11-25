@@ -53,7 +53,7 @@ test.describe('Notes dependency review (#82)', () => {
 
     await page.getByTestId('notes-review-choice-reanchor').click()
     await expect(page.getByTestId('notes-review-confirm')).toBeDisabled()
-    await page.getByTestId('notes-review-target').selectOption({ label: 'Base 600 #1' })
+    await page.getByTestId('notes-review-target').selectOption({ value: '{"kind":"entity","entityId":"seed-item-028"}' })
     await expect(page.getByTestId('notes-review-confirm')).toBeEnabled()
     await page.getByTestId('notes-review-confirm').click()
     await expect(page.getByTestId('notes-review')).toHaveCount(0)

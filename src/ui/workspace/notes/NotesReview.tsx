@@ -14,7 +14,7 @@
 import type { ReactNode } from 'react'
 import type { NotesChoice, NotesDependencyReport, NotesResolution, NotesSubject, NotesTargetRef } from '../../../edit'
 import type { Project } from '../../../domain'
-import { designOptionsOf, savedViewById } from '../../../domain'
+import { savedViewById } from '../../../domain'
 import { STRINGS } from '../../strings'
 import { commentAnchorSubject, commentFeatureLabel } from './anchorLabel'
 
@@ -68,34 +68,14 @@ export function notesTargetKey(target: NotesTargetRef): string {
   return JSON.stringify(target)
 }
 
-/**
- * A Placed Item reads as `Base 600 #2`: the design's name and which placement of it this is, in the
- * order they were placed. The design name alone would not answer criterion 3, which is about moving a
- * note from Base 600 #2 to Base 600 #1 — two options that read alike are one option React keeps and one
- * note left in the wrong place.
- */
-function placementLabel(project: Project, entityId: string): string | null {
-  const placements = [
-    ...project.existingModel.placedItems,
-    ...designOptionsOf(project).flatMap((option) => option.proposed.placedItems),
-  ]
-  const at = placements.findIndex((item) => item.id === entityId)
-  if (at < 0) return null
-  const item = placements[at]!
-  const design = project.itemDesigns.find((entry) => entry.id === item.itemDesignId)
-  if (design === undefined) return null
-  const occurrence = placements.reduce((count, other, index) => (index <= at && other.itemDesignId === item.itemDesignId ? count + 1 : count), 0)
-  return `${design.name} #${occurrence}`
-}
-
 /** What a Reanchor target reads as: `Base 600 #1`, `Kitchen`, `Pantry · West Elevation`. */
 export function notesTargetLabel(project: Project, target: NotesTargetRef): string {
   if (target.kind === 'view') {
     return savedViewById(project, target.viewId)?.name ?? STRINGS.notesChooseTarget
   }
-  if (target.kind === 'entity') {
-    return placementLabel(project, target.entityId) ?? commentAnchorSubject(project, target)
-  }
+  // One rule for every name in the app: `commentAnchorSubject` reads a Placed Item by `placementLabels`,
+  // the same label the inspector and the warnings strip write (#68), so the review cannot offer a
+  // `Base 600` that means something else everywhere else.
   return commentAnchorSubject(project, target)
 }
 

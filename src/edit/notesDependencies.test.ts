@@ -7,8 +7,9 @@
  * refusal is what a user who closes the dialog without answering is told, and the fingerprint is what
  * makes an answer that has gone stale refuse rather than misapply.
  */
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { COMMENT_SCOPE_ALL, type Annotation, type Comment, type EntityId, type Project } from '../domain'
+import { COMMENT_SCOPE_ALL, migrateProject, type Annotation, type Comment, type EntityId, type Project } from '../domain'
 import { pt } from '../geometry'
 import { applyIntent, applyPatches, previewIntent } from './apply'
 import type { Intent, NotesDependencyReport, NotesResolution, PayloadOf } from './intents'
@@ -531,5 +532,42 @@ describe('the review reaches every triggering operation (#82 §2)', () => {
     )
     expect(applied.project.comments).toHaveLength(0)
     expect(LATER > NOW).toBe(true)
+  })
+})
+
+/**
+ * The heading names the thing, never its kind. `This deletes Element.` is the sentence that makes a
+ * person read the row twice: the plan already calls that placement `Base 600 #2` and that wall `W-3`, in
+ * the inspector, the warnings strip and the Placed Items table (#68), so the review has to say the same
+ * words or it is a fifth name for one object.
+ */
+describe('the subject line names the entity (#82)', () => {
+  const opened = (): Project => {
+    const file = new URL('../../fixtures/e2e/preview-seed/notes-review-scene.json', import.meta.url)
+    const envelope = JSON.parse(readFileSync(file, 'utf8')) as { projects: { data: Project; schemaVersion: number }[] }
+    const record = envelope.projects[0]!
+    const migrated = migrateProject(record.data, record.schemaVersion, () => [])
+    if (!migrated.ok) expect.fail(`the shipped Notes scene no longer migrates: ${migrated.error.message}`)
+    return migrated.project as Project
+  }
+
+  it('calls a Placed Item by its placement label, ordinal and all', () => {
+    const project = opened()
+    // `seed-item-029` is the second placement of the `Base 600` Design, and C-004 speaks for it.
+    const report = notesOf(project, intent('plan.removeObject', { placedItemId: 'seed-item-029' }))!
+    expect(report.subject).toMatchObject({ kind: 'entity', label: 'Base 600 #2' })
+  })
+
+  it('calls a Wall by the label the drawing gives it', () => {
+    const project = opened()
+    // W-2, not W-3: W-3 carries two Openings, and the Wall rule (#58) refuses that deletion outright —
+    // the Notes review never gets asked, which is the right answer to a different question.
+    const wall = project.existingModel.walls.find((row) => row.id === 'seed-wall-003')!
+    const report = notesOf(project, intent('wall.delete', { wallId: wall.id }))!
+    const subject = report.subject
+    expect(subject.kind).toBe('entity')
+    if (subject.kind !== 'entity') return
+    expect(subject.label).toBe(wall.ref)
+    expect(subject.label).toBe('W-2')
   })
 })

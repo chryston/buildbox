@@ -46,7 +46,7 @@ import type {
   Point2,
   Project,
 } from '../domain'
-import { commentAnchorPoint, deriveWalls, effectiveCommentScope } from '../derive'
+import { commentAnchorPoint, derivePlacement, deriveWalls, effectiveCommentScope, placementLabels } from '../derive'
 import { canonicalJson } from '../lib'
 import { anchorResolves, nameOf, targetLabel } from './anchoredComments'
 import { refuse } from './handlers/support'
@@ -278,6 +278,26 @@ function firstLabel(ids: Iterable<EntityId>, pick: (id: EntityId) => string | nu
 }
 
 /**
+ * The plan's own name for a Placed Item — `Base 600 #2` — or `null` when the id is some other kind of
+ * entity. The ordinal comes from `placementLabels`, the rule the warnings strip, the inspector and the
+ * Placed Items table all read (#68), so a review row and an inspector section cannot mean two different
+ * placements of one Design. Siblings are counted in the model the item stands in: an Option's own
+ * placements are numbered among themselves, not among the Existing ones.
+ */
+function placementOf(project: Project, entityId: EntityId): string | null {
+  const models = [project.existingModel, ...designOptionsOf(project).map((option) => option.proposed)]
+  for (const model of models) {
+    const item = model.placedItems.find((row) => row.id === entityId)
+    if (item === undefined) continue
+    const design = project.itemDesigns.find((row) => row.id === item.itemDesignId)
+    if (design === undefined) return null
+    const siblings = model.placedItems.filter((row) => row.itemDesignId === design.id)
+    return placementLabels(siblings.map((row) => derivePlacement(design, row))).get(entityId) ?? design.name
+  }
+  return null
+}
+
+/**
  * The heading's subject: what the operation is doing to the thing the notes hang off.
  *
  * A Floor deletion takes its entities, its views and its Comments with it, and the question the user
@@ -321,7 +341,14 @@ function subjectOf(
         preferred,
         (id) => {
           const hit = beforeEntities.get(id)
-          return hit === undefined ? null : nameOf(hit.record)
+          if (hit === undefined) return null
+          // A Placed Item carries no name of its own: the plan calls it `Base 600 #2`, by the design it
+          // instances and which placement of that design it is. `placementLabels` is the one rule the
+          // warnings strip, the inspector and the Placed Items table share (#68), so the review cannot
+          // mean a different `Base 600` than the inspector does.
+          const placed = placementOf(before, id)
+          if (placed !== null) return placed
+          return nameOf(hit.record)
         },
         'Element',
       ),

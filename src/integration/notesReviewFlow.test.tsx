@@ -129,8 +129,10 @@ describe('deleting a placement that a Comment speaks for (#82 criteria 2, 3, 4, 
     await userEvent.click(screen.getByTestId('notes-review-choice-reanchor'))
     expect(confirm().hasAttribute('disabled')).toBe(true)
     const picker = screen.getByTestId('notes-review-target') as HTMLSelectElement
-    const target = Array.from(picker.options).find((option) => option.textContent === 'Base 600 #1')
-    if (target === undefined) throw new Error('the review offered no Base 600 #1 to move the note to')
+    // The surviving placement is the only `Base 600` left, so the plan's label for it carries no
+    // ordinal — the option is picked by the target it names, not by words two targets can share.
+    const target = Array.from(picker.options).find((option) => option.value === '{"kind":"entity","entityId":"seed-item-028"}')
+    if (target === undefined) throw new Error('the review offered the other Base 600 placement as nowhere to move the note to')
     await userEvent.selectOptions(picker, target!.value)
     expect(confirm().hasAttribute('disabled')).toBe(false)
     await userEvent.click(confirm())
