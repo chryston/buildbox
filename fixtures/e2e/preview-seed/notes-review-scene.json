@@ -8,72 +8,7 @@
       "schemaVersion": 16,
       "savedAt": "2026-11-25T09:00:00.000Z",
       "data": {
-        "designOptions": [
-          {
-            "demolishedIds": [],
-            "id": "option-a",
-            "name": "Option A",
-            "proposed": {
-              "beams": [],
-              "openings": [],
-              "placedItems": [],
-              "rooms": [],
-              "services": [
-                {
-                  "centrelineElevation": 300,
-                  "floorId": "seed-001",
-                  "id": "service-5",
-                  "kind": "gas",
-                  "line": {
-                    "end": {
-                      "x": 3000,
-                      "y": 1400
-                    },
-                    "start": {
-                      "x": 3000,
-                      "y": 600
-                    }
-                  },
-                  "outsideDiameter": 25,
-                  "predecessorIds": [],
-                  "section": "round",
-                  "shape": "run"
-                }
-              ],
-              "skirting": [],
-              "wallJunctions": [],
-              "walls": []
-            }
-          },
-          {
-            "demolishedIds": [],
-            "id": "option-b",
-            "name": "Option B",
-            "proposed": {
-              "beams": [],
-              "openings": [],
-              "placedItems": [
-                {
-                  "baseElevation": 0,
-                  "floorId": "seed-001",
-                  "id": "optb-island",
-                  "itemDesignId": "seed-012",
-                  "rotationDeg": 180,
-                  "translation": {
-                    "x": 1150,
-                    "y": 3200
-                  },
-                  "predecessorIds": []
-                }
-              ],
-              "rooms": [],
-              "services": [],
-              "skirting": [],
-              "wallJunctions": [],
-              "walls": []
-            }
-          }
-        ],
+        "designOptions": [],
         "elevationViews": [
           {
             "id": "sv-001",
@@ -1257,7 +1192,7 @@
             "body": "A note on the scene this fixture is drawn for.",
             "anchor": {
               "kind": "entity",
-              "entityId": "optb-island"
+              "entityId": "fp-island"
             },
             "status": "open",
             "priority": "normal",
@@ -1323,13 +1258,13 @@
               "x": 1400,
               "y": 3000
             },
-            "text": "Island sits here in Option B",
+            "text": "Island sits here",
             "layerId": null,
-            "scope": "option-b",
+            "scope": "all",
             "endpoint": {
               "free": {
                 "x": 1150,
-                "y": 3200
+                "y": 850
               }
             }
           },
@@ -1363,7 +1298,7 @@
       "revision": 1,
       "savedAt": "2026-11-25T09:00:00.000Z",
       "schemaVersion": 16,
-      "sizeBytes": 17113,
+      "sizeBytes": 16366,
       "lastBackupInitiatedAt": null,
       "lastBackupRevision": null,
       "trashedAt": null,

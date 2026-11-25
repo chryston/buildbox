@@ -24,7 +24,7 @@ import { createMemoryAdapter } from '../src/persistence'
 import type { ProjectRecord } from '../src/persistence'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const SOURCE = resolve(repoRoot, 'fixtures/e2e/preview-seed/services.json')
+const SOURCE = resolve(repoRoot, 'fixtures/e2e/preview-seed/services-plain.json')
 const PREVIEW_OUT = resolve(repoRoot, 'fixtures/e2e/preview-seed/notes-review-scene.json')
 const DB_NAME = 'buildbox'
 const NOW = '2026-11-25T09:00:00.000Z'
@@ -47,27 +47,31 @@ const elevation = base.elevationViews?.[0] ?? null
 if (elevation === null) fail('the scene has no Elevation View for a Reference Marker to sit in')
 
 // `Base 600` is placed once by the base scene. The second placement is the one a person deletes, and
-// the first is what the review offers as a target — the pair criterion 3 is about.
+// the first is what the review offers as a target — the pair criterion 3 is about. It is Option A's own
+// proposed work rather than Existing content, because deleting Existing work while Design Options exist
+// is refused by the baseline rule (#70) long before the notes question is reached, and the review would
+// never be seen.
 const baseDesign = base.itemDesigns.find((design) => design.name === 'Base 600') ?? null
 if (baseDesign === null) fail('the scene has no "Base 600" Item Design to place twice')
 const firstBase = base.existingModel.placedItems.find((item) => item.itemDesignId === baseDesign.id) ?? null
 if (firstBase === null) fail('the scene does not place "Base 600" at all')
-const secondBase = { ...firstBase!, id: 'seed-item-029', translation: { x: firstBase!.translation.x + 900, y: firstBase!.translation.y } }
+const secondBase = {
+  ...firstBase!,
+  id: 'seed-item-029',
+  translation: { x: firstBase!.translation.x + 900, y: firstBase!.translation.y },
+}
 
 // Walls read W-1, W-2, … in the order they are stored, so the third is the Wall criterion 5 and 6 name.
 const wall = base.existingModel.walls[2] ?? null
 if (wall === null) fail('the scene has no third Wall to be W-3')
 const featureOwner = base.existingModel.walls[1] ?? wall
 
-// Island #1 lives in Option B alone: deleting the Option is what strands the Comment on it.
+// The Island C-007 speaks for. The base scene carries no Design Options, which is deliberate: deleting
+// Existing work while Options exist is refused by the baseline rule (#70) before the notes question is
+// ever reached, so the review would never be seen. The Option case (#82 criterion 9) is covered against
+// a variant of this scene with Options added, in `src/integration/notesReviewFlow.test.tsx`.
 const island = base.existingModel.placedItems.find((item) => item.id === 'fp-island') ?? null
-if (island === null) fail('the scene has no Island to move into Option B')
-const optionIstand = { ...island, id: 'optb-island', predecessorIds: [], translation: { x: 1150, y: 3200 } }
-const designOptions = base.designOptions.map((option) =>
-  option.id === 'option-b'
-    ? { ...option, proposed: { ...option.proposed, placedItems: [...option.proposed.placedItems, optionIstand] } }
-    : option,
-)
+if (island === null) fail('the scene has no Island for a Comment to speak for')
 
 // A second Floor, so a Comment anchored to a Floor has a Floor that can be deleted (criterion 10). It
 // needs its own default Plan View, which is what a Floor without one would be refused for.
@@ -124,10 +128,10 @@ const comments: Comment[] = [
     anchor: { kind: 'feature', ownerId: featureOwner.id, featureId: 'leftFace', t: 0.5 },
     scope: undefined,
   }),
-  // On the Island that exists only in Option B (criterion 9).
+  // On the Island, so deleting it is what strands the note.
   comment('C-007', {
     title: 'Worktop overhang on the island',
-    anchor: { kind: 'entity', entityId: optionIstand.id },
+    anchor: { kind: 'entity', entityId: island.id },
     scope: undefined,
   }),
   // Anchored to Level 2, the Floor a person can delete (criterion 10).
@@ -157,12 +161,11 @@ const annotations: Annotation[] = [
     text: 'Chase this wall for the conduit',
     endpoint: { anchor: { kind: 'entity', entityId: wall.id } },
   }),
-  // Scoped to Option B, so deleting the Option asks about it (criterion 9).
+  // An Arrow over the Island, so a delete that takes the Island takes the mark with it.
   annotation('A-003', 'arrow', {
     position: { x: 1400, y: 3000 },
-    text: 'Island sits here in Option B',
-    endpoint: { free: { x: 1150, y: 3200 } },
-    scope: 'option-b',
+    text: 'Island sits here',
+    endpoint: { free: { x: island.translation.x, y: island.translation.y } },
   }),
   // Drawn in the Elevation View and pointing at the Item Detail of `Base 600`: deleting the Elevation
   // strands an incoming Reference Marker, which is a different question from an owned mark (criterion 7).
@@ -177,7 +180,6 @@ const annotations: Annotation[] = [
 
 const project: Project = {
   ...base,
-  designOptions,
   floors: [...base.floors, levelTwo],
   views: [...base.views, levelTwoView],
   elevationViews: (base.elevationViews ?? []).map((view) =>

@@ -16,12 +16,14 @@
  */
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import type { DeleteDesignOptionReview, IntentType, PayloadOf } from '../../../edit'
+import type { DeleteDesignOptionReview, IntentType, NotesResolution, PayloadOf } from '../../../edit'
 import type { DesignOption } from '../../../domain'
 import { designOptionsOf, nameKey } from '../../../domain'
 import { RENOVATION_STRINGS } from '../../strings/renovation'
+import { NotesReviewDialog } from '../notes/NotesReviewDialog'
 import { useWorkspaceDispatch, useWorkspaceProject, useWorkspaceRoot } from '../WorkspaceRoot'
 import { DeleteDesignOptionDialog } from './DeleteDesignOptionDialog'
+import type { DeleteOptionReviewNotes } from './DeleteDesignOptionDialog'
 
 /** The longest name `edit` and the validator accept for an Option (#69 §4). */
 const OPTION_NAME_MAX_LENGTH = 60
@@ -66,6 +68,8 @@ export function DesignOptionsSection(): ReactNode {
   const dispatch = useWorkspaceDispatch()
   const options = designOptionsOf(project)
   const [deleteReview, setDeleteReview] = useState<DeleteDesignOptionReview | null>(null)
+  const [deleteNotes, setDeleteNotes] = useState<DeleteOptionReviewNotes | null>(null)
+  const [notesOnly, setNotesOnly] = useState<{ optionId: string } & DeleteOptionReviewNotes | null>(null)
 
   const send = <T extends IntentType>(type: T, payload: PayloadOf<T>): void => {
     dispatch(services.intent.build(type, payload))
@@ -75,18 +79,27 @@ export function DesignOptionsSection(): ReactNode {
 
   /** The delete is asked before it is answered: the counts are the preview's, not a second count. */
   const askDelete = (optionId: string): void => {
-    const { review } = services.intent.preview(project, services.intent.build('designOption.delete', { optionId }))
+    const { review, notes } = services.intent.preview(project, services.intent.build('designOption.delete', { optionId }))
+    setDeleteNotes(notes === null ? null : { report: notes, project })
     if (review?.kind === 'delete-design-option') {
       setDeleteReview(review)
+      return
+    }
+    // Notes with nothing else to report (#82 §1): the same question, in a modal of its own.
+    if (notes !== null) {
+      setNotesOnly({ optionId, report: notes, project })
       return
     }
     send('designOption.delete', { optionId })
   }
 
-  const confirmDelete = (): void => {
+  const confirmDelete = (resolutions: readonly NotesResolution[]): void => {
     if (deleteReview === null) return
-    send('designOption.delete', { optionId: deleteReview.optionId })
+    // The answers ride the Intent, so the Option and everything that hung off it go in one Edit
+    // Transaction, and one Undo brings all of it back (#82 §5.1).
+    dispatch({ ...services.intent.build('designOption.delete', { optionId: deleteReview.optionId }), notesResolutions: resolutions })
     setDeleteReview(null)
+    setDeleteNotes(null)
   }
 
   return (
@@ -123,8 +136,24 @@ export function DesignOptionsSection(): ReactNode {
       {deleteReview !== null && (
         <DeleteDesignOptionDialog
           review={deleteReview}
+          notes={deleteNotes}
           onConfirm={confirmDelete}
-          onCancel={() => setDeleteReview(null)}
+          onCancel={() => {
+            setDeleteReview(null)
+            setDeleteNotes(null)
+          }}
+        />
+      )}
+      {notesOnly !== null && (
+        <NotesReviewDialog
+          project={notesOnly.project}
+          report={notesOnly.report}
+          stale={false}
+          onConfirm={(resolutions) => {
+            dispatch({ ...services.intent.build('designOption.delete', { optionId: notesOnly.optionId }), notesResolutions: resolutions })
+            setNotesOnly(null)
+          }}
+          onCancel={() => setNotesOnly(null)}
         />
       )}
     </section>

@@ -106,14 +106,19 @@ describe('the Notes review scene (#82 fixture)', () => {
     expect(marker?.targetViewId).toBe(project.itemDesigns.find((item) => item.name === 'Base 600')!.id)
   })
 
-  it('puts the Island that C-007 speaks for inside Option B, with A-003 scoped to it (criterion 9)', () => {
+  it('puts C-007 on the Island and A-003 above it, so one delete strands both', () => {
     const project = scene()
-    expect((project.designOptions ?? []).find((item) => item.id === 'option-b')?.proposed.placedItems.map((item) => item.id)).toContain('optb-island')
+    const island = project.existingModel.placedItems.find((item) => item.id === 'fp-island')
+    expect(island).toBeDefined()
     const note = project.comments.find((item) => item.reference === 'C-007')
-    expect(note?.anchor).toEqual({ kind: 'entity', entityId: 'optb-island' })
-    expect(project.annotations.find((item) => item.reference === 'A-003')?.scope).toBe('option-b')
-    // The Island is Option B's alone, so deleting the Option is what strands both notes.
-    expect(project.existingModel.placedItems.some((item) => item.id === 'optb-island')).toBe(false)
+    expect(note?.anchor).toEqual({ kind: 'entity', entityId: 'fp-island' })
+    const mark = project.annotations.find((item) => item.reference === 'A-003')
+    expect(mark?.type).toBe('arrow')
+    // The shipped scene carries no Design Options on purpose: deleting Existing work while Options exist
+    // is refused by the baseline rule (#70) before the notes question is reached. The Option case
+    // (#82 criterion 9) is exercised against a variant with Options, in the integration flow.
+    expect(project.designOptions ?? []).toHaveLength(0)
+    expect(mark?.scope).toBe('all')
   })
 
   it('anchors C-008 to a second Floor that can be deleted (criterion 10)', () => {
