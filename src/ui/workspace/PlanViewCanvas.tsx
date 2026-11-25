@@ -811,6 +811,12 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       lastClient.current = { x: event.clientX, y: event.clientY }
       lastPointer.current = toFloor(event.clientX, event.clientY)
       event.stopPropagation()
+      // The Comment tool in hand: the Item under the pointer is what the note is about, and a press is
+      // not the start of a drag (#80 §9). Without this the tool would move the cabinet it was naming.
+      if (tool === 'comment') {
+        onCommentEntity?.(id)
+        return
+      }
       // A click that the cycle answers with a *different* entity is not a drag of the thing under
       // the pointer: walking down a stack selects, it does not move (#70 criterion 15).
       const picked = cyclePick(id, event.clientX, event.clientY)

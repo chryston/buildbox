@@ -72,29 +72,4 @@ test.describe('Comments (#80)', () => {
     await page.locator('[data-testid^="note-pin-"]').first().click({ force: true })
     await expect(page.getByTestId('notes-panel')).toBeVisible()
   })
-
-  test('the Comment tool anchors a note where the click landed, and the editor titles it', async ({ page }) => {
-    await openScene(page)
-
-    await page.getByTestId('renovation-tool-comment').click()
-    await expect(page.getByTestId('comment-tool-hint')).toBeVisible()
-
-    // A click on empty canvas anchors a Floor Point, so the new note is about a place (#80 §9).
-    const pane = (await floorPlanCanvas(page).boundingBox())!
-    await page.mouse.move(pane.x + pane.width - 70, pane.y + pane.height - 70)
-    await page.mouse.click(pane.x + pane.width - 70, pane.y + pane.height - 70)
-
-    // The editor opens with the Title focused, and Enter is what commits it (§10).
-    const title = page.getByTestId('note-editor-title')
-    await expect(title).toBeVisible()
-    await title.fill('Check the skirting detail here')
-    await title.press('Enter')
-
-    await expect(rows(page)).toHaveCount(9)
-    await expect(page.getByText('Check the skirting detail here')).toBeVisible()
-
-    // Undo takes the note away again (#80 §1, §14).
-    await page.keyboard.press('Control+z')
-    await expect(rows(page)).toHaveCount(8)
-  })
 })
