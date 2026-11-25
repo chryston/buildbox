@@ -14,7 +14,7 @@
 import { bench, describe } from 'vitest'
 import { applyIntent, intentLabel } from '../edit'
 import type { Intent, IntentType, PayloadOf } from '../edit'
-import { designOptionsOf, validateProject } from '../domain'
+import { designOptionsOf, migrateProject, validateProject } from '../domain'
 import type { Project } from '../domain'
 import { createHistory } from './history'
 import type { HistoryEntry } from './types'
@@ -34,7 +34,13 @@ const SOURCES = import.meta.glob<string>('/fixtures/bench/renovation-reference.j
 const raw = Object.values(SOURCES)[0]
 if (raw === undefined) throw new Error('fixtures/bench/renovation-reference.json is missing')
 const envelope = JSON.parse(raw) as { domainSchemaVersion: number; project: Project }
-const project = envelope.project
+// A v8 document measured against the current schema: it has to be migrated the way opening a
+// Project migrates it, or the fields the current schema requires are simply missing (#80).
+let issuedViews = 0
+const migrated = migrateProject(envelope.project, envelope.domainSchemaVersion, (count = 1) =>
+  Array.from({ length: count }, () => `bench-history-view-${String(++issuedViews)}`))
+if (!migrated.ok) throw new Error(`renovation-reference.json: ${migrated.error.message}`)
+const project = migrated.project
 if (!validateProject(project).ok) throw new Error('the renovation reference Project does not validate')
 
 const NOW = '2026-11-18T00:00:00.000Z'
