@@ -139,15 +139,11 @@ describe('the Annotation tool group (#81 §3.1, §3.2)', () => {
     await renderWorkspace(placedScene())
   })
 
-  it('shows the five rows after Comment, disabled with a reason until the overlay is on', async () => {
-    for (const id of ['annotationText', 'annotationLeader', 'annotationArrow', 'annotationCloud', 'annotationMarker']) {
-      const button = screen.getByTestId(`renovation-tool-${id}`) as HTMLButtonElement
-      expect(button.disabled).toBe(true)
-      expect(button.getAttribute('title')).toBe('Turn on the Notes overlay to draw Annotations')
-    }
-    // A disabled row cannot arm: the hint pill stays away.
-    await userEvent.click(screen.getByTestId('renovation-tool-annotationText'))
-    expect(screen.queryByTestId('annotation-tool-hint')).toBeNull()
+  it('gates the five rows out of the strip until the overlay is on, then shows them enabled', async () => {
+    // A default-off overlay reserves no layout: the rows are absent, not merely disabled, so the
+    // Plan View keeps the height it had before Annotations existed (#81 §3.2).
+    for (const id of ['annotationText', 'annotationLeader', 'annotationArrow', 'annotationCloud', 'annotationMarker'])
+      expect(screen.queryByTestId(`renovation-tool-${id}`)).toBeNull()
     await overlayOn()
     for (const id of ['annotationText', 'annotationLeader', 'annotationArrow', 'annotationCloud', 'annotationMarker'])
       expect((screen.getByTestId(`renovation-tool-${id}`) as HTMLButtonElement).disabled).toBe(false)

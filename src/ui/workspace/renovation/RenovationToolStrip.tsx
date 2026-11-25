@@ -54,6 +54,15 @@ const TOOL_LABELS: { [T in RenovationToolId]: string } = {
   annotationMarker: ANNOTATION_STRINGS.toolMarker,
 }
 
+/** The five Annotation rows, which the Notes overlay gates out of the strip when it is off (#81 §3.2). */
+const ANNOTATION_TOOL_IDS: Partial<Record<RenovationToolId, true>> = {
+  annotationText: true,
+  annotationLeader: true,
+  annotationArrow: true,
+  annotationCloud: true,
+  annotationMarker: true,
+}
+
 /** The strip's own shortcut per row. No workspace tool shortcut exists today, so these are new keys. */
 const TOOL_KEYS: { [T in RenovationToolId]: string } = {
   select: 'v',
@@ -140,6 +149,8 @@ export interface RenovationToolStripProps {
   onMarkDemolition(): void
   onTogglePick(state: RenovationState): void
   onNotice(notice: string | null): void
+  /** Whether the Notes overlay is on; off, the five Annotation rows are absent, not merely disabled (#81 §3.2). */
+  overlayOn: boolean
 }
 
 /** Whether a keystroke belongs to a field rather than to the workspace. */
@@ -149,9 +160,15 @@ const isTyping = (target: EventTarget | null): boolean => {
 }
 
 export function RenovationToolStrip(props: RenovationToolStripProps): ReactNode {
-  const { display, hasDesignOption, activeTool, pickStates, notice, blocked, onTool, onMarkDemolition, onTogglePick, onNotice } = props
+  const { display, hasDesignOption, activeTool, pickStates, notice, blocked, onTool, onMarkDemolition, onTogglePick, onNotice, overlayOn } = props
   const reasons = { ...DEFAULT_BLOCKED, ...blocked }
   const hidden = hiddenToolCount(display, hasDesignOption)
+  // The Notes overlay is the Annotation group's gate (#81 §3.2). Off, the five rows are absent from
+  // the strip entirely — a default-off overlay reserves no layout, so the Plan View keeps the width
+  // and height #55 gave it and the strip stays the one row it was before Annotations existed.
+  const shownRows = RENOVATION_TOOL_ROWS.filter(
+    (row) => toolIsAvailable(row.id, display, hasDesignOption) && (overlayOn || ANNOTATION_TOOL_IDS[row.id] === undefined),
+  )
 
   const run = (tool: RenovationToolId): void => {
     if (tool === 'markDemolition') onMarkDemolition()
@@ -217,7 +234,7 @@ export function RenovationToolStrip(props: RenovationToolStripProps): ReactNode 
 
   return (
     <div className="bb-renovation-tool-strip" data-testid="renovation-tool-strip" data-display={display}>
-      {RENOVATION_TOOL_ROWS.filter((row) => toolIsAvailable(row.id, display, hasDesignOption)).map((row) => {
+      {shownRows.map((row) => {
         const reason = reasons[row.id]
         return (
           <button

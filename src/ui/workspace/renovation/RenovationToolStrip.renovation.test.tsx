@@ -24,6 +24,7 @@ const props = (over: Partial<Parameters<typeof RenovationToolStrip>[0]> = {}): P
   onMarkDemolition: vi.fn(),
   onTogglePick: vi.fn(),
   onNotice: vi.fn(),
+  overlayOn: true,
   ...over,
 })
 
@@ -75,6 +76,7 @@ describe('the tool strip', () => {
           onMarkDemolition={vi.fn()}
           onTogglePick={vi.fn()}
           onNotice={vi.fn()}
+          overlayOn={true}
         />,
       )
       const label = `${each.display}${each.hasDesignOption ? '' : ' without an Option'}`

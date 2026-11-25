@@ -3441,6 +3441,7 @@ export function FloorWorkspace(): ReactNode {
                 onMarkDemolition={markRenovationDemolition}
                 onTogglePick={togglePickState}
                 onNotice={showRenovationNotice}
+                overlayOn={notesOverlayOn}
               />
               {viewRenovationDisplay(view) !== 'existing' && renovationOptionId === null ? (
                 <RenovationErrorBanner
