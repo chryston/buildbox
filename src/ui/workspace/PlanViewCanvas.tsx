@@ -686,6 +686,12 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       onCommentEntity?.(id)
       return
     }
+    // A Text or Reference Marker in hand places where the click landed, even on an entity: the note
+    // is the thing being made, not a selection, and it anchors to the point, not the entity (#81 §3.5).
+    if ((tool === 'annotationText' || tool === 'annotationMarker') && lastPointer.current !== null) {
+      onCanvasClick?.(lastPointer.current)
+      return
+    }
     if (drawnWalls?.walls.some((wall) => wall.id === id) === true) onSelectWall?.(id)
     else if (drawnOpenings.some((host) => host.symbols.some((symbol) => symbol.id === id))) onSelectOpening?.(id)
     else if (drawnRooms?.rooms.some((room) => room.id === id) === true) onSelectRoom?.(id)
@@ -884,6 +890,12 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       // not the start of a drag (#80 §9). Without this the tool would move the cabinet it was naming.
       if (tool === 'comment' || tool === 'annotationLeader' || tool === 'annotationArrow') {
         onCommentEntity?.(id)
+        return
+      }
+      // A Text or Reference Marker in hand places where the click landed, even on an Item: the note
+      // is the thing being made, not a selection, and a press must not drag the cabinet it names (#81 §3.5).
+      if (tool === 'annotationText' || tool === 'annotationMarker') {
+        if (lastPointer.current !== null) onCanvasClick?.(lastPointer.current)
         return
       }
       // A click that the cycle answers with a *different* entity is not a drag of the thing under
