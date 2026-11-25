@@ -326,7 +326,7 @@ async function rasterImages(ops: readonly FlatOp[], deps: ExportDeps): Promise<M
 export { composeSheet, modelBounds } from './compose'
 export type { ComposedDrawing, ComposedSheet } from './compose'
 export { fitCheck, suggestionsFor, downsampledSize, pngSize, PAGE_MM, MARGIN_MM, FIXED_SCALES } from './fit'
-export { EXPORT_FOOTER, NOT_TO_SCALE, roomLabel, scaleStatement, SCOPE } from './strings'
+export { EXPORT_FOOTER, NOT_TO_SCALE, NOTES_SWITCH_LABELS, notesStatement, roomLabel, scaleStatement, SCOPE } from './strings'
 // The whole table as one namespace, for the CI scan over shipped strings (#66 criterion 8),
 // which has to see every word the writers can put in a file rather than the four the dialog asks for.
 export * as EXPORT_WORDS from './strings'
@@ -368,6 +368,7 @@ export type {
   ExportResult,
   ExportSnapshot,
   ListsRecipe,
+  NotesSwitches,
   Orientation,
   OrientationSetting,
   PageSize,
@@ -382,3 +383,6 @@ export type {
   ScaleSetting,
 } from './types'
 export type { AssetBytes } from './types'
+export { DEFAULT_NOTES_SWITCHES } from './types'
+export { exportNotes } from './notes'
+export type { ExportNotesInput, ExportNotePlacement } from './notes'

@@ -59,7 +59,7 @@ const COMPOSITION: RecordedComposition = {
   ],
   included_layers: [{ id: 'l-1', name: 'Structure' }],
   color_overrides: [],
-  notes: { overlay: false },
+  notes: { view_annotations: true, comment_pins: false, include_resolved_pins: false },
 }
 
 /** Four Placed Items in scope, all four of them hidden by the view the dialog was opened from. */
@@ -205,7 +205,7 @@ describe('the Export dialog with renovation on', () => {
     expect(block).toHaveTextContent('Structure, Unlayered')
     expect(block).toHaveTextContent('Colour overrides')
     expect(block).toHaveTextContent('none')
-    expect(block).toHaveTextContent('off')
+    expect(block).toHaveTextContent('View Annotations')
   })
 
   it('blocks a Display with no Option and opens the view that needs one', async () => {

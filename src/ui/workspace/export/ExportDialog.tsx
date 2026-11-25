@@ -21,7 +21,7 @@ import { Modal } from '../../library/Modal'
 import { STRINGS } from '../../strings'
 import { RENOVATION_STRINGS } from '../../strings/renovation'
 import { displayLabel } from '../renovation/displayTheme'
-import { fitCheck, suggestionsFor } from '../../../export'
+import { fitCheck, notesStatement, suggestionsFor } from '../../../export'
 import type {
   DrawingLayerChip,
   ExportProgress,
@@ -403,11 +403,7 @@ export const ExportDialog = ({
                     </div>
                     <div>
                       <dt>{RENOVATION_STRINGS.exportCompositionNotes}</dt>
-                      <dd>
-                        {composition.notes.overlay
-                          ? RENOVATION_STRINGS.exportCompositionOn
-                          : RENOVATION_STRINGS.exportCompositionOff}
-                      </dd>
+                      <dd>{notesStatement(composition.notes)}</dd>
                     </div>
                   </dl>
                 </details>

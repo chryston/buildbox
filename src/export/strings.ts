@@ -12,8 +12,32 @@
  */
 
 import type { RenovationState } from '../derive'
-import type { RenovationDisplay } from '../domain'
-import type { Orientation, PageSize } from './types'
+import type { CommentStatus, RenovationDisplay } from '../domain'
+import type { CompositionNotes, NotesSwitches, Orientation, PageSize } from './types'
+
+/**
+ * The three Notes switches in the order the dialog offers them (#83 §1), in the words the prototype
+ * uses. The dialog's chips, the composition block and the file's metadata all read the same three
+ * switches, so the words live beside the switches' own type rather than in a second table.
+ */
+export const NOTES_SWITCH_LABELS: Readonly<Record<keyof NotesSwitches, string>> = {
+  viewAnnotations: 'View Annotations',
+  commentPins: 'Comment Pins',
+  includeResolvedPins: 'include Resolved pins',
+}
+
+/** The status a pin's label ends with (#83 §3), the same two words the Notes panel writes. */
+export const PIN_STATUS_WORDS: Readonly<Record<CommentStatus, string>> = { open: 'Open', resolved: 'Resolved' }
+
+/** What the composition block says a sheet has on it: the switches that were on, or `none`. */
+export const notesStatement = (notes: CompositionNotes): string => {
+  const on = [
+    notes.view_annotations ? NOTES_SWITCH_LABELS.viewAnnotations : null,
+    notes.comment_pins ? NOTES_SWITCH_LABELS.commentPins : null,
+    notes.include_resolved_pins ? NOTES_SWITCH_LABELS.includeResolvedPins : null,
+  ].filter((word): word is string => word !== null)
+  return on.length === 0 ? 'none' : on.join(', ')
+}
 
 /** The fixed footer, verbatim from #61 §5. Every format writes this one string. */
 export const EXPORT_FOOTER =

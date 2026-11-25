@@ -42,8 +42,6 @@ export type PngLongEdge = 2048 | 4096
  */
 export interface DrawingToggles {
   readonly layers?: readonly EntityId[]
-  /** The `Notes overlay` chip, which stays off until #80 and #81 give it something to overlay. */
-  readonly notesOverlay?: boolean
 }
 
 /** One Drawing Layer as the composition names it: its ID and the name it had when it was drawn. */
@@ -59,9 +57,18 @@ export interface CompositionColorOverride {
   readonly color: string
 }
 
-/** The Notes switches. Only the overlay exists yet; the rest arrive with S10. */
+/**
+ * The Drawing tab's three Notes switches (#83 §1), as the metadata spells them.
+ *
+ * They are recorded per sheet because they decide what the sheet has on it: an Annotation is drawn
+ * content of one view, and a pin stands in one Floor's coordinates. The on-screen overlay is not
+ * here and never will be — the export composition comes from the recipe and from nothing else
+ * (#83 Notes), so a file cannot depend on what the person had switched off an hour ago.
+ */
 export interface CompositionNotes {
-  readonly overlay: boolean
+  readonly view_annotations: boolean
+  readonly comment_pins: boolean
+  readonly include_resolved_pins: boolean
 }
 
 /**
@@ -119,6 +126,29 @@ export type RecipeViewRef =
   | { readonly kind: 'item-detail'; readonly itemDesignId: string; readonly viewId?: string }
 
 /**
+ * The Drawing tab's three Notes switches (#83 §1).
+ *
+ * They are recipe and nothing else: never the saved view, never an Edit Transaction, never in a
+ * Backup. The on-screen Notes overlay is a different switch on a different surface, and turning
+ * these three does not touch it.
+ */
+export interface NotesSwitches {
+  /** Draw the Annotations of the exported view. On by default (#83 §5 of the contract). */
+  readonly viewAnnotations: boolean
+  /** Draw a pin for every Comment with a place in the exported view. Off by default. */
+  readonly commentPins: boolean
+  /** Give Resolved Comments pins too. Off, and only ever on while `commentPins` is on. */
+  readonly includeResolvedPins: boolean
+}
+
+/** What a dialog with nothing remembered starts on (#83 criterion 2). */
+export const DEFAULT_NOTES_SWITCHES: NotesSwitches = Object.freeze({
+  viewAnnotations: true,
+  commentPins: false,
+  includeResolvedPins: false,
+})
+
+/**
  * Everything the user chose. The recipe is the whole input; nothing else is remembered.
  *
  * `pageSize`, `orientation` and `scale` are PDF-only, but they are always present rather than
@@ -142,6 +172,12 @@ export interface Recipe {
   /** Copied from the Project's preferences when the dialog opens. */
   readonly unit: DisplayUnit
   readonly precision: number
+  /**
+   * The three Notes switches (#83 §1), part of the remembered recipe. Absent is the default: a recipe
+   * remembered before #83 has no opinion, and it means the same thing a dialog with nothing remembered
+   * means.
+   */
+  readonly notes?: NotesSwitches
   /** What the sheets were drawn from, recorded by `provenanceOf` for the file's metadata. */
   readonly composition?: readonly RecordedComposition[]
 }
@@ -157,6 +193,11 @@ export interface Recipe {
 export interface ListsRecipe {
   readonly tables: readonly TableId[]
   readonly scope: QuantityScope
+  /**
+   * Whether the Comment Register lists Resolved Comments (#83 §4.2). Absent means off, and it changes
+   * only the Register: no other table has a status to hide.
+   */
+  readonly includeResolvedComments?: boolean
 }
 
 /** The Project as it was when Export was pressed, and the revision those bytes are. */

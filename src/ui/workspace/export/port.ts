@@ -20,6 +20,7 @@ import type {
   ExportProgress,
   ListsRecipe,
   ListsSummary,
+  NotesSwitches,
   Recipe,
   RecipeViewRef,
   RecordedComposition,
@@ -120,7 +121,7 @@ export interface ExportPort {
    * What the sheet would be drawn from with these toggles (#73 §1), which is what the collapsible
    * block shows and what the file's metadata will carry. Asynchronous because it is `export`'s.
    */
-  composition(ref: RecipeViewRef, toggles: DrawingToggles): Promise<RecordedComposition | null>
+  composition(ref: RecipeViewRef, toggles: DrawingToggles, notes?: NotesSwitches): Promise<RecordedComposition | null>
   /**
    * The first selected view whose Drawing export is blocked (#73 §3), or `null`. The Lists tab is
    * never blocked: its scope is chosen here and never inherited from a view.

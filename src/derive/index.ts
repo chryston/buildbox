@@ -29,6 +29,12 @@
 export { cabinetSceneUnits } from './cabinetSceneUnits'
 export { commentAnchorPoint, commentIsInContext, commentScopeLabel, commentsForItemDetail, commentsForView, effectiveCommentScope } from './commentContext'
 export { annotationIsInContext, annotationLayerAccess, annotationOwner, annotationsForView, ANNOTATION_UNLAYERED_INK, effectiveAnnotationStyle, type EffectiveAnnotationStyle } from './annotationsContext'
+export {
+  COMMENT_ANCHOR_KIND_LABELS,
+  commentAnchorLabel,
+  commentAnchorSubject,
+  commentFeatureLabel,
+} from './commentLabels'
 export type { EffectiveCommentScope } from './commentContext'
 export { SNAP_ROW_KINDS, enabledSnapKinds, snapCandidates } from './snapCandidates'
 export type { SnapGeometry, SnapSettingKinds, SnapSourceInput, WallFaceSource } from './snapCandidates'

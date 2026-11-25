@@ -117,7 +117,7 @@ describe('a drawing export never edits (#73 criterion 12, criterion 2)', () => {
   it('leaves the Project, the revision and every saved view exactly as it found them', async () => {
     const before = canonicalJson(project)
     const viewsBefore = canonicalJson(project.views)
-    const toggled: RecipeViewRef = { ...VIEW, toggles: { layers: [], notesOverlay: true } }
+    const toggled: RecipeViewRef = { ...VIEW, toggles: { layers: [] } }
     for (const format of ['svg', 'pdf'] as const) {
       for (const view of [VIEW, toggled]) {
         const result = await exportFiles(snapshot, recipeOf(format, view), DEPS)

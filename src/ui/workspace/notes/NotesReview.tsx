@@ -16,7 +16,7 @@ import type { NotesChoice, NotesDependencyReport, NotesResolution, NotesSubject,
 import type { Project } from '../../../domain'
 import { savedViewById } from '../../../domain'
 import { STRINGS } from '../../strings'
-import { commentAnchorSubject, commentFeatureLabel } from './anchorLabel'
+import { commentAnchorSubject, commentFeatureLabel } from '../../../derive'
 
 /** The answer to one row: the choice, and the target when the choice takes one. */
 export interface NotesAnswer {

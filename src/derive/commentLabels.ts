@@ -1,22 +1,28 @@
 /**
  * The plain words a Comment's Anchor is named with (#80 §5.5, §5.6, §10).
  *
- * An Anchor is storage: `entity`, `point`, `left_face`, `node-7`. A person reading a row or a filter
- * reads `Placed Item · Base 600 #2 · Existing Model` and `+ Comment on Kitchen side face`, and criterion
- * 19 is explicit that no code ever reaches the screen. This module is the single place that translation
- * happens, so a row, a filter, the editor and the inspector cannot drift into four spellings of one
- * thing.
- *
- * A subject that has been deleted reads as `unrecognised target` rather than as a blank or a raw ID: the
- * §6 rules already put such a Comment in every context, so the row has to say something honest about why
- * it cannot name what it is about.
+ * The Notes panel writes these on a row's second line and the Comment Register writes them in its
+ * `target_label` column, which is why they live here rather than in `ui`: the file and the screen
+ * name one Anchor the same way, and a second copy of the naming rules is a second answer. §6 rules
+ * already put a Comment about a deleted subject in every context, so the label has to say something
+ * honest about why it cannot name what it is about.
  */
-import type { CommentAnchor, EntityId, Project, ProposedModel } from '../../../domain'
-import { COMMENT_KIND_LABELS } from '../../strings/comments'
-import { derivePlacement, placementLabels } from '../../../derive'
+import { derivePlacement, placementLabels } from './effective'
+import type { CommentAnchor, EntityId, Project, ProposedModel } from '../domain'
 
 /** A subject that no longer exists, which the row says so about. */
 const MISSING = 'unrecognised target'
+
+/** The kind half of an Anchor label, and the Register's `target_type` said in words (#80 §5.5). */
+export const COMMENT_ANCHOR_KIND_LABELS = {
+  project: 'Project',
+  floor: 'Floor',
+  design_option: 'Design Option',
+  item_design: 'Item Design',
+  entity: 'Placed Item',
+  feature: 'Feature',
+  floor_point: 'Floor Point',
+} as const satisfies Record<CommentAnchor['kind'], string>
 
 /** The Wall/Beam/Skirting/Service style of name: its Room name, its reference, or nothing. */
 const refOf = (row: unknown): string | null => {
@@ -38,6 +44,12 @@ const entityCollections = (model: ProposedModel): readonly unknown[][] => [
   model.placedItems,
 ]
 
+/** The vertical collections of a container, which a container holds beside the five core ones. */
+function extraCollections(model: ProposedModel): readonly unknown[] {
+  const record = model as unknown as Record<string, unknown>
+  return [record['beams'], record['skirting'], record['services']].flatMap((rows) => (Array.isArray(rows) ? rows : []))
+}
+
 /** The name of the entity an entity or feature Anchor names, or `null` when it has gone. */
 function entityName(project: Project, entityId: EntityId): string | null {
   const placed = project.existingModel.placedItems.find((row) => row.id === entityId)
@@ -58,12 +70,6 @@ function entityName(project: Project, entityId: EntityId): string | null {
     }
   }
   return null
-}
-
-/** The vertical collections of a container, which a container holds beside the five core ones. */
-function extraCollections(model: ProposedModel): readonly unknown[] {
-  const record = model as unknown as Record<string, unknown>
-  return [record['beams'], record['skirting'], record['services']].flatMap((rows) => (Array.isArray(rows) ? rows : []))
 }
 
 type NodeLike = { id: string; name?: string; spaceLabel?: string; children?: unknown[] }
@@ -141,6 +147,5 @@ export function commentAnchorSubject(project: Project, anchor: CommentAnchor): s
 
 /** The whole Anchor label a row writes on its second line, e.g. `Placed Item · Base 600 #2`. */
 export function commentAnchorLabel(project: Project, anchor: CommentAnchor): string {
-  return `${COMMENT_KIND_LABELS[anchor.kind]} · ${commentAnchorSubject(project, anchor)}`
+  return `${COMMENT_ANCHOR_KIND_LABELS[anchor.kind]} · ${commentAnchorSubject(project, anchor)}`
 }
-

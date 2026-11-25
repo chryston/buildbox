@@ -21,9 +21,11 @@ import type {
   CompositionColorOverride,
   CompositionLayer,
   DrawingToggles,
+  NotesSwitches,
   RecordedComposition,
   RecordedElevation,
 } from './types'
+import { DEFAULT_NOTES_SWITCHES } from './types'
 
 /** The gates and the record for one saved view, from one set of temporary toggles. */
 export interface DrawingComposition {
@@ -33,6 +35,12 @@ export interface DrawingComposition {
   readonly recorded: RecordedComposition
   /** The Design Option this view draws, or `null` for the Existing Model alone. */
   readonly optionId: EntityId | null
+  /**
+   * Whether one layer key reaches the paper (#83 §2.1): the saved view's visibility with the dialog's
+   * chips over the top. An Annotation names a layer directly rather than through an entity, so the
+   * gates' entity-shaped answer is not the question it has to ask.
+   */
+  readonly drawnLayer: (key: EntityId) => boolean
 }
 
 /** What one layer key is called on the sheet: the Project's own name, or `Unlayered`. */
@@ -63,6 +71,7 @@ export function drawingComposition(
   view: PlanView | ElevationView,
   floorId: EntityId,
   toggles: DrawingToggles | undefined,
+  notes: NotesSwitches = DEFAULT_NOTES_SWITCHES,
 ): DrawingComposition {
   // Flag off, no sheet may say it was drawn from a Design Option: the drawing is the Existing Model
   // whatever the saved view holds, and the metadata and the title block have to agree with it.
@@ -102,10 +111,15 @@ export function drawingComposition(
       layer_order: order.map(row),
       included_layers: order.filter(drawnKey).map(row),
       color_overrides: order.map(override).filter((each): each is CompositionColorOverride => each !== null),
-      notes: { overlay: toggles?.notesOverlay ?? false },
+      notes: {
+        view_annotations: notes.viewAnnotations,
+        comment_pins: notes.commentPins,
+        include_resolved_pins: notes.includeResolvedPins,
+      },
       ...(view.kind === 'elevation' ? { elevation: elevationOf(view) } : {}),
     },
     optionId,
+    drawnLayer: drawnKey,
   }
 }
 
