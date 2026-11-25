@@ -61,6 +61,12 @@ function testWorkspaceServices(): WorkspaceServices {
 
 let view: TestView
 
+/** Bring the panel out of the rail: most of this file is about the list inside it (§4.2). */
+async function openNotesPanel(): Promise<void> {
+  await userEvent.click(screen.getByTestId('notes-panel-toggle'))
+  await screen.findByTestId('notes-panel')
+}
+
 async function renderWorkspace(project: Project = sceneProject()): Promise<void> {
   view = await openTestView(project)
   workspaceStore.getState().reset()
@@ -91,13 +97,22 @@ beforeEach(async () => {
 })
 
 describe('the Notes panel (#80 §4, §5)', () => {
-  it('is open by default and lists the notes the context allows', () => {
+  it('starts as a rail and opens from the toolbar control', async () => {
+    // The panel starts closed so the canvas keeps the width #55 gave it (§4.1, §4.3); the control in
+    // §4.2 is what brings it back, and it says which way it will go.
+    expect(screen.getByTestId('notes-panel-collapsed')).toBeTruthy()
+    const toggle = screen.getByTestId('notes-panel-toggle')
+    const closedLabel = toggle.textContent
+    await userEvent.click(toggle)
+    // §4.2: the control says which way it will go, so its word changes with the state.
+    expect(screen.getByTestId('notes-panel-toggle').textContent).not.toBe(closedLabel)
     expect(screen.getByTestId('notes-panel')).toBeTruthy()
     // The fixture holds nine notes; the context rules are on, so at least the Floor's own are here.
     expect(rows().length).toBeGreaterThan(0)
   })
 
   it('shows every note once the context rules are switched off, and hides the resolved ones on request', async () => {
+    await openNotesPanel()
     await userEvent.click(screen.getByTestId('notes-current-context'))
     // The status filter starts on `Open`, so the fixture's one resolved note is hidden until asked for.
     expect(rows()).toHaveLength(8)
@@ -109,6 +124,7 @@ describe('the Notes panel (#80 §4, §5)', () => {
   })
 
   it('searches reference, title and body across the whole Project', async () => {
+    await openNotesPanel()
     await userEvent.click(screen.getByTestId('notes-current-context'))
     await userEvent.type(screen.getByTestId('notes-search'), 'C-004')
     expect(rows()).toHaveLength(1)
@@ -117,9 +133,9 @@ describe('the Notes panel (#80 §4, §5)', () => {
 
   it('collapses to a rail and opens again from the header switch', async () => {
     await userEvent.click(screen.getByTestId('notes-panel-toggle'))
-    expect(screen.getByTestId('notes-panel-collapsed')).toBeTruthy()
-    await userEvent.click(screen.getByTestId('notes-panel-toggle'))
     expect(screen.getByTestId('notes-panel')).toBeTruthy()
+    await userEvent.click(screen.getByTestId('notes-panel-toggle'))
+    expect(screen.getByTestId('notes-panel-collapsed')).toBeTruthy()
   })
 })
 
@@ -134,6 +150,7 @@ describe('the overlay (#80 §7)', () => {
   })
 
   it('reveals one note when its row is clicked, and clears the focus on Escape', async () => {
+    await openNotesPanel()
     await userEvent.click(screen.getByTestId('notes-overlay-button'))
     await userEvent.click(screen.getByTestId('notes-current-context'))
     // Clicking the pin on the Plan View reveals the note: its row becomes the selected one (#80 §7.5).
@@ -184,6 +201,7 @@ describe('the Comment tool and editor (#80 §9, §10)', () => {
 
 describe('the inspector and the Warning strip (#80 §8, §11)', () => {
   it('names the notes about the selected thing', async () => {
+    await openNotesPanel()
     const wall = view.project().existingModel.walls[0]!.id
     await userEvent.click(screen.getByTestId('notes-current-context'))
     // C-005 is anchored to the fixture's first Wall.

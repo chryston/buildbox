@@ -69,7 +69,12 @@ export interface NotesSessionSnapshot {
 }
 
 const DEFAULTS = {
-  panelOpen: true,
+  // §4.1 docks the panel on the right and §4.2 gives a `Hide Notes` / `Show Notes` control, but it does
+  // not say which state a Project opens in. It starts closed: the panel is 380 px (§4.3) out of a
+  // canvas region that #55 already shares with the Section pane, and taking that width from the host
+  // pushes the split below STACK_BELOW_PX, so a workspace that had two panes side by side stacks them
+  // and clips the Section. A note is one keystroke away; a clipped drawing is a person's whole screen.
+  panelOpen: false,
   overlayOn: false,
   selectedCommentId: null,
   revealNonce: 0,

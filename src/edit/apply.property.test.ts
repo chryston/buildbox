@@ -1431,6 +1431,28 @@ function seedRarePreconditions(): void {
   const serviceRiserIds = g.ids(1)
   const serviceId = serviceIds[0]!
   const serviceRiserId = serviceRiserIds[0]!
+  const commentId = g.ids(1)[0]!
+  // A Comment on a Floor anchor: the pass resolves it and reopens it, which is the pair a random
+  // sequence only reaches by luck.
+  current = {
+    ...current,
+    comments: [
+      ...current.comments,
+      {
+        id: commentId,
+        reference: 'C-001',
+        title: 'Scripted note',
+        body: 'Walked by the scripted pass.',
+        anchor: { kind: 'floor' as const, floorId },
+        status: 'open' as const,
+        priority: 'normal' as CommentPriority,
+        createdAt: NOW,
+        updatedAt: NOW,
+        scope: COMMENT_SCOPE_ALL,
+      },
+    ],
+    commentReferenceCounter: 1,
+  }
   const wall: WallDraft = {
     line: { kind: 'line', start: pt(0, 0), end: pt(4000, 0) },
     thickness: 100,
@@ -1558,6 +1580,15 @@ function seedRarePreconditions(): void {
     intent('service.rename', { serviceId: serviceRiserId, label: 'Stack' }),
     intent('service.delete', { serviceId: serviceRiserId }),
     intent('service.delete', { serviceId: serviceId }),
+    // `comment.reopen` refuses an open Comment and `comment.resolve` refuses a resolved one, so a
+    // random sequence only reaches Reopen if a Resolve happened first and the Comment then survived
+    // the Deletes after it. That is a coin toss over the whole run, so the pair is walked here on a
+    // Comment the pass seeds itself — `comment.create` is left to the random sequences, because its
+    // Undo deliberately keeps the reference it allocated, which this pass's exact round-trip check
+    // would read as a difference.
+    intent('comment.resolve', { commentId, at: LATER }),
+    intent('comment.reopen', { commentId, at: LATER }),
+    intent('comment.delete', { commentId }),
   ]
   for (const next of steps) {
     const tally = seen.get(next.type) ?? { applied: 0, refused: 0 }

@@ -34,6 +34,10 @@ async function openScene(page: Page): Promise<void> {
   await waitForFonts(page)
   await openProjectFromLibrary(page, projectName)
   await floorPlanCanvas(page).waitFor()
+  // The panel starts closed so the canvas keeps the width #55 gave it (§4.1); every case here is about
+  // the panel, so the helper brings it out of the rail.
+  await page.getByTestId('notes-panel-toggle').click()
+  await expect(page.getByTestId('notes-panel')).toBeVisible()
 }
 
 test.describe('Comments (#80)', () => {

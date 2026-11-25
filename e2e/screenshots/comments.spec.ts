@@ -45,10 +45,14 @@ async function openCommentsPlan(page: Page): Promise<void> {
   await expect(floorPlanCanvas(page)).toBeVisible()
   await waitForFonts(page)
   await waitForStablePaint(floorPlanCanvas(page))
+  // The panel starts closed so the canvas keeps the width #55 gave it (§4.1); these frames are about
+  // the panel, so the helper brings it out of the rail with the §4.2 control.
+  await page.getByTestId('notes-panel-toggle').click()
+  await expect(page.getByTestId('notes-panel')).toBeVisible()
 }
 
 test.describe('the Notes panel', () => {
-  test('the Plan View as it opens: the panel docked, the overlay off', async ({ page }) => {
+  test('the Plan View with the panel docked: the overlay off', async ({ page }) => {
     await openCommentsPlan(page)
     await expect(page.getByTestId('notes-panel')).toBeVisible()
     await expect(page.getByTestId('notes-overlay-button')).toHaveAttribute('aria-pressed', 'false')

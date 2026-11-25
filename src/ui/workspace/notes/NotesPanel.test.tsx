@@ -16,8 +16,9 @@ import { fileURLToPath } from 'node:url'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EntityId, Project } from '../../../domain'
-import { NotesPanel } from './NotesPanel'
+import { NotesPanel, NotesPanelToggle } from './NotesPanel'
 import { notesSessionStore } from './notesSession'
+import { COMMENT_STRINGS } from '../../strings/comments'
 
 const fixturesRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../fixtures')
 
@@ -83,6 +84,9 @@ const selectRow = (reference: string): void => {
 
 beforeEach(() => {
   notesSessionStore.getState().reset()
+  // The panel starts closed (§4.1 with the canvas width #55 gives it); these tests are about the list
+  // inside it, so opening it is a precondition rather than the thing under test.
+  notesSessionStore.getState().setPanelOpen(true)
 })
 
 describe('the Notes panel list (#80 §5)', () => {
@@ -223,5 +227,16 @@ describe('the Notes panel list (#80 §5)', () => {
   it('shows the empty editor prompt when nothing is selected', () => {
     panel()
     expect(screen.getByTestId('notes-editor-empty').textContent).toContain('Select a note')
+  })
+})
+
+describe('the `Hide Notes` / `Show Notes` control (#80 §4.2)', () => {
+  it('says which way it will go, in the two words the issue gives it', () => {
+    notesSessionStore.getState().setPanelOpen(false)
+    render(<NotesPanelToggle />)
+    expect(screen.getByTestId('notes-panel-toggle').textContent).toBe(COMMENT_STRINGS.showNotes)
+    fireEvent.click(screen.getByTestId('notes-panel-toggle'))
+    expect(notesSessionStore.getState().panelOpen).toBe(true)
+    expect(screen.getByTestId('notes-panel-toggle').textContent).toBe(COMMENT_STRINGS.hideNotes)
   })
 })
