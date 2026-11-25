@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url'
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import type { Project } from '../../domain'
-import { withComments } from '../../domain/testing'
+import { withAnnotations, withComments } from '../../domain/testing'
 import type { KeepFixed, Pt } from '../../geometry'
 import { canonicalJson } from '../../lib'
 import { applyIntent, type Intent } from '../index'
@@ -32,7 +32,7 @@ const seed = JSON.parse(
 const FLOOR = 'seed-001'
 // The seed was written before the Comment collection existed, and `applyIntent` judges the Comments a
 // Project carries on every edit (#80 §14), so it arrives with the two fields the fifteenth step writes.
-const project = withComments(seed.projects[0].data)
+const project = withAnnotations(withComments(seed.projects[0].data))
 const model = project.existingModel
 
 const wallIds = model.walls.map((each) => each.id)

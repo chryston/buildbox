@@ -18,21 +18,28 @@ import type { Comment, CommentPriority, CommentScope, EntityId, Project, SavedVi
 import { COMMENT_SCOPE_ALL, compareCommentReferences, designOptionsOf, isCommentScopeAll } from '../../../domain'
 import { commentIsInContext, commentScopeLabel, effectiveCommentScope, effectiveModel } from '../../../derive'
 import { COMMENT_PRIORITY_LABELS, COMMENT_STATUS_FILTERS, COMMENT_STATUS_LABELS, COMMENT_STRINGS, COMMENT_TARGET_LABELS } from '../../strings/comments'
+import { ANNOTATION_STRINGS } from '../../strings/annotations'
 import { formatSince } from '../../library/formatSince'
 import { commentAnchorLabel } from './anchorLabel'
 import { useNotesSession } from './notesSession'
+import { AnnotationsTab } from './AnnotationsTab'
+import type { AnnotationEditPatch } from './AnnotationsTab'
+import { annotationIsInContext } from '../../../derive'
 import type { NotesPriorityFilter, NotesStatusFilter, NotesTargetFilter } from './notesSession'
 
 export interface NotesPanelProps {
   project: Project
   /** The saved view the panel is beside, or `null` when none is open. */
-  view: (SavedViewSettings & { floorId: EntityId }) | null
+  view: (SavedViewSettings & { floorId: EntityId; id: EntityId }) | null
   /** The wall-clock instant edits are stamped with; the panel never reads the clock itself. */
   now: string
   onResolve(commentId: EntityId): void
   onReopen(commentId: EntityId): void
   onDelete(commentId: EntityId): void
   onEdit(commentId: EntityId, patch: { title?: string; body?: string; priority?: CommentPriority; scope?: CommentScope }): void
+  onEditAnnotation(annotationId: EntityId, patch: AnnotationEditPatch): void
+  onDeleteAnnotation(annotationId: EntityId): void
+  onGoToView(viewId: EntityId): void
 }
 
 /** The priority dot's colour, chosen by the priority alone (§37). */
@@ -52,7 +59,7 @@ function matchesQuery(comment: Comment, query: string): boolean {
 /** The four filters, composed with AND, after the §6 context rule has had its say (§5.3). */
 function listedComments(
   project: Project,
-  view: (SavedViewSettings & { floorId: EntityId }) | null,
+  view: (SavedViewSettings & { floorId: EntityId; id: EntityId }) | null,
   session: {
     currentContext: boolean
     status: NotesStatusFilter
@@ -302,7 +309,7 @@ function CommentRow({
 }
 
 export function NotesPanel(props: NotesPanelProps): ReactNode {
-  const { project, view, now, onResolve, onReopen, onDelete, onEdit } = props
+  const { project, view, now, onResolve, onReopen, onDelete, onEdit, onEditAnnotation, onDeleteAnnotation, onGoToView } = props
   const panelOpen = useNotesSession((state) => state.panelOpen)
   const selectedCommentId = useNotesSession((state) => state.selectedCommentId)
   const titleToFocus = useNotesSession((state) => state.titleToFocus)
@@ -319,6 +326,14 @@ export function NotesPanel(props: NotesPanelProps): ReactNode {
   )
   const selected = listed.find((comment) => comment.id === selectedCommentId) ?? project.comments.find((comment) => comment.id === selectedCommentId) ?? null
 
+  const tab = useNotesSession((state) => state.tab)
+  const annotationCount = useMemo(
+    () => (currentContext && view !== null
+      ? (project.annotations ?? []).filter((annotation) => annotation.viewId === view.id && annotationIsInContext(project, view, annotation)).length
+      : (project.annotations ?? []).length),
+    [project, view, currentContext],
+  )
+
   const toggle = useCallback(
     (comment: Comment): void => {
       if (comment.status === 'open') onResolve(comment.id)
@@ -332,12 +347,12 @@ export function NotesPanel(props: NotesPanelProps): ReactNode {
   return (
     <section className="bb-notes" data-testid="notes-panel" aria-label={COMMENT_STRINGS.notesPanel}>
       <div className="bb-notes-tabs" role="tablist" data-testid="notes-tabs">
-        <span className="bb-notes-tab" data-active="true" role="tab" data-testid="notes-tab-comments">
+        <button type="button" className="bb-notes-tab" data-active={tab === 'comments' ? 'true' : 'false'} role="tab" aria-selected={tab === 'comments'} data-testid="notes-tab-comments" onClick={() => session().setTab('comments')}>
           {COMMENT_STRINGS.commentsTab} {String(listed.length)}
-        </span>
-        <span className="bb-notes-tab" data-active="false" role="tab" data-testid="notes-tab-annotations">
-          {COMMENT_STRINGS.annotationsTab} 0
-        </span>
+        </button>
+        <button type="button" className="bb-notes-tab" data-active={tab === 'annotations' ? 'true' : 'false'} role="tab" aria-selected={tab === 'annotations'} data-testid="notes-tab-annotations" onClick={() => session().setTab('annotations')}>
+          {ANNOTATION_STRINGS.annotationsTab} {String(annotationCount)}
+        </button>
       </div>
       <div className="bb-notes-filters" data-testid="notes-filters">
         <input
@@ -357,72 +372,89 @@ export function NotesPanel(props: NotesPanelProps): ReactNode {
           />
           {COMMENT_STRINGS.currentContext}
         </label>
-        <select
-          className="bb-notes-filter"
-          data-testid="notes-status-filter"
-          value={status}
-          onChange={(event) => session().setStatus(event.target.value as NotesStatusFilter)}
-        >
-          {(['open', 'resolved', 'any'] as const).map((value) => (
-            <option key={value} value={value}>
-              {COMMENT_STATUS_FILTERS[value]}
-            </option>
-          ))}
-        </select>
-        <select
-          className="bb-notes-filter"
-          data-testid="notes-priority-filter"
-          value={priority}
-          onChange={(event) => session().setPriority(event.target.value as NotesPriorityFilter)}
-        >
-          <option value="any">{COMMENT_STRINGS.anyPriority}</option>
-          {(['high', 'normal', 'low'] as const).map((value) => (
-            <option key={value} value={value}>
-              {COMMENT_PRIORITY_LABELS[value]}
-            </option>
-          ))}
-        </select>
-        <select
-          className="bb-notes-filter"
-          data-testid="notes-target-filter"
-          value={target}
-          onChange={(event) => session().setTarget(event.target.value as NotesTargetFilter)}
-        >
-          <option value="any">{COMMENT_STRINGS.anyTarget}</option>
-          {(['project', 'floor', 'design_option', 'item_design', 'entity', 'feature', 'floor_point'] as const).map((value) => (
-            <option key={value} value={value}>
-              {COMMENT_TARGET_LABELS[value]}
-            </option>
-          ))}
-        </select>
+        {tab === 'comments' && (
+          <>
+            <select
+              className="bb-notes-filter"
+              data-testid="notes-status-filter"
+              value={status}
+              onChange={(event) => session().setStatus(event.target.value as NotesStatusFilter)}
+            >
+              {(['open', 'resolved', 'any'] as const).map((value) => (
+                <option key={value} value={value}>
+                  {COMMENT_STATUS_FILTERS[value]}
+                </option>
+              ))}
+            </select>
+            <select
+              className="bb-notes-filter"
+              data-testid="notes-priority-filter"
+              value={priority}
+              onChange={(event) => session().setPriority(event.target.value as NotesPriorityFilter)}
+            >
+              <option value="any">{COMMENT_STRINGS.anyPriority}</option>
+              {(['high', 'normal', 'low'] as const).map((value) => (
+                <option key={value} value={value}>
+                  {COMMENT_PRIORITY_LABELS[value]}
+                </option>
+              ))}
+            </select>
+            <select
+              className="bb-notes-filter"
+              data-testid="notes-target-filter"
+              value={target}
+              onChange={(event) => session().setTarget(event.target.value as NotesTargetFilter)}
+            >
+              <option value="any">{COMMENT_STRINGS.anyTarget}</option>
+              {(['project', 'floor', 'design_option', 'item_design', 'entity', 'feature', 'floor_point'] as const).map((value) => (
+                <option key={value} value={value}>
+                  {COMMENT_TARGET_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
       </div>
-      <ul className="bb-note-rows" data-testid="note-rows">
-        {listed.map((comment) => (
-          <CommentRow
-            key={comment.id}
-            project={project}
-            comment={comment}
-            selected={comment.id === selectedCommentId}
-            onSelect={() => session().select(comment.id)}
-            onToggle={() => toggle(comment)}
-          />
-        ))}
-      </ul>
-      {selected === null ? (
-        <p className="bb-notes-empty" data-testid="notes-editor-empty">
-          {COMMENT_STRINGS.selectNoteToEdit}
-        </p>
-      ) : (
-        <CommentEditor
+      {tab === 'annotations' ? (
+        <AnnotationsTab
           project={project}
-          comment={selected}
+          view={view}
           now={now}
-          onResolve={onResolve}
-          onReopen={onReopen}
-          onDelete={onDelete}
-          onEdit={onEdit}
-          focusTitle={titleToFocus === selected.id}
+          onEdit={onEditAnnotation}
+          onDelete={onDeleteAnnotation}
+          onGoToView={onGoToView}
         />
+      ) : (
+        <>
+          <ul className="bb-note-rows" data-testid="note-rows">
+            {listed.map((comment) => (
+              <CommentRow
+                key={comment.id}
+                project={project}
+                comment={comment}
+                selected={comment.id === selectedCommentId}
+                onSelect={() => session().select(comment.id)}
+                onToggle={() => toggle(comment)}
+              />
+            ))}
+          </ul>
+          {selected === null ? (
+            <p className="bb-notes-empty" data-testid="notes-editor-empty">
+              {COMMENT_STRINGS.selectNoteToEdit}
+            </p>
+          ) : (
+            <CommentEditor
+              project={project}
+              comment={selected}
+              now={now}
+              onResolve={onResolve}
+              onReopen={onReopen}
+              onDelete={onDelete}
+              onEdit={onEdit}
+              focusTitle={titleToFocus === selected.id}
+            />
+          )}
+        </>
       )}
     </section>
   )

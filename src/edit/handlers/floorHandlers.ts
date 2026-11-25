@@ -13,12 +13,12 @@
  * - **Reordering is not editing.** `floor.reorder` moves one array entry and touches no
  *   geometry, which is what criterion 2 measures byte for byte.
  */
-import { defaultPlanView, defaultPlanViewRange, elevationViewsOf, floorHasDependencies, formatCommentReference, nextFloorName, viewDesignOptionId, viewRenovationDisplay } from '../../domain'
-import type { CommentAnchor, EntityId, Floor, PlanView, Project } from '../../domain'
+import { defaultPlanView, defaultPlanViewRange, elevationViewsOf, floorHasDependencies, formatAnnotationReference, formatCommentReference, nextFloorName, viewDesignOptionId, viewRenovationDisplay } from '../../domain'
+import type { CommentAnchor, EntityAnchor, EntityId, FeatureAnchor, Floor, PlanView, Project } from '../../domain'
 import type { FloorIntent, Locator, PlanIntent, TransferPlanObjectsToFloor, ViewIntent } from '../intents'
 import type { Handler, IntentHandler } from './context'
 import { elevationViewPath } from './elevationHandlers'
-import { floorPath, refuse, requireFloor, requirePlacement, spendIds } from './support'
+import { floorPath, guardViewAnnotations, refuse, requireFloor, requirePlacement, spendIds } from './support'
 
 /** The path of one saved Plan View, in the validator's vocabulary. */
 export const viewPath = (viewId: EntityId): string => `views[${viewId}]`
@@ -52,12 +52,14 @@ function requireCopiedIds(
   ids: readonly string[],
   placedItemCount: number,
   commentCount: number,
+  annotationCount: number,
   type: string,
-): { floorId: string; viewId: string; placedItemIds: string[]; commentIds: string[] } {
+): { floorId: string; viewId: string; placedItemIds: string[]; commentIds: string[]; annotationIds: string[] } {
   const [floorId, viewId] = spendIds(ids, 2, type)
   const placedItemIds = spendIds(ids.slice(2), placedItemCount, type)
   const commentIds = spendIds(ids.slice(2 + placedItemCount), commentCount, type)
-  return { floorId, viewId, placedItemIds, commentIds }
+  const annotationIds = spendIds(ids.slice(2 + placedItemCount + commentCount), annotationCount, type)
+  return { floorId, viewId, placedItemIds, commentIds, annotationIds }
 }
 
 // --- Floors -------------------------------------------------------------------
@@ -166,7 +168,7 @@ const deleteFloor: Handler<'floor.delete'> = (ctx) => {
  * there is nothing to translate them into, and the preview showed them where they are.
  */
 const duplicateFloor: Handler<'floor.duplicate'> = (ctx) => {
-  const { floorId, name, toIndex, placedItemIds, includePlanImage, commentIds } = ctx.intent.payload
+  const { floorId, name, toIndex, placedItemIds, includePlanImage, commentIds, annotationIds } = ctx.intent.payload
   const source = requireFloor(ctx.project, floorId)
   const selected = new Set(placedItemIds)
   const copied = ctx.project.existingModel.placedItems.filter((item) => item.floorId === floorId && selected.has(item.id))
@@ -177,12 +179,25 @@ const duplicateFloor: Handler<'floor.duplicate'> = (ctx) => {
     if (comment === undefined) refuse('unknown-target', `comments[${id}]`, `There is no Comment ${id} to duplicate.`)
     return comment
   })
-  const { floorId: newFloorId, viewId: newViewId, placedItemIds: newPlacedIds, commentIds: freshCommentIds } = requireCopiedIds(
-    ctx.intent.ids,
-    copied.length,
-    carried.length,
-    ctx.intent.type,
-  )
+  // `Include Annotations` (#81 §9). The duplicate has one view — its own default Plan View — so only
+  // Annotations drawn there can come: one drawn in a named view of the original has no counterpart on
+  // the copy, and is refused by name rather than quietly dropped.
+  const sourceDefaultView = defaultViewOf(ctx.project, floorId)
+  const carriedMarks = annotationIds.map((id) => {
+    const annotation = ctx.project.annotations.find((candidate) => candidate.id === id)
+    if (annotation === undefined) refuse('unknown-target', `annotations[${id}]`, `There is no Annotation ${id} to duplicate.`)
+    if (sourceDefaultView === undefined || annotation.viewId !== sourceDefaultView.id) {
+      refuse('unknown-target', `annotations[${id}]`, 'Only Annotations drawn on the Floor’s default Plan View can come to the duplicate.')
+    }
+    return annotation
+  })
+  const {
+    floorId: newFloorId,
+    viewId: newViewId,
+    placedItemIds: newPlacedIds,
+    commentIds: freshCommentIds,
+    annotationIds: freshAnnotationIds,
+  } = requireCopiedIds(ctx.intent.ids, copied.length, carried.length, carriedMarks.length, ctx.intent.type)
   if (copied.length !== placedItemIds.length) {
     refuse(
       'unknown-target',
@@ -204,11 +219,10 @@ const duplicateFloor: Handler<'floor.duplicate'> = (ctx) => {
   // Renovation Display travel with it, because duplicating the Kitchen level while looking at
   // `Option A · Open kitchen` in Combined is a request for the same view of a copy, not for a
   // second Floor that has to be re-aimed by hand before it shows anything.
-  const sourceView = defaultViewOf(ctx.project, floorId)
   ctx.draft.views.push(
     defaultPlanView(newViewId, copy, {
-      designOptionId: sourceView === undefined ? null : viewDesignOptionId(sourceView),
-      renovationDisplay: sourceView === undefined ? 'existing' : viewRenovationDisplay(sourceView),
+      designOptionId: sourceDefaultView === undefined ? null : viewDesignOptionId(sourceDefaultView),
+      renovationDisplay: sourceDefaultView === undefined ? 'existing' : viewRenovationDisplay(sourceDefaultView),
     }),
   )
   copied.forEach((item, index) => {
@@ -235,6 +249,38 @@ const duplicateFloor: Handler<'floor.duplicate'> = (ctx) => {
       anchor: remapCommentOntoFloor(comment.anchor, newFloorId, copiedItemIds),
     })
   })
+  // Each Annotation that comes (#81 §9) draws on the duplicate's own default Plan View, arrives under
+  // a new `A-` number, and keeps its Layer and scope — those are Project-wide, and the duplicate
+  // shares them. An anchored endpoint follows the copy when it named a Placed Item that came across,
+  // and stays on the original otherwise, which is the truth; a Marker's target stays on the original
+  // view too, because the duplicate is a different drawing to navigate into.
+  carriedMarks.forEach((annotation, index) => {
+    const id = freshAnnotationIds[index]
+    if (id === undefined) {
+      refuse('unknown-target', floorPath(floorId), 'This duplicate needs one fresh ID per Annotation it brings across.')
+    }
+    ctx.draft.annotationReferenceCounter += 1
+    ctx.draft.annotations.push({
+      ...structuredClone(annotation),
+      id,
+      viewId: newViewId,
+      reference: formatAnnotationReference(ctx.draft.annotationReferenceCounter),
+      ...(annotation.endpoint === undefined || !('anchor' in annotation.endpoint)
+        ? {}
+        : { endpoint: { anchor: remapMarkEndpoint(annotation.endpoint.anchor, copiedItemIds) } }),
+    })
+  })
+}
+
+/**
+ * The endpoint of a duplicated Annotation, aimed at the duplicate where the duplicate has the thing
+ * it names (#81 §9): an entity anchor follows the copy of the Placed Item that came across, and an
+ * Anchor whose subject stayed behind keeps pointing at the original, which is the truth.
+ */
+function remapMarkEndpoint(anchor: EntityAnchor | FeatureAnchor, copiedItemIds: ReadonlyMap<EntityId, EntityId>): EntityAnchor | FeatureAnchor {
+  if (anchor.kind !== 'entity') return anchor
+  const copy = copiedItemIds.get(anchor.entityId)
+  return copy === undefined ? anchor : { ...anchor, entityId: copy }
 }
 
 /**
@@ -393,6 +439,9 @@ const deletePlanView: Handler<'view.delete'> = (ctx) => {
       'This is the Floor’s own Plan View. It goes when the Floor does, and not before.',
     )
   }
+  // #81 §8.1: Annotations draw in this view and Reference Markers navigate into it; nothing here
+  // retargets or deletes them for the user.
+  guardViewAnnotations(ctx.project, viewId, view.name, viewPath(viewId))
   ctx.draft.views = ctx.draft.views.filter((candidate) => candidate.id !== viewId)
 }
 

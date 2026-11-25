@@ -153,6 +153,7 @@ function pasteIntent(
     viewId: target.viewId ?? DEST_VIEW,
     copySet,
     includeComments: false,
+    includeAnnotations: false,
   }
   return {
     type: 'renovation.pasteFromProject',
@@ -509,7 +510,7 @@ describe('what a paste refuses (#72 §5, criteria 8, 9, 10)', () => {
 
   it('counts exactly the IDs the paste spends, and no more', () => {
     const copySet = copySetOf()
-    const payload: PasteFromOtherProject = { floorId: DEST_FLOOR, viewId: DEST_VIEW, copySet, includeComments: false }
+    const payload: PasteFromOtherProject = { floorId: DEST_FLOOR, viewId: DEST_VIEW, copySet, includeComments: false, includeAnnotations: false }
     // One per record, one per Item Design, one per source layer — including the slots the stranded
     // Opening and the `existing` answer leave unspent.
     expect(intentIdCount('renovation.pasteFromProject', payload)).toBe(13 + 4 + 2)

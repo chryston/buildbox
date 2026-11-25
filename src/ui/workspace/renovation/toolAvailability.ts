@@ -22,7 +22,7 @@
 import type { RenovationDisplay } from '../../../domain'
 
 /** The tools the strip can show: the S7 editing tools plus the two renovation ones (#70 §3). */
-export type RenovationToolId = 'select' | 'markDemolition' | 'replace' | 'wall' | 'opening' | 'skirting' | 'service' | 'room' | 'placeItem' | 'elevation' | 'comment'
+export type RenovationToolId = 'select' | 'markDemolition' | 'replace' | 'wall' | 'opening' | 'skirting' | 'service' | 'room' | 'placeItem' | 'elevation' | 'comment' | 'annotationText' | 'annotationLeader' | 'annotationArrow' | 'annotationCloud' | 'annotationMarker'
 
 /** One row of the table: a tool, and the Displays that allow it. */
 export interface RenovationToolRow {
@@ -39,7 +39,8 @@ export interface RenovationToolRow {
 /**
  * The table of #70 §3, one row per tool. Reading the columns off it gives the hidden counts the
  * strip prints: Existing hides 2, Demolition hides 6, Proposed hides 2, Combined hides 0, and a
- * Display with no Design Option hides 8 of 11. The Comment row is in none of those counts (#80 §9).
+ * Display with no Design Option hides 8. The six Notes rows are in none of those counts (#80 §9,
+ * #81 §3.1) — the counts read the same at sixteen rows as they did at eleven.
  */
 export const RENOVATION_TOOL_ROWS: readonly RenovationToolRow[] = [
   { id: 'select', allowedIn: ['existing', 'demolition', 'proposed', 'combined'], needsDesignOption: false },
@@ -65,6 +66,16 @@ export const RENOVATION_TOOL_ROWS: readonly RenovationToolRow[] = [
   // Display with no Design Option, where every other row but Select and Elevation is hidden. It is the
   // first row of the Notes group and is never counted among the tools a Display hides (#80 §9).
   { id: 'comment', allowedIn: ['existing', 'demolition', 'proposed', 'combined'], needsDesignOption: false },
+  // The five Annotation rows follow their Comment row and answer to it exactly: an Annotation is view
+  // content with no Renovation State, so every Display offers all five — this is where #70's
+  // `Text annotation` row lands — and none is ever counted among the tools a Display hides. The
+  // Notes overlay gates them, not the Display, and that gate travels on the strip's `blocked` map
+  // with the sentence that explains it (#81 §3.1–3.2).
+  { id: 'annotationText', allowedIn: ['existing', 'demolition', 'proposed', 'combined'], needsDesignOption: false },
+  { id: 'annotationLeader', allowedIn: ['existing', 'demolition', 'proposed', 'combined'], needsDesignOption: false },
+  { id: 'annotationArrow', allowedIn: ['existing', 'demolition', 'proposed', 'combined'], needsDesignOption: false },
+  { id: 'annotationCloud', allowedIn: ['existing', 'demolition', 'proposed', 'combined'], needsDesignOption: false },
+  { id: 'annotationMarker', allowedIn: ['existing', 'demolition', 'proposed', 'combined'], needsDesignOption: false },
 ]
 
 /**

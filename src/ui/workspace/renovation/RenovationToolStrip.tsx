@@ -28,6 +28,7 @@ import type { RenovationDisplay } from '../../../domain'
 import { STRINGS } from '../../strings'
 import { RENOVATION_STRINGS } from '../../strings/renovation'
 import { COMMENT_STRINGS } from '../../strings/comments'
+import { ANNOTATION_STRINGS } from '../../strings/annotations'
 import type { WorkspaceTool } from '../workspaceStore'
 import { displayLabel, swatchClass } from './displayTheme'
 import type { RenovationToolId } from './toolAvailability'
@@ -46,6 +47,25 @@ const TOOL_LABELS: { [T in RenovationToolId]: string } = {
   service: STRINGS.toolService,
   elevation: STRINGS.newElevationView,
   comment: COMMENT_STRINGS.commentTool,
+  annotationText: ANNOTATION_STRINGS.toolText,
+  annotationLeader: ANNOTATION_STRINGS.toolLeader,
+  annotationArrow: ANNOTATION_STRINGS.toolArrow,
+  annotationCloud: ANNOTATION_STRINGS.toolCloud,
+  annotationMarker: ANNOTATION_STRINGS.toolMarker,
+}
+
+/**
+ * The five Annotation rows draw as a glyph, not a word (#81 §3.1). The prototype's group is a glyph
+ * per tool; production keeps the glyph on the button and moves the full name to the accessible label
+ * and the hover title, so the group stays scannable and the one-row strip never wraps to make room
+ * for five words. The overlay-off tooltip overrides the name in the title while the group is disabled.
+ */
+const ANNOTATION_GLYPHS: Partial<Record<RenovationToolId, string>> = {
+  annotationText: 'T',
+  annotationLeader: '↖T',
+  annotationArrow: '↗',
+  annotationCloud: '☁',
+  annotationMarker: '◎',
 }
 
 /** The strip's own shortcut per row. No workspace tool shortcut exists today, so these are new keys. */
@@ -61,6 +81,11 @@ const TOOL_KEYS: { [T in RenovationToolId]: string } = {
   service: 's',
   elevation: 'e',
   comment: 'c',
+  annotationText: 't',
+  annotationLeader: 'l',
+  annotationArrow: 'a',
+  annotationCloud: 'u',
+  annotationMarker: 'z',
 }
 
 /**
@@ -88,6 +113,14 @@ const ROW_OF_TOOL: { [T in WorkspaceTool]: RenovationToolId | null } = {
   // A Comment belongs to its own row, which every Display allows — so a Display change never drops
   // the tool out from under a person mid-note (#80 §9).
   comment: 'comment',
+  // The five Annotation tools each belong to their own row, and every Display allows every row —
+  // the same guarantee the Comment row gives: a Display change never drops the tool mid-placement
+  // (#81 §3.1).
+  annotationText: 'annotationText',
+  annotationLeader: 'annotationLeader',
+  annotationArrow: 'annotationArrow',
+  annotationCloud: 'annotationCloud',
+  annotationMarker: 'annotationMarker',
   pan: null,
 }
 
@@ -141,6 +174,11 @@ export function RenovationToolStrip(props: RenovationToolStripProps): ReactNode 
     else if (tool === 'room') onTool('line')
     else if (tool === 'select') onTool('select')
     else if (tool === 'comment') onTool('comment')
+    else if (tool === 'annotationText') onTool('annotationText')
+    else if (tool === 'annotationLeader') onTool('annotationLeader')
+    else if (tool === 'annotationArrow') onTool('annotationArrow')
+    else if (tool === 'annotationCloud') onTool('annotationCloud')
+    else if (tool === 'annotationMarker') onTool('annotationMarker')
   }
 
   // Criterion 6: a Display that hides the tool in hand returns to Select, the one row every Display
@@ -155,6 +193,10 @@ export function RenovationToolStrip(props: RenovationToolStripProps): ReactNode 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return
+      // `t` belongs to the placement in hand while a Leader or Arrow is drawing: it toggles whether
+      // linear features are snap targets (#81 §3.7), and the Text row must not steal the key
+      // mid-gesture.
+      if (event.key.toLowerCase() === 't' && (activeTool === 'annotationLeader' || activeTool === 'annotationArrow')) return
       const tool = (Object.keys(TOOL_KEYS) as RenovationToolId[]).find((each) => TOOL_KEYS[each] === event.key.toLowerCase())
       if (tool === undefined) return
       if (!toolIsAvailable(tool, display, hasDesignOption)) {
@@ -176,7 +218,7 @@ export function RenovationToolStrip(props: RenovationToolStripProps): ReactNode 
     return () => {
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [display, hasDesignOption, onNotice, onTool, onMarkDemolition, reasons])
+  }, [display, hasDesignOption, activeTool, onNotice, onTool, onMarkDemolition, reasons])
 
   // A notice is a notice: it says its piece and goes away.
   useEffect(() => {
@@ -187,28 +229,38 @@ export function RenovationToolStrip(props: RenovationToolStripProps): ReactNode 
     }
   }, [notice, onNotice])
 
+  const toolButton = (row: (typeof RENOVATION_TOOL_ROWS)[number]): ReactNode => {
+    const reason = reasons[row.id]
+    const glyph = ANNOTATION_GLYPHS[row.id]
+    const name = TOOL_LABELS[row.id]
+    return (
+      <button
+        key={row.id}
+        type="button"
+        data-testid={`renovation-tool-${row.id}`}
+        className="bb-renovation-tool"
+        aria-pressed={ROW_OF_TOOL[activeTool] === row.id ? 'true' : 'false'}
+        disabled={reason !== undefined}
+        title={reason ?? (glyph !== undefined ? name : undefined)}
+        aria-label={glyph !== undefined ? name : undefined}
+        onClick={() => {
+          onNotice(null)
+          run(row.id)
+        }}
+      >
+        {glyph ?? name}
+      </button>
+    )
+  }
+
+  const shown = RENOVATION_TOOL_ROWS.filter((row) => toolIsAvailable(row.id, display, hasDesignOption))
+  const markRows = shown.filter((row) => ANNOTATION_GLYPHS[row.id] !== undefined)
+  const otherRows = shown.filter((row) => ANNOTATION_GLYPHS[row.id] === undefined)
+
   return (
     <div className="bb-renovation-tool-strip" data-testid="renovation-tool-strip" data-display={display}>
-      {RENOVATION_TOOL_ROWS.filter((row) => toolIsAvailable(row.id, display, hasDesignOption)).map((row) => {
-        const reason = reasons[row.id]
-        return (
-          <button
-            key={row.id}
-            type="button"
-            data-testid={`renovation-tool-${row.id}`}
-            className="bb-renovation-tool"
-            aria-pressed={ROW_OF_TOOL[activeTool] === row.id ? 'true' : 'false'}
-            disabled={reason !== undefined}
-            title={reason}
-            onClick={() => {
-              onNotice(null)
-              run(row.id)
-            }}
-          >
-            {TOOL_LABELS[row.id]}
-          </button>
-        )
-      })}
+      {otherRows.map(toolButton)}
+      {markRows.length > 0 && <span className="bb-renovation-annotation-group">{markRows.map(toolButton)}</span>}
       {hidden > 0 && (
         <span className="bb-renovation-hidden-count" data-testid="hidden-tool-count">
           {RENOVATION_STRINGS.toolsHidden(hidden)}

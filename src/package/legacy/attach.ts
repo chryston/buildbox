@@ -95,6 +95,8 @@ export function floorPlanAsProject(
     warningAcknowledgements: [],
     comments: [],
     commentReferenceCounter: 0,
+    annotations: [],
+    annotationReferenceCounter: 0,
   }
   return appendContent(project, content, options.floorId, options.newId)
 }

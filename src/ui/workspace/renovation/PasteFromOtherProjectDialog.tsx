@@ -33,7 +33,7 @@ export interface PasteDialogProps {
   /** This Project's layers, in the order the Project keeps them. */
   destinations: readonly PasteDestinationLayer[]
   /** Run the paste. `correct` asks for the wrapper that corrects the Existing Model first. */
-  onConfirm: (resolutions: readonly PasteLayerResolution[], correct: boolean, includeComments: boolean) => void
+  onConfirm: (resolutions: readonly PasteLayerResolution[], correct: boolean, includeComments: boolean, includeAnnotations: boolean) => void
   onCancel: () => void
   /** Why the last paste was refused. The dialog stays open and says it in plain words. */
   problem?: string
@@ -80,6 +80,7 @@ export function PasteFromOtherProjectDialog(props: PasteDialogProps): ReactNode 
   // `Include Comments` starts off (#80 §13), and the row it sits on says how many there would be, so
   // the box is answered with the number in front of the person rather than discovered afterwards.
   const [includeComments, setIncludeComments] = useState(false)
+  const [includeAnnotations, setIncludeAnnotations] = useState(false)
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -229,6 +230,17 @@ export function PasteFromOtherProjectDialog(props: PasteDialogProps): ReactNode 
             {RENOVATION_STRINGS.pasteIncludeComments(copySet.notes.length)}
           </label>
         )}
+        {copySet.annotations.length > 0 && (
+          <label className="bb-workspace-check" data-testid="paste-include-annotations-row">
+            <input
+              type="checkbox"
+              data-testid="paste-include-annotations"
+              checked={includeAnnotations}
+              onChange={(event) => setIncludeAnnotations(event.target.checked)}
+            />
+            {RENOVATION_STRINGS.pasteIncludeAnnotations(copySet.annotations.length)}
+          </label>
+        )}
         <div className="bb-workspace-dialog-actions">
           <button
             type="button"
@@ -236,7 +248,7 @@ export function PasteFromOtherProjectDialog(props: PasteDialogProps): ReactNode 
             className="bb-workspace-danger-button"
             disabled={blocked || !ready}
             onClick={() => {
-              onConfirm(resolutions, correct, includeComments)
+              onConfirm(resolutions, correct, includeComments, includeAnnotations)
             }}
           >
             {correct ? RENOVATION_STRINGS.pasteCorrectAndPaste : RENOVATION_STRINGS.pasteConfirm}

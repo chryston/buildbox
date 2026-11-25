@@ -21,7 +21,10 @@ import { validateProject } from './validate'
 /**
  * The domain schema this build writes and understands at the top of the chain.
  *
- * The fifteenth step (#80 §1) is the Comment: the Project gains the `comments` collection and the
+ * The sixteenth step (#81 §1) is the Annotation: the Project gains the `annotations` collection and
+ * the `A-` reference counter beside it, both Project-level, because a drawing note belongs to the
+ * record rather than to any one view's copy of it. The fifteenth before it (#80 §1) is the Comment:
+ * the Project gains the `comments` collection and the
  * `C-` reference counter beside it, both Project-level, because a note belongs to the record rather
  * than to any one Floor or Design Option. The fourteenth before it (#79 §1) is the Service: the
  * Existing Model gains the Service collection, and so does every Design Option's proposed work. The
@@ -35,10 +38,10 @@ import { validateProject } from './validate'
  * predates them. The ninth (#74 §1) is the Plan View Range: every saved view gains the height it
  * draws at. The eighth (#69 §1, #73) is the renovation model: Design Options, the Drawing Layers
  * every Project starts with, and the four settings a saved view gained. A Project saved by an older
- * build carries `schemaVersion: 14` and comes up the chain; a Project saved by a newer one is
- * refused as `newer-schema` rather than opened and quietly stripped of its Comments.
+ * build carries `schemaVersion: 15` and comes up the chain; a Project saved by a newer one is
+ * refused as `newer-schema` rather than opened and quietly stripped of its Annotations.
  */
-export const DOMAIN_SCHEMA_VERSION = 15
+export const DOMAIN_SCHEMA_VERSION = 16
 
 /**
  * One pure vN → vN+1 step. Its input is already a copy; it never reads the clock, and a
@@ -49,7 +52,8 @@ export type Migrator = (data: unknown, allocateId: IdAllocator) => unknown
 /**
  * `MIGRATORS[i]` migrates v(i+1) → v(i+2), so index 0 is v1 → v2.
  *
- * Fifteen steps, the last of which is the Comment collection and its reference counter (#80), the
+ * Sixteen steps, the last of which is the Annotation collection and its reference counter (#81), the
+ * one before it the Comment collection and its reference counter (#80), the
  * one before it the Service
  * collection (#79), the one before it the Skirting
  * collection (#78), the one before that the Beam
@@ -71,6 +75,7 @@ export const MIGRATORS: readonly Migrator[] = [
   migrateV12toV13,
   migrateV13toV14,
   migrateV14toV15,
+  migrateV15toV16,
 ]
 
 /**
@@ -530,6 +535,33 @@ export function migrateV14toV15(data: unknown): unknown {
     ...record,
     ...(hasComments ? {} : { comments: [] }),
     ...(hasCounter ? {} : { commentReferenceCounter: 0 }),
+  }
+}
+
+/**
+ * The Project gains the Annotation collection and the `A-` reference counter beside it (#81 §1).
+ *
+ * Both arrive empty and zero, for the same reason the Comment step did: a v15 Project has never
+ * seen an Annotation, and no legacy ones exist — the legacy `wall-hack` and `tile-zone` sketches
+ * were discarded during migration (#20 §7) and must not reappear as Annotations — so there is
+ * nothing to translate. The counter starts at zero because it counts what has been handed out, and
+ * the first Annotation of a migrated Project therefore takes `A-001`.
+ *
+ * Nothing else moves: an Annotation points at its owning view rather than standing in it, so no
+ * Floor, entity or view is rewritten, no ID is spent, and no clock is read. A record that already
+ * carries both fields came from a build that knows Annotations and is returned as the same object
+ * it arrived as, so the step is idempotent.
+ */
+export function migrateV15toV16(data: unknown): unknown {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return data
+  const record = data as Record<string, unknown>
+  const hasAnnotations = Array.isArray(record.annotations)
+  const hasCounter = typeof record.annotationReferenceCounter === 'number'
+  if (hasAnnotations && hasCounter) return data
+  return {
+    ...record,
+    ...(hasAnnotations ? {} : { annotations: [] }),
+    ...(hasCounter ? {} : { annotationReferenceCounter: 0 }),
   }
 }
 

@@ -18,7 +18,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import type { Comment, Project } from '../domain'
-import { withComments } from '../domain/testing'
+import { withAnnotations, withComments } from '../domain/testing'
 import { validateProject } from '../domain'
 import { flush } from '../session/testing'
 import { notesSessionStore, PLAN_IMAGE_ACCEPT, WorkspaceProvider, workspaceStore, type WorkspaceServices } from '../ui'
@@ -32,7 +32,7 @@ const PX = 0.05
 
 function sceneProject(): Project {
   const text = readFileSync(join(fixturesRoot, 'domain', 'v15', 'comments.json'), 'utf8')
-  return withComments(structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project))
+  return withAnnotations(withComments(structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project)))
 }
 
 function testWorkspaceServices(): WorkspaceServices {

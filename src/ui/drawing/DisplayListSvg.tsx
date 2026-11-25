@@ -84,6 +84,8 @@ export interface DisplayListInteractions {
   onWarningBadgePointerDown?: (id: string) => void
   /** A Notes overlay pin or `✎n` badge was clicked; the id is the Comment's (#80 §7.5). */
   onNotePointerDown?: (id: string) => void
+  /** An Annotation glyph was clicked; the id is the Annotation's (#81 §5). */
+  onMarkPointerDown?: (id: string) => void
   /** A click anywhere on a unit's own box. */
   onUnitClick?: (id: string) => void
   /** A section or a divider, picked where it is drawn: it becomes the selected node. */
@@ -142,6 +144,7 @@ const TEST_IDS: Readonly<Record<string, (id: string) => string>> = {
   'warning-badge': (id) => `warning-badge-${id}`,
   'note-pin': (id) => `note-pin-${id}`,
   'note-badge': (id) => `note-badge-${id}`,
+  'mark': (id) => `mark-${id}`,
   'origin-preview': (id) => `origin-preview-${id}`,
   'dimension-lines': () => 'dimension-lines',
   'dimension-width-line': () => 'dimension-width-line',
@@ -402,6 +405,17 @@ function renderNode(
       props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => {
         // The mark owns the gesture: the Wall or footprint under it is not what was clicked, and the
         // background click that would clear the selection must not happen either (#80 §7.5).
+        event.stopPropagation()
+        pick(id)
+      }) as never
+      props.onClick = ((event: React.MouseEvent) => event.stopPropagation()) as never
+      props.style = { cursor: 'pointer' }
+    }
+    if (role === 'mark' && interactions?.onMarkPointerDown !== undefined) {
+      const pick = interactions.onMarkPointerDown
+      props.onPointerDown = ((event: React.PointerEvent<SVGGElement>) => {
+        // An Annotation owns its own click the way a pin does: the model content under it is not
+        // what was pressed, and the background click that would clear the selection must not fire.
         event.stopPropagation()
         pick(id)
       }) as never

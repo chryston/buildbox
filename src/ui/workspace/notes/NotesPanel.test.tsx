@@ -55,6 +55,9 @@ function panel(): {
       onReopen={onReopen}
       onDelete={onDelete}
       onEdit={onEdit}
+      onEditAnnotation={vi.fn()}
+      onDeleteAnnotation={vi.fn()}
+      onGoToView={vi.fn()}
     />,
   )
   return { onResolve, onReopen, onDelete, onEdit }

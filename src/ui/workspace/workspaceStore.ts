@@ -25,7 +25,7 @@ import type { Viewport } from './viewport'
  * The Floor workspace does not offer them yet — a Custom Path has no Room target until #67 —
  * so only the Item Design editor renders them, and they are still gated by the same rule.
  */
-export type WorkspaceTool = 'select' | 'pan' | 'wall' | 'opening' | 'beam' | 'skirting' | 'service' | 'line' | 'arc' | 'ellipticalArc' | 'elevation' | 'comment'
+export type WorkspaceTool = 'select' | 'pan' | 'wall' | 'opening' | 'beam' | 'skirting' | 'service' | 'line' | 'arc' | 'ellipticalArc' | 'elevation' | 'comment' | 'annotationText' | 'annotationLeader' | 'annotationArrow' | 'annotationCloud' | 'annotationMarker'
 
 /**
  * The live drag: the Item being moved and where its Item Origin is going, in Floor

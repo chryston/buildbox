@@ -38,6 +38,26 @@ export function refuse(code: RejectionCode, path: string, message: string): neve
 }
 
 /**
+ * Refuse to delete a saved view that still carries Annotations or is aimed at by Reference
+ * Markers (#81 §8.1).
+ *
+ * An Annotation draws in exactly one view and a Reference Marker is a way into one; deleting the view
+ * would leave records pointing at a view that is not there. Until #82's retarget flow exists the
+ * delete is refused whole, and the sentence counts both directions because the user has to clear
+ * both before the retry can go ahead.
+ */
+export function guardViewAnnotations(project: Project, viewId: EntityId, viewName: string, path: string): void {
+  const incoming = project.annotations.filter((annotation) => annotation.type === 'reference_marker' && annotation.targetViewId === viewId).length
+  const owned = project.annotations.filter((annotation) => annotation.viewId === viewId).length
+  if (incoming === 0 && owned === 0) return
+  refuse(
+    'has-dependants',
+    path,
+    `“${viewName}” has ${incoming} incoming ${incoming === 1 ? 'Reference Marker' : 'Reference Markers'} and ${owned} ${owned === 1 ? 'Annotation' : 'Annotations'}. Retarget or delete them first.`,
+  )
+}
+
+/**
  * The catalogue, for the one handler that has to run another Intent whole: a correction replays the
  * edit it wraps, in the baseline and again inside an Option (#69 §12). `registry` installs it as it
  * is built, which keeps the dependency one-way — a handler reaching for the registry itself would

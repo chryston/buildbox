@@ -25,6 +25,7 @@ export { STRINGS, WARNING_COPY, warningSentence } from './strings'
 // than read off the filesystem.
 export { RENOVATION_STRINGS } from './strings/renovation'
 export { COMMENT_STRINGS } from './strings/comments'
+export { ANNOTATION_STRINGS, ANNOTATION_TYPE_LABELS } from './strings/annotations'
 // #69's renovation surface. It is exported here because #20 §2 makes a module's `index.ts` the only
 // way in; `FloorWorkspace` imports the folder directly, as the one consumer.
 export {

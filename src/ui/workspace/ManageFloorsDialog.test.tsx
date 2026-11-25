@@ -34,6 +34,8 @@ const project = (floors: Floor[]): Project => ({
   warningAcknowledgements: [],
   comments: [],
   commentReferenceCounter: 0,
+  annotations: [],
+  annotationReferenceCounter: 0,
 })
 
 const open = (floors: Floor[], over: Partial<Parameters<typeof ManageFloorsDialog>[0]> = {}) => {

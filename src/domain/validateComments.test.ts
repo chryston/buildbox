@@ -16,13 +16,14 @@
  */
 import { describe, expect, it } from 'vitest'
 import commentsFixture from '../../fixtures/domain/v15/comments.json?raw'
+import { withAnnotations } from './testing'
 import { validateProject } from './index'
 
 type Rec = Record<string, unknown>
 
 function base(): Rec {
   const envelope = JSON.parse(commentsFixture) as { domainSchemaVersion: number; project: Rec }
-  return structuredClone(envelope.project)
+  return withAnnotations(structuredClone(envelope.project) as never) as never
 }
 
 function problemsOf(value: unknown): { path: string; code: string }[] {

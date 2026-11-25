@@ -174,6 +174,8 @@ export function fixtureProject(): Project {
     warningAcknowledgements: [],
     comments: [],
     commentReferenceCounter: 0,
+    annotations: [],
+    annotationReferenceCounter: 0,
   }
 }
 
@@ -774,5 +776,81 @@ export function commentsFixtureProject(): Project {
       },
     ],
     commentReferenceCounter: 5,
+  }
+}
+
+/**
+ * The same Project as the v16 golden file (#81): the v15 scene, plus one Annotation of every type —
+ * an anchored and a free Endpoint, one Unlayered, style overrides, and a Reference Marker on an
+ * Elevation View pointing at the Plan View.
+ *
+ * The Anchors and the target are read out of the scene rather than written down, for the same reason
+ * the Comments above are: an unresolved reference is refused on import and the whole file would stop
+ * loading. The references run `A-001` to `A-005` and the counter sits at the highest one handed out.
+ */
+export function annotationsFixtureProject(): Project {
+  const project = commentsFixtureProject()
+  const wall = project.existingModel.walls[0]!
+  return {
+    ...project,
+    annotations: [
+      {
+        id: 'annotation-1' as EntityId,
+        reference: 'A-001',
+        type: 'text',
+        viewId: 'view-0' as EntityId,
+        layerId: 'layer-4' as EntityId,
+        scope: 'all',
+        position: { x: 1200, y: 900 },
+        text: 'Client to choose handle finish',
+      },
+      {
+        id: 'annotation-2' as EntityId,
+        reference: 'A-002',
+        type: 'leader',
+        viewId: 'view-0' as EntityId,
+        layerId: 'layer-4' as EntityId,
+        scope: 'all',
+        position: { x: 2400, y: 1800 },
+        text: 'Scribe to existing plaster line',
+        endpoint: { anchor: { kind: 'feature', ownerId: wall.id, featureId: 'leftFace', t: 0.5 } },
+        style: { colour: '#ff6b6b', weight: 2 },
+      },
+      {
+        id: 'annotation-3' as EntityId,
+        reference: 'A-003',
+        type: 'arrow',
+        viewId: 'view-0' as EntityId,
+        layerId: null,
+        scope: 'option-1' as EntityId,
+        position: { x: 3000, y: 2400 },
+        text: 'New opening here',
+        endpoint: { free: { x: 3400, y: 2200 } },
+        style: { size: 'L', arrowhead: false },
+      },
+      {
+        id: 'annotation-4' as EntityId,
+        reference: 'A-004',
+        type: 'revision_cloud',
+        viewId: 'view-0' as EntityId,
+        layerId: 'layer-4' as EntityId,
+        scope: 'all',
+        position: { a: { x: 800, y: 600 }, b: { x: 2000, y: 1200 } },
+        text: 'Move appliance wall 100 mm',
+      },
+      {
+        id: 'annotation-5' as EntityId,
+        reference: 'A-005',
+        type: 'reference_marker',
+        viewId: 'view-elevation-sink' as EntityId,
+        layerId: 'layer-4' as EntityId,
+        scope: 'all',
+        position: { x: 1500, y: 1200 },
+        text: 'Look at the plan',
+        targetViewId: 'view-0' as EntityId,
+        style: { markerShape: 'hexagon' },
+      },
+    ],
+    annotationReferenceCounter: 5,
   }
 }

@@ -73,6 +73,20 @@ export const SIZE_ROLES: Record<SizeRole, SizeRow> = {
   // sizes exist so the role is total; no export ever draws this band.
   'plan-note-pin': { screen: { px: 9 }, paper: { mm: 4 } },
   'plan-note-pin-text': { screen: { px: 10 }, paper: { mm: 4 } },
+  // The Annotation glyphs (#81 §1, §5): three bounded text sizes and three bounded weights, all
+  // screen-fixed like every other word and hairline, plus the arrowhead, the wrap column, the dash
+  // and the scallop. Paper sizes exist so the role is total; #83 decides whether export draws them.
+  'plan-mark-s': { screen: { px: 10 }, paper: { mm: 3 } },
+  'plan-mark-m': { screen: { px: 12 }, paper: { mm: 3.5 } },
+  'plan-mark-l': { screen: { px: 15 }, paper: { mm: 4.5 } },
+  'plan-mark-weight-1': { screen: { px: 1 }, paper: { mm: 0.35 } },
+  'plan-mark-weight-2': { screen: { px: 2 }, paper: { mm: 0.5 } },
+  'plan-mark-weight-3': { screen: { px: 3 }, paper: { mm: 0.7 } },
+  'plan-mark-dash': { screen: { px: 6 }, paper: { mm: 2 } },
+  'plan-mark-gap': { screen: { px: 4 }, paper: { mm: 1.5 } },
+  'plan-mark-arrow': { screen: { px: 9 }, paper: { mm: 3 } },
+  'plan-mark-wrap': { screen: { px: 160 }, paper: { mm: 40 } },
+  'plan-mark-scallop': { screen: { px: 6 }, paper: { mm: 2 } },
   // The cabinet canvas's two `Math.max(n / zoom, m)` sizes.
   'cabinet-dimension': { screen: { px: 12, mm: 8 }, paper: { mm: 2 } },
   'cabinet-space-label': { screen: { px: 10, mm: 6 }, paper: { mm: 2 } },
@@ -368,6 +382,30 @@ export const STYLES: Record<StyleKey, Style> = {
     hit: 'none',
   },
   'plan-note-leader': { stroke: 'var(--bb-note-resolved)', strokeWidth: 'hairline', hit: 'none' },
+
+  // The Annotation glyphs (#81 §5): the line or outline wears the record's own colour through the
+  // `item` paint, so one row serves every colour the palette offers. The weight and the dash are
+  // separate rows because a Style names one stroke width; the invisible target is a fat transparent
+  // stroke (a hairline is a hard thing to click, #65 §11), and the words wear the same colour.
+  'plan-mark-1': { stroke: 'item', strokeWidth: 'plan-mark-weight-1' },
+  'plan-mark-2': { stroke: 'item', strokeWidth: 'plan-mark-weight-2' },
+  'plan-mark-3': { stroke: 'item', strokeWidth: 'plan-mark-weight-3' },
+  'plan-mark-1-dashed': { stroke: 'item', strokeWidth: 'plan-mark-weight-1', dash: ['plan-mark-dash', 'plan-mark-gap'] },
+  'plan-mark-2-dashed': { stroke: 'item', strokeWidth: 'plan-mark-weight-2', dash: ['plan-mark-dash', 'plan-mark-gap'] },
+  'plan-mark-3-dashed': { stroke: 'item', strokeWidth: 'plan-mark-weight-3', dash: ['plan-mark-dash', 'plan-mark-gap'] },
+  'plan-mark-1:selected': { stroke: 'var(--bb-accent)', strokeWidth: 'plan-line-selected' },
+  'plan-mark-2:selected': { stroke: 'var(--bb-accent)', strokeWidth: 'plan-line-selected' },
+  'plan-mark-3:selected': { stroke: 'var(--bb-accent)', strokeWidth: 'plan-line-selected' },
+  'plan-mark-1-dashed:selected': { stroke: 'var(--bb-accent)', strokeWidth: 'plan-line-selected', dash: ['plan-mark-dash', 'plan-mark-gap'] },
+  'plan-mark-2-dashed:selected': { stroke: 'var(--bb-accent)', strokeWidth: 'plan-line-selected', dash: ['plan-mark-dash', 'plan-mark-gap'] },
+  'plan-mark-3-dashed:selected': { stroke: 'var(--bb-accent)', strokeWidth: 'plan-line-selected', dash: ['plan-mark-dash', 'plan-mark-gap'] },
+  'plan-mark-hit': { fill: 'transparent', stroke: 'transparent', strokeWidth: 'hit-target' },
+  'plan-mark-hit-line': { fill: 'none', stroke: 'transparent', strokeWidth: 'hit-target' },
+  'plan-mark-tint': { fill: 'item', fillAlpha: 0x22 / 0xff, stroke: 'none' },
+  'plan-mark-text-s': { fill: 'item', size: 'plan-mark-s', fontFamily: FONT_STACK },
+  'plan-mark-text-m': { fill: 'item', size: 'plan-mark-m', fontFamily: FONT_STACK },
+  'plan-mark-text-l': { fill: 'item', size: 'plan-mark-l', fontFamily: FONT_STACK },
+  'plan-mark-label': { fill: 'item', size: 'plan-mark-m', fontFamily: FONT_STACK, hit: 'none' },
 
   'plan-placeholder': {
     fill: 'var(--bb-bg-card)',

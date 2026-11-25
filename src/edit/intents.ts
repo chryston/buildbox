@@ -15,6 +15,11 @@
 import type { Patch } from 'immer'
 import type {
   Accessory,
+  AnnotationEndpoint,
+  AnnotationPosition,
+  AnnotationScope,
+  AnnotationStyle,
+  AnnotationType,
   CabinetMaterialId,
   ClearanceEnvelope,
   CommentAnchor,
@@ -51,7 +56,7 @@ import type {
   WallJustification,
   WallRefLine,
 } from '../domain'
-import { beamsOf, roomOutlinePath, skirtingOf } from '../domain'
+import { beamsOf, roomOutlinePath, servicesOf, skirtingOf } from '../domain'
 import type { KeepFixed, Pt } from '../geometry'
 
 import type { ValidationProblem } from '../lib'
@@ -170,6 +175,10 @@ export type S7IntentType =
   | 'comment.resolve'
   | 'comment.reopen'
   | 'comment.delete'
+  | 'annotation.create'
+  | 'annotation.edit'
+  | 'annotation.move'
+  | 'annotation.delete'
   | 'design.update'
   | 'design.setFootprint'
   | 'design.setOrigin'
@@ -599,6 +608,13 @@ export interface DuplicateFloor {
    * is shared and the note is about it.
    */
   commentIds: EntityId[]
+  /**
+   * The Annotations `Include Annotations` covers (#81 §9), already resolved by the dialog and **empty
+   * by default**, like the Comments box. Each one that comes arrives with a new ID, a new `A-`
+   * reference and its view aimed at the duplicate's own default Plan View; an Annotation drawn in a
+   * named view the duplicate does not have stays where it was drawn.
+   */
+  annotationIds: EntityId[]
 }
 
 /** A named Plan View on a Floor (#56). */
@@ -1324,6 +1340,76 @@ export interface DeleteComment {
 }
 
 /**
+ * Place one Annotation in exactly one saved view (#81 §2).
+ *
+ * The reference is **not** in the payload — the handler takes the next one from
+ * `annotationReferenceCounter`, which is the only thing that can promise a number is never handed
+ * out twice (#81 §1). `layerId` is the answer, never a question: `null` is Unlayered, and a real
+ * layer has to exist. `createLayer` is the first-Annotation prompt's answer (#81 §4): the layer is
+ * ordinary, mutable, placed at the front of the Project order with default permissions in every
+ * saved view, and it joins the Annotation in this one transaction — one undo removes both.
+ */
+export interface CreateAnnotation {
+  viewId: EntityId
+  type: AnnotationType
+  position: AnnotationPosition
+  text: string
+  /** A Drawing Layer ID, or `null` for Unlayered — always given, never guessed (#81 §1). */
+  layerId: EntityId | null
+  scope: AnnotationScope
+  /** Required for a Leader or Arrow, refused for every other type (#81 §1). */
+  endpoint?: AnnotationEndpoint
+  /** Required for a Reference Marker, refused for every other type (#81 §1). */
+  targetViewId?: EntityId
+  /** The overrides only; an absent field takes the layer's graphics (#81 §1). */
+  style?: AnnotationStyle
+  /** The prompt's `Create layer “Notes”`: name and colour arrive, the ID is pre-allocated (#81 §4). */
+  createLayer?: { name: string; color: string }
+}
+
+/**
+ * One committed change on an existing Annotation (#81 §2, §3.3a, §7).
+ *
+ * One Intent, and one undo step, whatever number of boxes the editor has: text commits on Enter or
+ * blur, not per keystroke. `style: null` is `Reset to layer style` — every override cleared, the
+ * Annotation takes the layer's graphics (§7 criterion 21). A position or endpoint change through the
+ * editor arrives here; a canvas drag arrives as `annotation.move`.
+ */
+export interface EditAnnotation {
+  annotationId: EntityId
+  text?: string
+  /** `null` is Unlayered; the layer named has to exist (#81 §1). */
+  layerId?: EntityId | null
+  scope?: AnnotationScope
+  targetViewId?: EntityId
+  /** The whole style, or `null` to clear every override — never a merge of one field. */
+  style?: AnnotationStyle | null
+  position?: AnnotationPosition
+  endpoint?: AnnotationEndpoint
+}
+
+/**
+ * Drag an Annotation on the canvas (#81 §2): the whole position at once, and for a Leader or Arrow
+ * the endpoint too when the drag took the anchored end with it. One undo step per drag, not per
+ * mouse-move; the UI commits on mouse-up.
+ */
+export interface MoveAnnotation {
+  annotationId: EntityId
+  position: AnnotationPosition
+  endpoint?: AnnotationEndpoint
+}
+
+/**
+ * Delete an Annotation (#81 §2).
+ *
+ * One undo step, and undo restores the record with its original ID **and** its original reference:
+ * the counter is never rewound, so the number that was `A-009` is not handed to anything in between.
+ */
+export interface DeleteAnnotation {
+  annotationId: EntityId
+}
+
+/**
  * `Acknowledge warning` (#66 §4): the user's decision about one warning, recorded with the
  * note they gave for it.
  *
@@ -1615,6 +1701,11 @@ export interface PasteFromOtherProject {
    * would bring; nothing crosses until the box is checked.
    */
   includeComments: boolean
+  /**
+   * `Include Annotations`, off by default (#81 §9). The preview dialog shows how many Annotations the
+   * copy would bring; nothing crosses until the box is checked.
+   */
+  includeAnnotations: boolean
 }
 
 /** Where one source Layer's work goes: onto a Layer this Project has, onto a new one, or nowhere. */
@@ -1738,6 +1829,10 @@ export interface IntentPayloads {
   'comment.resolve': ResolveComment
   'comment.reopen': ReopenComment
   'comment.delete': DeleteComment
+  'annotation.create': CreateAnnotation
+  'annotation.edit': EditAnnotation
+  'annotation.move': MoveAnnotation
+  'annotation.delete': DeleteAnnotation
   'design.update': UpdateItemDesign
   'design.setFootprint': SetItemDesignFootprint
   'design.setOrigin': SetItemDesignOrigin
@@ -1831,6 +1926,8 @@ export type ServiceIntent = Intent<Extract<IntentType, `service.${string}`>>
 
 /** Every Comment Intent (#80 §3): the five the Notes panel and the `✎ Comment` tool dispatch. */
 export type CommentIntent = Intent<Extract<IntentType, `comment.${string}`>>
+/** Every Annotation Intent (#81 §2): the four the Annotation tools and the Notes editor dispatch. */
+export type AnnotationIntent = Intent<Extract<IntentType, `annotation.${string}`>>
 export type DesignIntent = Intent<Extract<IntentType, `design.${string}`>>
 export type FloorIntent = Intent<Extract<IntentType, `floor.${string}`>>
 /**
@@ -1951,6 +2048,14 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
   'comment.resolve': [],
   'comment.reopen': [],
   'comment.delete': [],
+  // An Annotation takes its own ID, and — only when `createLayer` is present — the ID of the layer
+  // the first-Annotation prompt is creating with it (#81 §4). The second ID is spent on the prompt's
+  // answer and simply unused otherwise; the counter, like the Comment one, is a number, not an ID,
+  // and is never rewound.
+  'annotation.create': ['annotationId', 'layerId'],
+  'annotation.edit': [],
+  'annotation.move': [],
+  'annotation.delete': [],
   'design.update': [],
   'design.setFootprint': [],
   'design.setOrigin': [],
@@ -1964,7 +2069,7 @@ export const INTENT_ID_ORDER: Record<S7IntentType, readonly string[]> = {
   'floor.setLimits': [],
   'floor.setDefaultWallHeight': [],
   'floor.delete': [],
-  'floor.duplicate': ['floorId', 'viewId', 'placedItemId…', 'commentId…'],
+  'floor.duplicate': ['floorId', 'viewId', 'placedItemId…', 'commentId…', 'annotationId…'],
   'view.create': ['viewId'],
   'view.rename': [],
   'view.delete': [],
@@ -2044,9 +2149,10 @@ export function intentIdCount(type: IntentType, payload?: PayloadOf): number {
   if (payload === undefined) return fixed + VARIADIC_ID_COUNT
   switch (type) {
     case 'floor.duplicate': {
-      // One per Placed Item, plus one per Comment `Include Comments` brings across (#80 §13).
+      // One per Placed Item, plus one per Comment `Include Comments` brings across (#80 §13), plus
+      // one per Annotation `Include Annotations` brings across (#81 §9).
       const duplicate = payload as DuplicateFloor
-      return fixed + duplicate.placedItemIds.length + duplicate.commentIds.length
+      return fixed + duplicate.placedItemIds.length + duplicate.commentIds.length + duplicate.annotationIds.length
     }
     case 'plan.copyToFloor':
       return (payload as CopyPlanObjectsToFloor).placedItemIds.length
@@ -2085,11 +2191,16 @@ export function intentIdCount(type: IntentType, payload?: PayloadOf): number {
         placedItems.length +
         beamsOf(pasted.entities).length +
         skirtingOf(pasted.entities).length +
+        // Services were claimed by the handler from #79 on but never counted here; a copy that
+        // brought one would have spent the Item Designs' slots. Found by the #81 paste tests.
+        servicesOf(pasted.entities).length +
         pasted.itemDesigns.length +
         pasted.layers.length +
         // `Include Comments` (#80 §13) takes one more slot per Comment that crosses, at the tail, so
-        // the blocks `locatePaste` reads from the front are unmoved.
-        ((payload as PasteFromOtherProject).includeComments ? pasted.notes.length : 0)
+        // the blocks `locatePaste` reads from the front are unmoved. `Include Annotations` (#81 §9)
+        // sits after it for the same reason.
+        ((payload as PasteFromOtherProject).includeComments ? pasted.notes.length : 0) +
+        ((payload as PasteFromOtherProject).includeAnnotations ? pasted.annotations.length : 0)
       )
     }
     default:
@@ -2155,6 +2266,8 @@ export type RejectionCode =
   | 'invalid-service'
   /** A Comment edit its record cannot represent: a scope on an Anchor that inherits one, a missing title, a priority outside the three (#80 §1, §3). */
   | 'invalid-comment'
+  /** An Annotation edit its record cannot represent: an endpoint on a type that draws none, a Marker with no target, a style outside the bounded sets, text that will not validate (#81 §1, §2). */
+  | 'invalid-annotation'
   /** A Room proposal that overlaps another Room, or a Wall edit a referenced Room edge cannot follow (#67 §7, §12). */
   | 'room-blocked'
   /** A Design Option the Project cannot hold: a name another Option already answers to (#69 §2). */

@@ -102,13 +102,14 @@ export function expectRejection(project: Project, next: Intent, code: RejectionC
  */
 export function expectRoundTrip(project: Project, next: Intent): Applied {
   const result = expectApplied(project, next)
-  // One field is deliberately not restored by undo: the Comment reference counter, which counts
-  // numbers that have already been handed out (#80 §1 criterion 2). Everything else comes back exactly.
+  // One pair of fields is deliberately not restored by undo: the Comment and Annotation reference
+  // counters, which count numbers that have already been handed out (#80 §1 criterion 2, #81 §1).
+  // Everything else comes back exactly.
   const undone = applyPatches(result.project, result.inversePatches)
   const restored =
-    undone.commentReferenceCounter === project.commentReferenceCounter
+    undone.commentReferenceCounter === project.commentReferenceCounter && undone.annotationReferenceCounter === project.annotationReferenceCounter
       ? undone
-      : { ...undone, commentReferenceCounter: project.commentReferenceCounter }
+      : { ...undone, commentReferenceCounter: project.commentReferenceCounter, annotationReferenceCounter: project.annotationReferenceCounter }
   expect(canonicalJson(restored)).toBe(canonicalJson(project))
   expect(canonicalJson(applyPatches(project, result.patches))).toBe(canonicalJson(result.project))
   return result

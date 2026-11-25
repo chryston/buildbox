@@ -89,7 +89,7 @@ function findFeatureOwner(project: Project, ownerId: EntityId): { readonly kind:
  * record is gone the kind's plain wording stands in, because the one thing the message must not do is
  * print a raw kind code (`entity`, `floor_point`) at somebody (#80 criterion 19).
  */
-function targetLabel(project: Project, anchor: CommentAnchor): string {
+export function targetLabel(project: Project, anchor: CommentAnchor): string {
   switch (anchor.kind) {
     case 'project':
       return project.meta.name

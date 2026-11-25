@@ -260,6 +260,9 @@ export const TOKEN = {
   /* Notes (#80 §37) — amber pins and badges, red-orange high priority, muted grey Resolved. */
   notePin: "--bb-note-pin",
   notePinText: "--bb-note-pin-text",
+  /* The Revision Cloud's placement preview (#81 §3.8). */
+  cloudPreviewStroke: "--bb-cloud-preview-stroke",
+  cloudPreviewFill: "--bb-cloud-preview-fill",
   noteHigh: "--bb-note-high",
   noteNormal: "--bb-note-normal",
   noteLow: "--bb-note-low",

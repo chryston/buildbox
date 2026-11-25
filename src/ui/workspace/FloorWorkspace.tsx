@@ -17,12 +17,12 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveBeams, deriveSkirting, deriveServices, skirtingFaceTargets, skirtingSnapSources, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, elevationFrameOf, enabledVerticalSnapKinds, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates, verticalSnapCandidates, commentAnchorPoint, commentsForView } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveBeams, deriveSkirting, deriveServices, skirtingFaceTargets, skirtingSnapSources, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, elevationFrameOf, enabledVerticalSnapKinds, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates, verticalSnapCandidates, commentAnchorPoint, commentsForView, annotationsForView, effectiveAnnotationStyle } from '../../derive'
 import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings, drawElevationView } from '../../drawing'
-import type { BadgeSubject, LayerGates, NoteBadgeSubject, NotePinSubject, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
-import type { CommentAnchor, EntityId, ElevationView, Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
-import { anchorChoosesScope, COMMENT_SCOPE_ALL, commentIsOpen, DEFAULT_COMMENT_PRIORITY, cabinetFeatureIds, DEFAULT_FEATURE_T, designOptionsOf, duplicateCommentIds, elevationViewsOf, isLinearFeature, ownerKindOfDesign, registeredFeatureIds, allServices, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf } from '../../domain'
+import type { BadgeSubject, LayerGates, MarkSubject, NoteBadgeSubject, NotePinSubject, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
+import type { Annotation, AnnotationEndpoint, AnnotationPosition, AnnotationType, CommentAnchor, EntityId, ElevationView, Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
+import { anchorChoosesScope, COMMENT_SCOPE_ALL, commentIsOpen, DEFAULT_COMMENT_PRIORITY, cabinetFeatureIds, DEFAULT_FEATURE_T, designOptionsOf, duplicateCommentIds, duplicateAnnotationIds, elevationViewsOf, isLinearFeature, ownerKindOfDesign, registeredFeatureIds, allServices, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf, annotationPositionIsRect, endpointIsAnchored, savedViewById, annotationDefaultLayerName, annotationDefaultLayerColor, ANNOTATION_SCOPE_ALL, DEFAULT_REVISION_CLOUD_WIDTH_MM, DEFAULT_REVISION_CLOUD_HEIGHT_MM, savedViewsOf, viewActiveLayerId } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
@@ -140,6 +140,8 @@ import type { RenovationInspectorAction, RenovationInspectorLayer, RenovationIns
 import { canPasteHere, pasteClipboardStore, usePasteClipboard } from './pasteClipboard'
 import { RENOVATION_STRINGS } from '../strings/renovation'
 import { COMMENT_STRINGS } from '../strings/comments'
+import { ANNOTATION_STRINGS, ANNOTATION_TYPE_LABELS } from '../strings/annotations'
+import { AnnotationLayerPrompt } from './AnnotationLayerPrompt'
 import { commentFeatureLabel } from './notes/anchorLabel'
 import { FIELDS_UNLOCKED, FieldsLockedContext } from './fieldsLock'
 import type { FieldsLock } from './fieldsLock'
@@ -1216,6 +1218,22 @@ export function FloorWorkspace(): ReactNode {
    * the move that preceded it has been rendered.
    */
   const clickOnCanvas = (at: Pt): void => {
+    if (annotationToolType !== null) {
+      // An Annotation tool in hand: the click places (#81 §3.5–3.9). The Revision Cloud never
+      // reaches here — its drag owns the canvas — and a Leader or Arrow spends its first click on
+      // the endpoint and its second on the text's position. An entity under the cursor never
+      // reaches here either: the canvas routes it to `onCommentEntity` with the entity the cycle
+      // resolved, which is the anchor a Leader or Arrow wants.
+      const type = annotationToolType
+      if (type === 'revision_cloud') return
+      if (type === 'leader' || type === 'arrow') {
+        if (annotationEndpoint === null) setAnnotationEndpoint({ free: endpointAt(at) })
+        else placeAnnotation(type, at, annotationEndpoint)
+        return
+      }
+      placeAnnotation(type, at)
+      return
+    }
     if (tool === 'comment') {
       // Empty Floor with the tool in hand: the note is anchored to the point aimed at, in Floor
       // millimetres (#80 §9). An entity under the cursor never reaches here — the canvas routes it
@@ -1254,6 +1272,163 @@ export function FloorWorkspace(): ReactNode {
     const commentId = intent.ids[0] ?? null
     if (commentId !== null) notesSessionStore.getState().selectNew(commentId)
     setTool('select')
+  }
+
+  // ── Annotation placement (#81 §3, §4) ────────────────────────────────────────────────
+
+  /** The type the tool in hand draws, or `null` when the tool is not an Annotation tool. */
+  const annotationToolType: AnnotationType | null =
+    tool === 'annotationText' ? 'text'
+      : tool === 'annotationLeader' ? 'leader'
+        : tool === 'annotationArrow' ? 'arrow'
+          : tool === 'annotationCloud' ? 'revision_cloud'
+            : tool === 'annotationMarker' ? 'reference_marker'
+              : null
+
+  /** The half-placed Leader or Arrow: the endpoint its first click settled (#81 §3.7). */
+  const [annotationEndpoint, setAnnotationEndpoint] = useState<AnnotationEndpoint | null>(null)
+  /** Whether linear features are snap targets — `t` flips it mid-placement (#81 §3.7). */
+  const [annotationLinearSnap, setAnnotationLinearSnap] = useState(false)
+  /** The first-Annotation layer question, waiting for its answer (#81 §4.2). */
+  const [annotationPrompt, setAnnotationPrompt] = useState<{
+    type: AnnotationType
+    position: AnnotationPosition
+    endpoint?: AnnotationEndpoint
+  } | null>(null)
+
+  // The view just left, which is what a Reference Marker points at by default (#81 §3.9): the
+  // person places the marker in one view having just come from the view it should open.
+  const previousViewRef = useRef<EntityId | null>(null)
+  const lastOtherViewRef = useRef<EntityId | null>(null)
+  useEffect(() => {
+    const id = view?.id ?? null
+    if (id !== null && previousViewRef.current !== null && previousViewRef.current !== id) {
+      lastOtherViewRef.current = previousViewRef.current
+    }
+    previousViewRef.current = id
+  }, [view?.id])
+
+  /** The next marker number in this view: one past the highest marker already standing there. */
+  const nextMarkerNumber = (): number => {
+    if (view === null) return 1
+    let highest = 0
+    for (const each of project.annotations) {
+      if (each.viewId !== view.id || each.type !== 'reference_marker') continue
+      const n = Number(each.text)
+      if (Number.isFinite(n)) highest = Math.max(highest, Math.floor(n))
+    }
+    return highest + 1
+  }
+
+  /** The default target: the view just left, else the first other saved view (#81 §3.9). */
+  const markerTarget = (): EntityId | null => {
+    if (view === null) return null
+    const others = savedViewsOf(project).filter((each) => each.id !== view.id)
+    const last = lastOtherViewRef.current
+    if (last !== null && others.some((each) => each.id === last)) return last
+    return others[0]?.id ?? null
+  }
+
+  /** One `annotation.create`, one undo step, and the new glyph stands selected (#81 §3.10). */
+  const sendAnnotationCreate = (
+    type: AnnotationType,
+    position: AnnotationPosition,
+    layerId: EntityId | null,
+    endpoint?: AnnotationEndpoint,
+    createLayer?: { name: string; color: string },
+  ): void => {
+    if (view === null) return
+    const target = type === 'reference_marker' ? markerTarget() : null
+    const intent = services.intent.build(
+      'annotation.create',
+      {
+        viewId: view.id,
+        type,
+        position,
+        text: type === 'reference_marker' ? String(nextMarkerNumber()) : ANNOTATION_STRINGS.defaultText,
+        layerId,
+        scope: renovationOptionId ?? ANNOTATION_SCOPE_ALL,
+        ...(endpoint !== undefined ? { endpoint } : {}),
+        ...(target !== null ? { targetViewId: target } : {}),
+        ...(createLayer !== undefined ? { createLayer } : {}),
+      },
+      ANNOTATION_TYPE_LABELS[type],
+    )
+    sendIntent(intent)
+    setAnnotationEndpoint(null)
+    setTool('select')
+    setSelectedMarkId(intent.ids[0] ?? null)
+    // The editor opens with the new Annotation selected and its text handed to the keyboard (#81 §3.10).
+    if (intent.ids[0] !== undefined) notesSessionStore.getState().selectNewAnnotation(intent.ids[0])
+  }
+
+  /**
+   * Placement's layer answer (#81 §4): the type's default layer by name; failing that, the prompt
+   * for the Project's first Annotation, the view's active layer for every later one, and Unlayered
+   * when the view has no active layer. A layer that is read-only in this view refuses with its
+   * sentence and changes nothing (§3.4).
+   */
+  const placeAnnotation = (type: AnnotationType, position: AnnotationPosition, endpoint?: AnnotationEndpoint): void => {
+    if (view === null) return
+    const defaultName = annotationDefaultLayerName(type)
+    const existing = drawingLayersOf(project).find((layer) => layer.name === defaultName)
+    if (existing !== undefined) {
+      if (!effectiveLayerSetting(project, view, existing.id).editable) {
+        showRenovationNotice(ANNOTATION_STRINGS.readOnlyRefusal(existing.name))
+        return
+      }
+      sendAnnotationCreate(type, position, existing.id, endpoint)
+      return
+    }
+    if (project.annotations.length === 0) {
+      setAnnotationPrompt({ type, position, ...(endpoint !== undefined ? { endpoint } : {}) })
+      return
+    }
+    const active = viewActiveLayerId(view)
+    if (active !== null && !effectiveLayerSetting(project, view, active).editable) {
+      showRenovationNotice(ANNOTATION_STRINGS.readOnlyRefusal(drawingLayerById(project, active)?.name ?? defaultName))
+      return
+    }
+    if (active === null && !effectiveLayerSetting(project, view, UNLAYERED_LAYER_KEY).editable) {
+      showRenovationNotice(ANNOTATION_STRINGS.readOnlyRefusal(ANNOTATION_STRINGS.unlayered))
+      return
+    }
+    sendAnnotationCreate(type, position, active, endpoint)
+  }
+
+  /**
+   * The Leader or Arrow's first click on empty canvas (#81 §3.7): a snap candidate inside the
+   * acquisition radius takes the endpoint's place — linear kinds only while `t` has armed them —
+   * and everything else leaves a free endpoint where the pointer was. The candidate list carries
+   * geometry, not entity identity, so an acquired point stays an honest free endpoint at the
+   * snapped place; anchoring to the entity itself is what a click on the entity is for.
+   */
+  const endpointAt = (at: Pt): Pt => {
+    if (floorWalls === null || viewport === null || viewport === undefined) return at
+    const candidates = snapCandidates({
+      geometry: roomSnapGeometry,
+      walls: [...floorWalls.snapSources, ...skirtingSnapSourcesValue],
+      cursor: at,
+      from: at,
+      gridSpacingMm: snapSettings.gridSpacingMm,
+      angleIncrementDeg: snapSettings.angle.incrementDeg,
+      enabled: snapKinds,
+      allowed: snapLayerAllowed,
+    }).filter((candidate) => annotationLinearSnap || (candidate.kind !== 'wallFace' && candidate.kind !== 'midpoint'))
+    const snap = resolveSnap(candidates, at, SNAP_ACQUISITION_PX / viewport.zoom, snapKinds)
+    return snap === null ? at : snap.point
+  }
+
+  /** The Revision Cloud's release (#81 §3.8): a drag keeps its rectangle, a click the default. */
+  const placeCloud = (a: Pt, b: Pt, dragged: boolean): void => {
+    if (!dragged) {
+      placeAnnotation('revision_cloud', {
+        a: { x: a.x - DEFAULT_REVISION_CLOUD_WIDTH_MM / 2, y: a.y - DEFAULT_REVISION_CLOUD_HEIGHT_MM / 2 },
+        b: { x: a.x + DEFAULT_REVISION_CLOUD_WIDTH_MM / 2, y: a.y + DEFAULT_REVISION_CLOUD_HEIGHT_MM / 2 },
+      })
+      return
+    }
+    placeAnnotation('revision_cloud', { a, b })
   }
 
   /**
@@ -1400,6 +1575,15 @@ export function FloorWorkspace(): ReactNode {
    * "where is this one", and answering it by adding every other pin beside it is a different answer.
    */
   const notesOverlayOn = useNotesSession((state) => state.overlayOn)
+
+  // The overlay is the group's gate (#81 §3.2): switching it off mid-placement disarms the tool,
+  // and the half-made Annotation is abandoned exactly as Esc would have abandoned it.
+  useEffect(() => {
+    if (!notesOverlayOn && annotationToolType !== null) {
+      setAnnotationEndpoint(null)
+      setTool('select')
+    }
+  }, [notesOverlayOn, tool])
   const notesSelectedId = useNotesSession((state) => state.selectedCommentId)
   const notePins: NotePinSubject[] = (() => {
     if (!notesOverlayOn || view === null || floorWalls === null) return []
@@ -1431,6 +1615,49 @@ export function FloorWorkspace(): ReactNode {
       const count = counts.get(placement.designId)
       if (count === undefined) continue
       out.push({ id: placement.id, bounds: placement.worldBounds, count })
+    }
+    return out
+  })()
+
+  /**
+   * The Annotations this view draws (#81 §5): the derive answers which ones and with what style;
+   * the anchored endpoint is resolved here, where the Walls are, so a mark follows the thing it
+   * names (§5.2) while its label stays where it was composed. A Leader whose subject has gone is
+   * not drawn at a guessed place — the Notes tab still lists it, and the canvas does not invent.
+   */
+  const [selectedMarkId, setSelectedMarkId] = useState<string | null>(null)
+  const markSubjects: MarkSubject[] = (() => {
+    if (!notesOverlayOn || view === null) return []
+    const out: MarkSubject[] = []
+    for (const annotation of annotationsForView(project, view)) {
+      const position = annotation.position
+      const at = annotationPositionIsRect(position)
+        ? { x: Math.min(position.a.x, position.b.x), y: Math.min(position.a.y, position.b.y) }
+        : position
+      let endpointAt: Point2 | null = null
+      if (annotation.endpoint !== undefined) {
+        endpointAt = endpointIsAnchored(annotation.endpoint)
+          ? (floorWalls === null ? null : commentAnchorPoint(project, floorWalls, annotation.endpoint.anchor))
+          : annotation.endpoint.free
+        if (endpointAt === null) continue
+      }
+      out.push({
+        id: annotation.id,
+        type: annotation.type,
+        at,
+        text: annotation.text,
+        endpointAt,
+        rect: annotationPositionIsRect(position)
+          ? {
+              x: Math.min(position.a.x, position.b.x),
+              y: Math.min(position.a.y, position.b.y),
+              w: Math.abs(position.b.x - position.a.x),
+              h: Math.abs(position.b.y - position.a.y),
+            }
+          : null,
+        targetLabel: annotation.targetViewId === undefined ? null : savedViewById(project, annotation.targetViewId)?.name ?? null,
+        style: effectiveAnnotationStyle(project, view, annotation),
+      })
     }
     return out
   })()
@@ -1684,6 +1911,15 @@ export function FloorWorkspace(): ReactNode {
           setTool('select')
           return
         }
+        if (annotationToolType !== null) {
+          // The same backing out (#81 §3.11): Esc mid-placement returns to Select with nothing
+          // created — the half-drawn Leader forgets its endpoint and a waiting prompt closes.
+          event.preventDefault()
+          setAnnotationEndpoint(null)
+          setAnnotationPrompt(null)
+          setTool('select')
+          return
+        }
         if (tool === 'comment') {
           // The same backing out (#80 §9): Esc leaves the tool with nothing sent and nothing selected,
           // because a note nobody meant to start is not a note.
@@ -1699,6 +1935,13 @@ export function FloorWorkspace(): ReactNode {
       }
       const target = event.target as HTMLElement | null
       if (target !== null && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+      if (event.key.toLowerCase() === 't' && (tool === 'annotationLeader' || tool === 'annotationArrow')) {
+        // `t` toggles whether linear features are snap targets mid-placement (#81 §3.7); the tool
+        // strip yields the key while one of these tools is in hand, so this is the whole wiring.
+        event.preventDefault()
+        setAnnotationLinearSnap((on) => !on)
+        return
+      }
       // Ctrl/Cmd+C copies the selected record into this tab's clipboard (#72 §3). Nothing is
       // dispatched, so the source Project keeps its revision; with nothing selected the key is left
       // alone, because then it is not the workspace's key to answer.
@@ -1813,11 +2056,13 @@ export function FloorWorkspace(): ReactNode {
 
   const duplicateFloor = (input: DuplicateFloorInput): void => {
     if (duplicateFloorId === null) return
-    const { includeComments, ...rest } = input
+    const { includeComments, includeAnnotations, ...rest } = input
+    const defaultViewId = project.views.find((candidate) => candidate.floorId === duplicateFloorId && candidate.isDefault)?.id
     send('floor.duplicate', {
       floorId: duplicateFloorId,
       ...rest,
       commentIds: includeComments ? duplicateCommentIds(project, duplicateFloorId, input.placedItemIds) : [],
+      annotationIds: includeAnnotations && defaultViewId !== undefined ? duplicateAnnotationIds(project, [defaultViewId]) : [],
     })
     setDuplicateFloorId(null)
     const after = session.getSnapshot().project
@@ -2070,8 +2315,20 @@ export function FloorWorkspace(): ReactNode {
   // #70 §3: the two things only this component knows, which the strip cannot derive from the table —
   // whether one thing is named well enough to mark, and which Design Option would own the record.
   const renovationSelectedIds = [wallSelection, openingSelection, roomSelection, beamSelection, skirtingSelection, serviceSelection, selection].filter((id) => id !== null)
-  const renovationBlocked: Partial<Record<RenovationToolId, string>> =
-    renovationSelectedIds.length === 1 ? {} : { markDemolition: RENOVATION_STRINGS.markDemolitionNeedsOne }
+  const renovationBlocked: Partial<Record<RenovationToolId, string>> = {
+    ...(renovationSelectedIds.length === 1 ? {} : { markDemolition: RENOVATION_STRINGS.markDemolitionNeedsOne }),
+    // The Notes overlay is the Annotation group's gate (#81 §3.2): the five rows stay visible,
+    // disabled, and say their reason on hover and on a refused keypress.
+    ...(notesOverlayOn
+      ? {}
+      : {
+          annotationText: ANNOTATION_STRINGS.overlayOffTooltip,
+          annotationLeader: ANNOTATION_STRINGS.overlayOffTooltip,
+          annotationArrow: ANNOTATION_STRINGS.overlayOffTooltip,
+          annotationCloud: ANNOTATION_STRINGS.overlayOffTooltip,
+          annotationMarker: ANNOTATION_STRINGS.overlayOffTooltip,
+        }),
+  }
   const markRenovationDemolition = (): void => {
     const entityId = renovationSelectedIds[0]
     if (renovationOptionId === null || entityId === undefined) return
@@ -3412,6 +3669,25 @@ export function FloorWorkspace(): ReactNode {
           // threaded through four inspectors that each have to remember to honour it.
           <FieldsLockedContext.Provider value={fieldsLock}>
           <>
+          {selectedMarkId !== null && project.annotations.some((a) => a.id === selectedMarkId) && (
+            <div className="bb-inspector-notes" data-testid="inspector-annotation">
+              <div className="bb-inspector-notes-heading" data-testid="inspector-annotation-heading">
+                {(() => {
+                  const mark = project.annotations.find((a) => a.id === selectedMarkId) as Annotation
+                  return `${mark.reference} · ${ANNOTATION_TYPE_LABELS[mark.type]}`
+                })()}
+              </div>
+              <dl>
+                <div><dt>{ANNOTATION_STRINGS.fieldView}</dt><dd data-testid="inspector-annotation-owner">{ANNOTATION_STRINGS.ownerDrawingContent}</dd></div>
+                <div><dt>{ANNOTATION_STRINGS.fieldLayer}</dt><dd data-testid="inspector-annotation-layer">
+                  {(() => {
+                    const mark = project.annotations.find((a) => a.id === selectedMarkId) as Annotation
+                    return mark.layerId === null ? ANNOTATION_STRINGS.unlayered : (drawingLayerById(project, mark.layerId)?.name ?? ANNOTATION_STRINGS.unlayered)
+                  })()}
+                </dd></div>
+              </dl>
+            </div>
+          )}
           {selectedRoom !== null
             ? <RoomInspector
                 room={selectedRoom.room}
@@ -3697,9 +3973,26 @@ export function FloorWorkspace(): ReactNode {
               onSelect={select}
               onCursorChange={setOpeningCursor}
               onCanvasClick={clickOnCanvas}
-              onCommentEntity={(entityId) => placeComment({ kind: 'entity', entityId })}
+              onCommentEntity={(entityId) => {
+                // A Leader or Arrow in hand names its entity: this click is the endpoint's anchor
+                // (#81 §3.7). With any other tool the click stays the Comment tool's, unchanged.
+                if (tool === 'annotationLeader' || tool === 'annotationArrow') {
+                  setAnnotationEndpoint({ anchor: { kind: 'entity', entityId } })
+                  return
+                }
+                placeComment({ kind: 'entity', entityId })
+              }}
               notePins={notePins}
               noteBadges={noteBadges}
+              markSubjects={markSubjects}
+              selectedMarkId={selectedMarkId}
+              onMarkPointerDown={(id) => {
+                setSelectedMarkId(id)
+                // A canvas selection opens the panel on the Annotations tab and focuses the row
+                // (#81 §3.3a); the panel and the tab are Display state, never a history step.
+                if (id !== null) notesSessionStore.getState().selectAnnotation(id)
+              }}
+              onCloudRect={annotationToolType === 'revision_cloud' ? placeCloud : undefined}
               onNotePointerDown={(id) => notesSessionStore.getState().select(id)}
               focusPoint={notesFocusPoint}
               warningSubjects={warningSubjects}
@@ -3911,6 +4204,23 @@ export function FloorWorkspace(): ReactNode {
                     Cancel
                   </button>
                 </div>
+              ) : annotationToolType !== null ? (
+                <div className="bb-workspace-tool-hint" data-testid="annotation-tool-hint" role="status">
+                  {tool === 'annotationLeader' || tool === 'annotationArrow'
+                    ? ANNOTATION_STRINGS.toolAnchorHint(annotationToolType)
+                    : ANNOTATION_STRINGS.toolHint(annotationToolType)}
+                  <button
+                    type="button"
+                    className="bb-workspace-tool-button"
+                    data-testid="annotation-tool-cancel"
+                    onClick={() => {
+                      setAnnotationEndpoint(null)
+                      setTool('select')
+                    }}
+                  >
+                    {ANNOTATION_STRINGS.cancel}
+                  </button>
+                </div>
               ) : tool === 'beam' ? beamDraftOverlay : tool === 'skirting' ? skirtingToolLayer : tool === 'service' ? serviceToolLayer : elevationDraftOverlay}
             />
             )}
@@ -4095,6 +4405,12 @@ export function FloorWorkspace(): ReactNode {
             onReopen={(commentId) => send('comment.reopen', { commentId, at: services.now() })}
             onDelete={(commentId) => send('comment.delete', { commentId })}
             onEdit={(commentId, patch) => send('comment.edit', { commentId, ...patch, at: services.now() })}
+            onEditAnnotation={(annotationId, patch) => send('annotation.edit', { annotationId, ...patch })}
+            onDeleteAnnotation={(annotationId) => send('annotation.delete', { annotationId })}
+            onGoToView={(viewId) => {
+              const target = project.views.find((each) => each.id === viewId)
+              if (target !== undefined) workspaceStore.getState().setActiveFloor(target.floorId, viewId)
+            }}
             />
           ) : null
         }
@@ -4115,6 +4431,32 @@ export function FloorWorkspace(): ReactNode {
           review={deleteReview}
           onConfirm={confirmDeleteWall}
           onCancel={() => setDeleteReview(null)}
+        />
+      )}
+      {annotationPrompt !== null && (
+        <AnnotationLayerPrompt
+          layerName={annotationDefaultLayerName(annotationPrompt.type)}
+          color={annotationDefaultLayerColor(annotationPrompt.type)}
+          layers={drawingLayersOf(project).map((layer) => ({ id: layer.id, name: layer.name }))}
+          onCancel={() => {
+            setAnnotationPrompt(null)
+          }}
+          onConfirm={(answer) => {
+            const pending = annotationPrompt
+            if ('create' in answer) {
+              setAnnotationPrompt(null)
+              sendAnnotationCreate(pending.type, pending.position, null, pending.endpoint, { name: answer.name, color: answer.color })
+              return
+            }
+            // A chosen existing layer that is read-only here refuses like placement itself (#81 §3.4):
+            // the prompt stays open, because the question has still not been answered.
+            if (answer.layerId !== null && view !== null && !effectiveLayerSetting(project, view, answer.layerId).editable) {
+              showRenovationNotice(ANNOTATION_STRINGS.readOnlyRefusal(drawingLayerById(project, answer.layerId)?.name ?? ''))
+              return
+            }
+            setAnnotationPrompt(null)
+            sendAnnotationCreate(pending.type, pending.position, answer.layerId, pending.endpoint)
+          }}
         />
       )}
       {pendingDistancePx !== null && floorId !== null && (

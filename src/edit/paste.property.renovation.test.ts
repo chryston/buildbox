@@ -119,7 +119,7 @@ describe('any copy set under any layer mapping (#72 §4)', () => {
         const review = pasteReviewOf(before, before.views[0]!, copySet)
         // A copy that brings nothing is a no-op the shell never offers; it is not a case here.
         fc.pre(review.entityCount > 0)
-        const payload = { floorId: DEST_FLOOR, viewId: DEST_VIEW, copySet, includeComments: false as const }
+        const payload = { floorId: DEST_FLOOR, viewId: DEST_VIEW, copySet, includeComments: false as const, includeAnnotations: false as const }
         const next = {
           type: 'renovation.pasteFromProject' as const,
           label: intentLabel('renovation.pasteFromProject'),
@@ -190,7 +190,7 @@ describe('any copy set under any layer mapping (#72 §4)', () => {
         const copySet = captureCopySet(source, source.views[0]!, picked)
         const review = pasteReviewOf(before, before.views[0]!, copySet)
         fc.pre(review.entityCount > 0)
-        const payload = { floorId: DEST_FLOOR, viewId: DEST_VIEW, copySet, includeComments: false as const }
+        const payload = { floorId: DEST_FLOOR, viewId: DEST_VIEW, copySet, includeComments: false as const, includeAnnotations: false as const }
         const next = {
           type: 'renovation.pasteFromProject' as const,
           label: intentLabel('renovation.pasteFromProject'),

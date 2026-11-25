@@ -103,6 +103,7 @@ export {
   migrateV12toV13,
   migrateV13toV14,
   migrateV14toV15,
+  migrateV15toV16,
   runMigrationChain,
   type Migrator,
   type MigrateError,
@@ -246,6 +247,45 @@ export {
   openComments,
 } from './comments'
 export type {
+  Annotation,
+  AnnotationEndpoint,
+  AnnotationMarkerShape,
+  AnnotationPosition,
+  AnnotationRect,
+  AnnotationScope,
+  AnnotationSize,
+  AnnotationStyle,
+  AnnotationType,
+} from './annotations'
+export {
+  ANNOTATION_DEFAULT_LAYER_NAME,
+  ANNOTATION_MARKER_SHAPES,
+  ANNOTATION_PALETTE,
+  ANNOTATION_REFERENCE_MIN_DIGITS,
+  ANNOTATION_REFERENCE_PATTERN,
+  ANNOTATION_SCOPE_ALL,
+  ANNOTATION_SIZES,
+  ANNOTATION_TEXT_MAX_LENGTH,
+  ANNOTATION_TYPES,
+  ANNOTATION_WEIGHTS,
+  annotationDefaultLayerColor,
+  annotationDefaultLayerName,
+  annotationPositionIsRect,
+  annotationReferenceNumber,
+  annotationTypeHasEndpoint,
+  annotationTypeHasTarget,
+  compareAnnotationReferences,
+  DEFAULT_REVISION_CLOUD_HEIGHT_MM,
+  DEFAULT_REVISION_CLOUD_WIDTH_MM,
+  duplicateAnnotationIds,
+  endpointIsAnchored,
+  formatAnnotationReference,
+  isAnnotationScopeAll,
+  NOTES_LAYER_DEFAULT_COLOR,
+  REVISION_CLOUD_DEFAULT_LAYER_NAME,
+  REVISIONS_LAYER_DEFAULT_COLOR,
+} from './annotations'
+export type {
   CollectionOwnerKind,
   EntityCollectionKey,
   FeatureOwnerKind,
@@ -310,7 +350,7 @@ export type {
   DrawingLayer,
   LayerSetting,
 } from './project'
-export { remapAnchor, remapEntities, remapIds, type IdAllocator, type IdReplacement } from './remapIds'
+export { remapAnchor, remapEntities, remapIds, remapMarkAnchor, type IdAllocator, type IdReplacement } from './remapIds'
 export { ACKNOWLEDGEMENT_NOTE_MAX_LENGTH, warningKey } from './warnings'
 export {
   MAX_OUTLINE_RECTS,

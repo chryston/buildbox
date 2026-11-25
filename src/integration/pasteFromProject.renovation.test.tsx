@@ -30,7 +30,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import type { EntityId, Project } from '../domain'
 import { entityLayerId } from '../domain'
-import { withComments } from '../domain/testing'
+import { withAnnotations, withComments } from '../domain/testing'
 import { pasteClipboardStore, PLAN_IMAGE_ACCEPT, WorkspaceProvider, workspaceStore, type WorkspaceServices } from '../ui'
 import { openTestView, renderWithBindings as render, TEST_EXPORT_PORT, type TestView } from '../ui/legacy/testing'
 
@@ -51,7 +51,7 @@ const DINING_CHAIR = 'fp-sofa'
 
 const readProject = (name: string): Project => {
   const text = readFileSync(join(fixturesRoot, 'domain', 'v9', name), 'utf8')
-  return withComments(structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project))
+  return withAnnotations(withComments(structuredClone((JSON.parse(text) as { domainSchemaVersion: number; project: Project }).project)))
 }
 
 let view: TestView

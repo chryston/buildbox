@@ -13,12 +13,13 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { canonicalJsonBytes, sha256Hex } from '../lib'
 import { DEFAULT_DRAWING_LAYERS, MIGRATORS, type PlanView, type Project } from '../domain'
-import { withClearanceEnvelopes, withElevationViews, withPlanViewRanges } from '../domain/testing'
+import { withAnnotations, withClearanceEnvelopes, withElevationViews, withPlanViewRanges } from '../domain/testing'
 import { encodeProject } from './encode'
 import { migrateDomainProject, stageImport } from './import'
 import {
   acknowledgementsFixtureProject,
   allocateIds,
+  annotationsFixtureProject,
   beamsFixtureProject,
   clearanceFixtureProject,
   commentsFixtureProject,
@@ -38,7 +39,7 @@ import {
 
 const ASSET_ENTRY = `assets/${FIXTURE_PLAN_IMAGE_HASH}.png`
 
-type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6' | 'v7' | 'v8' | 'v9' | 'v10' | 'v11' | 'v12' | 'v13' | 'v14' | 'v15'
+type FixtureVersion = 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6' | 'v7' | 'v8' | 'v9' | 'v10' | 'v11' | 'v12' | 'v13' | 'v14' | 'v15' | 'v16'
 
 const fixtureDir = (version: FixtureVersion): URL => new URL(`../../fixtures/package/${version}/`, import.meta.url)
 const readFrom = (version: FixtureVersion) => (relative: string): Uint8Array =>
@@ -59,6 +60,7 @@ const readV12 = readFrom('v12')
 const readV13 = readFrom('v13')
 const readV14 = readFrom('v14')
 const readV15 = readFrom('v15')
+const readV16 = readFrom('v16')
 
 const ARCHIVE_V1 = readV1('reference.buildbox')
 const ARCHIVE_V2 = readV2('reference.buildbox')
@@ -95,6 +97,9 @@ const ARCHIVE_V14 = readV14('services.buildbox')
 // The v15 file is named for what the step added, as the eight before it were: it is the first Backup
 // whose Project carries a Comment (#80).
 const ARCHIVE_V15 = readV15('comments.buildbox')
+// The v16 file is named for what the step added, as the nine before it were: it is the first Backup
+// whose Project carries an Annotation (#81).
+const ARCHIVE_V16 = readV16('annotations.buildbox')
 const ASSET_BYTES = readV2(ASSET_ENTRY)
 
 /** The one Plan Image every fixture carries, served the way the export serves it. */
@@ -159,11 +164,15 @@ const canonicalWithout = (record: unknown, ...names: string[]): string =>
 /** The two fields the fifteenth step adds to the Project itself (#80 §1). */
 const COMMENT_FIELDS = ['comments', 'commentReferenceCounter'] as const
 
+/** The two fields the sixteenth step adds to the Project itself (#81 §1). */
+const ANNOTATION_FIELDS = ['annotations', 'annotationReferenceCounter'] as const
+
 /**
- * What a Backup predating the four newest steps lacks: the model collections the three before it grow
- * (#77, #78, #79) and the Comment fields the fifteenth adds (#80).
+ * What a Backup predating the five newest steps lacks: the model collections the three before it grow
+ * (#77, #78, #79), the Comment fields the fifteenth adds (#80) and the Annotation fields the
+ * sixteenth (#81).
  */
-const PRIOR_FIELDS = ['beams', 'skirting', 'services', ...COMMENT_FIELDS]
+const PRIOR_FIELDS = ['beams', 'skirting', 'services', ...COMMENT_FIELDS, ...ANNOTATION_FIELDS]
 const canonicalOfPrior = (record: unknown): string => canonicalWithout(record, ...PRIOR_FIELDS)
 
 /**
@@ -769,13 +778,13 @@ describe('the committed v12 Backup (#77)', () => {
     // Being re-encoded byte for byte is the property of the Backup at the current schema — the v13
     // file below. What a superseded file owes forever is that its own bytes are the canonical form
     // of the Project they were written from, so the step above is the only thing between them.
-    expect(new TextDecoder().decode(readV12('project.json'))).toBe(`${canonicalWithout(beamsFixtureProject(), 'skirting', 'services', ...COMMENT_FIELDS)}\n`)
+    expect(new TextDecoder().decode(readV12('project.json'))).toBe(`${canonicalWithout(beamsFixtureProject(), 'skirting', 'services', ...COMMENT_FIELDS, ...ANNOTATION_FIELDS)}\n`)
   })
 
   it('is described by a manifest that names domain schema v12', async () => {
     const staged = await stageImport(ARCHIVE_V12, { acceptPreview: false, allocateId: allocateIds() })
     if (!staged.ok) throw new Error('the fixture must stage')
-    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalWithout(beamsFixtureProject(), 'skirting', 'services', ...COMMENT_FIELDS), 12))
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalWithout(beamsFixtureProject(), 'skirting', 'services', ...COMMENT_FIELDS, ...ANNOTATION_FIELDS), 12))
   })
 
   it('holds one Beam in the Existing Model, and no Beam collection in the record beside it', () => {
@@ -815,13 +824,13 @@ describe('the committed v13 Backup (#78)', () => {
     // Being re-encoded byte for byte is the property of the Backup at the current schema — the v14
     // file below. What a superseded file owes forever is that its own bytes are the canonical form of
     // the Project they were written from, minus the Service collection the fourteenth step adds.
-    expect(new TextDecoder().decode(readV13('project.json'))).toBe(`${canonicalWithout(skirtingFixtureProject(), 'services', ...COMMENT_FIELDS)}\n`)
+    expect(new TextDecoder().decode(readV13('project.json'))).toBe(`${canonicalWithout(skirtingFixtureProject(), 'services', ...COMMENT_FIELDS, ...ANNOTATION_FIELDS)}\n`)
   })
 
   it('is described by a manifest that names domain schema v13', async () => {
     const staged = await stageImport(ARCHIVE_V13, { acceptPreview: false, allocateId: allocateIds() })
     if (!staged.ok) throw new Error('the fixture must stage')
-    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalWithout(skirtingFixtureProject(), 'services', ...COMMENT_FIELDS), 13))
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalWithout(skirtingFixtureProject(), 'services', ...COMMENT_FIELDS, ...ANNOTATION_FIELDS), 13))
   })
 
   // Criterion 14: a BuildBox that stops at v12 has no thirteenth step to read this with.
@@ -874,13 +883,13 @@ describe('the committed v14 Backup (#79)', () => {
     // file below. What a superseded file owes forever is that its own bytes are the canonical form of
     // the Project they were written from, minus the Comment collection and its counter that the
     // fifteenth step adds.
-    expect(new TextDecoder().decode(readV14('project.json'))).toBe(`${canonicalWithout(servicesFixtureProject(), ...COMMENT_FIELDS)}\n`)
+    expect(new TextDecoder().decode(readV14('project.json'))).toBe(`${canonicalWithout(servicesFixtureProject(), ...COMMENT_FIELDS, ...ANNOTATION_FIELDS)}\n`)
   })
 
   it('is described by a manifest that names domain schema v14', async () => {
     const staged = await stageImport(ARCHIVE_V14, { acceptPreview: false, allocateId: allocateIds() })
     if (!staged.ok) throw new Error('the fixture must stage')
-    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalWithout(servicesFixtureProject(), ...COMMENT_FIELDS), 14))
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalWithout(servicesFixtureProject(), ...COMMENT_FIELDS, ...ANNOTATION_FIELDS), 14))
   })
 
   // A BuildBox that stops at v13 has no fourteenth step to read this with.
@@ -918,25 +927,29 @@ describe('the committed v14 Backup (#79)', () => {
   })
 })
 
-// The fifteenth schema (#80): the Backup this build writes, and what a build one schema behind says
-// when it is handed it.
+// The fifteenth schema (#80): a superseded Backup this build still reads, one step behind.
 describe('the committed v15 Backup (#80)', () => {
-  it('stages into the Project it was written from, unmigrated', async () => {
+  it('stages into the Project it was written from, read forward one step (#81)', async () => {
     const result = await stageImport(ARCHIVE_V15, { acceptPreview: false, allocateId: allocateIds() })
     if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
-    expect(result.staged.project).toEqual(commentsFixtureProject())
-    expect(result.staged.migratedFrom).toBeNull()
+    // The sixteenth step invents no drawing: the Project that comes forward has the Annotation
+    // fields and nothing in them.
+    expect(result.staged.project).toEqual(withAnnotations(commentsFixtureProject()))
+    expect(result.staged.migratedFrom).toBe(15)
   })
 
-  it('is re-encoded byte for byte by this build', async () => {
-    expect(await encodeProject(commentsFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V15)
-    expect(new TextDecoder().decode(readV15('project.json'))).toBe(`${canonicalOf(commentsFixtureProject())}\n`)
+  it('keeps the canonical record it was written from, which this build no longer writes', () => {
+    // Being re-encoded byte for byte is the property of the Backup at the current schema — the v16
+    // file below. What a superseded file owes forever is that its own bytes are the canonical form
+    // of the Project they were written from, minus the Annotation collection and its counter that
+    // the sixteenth step adds.
+    expect(new TextDecoder().decode(readV15('project.json'))).toBe(`${canonicalWithout(commentsFixtureProject(), ...ANNOTATION_FIELDS)}\n`)
   })
 
   it('is described by a manifest that names domain schema v15', async () => {
     const staged = await stageImport(ARCHIVE_V15, { acceptPreview: false, allocateId: allocateIds() })
     if (!staged.ok) throw new Error('the fixture must stage')
-    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOf(commentsFixtureProject()), 15))
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalWithout(commentsFixtureProject(), ...ANNOTATION_FIELDS), 15))
   })
 
   // A BuildBox that stops at v14 has no fifteenth step to read this with.
@@ -965,5 +978,59 @@ describe('the committed v15 Backup (#80)', () => {
 
   it('carries the same asset, byte for byte', () => {
     expect(readV15(ASSET_ENTRY)).toEqual(ASSET_BYTES)
+  })
+})
+
+// The sixteenth schema (#81): the Backup this build writes, and what a build one schema behind says
+// when it is handed it.
+describe('the committed v16 Backup (#81)', () => {
+  it('stages into the Project it was written from, unmigrated', async () => {
+    const result = await stageImport(ARCHIVE_V16, { acceptPreview: false, allocateId: allocateIds() })
+    if (!result.ok) throw new Error(`${result.problem.code}: ${JSON.stringify(result.problem)}`)
+    expect(result.staged.project).toEqual(annotationsFixtureProject())
+    expect(result.staged.migratedFrom).toBeNull()
+  })
+
+  it('is re-encoded byte for byte by this build', async () => {
+    expect(await encodeProject(annotationsFixtureProject(), assetSource, FIXTURE_BUILD)).toEqual(ARCHIVE_V16)
+    expect(new TextDecoder().decode(readV16('project.json'))).toBe(`${canonicalOf(annotationsFixtureProject())}\n`)
+  })
+
+  it('is described by a manifest that names domain schema v16', async () => {
+    const staged = await stageImport(ARCHIVE_V16, { acceptPreview: false, allocateId: allocateIds() })
+    if (!staged.ok) throw new Error('the fixture must stage')
+    expect(staged.staged.manifest).toEqual(await manifestOf(canonicalOf(annotationsFixtureProject()), 16))
+  })
+
+  // A BuildBox that stops at v15 has no sixteenth step to read this with.
+  it('is refused by a build one schema behind as saved by a newer BuildBox', () => {
+    const record = JSON.parse(new TextDecoder().decode(readV16('project.json'))) as unknown
+    const v15Reader = migrateDomainProject(record, 16, MIGRATORS.slice(0, 15), 15, allocateIds())
+    if (v15Reader.ok) throw new Error('a build at schema v15 read a v16 Project')
+    expect(v15Reader.problem).toEqual({ code: 'newer-schema', detail: { detected: 16, supported: 15 } })
+  })
+
+  it('holds one Annotation of every type it names, and no Annotation field in the record beside it', () => {
+    const annotations = annotationsFixtureProject().annotations
+    // One reference per Annotation, in order, and the counter ahead of every one of them (#81 §1).
+    expect(annotations.map((annotation) => annotation.reference)).toEqual(['A-001', 'A-002', 'A-003', 'A-004', 'A-005'])
+    expect(annotationsFixtureProject().annotationReferenceCounter).toBe(5)
+    expect(annotations.map((annotation) => annotation.type)).toEqual(['text', 'leader', 'arrow', 'revision_cloud', 'reference_marker'])
+    // An Endpoint exists exactly on the two types that draw one; a target exists exactly on the Marker.
+    expect(annotations.map((annotation) => annotation.endpoint !== undefined)).toEqual([false, true, true, false, false])
+    expect(annotations.map((annotation) => annotation.targetViewId ?? null)).toEqual([null, null, null, null, 'view-0'])
+    // One Unlayered, one owned by a Design Option, one on an Elevation View; the Revision Cloud
+    // stores a rectangle and no single point.
+    expect(annotations[2]).toMatchObject({ layerId: null, scope: 'option-1' })
+    expect(annotations[4].viewId).toBe('view-elevation-sink')
+    expect(annotations[3].position).toEqual({ a: { x: 800, y: 600 }, b: { x: 2000, y: 1200 } })
+    // The v15 record beside it has no Annotation field at all — the step in one comparison.
+    const prior = JSON.parse(new TextDecoder().decode(readV15('project.json'))) as Record<string, unknown>
+    expect(prior).not.toHaveProperty('annotations')
+    expect(prior).not.toHaveProperty('annotationReferenceCounter')
+  })
+
+  it('carries the same asset, byte for byte', () => {
+    expect(readV16(ASSET_ENTRY)).toEqual(ASSET_BYTES)
   })
 })

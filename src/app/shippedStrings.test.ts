@@ -23,12 +23,12 @@ import { describe, expect, it } from 'vitest'
 import { getPresetPack } from '../domain'
 import { BANNED_WORDS, bannedWordsIn, mentionsWord } from '../lib'
 import { EXPORT_WORDS, TABLES } from '../export'
-import { RENOVATION_STRINGS, STRINGS, WARNING_COPY } from '../ui'
+import { ANNOTATION_STRINGS, RENOVATION_STRINGS, STRINGS, WARNING_COPY } from '../ui'
 
 const srcRoot = fileURLToPath(new URL('../../src', import.meta.url))
 
 /** The tables the words are held in, scanned as values below rather than as source. */
-const TABLES_SHIPPED = ['ui/strings/index.ts', 'ui/strings/renovation.ts', 'ui/strings/comments.ts', 'export/strings.ts', 'export/csv/tables.ts']
+const TABLES_SHIPPED = ['ui/strings/index.ts', 'ui/strings/renovation.ts', 'ui/strings/comments.ts', 'ui/strings/annotations.ts', 'export/strings.ts', 'export/csv/tables.ts']
 
 /**
  * The source the backstop reads.
@@ -87,6 +87,8 @@ const shipped: Array<[string, string]> = [
   // #69: the renovation surface's copy is scanned with the rest, because a banned word is banned in
   // a dialog nobody has opened yet too.
   ...stringsOf(RENOVATION_STRINGS, 'ui/strings/renovation'),
+  // #81: the Annotation surface's copy joins the scan for the same reason.
+  ...stringsOf(ANNOTATION_STRINGS, 'ui/strings/annotations'),
   ...stringsOf(EXPORT_WORDS, 'export/strings'),
   // #68 criterion 8: the CI scan covers every header and every enum code, because both are words
   // a reader's spreadsheet filters on and neither is anything the user typed.

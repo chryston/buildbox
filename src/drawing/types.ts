@@ -79,6 +79,10 @@ export type LayerKey =
       Openings, the strips, the pipes and the footprints — and below every label, handle and warning,
       because a mark that hides a measurement is a mark that damages the drawing. */
   | 'plan-notes'
+  /** The Annotation glyphs (#81 §5.5): drawn content, so they paint above the model bodies the way
+      the Notes overlay does, and below every word — a note that hides a measurement is still a note
+      that hides a measurement. */
+  | 'plan-marks'
   | 'placed-item-labels'
   /** The `W-n` references (#64 §15), in the same untransformed text half as the item labels. */
   | 'wall-labels'
@@ -142,6 +146,7 @@ export const LAYER_ORDER: readonly LayerKey[] = [
   'placed-items',
   'plan-annotations',
   'plan-notes',
+  'plan-marks',
   'placed-item-labels',
   'wall-labels',
   'beam-labels',
@@ -318,6 +323,28 @@ export type StyleKey =
   | 'plan-note-badge'
   | 'plan-note-pin-text'
   | 'plan-note-leader'
+  /** The Annotation glyphs (#81 §5): the line or outline in the record's colour, its invisible
+      target, the words it wears, the Revision Cloud's tint and the `→ <view>` beside a Marker.
+      The weight and the dash are separate rows because a Style row names one stroke width. */
+  | 'plan-mark-1'
+  | 'plan-mark-2'
+  | 'plan-mark-3'
+  | 'plan-mark-1-dashed'
+  | 'plan-mark-2-dashed'
+  | 'plan-mark-3-dashed'
+  | 'plan-mark-1:selected'
+  | 'plan-mark-2:selected'
+  | 'plan-mark-3:selected'
+  | 'plan-mark-1-dashed:selected'
+  | 'plan-mark-2-dashed:selected'
+  | 'plan-mark-3-dashed:selected'
+  | 'plan-mark-hit'
+  | 'plan-mark-hit-line'
+  | 'plan-mark-tint'
+  | 'plan-mark-text-s'
+  | 'plan-mark-text-m'
+  | 'plan-mark-text-l'
+  | 'plan-mark-label'
   | 'plan-placeholder'
   /** The demolition overlay: a dashed outline in the demolition colour, hatched inside (#70 §F). */
   | 'renovation-demolition'
@@ -407,6 +434,23 @@ export type SizeRole =
   /** The Notes overlay's pin radius and the `✎n` inside it (#80 §7.4). */
   | 'plan-note-pin'
   | 'plan-note-pin-text'
+  /** The three bounded Annotation text sizes (#81 §1): S, M and L, screen-fixed like every word. */
+  | 'plan-mark-s'
+  | 'plan-mark-m'
+  | 'plan-mark-l'
+  /** The three bounded line weights (#81 §1), one role each because a Style row names a role. */
+  | 'plan-mark-weight-1'
+  | 'plan-mark-weight-2'
+  | 'plan-mark-weight-3'
+  /** The dash and the gap of a dashed Annotation line (#81 §1): screen-fixed, like the line itself. */
+  | 'plan-mark-dash'
+  | 'plan-mark-gap'
+  /** The two barbs of an arrowhead, as their length from the tip (#81 §5). */
+  | 'plan-mark-arrow'
+  /** The width an Annotation's text wraps at (#81 §5): a column of words, not a line across the Flat. */
+  | 'plan-mark-wrap'
+  /** The radius of one Revision Cloud scallop (#81 §5.7). */
+  | 'plan-mark-scallop'
   | 'plan-line'
   | 'plan-line-selected'
   | 'hairline'

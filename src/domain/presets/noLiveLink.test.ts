@@ -116,6 +116,8 @@ function projectBuiltFrom(pack: PresetPack): Project {
     warningAcknowledgements: [],
     comments: [],
     commentReferenceCounter: 0,
+    annotations: [],
+    annotationReferenceCounter: 0,
   }
 }
 

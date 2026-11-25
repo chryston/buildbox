@@ -47,6 +47,8 @@ const project = (): Project => ({
   warningAcknowledgements: [],
   comments: [],
   commentReferenceCounter: 0,
+  annotations: [],
+  annotationReferenceCounter: 0,
 })
 
 const open = (sourceFloorId = 'floor-1') => {
@@ -76,6 +78,7 @@ describe('the checklist', () => {
       placedItemIds: ['p1', 'p2', 'p3'],
       includePlanImage: false,
       includeComments: false,
+      includeAnnotations: false,
     })
   })
 
