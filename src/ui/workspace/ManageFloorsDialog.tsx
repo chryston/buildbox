@@ -59,9 +59,6 @@ export function ManageFloorsDialog(props: ManageFloorsDialogProps): ReactNode {
               className="bb-workspace-floor-row"
               data-testid={`floor-row-${floor.id}`}
               data-active={floor.id === activeFloorId ? 'true' : 'false'}
-              draggable
-              onDragStart={() => setDraggedId(floor.id)}
-              onDragEnd={() => setDraggedId(null)}
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => {
                 event.preventDefault()
@@ -74,6 +71,8 @@ export function ManageFloorsDialog(props: ManageFloorsDialogProps): ReactNode {
                 floor={floor}
                 index={index}
                 count={floors.length}
+                onDragStartFloor={() => setDraggedId(floor.id)}
+                onDragEndFloor={() => setDraggedId(null)}
               />
             </li>
           ))}
@@ -105,8 +104,10 @@ function FloorRow(props: ManageFloorsDialogProps & {
   floor: Floor
   index: number
   count: number
+  onDragStartFloor(): void
+  onDragEndFloor(): void
 }): ReactNode {
-  const { floor, index, count, project, unit, precision, onRename, onReorder, onSetLimits, onSetWallHeight, onDuplicate, onDelete } = props
+  const { floor, index, count, project, unit, precision, onRename, onReorder, onSetLimits, onSetWallHeight, onDuplicate, onDelete, onDragStartFloor, onDragEndFloor } = props
   const [name, setName] = useState<string | null>(null)
   const [nameError, setNameError] = useState<string | null>(null)
   const [heightText, setHeightText] = useState<string | null>(null)
@@ -150,7 +151,16 @@ function FloorRow(props: ManageFloorsDialogProps & {
 
   return (
     <>
-      <span className="bb-workspace-floor-drag" data-testid={`floor-drag-${floor.id}`} aria-hidden="true">⠿</span>
+      {/* The grip is the drag source, and the only one: a `draggable` row made Chromium start a drag on
+          the way down to its own buttons, so Delete and Duplicate never got their click. */}
+      <span
+        className="bb-workspace-floor-drag"
+        data-testid={`floor-drag-${floor.id}`}
+        aria-hidden="true"
+        draggable
+        onDragStart={onDragStartFloor}
+        onDragEnd={onDragEndFloor}
+      >⠿</span>
       <input
         className="bb-workspace-input"
         data-testid={`floor-name-${floor.id}`}

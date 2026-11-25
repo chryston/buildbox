@@ -210,3 +210,41 @@ describe('deleting the Floor a Comment is anchored to (#82 criterion 10)', () =>
     expect(comment('C-008').anchor).toEqual({ kind: 'project' })
   })
 })
+
+/**
+ * A Wall with nothing leaning on it except a Comment pinned to its face (#82 criterion 9). The Wall's
+ * Openings review (#78) is the dialog these rows usually sit inside; with no Openings there is no such
+ * dialog, and the ask has to arrive anyway rather than the button turning into a no-op.
+ */
+describe('deleting the Wall a Comment is pinned to (#82 criterion 9)', () => {
+  const selectW2 = async (): Promise<void> => {
+    act(() => workspaceStore.getState().selectWall('seed-wall-003'))
+    await screen.findByTestId('wall-inspector')
+    await userEvent.click(screen.getByTestId('wall-delete'))
+  }
+
+  it('asks, and Cancel takes the Wall and its Comment back unchanged', async () => {
+    const before = view.session.getSnapshot().revision
+    await selectW2()
+    const dialog = await review()
+    expect(dialog.textContent).toContain('C-006')
+    expect(confirm().hasAttribute('disabled')).toBe(true)
+    await userEvent.click(screen.getByTestId('notes-review-cancel'))
+    await settle()
+    expect(view.project().existingModel.walls.some((wall) => wall.id === 'seed-wall-003')).toBe(true)
+    expect(comment('C-006').anchor).toMatchObject({ kind: 'feature', ownerId: 'seed-wall-003' })
+    expect(view.session.getSnapshot().revision).toBe(before)
+  })
+
+  it('deletes Wall and Comment as one transaction when Delete is answered', async () => {
+    const before = view.session.getSnapshot().revision
+    await selectW2()
+    await review()
+    await userEvent.click(screen.getByTestId('notes-review-choice-delete'))
+    await userEvent.click(confirm())
+    await settle()
+    expect(view.project().existingModel.walls.some((wall) => wall.id === 'seed-wall-003')).toBe(false)
+    expect(view.project().comments.some((entry) => entry.reference === 'C-006')).toBe(false)
+    expect(view.session.getSnapshot().revision).toBe(before + 1)
+  })
+})

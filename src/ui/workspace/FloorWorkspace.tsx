@@ -1720,6 +1720,13 @@ export function FloorWorkspace(): ReactNode {
       selectWall(null)
       return
     }
+    // A Wall with nothing to agree about except its Notes has no Wall review to sit inside. Asking in
+    // the Wall dialog anyway would mean rendering a dialog whose rows are all empty; asking in the
+    // standalone review is what every other operation does, and the Floor deletion already does here.
+    if (review === null && notes !== null) {
+      setNotesReview({ intent: services.intent.build('wall.delete', { wallId }), report: notes, stale: false })
+      return
+    }
     setDeleteReview(review?.kind === 'delete-wall' ? review : null)
     setDeleteReviewNotes(notes)
   }

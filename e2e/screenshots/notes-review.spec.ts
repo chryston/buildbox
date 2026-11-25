@@ -1,17 +1,19 @@
 /**
  * The dependency review photographed (#82 criterion 15).
  *
- * Two frames of one scene, both of the question a person cannot skip:
+ * Four frames, one per shape the question takes, each reached by the gesture a person uses:
  *
  *   - a placement deleted with the note still undecided: the subject line, the note quoted, the three
  *     answers, and Apply disabled — the operation cannot go while a note is unanswered (§4, §6);
- *   - the same row answered by Reanchor to `Base 600 #1`: the target named in the row, Apply enabled,
- *     which is the sentence a person needs to trust the move (§4.2).
+ *   - the same row answered by Reanchor to the other placement: the target named in the row, Apply
+ *     enabled, which is the sentence a person needs to trust the move (§4.2);
+ *   - a Floor deleted: the review arrives after the Floor's own dependency dialog, with the note preset
+ *     to Delete, because the thing it speaks for is going with the Floor (§10).
  *
- * The Floor and Wall deletions ask the same component the same question with rows preset to Delete, and
- * the Wall's arrives inside the Wall's own dialog; both are covered by the integration flows and the
- * dialog's own tests rather than here, because reaching a Wall or a Floor with a real click needs the
- * selection gesture the smoke specs already own.
+ * The Wall's review (§9) is the same component inside the Wall's own dialog, next to the Skirting rows
+ * #78 gave it; it is pinned by the integration flow and the dialog's own tests, because at the fitted
+ * zoom this Floor's W-2 stands along the edge of the plan pane, where a click lands on the Wall drawn
+ * over it rather than on W-2 — a gesture problem, not a review problem.
  *
  * The scene is the Notes seed (`scripts/make-notes-review-seed.ts`). The clock is frozen so the toolbar's
  * save line cannot move between two runs.
@@ -62,5 +64,18 @@ test.describe('the dependency review', () => {
     await expect(page.getByTestId('notes-review-confirm')).toBeEnabled()
     await waitForStablePaint(page.getByTestId('notes-review'))
     await expect(page).toHaveScreenshot('notes-review-reanchor-target.png')
+  })
+
+  test('a Floor deleted: its note listed preset to Delete', async ({ page }) => {
+    await openNotesPlan(page)
+    await page.getByTestId('manage-floors').click()
+    await expect(page.getByTestId('manage-floors-dialog')).toBeVisible()
+    await page.getByTestId('floor-delete-seed-floor-002').click()
+    await expect(page.getByTestId('delete-floor-dialog')).toBeVisible()
+    await page.getByTestId('delete-floor-confirm').click()
+    await expect(page.getByTestId('notes-review')).toBeVisible()
+    await expect(page.getByTestId('notes-review-row').first()).toContainText('C-008')
+    await waitForStablePaint(page.getByTestId('notes-review'))
+    await expect(page).toHaveScreenshot('notes-review-floor-deletion.png')
   })
 })
