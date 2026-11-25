@@ -24,7 +24,7 @@ import type { BadgeSubject, LayerGates, MarkSubject, NoteBadgeSubject, NotePinSu
 import type { Annotation, AnnotationEndpoint, AnnotationPosition, AnnotationType, CommentAnchor, EntityId, ElevationView, Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
 import { anchorChoosesScope, COMMENT_SCOPE_ALL, commentIsOpen, DEFAULT_COMMENT_PRIORITY, cabinetFeatureIds, DEFAULT_FEATURE_T, designOptionsOf, duplicateCommentIds, duplicateAnnotationIds, elevationViewsOf, isLinearFeature, ownerKindOfDesign, registeredFeatureIds, allServices, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf, annotationPositionIsRect, endpointIsAnchored, savedViewById, annotationDefaultLayerName, annotationDefaultLayerColor, ANNOTATION_SCOPE_ALL, DEFAULT_REVISION_CLOUD_WIDTH_MM, DEFAULT_REVISION_CLOUD_HEIGHT_MM, savedViewsOf, viewActiveLayerId } from '../../domain'
 import type { SessionAsset } from '../../session'
-import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
+import type { DeleteWallReview, Intent, IntentType, NotesDependencyReport, NotesResolution, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
   usePlanImageSrc,
   useSaveStatus,
@@ -49,6 +49,7 @@ import { WallDraftOverlay, emptyWallDraft } from './wall/WallDraftOverlay'
 import { OpeningDraftOverlay } from './opening/OpeningDraftOverlay'
 import { OpeningInspector } from './opening/OpeningInspector'
 import { DeleteWallReviewDialog } from './wall/DeleteWallReviewDialog'
+import { NotesReviewDialog } from './notes/NotesReviewDialog'
 import { emptyOpeningDraft, openingAim } from './opening/openingDraft'
 import type { OpeningAim, OpeningDraft } from './opening/openingDraft'
 import { DEFAULT_OPENING_PRESET_ID, openingPresetRow, resolveOpeningPreset } from './opening/openingPresets'
@@ -960,6 +961,12 @@ export function FloorWorkspace(): ReactNode {
    * revision is where it was, and Cancel changes nothing. In the Existing display the same edit is
    * today's bare rejection: there the baseline is what a person is working on (#70 §7c).
    */
+  /**
+   * The Notes review waiting on an answer (#82 §1): the Intent that was refused, the rows it would
+   * strand, and whether this is its first asking. Apply re-sends this same Intent with the answers in
+   * it, so the transaction the user approved is the transaction that runs.
+   */
+  const [notesReview, setNotesReview] = useState<{ intent: Intent; report: NotesDependencyReport; stale: boolean } | null>(null)
   const sendIntent = (intent: Intent): void => {
     const demolition = deleteAsDemolition(intent)
     if (demolition !== null) {
@@ -968,6 +975,25 @@ export function FloorWorkspace(): ReactNode {
     }
     const result = dispatch(intent)
     if (result.ok) return
+    if (result.code === 'has-dependants' && intent.notesResolutions === undefined) {
+      // A delete that would strand Notes (#82 §1). The refusal is already in hand, so the question is
+      // asked only when it is actually owed: the same Intent previewed gives the rows, and Apply sends
+      // this very Intent back with the answers in it.
+      const { notes } = services.intent.preview(project, intent)
+      if (notes !== null) {
+        setNotesReview({ intent, report: notes, stale: false })
+        return
+      }
+    }
+    if (result.code === 'stale-dependency-resolution') {
+      // The Project moved while the review was open (#82 §5.2). Nothing was written; the review reopens
+      // with the notice rather than quietly re-asking a different question.
+      const { notes } = services.intent.preview(project, intent)
+      if (notes !== null) {
+        setNotesReview({ intent, report: notes, stale: true })
+        return
+      }
+    }
     if (result.code === 'layer-blocked') {
       // New content had nowhere it was allowed to go (#71 §2): the tool's own press is undone, the
       // revision never moved, and the notice says which layer stood in the way and what would move it.
@@ -1684,25 +1710,29 @@ export function FloorWorkspace(): ReactNode {
    * deleting something nobody agreed to.
    */
   const [deleteReview, setDeleteReview] = useState<DeleteWallReview | null>(null)
+  const [deleteReviewNotes, setDeleteReviewNotes] = useState<NotesDependencyReport | null>(null)
   const deleteWall = (wallId: string): void => {
-    const { review } = services.intent.preview(project, services.intent.build('wall.delete', { wallId }))
-    // `wall.delete` answers with the Wall review or nothing; the Option review of #69 is another
-    // dialog's business and never arrives here.
-    if (review?.kind === 'delete-wall') {
-      setDeleteReview(review)
+    const { review, notes } = services.intent.preview(project, services.intent.build('wall.delete', { wallId }))
+    // `wall.delete` answers with the Wall review, the Notes review, both, or nothing; the Option
+    // review of #69 is another dialog's business and never arrives here.
+    if (review?.kind !== 'delete-wall' && notes === null) {
+      send('wall.delete', { wallId })
+      selectWall(null)
       return
     }
-    send('wall.delete', { wallId })
-    selectWall(null)
+    setDeleteReview(review?.kind === 'delete-wall' ? review : null)
+    setDeleteReviewNotes(notes)
   }
-  const confirmDeleteWall = (): void => {
+  const confirmDeleteWall = (resolutions: readonly NotesResolution[]): void => {
     if (deleteReview === null) return
     send('wall.delete', {
       wallId: deleteReview.wallId,
       openings: deleteReview.openings.map((opening) => opening.id),
       skirting: deleteReview.skirting.map((entry) => entry.id),
+      ...(resolutions.length > 0 ? { notesResolutions: resolutions } : {}),
     })
     setDeleteReview(null)
+    setDeleteReviewNotes(null)
     selectWall(null)
   }
 
@@ -4429,8 +4459,25 @@ export function FloorWorkspace(): ReactNode {
       {deleteReview !== null && (
         <DeleteWallReviewDialog
           review={deleteReview}
+          notes={deleteReviewNotes === null ? null : { report: deleteReviewNotes, project }}
           onConfirm={confirmDeleteWall}
-          onCancel={() => setDeleteReview(null)}
+          onCancel={() => {
+            setDeleteReview(null)
+            setDeleteReviewNotes(null)
+          }}
+        />
+      )}
+      {notesReview !== null && (
+        <NotesReviewDialog
+          project={project}
+          report={notesReview.report}
+          stale={notesReview.stale}
+          onConfirm={(resolutions) => {
+            const pending = notesReview.intent
+            setNotesReview(null)
+            sendIntent({ ...pending, notesResolutions: resolutions })
+          }}
+          onCancel={() => setNotesReview(null)}
         />
       )}
       {annotationPrompt !== null && (

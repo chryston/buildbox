@@ -46,7 +46,7 @@ export function guardAnchoredAnnotations(before: Project, after: Project): void 
     refuse(
       'has-dependants',
       `annotations[${list[0]!.id}]`,
-      `${list.length} ${list.length === 1 ? 'Annotation is' : 'Annotations are'} anchored to ${label}: ${references.join(', ')}. Delete or move them first.`,
+      `${list.length} ${list.length === 1 ? 'Annotation is' : 'Annotations are'} anchored to ${label}: ${references.join(', ')}. Answer the dependency review that opens when this is asked.`,
     )
   }
 }
