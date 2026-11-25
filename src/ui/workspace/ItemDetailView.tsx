@@ -17,10 +17,6 @@ import { ShapeEditor } from './shape/ShapeEditor'
 import { ClearanceEnvelopeSection } from './ClearanceEnvelopeSection'
 import { useWorkspace, workspaceStore } from './workspaceStore'
 import { STRINGS } from '../strings'
-import { COMMENT_STRINGS } from '../strings/comments'
-import { NotesPanel, NotesPanelToggle } from './notes/NotesPanel'
-import { notesSessionStore, useNotesSession } from './notes/notesSession'
-import type { IntentType, PayloadOf } from '../../edit'
 import { ExportDialog } from './export/ExportDialog'
 
 export interface ItemDetailViewProps {
@@ -52,12 +48,6 @@ export function ItemDetailView({ itemDesignId, children }: ItemDetailViewProps) 
   // The cabinet editor is passed in; a generic Item Design has no editor of its own and gets
   // the shape editor instead. `null` counts as absent, which is what the caller passes.
   const hasEditor = children !== null && children !== undefined
-  const panelOpen = useNotesSession((state) => state.panelOpen)
-  const overlayOn = useNotesSession((state) => state.overlayOn)
-  // The same Intent pipeline the Plan View uses: the panel edits the Project, not a copy of it (#80 §12).
-  const send = <T extends IntentType>(type: T, payload: PayloadOf<T>): void => {
-    session.dispatch(services.intent.build(type, payload))
-  }
   const from = detail?.from ?? null
   const fromFloor = from === null
     ? null
@@ -81,19 +71,6 @@ export function ItemDetailView({ itemDesignId, children }: ItemDetailViewProps) 
         <span className="bb-item-detail-title" data-testid="item-detail-title">
           {entry?.label ?? ''}
         </span>
-        {/* The same Notes panel the Plan View docks, with the same open switch (#80 §12): a note about
-            this Item Design is written and read in one place, not one per view. */}
-        <NotesPanelToggle />
-        <button
-          type="button"
-          className="bb-workspace-tool-button bb-notes-overlay-button"
-          aria-pressed={overlayOn}
-          data-testid="notes-overlay-button"
-          title={COMMENT_STRINGS.overlayHint}
-          onClick={() => notesSessionStore.getState().setOverlayOn(!overlayOn)}
-        >
-          {overlayOn ? COMMENT_STRINGS.overlayOn : COMMENT_STRINGS.overlayOff}
-        </button>
         <button
           type="button"
           className="bb-item-detail-export"
@@ -119,17 +96,6 @@ export function ItemDetailView({ itemDesignId, children }: ItemDetailViewProps) 
         />
       )}
       <div className="bb-item-detail-body">
-        {panelOpen && (
-          <NotesPanel
-            project={project}
-            view={null}
-            now={services.now()}
-            onResolve={(commentId) => send('comment.resolve', { commentId, at: services.now() })}
-            onReopen={(commentId) => send('comment.reopen', { commentId, at: services.now() })}
-            onDelete={(commentId) => send('comment.delete', { commentId })}
-            onEdit={(commentId, patch) => send('comment.edit', { commentId, ...patch, at: services.now() })}
-          />
-        )}
         <nav
           className="bb-item-detail-placements"
           aria-label={STRINGS.placements}
