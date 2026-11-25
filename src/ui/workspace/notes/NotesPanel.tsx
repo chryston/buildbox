@@ -176,6 +176,7 @@ function CommentEditor({
               scopeText
             ) : (
               <select
+                className="bb-notes-filter"
                 data-testid="note-editor-scope-select"
                 value={isCommentScopeAll(comment.scope ?? COMMENT_SCOPE_ALL) ? COMMENT_SCOPE_ALL : (comment.scope as string)}
                 onChange={(event) => onEdit(comment.id, { scope: event.target.value })}
@@ -194,6 +195,7 @@ function CommentEditor({
           <dt>{COMMENT_STRINGS.priority}</dt>
           <dd>
             <select
+              className="bb-notes-filter"
               data-testid="note-editor-priority"
               value={comment.priority}
               onChange={(event) => onEdit(comment.id, { priority: event.target.value as CommentPriority })}
