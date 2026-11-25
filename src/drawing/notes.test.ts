@@ -79,7 +79,7 @@ describe('the Notes overlay', () => {
   })
 
   it('keeps a pin where it is when the seat is free, and leads it back when it is not (#80 §7.4)', () => {
-    const r = notePinRadius(SCREEN)
+    const r = notePinRadius(SCREEN, 'C-a')
     const free = drawNotes([pin('a', 800, 800)], [], { sizing: SCREEN })!
     expect(free.bounds.x).toBeCloseTo(800 - r)
     const taken = drawNotes([pin('a', 0, 0)], [], { sizing: SCREEN, obstacles: [{ x: -500, y: -500, w: 1000, h: 1000 }] })!

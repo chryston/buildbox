@@ -149,7 +149,7 @@ export function drawNotes(
   badges: readonly NoteBadgeSubject[],
   options: NoteOptions,
 ): DisplayList | null {
-  const r = resolveSize('plan-note-pin', options.sizing).mm
+  const baseR = resolveSize('plan-note-pin', options.sizing).mm
   const fontSize = resolveSize('plan-note-pin-text', options.sizing).mm
   const obstacles = options.obstacles ?? []
   const placed: Rect[] = []
@@ -160,6 +160,7 @@ export function drawNotes(
   // the free space around it. A pin stands where it stands — it is a point, not a thing with bounds —
   // so it only moves when the seat is taken.
   for (const pin of pins) {
+    const r = notePinRadius(options.sizing, pin.reference)
     const seat = { x: pin.at.x - r, y: pin.at.y - r, w: 2 * r, h: 2 * r }
     const fits = !covered(seat, [...obstacles, ...placed])
     let at = pin.at
@@ -185,6 +186,7 @@ export function drawNotes(
   // Then the `✎n` badges, one per placement, avoiding the labels, the handles, the warnings and the
   // pins placed above.
   for (const badge of badges) {
+    const r = baseR
     const all = candidates(badge.bounds, r)
     const fits = all.find(
       (at) => !covered({ x: at.x - r, y: at.y - r, w: 2 * r, h: 2 * r }, [...obstacles, ...placed]),
@@ -212,7 +214,13 @@ export function drawNotes(
 }
 
 /** The pin radius under `sizing`, for a caller that measures against it. */
-export const notePinRadius = (sizing: Sizing): number => resolveSize('plan-note-pin', sizing).mm
+export const notePinRadius = (sizing: Sizing, reference?: string): number => {
+  const base = resolveSize('plan-note-pin', sizing).mm
+  if (reference === undefined) return base
+  // The disc wears its reference, so it is as wide as that reference needs: a fixed circle sized for
+  // a badge's two glyphs cut "C-005" down to something unreadable (#80 §7.4).
+  return Math.max(base, layoutText(reference, resolveSize('plan-note-pin-text', sizing).mm).width / 2 + resolveSize('plan-note-pin-text', sizing).mm * 0.4)
+}
 
 /** Every box the overlay draws, so a test can assert a pin covers no label (#80 criterion 22). */
 export function noteRects(list: DisplayList): Rect[] {

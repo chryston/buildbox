@@ -729,6 +729,17 @@
   font-weight: 600;
 }
 
+.bb-note-editor-title,
+.bb-note-editor-body {
+  /* An unstyled `<input>` paints the platform's white field while inheriting this panel's light
+     text, which is unreadable. The fields take the workspace's own field colours. */
+  padding: 6px 8px;
+  border: 1px solid var(--bb-select-border);
+  border-radius: var(--bb-radius-button);
+  background: var(--bb-select-bg);
+  color: var(--bb-text);
+}
+
 .bb-note-editor-body {
   resize: vertical;
   font-family: inherit;
