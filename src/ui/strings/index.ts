@@ -550,6 +550,37 @@ export const STRINGS = {
       : skirtings === 0
         ? `Delete wall and ${plural(openings, 'opening', 'openings')}`
         : `Delete wall, ${plural(openings, 'opening', 'openings')} and ${plural(skirtings, 'skirting', 'skirtings')}`,
+  // The Notes dependency review (#82 §2, §3): the question a delete asks about the Comments and
+  // Annotations that name what it removes. The row states its own choices, so nothing here guesses.
+  notesReviewEyebrow: 'Dependency review',
+  /** The heading of the Notes section inside a review that already lists something else (#82 §14). */
+  notesReviewSection: 'Comments and Annotations',
+  notesReviewHeading: (notes: number): string =>
+    `${plural(notes, 'note is', 'notes are')} about what this removes`,
+  /** The subject line: what is going, in the words the rest of the app uses for it. */
+  notesReviewSubject: (verb: string, label: string): string =>
+    `This ${verb} ${label}. Choose what happens to each note.`,
+  notesVerbDelete: 'deletes',
+  notesVerbRemove: 'removes',
+  notesVerbReplace: 'replaces',
+  notesChoiceFloorPoint: 'Floor Point',
+  notesChoiceReanchor: 'Reanchor',
+  notesChoiceDelete: 'Delete',
+  notesChoiceKeep: 'Keep',
+  notesChooseTarget: 'Choose target…',
+  notesTargetProject: 'the Project',
+  /** The disabled `Floor Point` segment says why it cannot be picked (#82 §3). */
+  notesNoPosition: 'This note has no position on a Floor',
+  /** What `Keep` means for this row, said before Apply rather than after (#82 §2.6). */
+  notesKeepAllOptions: 'Keep → All Options',
+  notesKeepFloorPoint: 'Keep → Floor Point, All Options',
+  notesDeletedWithView: 'Deleted with its view.',
+  notesReviewApply: 'Apply and continue',
+  notesReviewCancel: 'Cancel — change nothing',
+  /** The review re-opened against a Project that has moved on (#82 §5.2). */
+  notesReviewStale: 'Something changed while this review was open. Check the highlighted rows.',
+  notesReviewNeedsAnswer: (notes: number): string =>
+    `Answer ${plural(notes, 'note', 'notes')} before applying.`,
   // The Door / window inspector and its draft (#65's components, #66 §17).
   openingLabel: 'Label',
   openingKind: 'Kind',

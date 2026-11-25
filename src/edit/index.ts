@@ -12,6 +12,7 @@
  * It is dark until #48 puts history in front of it and #49 builds Intents from UI events.
  */
 export { applyIntent, applyPatches, previewIntent } from './apply'
+export { applyNotesResolutions, notesDependencyReport, notesReviewMessage } from './notesDependencies'
 export { CREATE_PROJECT_ID_COUNT, createProject, type CreateProjectArgs } from './create'
 export { DEFAULT_WALL_THICKNESS_MM, LEGACY_DEFAULT_SETTINGS, newWallDefaults } from './defaults'
 export {
@@ -64,6 +65,13 @@ export {
   type MovePlanPlacement,
   type MoveToDesignOption,
   type MoveToOptionReview,
+  type NotesChoice,
+  type NotesDependencyReport,
+  type NotesDependencyRow,
+  type NotesResolution,
+  type NotesRowNote,
+  type NotesSubject,
+  type NotesTargetRef,
   type OffsetWall,
   type OpeningIntent,
   type PayloadOf,

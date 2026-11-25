@@ -29,7 +29,7 @@ import {
 import type { ElevationView, ElevationViewLine, ElevationViewSide, EntityId, Project } from '../../domain'
 import type { Locator, RenovationIntentType } from '../intents'
 import type { Handler, IntentHandler } from './context'
-import { guardViewAnnotations, refuse, requireFloor, spendIds } from './support'
+import { refuse, requireFloor, spendIds } from './support'
 
 /** The Elevation View half of the renovation set. */
 type ElevationIntentType = Extract<RenovationIntentType, `elevationView.${string}`>
@@ -185,10 +185,9 @@ function sameLine(a: ElevationViewLine, b: ElevationViewLine): boolean {
 
 const deleteElevationView: Handler<'elevationView.delete'> = (ctx) => {
   const { viewId } = ctx.intent.payload
-  const view = requireElevationView(ctx.project, viewId)
-  // #81 §8.1: an Annotation draws in exactly one saved view, Elevation included, and a Reference
-  // Marker navigates into one; nothing here retargets or deletes them for the user.
-  guardViewAnnotations(ctx.project, viewId, view.name, `elevationViews[${viewId}]`)
+  requireElevationView(ctx.project, viewId)
+  // Annotations drawing here and Reference Markers navigating in are #82's dependency review, not
+  // this handler's business: the delete is refused only by answers the user has not given.
   // No cascade, in either direction: the view goes and the world it looks at stays exactly as it was.
   ctx.draft.elevationViews = elevationViewsOf(ctx.draft).filter((candidate) => candidate.id !== viewId)
 }

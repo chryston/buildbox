@@ -184,7 +184,10 @@ export function createIntentFactory(clock: ClockPort, ids: IdSource): IntentBuil
         now: clock.now(),
       } as Intent
     },
-    preview: (project, intent) => ({ review: previewIntent(project, intent).review }),
+    preview: (project, intent) => {
+      const { review, notes } = previewIntent(project, intent)
+      return { review, notes }
+    },
     evaluate: (project, intent) => {
       // The Options set aside: the answer is what the edit does to the record, and the baseline
       // protection (#70 §7a) is a rule about Options existing, not about the edit.

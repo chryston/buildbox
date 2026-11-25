@@ -851,6 +851,126 @@
   cursor: default;
 }
 
+/* ------------------------------------------------- notes dependency review */
+
+/* The review is wider than the yes/no dialogs: a row carries a reference, a title, an Anchor label,
+   three choices and a target picker, and squeezing that into 340 px wraps every row. */
+.bb-notes-review-dialog {
+  width: 620px;
+  max-width: calc(100vw - 48px);
+  border-radius: 14px;
+}
+
+.bb-notes-review-eyebrow {
+  margin: 0 0 2px;
+  font-size: var(--bb-size-badge);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bb-danger-text);
+}
+
+.bb-notes-review-heading {
+  margin: 12px 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bb-notes-review-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bb-notes-review-row {
+  padding: 10px 0;
+  border-top: 1px solid var(--bb-border-card);
+}
+
+.bb-notes-review-row-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bb-notes-review-reference {
+  color: var(--bb-text-muted);
+  margin-right: 6px;
+}
+
+.bb-notes-review-row-anchor {
+  margin: 2px 0 8px;
+  font-size: 12px;
+  color: var(--bb-text-muted);
+}
+
+.bb-notes-review-row-answer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bb-notes-review-seg {
+  display: inline-flex;
+  border: 1px solid var(--bb-border-card);
+  border-radius: var(--bb-radius-button);
+  overflow: hidden;
+}
+
+.bb-notes-review-seg-button {
+  min-width: 64px;
+  min-height: var(--bb-control-min-height);
+  padding: 0 10px;
+  border: none;
+  border-left: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-button);
+  color: var(--bb-text-button);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.bb-notes-review-seg-button:first-child {
+  border-left: none;
+}
+
+.bb-notes-review-seg-button.is-selected {
+  background: var(--bb-accent);
+  color: var(--bb-text-strong);
+  font-weight: 600;
+}
+
+.bb-notes-review-seg-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.bb-notes-review-target {
+  min-height: var(--bb-control-min-height);
+  padding: 0 8px;
+  border-radius: var(--bb-radius-button);
+  border: 1px solid var(--bb-border-card);
+  background: var(--bb-bg-modal);
+  color: var(--bb-text);
+  font-size: 13px;
+}
+
+.bb-notes-review-helper {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--bb-text-muted);
+}
+
+.bb-notes-review-stale {
+  color: var(--bb-danger-text);
+}
+
+/* The review deletes things, so its primary action is the danger colour rather than the accent. */
+.bb-notes-review-danger {
+  background: var(--bb-danger-button);
+  color: var(--bb-bg-modal);
+}
+
 /* ------------------------------------------------------- narrow viewports */
 
 /* Below 1024 px the rail is a drawer over the canvas, opened by `View & selection`. */

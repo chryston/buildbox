@@ -21,7 +21,7 @@ import {
 } from 'react'
 import type { ReactNode } from 'react'
 import type { Project } from '../../domain'
-import type { CopySet, DependencyReview, Intent, IntentType, PayloadOf } from '../../edit'
+import type { CopySet, DependencyReview, Intent, IntentType, NotesDependencyReport, PayloadOf } from '../../edit'
 import type { DispatchResult, ProjectSession, SaveState, SessionAsset } from '../../session'
 import type { EntityId, PlanImageMediaType, PlanView } from '../../domain'
 import { workspaceStore } from './workspaceStore'
@@ -41,9 +41,11 @@ export interface WorkspaceIntentBuilder {
   /**
    * What an Intent would take with it, without applying it (#65 §8). The workspace asks before
    * a delete that has to be answered first; `previewIntent` itself is an `edit` value, and the
-   * workspace reaches `edit` only through what `app` hands it.
+   * workspace reaches `edit` only through what `app` hands it. `notes` is the same question about
+   * the Comments and Annotations the edit would strand (#82 §2), and the two reports share one
+   * dialog because they share one operation.
    */
-  preview(project: Project, intent: Intent): { review: DependencyReview | null }
+  preview(project: Project, intent: Intent): { review: DependencyReview | null; notes: NotesDependencyReport | null }
   /**
    * What one Intent would make of the Project, without committing it (#70 §7a). The Design Options
    * are set aside for the answer: the question this answers is what the edit does to the record it

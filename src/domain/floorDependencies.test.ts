@@ -174,7 +174,7 @@ describe('summarizeFloorDependencies', () => {
     expect(floorHasDependencies(one, 'floor-cellar')).toBe(false)
   })
 
-  it('refuses a Floor whose view still carries an Annotation, because it draws in exactly one view (#81 §5.1)', () => {
+  it('still lists an Annotation in its view, but no longer refuses for it (#81 §5.1, #82 §1.4)', () => {
     const one = project()
     one.annotations = [
       {
@@ -188,7 +188,14 @@ describe('summarizeFloorDependencies', () => {
         scope: 'all',
       },
     ]
-    expect(floorHasDependencies(one, 'floor-kitchen')).toBe(true)
+    const notesOnly: Project = {
+      ...one,
+      views: one.views.filter((view) => view.isDefault),
+      elevationViews: [],
+      existingModel: { ...one.existingModel, placedItems: [], beams: [] },
+      floors: one.floors.map((entry) => (entry.id === 'floor-kitchen' ? { ...entry, planImage: null } : entry)),
+    }
+    expect(floorHasDependencies(notesOnly, 'floor-kitchen')).toBe(false)
     expect(summarizeFloorDependencies(one, 'floor-kitchen')[5]?.text).toBe('1 Annotation')
     expect(floorHasDependencies(one, 'floor-cellar')).toBe(false)
   })

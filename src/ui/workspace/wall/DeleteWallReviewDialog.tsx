@@ -11,19 +11,33 @@
  * It is a modal over the workspace, not a thing drawn in the Plan View: the scene is the plan,
  * and a question is not part of a plan.
  */
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { DeleteWallReview } from '../../../edit'
+import type { DeleteWallReview, NotesDependencyReport, NotesResolution } from '../../../edit'
+import type { Project } from '../../../domain'
 import { STRINGS } from '../../strings'
+import { NotesReviewSection, initialNotesAnswers, notesResolutions, unansweredNotes } from '../notes/NotesReview'
+import type { NotesAnswer, NotesAnswers } from '../notes/NotesReview'
+
+export interface DeleteWallReviewNotes {
+  report: NotesDependencyReport
+  project: Project
+}
 
 export interface DeleteWallReviewDialogProps {
   review: DeleteWallReview
-  onConfirm: () => void
+  /**
+   * The Notes this same delete would strand (#82 criterion 14). They are a section of this question,
+   * never a second dialog: one Apply commits one transaction that answers both.
+   */
+  notes?: DeleteWallReviewNotes | null
+  onConfirm: (resolutions: readonly NotesResolution[]) => void
   onCancel: () => void
 }
 
 export function DeleteWallReviewDialog(props: DeleteWallReviewDialogProps): ReactNode {
-  const { review, onConfirm, onCancel } = props
+  const { review, notes, onConfirm, onCancel } = props
+  const [answers, setAnswers] = useState<NotesAnswers>(() => (notes === null || notes === undefined ? {} : initialNotesAnswers(notes.report)))
   // Escape is the same answer as Cancel: the revision does not move either way (#65 criterion 7).
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -32,6 +46,10 @@ export function DeleteWallReviewDialog(props: DeleteWallReviewDialogProps): Reac
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onCancel])
+
+  const outstanding = notes === null || notes === undefined ? 0 : unansweredNotes(notes.report, answers)
+  const answer = (dependentId: string, next: NotesAnswer): void =>
+    setAnswers((current) => ({ ...current, [dependentId]: next }))
 
   return (
     <div className="bb-workspace-dialog-backdrop" data-testid="delete-wall-review">
@@ -55,12 +73,24 @@ export function DeleteWallReviewDialog(props: DeleteWallReviewDialogProps): Reac
             <li key={entry.id} data-testid="delete-wall-review-row">{entry.text}</li>
           ))}
         </ul>
+        {notes !== null && notes !== undefined && (
+          <NotesReviewSection project={notes.project} report={notes.report} answers={answers} onAnswer={answer} />
+        )}
         <div className="bb-workspace-dialog-actions">
           <button
             type="button"
             data-testid="delete-wall-review-confirm"
             className="bb-workspace-primary-button"
-            onClick={onConfirm}
+            disabled={outstanding > 0}
+            title={outstanding > 0 ? STRINGS.notesReviewNeedsAnswer(outstanding) : undefined}
+            onClick={() => {
+              if (notes === null || notes === undefined) {
+                onConfirm([])
+                return
+              }
+              const resolutions = notesResolutions(notes.report, answers)
+              if (resolutions !== null) onConfirm(resolutions)
+            }}
           >
             {STRINGS.wallDeleteWithDependencies(review.openings.length, review.skirting.length)}
           </button>

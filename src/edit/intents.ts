@@ -25,6 +25,7 @@ import type {
   CommentAnchor,
   CommentPriority,
   CommentScope,
+  CommentStatus,
   CommentWarningLink,
   DrawerConfig,
   DisplayUnit,
@@ -1897,6 +1898,14 @@ export interface IntentFields {
   now: string
   /** Dependency-review choices (#20 §4). No v1 Intent reads it. */
   resolutions?: unknown
+  /**
+   * The answers to the Notes dependency review (#82 §5.1), one per row the preview listed.
+   *
+   * It rides the Intent rather than a side channel so the deletion and every decision about what
+   * hung off it are one command: one dispatch, one Edit Transaction, one undo. `applyIntent`
+   * recomputes the report and refuses an answer the Project has moved on from.
+   */
+  notesResolutions?: readonly NotesResolution[]
 }
 
 /**
@@ -2281,6 +2290,8 @@ export type RejectionCode =
   /** A Vertical Extent or Plan View Range that describes no band of height: a value that is not a
    * number, a height of 0 or less, a top at or below its base, a Lower not below its Upper (#74 §4, §5). */
   | 'invalid-extent'
+  /** A Notes dependency review answered against a Project that has changed since it was shown (#82 §5.2). */
+  | 'stale-dependency-resolution'
 
 /**
  * What an Intent takes with it, listed before it runs (#20 §4, #65 §8).
@@ -2520,6 +2531,118 @@ export interface PasteReview {
   readonly notComingAcross: readonly PasteLoss[]
   readonly detached: readonly PasteLoss[]
   readonly destination: PasteDestination
+}
+
+/**
+ * The Notes dependency review (#82 §1, §3): the one answer a row of the modal accepts.
+ *
+ * Four answers, and a row offers only the ones its kind allows. `floor_point` means "keep it at this
+ * spot on the Floor" — for a Comment that is a `floor_point` Anchor, for an Annotation endpoint a
+ * free point — and `keep` exists only where the operation deletes a whole Design Option or Floor,
+ * where "keep" means the note outlives the scope it was written under.
+ */
+export type NotesChoice = 'floor_point' | 'reanchor' | 'delete' | 'keep'
+
+/**
+ * Where a `Reanchor` points (#82 §4), in the shape the Intent carries back.
+ *
+ * The same seven targets a Comment Anchor has, plus a saved view: a Reference Marker is the one
+ * dependent whose target is a view rather than a thing in the model.
+ */
+export type NotesTargetRef =
+  | { readonly kind: 'project' }
+  | { readonly kind: 'floor'; readonly floorId: EntityId }
+  | { readonly kind: 'design_option'; readonly designOptionId: EntityId }
+  | { readonly kind: 'item_design'; readonly itemDesignId: EntityId }
+  | { readonly kind: 'entity'; readonly entityId: EntityId }
+  | { readonly kind: 'feature'; readonly ownerId: EntityId; readonly featureId: string }
+  | { readonly kind: 'view'; readonly viewId: EntityId }
+
+/**
+ * One row's answer, carried inside the Intent that asks the question (#82 §5.1).
+ *
+ * `expectedAnchor` is the canonical JSON of the Anchor or endpoint as it stood when the row was
+ * reviewed, never an object identity: the Project the answer comes back to may be a different one,
+ * and the only honest comparison is between what the user read and what is there now.
+ */
+export interface NotesResolution {
+  readonly dependentId: EntityId
+  readonly choice: NotesChoice
+  /** Where `reanchor` points; present exactly for that choice. */
+  readonly targetRef?: NotesTargetRef
+  readonly expectedAnchor: string
+}
+
+/** The one sentence a row may carry beside its choices, or nothing. */
+export type NotesRowNote = 'deleted-with-view' | 'keep-all-options' | 'keep-floor-point'
+
+/**
+ * One dependent note (#82 §1): everything the row has to say, as data rather than as a sentence —
+ * `ui/strings` owns the words (#66 criterion 16).
+ */
+export interface NotesDependencyRow {
+  readonly dependentId: EntityId
+  /** Which of the three row shapes the modal draws. */
+  readonly kind: 'comment' | 'annotation' | 'reference_marker'
+  /** `C-004` / `A-002`. */
+  readonly reference: string
+  /** The Comment's title, or the Annotation's text — the note's own words. */
+  readonly title: string
+  /** The Comment's status; `null` for an Annotation, which has none. */
+  readonly status: CommentStatus | null
+  /** The Annotation's type; `null` for a Comment. */
+  readonly annotationType: AnnotationType | null
+  /** The view a Reference Marker stands in, for `… in <owning view> → <target view>`. */
+  readonly owningViewName: string | null
+  /** The view a Reference Marker points at. */
+  readonly targetViewName: string | null
+  /** How the Anchor or endpoint reads today: `“Base 600 #2”`, `a Floor Point`. */
+  readonly anchorLabel: string
+  /** The canonical fingerprint `expectedAnchor` is compared against (#82 §5.1). */
+  readonly fingerprint: string
+  /** The choices this row offers, in the order the segmented control lists them. */
+  readonly choices: readonly NotesChoice[]
+  /** The choice the row starts at; `null` is undecided (#82 §2.5). */
+  readonly preset: NotesChoice | null
+  /**
+   * Whether `Floor Point` is unavailable, which the modal draws as a disabled segment with the
+   * tooltip `This note has no position on a Floor` (#82 §3).
+   */
+  readonly floorPointDisabled: boolean
+  /** The `Choose target…` list; empty exactly when the row offers no `Reanchor`. */
+  readonly targets: readonly NotesTargetRef[]
+  readonly note: NotesRowNote | null
+}
+
+/**
+ * What the operation is about to do to the thing the notes hang off (#82 §2), which decides the
+ * heading and the subject line the dialog asks.
+ */
+export type NotesSubject =
+  | { readonly kind: 'entity'; readonly label: string }
+  | { readonly kind: 'item_design'; readonly label: string }
+  | { readonly kind: 'view'; readonly label: string }
+  /**
+   * A registered feature going while its owner stays — a cabinet node removed by a board removal, a
+   * Wall face replaced by a merge. It carries the feature's identity rather than a sentence, because
+   * the words for `leftFace` belong to `ui/strings` (#82 criterion 19), and `faceLike` picks "face"
+   * from "feature" in the subject line.
+   */
+  | { readonly kind: 'feature'; readonly ownerId: EntityId; readonly featureId: string; readonly faceLike: boolean }
+  | { readonly kind: 'design_option'; readonly label: string }
+  | { readonly kind: 'floor'; readonly label: string }
+
+/**
+ * The report a deleting or replacing Intent answers with before it runs (#82 §1).
+ *
+ * `previewIntent` returns it beside the `DependencyReview` of the same operation, so one modal lists
+ * the Wall's Openings and the Notes that name that same Wall (#82 criterion 14) — the two reports are
+ * two sections of one question, never two dialogs. An empty report means the operation runs unasked.
+ */
+export interface NotesDependencyReport {
+  readonly kind: 'notes'
+  readonly subject: NotesSubject
+  readonly rows: readonly NotesDependencyRow[]
 }
 
 /** What an Intent takes with it, per review family. */

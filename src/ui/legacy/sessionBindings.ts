@@ -21,7 +21,7 @@
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import type { CabinetMaterialId, DrawerConfig, ElementType, EntityId, GlobalSettings, PlanView, Project } from '../../domain'
 import { anchorChoosesScope, COMMENT_SCOPE_ALL } from '../../domain'
-import type { CopySet, DependencyReview, Intent, IntentType, PayloadOf } from '../../edit'
+import type { CopySet, DependencyReview, Intent, IntentType, NotesDependencyReport, PayloadOf } from '../../edit'
 import type { ProjectSession, SaveState, SessionAsset } from '../../session'
 import { useProject, useProjectSelector, useSession } from './useProject'
 import { COMMENT_STRINGS, STRINGS } from '..'
@@ -46,9 +46,10 @@ export interface IntentBuilder {
    * What an Intent would take with it, without applying it (#65 §8). The delete of a Wall with
    * Openings has to be answered before it runs, and the answer is the same report the Intent
    * itself consults — so the question is asked of `app`, which is the only place `edit`'s values
-   * may be read.
+   * may be read. `notes` is the same question about the Comments and Annotations the edit would
+   * strand (#82 §2); one dialog carries both, because one operation asks both.
    */
-  preview(project: Project, intent: Intent): { review: DependencyReview | null }
+  preview(project: Project, intent: Intent): { review: DependencyReview | null; notes: NotesDependencyReport | null }
   /**
    * What one Intent would make of the Project, without committing it, with the Design Options set
    * aside (#70 §7a): the workspace asks it what an edit of an Existing entity would have done to the

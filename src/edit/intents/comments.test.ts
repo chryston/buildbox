@@ -352,10 +352,10 @@ describe('the anchored-deletion guard (#80 §14)', () => {
     return { project, wallId, comment: commentAt(project) }
   }
 
-  it('refuses to delete an anchored element, naming it and its reference (#10)', () => {
+  it('refuses an unanswered delete and asks what happens to the note (#10, #82 §1)', () => {
     const { project, wallId, comment } = anchoredWall()
     const rejection = expectRejection(project, intent('wall.delete', { wallId }), 'has-dependants')
-    expect(rejection.problems[0]!.message).toBe(`1 Comment is anchored to “${project.existingModel.walls[0]!.ref}”: ${comment.reference}. Delete or move them first.`)
+    expect(rejection.problems[0]!.message).toBe(`1 note is about what this removes: ${comment.reference}. Choose what happens to each.`)
   })
 
   it('changes nothing at all when it refuses (#10)', () => {
@@ -372,7 +372,7 @@ describe('the anchored-deletion guard (#80 §14)', () => {
       intent('comment.create', projectPayload({ title: 'Also here', anchor: { kind: 'feature', ownerId: wallId, featureId: 'leftFace', t: 0.25 } }), source(1)),
     ).project
     const rejection = expectRejection(second, intent('wall.delete', { wallId }), 'has-dependants')
-    expect(rejection.problems[0]!.message).toBe('2 Comments are anchored to “' + second.existingModel.walls[0]!.ref + '”: C-001, C-002. Delete or move them first.')
+    expect(rejection.problems[0]!.message).toBe('2 notes are about what this removes: C-001, C-002. Choose what happens to each.')
   })
 
   it('refuses to delete a Floor a Comment is anchored to', () => {

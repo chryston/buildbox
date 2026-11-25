@@ -10,14 +10,29 @@
  * A row is shown only where the Option actually owns something. A new Option holds nothing, and a
  * dialog of seven zeroes teaches a person to stop reading it.
  */
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { DeleteDesignOptionReview } from '../../../edit'
+import type { DeleteDesignOptionReview, NotesDependencyReport, NotesResolution } from '../../../edit'
+import type { Project } from '../../../domain'
 import { RENOVATION_STRINGS } from '../../strings/renovation'
+import { NotesReviewSection, initialNotesAnswers, notesResolutions, unansweredNotes } from '../notes/NotesReview'
+import type { NotesAnswer, NotesAnswers } from '../notes/NotesReview'
+
+/** What the Notes half of this review needs: the rows the delete would strand, and the Project to name them in. */
+export interface DeleteOptionReviewNotes {
+  readonly report: NotesDependencyReport
+  readonly project: Project
+}
 
 export interface DeleteDesignOptionDialogProps {
   review: DeleteDesignOptionReview
-  onConfirm: () => void
+  /**
+   * The Comments and Annotations this Option owns or is anchored to (#82 criterion 14). They are answered
+   * in this same modal, above one Apply — never a second dialog that asks a person to hold two questions
+   * open at once.
+   */
+  notes?: DeleteOptionReviewNotes | null
+  onConfirm: (resolutions: readonly NotesResolution[]) => void
   onCancel: () => void
 }
 
@@ -36,8 +51,15 @@ export function deleteOptionRows(review: DeleteDesignOptionReview): readonly { i
 }
 
 export function DeleteDesignOptionDialog(props: DeleteDesignOptionDialogProps): ReactNode {
-  const { review, onConfirm, onCancel } = props
+  const { review, notes, onConfirm, onCancel } = props
   const heading = RENOVATION_STRINGS.deleteOptionHeading(review.optionName)
+  const [answers, setAnswers] = useState<NotesAnswers>(() =>
+    notes === null || notes === undefined ? {} : initialNotesAnswers(notes.report),
+  )
+  const answer = (dependentId: string, next: NotesAnswer): void => {
+    setAnswers((current) => ({ ...current, [dependentId]: next }))
+  }
+  const outstanding = notes === null || notes === undefined ? 0 : unansweredNotes(notes.report, answers)
   // Escape answers the question the same way Cancel does: nothing is deleted (#65 criterion 7).
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -59,12 +81,23 @@ export function DeleteDesignOptionDialog(props: DeleteDesignOptionDialogProps): 
         <p className="bb-workspace-dialog-note" data-testid="delete-option-unchanged">
           {RENOVATION_STRINGS.deleteOptionUnchanged}
         </p>
+        {notes !== null && notes !== undefined && (
+          <NotesReviewSection project={notes.project} report={notes.report} answers={answers} onAnswer={answer} />
+        )}
         <div className="bb-workspace-dialog-actions">
           <button
             type="button"
             data-testid="delete-option-confirm"
             className="bb-workspace-danger-button"
-            onClick={onConfirm}
+            disabled={outstanding > 0}
+            onClick={() => {
+              if (notes === null || notes === undefined) {
+                onConfirm([])
+                return
+              }
+              const resolutions = notesResolutions(notes.report, answers)
+              if (resolutions !== null) onConfirm(resolutions)
+            }}
           >
             {RENOVATION_STRINGS.deleteOptionConfirm}
           </button>
