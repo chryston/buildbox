@@ -294,6 +294,10 @@
      and nothing else, so no component hard-codes a colour. */
   --bb-note-pin: #e7bd58;
   --bb-note-pin-text: #241b04;
+  /* The Revision Cloud's placement preview (#81 §3.8): the cloud's own default amber, dashed and
+     translucent, so the rectangle reads as the thing being made rather than the drawing. */
+  --bb-cloud-preview-stroke: #ffb547;
+  --bb-cloud-preview-fill: rgba(255, 181, 71, 0.12);
   --bb-note-high: #ff6a3d;
   --bb-note-normal: #8fb7ff;
   --bb-note-low: #7c7c86;

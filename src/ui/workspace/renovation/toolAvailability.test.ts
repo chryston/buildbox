@@ -34,8 +34,8 @@ describe('the tool table of #70 §3', () => {
     // exception: a Project with no Options at all is still drawn and edited on it, exactly as it was
     // before any of this existed.
     for (const display of ['demolition', 'proposed', 'combined'] as const)
-      expect(availableTools(display, false)).toEqual(['select', 'elevation', 'comment'])
-    expect(availableTools('existing', false)).toEqual(['select', 'wall', 'opening', 'skirting', 'service', 'room', 'placeItem', 'elevation', 'comment'])
+      expect(availableTools(display, false)).toEqual(['select', 'elevation', 'comment', 'annotationText', 'annotationLeader', 'annotationArrow', 'annotationCloud', 'annotationMarker'])
+    expect(availableTools('existing', false)).toEqual(['select', 'wall', 'opening', 'skirting', 'service', 'room', 'placeItem', 'elevation', 'comment', 'annotationText', 'annotationLeader', 'annotationArrow', 'annotationCloud', 'annotationMarker'])
   })
 
   it('offers the Comment tool everywhere, including the error state (#80 §9)', () => {
@@ -70,8 +70,21 @@ describe('the tool table of #70 §3', () => {
     }
   })
 
+  it('offers the five Annotation tools everywhere, including the error state (#81 §3.1)', () => {
+    // An Annotation writes no geometry and no Design Option owns it — the Comment row's answer,
+    // given five times over. The rows are never hidden by the Display and never by a missing
+    // Option; the Notes overlay gates them, and that gate is not the table's business (#81 §3.2).
+    for (const tool of ['annotationText', 'annotationLeader', 'annotationArrow', 'annotationCloud', 'annotationMarker'] as const) {
+      for (const display of displays) {
+        expect(toolIsAvailable(tool, display, true)).toBe(true)
+        expect(toolIsAvailable(tool, display, false)).toBe(true)
+      }
+      expect(displaysAllowing(tool)).toEqual(displays)
+    }
+  })
+
   it('is one row per tool, each reachable somewhere — so #81 adds a row and nothing else', () => {
-    expect(RENOVATION_TOOL_ROWS).toHaveLength(11)
+    expect(RENOVATION_TOOL_ROWS).toHaveLength(16)
     for (const row of RENOVATION_TOOL_ROWS) {
       expect(row.allowedIn.length).toBeGreaterThan(0)
       expect(displaysAllowing(row.id)).toEqual(row.allowedIn)

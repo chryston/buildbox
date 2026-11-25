@@ -244,6 +244,12 @@ export interface PlanViewCanvasProps {
   /** An Annotation glyph was clicked: select it (#81 §5). */
   onMarkPointerDown?: (id: string) => void
   /**
+   * The Revision Cloud drag, in the tool's hand (#81 §3.8): the two corners of the drag in Floor
+   * millimetres, and whether the pointer actually moved. A press that never moved is the click
+   * without a drag, and the workspace answers it with the default cloud.
+   */
+  onCloudRect?: (a: Point2, b: Point2, dragged: boolean) => void
+  /**
    * Pan so this Floor point stands at the centre (#80 §7.5): selecting a row reveals that one note,
    * and a pin revealed off the edge of the screen has not been revealed.
    *
@@ -270,7 +276,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     angleSnap, overlay, htmlOverlay, screenOverlay, walls, beams = null, selectedBeamId = null, skirting = null, selectedSkirtingId = null, services = null, selectedServiceId = null, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
     openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
     rooms = null, selectedRoomId = null, onSelectRoom, onSelectBeam, onSelectSkirting, onSelectService, roomProposal = null,
-    warningSubjects = [], notePins = [], noteBadges = [], markSubjects = [], selectedMarkId = null, onSelectWarningBadge, onNotePointerDown, onMarkPointerDown, focusPoint = null,
+    warningSubjects = [], notePins = [], noteBadges = [], markSubjects = [], selectedMarkId = null, onSelectWarningBadge, onNotePointerDown, onMarkPointerDown, onCloudRect, focusPoint = null,
   } = props
   const [hostSize, setHostSize] = useState({ width: 0, height: 0 })
   const [dragging, setDragging] = useState(false)
@@ -402,6 +408,53 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     onPointerMove(event)
   }, [onCursorChange, toFloor, onPointerMove])
 
+  // The Revision Cloud drag (#81 §3.8): the tool owns the whole canvas, so the press starts the
+  // rectangle wherever it lands, the pointer drags the far corner, and the release hands both
+  // corners over — with the honest word about whether the pointer ever moved.
+  const cloudDrag = useRef<{ from: Point2; to: Point2 } | null>(null)
+  const [cloudPreview, setCloudPreview] = useState<{ from: Point2; to: Point2 } | null>(null)
+
+  const onPlanPointerDown = useCallback((event: React.PointerEvent<SVGSVGElement>): void => {
+    // The hint pill is not an overlay in this sense: it sits beside the canvas and never owns the
+    // pointer. Only the Elevation View's own overlay does.
+    if (onCloudRect !== undefined && event.button === 0 && overlay === undefined) {
+      const at = toFloor(event.clientX, event.clientY)
+      if (at !== null) {
+        consumedPointer.current = true
+        cloudDrag.current = { from: at, to: at }
+        setCloudPreview({ from: at, to: at })
+        svgRef.current?.setPointerCapture(event.pointerId)
+      }
+      return
+    }
+    onPointerDown(event)
+  }, [onCloudRect, overlay, toFloor, svgRef, onPointerDown])
+
+  const onPlanPointerMove = useCallback((event: React.PointerEvent<SVGSVGElement>): void => {
+    const drag = cloudDrag.current
+    if (drag !== null) {
+      const at = toFloor(event.clientX, event.clientY)
+      if (at !== null) {
+        cloudDrag.current = { from: drag.from, to: at }
+        setCloudPreview({ from: drag.from, to: at })
+      }
+      return
+    }
+    onCanvasPointerMove(event)
+  }, [toFloor, onCanvasPointerMove])
+
+  const onPlanPointerUp = useCallback((): void => {
+    const drag = cloudDrag.current
+    if (drag !== null) {
+      cloudDrag.current = null
+      setCloudPreview(null)
+      const movedPx = Math.hypot(drag.to.x - drag.from.x, drag.to.y - drag.from.y) * (viewport?.zoom ?? 1)
+      onCloudRect?.(drag.from, drag.to, movedPx > 6)
+      return
+    }
+    onPointerUp()
+  }, [viewport, onCloudRect, onPointerUp])
+
   const onBackgroundClick = useCallback((event: React.MouseEvent<SVGSVGElement>) => {
     // A pointerdown that a footprint or the rotate handle took is not a click on the Floor,
     // even when the click itself lands on the root — which is what a drag does, its pointer
@@ -418,8 +471,10 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       if (renovation !== null) renovation.onCycle?.(null, [])
       onSelect(null)
     }
-    if (tool === 'comment') {
-      // Empty Floor: the note is anchored to the point aimed at (#80 §9).
+    if (tool === 'comment' || tool === 'annotationText' || tool === 'annotationLeader' || tool === 'annotationArrow' || tool === 'annotationMarker') {
+      // Empty Floor: the note is anchored to the point aimed at (#80 §9); an Annotation is placed
+      // where the click landed (#81 §3.5). A Revision Cloud never arrives here — its drag owns the
+      // gesture and marks the pointer consumed.
       const at = toFloor(event.clientX, event.clientY)
       if (at !== null) onCanvasClick?.(at)
       return
@@ -627,7 +682,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     // nothing, because the note is the thing being made, not a selection (#80 §9). The entity is the
     // one the cycle just resolved under the pointer, so a stack of overlapping content anchors to
     // the same thing a click would have selected.
-    if (tool === 'comment') {
+    if (tool === 'comment' || tool === 'annotationLeader' || tool === 'annotationArrow') {
       onCommentEntity?.(id)
       return
     }
@@ -827,7 +882,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       event.stopPropagation()
       // The Comment tool in hand: the Item under the pointer is what the note is about, and a press is
       // not the start of a drag (#80 §9). Without this the tool would move the cabinet it was naming.
-      if (tool === 'comment') {
+      if (tool === 'comment' || tool === 'annotationLeader' || tool === 'annotationArrow') {
         onCommentEntity?.(id)
         return
       }
@@ -867,11 +922,11 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
         ref={svgRef}
         data-testid="floor-plan-canvas"
         style={{ touchAction: 'none', cursor }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onCanvasPointerMove}
+        onPointerDown={onPlanPointerDown}
+        onPointerMove={onPlanPointerMove}
         onPointerLeave={() => onCursorChange?.(null)}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
+        onPointerUp={onPlanPointerUp}
+        onPointerCancel={onPlanPointerUp}
         onClick={onBackgroundClick}
       >
         {matrix !== undefined && (
@@ -966,6 +1021,19 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
                 screen={{ pxPerUnit: zoom, panX, panY }}
                 resolveAsset={resolveAsset}
                 interactions={interactions}
+              />
+            )}
+            {cloudPreview !== null && (
+              <rect
+                data-testid="annotation-cloud-preview"
+                className="bb-workspace-cloud-preview"
+                x={Math.min(cloudPreview.from.x, cloudPreview.to.x)}
+                y={Math.min(cloudPreview.from.y, cloudPreview.to.y)}
+                width={Math.abs(cloudPreview.to.x - cloudPreview.from.x)}
+                height={Math.abs(cloudPreview.to.y - cloudPreview.from.y)}
+                strokeWidth={1.5 / zoom}
+                strokeDasharray={`${6 / zoom} ${4 / zoom}`}
+                pointerEvents="none"
               />
             )}
             {screenOverlay !== undefined && <g transform={matrix}>{screenOverlay}</g>}

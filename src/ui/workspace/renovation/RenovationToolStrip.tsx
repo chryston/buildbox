@@ -28,6 +28,7 @@ import type { RenovationDisplay } from '../../../domain'
 import { STRINGS } from '../../strings'
 import { RENOVATION_STRINGS } from '../../strings/renovation'
 import { COMMENT_STRINGS } from '../../strings/comments'
+import { ANNOTATION_STRINGS } from '../../strings/annotations'
 import type { WorkspaceTool } from '../workspaceStore'
 import { displayLabel, swatchClass } from './displayTheme'
 import type { RenovationToolId } from './toolAvailability'
@@ -46,6 +47,11 @@ const TOOL_LABELS: { [T in RenovationToolId]: string } = {
   service: STRINGS.toolService,
   elevation: STRINGS.newElevationView,
   comment: COMMENT_STRINGS.commentTool,
+  annotationText: ANNOTATION_STRINGS.toolText,
+  annotationLeader: ANNOTATION_STRINGS.toolLeader,
+  annotationArrow: ANNOTATION_STRINGS.toolArrow,
+  annotationCloud: ANNOTATION_STRINGS.toolCloud,
+  annotationMarker: ANNOTATION_STRINGS.toolMarker,
 }
 
 /** The strip's own shortcut per row. No workspace tool shortcut exists today, so these are new keys. */
@@ -61,6 +67,11 @@ const TOOL_KEYS: { [T in RenovationToolId]: string } = {
   service: 's',
   elevation: 'e',
   comment: 'c',
+  annotationText: 't',
+  annotationLeader: 'l',
+  annotationArrow: 'a',
+  annotationCloud: 'u',
+  annotationMarker: 'z',
 }
 
 /**
@@ -88,6 +99,14 @@ const ROW_OF_TOOL: { [T in WorkspaceTool]: RenovationToolId | null } = {
   // A Comment belongs to its own row, which every Display allows — so a Display change never drops
   // the tool out from under a person mid-note (#80 §9).
   comment: 'comment',
+  // The five Annotation tools each belong to their own row, and every Display allows every row —
+  // the same guarantee the Comment row gives: a Display change never drops the tool mid-placement
+  // (#81 §3.1).
+  annotationText: 'annotationText',
+  annotationLeader: 'annotationLeader',
+  annotationArrow: 'annotationArrow',
+  annotationCloud: 'annotationCloud',
+  annotationMarker: 'annotationMarker',
   pan: null,
 }
 
@@ -141,6 +160,11 @@ export function RenovationToolStrip(props: RenovationToolStripProps): ReactNode 
     else if (tool === 'room') onTool('line')
     else if (tool === 'select') onTool('select')
     else if (tool === 'comment') onTool('comment')
+    else if (tool === 'annotationText') onTool('annotationText')
+    else if (tool === 'annotationLeader') onTool('annotationLeader')
+    else if (tool === 'annotationArrow') onTool('annotationArrow')
+    else if (tool === 'annotationCloud') onTool('annotationCloud')
+    else if (tool === 'annotationMarker') onTool('annotationMarker')
   }
 
   // Criterion 6: a Display that hides the tool in hand returns to Select, the one row every Display
@@ -155,6 +179,10 @@ export function RenovationToolStrip(props: RenovationToolStripProps): ReactNode 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return
+      // `t` belongs to the placement in hand while a Leader or Arrow is drawing: it toggles whether
+      // linear features are snap targets (#81 §3.7), and the Text row must not steal the key
+      // mid-gesture.
+      if (event.key.toLowerCase() === 't' && (activeTool === 'annotationLeader' || activeTool === 'annotationArrow')) return
       const tool = (Object.keys(TOOL_KEYS) as RenovationToolId[]).find((each) => TOOL_KEYS[each] === event.key.toLowerCase())
       if (tool === undefined) return
       if (!toolIsAvailable(tool, display, hasDesignOption)) {
@@ -176,7 +204,7 @@ export function RenovationToolStrip(props: RenovationToolStripProps): ReactNode 
     return () => {
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [display, hasDesignOption, onNotice, onTool, onMarkDemolition, reasons])
+  }, [display, hasDesignOption, activeTool, onNotice, onTool, onMarkDemolition, reasons])
 
   // A notice is a notice: it says its piece and goes away.
   useEffect(() => {

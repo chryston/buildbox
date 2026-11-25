@@ -296,6 +296,11 @@
 }
 
 /* The draft bar and the warning strip are overlays: they never resize the canvas. */
+.bb-workspace-cloud-preview {
+  fill: var(--bb-cloud-preview-fill);
+  stroke: var(--bb-cloud-preview-stroke);
+}
+
 .bb-workspace-draft-bar {
   position: absolute;
   top: 12px;
