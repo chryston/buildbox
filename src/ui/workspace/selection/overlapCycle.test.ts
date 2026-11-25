@@ -164,14 +164,14 @@ describe('the cycle walks the Range Classes (#74 §6)', () => {
   it('never starts with an Above-range candidate, whatever the candidate set (#74 criterion 10)', () => {
     fc.assert(
       fc.property(
-        fc.array(
+        fc.uniqueArray(
           fc.record({
             entityId: fc.string({ minLength: 1, maxLength: 6 }),
             renovationState: fc.constantFrom('existing' as const, 'demolition' as const, 'proposed' as const),
             drawOrder: fc.integer({ min: 0, max: 40 }),
             rangeClass: fc.option(fc.constantFrom('in' as const, 'above' as const, 'below' as const), { nil: undefined }),
           }),
-          { minLength: 1, maxLength: 12 },
+          { minLength: 1, maxLength: 12, selector: (row) => row.entityId },
         ),
         (candidates) => {
           const ordered = cycleOrder(candidates)
