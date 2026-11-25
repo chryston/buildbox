@@ -19,6 +19,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import type { Comment, Project } from '../domain'
 import { withComments } from '../domain/testing'
+import { validateProject } from '../domain'
 import { notesSessionStore, PLAN_IMAGE_ACCEPT, WorkspaceProvider, workspaceStore, type WorkspaceServices } from '../ui'
 import type { Viewport, ViewportCache } from '../ui'
 import { openTestView, renderWithBindings as render, TEST_EXPORT_PORT, type TestView } from '../ui/legacy/testing'
@@ -209,5 +210,17 @@ describe('the inspector and the Warning strip (#80 §8, §11)', () => {
     expect(stored()).toHaveLength(before)
     // The counter does not rewind: a number once handed out is never handed out twice.
     expect(counter()).toBe(10)
+  })
+})
+
+describe('the browser seed (#80)', () => {
+  it('validates, so the app will accept an Intent on it', () => {
+    // The app refuses every Intent on a Project that does not validate. A seed with a hole in it
+    // therefore looks alive — the panel lists its notes — while no note can ever be written, which
+    // is how the missing `scope` on the choosing Anchor kinds survived a whole screenshot pass.
+    const seed = JSON.parse(
+      readFileSync(join(fixturesRoot, 'e2e', 'preview-seed', 'comments-scene.json'), 'utf8'),
+    ) as { projects: { data: Project }[] }
+    expect(validateProject(seed.projects[0]!.data).ok).toBe(true)
   })
 })

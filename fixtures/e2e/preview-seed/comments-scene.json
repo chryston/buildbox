@@ -1124,6 +1124,7 @@
             "anchor": {
               "kind": "project"
             },
+            "scope": "all",
             "status": "open",
             "priority": "high",
             "createdAt": "2026-11-18T09:00:00.000Z",
@@ -1138,6 +1139,7 @@
               "kind": "floor",
               "floorId": "seed-001"
             },
+            "scope": "all",
             "status": "open",
             "priority": "normal",
             "createdAt": "2026-11-18T09:00:00.000Z",
@@ -1156,6 +1158,7 @@
                 "y": 2200
               }
             },
+            "scope": "all",
             "status": "open",
             "priority": "low",
             "createdAt": "2026-11-18T09:00:00.000Z",
@@ -1170,6 +1173,7 @@
               "kind": "item_design",
               "itemDesignId": "unit-kitchen-base"
             },
+            "scope": "all",
             "status": "open",
             "priority": "normal",
             "createdAt": "2026-11-18T09:00:00.000Z",
@@ -1218,6 +1222,7 @@
                 "y": 900
               }
             },
+            "scope": "all",
             "status": "open",
             "priority": "normal",
             "createdAt": "2026-11-18T09:00:00.000Z",
@@ -1232,6 +1237,7 @@
               "kind": "floor",
               "floorId": "seed-001"
             },
+            "scope": "all",
             "status": "resolved",
             "priority": "normal",
             "createdAt": "2026-11-18T09:00:00.000Z",
@@ -1251,7 +1257,7 @@
       "revision": 1,
       "savedAt": "2026-11-18T09:00:00.000Z",
       "schemaVersion": 15,
-      "sizeBytes": 16085,
+      "sizeBytes": 16169,
       "lastBackupInitiatedAt": null,
       "lastBackupRevision": null,
       "trashedAt": null,

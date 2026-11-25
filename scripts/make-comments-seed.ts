@@ -15,7 +15,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { validateProject } from '../src/domain'
+import { anchorChoosesScope, COMMENT_SCOPE_ALL, validateProject } from '../src/domain'
 import type { Comment, Project } from '../src/domain'
 import { migrateProject } from '../src/domain/migrate'
 import { createMemoryAdapter } from '../src/persistence'
@@ -64,6 +64,10 @@ const note = (
   title,
   body,
   anchor,
+  // An Anchor that names no Design Option has to say which Option the note applies to (§1), so the
+  // kinds that choose one carry it. Without it the seed does not validate, and the app then refuses
+  // every Intent on it as `invalid-project` — which is how a note could be listed but never written.
+  ...(anchorChoosesScope(anchor.kind) ? { scope: COMMENT_SCOPE_ALL } : {}),
   status: 'open',
   priority: 'normal',
   createdAt: NOW,
@@ -83,8 +87,10 @@ const comments: Comment[] = [
 ]
 
 const project: Project = { ...base, comments, commentReferenceCounter: 9 }
-const problems = validateProject(project)
-if (problems.length > 0) fail(`the scene does not validate: ${problems.map((p) => `${p.path}: ${p.message}`).join('; ')}`)
+// `validateProject` answers `{ ok }`, not a list: `problems.length` on that answer is `undefined`,
+// so a gate written against a list can never fail and ships a scene the app then refuses.
+const checked = validateProject(project)
+if (!checked.ok) fail(`the scene does not validate: ${checked.problems.map((p) => `${p.path}: ${p.message}`).join('; ')}`)
 
 // Committed through the production adapter and read back, so every record is one the app itself wrote.
 const ports = createMemoryAdapter()

@@ -72,4 +72,37 @@ test.describe('Comments (#80)', () => {
     await page.locator('[data-testid^="note-pin-"]').first().click({ force: true })
     await expect(page.getByTestId('notes-panel')).toBeVisible()
   })
+
+  test('the Comment tool anchors a note on the placement it was clicked on (#80 §9)', async ({ page }) => {
+    await openScene(page)
+    await page.getByTestId('notes-current-context').uncheck()
+    await page.getByTestId('notes-status-filter').selectOption('any')
+    await expect(rows(page)).toHaveCount(8)
+
+    await page.getByTestId('renovation-tool-comment').click()
+    await expect(page.getByTestId('comment-tool-hint')).toBeVisible()
+    await page.locator('[data-testid="floor-plan-canvas"] [data-ref-role="placed-item"]').first().click()
+
+    // The note exists, is named by the thing it was put on, and its Title is being typed (#80 §9, §10).
+    await expect(rows(page)).toHaveCount(9)
+    const title = page.getByTestId('note-editor-title')
+    await expect(title).toBeVisible()
+    await title.fill('Sill height to match the appliance')
+    await title.press('Enter')
+    // The newest note carries the Title that was typed; its reference comes from the Project's
+    // counter, so the row is named by what it says rather than by a number this spec cannot know.
+    await expect(rows(page).last()).toContainText('Sill height to match the appliance')
+    // The tool is spent: one press, one note (§9.3).
+    await expect(page.getByTestId('comment-tool-hint')).toHaveCount(0)
+  })
+
+  test('the inspector names the notes about the selected placement (#80 §8)', async ({ page }) => {
+    await openScene(page)
+    await page.locator('[data-testid="floor-plan-canvas"] [data-ref-role="placed-item"]').first().click()
+    // §8: the left inspector carries a Comments section for the thing selected, with an explicit
+    // button for starting a note on it — the person chooses, nothing is inferred.
+    await expect(page.getByTestId('inspector-notes')).toBeVisible()
+    await expect(page.getByTestId('inspector-notes-heading')).toContainText('On this placement')
+    await expect(page.getByTestId('inspector-comment-on-entity')).toBeVisible()
+  })
 })
