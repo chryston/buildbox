@@ -17,12 +17,12 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
-import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveBeams, deriveSkirting, deriveServices, skirtingFaceTargets, skirtingSnapSources, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, elevationFrameOf, enabledVerticalSnapKinds, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates, verticalSnapCandidates, commentAnchorPoint, commentsForView } from '../../derive'
+import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockFor, roomFaceCandidates, SNAP_ACQUISITION_PX, displayModel, displayProject, displayStates, effectiveFloor, effectiveModel, deriveBeams, deriveSkirting, deriveServices, skirtingFaceTargets, skirtingSnapSources, deriveRooms, deriveWalls, layerAccessOf, effectiveLayerOrder, effectiveLayerSetting, entityLayerKeys, elevationScene, elevationFrameOf, enabledVerticalSnapKinds, rangeClasses, resolveSnap, snapCandidateAllowed, snapCandidates, verticalSnapCandidates, commentAnchorPoint, commentsForView, annotationsForView, effectiveAnnotationStyle } from '../../derive'
 import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings, drawElevationView } from '../../drawing'
-import type { BadgeSubject, LayerGates, NoteBadgeSubject, NotePinSubject, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
+import type { BadgeSubject, LayerGates, MarkSubject, NoteBadgeSubject, NotePinSubject, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
 import type { CommentAnchor, EntityId, ElevationView, Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
-import { anchorChoosesScope, COMMENT_SCOPE_ALL, commentIsOpen, DEFAULT_COMMENT_PRIORITY, cabinetFeatureIds, DEFAULT_FEATURE_T, designOptionsOf, duplicateCommentIds, elevationViewsOf, isLinearFeature, ownerKindOfDesign, registeredFeatureIds, allServices, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf } from '../../domain'
+import { anchorChoosesScope, COMMENT_SCOPE_ALL, commentIsOpen, DEFAULT_COMMENT_PRIORITY, cabinetFeatureIds, DEFAULT_FEATURE_T, designOptionsOf, duplicateCommentIds, elevationViewsOf, isLinearFeature, ownerKindOfDesign, registeredFeatureIds, allServices, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf, annotationPositionIsRect, endpointIsAnchored, savedViewById } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
@@ -1431,6 +1431,49 @@ export function FloorWorkspace(): ReactNode {
       const count = counts.get(placement.designId)
       if (count === undefined) continue
       out.push({ id: placement.id, bounds: placement.worldBounds, count })
+    }
+    return out
+  })()
+
+  /**
+   * The Annotations this view draws (#81 §5): the derive answers which ones and with what style;
+   * the anchored endpoint is resolved here, where the Walls are, so a mark follows the thing it
+   * names (§5.2) while its label stays where it was composed. A Leader whose subject has gone is
+   * not drawn at a guessed place — the Notes tab still lists it, and the canvas does not invent.
+   */
+  const [selectedMarkId, setSelectedMarkId] = useState<string | null>(null)
+  const markSubjects: MarkSubject[] = (() => {
+    if (!notesOverlayOn || view === null) return []
+    const out: MarkSubject[] = []
+    for (const annotation of annotationsForView(project, view)) {
+      const position = annotation.position
+      const at = annotationPositionIsRect(position)
+        ? { x: Math.min(position.a.x, position.b.x), y: Math.min(position.a.y, position.b.y) }
+        : position
+      let endpointAt: Point2 | null = null
+      if (annotation.endpoint !== undefined) {
+        endpointAt = endpointIsAnchored(annotation.endpoint)
+          ? (floorWalls === null ? null : commentAnchorPoint(project, floorWalls, annotation.endpoint.anchor))
+          : annotation.endpoint.free
+        if (endpointAt === null) continue
+      }
+      out.push({
+        id: annotation.id,
+        type: annotation.type,
+        at,
+        text: annotation.text,
+        endpointAt,
+        rect: annotationPositionIsRect(position)
+          ? {
+              x: Math.min(position.a.x, position.b.x),
+              y: Math.min(position.a.y, position.b.y),
+              w: Math.abs(position.b.x - position.a.x),
+              h: Math.abs(position.b.y - position.a.y),
+            }
+          : null,
+        targetLabel: annotation.targetViewId === undefined ? null : savedViewById(project, annotation.targetViewId)?.name ?? null,
+        style: effectiveAnnotationStyle(project, view, annotation),
+      })
     }
     return out
   })()
@@ -3701,6 +3744,9 @@ export function FloorWorkspace(): ReactNode {
               onCommentEntity={(entityId) => placeComment({ kind: 'entity', entityId })}
               notePins={notePins}
               noteBadges={noteBadges}
+              markSubjects={markSubjects}
+              selectedMarkId={selectedMarkId}
+              onMarkPointerDown={setSelectedMarkId}
               onNotePointerDown={(id) => notesSessionStore.getState().select(id)}
               focusPoint={notesFocusPoint}
               warningSubjects={warningSubjects}

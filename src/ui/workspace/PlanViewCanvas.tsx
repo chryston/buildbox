@@ -28,10 +28,11 @@ import {
   drawOrderOf,
   drawSelectionAnnotations,
   drawNotes, drawWarningBadges,
+  drawMarks,
   displayRects,
   resolveSize,
 } from '../../drawing'
-import type { BadgeSubject, DisplayList, NoteBadgeSubject, NotePinSubject, LayerGates, OpeningPreview, PlanPreview, RangeGates, RoomProposal, Sizing, WallOpenings } from '../../drawing'
+import type { BadgeSubject, DisplayList, MarkSubject, NoteBadgeSubject, NotePinSubject, LayerGates, OpeningPreview, PlanPreview, RangeGates, RoomProposal, Sizing, WallOpenings } from '../../drawing'
 import { DisplayListSvg } from '../drawing/DisplayListSvg'
 import { OverlapCycleList } from './renovation/OverlapCycleList'
 import { cycleOrder, nextCycle, reachableCandidates } from './selection/overlapCycle'
@@ -232,10 +233,16 @@ export interface PlanViewCanvasProps {
   /** The Notes overlay's pins and `✎n` badges, already filtered to this view (#80 §7). */
   notePins?: readonly NotePinSubject[]
   noteBadges?: readonly NoteBadgeSubject[]
+  /** The Annotations this view draws, already filtered and styled (#81 §5). */
+  markSubjects?: readonly MarkSubject[]
+  /** The selected Annotation, for the outline on its glyph (#81 §5). */
+  selectedMarkId?: string | null
   /** A badge was clicked: open the Warning strip at that entity's first row. */
   onSelectWarningBadge?: (id: string) => void
   /** A pin or `✎n` badge was clicked: select that note (#80 §7.5). */
   onNotePointerDown?: (id: string) => void
+  /** An Annotation glyph was clicked: select it (#81 §5). */
+  onMarkPointerDown?: (id: string) => void
   /**
    * Pan so this Floor point stands at the centre (#80 §7.5): selecting a row reveals that one note,
    * and a pin revealed off the edge of the screen has not been revealed.
@@ -263,7 +270,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     angleSnap, overlay, htmlOverlay, screenOverlay, walls, beams = null, selectedBeamId = null, skirting = null, selectedSkirtingId = null, services = null, selectedServiceId = null, renovation = null, layerGates = null, rangeGates = null, selectedWallId = null, onSelectWall,
     openings = [], selectedOpeningId = null, openingPreview = null, onSelectOpening,
     rooms = null, selectedRoomId = null, onSelectRoom, onSelectBeam, onSelectSkirting, onSelectService, roomProposal = null,
-    warningSubjects = [], notePins = [], noteBadges = [], onSelectWarningBadge, onNotePointerDown, focusPoint = null,
+    warningSubjects = [], notePins = [], noteBadges = [], markSubjects = [], selectedMarkId = null, onSelectWarningBadge, onNotePointerDown, onMarkPointerDown, focusPoint = null,
   } = props
   const [hostSize, setHostSize] = useState({ width: 0, height: 0 })
   const [dragging, setDragging] = useState(false)
@@ -633,8 +640,14 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
     else onSelect(id)
   }
 
+  // The Annotations (#81 §5.5): drawn content, so they share the Notes band's place above the model
+  // bodies — and they avoid nothing: a mark stands exactly where it was composed, because moving a
+  // person's circle to dodge a label is how a mark stops meaning what it was drawn to mean.
+  const markList: DisplayList | null = markSubjects.length === 0 ? null : drawMarks(markSubjects, { sizing })
+
   // The Notes overlay (#80 §7.4): above every model body and below every word, and it avoids the same
-  // boxes a warning badge avoids — plus the badges themselves, because a note never hides a warning.
+  // boxes a warning badge avoids — plus the badges themselves, because a note never hides a warning,
+  // and the Annotations, because a pin over a cloud's word hides the change it names.
   const noteMarks: DisplayList | null = notePins.length === 0 && noteBadges.length === 0
     ? null
     : drawNotes(notePins, noteBadges, {
@@ -643,6 +656,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
           ...(warningBadges === null ? [] : displayRects(warningBadges)),
           ...displayRects(painted),
           ...(annotations === null ? [] : displayRects(annotations)),
+          ...(markList === null ? [] : displayRects(markList)),
         ],
       })
 
@@ -844,7 +858,7 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
       }
       startRotateDrag(id)
     },
-    onWarningBadgePointerDown: onSelectWarningBadge, onNotePointerDown,
+    onWarningBadgePointerDown: onSelectWarningBadge, onNotePointerDown, onMarkPointerDown,
   }
 
   return (
@@ -909,6 +923,21 @@ export function PlanViewCanvas(props: PlanViewCanvasProps): ReactNode {
                   />
                 </>
               )}
+            {/* The Annotations, below the pins and above the model (#81 §5.5): their own list, keyed
+                by the Annotations rather than the revision, and never on an export until #83 asks. */}
+            {markList !== null && (
+              <DisplayListSvg
+                list={markList}
+                sizing={sizing}
+                matrix={matrix}
+                textSpace="screen"
+                textLayerTestId="plan-mark-text-layer"
+                screen={{ pxPerUnit: zoom, panX, panY }}
+                emphasis={{ selected: selectedMarkId === null ? undefined : new Set([selectedMarkId]) }}
+                resolveAsset={resolveAsset}
+                interactions={interactions}
+              />
+            )}
             {/* The Notes overlay, above the model and below every word (#80 §7.4). Its own list,
                 keyed by the Comments rather than the revision, and never on an export. */}
             {noteMarks !== null && (
