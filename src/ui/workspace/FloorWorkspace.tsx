@@ -21,8 +21,8 @@ import { originSnapCandidates, usableIntervals, deriveWarnings, roomDeleteBlockF
 import type { LayerAccess, Pt, RenovationState, RoomFaceCandidate, Warning } from '../../derive'
 import { wallOpenings, drawElevationView } from '../../drawing'
 import type { BadgeSubject, LayerGates, MarkSubject, NoteBadgeSubject, NotePinSubject, OpeningPreview, RangeGates, RoomProposal } from '../../drawing'
-import type { AnnotationEndpoint, AnnotationPosition, AnnotationType, CommentAnchor, EntityId, ElevationView, Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
-import { anchorChoosesScope, COMMENT_SCOPE_ALL, commentIsOpen, DEFAULT_COMMENT_PRIORITY, cabinetFeatureIds, DEFAULT_FEATURE_T, designOptionsOf, duplicateCommentIds, elevationViewsOf, isLinearFeature, ownerKindOfDesign, registeredFeatureIds, allServices, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf, annotationPositionIsRect, endpointIsAnchored, savedViewById, annotationDefaultLayerName, annotationDefaultLayerColor, ANNOTATION_SCOPE_ALL, DEFAULT_REVISION_CLOUD_WIDTH_MM, DEFAULT_REVISION_CLOUD_HEIGHT_MM, savedViewsOf, viewActiveLayerId } from '../../domain'
+import type { Annotation, AnnotationEndpoint, AnnotationPosition, AnnotationType, CommentAnchor, EntityId, ElevationView, Point2, Project, RenovationDisplay, WallClassification } from '../../domain'
+import { anchorChoosesScope, COMMENT_SCOPE_ALL, commentIsOpen, DEFAULT_COMMENT_PRIORITY, cabinetFeatureIds, DEFAULT_FEATURE_T, designOptionsOf, duplicateCommentIds, duplicateAnnotationIds, elevationViewsOf, isLinearFeature, ownerKindOfDesign, registeredFeatureIds, allServices, nextBeamLabel, nextSkirtingLabel, skirtingOf, skirtingLabel, nextOpeningLabel, summarizeFloorDependencies, viewDesignOptionId, viewRenovationDisplay, drawingLayerById, drawingLayersOf, NEW_LAYER_COLOR, UNLAYERED_LAYER_KEY, viewLayerSettingOverride, designHeight, beamsOf, annotationPositionIsRect, endpointIsAnchored, savedViewById, annotationDefaultLayerName, annotationDefaultLayerColor, ANNOTATION_SCOPE_ALL, DEFAULT_REVISION_CLOUD_WIDTH_MM, DEFAULT_REVISION_CLOUD_HEIGHT_MM, savedViewsOf, viewActiveLayerId } from '../../domain'
 import type { SessionAsset } from '../../session'
 import type { DeleteWallReview, Intent, IntentType, PayloadOf, RoomOutlineShape } from '../../edit'
 import {
@@ -1358,6 +1358,8 @@ export function FloorWorkspace(): ReactNode {
     setAnnotationEndpoint(null)
     setTool('select')
     setSelectedMarkId(intent.ids[0] ?? null)
+    // The editor opens with the new Annotation selected and its text handed to the keyboard (#81 §3.10).
+    if (intent.ids[0] !== undefined) notesSessionStore.getState().selectNewAnnotation(intent.ids[0])
   }
 
   /**
@@ -2054,12 +2056,13 @@ export function FloorWorkspace(): ReactNode {
 
   const duplicateFloor = (input: DuplicateFloorInput): void => {
     if (duplicateFloorId === null) return
-    const { includeComments, ...rest } = input
+    const { includeComments, includeAnnotations, ...rest } = input
+    const defaultViewId = project.views.find((candidate) => candidate.floorId === duplicateFloorId && candidate.isDefault)?.id
     send('floor.duplicate', {
       floorId: duplicateFloorId,
       ...rest,
       commentIds: includeComments ? duplicateCommentIds(project, duplicateFloorId, input.placedItemIds) : [],
-      annotationIds: [],
+      annotationIds: includeAnnotations && defaultViewId !== undefined ? duplicateAnnotationIds(project, [defaultViewId]) : [],
     })
     setDuplicateFloorId(null)
     const after = session.getSnapshot().project
@@ -3666,6 +3669,25 @@ export function FloorWorkspace(): ReactNode {
           // threaded through four inspectors that each have to remember to honour it.
           <FieldsLockedContext.Provider value={fieldsLock}>
           <>
+          {selectedMarkId !== null && project.annotations.some((a) => a.id === selectedMarkId) && (
+            <div className="bb-inspector-notes" data-testid="inspector-annotation">
+              <div className="bb-inspector-notes-heading" data-testid="inspector-annotation-heading">
+                {(() => {
+                  const mark = project.annotations.find((a) => a.id === selectedMarkId) as Annotation
+                  return `${mark.reference} · ${ANNOTATION_TYPE_LABELS[mark.type]}`
+                })()}
+              </div>
+              <dl>
+                <div><dt>{ANNOTATION_STRINGS.fieldView}</dt><dd data-testid="inspector-annotation-owner">{ANNOTATION_STRINGS.ownerDrawingContent}</dd></div>
+                <div><dt>{ANNOTATION_STRINGS.fieldLayer}</dt><dd data-testid="inspector-annotation-layer">
+                  {(() => {
+                    const mark = project.annotations.find((a) => a.id === selectedMarkId) as Annotation
+                    return mark.layerId === null ? ANNOTATION_STRINGS.unlayered : (drawingLayerById(project, mark.layerId)?.name ?? ANNOTATION_STRINGS.unlayered)
+                  })()}
+                </dd></div>
+              </dl>
+            </div>
+          )}
           {selectedRoom !== null
             ? <RoomInspector
                 room={selectedRoom.room}
@@ -3964,7 +3986,12 @@ export function FloorWorkspace(): ReactNode {
               noteBadges={noteBadges}
               markSubjects={markSubjects}
               selectedMarkId={selectedMarkId}
-              onMarkPointerDown={setSelectedMarkId}
+              onMarkPointerDown={(id) => {
+                setSelectedMarkId(id)
+                // A canvas selection opens the panel on the Annotations tab and focuses the row
+                // (#81 §3.3a); the panel and the tab are Display state, never a history step.
+                if (id !== null) notesSessionStore.getState().selectAnnotation(id)
+              }}
               onCloudRect={annotationToolType === 'revision_cloud' ? placeCloud : undefined}
               onNotePointerDown={(id) => notesSessionStore.getState().select(id)}
               focusPoint={notesFocusPoint}
@@ -4378,6 +4405,12 @@ export function FloorWorkspace(): ReactNode {
             onReopen={(commentId) => send('comment.reopen', { commentId, at: services.now() })}
             onDelete={(commentId) => send('comment.delete', { commentId })}
             onEdit={(commentId, patch) => send('comment.edit', { commentId, ...patch, at: services.now() })}
+            onEditAnnotation={(annotationId, patch) => send('annotation.edit', { annotationId, ...patch })}
+            onDeleteAnnotation={(annotationId) => send('annotation.delete', { annotationId })}
+            onGoToView={(viewId) => {
+              const target = project.views.find((each) => each.id === viewId)
+              if (target !== undefined) workspaceStore.getState().setActiveFloor(target.floorId, viewId)
+            }}
             />
           ) : null
         }

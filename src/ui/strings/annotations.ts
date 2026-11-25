@@ -51,6 +51,8 @@ export const ANNOTATION_STRINGS = {
   readOnlyRefusal: (name: string): string => `${name} is read-only in this view`,
   // The Notes panel's tab and rows (#81 §6).
   annotationsTab: 'Annotations',
+  // The left inspector for a selected Annotation (#81 §3.3a): its owner is the drawing content.
+  ownerDrawingContent: 'View drawing content',
   anyAnnotation: 'Any annotation',
   anyLayer: 'Any layer',
   unlayered: 'Unlayered',

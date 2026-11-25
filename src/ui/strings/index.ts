@@ -848,6 +848,7 @@ export const STRINGS = {
   placedItems: 'Placed Items',
   includePlanImage: 'Include Plan Image',
   includeComments: 'Include Comments',
+  includeAnnotations: 'Include Annotations',
   /** The position a new Floor can take, named by the two Floors it would sit between. */
   positionAtTop: 'At the top',
   positionBetween: (before: string, after: string): string => `Between ${before} and ${after}`,

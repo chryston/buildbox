@@ -51,6 +51,8 @@ export interface DuplicateFloorInput {
   includePlanImage: boolean
   /** `Include Comments`, off by default (#80 §13). */
   includeComments: boolean
+  /** `Include Annotations`, off by default (#81 §11). */
+  includeAnnotations: boolean
 }
 
 export interface DuplicateFloorDialogProps {
@@ -70,6 +72,7 @@ export function DuplicateFloorDialog(props: DuplicateFloorDialogProps): ReactNod
   const [unchecked, setUnchecked] = useState<ReadonlySet<EntityId>>(new Set())
   const [includePlanImage, setIncludePlanImage] = useState(false)
   const [includeComments, setIncludeComments] = useState(false)
+  const [includeAnnotations, setIncludeAnnotations] = useState(false)
 
   if (source === undefined) return null
   const trimmed = name.trim()
@@ -156,13 +159,23 @@ export function DuplicateFloorDialog(props: DuplicateFloorDialogProps): ReactNod
           />
           {STRINGS.includeComments}
         </label>
+        {/* `Include Annotations` starts off, like `Include Comments` (#81 §11). */}
+        <label className="bb-workspace-check" data-testid="duplicate-annotations-row">
+          <input
+            type="checkbox"
+            data-testid="duplicate-include-annotations"
+            checked={includeAnnotations}
+            onChange={(event) => setIncludeAnnotations(event.target.checked)}
+          />
+          {STRINGS.includeAnnotations}
+        </label>
         <div className="bb-workspace-dialog-actions">
           <button
             type="button"
             data-testid="duplicate-confirm"
             className="bb-workspace-primary-button"
             disabled={nameError !== null}
-            onClick={() => onConfirm({ name: trimmed, toIndex, placedItemIds: chosen, includePlanImage, includeComments })}
+            onClick={() => onConfirm({ name: trimmed, toIndex, placedItemIds: chosen, includePlanImage, includeComments, includeAnnotations })}
           >
             {STRINGS.duplicate}
           </button>

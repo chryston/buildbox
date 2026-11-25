@@ -13,7 +13,7 @@
  */
 import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
-import type { CommentAnchor, CommentPriority, CommentStatus, EntityId } from '../../../domain'
+import type { AnnotationType, CommentAnchor, CommentPriority, CommentStatus, EntityId } from '../../../domain'
 
 /** The status filter's three settings; `any` is the only one that shows Resolved rows. */
 export type NotesStatusFilter = CommentStatus | 'any'
@@ -21,6 +21,12 @@ export type NotesStatusFilter = CommentStatus | 'any'
 export type NotesTargetFilter = CommentAnchor['kind'] | 'any'
 /** The priority filter: a priority, or `any`. */
 export type NotesPriorityFilter = CommentPriority | 'any'
+/** Which list the panel shows (#81 §6): the Comments tab or the Annotations tab. */
+export type NotesTab = 'comments' | 'annotations'
+/** The Annotation type filter: a type, or `any` (#81 §6.3). */
+export type NotesAnnotationTypeFilter = AnnotationType | 'any'
+/** The Annotation layer filter: a layer, `Unlayered`, or `any` (#81 §6.3). */
+export type NotesAnnotationLayerFilter = 'any' | 'unlayered' | EntityId
 
 export interface NotesSessionSnapshot {
   /** Whether the docked panel is expanded. Independent of `overlayOn` (#80 §4.2). */
@@ -41,6 +47,24 @@ export interface NotesSessionSnapshot {
   status: NotesStatusFilter
   priority: NotesPriorityFilter
   target: NotesTargetFilter
+  /** Which list the panel shows (#81 §6). */
+  tab: NotesTab
+  /** The Annotation type filter (#81 §6.3). */
+  annotationType: NotesAnnotationTypeFilter
+  /** The Annotation layer filter (#81 §6.3). */
+  annotationLayer: NotesAnnotationLayerFilter
+  /** The Annotation row selected in the Annotations tab; also the temporary focus (#81 §6.5). */
+  selectedAnnotationId: EntityId | null
+  /** The Annotation whose text the editor should focus and select, or `null` (#81 §3.10). */
+  annotationTextToFocus: EntityId | null
+  setTab(tab: NotesTab): void
+  setAnnotationType(type: NotesAnnotationTypeFilter): void
+  setAnnotationLayer(layer: NotesAnnotationLayerFilter): void
+  /** Select an Annotation row; a canvas selection opens the panel and the tab too (#81 §3.3a). */
+  selectAnnotation(annotationId: EntityId | null): void
+  /** The Annotation a tool just placed: selected, its text handed to the keyboard, panel open. */
+  selectNewAnnotation(annotationId: EntityId): void
+  clearAnnotationTextFocus(): void
   setPanelOpen(open: boolean): void
   setOverlayOn(on: boolean): void
   /** Turn the overlay off, which is what clearing the focus does too (§7.6). */
@@ -84,6 +108,11 @@ const DEFAULTS = {
   status: 'open' as NotesStatusFilter,
   priority: 'any' as NotesPriorityFilter,
   target: 'any' as NotesTargetFilter,
+  tab: 'comments' as NotesTab,
+  annotationType: 'any' as NotesAnnotationTypeFilter,
+  annotationLayer: 'any' as NotesAnnotationLayerFilter,
+  selectedAnnotationId: null,
+  annotationTextToFocus: null,
 }
 
 export const notesSessionStore = createStore<NotesSessionSnapshot>()((set) => ({
@@ -99,6 +128,12 @@ export const notesSessionStore = createStore<NotesSessionSnapshot>()((set) => ({
   setStatus: (status) => set({ status }),
   setPriority: (priority) => set({ priority }),
   setTarget: (target) => set({ target }),
+  setTab: (tab) => set({ tab }),
+  setAnnotationType: (annotationType) => set({ annotationType }),
+  setAnnotationLayer: (annotationLayer) => set({ annotationLayer }),
+  selectAnnotation: (selectedAnnotationId) => set({ selectedAnnotationId, tab: 'annotations', panelOpen: true }),
+  selectNewAnnotation: (annotationId) => set({ selectedAnnotationId: annotationId, annotationTextToFocus: annotationId, tab: 'annotations', panelOpen: true }),
+  clearAnnotationTextFocus: () => set({ annotationTextToFocus: null }),
   reset: () => set({ ...DEFAULTS }),
 }))
 

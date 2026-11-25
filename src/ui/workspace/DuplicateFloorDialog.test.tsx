@@ -78,6 +78,7 @@ describe('the checklist', () => {
       placedItemIds: ['p1', 'p2', 'p3'],
       includePlanImage: false,
       includeComments: false,
+      includeAnnotations: false,
     })
   })
 

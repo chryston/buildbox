@@ -164,6 +164,8 @@ describe('the question the paste asks (#72 criteria 2, 3)', () => {
       false,
       // `Include Comments` starts off (#80 §13).
       false,
+      // `Include Annotations` starts off (#81 §11).
+      false,
     )
   })
 
@@ -171,7 +173,7 @@ describe('the question the paste asks (#72 criteria 2, 3)', () => {
     const { onConfirm } = open({ rows: [review().rows[1]] })
     fireEvent.change(targetOf(L2), { target: { value: 'unlayered' } })
     fireEvent.click(confirm())
-    expect(onConfirm).toHaveBeenCalledWith([{ sourceLayerId: L2, target: { kind: 'unlayered' } }], false, false)
+    expect(onConfirm).toHaveBeenCalledWith([{ sourceLayerId: L2, target: { kind: 'unlayered' } }], false, false, false)
   })
 })
 
@@ -232,6 +234,7 @@ describe('what the copy cannot bring (#72 criteria 8, 9, 10)', () => {
         { sourceLayerId: L2, target: { kind: 'new' } },
       ],
       true,
+      false,
       false,
     )
   })
