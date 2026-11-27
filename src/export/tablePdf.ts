@@ -397,9 +397,12 @@ function drawRow(
     const width = layout[index]!.width
     const all = layout[index]!.cells[row] ?? ['']
     const shown = lines === null ? all.slice(from) : all.slice(from, from + lines)
+    // A column shorter than the row's tallest has no line inside this window — but the first column of
+    // a continued row still has to say the row continues, so the window is never left empty.
+    const printed = shown.length > 0 ? shown : ['']
     const x = columnX[index]!
     const first = index === 0
-    shown.forEach((lineText, lineIndex) => {
+    printed.forEach((lineText, lineIndex) => {
       const value = first && lineIndex === 0 && from > 0 ? `${lineText} ${CONTINUED}` : lineText
       ops.push(
         text(value, { x: x + (column.numeric ? width - PAD_X : PAD_X), y: y + PAD_Y + lineIndex * LEAD * BODY_SIZE },
