@@ -67,6 +67,9 @@ const SCOPE: QuantityScope = {
   drawingLayers: 'all',
 }
 
+/** Stands for a scope the Comments do not reach: the summary answers with no rows at all. */
+let noCommentsInScope = false
+
 const SUMMARY: ListsSummary = {
   statement: 'Both Floors · Existing Model only',
   commentStatement: 'Both Floors · Existing Model only · Open Comments',
@@ -146,6 +149,8 @@ function recordingPort(record: Recorded, memory: Map<string, Recipe>, listMemory
     blocking: async (): Promise<BlockedView | null> => null,
     summariseLists: async (_scope, _origin, includeResolvedComments) => {
       record.summaries.push(includeResolvedComments)
+      // A scope the Comments do not reach answers with no rows at all — the file behind it is a header.
+      if (noCommentsInScope) return { ...SUMMARY, rows: { ...SUMMARY.rows, comments: 0 } }
       return includeResolvedComments
         ? { ...SUMMARY, commentStatement: 'Both Floors · Existing Model only · Open and Resolved Comments', rows: { ...SUMMARY.rows, comments: 8 } }
         : SUMMARY
@@ -383,6 +388,19 @@ describe('the Comment Register in the Lists tab (#83 criteria 9, 10, 11, 12)', (
     expect(screen.getByTestId('export-lists-rows-comments')).toHaveTextContent('8')
     expect(screen.getByText('Both Floors · Existing Model only · Open and Resolved Comments')).toBeInTheDocument()
     expect(last(record.summaries)).toBe(true)
+    await settle()
+  })
+
+  it('says `0 rows` for a scope with nothing in it (#83 criterion 15)', async () => {
+    await openLists()
+    await userEvent.click(screen.getByTestId('export-lists-table-comments'))
+    await settle()
+    noCommentsInScope = true
+    await userEvent.click(screen.getByTestId('export-lists-floor-seed-floor-002'))
+    await settle()
+    expect(screen.getByTestId('export-lists-rows-comments')).toHaveTextContent('0 rows')
+    noCommentsInScope = false
+    await closeDialog()
     await settle()
   })
 
