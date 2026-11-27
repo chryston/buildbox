@@ -204,13 +204,25 @@ function asRecipe(value: unknown): Recipe | null {
       return null
     }
   }
+  // #85: a remembered page order is a list of view keys, and a remembered orientation is one per
+  // view. Both are absent for every recipe written before Drawing Sets, which is the Project's own
+  // order and the recipe's own orientation — so only a value that is neither absent nor well-formed
+  // is a recipe this build cannot run.
+  if (held.pageOrder !== undefined && (!Array.isArray(held.pageOrder) || !held.pageOrder.every((key) => typeof key === 'string'))) {
+    return null
+  }
+  if (held.pageOrientations !== undefined) {
+    const orientations = fields(held.pageOrientations)
+    if (orientations === null) return null
+    if (!Object.values(orientations).every((setting) => oneOf(setting, ['portrait', 'landscape']))) return null
+  }
   return value as Recipe
 }
 
 function isViewRef(value: unknown): boolean {
   const held = fields(value)
   if (held === null) return false
-  if (held.kind === 'plan') return typeof held.viewId === 'string'
+  if (held.kind === 'plan' || held.kind === 'elevation') return typeof held.viewId === 'string'
   return held.kind === 'item-detail' && typeof held.itemDesignId === 'string'
 }
 

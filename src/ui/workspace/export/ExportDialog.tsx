@@ -35,7 +35,7 @@ import type {
 } from '../../../export'
 
 import { ListsPanel } from './ListsPanel'
-import { viewKey } from './port'
+import { viewKey } from '../../../export'
 import type { BlockedView, ExportPort, ExportPreview, ExportRunOutcome } from './port'
 import type { Rect } from '../../../derive'
 import type { DisplayUnit } from '../../../domain'

@@ -133,9 +133,9 @@ describe('exportLists', () => {
 
     const entries = entriesOf(result.archive.bytes)
     expect([...entries.keys()]).toEqual([
+      'manifest.json',
       'Maple-Street-Kitchen_items_20261120.csv',
       'Maple-Street-Kitchen_cut-list_20261120.csv',
-      'manifest.json',
     ])
     // The manifest is the same JSON the dialog's own file list came from, and it describes the
     // archive it sits in — including itself, which cannot carry its own digest.
@@ -143,7 +143,10 @@ describe('exportLists', () => {
     expect(manifest.contract_version).toBe('1.0')
     expect(manifest.project_revision).toBe(3)
     expect(manifest.recipe).toEqual(recipeOf(['items', 'cut-list']))
-    expect(manifest.files.map((file) => file.path)).toEqual([...entries.keys()])
+    // The manifest's own list runs in the order the files follow it in the archive, and ends with
+    // itself: the archive leads with the manifest, the list inside it does not.
+    const [lead, ...sheets] = [...entries.keys()]
+    expect(manifest.files.map((file) => file.path)).toEqual([...sheets, lead!])
     for (const file of manifest.files.filter((each) => each.kind !== 'manifest')) {
       const bytes = entries.get(file.path)!
       expect(file.bytes).toBe(bytes.length)
@@ -258,8 +261,10 @@ describe('the five tables of #68', () => {
     if (!result.ok || result.kind !== 'archive') throw new Error('seven tables should give an archive')
     expect(result.archive.name).toBe('Maple-Street-Kitchen_lists_20261120.zip')
     const entries = entriesOf(result.archive.bytes)
-    // The recipe's order is the dialog's; the ZIP's is the contract's, whatever was clicked first.
+    // The recipe's order is the dialog's; the ZIP's is the contract's, whatever was clicked first —
+    // and the manifest leads it, so a reader learns what it holds before it holds any of it (#85 §2.1).
     expect([...entries.keys()]).toEqual([
+      'manifest.json',
       'Maple-Street-Kitchen_items_20261120.csv',
       'Maple-Street-Kitchen_cut-list_20261120.csv',
       'Maple-Street-Kitchen_rooms_20261120.csv',
@@ -267,7 +272,6 @@ describe('the five tables of #68', () => {
       'Maple-Street-Kitchen_openings_20261120.csv',
       'Maple-Street-Kitchen_placed-items_20261120.csv',
       'Maple-Street-Kitchen_warnings_20261120.csv',
-      'manifest.json',
     ])
     const manifest = manifestOf(result.archive.bytes)
     expect(manifest.files.map((file) => [file.path, file.kind])).toEqual([

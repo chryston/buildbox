@@ -13,7 +13,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { ExportDialog } from './ExportDialog'
-import { viewKey } from './port'
+import { viewKey } from '../../../export'
 import type { BlockedView, ExportPort, ExportPreview, ExportRunOutcome, ExportableView, ListsOptions } from './port'
 import type { QuantityScope } from '../../../derive'
 import type { DisplayList } from '../../../drawing'

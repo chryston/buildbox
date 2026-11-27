@@ -71,12 +71,6 @@ export interface ExportPreview {
   readonly heightMm: number
 }
 
-/** The stable key a recipe is remembered under: one per Project and saved view. */
-export function viewKey(ref: RecipeViewRef): string {
-  if (ref.kind === 'plan') return `plan:${ref.viewId}`
-  return ref.kind === 'elevation' ? `elevation:${ref.viewId}` : `item:${ref.itemDesignId}`
-}
-
 /** One Floor or Design Option the Lists tab can put in scope, named as the Project names it. */
 export interface ListsChoice {
   readonly id: string

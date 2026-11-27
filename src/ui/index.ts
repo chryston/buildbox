@@ -84,7 +84,6 @@ export { RenovationToolStrip } from './workspace/renovation/RenovationToolStrip'
 export { DISPLAY_ORDER, DISPLAY_ROLES, DISPLAY_STATES, displayLabel } from './workspace/renovation/displayTheme'
 export { ExportDialog, UNIT_LABEL, type ExportDialogProps } from './workspace/export/ExportDialog'
 export {
-  viewKey,
   type BlockedView,
   type ExportMeasurement,
   type ExportPort,

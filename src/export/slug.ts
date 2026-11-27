@@ -86,9 +86,12 @@ export function drawingFileName(parts: NameParts, format: FileFormat): string {
   return `${segments.join('_')}.${EXTENSION[format]}`
 }
 
-/** `<project>_drawings_<YYYYMMDD>.zip` — the archive that holds more than one file. */
-export function archiveName(project: string, date: string): string {
-  return `${slug(project)}_drawings_${date}.zip`
+/**
+ * `<project>_drawings_<YYYYMMDD>.zip` — the archive that holds more than one file — or the one PDF a
+ * multi-view Drawing Set is, which is named for the set for the same reason (#85 §1.3).
+ */
+export function archiveName(project: string, date: string, extension: 'zip' | 'pdf' = 'zip'): string {
+  return `${slug(project)}_drawings_${date}.${extension}`
 }
 
 /**
@@ -105,6 +108,11 @@ export function listFileName(project: string, table: TableId, date: string, exte
 /** `<project>_lists_<YYYYMMDD>.zip` — the archive that holds two or more tables. */
 export function listsArchiveName(project: string, date: string): string {
   return `${slug(project)}_lists_${date}.zip`
+}
+
+/** `<project>_handoff_<YYYYMMDD>.zip` — the pack a person sends to someone else (#85 §3.3). */
+export function handoffArchiveName(project: string, date: string): string {
+  return `${slug(project)}_handoff_${date}.zip`
 }
 
 /**

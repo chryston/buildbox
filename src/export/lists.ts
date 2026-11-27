@@ -280,7 +280,8 @@ export async function exportLists(
     archive: {
       name: archive,
       mediaType: 'application/zip',
-      bytes: zipOf([...files, manifestFile]),
+      // The manifest leads the archive (#85 §2.1).
+      bytes: zipOf([manifestFile, ...files]),
     },
   }
 }

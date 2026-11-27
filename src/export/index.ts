@@ -29,6 +29,7 @@ import { pngSize } from './fit'
 import type { FlatOp } from './flatten'
 import { flatten } from './flatten'
 import { fileDate } from './format'
+import { orderedViews, viewKey } from './pageOrder'
 import { MEDIA_TYPE, drawingFileName, uniqueSegments, archiveName } from './slug'
 import { SHEET_SIZING } from './sheet'
 import { noGlyphFor } from './strings'
@@ -44,6 +45,7 @@ import type {
   ExportFile,
   ExportResult,
   ExportSnapshot,
+  Orientation,
   RasterImage,
   Recipe,
   RecipeViewRef,
@@ -63,7 +65,12 @@ type Written =
       readonly warnings: readonly string[]
       readonly missingGlyphs: readonly string[]
     }
-  | { readonly ok: false; readonly reason: ExportFailure['reason'] }
+  | {
+      readonly ok: false
+      readonly reason: ExportFailure['reason']
+      /** The view at fault, when the file holds more than one and the file's own name says nothing. */
+      readonly output?: string
+    }
 
 /**
  * The drawings, as files.
@@ -81,11 +88,19 @@ export async function exportFiles(
   const provenance = provenanceOf(snapshot, recipe, deps)
   const failures: ExportFailure[] = []
   const pending: Pending[] = []
-  const total = recipe.views.length
+  // A Drawing Set is one list of views in one order (#85 §1.1): the page a view lands on is decided
+  // before anything is drawn, so the title block can say `Page 2/3` and the PDF can put the pages in
+  // that order without either of them asking again.
+  const views = orderedViews(snapshot.project, recipe)
+  const total = views.length
 
-  for (const [index, view] of recipe.views.entries()) {
+  for (const [index, view] of views.entries()) {
     deps.onProgress?.({ stage: 'drawing', done: index, total, label: labelOf(snapshot, view) })
-    const composed = composeSheet(snapshot, view, recipe, clock, deps.buildboxVersion)
+    const composed = composeSheet(snapshot, view, recipe, clock, deps.buildboxVersion, {
+      number: index + 1,
+      of: total,
+      ...pageOrientation(recipe, view),
+    })
     if (!composed.ok) {
       failures.push({ output: labelOf(snapshot, view), reason: composed.reason })
       continue
@@ -101,12 +116,31 @@ export async function exportFiles(
   // one file or as an archive — the manifest only exists for the archive.
   const glyphLabels: string[] = []
 
+  // A PDF set is one file with one page per view, so it is written once rather than per view; SVG
+  // and PNG give one file per view and go into the archive beside the manifest (#85 §1.3, §1.5).
+  if (recipe.format === 'pdf' && pending.length > 0) {
+    const written = await writePdfSet(
+      deps,
+      provenance,
+      pending,
+      names[0]!,
+      pending.map((item) => labelOf(snapshot, item.view)),
+    )
+    if (!written.ok) {
+      return { ok: false, failures: [{ output: written.output ?? names[0]!, reason: written.reason }] }
+    }
+    for (const label of written.missingGlyphs) {
+      if (!glyphLabels.includes(label)) glyphLabels.push(label)
+    }
+    return { ok: true, kind: 'single', file: written.file, missingGlyphs: glyphLabels }
+  }
+
   for (const [index, item] of pending.entries()) {
     const name = names[index]!
     deps.onProgress?.({ stage: 'file', done: index, total, label: name })
     const written = await writeOne(recipe, deps, provenance, item.composed, name)
     if (!written.ok) {
-      failures.push({ output: name, reason: written.reason })
+      failures.push({ output: written.output ?? name, reason: written.reason })
       continue
     }
     files.push(written.file)
@@ -159,7 +193,9 @@ export async function exportFiles(
     files,
     missingGlyphs: glyphLabels,
     manifest: manifestFile,
-    archive: { name: archive, mediaType: 'application/zip', bytes: zipOf([...files, manifestFile]) },
+    // The manifest leads the archive (#85 §2.1): a reader that stops after the first entry, or that
+    // streams the file, learns what it is holding before it holds any of it.
+    archive: { name: archive, mediaType: 'application/zip', bytes: zipOf([manifestFile, ...files]) },
   }
 }
 
@@ -188,6 +224,12 @@ function nameAll(
   clock: ExportDeps['clock'],
 ): string[] {
   const date = fileDate(clock.localDate())
+  // A Drawing Set of more than one view is one PDF, and it is named for the set and not for a view:
+  // no single view's name describes the file the other views are in (#85 §1.3).
+  if (recipe.format === 'pdf' && pending.length > 1) {
+    const name = archiveName(snapshot.project.meta.name, date, 'pdf')
+    return pending.map(() => name)
+  }
   const views = uniqueSegments(pending.map((item) => item.composed.viewName))
   return pending.map((item, index) =>
     drawingFileName(
@@ -202,6 +244,67 @@ function nameAll(
       recipe.format,
     ),
   )
+}
+
+/** The orientation the person forced on one page of a set, if they forced one (#85 §1.3). */
+function pageOrientation(recipe: Recipe, view: RecipeViewRef): { orientation?: Orientation } {
+  const held = recipe.pageOrientations?.[viewKey(view)]
+  return held === undefined ? {} : { orientation: held }
+}
+
+/**
+ * A Drawing Set as one PDF: one page per view, in page order, sharing one embedded face.
+ *
+ * The font is subset once for the whole file and the trailer's `/ID` is taken over every page's own
+ * geometry, so a set exported twice from one revision is the same bytes and a set with one page
+ * moved is not. A Plan Image is embedded once however many pages draw it.
+ */
+async function writePdfSet(
+  deps: ExportDeps,
+  provenance: Provenance,
+  pending: readonly Pending[],
+  name: string,
+  labels: readonly string[],
+): Promise<Written> {
+  if (deps.font === undefined) return { ok: false, reason: 'no-font' }
+  const sheets = pending.map((item) => ({ composed: item.composed, ops: flatten(item.composed.list, SHEET_SIZING) }))
+  const images = new Map<string, PdfImage>()
+  for (const [index, sheet] of sheets.entries()) {
+    const held = await pdfImages(sheet.ops, deps)
+    // The set is one file, but the thing that went wrong belongs to one page: a person who is told
+    // `the PDF couldn't be made` cannot act on it, and a person who is told which view can (#61
+    // criterion 6, #85 §2.4).
+    if (held === null) return { ok: false, reason: 'image-format', output: labels[index] }
+    for (const [hash, image] of held) if (!images.has(hash)) images.set(hash, image)
+  }
+  const pdf = await writePdf({
+    pages: sheets.map((sheet) => ({
+      widthMm: sheet.composed.sheet.widthMm,
+      heightMm: sheet.composed.sheet.heightMm,
+      ops: sheet.ops,
+    })),
+    provenance,
+    fontBytes: deps.font.bytes,
+    images,
+    contentHash: await contentHashOf(
+      provenance,
+      sheets.flatMap((sheet) => flatten(sheet.composed.drawing, SHEET_SIZING)),
+    ),
+    when: deps.clock.now(),
+  })
+  // The writer is asked last and answers for every sheet, title block and dimension labels included:
+  // each drawing reports only its own text, and a label the frame carries would otherwise go missing
+  // in silence (#61 criterion 11).
+  const lost: MissingGlyph[] = []
+  for (const glyph of [...pending.flatMap((item) => item.composed.missingGlyphs), ...pdf.missingGlyphs]) {
+    const at = `${glyph.text}\u0000${glyph.chars.join('')}`
+    if (!lost.some((each) => `${each.text}\u0000${each.chars.join('')}` === at)) lost.push(glyph)
+  }
+  return {
+    ok: true,
+    ...glyphNotice(lost),
+    file: { name, mediaType: MEDIA_TYPE.pdf, bytes: pdf.bytes },
+  }
 }
 
 /** One composed view as bytes, or the reason it has none. */
@@ -220,28 +323,6 @@ async function writeOne(
       ok: true,
       ...glyphNotice(composed.missingGlyphs),
       file: { name, mediaType: MEDIA_TYPE.svg, bytes: writeSvg(composed.sheet, composed.list, provenance, uris) },
-    }
-  }
-
-  if (recipe.format === 'pdf') {
-    if (deps.font === undefined) return { ok: false, reason: 'no-font' }
-    const images = await pdfImages(ops, deps)
-    if (images === null) return { ok: false, reason: 'image-format' }
-    const pdf = await writePdf({
-      pages: [{ widthMm: composed.sheet.widthMm, heightMm: composed.sheet.heightMm, ops }],
-      provenance,
-      fontBytes: deps.font.bytes,
-      images,
-      contentHash: await contentHashOf(provenance, flatten(composed.drawing, SHEET_SIZING)),
-      when: deps.clock.now(),
-    })
-    // The writer is asked last and answers for the whole sheet, title block and dimension labels
-    // included: the drawing reports only its own text, and a label the frame carries would otherwise
-    // go missing in silence (#61 criterion 11).
-    return {
-      ok: true,
-      ...glyphNotice([...composed.missingGlyphs, ...pdf.missingGlyphs]),
-      file: { name, mediaType: MEDIA_TYPE.pdf, bytes: pdf.bytes },
     }
   }
 
@@ -358,7 +439,10 @@ export {
 export type { Column, ColumnKind, ListTableId, TableId, TableSpec } from './csv/tables'
 export { CSV_BOM, writeCsv } from './csv/write'
 export type { Cell, CsvRow } from './csv/write'
-export { slug, drawingFileName, archiveName, listFileName, listsArchiveName } from './slug'
+export { slug, drawingFileName, archiveName, listFileName, listsArchiveName, handoffArchiveName } from './slug'
+export { defaultPageOrder, orderedViews, pageOrderOf, viewKey } from './pageOrder'
+export type { SheetPage } from './compose'
+export { SINGLE_PAGE } from './compose'
 export { provenanceOf, provenanceJson } from './provenance'
 export { manifestOf, manifestBytes, zipOf } from './zip'
 export type { Manifest, ManifestFile } from './zip'

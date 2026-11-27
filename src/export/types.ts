@@ -180,6 +180,19 @@ export interface Recipe {
   readonly notes?: NotesSwitches
   /** What the sheets were drawn from, recorded by `provenanceOf` for the file's metadata. */
   readonly composition?: readonly RecordedComposition[]
+  /**
+   * The page order the person set, as view keys (#85 §1.2). Absent is the Project's own order —
+   * Floor display order, then each Floor's view-list order, then Item Detail Views in Item Design
+   * order — which is what every recipe written before Drawing Sets meant, because a single view has
+   * one page and one order.
+   */
+  readonly pageOrder?: readonly string[]
+  /**
+   * The orientation the person forced on one page, by view key (#85 §1.3). Absent for a page means
+   * the recipe's own `orientation`, which is `auto` until they say otherwise: a Drawing Set of a
+   * long Plan and a tall detail wants each page held the way its own drawing suits.
+   */
+  readonly pageOrientations?: Readonly<Partial<Record<string, Orientation>>>
 }
 
 /**
