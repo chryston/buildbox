@@ -354,7 +354,7 @@ describe('the Export dialog', () => {
     expect(screen.getByTestId('export-scale')).toBeInTheDocument()
   })
 
-  it('shows the PNG size only for PNG, and exports one view at a time as PDF', async () => {
+  it('shows the PNG size only for PNG, and lets a PDF hold every view chosen', async () => {
     const { port } = fakePort()
     await open(port)
     expect(screen.queryByTestId('export-png-size')).toBeNull()
@@ -362,8 +362,29 @@ describe('the Export dialog', () => {
     expect(screen.getByTestId('export-png-size')).toHaveValue('2048')
     fireEvent.change(screen.getByTestId('export-format'), { target: { value: 'pdf' } })
     expect(screen.getByTestId('export-notice-privacy')).toBeInTheDocument()
-    expect(screen.getByTestId(`export-view-${viewKey(OTHER)}`)).toBeDisabled()
-    expect(screen.getByText('PDF exports one view at a time.')).toBeInTheDocument()
+    // A Drawing Set (#85 §1.1): PDF no longer takes one view, so the other boxes stay tickable and
+    // the sentence that said otherwise is gone.
+    expect(screen.getByTestId(`export-view-${viewKey(OTHER)}`)).toBeEnabled()
+    expect(screen.queryByText('PDF exports one view at a time.')).toBeNull()
+  })
+
+  it('lists the pages of a set and moves one ahead of another (#85 §1.2)', async () => {
+    const { port, runs } = fakePort()
+    await open(port)
+    fireEvent.change(screen.getByTestId('export-format'), { target: { value: 'pdf' } })
+    expect(screen.queryByTestId('export-page-order')).toBeNull()
+    fireEvent.click(screen.getByTestId(`export-view-${viewKey(OTHER)}`))
+    // The order the ↑/↓ controls are listed in is the order the pages will be drawn in.
+    const pages = (): string[] =>
+      screen
+        .getAllByTestId(/^export-page-up-/)
+        .map((row) => row.getAttribute('data-testid')!.slice('export-page-up-'.length))
+    expect(pages()).toEqual([viewKey(ORIGIN), viewKey(OTHER)])
+    fireEvent.click(screen.getByTestId(`export-page-down-${viewKey(ORIGIN)}`))
+    expect(pages()).toEqual([viewKey(OTHER), viewKey(ORIGIN)])
+    fireEvent.click(screen.getByTestId('export-run'))
+    await waitFor(() => expect(runs).toHaveLength(1))
+    expect(runs[0]!.pageOrder).toEqual([viewKey(OTHER), viewKey(ORIGIN)])
   })
 
   it('blocks an export with no view chosen and says what is missing', async () => {

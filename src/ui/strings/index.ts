@@ -498,9 +498,20 @@ export const STRINGS = {
   exportRunning: 'Exporting…',
   /** Blocking explanations: Export stays disabled and says why in one line. */
   exportNeedViews: 'Choose at least one view to export.',
-  exportPdfSingleView: 'PDF exports one view at a time.',
-  exportScaleNoFit: (denominator: number): string =>
-    `At 1:${denominator} the drawing is bigger than the page.`,
+  /**
+   * A fixed scale that will not hold one particular page (#85 §1.4). The view is named because a
+   * Drawing Set of four views where one is too big for the paper is not a problem with the other
+   * three, and the person needs to know which one to change or untick.
+   */
+  exportScaleNoFit: (denominator: number, view: string): string =>
+    `At 1:${denominator} “${view}” is bigger than the page.`,
+  /** One page of a Drawing Set: which way it is held (#85 §1.3). */
+  exportPageHold: (view: string): string => `How “${view}” is held`,
+  exportPageHoldAuto: 'Auto',
+  exportPageHoldPortrait: 'Portrait',
+  exportPageHoldLandscape: 'Landscape',
+  exportPageUp: (view: string): string => `Move “${view}” up one page`,
+  exportPageDown: (view: string): string => `Move “${view}” down one page`,
   exportScaleNoFitFixes: 'One-click fixes:',
   exportFixScale: (denominator: number): string => `Use 1:${denominator}`,
   exportFixFit: 'Use Fit to page',
