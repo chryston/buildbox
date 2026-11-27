@@ -68,7 +68,7 @@ export interface TableSpec {
 }
 
 /** The tables this build writes. Later issues add rows here, and nowhere else. */
-export type TableId = 'items' | 'cut-list' | 'rooms' | 'walls' | 'openings' | 'beams' | 'skirting' | 'services' | 'placed-items' | 'warnings'
+export type TableId = 'items' | 'cut-list' | 'rooms' | 'walls' | 'openings' | 'beams' | 'skirting' | 'services' | 'placed-items' | 'warnings' | 'comments'
 
 /**
  * A table's columns, in contract order: the header line supplies the file's words, the pairs
@@ -454,6 +454,43 @@ export const WARNINGS_TABLE: TableSpec = {
   ]),
 }
 
+/**
+ * The Comment Register (#83 §4.3).
+ *
+ * Thirteen columns, in this order, and no author: a Comment is the Project's, and a column naming
+ * who wrote it would make the row about the writer. `reference` is the immutable `C-nnn`, so the
+ * file sorts itself and a reader can quote a row back.
+ *
+ * `scope` and `target_type` publish the storage codes — `all_options | existing_model |
+ * design_option` and the seven Anchor kinds — because a CSV is filtered by a program as often as by
+ * an eye, and the panel's words (`All Options`, `Placed Item`) carry spaces a filter has to quote.
+ * `target_label` is the panel's own plain label, so a row and a pin name the same thing.
+ *
+ * There is no `floor_id` or `design_option_id`: the Register is read by a person who has the
+ * Project's names, and #83 §4.3 fixes the columns exactly.
+ */
+const COMMENTS_HEADER =
+  'reference,title,body,status,priority,created_at,updated_at,resolved_at,scope,floor,design_option,target_type,target_label'
+
+export const COMMENTS_TABLE: TableSpec = {
+  id: 'comments',
+  columns: columnsFor(COMMENTS_HEADER, [
+    ['reference', 'id'],
+    ['title', 'text'],
+    ['body', 'text'],
+    ['status', 'enum', ['open', 'resolved']],
+    ['priority', 'enum', ['low', 'normal', 'high']],
+    ['createdAt', 'text'],
+    ['updatedAt', 'text'],
+    ['resolvedAt', 'text'],
+    ['scope', 'enum', ['all_options', 'existing_model', 'design_option']],
+    ['floor', 'text'],
+    ['designOption', 'text'],
+    ['targetType', 'enum', ['project', 'floor', 'design_option', 'item_design', 'entity', 'feature', 'floor_point']],
+    ['targetLabel', 'text'],
+  ]),
+}
+
 /** Every table by name, in the order a ZIP writes them. */
 export const TABLES: Readonly<Record<TableId, TableSpec>> = {
   items: ITEMS_TABLE,
@@ -466,6 +503,7 @@ export const TABLES: Readonly<Record<TableId, TableSpec>> = {
   services: SERVICES_TABLE,
   'placed-items': PLACED_ITEMS_TABLE,
   warnings: WARNINGS_TABLE,
+  comments: COMMENTS_TABLE,
 }
 
 /** The header row, exactly as the file's first line reads. */

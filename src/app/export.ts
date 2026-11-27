@@ -32,6 +32,8 @@ import type {
   ExportResult,
   ExportSnapshot,
   ListsRecipe,
+  ListsSummary,
+  NotesSwitches,
   Rasterizer,
   Recipe,
   RecipeViewRef,
@@ -44,6 +46,7 @@ import type {
   BlockedView,
   ExportMeasurement,
   ExportPort,
+  ExportPreview,
   ExportRunOutcome,
   ExportableView,
   ListsOptions,
@@ -82,7 +85,10 @@ interface RememberedListsRecipe {
   readonly recipe: ListsRecipe
 }
 
-const TABLE_IDS = ['items', 'cut-list'] as const
+// Every table this build writes, so a remembered recipe naming one of them is trusted: a list kept to
+// the two tables of #62 would refuse the recipe of any later issue, and the dialog would forget what
+// the person ticked.
+const TABLE_IDS = ['items', 'cut-list', 'rooms', 'walls', 'openings', 'beams', 'skirting', 'services', 'placed-items', 'warnings', 'comments'] as const
 const RENOVATION_STATES = ['existing', 'demolition', 'proposed'] as const
 
 /**
@@ -110,6 +116,7 @@ function asListsRecipe(value: unknown): ListsRecipe | null {
     return null
   }
   if (scope.itemDesignId !== undefined && typeof scope.itemDesignId !== 'string') return null
+  if (held.includeResolvedComments !== undefined && typeof held.includeResolvedComments !== 'boolean') return null
   return value as ListsRecipe
 }
 
@@ -155,6 +162,19 @@ function asRecipe(value: unknown): Recipe | null {
   if (typeof held.titleBlock !== 'boolean' || typeof held.grid !== 'boolean') return null
   if (held.unit !== 'mm' && held.unit !== 'cm' && held.unit !== 'm') return null
   if (typeof held.precision !== 'number') return null
+  // The three Notes switches (#83 §1): absent is a recipe from before #83 and means the default, so
+  // only a value that is neither absent nor a set of three booleans is a recipe this build cannot run.
+  if (held.notes !== undefined) {
+    const notes = fields(held.notes)
+    if (
+      notes === null
+      || typeof notes.viewAnnotations !== 'boolean'
+      || typeof notes.commentPins !== 'boolean'
+      || typeof notes.includeResolvedPins !== 'boolean'
+    ) {
+      return null
+    }
+  }
   return value as Recipe
 }
 
@@ -397,13 +417,24 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
       return drawingLayerChips(project, savedViewOf(project, ref))
     },
 
-    async composition(ref: RecipeViewRef, toggles: DrawingToggles): Promise<RecordedComposition | null> {
+    async composition(ref: RecipeViewRef, toggles: DrawingToggles, notes?: NotesSwitches): Promise<RecordedComposition | null> {
       const { drawingComposition } = await import('../export')
       const project = deps.session().getSnapshot().project
       const view = savedViewOf(project, ref)
       // An Item Detail View has no layers and no Display: its sheet is one elevation of one design,
       // so the Drawing tab shows no composition block for it rather than an empty one.
-      return view === null ? null : drawingComposition(project, view, view.floorId, toggles).recorded
+      return view === null ? null : drawingComposition(project, view, view.floorId, toggles, notes).recorded
+    },
+
+    async preview(ref: RecipeViewRef, recipe: Recipe): Promise<ExportPreview | null> {
+      // The preview is the file: `composeSheet` is what the Worker and the fallback both call, so
+      // the dialog cannot show a composition the export then declines to draw. The date the title
+      // block prints is today's, which is the date the sheet would carry if it were run now.
+      const { composeSheet } = await import('../export')
+      const composed = composeSheet(snapshotOf(), ref, recipe, deps.clock, deps.buildboxVersion)
+      return composed.ok
+        ? { list: composed.list, widthMm: composed.sheet.widthMm, heightMm: composed.sheet.heightMm }
+        : null
     },
 
     async blocking(refs: readonly RecipeViewRef[]): Promise<BlockedView | null> {
@@ -418,7 +449,11 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
       return null
     },
 
-    async summariseLists(scope: QuantityScope, origin: RecipeViewRef) {
+    async summariseLists(
+      scope: QuantityScope,
+      origin: RecipeViewRef,
+      includeResolvedComments: boolean,
+    ): Promise<ListsSummary> {
       // `listsSummary` is the cheap half of `export` — the derivation, not the writers — and it is
       // still loaded on demand so the first paint never waits for the module. The originating view
       // goes with the scope because the dialog's hidden-in-view count is that view's, not the
@@ -426,7 +461,7 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
       const { listsSummary } = await import('../export')
       const { project } = deps.session().getSnapshot()
       const view = origin.kind === 'plan' ? project.views.find((each) => each.id === origin.viewId) ?? null : null
-      return listsSummary(snapshotOf(), scope, view)
+      return listsSummary(snapshotOf(), scope, view, includeResolvedComments)
     },
 
     async recallLists(key: string): Promise<ListsRecipe | null> {

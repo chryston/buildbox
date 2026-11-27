@@ -432,6 +432,14 @@ export const STRINGS = {
   exportEmptyViewNotice: 'A view with nothing in it still exports, with its title block.',
   /** The Backup is the thing that keeps the work; the dialog points at it and stops. */
   exportBackupLink: 'To keep everything, including images and comments, use Download Backup in the Project Library.',
+  /**
+   * The third group on the Drawing tab (#83 §1), after the temporary layer toggles: what the sheet
+   * has drawn on it that is not geometry. The three chips inside are named by `export`, because the
+   * metadata in the file has to carry the same three words the control did.
+   */
+  exportNotesGroup: 'Notes',
+  /** The preview is a picture, so it gets the sentence a screen reader reads in place of it. */
+  exportPreviewAria: 'Preview of the drawing this recipe will export',
   /** The Lists tab (#62). `Item List` and `Cut List` are the contract's own table names. */
   exportListsGroupTables: 'Tables',
   exportListsGroupScope: 'Scope',
@@ -446,6 +454,14 @@ export const STRINGS = {
   exportListServices: 'Services',
   exportListPlacedItems: 'Placed Items',
   exportListWarnings: 'Warnings List',
+  /** The Comment Register of #83, in the issue's own words — the table's name, not a description. */
+  exportListComments: 'Comment Register',
+  /**
+   * Beside the Register, and only while it is ticked: Resolved Comments are opt-in (#83 §4.1), so
+   * the box that widens the file sits with the table it widens rather than in the Scope group,
+   * where a Renovation State would be and where it would look like it filtered the other tables.
+   */
+  exportListsIncludeResolved: 'Include Resolved Comments',
   /** Why the State and Layer controls go grey: that table is scoped by Floor and option only. */
   exportListsWarningsIgnoreScope: 'Warnings ignore layers and states.',
   /**

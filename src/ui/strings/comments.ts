@@ -22,17 +22,6 @@ export const COMMENT_TARGET_LABELS = {
   floor_point: 'Floor Point',
 } as const satisfies Record<CommentAnchor['kind'], string>
 
-/** The kind word a row leads its Anchor label with, shorter than the filter's name for the same thing. */
-export const COMMENT_KIND_LABELS = {
-  project: 'Project',
-  floor: 'Floor',
-  design_option: 'Design Option',
-  item_design: 'Item Design',
-  entity: 'Placed Item',
-  feature: 'Feature',
-  floor_point: 'Floor Point',
-} as const satisfies Record<CommentAnchor['kind'], string>
-
 /** The status a row and the editor name, and the three the status filter offers. */
 export const COMMENT_STATUS_LABELS: Record<CommentStatus, string> = { open: 'Open', resolved: 'Resolved' }
 export const COMMENT_STATUS_FILTERS = { open: 'Open', resolved: 'Resolved', any: 'Any' } as const

@@ -352,6 +352,8 @@ describe('listsSummary', () => {
       skirting: 0,
       services: 0,
       warnings: 1,
+      // A Comment is no one's quantity: this Project has none, and the Register says so with a 0.
+      comments: 0,
     })
     expect(summary.rows['cut-list']).toBeGreaterThan(0)
     // Counting needs no copy: the sentences are rendered for a file, never for a number.

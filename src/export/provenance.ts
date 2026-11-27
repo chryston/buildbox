@@ -21,20 +21,21 @@ import { drawingComposition } from './composition'
 // drawing and a CSV carry the same number because they read the same constant.
 import { CSV_CONTRACT_VERSION } from './csv/tables'
 import { PRODUCT_NAME } from './strings'
-import type { ExportDeps, ExportSnapshot, ListsRecipe, Recipe, RecipeViewRef, RecordedComposition } from './types'
+import type { ExportDeps, ExportSnapshot, ListsRecipe, NotesSwitches, Recipe, RecipeViewRef, RecordedComposition } from './types'
+import { DEFAULT_NOTES_SWITCHES } from './types'
 import type { Project } from '../domain'
 
 /** What one drawing was drawn from, or nothing for an Item Detail, which has no layers to record. */
-function compositionOf(project: Project, view: RecipeViewRef): RecordedComposition | null {
+function compositionOf(project: Project, view: RecipeViewRef, notes: NotesSwitches | undefined): RecordedComposition | null {
   if (view.kind === 'plan') {
     const planView = project.views.find((each) => each.id === view.viewId)
-    return planView === undefined ? null : drawingComposition(project, planView, planView.floorId, view.toggles).recorded
+    return planView === undefined ? null : drawingComposition(project, planView, planView.floorId, view.toggles, notes).recorded
   }
   if (view.kind === 'elevation') {
     // The Elevation definition rides along with the layer record (#75 criterion 15): the sheet says
     // where the viewer stood, so a drawing whose view line has since moved is still explainable.
     const elevationView = (project.elevationViews ?? []).find((each) => each.id === view.viewId)
-    return elevationView === undefined ? null : drawingComposition(project, elevationView, elevationView.floorId, undefined).recorded
+    return elevationView === undefined ? null : drawingComposition(project, elevationView, elevationView.floorId, undefined, notes).recorded
   }
   return null
 }
@@ -70,8 +71,11 @@ export function provenanceOf(
     'views' in recipe
       ? {
           ...recipe,
+          // The switches the sheet was actually drawn with, always published: a recipe remembered from
+          // before #83 has no `notes` field of its own, and the file still has to say what it shows.
+          notes: recipe.notes ?? DEFAULT_NOTES_SWITCHES,
           composition: recipe.views
-            .map((view) => compositionOf(snapshot.project, view))
+            .map((view) => compositionOf(snapshot.project, view, recipe.notes))
             .filter((each): each is RecordedComposition => each !== null),
         }
       : recipe

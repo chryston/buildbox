@@ -39,6 +39,7 @@ import {
 import type { RenovationState } from '../derive'
 import { viewDesignOptionId, viewRenovationDisplay } from '../domain'
 import { drawingComposition } from './composition'
+import { exportNotes } from './notes'
 import { autoOrientation, fitCheck, fitDenominator, sheetOf } from './fit'
 import type { FitSuggestion, Sheet } from './fit'
 import { formatLength } from './format'
@@ -47,6 +48,7 @@ import { SHEET_SIZING, footerItems, frameItems, furnitureLayer, gridItems, renov
 import { DESIGN_OPTION, DISPLAY_NAME, NOT_TO_SCALE, TITLE_BLOCK, roomLabel, scaleStatement, unitStatement } from './strings'
 import { translateList } from './transform'
 import type { ExportSnapshot, Recipe, RecipeViewRef } from './types'
+import { DEFAULT_NOTES_SWITCHES } from './types'
 
 /** One view, on the sheet it belongs on, in millimetres of paper. */
 export type ComposedSheet =
@@ -111,7 +113,7 @@ function rawDrawing(
     const planView = project.views.find((each) => each.id === view.viewId)
     if (planView === undefined) return { ok: false, reason: 'unknown-view' }
     const floorId = planView.floorId
-    const composition = drawingComposition(project, planView, floorId, view.toggles)
+    const composition = drawingComposition(project, planView, floorId, view.toggles, recipe.notes)
     const drawn = displayProject(project, composition.optionId)
     // The screen's recipe, line for line (#70 §F): the standing geometry comes from the Project with
     // the active Option's demolition records set aside, so a Wall marked for demolition is still
@@ -132,10 +134,15 @@ function rawDrawing(
       project.itemDesigns,
       planView.planViewRange,
     )
-    const { list } = drawFloorView(
+    // The Floor and its Walls, derived once: the drawing scales them into paper millimetres, while the
+    // Notes resolve their Anchors against the unscaled Walls and scale the answer (#83 §2.2) — a scale
+    // is something you apply to a place, not something you ask a question about.
+    const floor = effectiveFloor(drawn, revision, floorId, composition.optionId)
+    const walls = deriveWalls(drawn, floorId, composition.optionId)
+    const { list: painted } = drawFloorView(
       {
-        floor: scaleDerivedFloor(effectiveFloor(drawn, revision, floorId, composition.optionId), shrink),
-        walls: scaleFloorWalls(deriveWalls(drawn, floorId, composition.optionId), shrink),
+        floor: scaleDerivedFloor(floor, shrink),
+        walls: scaleFloorWalls(walls, shrink),
         rooms: scaleFloorRooms(deriveRooms(drawn, floorId, composition.optionId), shrink),
         openings: scaleWallOpenings(
           wallOpenings(
@@ -155,6 +162,30 @@ function rawDrawing(
         formatRoomLabel: roomLabel,
       },
     )
+    // #83 §2: the Annotations of this view and the pins of its Comments ride on the sheet, painted over
+    // the Floor in the order the canvas paints them and gated by the recipe — never by the screen's
+    // overlay switch, which is Display state and has no say about a file.
+    const notes = exportNotes({
+      project,
+      view: planView,
+      optionId: composition.optionId,
+      drawnLayer: composition.drawnLayer,
+      walls,
+      placements: floor.placements,
+      notes: recipe.notes ?? DEFAULT_NOTES_SWITCHES,
+      shrink,
+    })
+    const list = notes === null ? painted : {
+      ...painted,
+      bounds: {
+        x: Math.min(painted.bounds.x, notes.bounds.x),
+        y: Math.min(painted.bounds.y, notes.bounds.y),
+        w: Math.max(painted.bounds.x + painted.bounds.w, notes.bounds.x + notes.bounds.w) - Math.min(painted.bounds.x, notes.bounds.x),
+        h: Math.max(painted.bounds.y + painted.bounds.h, notes.bounds.y + notes.bounds.h) - Math.min(painted.bounds.y, notes.bounds.y),
+      },
+      layers: [...painted.layers, ...notes.layers],
+      missingGlyphs: [...painted.missingGlyphs, ...notes.missingGlyphs],
+    }
     return {
       ok: true,
       drawing: {
@@ -178,7 +209,7 @@ function rawDrawing(
     // The same layer access a Plan View sheet gets (#71 §4): an Elevation View is a saved view like
     // any other, and a sheet that quietly drew what the view hides would be a different drawing from
     // the one on the screen. There are no temporary chips for one yet, so `undefined` is the view.
-    const composition = drawingComposition(project, elevationView, elevationView.floorId, undefined)
+    const composition = drawingComposition(project, elevationView, elevationView.floorId, undefined, recipe.notes)
     const scene = elevationScene(project, elevationView)
     const states = composition.optionId === null
       ? null

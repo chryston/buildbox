@@ -124,10 +124,12 @@ export const TEST_EXPORT_PORT: ExportPort = {
   listsOptions: async () => TEST_LISTS_OPTIONS,
   drawingLayers: async () => [],
   composition: async () => null,
+  preview: async () => null,
   blocking: async () => null,
   summariseLists: async () => ({
     statement: '',
-    rows: { items: 0, 'cut-list': 0, rooms: 0, walls: 0, openings: 0, beams: 0, skirting: 0, services: 0, 'placed-items': 0, warnings: 0 },
+    commentStatement: '',
+    rows: { items: 0, 'cut-list': 0, rooms: 0, walls: 0, openings: 0, beams: 0, skirting: 0, services: 0, 'placed-items': 0, warnings: 0, comments: 0 },
     cutListCapable: false,
     hiddenInView: { count: 0, refs: [] },
   }),

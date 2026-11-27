@@ -16,15 +16,15 @@ import type { ReactNode } from 'react'
 import { notesSessionStore } from './notesSession'
 import type { Comment, CommentPriority, CommentScope, EntityId, Project, SavedViewSettings } from '../../../domain'
 import { COMMENT_SCOPE_ALL, compareCommentReferences, designOptionsOf, isCommentScopeAll } from '../../../domain'
-import { commentIsInContext, commentScopeLabel, effectiveCommentScope, effectiveModel } from '../../../derive'
+import { commentAnchorLabel, commentIsInContext, commentScopeLabel, effectiveCommentScope, effectiveModel } from '../../../derive'
 import { COMMENT_PRIORITY_LABELS, COMMENT_STATUS_FILTERS, COMMENT_STATUS_LABELS, COMMENT_STRINGS, COMMENT_TARGET_LABELS } from '../../strings/comments'
 import { ANNOTATION_STRINGS } from '../../strings/annotations'
 import { formatSince } from '../../library/formatSince'
-import { commentAnchorLabel } from './anchorLabel'
 import { useNotesSession } from './notesSession'
 import { AnnotationsTab } from './AnnotationsTab'
 import type { AnnotationEditPatch } from './AnnotationsTab'
 import { annotationIsInContext } from '../../../derive'
+
 import type { NotesPriorityFilter, NotesStatusFilter, NotesTargetFilter } from './notesSession'
 
 export interface NotesPanelProps {

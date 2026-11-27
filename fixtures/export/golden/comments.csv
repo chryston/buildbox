@@ -1,0 +1,7 @@
+﻿reference,title,body,status,priority,created_at,updated_at,resolved_at,scope,floor,design_option,target_type,target_label
+C-001,Check the ceiling void before ordering,A note on the scene this fixture is drawn for.,open,normal,2026-11-25T09:00:00.000Z,2026-11-25T09:00:00.000Z,,all_options,,,project,Project · Renovation edits
+C-002,Floor level to be confirmed on site,A note on the scene this fixture is drawn for.,open,normal,2026-11-25T09:00:00.000Z,2026-11-25T09:00:00.000Z,,all_options,Floor 1,,floor,Floor · Floor 1
+C-003,Island needs 1000 mm on the sink side,A note on the scene this fixture is drawn for.,open,normal,2026-11-25T09:00:00.000Z,2026-11-25T09:00:00.000Z,,all_options,Floor 1,,floor_point,Floor Point · Floor 1
+C-004,Shift 50 mm for dishwasher,"The dishwasher needs its 50 mm. Move this unit, not the note.",open,high,2026-11-25T09:00:00.000Z,2026-11-25T09:00:00.000Z,,existing_model,Floor 1,,entity,Placed Item · Base 600 #2
+C-006,Radiator on this face,A note on the scene this fixture is drawn for.,open,normal,2026-11-25T09:00:00.000Z,2026-11-25T09:00:00.000Z,,existing_model,Floor 1,,feature,Feature · left face
+C-007,Worktop overhang on the island,A note on the scene this fixture is drawn for.,open,normal,2026-11-25T09:00:00.000Z,2026-11-25T09:00:00.000Z,,existing_model,Floor 1,,entity,Placed Item · Island (custom)

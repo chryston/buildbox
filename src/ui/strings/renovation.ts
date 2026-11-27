@@ -138,8 +138,6 @@ export const RENOVATION_STRINGS = {
    */
   exportLayersStart: (viewName: string): string =>
     `Starts from the saved view. Toggles here are temporary and don't change “${viewName}”.`,
-  /** The chip that has nothing to overlay yet (#80, #81). */
-  exportNotesOverlay: 'Notes overlay',
   /** The collapsible's heading line, verbatim: what is in there is why a repeat export is the same file. */
   exportCompositionHeading: 'Recorded composition (repeat export is deterministic):',
   exportCompositionView: 'View',

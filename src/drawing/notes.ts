@@ -2,9 +2,9 @@
  * The Notes overlay (#80 §7).
  *
  * A pin is screen chrome, exactly like the warning badge in `badges.ts`: it is a second display list
- * keyed by the Comments the caller has already filtered, not a layer of the Floor's own, and **the
- * export never sees this module**. A note is a remark about a building, not a line on a drawing of it,
- * and #84's Comment Register is the surface that prints notes.
+ * keyed by the Comments the caller has already filtered, not a layer of the Floor's own. #83 gave the
+ * sheet the same list: an exported Plan View draws these marks when the recipe asks for them, with a
+ * label beside each dot, because a pin on paper has no tooltip to fall back on.
  *
  * Two marks, because two questions are being answered:
  *
@@ -43,6 +43,13 @@ export interface NotePinSubject {
   readonly tone: NotePinTone
   /** The note's reference: the accessible name of the mark, and the text the pin wears. */
   readonly reference: string
+  /**
+   * The words beside the dot (#83 §3): `C-004 Shift 50 mm for dishwasher · Open`. Only a sheet sets
+   * it — on screen the tooltip answers that question and the disc stays a disc — and the dot stays
+   * exactly where it stood, because a pin that moved to make room for its own label would stop
+   * marking the place it is about.
+   */
+  readonly label?: string | null
 }
 
 /** One placement of an Item Design that has notes: the `✎n` badge's subject. */
@@ -139,11 +146,51 @@ function mark(
 }
 
 /**
+ * A dot that speaks: the disc at the place, a hairline leader, and the reference, the title and the
+ * status in a pill the tone of the disc (#83 §3). The pill is the only part allowed to move, and it
+ * moves to the first free seat the caller found.
+ */
+function labelledMark(
+  id: string,
+  at: { x: number; y: number },
+  r: number,
+  tone: NotePinTone,
+  label: string,
+  pill: Rect,
+  fontSize: number,
+): DisplayItem {
+  const cx = pill.x + pill.w / 2 - at.x
+  const cy = pill.y + pill.h / 2 - at.y
+  return {
+    kind: 'group',
+    ref: { id, role: 'note-pin' },
+    transform: affineTranslate(at.x, at.y),
+    items: [
+      { kind: 'path', segments: lineCommands({ x: 0, y: 0 }, { x: cx, y: cy }), closed: false, style: 'plan-note-leader' },
+      { kind: 'path', segments: roundedRectCommands(pill.x - at.x, pill.y - at.y, pill.w, pill.h, pill.h / 2), closed: true, style: `plan-note-pin-${tone}` as StyleKey },
+      {
+        kind: 'text',
+        text: label,
+        at: { x: cx, y: cy },
+        anchor: 'middle',
+        baseline: 'middle',
+        rotationDeg: 0,
+        role: 'badge',
+        style: 'plan-note-pin-text',
+        layout: layoutText(label, fontSize),
+      },
+      { kind: 'path', segments: roundedRectCommands(-r, -r, 2 * r, 2 * r, r), closed: true, style: `plan-note-pin-${tone}` as StyleKey },
+    ],
+  }
+}
+
+/**
  * The overlay's marks, or `null` when there is nothing to show.
  *
  * `null` rather than an empty list, as `drawWarningBadges` does: a renderer should have nothing to
  * draw rather than an empty `<g>` to notice.
  */
+
 export function drawNotes(
   pins: readonly NotePinSubject[],
   badges: readonly NoteBadgeSubject[],
@@ -160,6 +207,25 @@ export function drawNotes(
   // the free space around it. A pin stands where it stands — it is a point, not a thing with bounds —
   // so it only moves when the seat is taken.
   for (const pin of pins) {
+    if (pin.label !== undefined && pin.label !== null) {
+      // A labelled pin keeps its dot and moves only its pill, so the place it names stays named.
+      const r = notePinRadius(options.sizing)
+      const box = { w: layoutText(pin.label, fontSize).width + fontSize * 1.2, h: fontSize * 1.8 }
+      const seat = { x: pin.at.x - r, y: pin.at.y - r, w: 2 * r, h: 2 * r }
+      const seats = candidates(seat, r + Math.max(box.w, box.h) / 2)
+      const free = seats.find(
+        (one) => !covered({ x: one.x - box.w / 2, y: one.y - box.h / 2, w: box.w, h: box.h }, [...obstacles, ...placed]),
+      )
+      const centre = free ?? (() => {
+        const direction = outward(seat, seats[0]!)
+        return { x: seats[0]!.x + direction.x * box.h, y: seats[0]!.y + direction.y * box.h }
+      })()
+      const pill = { x: centre.x - box.w / 2, y: centre.y - box.h / 2, w: box.w, h: box.h }
+      placed.push(pill)
+      bounds = union(union(bounds, pill), seat)
+      items.push(labelledMark(pin.id, pin.at, r, pin.tone, pin.label, pill, fontSize))
+      continue
+    }
     const r = notePinRadius(options.sizing, pin.reference)
     const seat = { x: pin.at.x - r, y: pin.at.y - r, w: 2 * r, h: 2 * r }
     const fits = !covered(seat, [...obstacles, ...placed])

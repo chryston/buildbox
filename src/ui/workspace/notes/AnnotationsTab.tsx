@@ -12,7 +12,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { notesSessionStore, useNotesSession } from './notesSession'
 import type { NotesAnnotationLayerFilter, NotesAnnotationTypeFilter } from './notesSession'
-import { commentAnchorSubject } from './anchorLabel'
 import type {
   Annotation,
   AnnotationScope,
@@ -35,7 +34,7 @@ import {
   drawingLayersOf,
   endpointIsAnchored,
 } from '../../../domain'
-import { ANNOTATION_UNLAYERED_INK, annotationIsInContext } from '../../../derive'
+import { ANNOTATION_UNLAYERED_INK, annotationIsInContext, commentAnchorSubject } from '../../../derive'
 import { ANNOTATION_STRINGS, ANNOTATION_TYPE_LABELS } from '../../strings/annotations'
 
 /** The patch the editor sends: every field `annotation.edit` can change, whole-style replacement. */

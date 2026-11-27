@@ -14,8 +14,9 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { ExportDialog } from './ExportDialog'
 import { viewKey } from './port'
-import type { BlockedView, ExportPort, ExportRunOutcome, ExportableView, ListsOptions } from './port'
+import type { BlockedView, ExportPort, ExportPreview, ExportRunOutcome, ExportableView, ListsOptions } from './port'
 import type { QuantityScope } from '../../../derive'
+import type { DisplayList } from '../../../drawing'
 import type {
   DrawingLayerChip,
   ExportFailure,
@@ -32,6 +33,22 @@ const OTHER: RecipeViewRef = { kind: 'plan', viewId: 'v-2' }
 /** A 4 m × 3 m Floor: 400 mm wide at 1:10, 40 mm at 1:100, so 1:10 cannot hold A4 and 1:100 can. */
 const BOUNDS = { x: 0, y: 0, w: 4000, h: 3000 }
 
+/**
+ * An A4 landscape sheet with nothing on it (#83 §3).
+ *
+ * The dialog draws whatever list the port hands it and asks nothing of it, so a preview with no
+ * layers is enough to pin that the box is there, that it is asked for again when a switch moves,
+ * and that the switches are the only thing that moved. What the list holds is `composeSheet`'s
+ * business, and the SVG golden tests it byte for byte.
+ */
+const PREVIEW_LIST: DisplayList = {
+  space: 'floor',
+  bounds: { x: 0, y: 0, w: 297, h: 210 },
+  layers: [],
+  missingGlyphs: [],
+}
+const PREVIEW: ExportPreview = { list: PREVIEW_LIST, widthMm: 297, heightMm: 210 }
+
 /** A checkbox, read as the input it is. */
 const checked = (testId: string): boolean => (screen.getByTestId(testId) as HTMLInputElement).checked
 const disabled = (testId: string): boolean => (screen.getByTestId(testId) as HTMLInputElement).disabled
@@ -44,6 +61,8 @@ interface Fake {
   readonly rememberedLists: ListsRecipe[]
   /** Every scope the Lists panel asked about, oldest first: the sentence is asked for, not kept. */
   readonly scopes: QuantityScope[]
+  /** Every recipe the preview was asked to compose, oldest first (#83 §3). */
+  readonly previews: Recipe[]
   setOutcome(outcome: ExportRunOutcome): void
   /** What the Lists tab is told its scope holds; the notices are answers to this. */
   setListsSummary(summary: ListsSummary): void
@@ -78,7 +97,8 @@ const LISTS_LAYERED: ListsOptions = {
 
 const ITEM_SUMMARY: ListsSummary = {
   statement: 'Floor plan · All Floors · Existing only · Existing, Demolition, Proposed · all layers incl. Unlayered',
-  rows: { items: 3, 'cut-list': 0, rooms: 0, walls: 0, openings: 0, beams: 0, skirting: 0, services: 0, 'placed-items': 0, warnings: 0 },
+  commentStatement: 'All Floors · Existing Model only · Open Comments',
+  rows: { items: 3, 'cut-list': 0, rooms: 0, walls: 0, openings: 0, beams: 0, skirting: 0, services: 0, 'placed-items': 0, warnings: 0, comments: 0 },
   cutListCapable: false,
   hiddenInView: { count: 0, refs: [] },
 }
@@ -98,12 +118,15 @@ function fakePort(options?: {
   composition?: RecordedComposition | null
   /** The view whose Display blocks the Drawing export, if one does (#73 §3). */
   blocked?: BlockedView | null
+  /** What the preview answers with; `null` is a recipe that composes no sheet (#83 §3). */
+  preview?: ExportPreview | null
 }): Fake {
   const runs: Recipe[] = []
   const remembered: Recipe[] = []
   const listsRuns: ListsRecipe[] = []
   const rememberedLists: ListsRecipe[] = []
   const scopes: QuantityScope[] = []
+  const previews: Recipe[] = []
   let listsSummary: ListsSummary = options?.listsSummary ?? ITEM_SUMMARY
   let outcome: ExportRunOutcome = { kind: 'cancelled' }
   let resolveRun: ((value: ExportRunOutcome) => void) | null = null
@@ -114,6 +137,7 @@ function fakePort(options?: {
     listsRuns,
     rememberedLists,
     scopes,
+    previews,
     setOutcome(next) {
       outcome = next
       resolveRun?.(next)
@@ -150,6 +174,10 @@ function fakePort(options?: {
       listsOptions: () => Promise.resolve(options?.listsOptions ?? LISTS_FLOORS),
       drawingLayers: () => Promise.resolve(options?.chips ?? []),
       composition: () => Promise.resolve(options?.composition ?? null),
+      preview: (_ref, recipe) => {
+        previews.push(recipe)
+        return Promise.resolve(options?.preview === undefined ? PREVIEW : options.preview)
+      },
       blocking: () => Promise.resolve(options?.blocked ?? null),
       summariseLists: (scope) => {
         scopes.push(scope)
@@ -171,6 +199,21 @@ function fakePort(options?: {
   }
 }
 
+/**
+ * Every answer the dialog asked the port for, landed inside `act`.
+ *
+ * The dialog asks asynchronously — the measurement, the chips, the composition, the preview — so a
+ * test that moved a control has to let the answer arrive before it asserts, or React reports the
+ * update as having happened outside its own scope.
+ */
+async function settle(): Promise<void> {
+  await act(async () => {
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0)
+    })
+  })
+}
+
 async function open(
   port: ExportPort,
   options?: { unsavedChanges?: boolean; onClose?: () => void; origin?: RecipeViewRef },
@@ -189,14 +232,10 @@ async function open(
   // paint. Awaiting the button settles them inside `act` rather than in the middle of the next
   // assertion.
   await screen.findByTestId('export-run')
-  // The Drawing tab also asks the port for its chips, the composition, the Option names and whether
-  // a view blocks the export. All four answer a macrotask later, and they must answer inside `act`
-  // rather than in the middle of the next test's assertions.
-  await act(async () => {
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 0)
-    })
-  })
+  // The Drawing tab also asks the port for its chips, the composition, the preview, the Option names
+  // and whether a view blocks the export. All five answer a macrotask later, and they must answer
+  // inside `act` rather than in the middle of the next test's assertions.
+  await settle()
 }
 
 const RECIPE = (overrides: Partial<Recipe> = {}): Recipe => ({
@@ -511,7 +550,7 @@ describe('the Lists tab', () => {
       listsSummary: {
         ...ITEM_SUMMARY,
         cutListCapable: true,
-        rows: { items: 3, 'cut-list': 6, rooms: 0, walls: 2, openings: 1, beams: 0, skirting: 0, services: 0, 'placed-items': 4, warnings: 3 },
+        rows: { items: 3, 'cut-list': 6, rooms: 0, walls: 2, openings: 1, beams: 0, skirting: 0, services: 0, 'placed-items': 4, warnings: 3, comments: 5 },
       },
     })
     await open(fake.port)
@@ -534,6 +573,7 @@ describe('the Lists tab', () => {
       'export-lists-table-services',
       'export-lists-table-placed-items',
       'export-lists-table-warnings',
+      'export-lists-table-comments',
     ])
     const list = screen.getByTestId('export-lists-tables')
     expect(list).toHaveTextContent('Item List')
@@ -542,13 +582,16 @@ describe('the Lists tab', () => {
     expect(list).toHaveTextContent('Openings')
     expect(list).toHaveTextContent('Placed Items')
     expect(list).toHaveTextContent('Warnings List')
+    expect(list).toHaveTextContent('Comment Register')
     // Nothing new is on by default: the #62 recipe is untouched by the five that arrived.
     expect(checked('export-lists-table-rooms')).toBe(false)
     expect(checked('export-lists-table-warnings')).toBe(false)
+    expect(checked('export-lists-table-comments')).toBe(false)
     expect(screen.getByTestId('export-lists-rows-walls')).toHaveTextContent('2 rows')
     expect(screen.getByTestId('export-lists-rows-openings')).toHaveTextContent('1 row')
     expect(screen.getByTestId('export-lists-rows-placed-items')).toHaveTextContent('4 rows')
     expect(screen.getByTestId('export-lists-rows-warnings')).toHaveTextContent('3 rows')
+    expect(screen.getByTestId('export-lists-rows-comments')).toHaveTextContent('5 rows')
     // Criterion 7: an empty table is an answer beside the checkbox, not a missing one.
     expect(screen.getByTestId('export-lists-rows-rooms')).toHaveTextContent('0 rows')
     expect(screen.getByTestId('export-lists-rows-rooms')).toHaveClass('bb-export-rows-empty')
