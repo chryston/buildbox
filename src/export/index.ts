@@ -228,9 +228,7 @@ async function writeOne(
     const images = await pdfImages(ops, deps)
     if (images === null) return { ok: false, reason: 'image-format' }
     const pdf = await writePdf({
-      widthMm: composed.sheet.widthMm,
-      heightMm: composed.sheet.heightMm,
-      ops,
+      pages: [{ widthMm: composed.sheet.widthMm, heightMm: composed.sheet.heightMm, ops }],
       provenance,
       fontBytes: deps.font.bytes,
       images,
@@ -347,6 +345,8 @@ export type { ListsSummary } from './lists'
 // page is drawn from.
 export { tableModel } from './tableModel'
 export type { CellAlign, TableModel, TableColumn } from './tableModel'
+export { tableSheets, writeTablePdf } from './tablePdf'
+export type { TablePdfInput, TablePdfResult } from './tablePdf'
 export { LENGTH_DP, AREA_DP, ANGLE_DP, INTEGER_DP, formatNumber, neutralise, quote } from './csv/format'
 export {
   CSV_CONTRACT_VERSION,
