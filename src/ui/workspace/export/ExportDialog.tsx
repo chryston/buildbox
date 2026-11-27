@@ -18,13 +18,15 @@
  */
 import { useEffect, useState } from 'react'
 import { Modal } from '../../library/Modal'
+import { DisplayListSvg } from '../../drawing/DisplayListSvg'
 import { STRINGS } from '../../strings'
 import { RENOVATION_STRINGS } from '../../strings/renovation'
 import { displayLabel } from '../renovation/displayTheme'
-import { fitCheck, notesStatement, suggestionsFor } from '../../../export'
+import { DEFAULT_NOTES_SWITCHES, NOTES_SWITCH_LABELS, SHEET_SIZING, fitCheck, notesStatement, suggestionsFor } from '../../../export'
 import type {
   DrawingLayerChip,
   ExportProgress,
+  NotesSwitches,
   Orientation,
   Recipe,
   RecipeViewRef,
@@ -34,7 +36,7 @@ import type {
 
 import { ListsPanel } from './ListsPanel'
 import { viewKey } from './port'
-import type { BlockedView, ExportPort, ExportRunOutcome } from './port'
+import type { BlockedView, ExportPort, ExportPreview, ExportRunOutcome } from './port'
 import type { Rect } from '../../../derive'
 import type { DisplayUnit } from '../../../domain'
 import type { ReactNode } from 'react'
@@ -104,6 +106,9 @@ export const ExportDialog = ({
     grid: false,
     unit,
     precision,
+    // Annotations on, pins off, Resolved pins off (#83 criterion 2) — the contract's defaults, and
+    // the answer for a device that has never exported this view.
+    notes: DEFAULT_NOTES_SWITCHES,
   })
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<ExportProgress | null>(null)
@@ -118,7 +123,7 @@ export const ExportDialog = ({
     let alive = true
     void port.recall(key).then((remembered) => {
       if (!alive || remembered === null) return
-      setRecipe({ ...remembered, views: [origin], unit, precision })
+      setRecipe({ ...remembered, views: [origin], unit, precision, notes: remembered.notes ?? DEFAULT_NOTES_SWITCHES })
     })
     return () => {
       alive = false
@@ -202,18 +207,63 @@ export const ExportDialog = ({
     })
   }
 
+  // ---- the Notes switches (#83 §1)
+  //
+  // Three chips whose only effect is `recipe.notes`. The saved view, the on-screen Notes overlay, the
+  // revision and the history are untouched by them, which is not a rule this file has to enforce —
+  // the dialog holds no Project and dispatches nothing — but the switches are the reason the rule is
+  // worth stating: a person is allowed to want a sheet with pins on a drawing they look at without
+  // pins. `export` reads the switches from the recipe and from nowhere else, which is what lets the
+  // same recipe draw the same file a month later.
+  const notes = recipe.notes ?? DEFAULT_NOTES_SWITCHES
+  const setNotes = (next: Partial<NotesSwitches>): void => {
+    const held = { ...notes, ...next }
+    // Pins off takes `include Resolved pins` with it (#83 §1.1): a recipe that asked for Resolved
+    // pins while asking for no pins describes a sheet that has nothing to label `· Resolved`.
+    patch({ notes: held.commentPins ? held : { ...held, includeResolvedPins: false } })
+  }
+
   const togglesKey = JSON.stringify(toggles ?? null)
+  const notesKey = JSON.stringify(notes)
   const [composition, setComposition] = useState<RecordedComposition | null>(null)
   useEffect(() => {
     let alive = true
-    void port.composition(origin, toggles ?? {}).then((next) => {
+    void port.composition(origin, toggles ?? {}, notes).then((next) => {
       if (alive) setComposition(next)
     })
     return () => {
       alive = false
     }
-    // The toggles are keyed by their own text: every chip replaces the object.
-  }, [port, origin, togglesKey])
+    // The toggles and the switches are keyed by their own text: every chip replaces the object.
+  }, [port, origin, togglesKey, notesKey])
+
+  // The preview is the file rather than an impression of it: `preview` hands back the very display
+  // list `composeSheet` gives the Worker, sheet furniture included, so every switch, layer chip and
+  // scope change redraws what the download would hold (#83 §3).
+  //
+  // Keyed by the fields the sheet is actually drawn from — the view, the sheet, the scale, the title
+  // block, the grid and the switches. Format, PNG size, units, precision and which *other* views are
+  // ticked move no pixel of it, and composing a whole sheet to find that out again is not free.
+  const previewRef = originRef ?? origin
+  const previewKey = JSON.stringify([
+    previewRef,
+    recipe.pageSize,
+    recipe.orientation,
+    recipe.scale,
+    recipe.titleBlock,
+    recipe.grid,
+    recipe.notes,
+  ])
+  const [preview, setPreview] = useState<ExportPreview | null>(null)
+  useEffect(() => {
+    let alive = true
+    void port.preview(previewRef, recipe).then((next) => {
+      if (alive) setPreview(next)
+    })
+    return () => {
+      alive = false
+    }
+  }, [port, previewKey])
 
   // The Option names are Project data, so the composition block reads them from the same place the
   // Lists tab does rather than printing an ID a customer cannot match to anything.
@@ -363,11 +413,6 @@ export const ExportDialog = ({
                     <span>{chip.name}</span>
                   </label>
                 ))}
-                {/* Nothing to overlay until #80 and #81 land, so the chip is there and cannot be moved. */}
-                <label>
-                  <input type="checkbox" data-testid="export-layer-notes" checked={false} disabled />
-                  <span>{RENOVATION_STRINGS.exportNotesOverlay}</span>
-                </label>
               </div>
               {composition !== null && (
                 <details data-testid="export-composition">
@@ -410,6 +455,68 @@ export const ExportDialog = ({
               )}
             </fieldset>
           )}
+
+          <fieldset disabled={busy}>
+            <legend>{STRINGS.exportNotesGroup}</legend>
+            <div className="bb-export-chips" data-testid="export-notes-switches">
+              <label>
+                <input
+                  type="checkbox"
+                  data-testid="export-notes-annotations"
+                  checked={notes.viewAnnotations}
+                  onChange={(event) => {
+                    setNotes({ viewAnnotations: event.target.checked })
+                  }}
+                />
+                <span>{NOTES_SWITCH_LABELS.viewAnnotations}</span>
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  data-testid="export-notes-pins"
+                  checked={notes.commentPins}
+                  onChange={(event) => {
+                    setNotes({ commentPins: event.target.checked })
+                  }}
+                />
+                <span>{NOTES_SWITCH_LABELS.commentPins}</span>
+              </label>
+              <label>
+                {/* Disabled while there are no pins (#83 §1.1): the switch decides what a pin says,
+                    and with no pins it decides nothing. */}
+                <input
+                  type="checkbox"
+                  data-testid="export-notes-resolved"
+                  checked={notes.includeResolvedPins}
+                  disabled={!notes.commentPins}
+                  onChange={(event) => {
+                    setNotes({ includeResolvedPins: event.target.checked })
+                  }}
+                />
+                <span>{NOTES_SWITCH_LABELS.includeResolvedPins}</span>
+              </label>
+            </div>
+            {preview !== null && (
+              // The sheet this recipe would write, drawn from the same display list the Worker
+              // serialises (#83 §3). The `viewBox` is the whole sheet, so the preview crops nothing
+              // the file keeps and shows nothing the file loses.
+              <div className="bb-export-preview" data-testid="export-preview">
+                <svg
+                  data-testid="export-preview-svg"
+                  viewBox={`0 0 ${preview.widthMm} ${preview.heightMm}`}
+                  role="img"
+                  aria-label={STRINGS.exportPreviewAria}
+                >
+                  <DisplayListSvg
+                    list={preview.list}
+                    sizing={SHEET_SIZING}
+                    textSpace="list"
+                    resolveAsset={() => null}
+                  />
+                </svg>
+              </div>
+            )}
+          </fieldset>
 
           <fieldset disabled={busy}>
             <legend>{STRINGS.exportGroupFiles}</legend>

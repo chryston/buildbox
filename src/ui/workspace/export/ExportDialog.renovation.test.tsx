@@ -13,6 +13,7 @@ import type {
   DrawingToggles,
   ListsRecipe,
   ListsSummary,
+  NotesSwitches,
   Recipe,
   RecipeViewRef,
   RecordedComposition,
@@ -111,7 +112,8 @@ function portFor(answers: Answers = {}): {
     },
     listsOptions: () => Promise.resolve(answers.listsOptions ?? OPTIONS),
     drawingLayers: () => Promise.resolve(answers.chips ?? CHIPS),
-    composition: (_ref, toggles) => Promise.resolve(record(answers.composition ?? COMPOSITION, toggles)),
+    composition: (_ref, toggles, notes) => Promise.resolve(record(answers.composition ?? COMPOSITION, toggles, notes)),
+    preview: () => Promise.resolve(null),
     blocking: () => Promise.resolve(answers.blocked ?? null),
     summariseLists: () => Promise.resolve(answers.summary ?? SUMMARY),
     recallLists: () => Promise.resolve(null),
@@ -125,11 +127,25 @@ function portFor(answers: Answers = {}): {
   return { port, runs, listsRuns, saved, views }
 }
 
-/** What the composition would be with these toggles — the same answer the writer would record. */
-function record(base: RecordedComposition, toggles: DrawingToggles): RecordedComposition {
-  if (toggles.layers === undefined) return base
-  const kept = base.layer_order.filter((layer) => toggles.layers?.includes(layer.id))
-  return { ...base, included_layers: kept }
+/** What the composition would be with these toggles and switches — the same answer the writer records. */
+function record(base: RecordedComposition, toggles: DrawingToggles, notes?: NotesSwitches): RecordedComposition {
+  const included =
+    toggles.layers === undefined ? base.included_layers : base.layer_order.filter((layer) => toggles.layers?.includes(layer.id))
+  // The switches are recorded in the file's own snake_case, because the block's whole purpose is to
+  // say what the metadata will say (#83 §8).
+  return {
+    ...base,
+    included_layers: included,
+    ...(notes === undefined
+      ? {}
+      : {
+          notes: {
+            view_annotations: notes.viewAnnotations,
+            comment_pins: notes.commentPins,
+            include_resolved_pins: notes.includeResolvedPins,
+          },
+        }),
+  }
 }
 
 const checked = (testId: string): boolean => (screen.getByTestId(testId) as HTMLInputElement).checked
@@ -179,8 +195,6 @@ describe('the Export dialog with renovation on', () => {
     expect(checked('export-layer-l-1')).toBe(true)
     expect(checked('export-layer-l-2')).toBe(false)
     expect(checked('export-layer-unlayered')).toBe(true)
-    // The chip that has nothing to overlay yet is there and cannot be moved (#80, #81).
-    expect(disabled('export-layer-notes')).toBe(true)
 
     fireEvent.click(screen.getByTestId('export-layer-l-2'))
     expect(checked('export-layer-l-2')).toBe(true)

@@ -26,6 +26,7 @@ import type {
   RecordedComposition,
 } from '../../../export'
 import type { RenovationDisplay } from '../../../domain'
+import type { DisplayList } from '../../../drawing'
 import type { QuantityScope, Rect } from '../../../derive'
 
 /** One view the picker can offer, already named the way the Project names it. */
@@ -54,6 +55,20 @@ export type ExportRunOutcome =
 export interface ExportMeasurement {
   /** The drawing's bounds in model millimetres, or `null` when the view holds nothing. */
   readonly bounds: Rect | null
+}
+
+/**
+ * The composed sheet at preview size (#83 §3).
+ *
+ * It is the same `DisplayList` the Worker serialises into the SVG — `composeSheet`'s own answer,
+ * sheet furniture and all — so the dialog draws the file rather than an impression of it. The sheet
+ * size comes with it because the preview's `viewBox` is the sheet: a preview that cropped the frame
+ * would be showing a drawing nobody is about to get.
+ */
+export interface ExportPreview {
+  readonly list: DisplayList
+  readonly widthMm: number
+  readonly heightMm: number
 }
 
 /** The stable key a recipe is remembered under: one per Project and saved view. */
@@ -122,6 +137,12 @@ export interface ExportPort {
    * block shows and what the file's metadata will carry. Asynchronous because it is `export`'s.
    */
   composition(ref: RecipeViewRef, toggles: DrawingToggles, notes?: NotesSwitches): Promise<RecordedComposition | null>
+  /**
+   * The sheet this recipe would write for this view, as the display list the file is drawn from
+   * (#83 §3), or `null` when the recipe writes no sheet — an empty selection, a fixed scale that
+   * will not fit. Asynchronous for the same reason as `composition`: `composeSheet` is `export`'s.
+   */
+  preview(ref: RecipeViewRef, recipe: Recipe): Promise<ExportPreview | null>
   /**
    * The first selected view whose Drawing export is blocked (#73 §3), or `null`. The Lists tab is
    * never blocked: its scope is chosen here and never inherited from a view.

@@ -88,6 +88,7 @@ export {
   type BlockedView,
   type ExportMeasurement,
   type ExportPort,
+  type ExportPreview,
   type ListsOptions,
   type ListsChoice,
   type ExportRunOutcome,

@@ -124,6 +124,7 @@ export const TEST_EXPORT_PORT: ExportPort = {
   listsOptions: async () => TEST_LISTS_OPTIONS,
   drawingLayers: async () => [],
   composition: async () => null,
+  preview: async () => null,
   blocking: async () => null,
   summariseLists: async () => ({
     statement: '',

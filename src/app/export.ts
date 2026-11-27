@@ -46,6 +46,7 @@ import type {
   BlockedView,
   ExportMeasurement,
   ExportPort,
+  ExportPreview,
   ExportRunOutcome,
   ExportableView,
   ListsOptions,
@@ -423,6 +424,17 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
       // An Item Detail View has no layers and no Display: its sheet is one elevation of one design,
       // so the Drawing tab shows no composition block for it rather than an empty one.
       return view === null ? null : drawingComposition(project, view, view.floorId, toggles, notes).recorded
+    },
+
+    async preview(ref: RecipeViewRef, recipe: Recipe): Promise<ExportPreview | null> {
+      // The preview is the file: `composeSheet` is what the Worker and the fallback both call, so
+      // the dialog cannot show a composition the export then declines to draw. The date the title
+      // block prints is today's, which is the date the sheet would carry if it were run now.
+      const { composeSheet } = await import('../export')
+      const composed = composeSheet(snapshotOf(), ref, recipe, deps.clock, deps.buildboxVersion)
+      return composed.ok
+        ? { list: composed.list, widthMm: composed.sheet.widthMm, heightMm: composed.sheet.heightMm }
+        : null
     },
 
     async blocking(refs: readonly RecipeViewRef[]): Promise<BlockedView | null> {
