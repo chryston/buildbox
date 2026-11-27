@@ -66,7 +66,8 @@ export interface ExportWorkerAsset {
  * the main thread for each image as it came to it would serialise the Asset Store reads behind the
  * drawing, and a Project's images are a few megabytes at worst. They are copied, never transferred:
  * the caller may still need them for the main-thread fallback, and a detached buffer would arrive
- * there empty. The lists' half carries a scope and nothing else.
+ * there empty. The lists' half carries a scope, and the same face when one of its tables is asked
+ * for as a printed table (#84 §3.1) — a CSV needs nothing.
  */
 export type ExportWorkerJob =
   | {
@@ -75,7 +76,7 @@ export type ExportWorkerJob =
       readonly font?: Uint8Array
       readonly assets: readonly ExportWorkerAsset[]
     }
-  | { readonly kind: 'lists'; readonly recipe: ListsRecipe }
+  | { readonly kind: 'lists'; readonly recipe: ListsRecipe; readonly font?: Uint8Array }
 
 /** One export request. */
 export interface ExportRequest {
@@ -105,7 +106,14 @@ scope.onmessage = (event) => {
   }
   const clock = { now: () => deps.instant, localDate: () => deps.localDay }
   const run = (): Promise<ExportResult> => {
-    if (job.kind === 'lists') return exportLists(snapshot, job.recipe, { ...deps, clock, onProgress })
+    if (job.kind === 'lists') {
+      return exportLists(snapshot, job.recipe, {
+        ...deps,
+        clock,
+        onProgress,
+        ...(job.font === undefined ? {} : { font: { bytes: job.font } }),
+      })
+    }
     const rasterizer = createRasterizer() ?? undefined
     const byHash = new Map(job.assets.map((asset) => [asset.sha256, asset]))
     return exportFiles(snapshot, job.recipe, {

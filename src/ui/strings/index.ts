@@ -462,6 +462,19 @@ export const STRINGS = {
    * where a Renovation State would be and where it would look like it filtered the other tables.
    */
   exportListsIncludeResolved: 'Include Resolved Comments',
+  /**
+   * The shape each table takes in the download (#84 §3.1). Only the three lists offer it: the eight
+   * element tables have no column layout yet, so for them the question does not arise.
+   */
+  exportListsGroupFormat: 'Format',
+  exportListsFormatCsv: 'CSV',
+  exportListsFormatPdf: 'PDF',
+  exportListsFormatBoth: 'CSV and PDF',
+  /**
+   * Which sheet a printed table starts on (#84 §3.2). The page turns itself when the columns will not
+   * fit the tall sheet, so this is the paper, not the direction.
+   */
+  exportListsPageSize: 'PDF page size',
   /** Why the State and Layer controls go grey: that table is scoped by Floor and option only. */
   exportListsWarningsIgnoreScope: 'Warnings ignore layers and states.',
   /**

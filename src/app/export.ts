@@ -91,6 +91,14 @@ interface RememberedListsRecipe {
 const TABLE_IDS = ['items', 'cut-list', 'rooms', 'walls', 'openings', 'beams', 'skirting', 'services', 'placed-items', 'warnings', 'comments'] as const
 const RENOVATION_STATES = ['existing', 'demolition', 'proposed'] as const
 
+const LIST_FORMATS = ['csv', 'pdf', 'both'] as const
+const PRINTED_TABLES = ['items', 'cut-list', 'comments'] as const
+
+/** Does this recipe ask for any table as a printed table? Only then does the run need the face. */
+function wantsPrintedTable(recipe: ListsRecipe): boolean {
+  return Object.values(recipe.formats ?? {}).some((format) => format === 'pdf' || format === 'both')
+}
+
 /**
  * Is this the shape of a lists recipe?
  *
@@ -117,6 +125,17 @@ function asListsRecipe(value: unknown): ListsRecipe | null {
   }
   if (scope.itemDesignId !== undefined && typeof scope.itemDesignId !== 'string') return null
   if (held.includeResolvedComments !== undefined && typeof held.includeResolvedComments !== 'boolean') return null
+  // #84: a remembered format for a table this build cannot print, or a page size it has no sheet for,
+  // is a recipe from a build this one has not met — the whole recipe is ignored, as the rule above says.
+  if (held.formats !== undefined) {
+    const formats = fields(held.formats)
+    if (formats === null) return null
+    for (const [table, format] of Object.entries(formats)) {
+      if (!oneOf(table, PRINTED_TABLES)) return null
+      if (!oneOf(format, LIST_FORMATS)) return null
+    }
+  }
+  if (held.pageSize !== undefined && !oneOf(held.pageSize, PAGE_SIZES)) return null
   return value as ListsRecipe
 }
 
@@ -258,7 +277,12 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
     const { exportFiles, exportLists } = await import('../export')
     const clock = { now: () => request.deps.instant, localDate: () => request.deps.localDay }
     if (request.job.kind === 'lists') {
-      return exportLists(request.snapshot, request.job.recipe, { ...request.deps, clock, onProgress })
+      return exportLists(request.snapshot, request.job.recipe, {
+        ...request.deps,
+        clock,
+        onProgress,
+        ...(request.job.font === undefined ? {} : { font: { bytes: request.job.font } }),
+      })
     }
     if (mainThread === null) mainThread = createRasterizer() ?? null
     const lookup = new Map(request.job.assets.map((one) => [one.sha256, one]))
@@ -494,7 +518,7 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
           unsavedChanges,
           warningMessages: sentences,
         },
-        job: { kind: 'lists', recipe },
+        job: { kind: 'lists', recipe, ...(wantsPrintedTable(recipe) ? { font: await loadFont() } : {}) },
       }
       return runJob(request, onProgress, () => runHere(request, onProgress))
     },

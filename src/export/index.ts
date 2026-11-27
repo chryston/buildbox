@@ -377,6 +377,7 @@ export type {
   ExportResult,
   ExportSnapshot,
   ListsRecipe,
+  ListFormat,
   NotesSwitches,
   Orientation,
   OrientationSetting,

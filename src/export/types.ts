@@ -9,7 +9,7 @@
 
 import type { QuantityScope } from '../derive'
 import type { DisplayUnit, EntityId, Point2, Project, RenovationDisplay } from '../domain'
-import type { TableId } from './csv/tables'
+import type { ListTableId, TableId } from './csv/tables'
 
 /** The three formats #61 writes. One export writes one of them. */
 export type DrawingFormat = 'svg' | 'png' | 'pdf'
@@ -198,7 +198,22 @@ export interface ListsRecipe {
    * only the Register: no other table has a status to hide.
    */
   readonly includeResolvedComments?: boolean
+  /**
+   * What shape each table takes in the download (#84 §3.1). Absent means `csv`, which is what every
+   * recipe written before #84 meant; a recipe that says nothing about a table asks for its CSV. Only
+   * the three lists can be printed: the eight element tables have no column layout yet, so a recipe
+   * cannot ask for their PDF.
+   */
+  readonly formats?: Readonly<Partial<Record<ListTableId, ListFormat>>>
+  /**
+   * The paper a printed table is laid out on (#84 §3.2). Absent means A4. The page still turns itself
+   * when the columns will not fit the tall sheet; this only chooses which sheet to start from.
+   */
+  readonly pageSize?: PageSize
 }
+
+/** The shape one table takes in the download: its rows as a file, as a printed table, or as both. */
+export type ListFormat = 'csv' | 'pdf' | 'both'
 
 /** The Project as it was when Export was pressed, and the revision those bytes are. */
 export interface ExportSnapshot {
