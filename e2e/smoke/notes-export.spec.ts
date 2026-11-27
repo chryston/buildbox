@@ -26,6 +26,21 @@ const seed = JSON.parse(
 const projectName = seed.library.find((record) => record.id === seed.projects[0]!.id)!.name
 const projectId = seed.projects[0]!.id
 
+/** Every table the Lists tab offers, in the order it lists them. */
+const LIST_TABLE_IDS = [
+  'items',
+  'cut-list',
+  'rooms',
+  'walls',
+  'openings',
+  'beams',
+  'skirting',
+  'services',
+  'placed-items',
+  'warnings',
+  'comments',
+] as const
+
 /** C-004's body. A pin shows reference, title and status; this is the sentence that proves it does not. */
 const C004_BODY = 'The dishwasher needs its 50 mm. Move this unit, not the note.'
 
@@ -157,9 +172,13 @@ test.describe('Comment Register (#83)', () => {
     const table = page.getByTestId('export-lists-table-comments')
     // One table only: a bare CSV is the file whose header and name this spec reads, and the dialog
     // refuses two tables into one CSV anyway.
-    const tables = page.getByTestId(/^export-lists-table-/)
-    for (let i = 0, n = await tables.count(); i < n; i += 1) {
-      const box = tables.nth(i)
+    //
+    // Each box is addressed by its own id rather than by walking the list positionally: unchecking a
+    // table re-seeds the Renovation States and refetches the row counts, and a re-render can move the
+    // element a stale index was pointing at — which then leaves a second table ticked and the download
+    // is a ZIP instead of the one CSV this spec reads.
+    for (const id of LIST_TABLE_IDS) {
+      const box = page.getByTestId(`export-lists-table-${id}`)
       if (await box.isChecked()) await box.uncheck()
     }
     await table.check()

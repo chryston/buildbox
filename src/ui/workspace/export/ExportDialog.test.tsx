@@ -760,4 +760,80 @@ describe('the Lists tab', () => {
     expect(screen.getByTestId('export-lists-failed')).toHaveTextContent('Kitchen_items_20261120.csv')
     expect(onClose).not.toHaveBeenCalled()
   })
+
+  it('asks for the shape and the paper it was shown, and remembers both', async () => {
+    const fake = fakePort()
+    const onClose = vi.fn()
+    await open(fake.port, { onClose })
+    await openLists()
+
+    // The question is asked only of the three tables with a printed form; the eight element tables
+    // have no column layout, so their row carries no choice at all.
+    expect(screen.getByTestId('export-lists-format-items')).toBeInTheDocument()
+    expect(screen.queryByTestId('export-lists-format-rooms')).toBeNull()
+    // Nothing is printed yet, so the paper is not asked about either.
+    expect(screen.queryByTestId('export-lists-page-size')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('export-lists-format-items-pdf'))
+    expect(screen.getByTestId('export-lists-page-size')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('export-lists-page-size-A3'))
+    expect(screen.getByTestId('export-lists-format-items-pdf')).toBeChecked()
+
+    fireEvent.click(screen.getByTestId('export-lists-run'))
+    await waitFor(() => expect(fake.listsRuns).toHaveLength(1))
+    expect(fake.listsRuns[0]?.formats).toEqual({ items: 'pdf' })
+    expect(fake.listsRuns[0]?.pageSize).toBe('A3')
+    await waitFor(() => expect(fake.rememberedLists).toHaveLength(1))
+    expect(fake.rememberedLists[0]?.formats).toEqual({ items: 'pdf' })
+    expect(fake.rememberedLists[0]?.pageSize).toBe('A3')
+  })
+
+  it('opens on the shape and the paper this view was last exported with', async () => {
+    const fake = fakePort({
+      rememberedLists: {
+        tables: ['items'],
+        scope: {
+          floorIds: ['floor-1'],
+          designOptionIds: 'existing-only',
+          renovationStates: ['existing', 'demolition', 'proposed'],
+          drawingLayers: 'all',
+        },
+        formats: { items: 'both' },
+        pageSize: 'A3',
+      },
+    })
+    await open(fake.port)
+    await openLists()
+    expect(screen.getByTestId('export-lists-format-items-both')).toBeChecked()
+    expect(screen.getByTestId('export-lists-page-size-A3')).toBeChecked()
+  })
+
+  it('says which labels the face had no glyph for, and keeps the dialog open', async () => {
+    const fake = fakePort()
+    const onClose = vi.fn()
+    await open(fake.port, { onClose })
+    await openLists()
+    fireEvent.click(screen.getByTestId('export-lists-format-items-pdf'))
+    fireEvent.click(screen.getByTestId('export-lists-run'))
+    await waitFor(() => expect(fake.listsRuns).toHaveLength(1))
+
+    // The file was written: the notice sits beside the download rather than replacing it, so the
+    // person learns about the boxes without opening the PDF to find them (#84 §3.7).
+    fake.setOutcome({ kind: 'downloaded', files: 1, missingGlyphs: ['C-012 title', 'Item Design “書櫃”'] })
+
+    await waitFor(() => expect(screen.getByTestId('export-lists-notice-glyphs')).toBeInTheDocument())
+    expect(screen.getByTestId('export-lists-notice-glyphs')).toHaveTextContent('書櫃')
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('closes on a download with nothing to report', async () => {
+    const fake = fakePort()
+    const onClose = vi.fn()
+    await open(fake.port, { onClose })
+    await openLists()
+    fireEvent.click(screen.getByTestId('export-lists-run'))
+    await waitFor(() => expect(fake.listsRuns).toHaveLength(1))
+    fake.setOutcome({ kind: 'downloaded', files: 2, missingGlyphs: [] })
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+  })
 })
