@@ -21,6 +21,7 @@ import type { QuantityScope } from '../derive'
 import type { PlanView } from '../domain'
 
 import { sha256Hex } from '../lib'
+import { commentRegisterRows, commentScopeStatement } from './comments'
 import { TABLES } from './csv/tables'
 import type { TableId } from './csv/tables'
 import { writeCsv } from './csv/write'
@@ -42,6 +43,12 @@ export const CSV_MEDIA_TYPE = 'text/csv'
 export interface ListsSummary {
   /** The plain-words scope statement, updated live. */
   readonly statement: string
+  /**
+   * The Comment Register's own scope line (#83 §4.2): Floors · Design Options · status. It is not
+   * `statement`, because Renovation States and Drawing Layers filter no Comment, and a sentence
+   * naming them would promise a filter the Register does not apply.
+   */
+  readonly commentStatement: string
   /** Rows each table would hold for this scope; `0` is what the dialog calls `0 rows`. */
   readonly rows: Readonly<Record<TableId, number>>
   /** Whether a design with a cut list is in scope at all, which decides the Cut List checkbox. */
@@ -77,6 +84,7 @@ export function listsSummary(
   snapshot: ExportSnapshot,
   scope: QuantityScope,
   view: PlanView | null,
+  includeResolvedComments = false,
 ): ListsSummary {
   const counted = quantities(snapshot.project, snapshot.revision, scope)
   // The five #68 tables are derived here for their row counts alone: a count never depends on the
@@ -84,6 +92,7 @@ export function listsSummary(
   const at = deriveTables(snapshot.project, scope, { warningMessages: null })
   return {
     statement: describeScope(scope, snapshot.project),
+    commentStatement: commentScopeStatement(snapshot.project, scope, includeResolvedComments),
     rows: {
       items: counted.items.length,
       'cut-list': counted.cuts.length,
@@ -95,6 +104,7 @@ export function listsSummary(
       services: at.services.length,
       'placed-items': at.placedItems.length,
       warnings: at.warnings.length,
+      comments: commentRegisterRows(snapshot.project, scope, includeResolvedComments).length,
     },
     cutListCapable: cutListCapable(snapshot.project, snapshot.revision, scope),
     // #73 §2: the scope decides the rows and the view decides what a person can see, so the dialog
@@ -142,6 +152,9 @@ export async function exportLists(
   // are wired up here fails by name: the `id === 'items' ? items : cuts` this replaces would have
   // written Cut List rows into a `rooms.csv` the moment a third table appeared (#68).
   const rowsOf: Partial<Record<TableId, readonly CsvRow[]>> = { items: counted.items, 'cut-list': counted.cuts }
+  if (tables.includes('comments')) {
+    rowsOf.comments = commentRegisterRows(snapshot.project, recipe.scope, recipe.includeResolvedComments === true)
+  }
   if (tables.some((id) => id !== 'items' && id !== 'cut-list')) {
     const at = deriveTables(snapshot.project, recipe.scope, { warningMessages: deps.warningMessages ?? null })
     rowsOf.rooms = at.rooms

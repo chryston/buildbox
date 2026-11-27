@@ -446,6 +446,14 @@ export const STRINGS = {
   exportListServices: 'Services',
   exportListPlacedItems: 'Placed Items',
   exportListWarnings: 'Warnings List',
+  /** The Comment Register of #83, in the issue's own words — the table's name, not a description. */
+  exportListComments: 'Comment Register',
+  /**
+   * Beside the Register, and only while it is ticked: Resolved Comments are opt-in (#83 §4.1), so
+   * the box that widens the file sits with the table it widens rather than in the Scope group,
+   * where a Renovation State would be and where it would look like it filtered the other tables.
+   */
+  exportListsIncludeResolved: 'Include Resolved Comments',
   /** Why the State and Layer controls go grey: that table is scoped by Floor and option only. */
   exportListsWarningsIgnoreScope: 'Warnings ignore layers and states.',
   /**

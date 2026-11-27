@@ -164,6 +164,9 @@ export const SCOPE = {
   existingModelOnly: 'Existing Model only',
   /** ` (compared)` — several Design Options, so every Existing row is repeated once per Option. */
   compared: ' (compared)',
+  /** The Register's status arm (#83 §4.2): Resolved Comments are opt-in, so the line says which it lists. */
+  openComments: 'Open Comments',
+  openAndResolvedComments: 'Open and Resolved Comments',
   states: {
     existing: 'Existing',
     demolition: 'Demolition',

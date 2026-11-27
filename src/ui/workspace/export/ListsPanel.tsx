@@ -43,6 +43,9 @@ const TABLE_ROWS: readonly { id: TableId; label: string }[] = [
   { id: 'services', label: STRINGS.exportListServices },
   { id: 'placed-items', label: STRINGS.exportListPlacedItems },
   { id: 'warnings', label: STRINGS.exportListWarnings },
+  // Last, because it is the one table here that is not a quantity: it lists what a person wrote
+  // about the work rather than the work itself (#83 §4).
+  { id: 'comments', label: STRINGS.exportListComments },
 ]
 
 /**
@@ -124,6 +127,9 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
       setRecipe({
         tables: remembered?.tables ?? ['items', 'cut-list'],
         scope: remembered === null ? fullScope(next, origin) : recalledScope(remembered.scope, next),
+        // Off by default (#83 §4.1): Resolved Comments are opt-in, and a remembered recipe that
+        // never set the field is the same as one that left it out.
+        includeResolvedComments: remembered?.includeResolvedComments === true,
       })
     })
     return () => {
@@ -132,12 +138,13 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
   }, [port, key, origin])
 
   // The statement and the row counts are derived, so they are asked for rather than kept in step
-  // by hand. The scope is keyed by its own text because every control replaces the object.
-  const scopeKey = recipe === null ? null : JSON.stringify(recipe.scope)
+  // by hand. The scope is keyed by its own text because every control replaces the object, and the
+  // Resolved flag rides along because it moves the Register's count and no other table's (#83 §4.1).
+  const scopeKey = recipe === null ? null : JSON.stringify([recipe.scope, recipe.includeResolvedComments === true])
   useEffect(() => {
     if (recipe === null) return
     let alive = true
-    void port.summariseLists(recipe.scope, origin).then((next) => {
+    void port.summariseLists(recipe.scope, origin, recipe.includeResolvedComments === true).then((next) => {
       if (alive) setSummary(next)
     })
     return () => {
@@ -172,6 +179,12 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
         renovationStates: alone ? defaultCutListStates(recipe.scope) : [...STATES],
       },
     })
+  }
+
+  // The Register's one extra control (#83 §4.1). It lives with the tables and not the scope
+  // because it filters exactly one table: no other list here has a status to hide.
+  const toggleResolved = (): void => {
+    patch({ includeResolvedComments: !(recipe.includeResolvedComments === true) })
   }
 
   const toggleFloor = (floorId: string): void => {
@@ -265,7 +278,11 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
     if (blocked !== null || busy) return
     setBusy(true)
     setOutcome(null)
-    const chosen: ListsRecipe = { tables, scope: recipe.scope }
+    const chosen: ListsRecipe = {
+      tables,
+      scope: recipe.scope,
+      includeResolvedComments: recipe.includeResolvedComments === true,
+    }
     port.rememberLists(key, chosen)
     void port.runLists(chosen, setProgress).then((result) => {
       setBusy(false)
@@ -310,6 +327,23 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
             ),
           )}
         </ul>
+        {tables.includes('comments') && (
+          // Only while the Register is ticked: the box answers a question about a file that is not
+          // being written otherwise, and a greyed-out one would be a question with no subject.
+          <div className="bb-export-comments" data-testid="export-lists-comments">
+            <label>
+              <input
+                type="checkbox"
+                data-testid="export-lists-include-resolved"
+                checked={recipe.includeResolvedComments === true}
+                onChange={() => {
+                  toggleResolved()
+                }}
+              />
+              <span>{STRINGS.exportListsIncludeResolved}</span>
+            </label>
+          </div>
+        )}
       </fieldset>
 
       <fieldset disabled={busy}>
@@ -497,6 +531,13 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
       <p className="bb-export-scope" data-testid="export-lists-statement">
         {summary?.statement ?? ''}
       </p>
+      {tables.includes('comments') && (
+        // The Register's own line, because the sentence above names Renovation States and Drawing
+        // Layers, and neither filters a Comment (#83 §4.2): one file, two honest descriptions.
+        <p className="bb-export-scope" data-testid="export-lists-comment-statement">
+          {summary?.commentStatement ?? ''}
+        </p>
+      )}
 
       <div className="modal-actions">
         {busy ? (

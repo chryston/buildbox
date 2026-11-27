@@ -32,6 +32,7 @@ import type {
   ExportResult,
   ExportSnapshot,
   ListsRecipe,
+  ListsSummary,
   NotesSwitches,
   Rasterizer,
   Recipe,
@@ -436,7 +437,11 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
       return null
     },
 
-    async summariseLists(scope: QuantityScope, origin: RecipeViewRef) {
+    async summariseLists(
+      scope: QuantityScope,
+      origin: RecipeViewRef,
+      includeResolvedComments: boolean,
+    ): Promise<ListsSummary> {
       // `listsSummary` is the cheap half of `export` — the derivation, not the writers — and it is
       // still loaded on demand so the first paint never waits for the module. The originating view
       // goes with the scope because the dialog's hidden-in-view count is that view's, not the
@@ -444,7 +449,7 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
       const { listsSummary } = await import('../export')
       const { project } = deps.session().getSnapshot()
       const view = origin.kind === 'plan' ? project.views.find((each) => each.id === origin.viewId) ?? null : null
-      return listsSummary(snapshotOf(), scope, view)
+      return listsSummary(snapshotOf(), scope, view, includeResolvedComments)
     },
 
     async recallLists(key: string): Promise<ListsRecipe | null> {

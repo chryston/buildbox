@@ -107,6 +107,20 @@ export function commentScopeLabel(project: Project, scope: EffectiveCommentScope
   return scope.inherited ? `${name} (inherited)` : name
 }
 
+/**
+ * The Floor an entity or feature Anchor's subject lives on, or `null`.
+ *
+ * `null` means the Anchor names no Floor and there is nothing to inherit one from: a Floor, Floor
+ * Point, Project, Design Option or Item Design Anchor, or a subject that has since been deleted. The
+ * Comment Register reads it as "this row has no Floor column" (#83 §4.4), which is the same answer
+ * `effectiveCommentScope` gives when it has no subject to inherit a scope from.
+ */
+export function commentSubjectFloorId(project: Project, comment: Comment): EntityId | null {
+  const anchor = comment.anchor
+  const subjectId = anchor.kind === 'entity' ? anchor.entityId : anchor.kind === 'feature' ? anchor.ownerId : null
+  return subjectId === null ? null : locateSubject(project, subjectId, null)?.floorId ?? null
+}
+
 /** The Option's name, or `Existing Model` for one the Project no longer has. */
 function optionName(project: Project, optionId: EntityId): string {
   return (project.designOptions ?? []).find((option) => option.id === optionId)?.name ?? 'Existing Model'

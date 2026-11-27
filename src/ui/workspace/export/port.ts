@@ -129,13 +129,17 @@ export interface ExportPort {
   blocking(refs: readonly RecipeViewRef[]): Promise<BlockedView | null>
   /**
    * What a scope would export, as the controls move: the plain-words statement, the rows each
-   * table would hold, whether a design with parts to cut is in scope at all, and how many of those
+   * table would hold, whether a design with a cut list is in scope at all, and how many of those
    * rows the originating view hides (#73 §2).
+   *
+   * `includeResolvedComments` travels with the scope because the Register's row count depends on
+   * it and nothing else's does (#83 §4.1): the count beside that row is the file's row count, so
+   * ticking the box moves the number.
    *
    * Asynchronous for the same reason `measure` is: the derivation lives in `export`, which is
    * loaded on demand so that a reader who never presses Export does not download it.
    */
-  summariseLists(scope: QuantityScope, origin: RecipeViewRef): Promise<ListsSummary>
+  summariseLists(scope: QuantityScope, origin: RecipeViewRef, includeResolvedComments: boolean): Promise<ListsSummary>
   /** The last lists recipe used for this view on this device, if there is one. */
   recallLists(key: string): Promise<ListsRecipe | null>
   rememberLists(key: string, recipe: ListsRecipe): void

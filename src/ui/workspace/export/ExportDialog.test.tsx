@@ -78,7 +78,8 @@ const LISTS_LAYERED: ListsOptions = {
 
 const ITEM_SUMMARY: ListsSummary = {
   statement: 'Floor plan · All Floors · Existing only · Existing, Demolition, Proposed · all layers incl. Unlayered',
-  rows: { items: 3, 'cut-list': 0, rooms: 0, walls: 0, openings: 0, beams: 0, skirting: 0, services: 0, 'placed-items': 0, warnings: 0 },
+  commentStatement: 'All Floors · Existing Model only · Open Comments',
+  rows: { items: 3, 'cut-list': 0, rooms: 0, walls: 0, openings: 0, beams: 0, skirting: 0, services: 0, 'placed-items': 0, warnings: 0, comments: 0 },
   cutListCapable: false,
   hiddenInView: { count: 0, refs: [] },
 }
@@ -511,7 +512,7 @@ describe('the Lists tab', () => {
       listsSummary: {
         ...ITEM_SUMMARY,
         cutListCapable: true,
-        rows: { items: 3, 'cut-list': 6, rooms: 0, walls: 2, openings: 1, beams: 0, skirting: 0, services: 0, 'placed-items': 4, warnings: 3 },
+        rows: { items: 3, 'cut-list': 6, rooms: 0, walls: 2, openings: 1, beams: 0, skirting: 0, services: 0, 'placed-items': 4, warnings: 3, comments: 5 },
       },
     })
     await open(fake.port)
@@ -534,6 +535,7 @@ describe('the Lists tab', () => {
       'export-lists-table-services',
       'export-lists-table-placed-items',
       'export-lists-table-warnings',
+      'export-lists-table-comments',
     ])
     const list = screen.getByTestId('export-lists-tables')
     expect(list).toHaveTextContent('Item List')
@@ -542,13 +544,16 @@ describe('the Lists tab', () => {
     expect(list).toHaveTextContent('Openings')
     expect(list).toHaveTextContent('Placed Items')
     expect(list).toHaveTextContent('Warnings List')
+    expect(list).toHaveTextContent('Comment Register')
     // Nothing new is on by default: the #62 recipe is untouched by the five that arrived.
     expect(checked('export-lists-table-rooms')).toBe(false)
     expect(checked('export-lists-table-warnings')).toBe(false)
+    expect(checked('export-lists-table-comments')).toBe(false)
     expect(screen.getByTestId('export-lists-rows-walls')).toHaveTextContent('2 rows')
     expect(screen.getByTestId('export-lists-rows-openings')).toHaveTextContent('1 row')
     expect(screen.getByTestId('export-lists-rows-placed-items')).toHaveTextContent('4 rows')
     expect(screen.getByTestId('export-lists-rows-warnings')).toHaveTextContent('3 rows')
+    expect(screen.getByTestId('export-lists-rows-comments')).toHaveTextContent('5 rows')
     // Criterion 7: an empty table is an answer beside the checkbox, not a missing one.
     expect(screen.getByTestId('export-lists-rows-rooms')).toHaveTextContent('0 rows')
     expect(screen.getByTestId('export-lists-rows-rooms')).toHaveClass('bb-export-rows-empty')

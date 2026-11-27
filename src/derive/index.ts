@@ -27,7 +27,7 @@
  * by `session`, never a module-level map.
  */
 export { cabinetSceneUnits } from './cabinetSceneUnits'
-export { commentAnchorPoint, commentIsInContext, commentScopeLabel, commentsForItemDetail, commentsForView, effectiveCommentScope } from './commentContext'
+export { commentAnchorPoint, commentIsInContext, commentScopeLabel, commentSubjectFloorId, commentsForItemDetail, commentsForView, effectiveCommentScope } from './commentContext'
 export { annotationIsInContext, annotationLayerAccess, annotationOwner, annotationsForView, ANNOTATION_UNLAYERED_INK, effectiveAnnotationStyle, type EffectiveAnnotationStyle } from './annotationsContext'
 export {
   COMMENT_ANCHOR_KIND_LABELS,
