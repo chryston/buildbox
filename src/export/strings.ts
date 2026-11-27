@@ -13,6 +13,7 @@
 
 import type { RenovationState } from '../derive'
 import type { CommentStatus, RenovationDisplay } from '../domain'
+import type { ListTableId } from './csv/tables'
 import type { CompositionNotes, NotesSwitches, Orientation, PageSize } from './types'
 
 /**
@@ -187,3 +188,139 @@ export function trimScale(denominator: number): string {
   const rounded = Math.round(denominator * 10) / 10
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
 }
+
+// ------------------------------------------------------------------- the printed tables (#84)
+
+/**
+ * The three tables that print, in the words a reader uses.
+ *
+ * The CSV file is named after the contract's own id (`cut-list`); the printed page is named after
+ * the thing (#84 §3.5). The two are never the same string for the same reason the dialog's labels
+ * are not: one is an identifier a script compares and the other is a heading a person reads.
+ */
+export const TABLE_NAMES: Readonly<Record<ListTableId, string>> = {
+  items: 'Item List',
+  'cut-list': 'Cut List',
+  comments: 'Comment Register',
+}
+
+/**
+ * What each CSV column is called on paper, keyed by the table and the published header (#84 §2).
+ *
+ * Keyed by the header rather than by position so that a column appended in a minor version of the
+ * CSV contract fails by name — `tableModel` throws on a column with no label here — instead of
+ * printing the file's own identifier as its heading. The printed column order is the CSV's, always
+ * read off the `TableSpec`; this table supplies words and nothing else.
+ *
+ * A length column's label carries no unit: `tableModel` appends the Project's, so the header reads
+ * `Width (mm)` and agrees with the title block's `Dimensions in mm` whatever the Project is set to.
+ */
+export const COLUMN_LABELS: Readonly<Record<ListTableId, Readonly<Record<string, string>>>> = {
+  items: {
+    floor_id: 'Floor ID',
+    floor: 'Floor',
+    design_option_id: 'Design Option ID',
+    design_option: 'Design Option',
+    renovation_state: 'Renovation State',
+    item_design_id: 'Item Design ID',
+    item_design: 'Item Design',
+    count: 'Count',
+    width_mm: 'Width',
+    depth_mm: 'Depth',
+    height_mm: 'Height',
+  },
+  'cut-list': {
+    design_option_id: 'Design Option ID',
+    design_option: 'Design Option',
+    renovation_state: 'Renovation State',
+    item_design_id: 'Item Design ID',
+    item_design: 'Item Design',
+    part: 'Part',
+    length_mm: 'Length',
+    width_mm: 'Width',
+    thickness_mm: 'Thickness',
+    material: 'Material',
+    qty_per_item: 'Qty per item',
+    item_count: 'Item count',
+    qty_in_scope: 'Qty in scope',
+    notes: 'Notes',
+  },
+  comments: {
+    reference: 'Reference',
+    title: 'Title',
+    body: 'Body',
+    status: 'Status',
+    priority: 'Priority',
+    created_at: 'Created',
+    updated_at: 'Updated',
+    resolved_at: 'Resolved',
+    scope: 'Scope',
+    floor: 'Floor',
+    design_option: 'Design Option',
+    target_type: 'Target type',
+    target_label: 'Target',
+  },
+}
+
+/**
+ * The storage codes a printed table shows as plain words, keyed by `table:header` (#84 §1.2).
+ *
+ * The CSV publishes the codes and a printed page never does: #80 §5.5 is a rule about what a person
+ * reads, and paper is read by a person. The keys are qualified by the table because `status` means
+ * `Open` or `Resolved` in the Register and something else again in the Warnings List, and one word
+ * list for both would print a Comment as an acknowledged Warning.
+ *
+ * `entity` reads `Element or Placed Item`, the words the Notes panel's filter offers: on paper there
+ * is no pin to look at, so the row has to say what kind of thing it names.
+ */
+export const CODE_LABELS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  'items:renovation_state': SCOPE.states,
+  'cut-list:renovation_state': SCOPE.states,
+  'comments:status': PIN_STATUS_WORDS,
+  'comments:priority': { low: 'Low', normal: 'Normal', high: 'High' },
+  'comments:scope': {
+    all_options: 'All Options',
+    existing_model: 'Existing Model',
+    design_option: 'Design Option',
+  },
+  'comments:target_type': {
+    project: 'Project',
+    floor: 'Floor',
+    design_option: 'Design Option',
+    item_design: 'Item Design',
+    entity: 'Element or Placed Item',
+    feature: 'Feature',
+    floor_point: 'Floor Point',
+  },
+}
+
+/**
+ * The suffix the Register's timestamps print with (#84 Why).
+ *
+ * `YYYY-MM-DD HH:mm UTC`, and never the reader's local hour: the contract records no time zone, so
+ * a page that printed a local one would state a fact it cannot support and would disagree with the
+ * CSV it is meant to match row for row.
+ */
+export const UTC_SUFFIX = 'UTC'
+
+/** `0 rows` — the line an empty scope prints under its header row (#84 §3.10). */
+export const ZERO_ROWS = '0 rows'
+
+/** `(continued)` — what a row too tall for one page says in its first cell on the next page. */
+export const CONTINUED = '(continued)'
+
+/**
+ * The dialog's notice for characters the embedded face cannot draw (#84 §3.7).
+ *
+ * A notice beside a file that was written, not a failure instead of one: the page carries a box
+ * where each unreadable character sits, so the person can find it, and this sentence tells them
+ * which labels to expect boxes in.
+ */
+export const unrenderableNotice = (labels: readonly string[]): string =>
+  `Some characters can't be shown in the PDF: ${labels.join(', ')}.`
+
+/** The title block's table row: `Table` over `Cut List`. */
+export const TABLE_TITLE_LABEL = 'Table'
+
+/** The title block's scope row, which stands where a drawing's Floor or Item row stands. */
+export const SCOPE_TITLE_LABEL = 'Scope'

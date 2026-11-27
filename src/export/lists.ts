@@ -25,11 +25,11 @@ import { commentRegisterRows, commentScopeStatement } from './comments'
 import { TABLES } from './csv/tables'
 import type { TableId } from './csv/tables'
 import { writeCsv } from './csv/write'
-import type { CsvRow } from './csv/write'
 import { fileDate } from './format'
 import { hiddenInView } from './hiddenInView'
 import type { HiddenInView } from './hiddenInView'
 import { provenanceOf } from './provenance'
+import { listRows } from './rows'
 import { describeScope } from './scope'
 import { listFileName, listsArchiveName } from './slug'
 import { manifestBytes, manifestOf, zipOf } from './zip'
@@ -147,25 +147,12 @@ export async function exportLists(
     throw new TypeError('exportLists needs deps.warningMessages to write the Warnings List')
   }
 
-  const counted = quantities(snapshot.project, snapshot.revision, recipe.scope)
-  // The tables this function can write, by name. A `TableId` added to the contract before its rows
-  // are wired up here fails by name: the `id === 'items' ? items : cuts` this replaces would have
-  // written Cut List rows into a `rooms.csv` the moment a third table appeared (#68).
-  const rowsOf: Partial<Record<TableId, readonly CsvRow[]>> = { items: counted.items, 'cut-list': counted.cuts }
-  if (tables.includes('comments')) {
-    rowsOf.comments = commentRegisterRows(snapshot.project, recipe.scope, recipe.includeResolvedComments === true)
-  }
-  if (tables.some((id) => id !== 'items' && id !== 'cut-list')) {
-    const at = deriveTables(snapshot.project, recipe.scope, { warningMessages: deps.warningMessages ?? null })
-    rowsOf.rooms = at.rooms
-    rowsOf.walls = at.walls
-    rowsOf.openings = at.openings
-    rowsOf.beams = at.beams
-    rowsOf.skirting = at.skirting
-    rowsOf.services = at.services
-    rowsOf['placed-items'] = at.placedItems
-    rowsOf.warnings = at.warnings
-  }
+  // The rows come from the one source the printed table reads too (#84 §1.3), so a PDF and a CSV of
+  // one recipe cannot disagree about a row, a cell or an order. A `TableId` added to the contract
+  // before its rows are wired up there fails by name: the `id === 'items' ? items : cuts` the
+  // original replaced would have written Cut List rows into a `rooms.csv` the moment a third table
+  // appeared (#68).
+  const rowsOf = listRows(snapshot, recipe, tables, deps.warningMessages ?? null)
   const files: ExportFile[] = []
   const entries: ManifestFile[] = []
   for (const [index, id] of tables.entries()) {
