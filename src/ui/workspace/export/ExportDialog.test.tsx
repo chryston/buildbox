@@ -462,6 +462,8 @@ describe('the Export dialog', () => {
     await waitFor(() => expect(screen.getByTestId('export-failed')).toBeInTheDocument())
     expect(screen.getByTestId('export-failed')).toHaveTextContent('Nothing was downloaded.')
     expect(screen.getByTestId('export-failed')).toHaveTextContent('plan.svg: It does not fit the page at that scale.')
+    // All or nothing, and a way out in the same breath (#85 §2.4).
+    expect(screen.getByTestId('export-failed')).toHaveTextContent('Untick that view and try again.')
     expect(onClose).not.toHaveBeenCalled()
   })
 
