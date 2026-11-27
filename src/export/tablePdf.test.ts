@@ -22,7 +22,7 @@ import type { ListTableId } from './csv/tables'
 import { commentScopeStatement } from './comments'
 import { provenanceOf } from './provenance'
 import { describeScope } from './scope'
-import { ZERO_ROWS } from './strings'
+import { TABLE_NAMES, ZERO_ROWS, unitStatement } from './strings'
 import { tableModel } from './tableModel'
 import { tableSheets, writeTablePdf } from './tablePdf'
 import type { TablePdfInput } from './tablePdf'
@@ -75,6 +75,7 @@ function inputOf(
   return {
     model: tableModel(snapshotOf(project), recipe, table),
     scopeStatement: statementOf(project, table, scope),
+    projectName: 'Kitchen Renovation',
     provenance: provenanceOf(snapshotOf(project), recipe, DEPS),
     fontBytes: FONT,
     pageSize: options.pageSize ?? 'A4',
@@ -181,6 +182,21 @@ describe('the printed pages', () => {
     }
     // Every row is printed exactly once, in the CSV order, across the whole file.
     expect(seen).toEqual(references)
+  })
+
+  test('the title block says whose table, which rows, on what unit, when and which page', () => {
+    const input = inputOf(scene, 'comments')
+    const words = printed(input)
+    // Criterion 11: every one of these, and no author and no logo anywhere on the face.
+    expect(words.some((one) => one.includes('Kitchen Renovation'))).toBe(true)
+    expect(words.some((one) => one.includes(TABLE_NAMES.comments))).toBe(true)
+    expect(words.some((one) => one.includes(input.scopeStatement))).toBe(true)
+    expect(words.some((one) => one.includes(unitStatement(input.model.unit)))).toBe(true)
+    expect(words.some((one) => one.includes(CLOCK.localDate()))).toBe(true)
+    expect(words.some((one) => one.includes('0.0.0-test'))).toBe(true)
+    expect(words.some((one) => one.includes('Page 1/'))).toBe(true)
+    // Criterion 12: the Project's ID and revision are metadata, not page furniture.
+    expect(words.some((one) => one.includes(scene.id))).toBe(false)
   })
 
   test('an empty scope still prints a page: the title block, the headers, and no rows', () => {

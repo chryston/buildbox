@@ -74,6 +74,11 @@ export interface TablePdfInput {
   readonly model: TableModel
   /** The plain-words scope statement, which is the reader's answer to "which rows are these?". */
   readonly scopeStatement: string
+  /**
+   * The Project's name, on the page face. Criterion 11 asks for it and criterion 12 keeps its ID and
+   * revision in the metadata only, so the name arrives here rather than riding in with `provenance`.
+   */
+  readonly projectName: string
   readonly provenance: Provenance
   readonly fontBytes: Uint8Array
   readonly pageSize: PageSize
@@ -311,6 +316,13 @@ export function tableSheets(input: TablePdfInput): PdfSheet[] {
     const ops: FlatOp[] = []
     // The title block, on every page: a page that has left its siblings behind still says what it is.
     ops.push(text(`${TABLE_TITLE_LABEL}: ${TABLE_NAMES[model.table]}`, { x: MARGIN, y: MARGIN }, TITLE_SIZE, 'start', INK))
+    // The Project's name at the other end of the same line, when the caller can say it: whose table
+    // this is, answered before the reader looks at a file name (#84 §3.5). `export` is given the
+    // Project, not the library record its name lives on, so the name arrives as an optional dep and
+    // a caller that has it gets it printed.
+    if (input.projectName !== '') {
+      ops.push(text(input.projectName, { x: paper.w - MARGIN, y: MARGIN }, TITLE_SIZE, 'end', INK))
+    }
     ops.push(text(`${SCOPE_TITLE_LABEL}: ${input.scopeStatement}`, { x: MARGIN, y: MARGIN + 7 }, LABEL_SIZE, 'start', INK))
     const facts = [
       `${TITLE_BLOCK.version} ${input.provenance.buildbox_version}`,

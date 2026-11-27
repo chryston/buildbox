@@ -389,6 +389,12 @@ export interface ExportDeps {
   readonly warningMessages?: Readonly<Record<string, string>>
   /** The bundled Noto Sans subset, as TrueType: a PDF embeds it, a raster labels with it. */
   readonly font?: { readonly bytes: Uint8Array }
+  /**
+   * The Project's display name, for the printed table's title block (#84 §3.5). It lives on the
+   * library record rather than on the Project, so `export` cannot read it and a caller that has it
+   * passes it here. Absent, the page prints without it.
+   */
+  readonly projectName?: string
   readonly rasterizer?: Rasterizer
   readonly assets?: AssetBytes
   readonly onProgress?: (progress: ExportProgress) => void

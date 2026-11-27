@@ -152,7 +152,7 @@ export async function exportLists(
   recipe: ListsRecipe,
   deps: Pick<
     ExportDeps,
-    'clock' | 'buildboxVersion' | 'contractVersion' | 'unsavedChanges' | 'onProgress' | 'warningMessages' | 'font'
+    'clock' | 'buildboxVersion' | 'contractVersion' | 'unsavedChanges' | 'onProgress' | 'warningMessages' | 'font' | 'projectName'
   >,
 ): Promise<ExportResult> {
   const provenance = provenanceOf(snapshot, recipe, deps)
@@ -219,6 +219,7 @@ export async function exportLists(
       const printed = await writeTablePdf({
         model: tableModel(snapshot, recipe, id),
         scopeStatement: id === 'comments' ? commentStatement : statement,
+        projectName: deps.projectName ?? '',
         provenance,
         fontBytes: deps.font.bytes,
         pageSize,
