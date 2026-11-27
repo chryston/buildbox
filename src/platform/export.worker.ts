@@ -49,6 +49,12 @@ export interface ExportWorkerDeps {
    * the one reading of a clock it will not let the Worker take.
    */
   readonly warningMessages?: Readonly<Record<string, string>>
+  /**
+   * The Project's display name, for the printed table's title block (#84 §3.5). It lives on the
+   * Library record rather than on the Project, so the main thread reads it and sends it — the same
+   * reason the clock and the Warning sentences cross as data.
+   */
+  readonly projectName?: string
 }
 
 /** One asset as it crosses into the Worker: its hash, its bytes, and what it claims to be. */

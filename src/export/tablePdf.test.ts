@@ -49,6 +49,14 @@ function loadScene(): Project {
 
 const scene = loadScene()
 
+/**
+ * The name the Library record carries for the fixture Project — the name the app would read and hand
+ * to `export` as `deps.projectName`, since the Project's own bytes do not hold it (#84 §3.5).
+ */
+const SCENE_NAME = (
+  JSON.parse(readFileSync(SCENE, 'utf8')) as { library: { name: string }[] }
+).library[0]!.name
+
 const scopeOf = (project: Project, over: Partial<QuantityScope> = {}): QuantityScope => ({
   floorIds: project.floors.map((floor) => floor.id),
   designOptionIds: 'existing-only',
@@ -75,7 +83,7 @@ function inputOf(
   return {
     model: tableModel(snapshotOf(project), recipe, table),
     scopeStatement: statementOf(project, table, scope),
-    projectName: 'Kitchen Renovation',
+    projectName: SCENE_NAME,
     provenance: provenanceOf(snapshotOf(project), recipe, DEPS),
     fontBytes: FONT,
     pageSize: options.pageSize ?? 'A4',
@@ -188,7 +196,7 @@ describe('the printed pages', () => {
     const input = inputOf(scene, 'comments')
     const words = printed(input)
     // Criterion 11: every one of these, and no author and no logo anywhere on the face.
-    expect(words.some((one) => one.includes('Kitchen Renovation'))).toBe(true)
+    expect(words.some((one) => one.includes(SCENE_NAME))).toBe(true)
     expect(words.some((one) => one.includes(TABLE_NAMES.comments))).toBe(true)
     expect(words.some((one) => one.includes(input.scopeStatement))).toBe(true)
     expect(words.some((one) => one.includes(unitStatement(input.model.unit)))).toBe(true)

@@ -71,6 +71,16 @@ export interface ExportPortDeps {
   readAsset(sha256: string): Promise<{ bytes: Uint8Array; mediaType: string } | null>
   readonly clock: ExportClock
   readonly buildboxVersion: string
+  /**
+   * The open Project's display name, for the printed table's title block (#84 §3.5).
+   *
+   * The name belongs to the Library record and not to the Project — `ProjectRecord` carries the
+   * bytes and the revision, and only the Library list carries what the person typed — so `export`
+   * cannot read it and this is where the app reaches across. Read per run rather than captured with
+   * the port, which outlives a Project switch. `''` when it cannot be had: a page without a name is
+   * a lesser loss than a download that fails over a label.
+   */
+  projectName(): Promise<string>
 }
 
 /** One remembered recipe: the view it belongs to and the recipe itself. */
@@ -517,6 +527,7 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
           buildboxVersion: deps.buildboxVersion,
           unsavedChanges,
           warningMessages: sentences,
+          projectName: await deps.projectName(),
         },
         job: { kind: 'lists', recipe, ...(wantsPrintedTable(recipe) ? { font: await loadFont() } : {}) },
       }
