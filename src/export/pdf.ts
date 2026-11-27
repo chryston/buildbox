@@ -44,11 +44,20 @@ export interface PdfImage {
   readonly mediaType: string
 }
 
-/** What a PDF needs and nothing else. */
-export interface PdfInput {
+/** One page of a PDF: its paper and the operations that fill it. */
+export interface PdfSheet {
   readonly widthMm: number
   readonly heightMm: number
   readonly ops: readonly FlatOp[]
+}
+
+/** What a PDF needs and nothing else. */
+export interface PdfInput {
+  /**
+   * The pages, in order. A drawing is one page; a printed table is as many as its rows need, and
+   * the font subset, the metadata and the `/ID` are written once for all of them.
+   */
+  readonly pages: readonly PdfSheet[]
   readonly provenance: Provenance
   readonly fontBytes: Uint8Array
   /** Asset bytes by hash, for the Plan Image. */
@@ -225,26 +234,29 @@ export async function writePdf(input: PdfInput): Promise<{ bytes: Uint8Array; mi
     subset: true,
     customName: `${subsetTag(input.contentHash)}+NotoSans`,
   })
-  const page = doc.addPage([pt(input.widthMm), pt(input.heightMm)])
-
   const embedded = new Map<string, PDFImage>()
-  for (const op of input.ops) {
-    if (op.kind !== 'image' || embedded.has(op.assetHash)) continue
-    const stored = input.images.get(op.assetHash)
-    if (stored === undefined) continue
-    embedded.set(
-      op.assetHash,
-      stored.mediaType === 'image/jpeg' ? await doc.embedJpg(stored.bytes) : await doc.embedPng(stored.bytes),
-    )
+  for (const sheet of input.pages) {
+    for (const op of sheet.ops) {
+      if (op.kind !== 'image' || embedded.has(op.assetHash)) continue
+      const stored = input.images.get(op.assetHash)
+      if (stored === undefined) continue
+      embedded.set(
+        op.assetHash,
+        stored.mediaType === 'image/jpeg' ? await doc.embedJpg(stored.bytes) : await doc.embedPng(stored.bytes),
+      )
+    }
   }
 
   const missingGlyphs: MissingGlyph[] = []
-  for (const op of input.ops) {
-    if (op.kind === 'path') drawPath(page, op, input.heightMm)
-    else if (op.kind === 'text') drawText(page, font, op, input.heightMm, missingGlyphs)
-    else if (op.kind === 'image') {
-      const handle = embedded.get(op.assetHash)
-      if (handle !== undefined) drawImage(page, handle, op, input.heightMm)
+  for (const sheet of input.pages) {
+    const page = doc.addPage([pt(sheet.widthMm), pt(sheet.heightMm)])
+    for (const op of sheet.ops) {
+      if (op.kind === 'path') drawPath(page, op, sheet.heightMm)
+      else if (op.kind === 'text') drawText(page, font, op, sheet.heightMm, missingGlyphs)
+      else if (op.kind === 'image') {
+        const handle = embedded.get(op.assetHash)
+        if (handle !== undefined) drawImage(page, handle, op, sheet.heightMm)
+      }
     }
   }
 

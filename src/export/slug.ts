@@ -98,8 +98,8 @@ export function archiveName(project: string, date: string): string {
  * table it holds, and a name that renamed the table to make a tidier segment would be a second
  * name for one thing.
  */
-export function listFileName(project: string, table: TableId, date: string): string {
-  return `${slug(project)}_${table}_${date}.csv`
+export function listFileName(project: string, table: TableId, date: string, extension: 'csv' | 'pdf' = 'csv'): string {
+  return `${slug(project)}_${table}_${date}.${extension}`
 }
 
 /** `<project>_lists_<YYYYMMDD>.zip` — the archive that holds two or more tables. */

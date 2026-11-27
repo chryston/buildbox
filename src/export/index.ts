@@ -228,9 +228,7 @@ async function writeOne(
     const images = await pdfImages(ops, deps)
     if (images === null) return { ok: false, reason: 'image-format' }
     const pdf = await writePdf({
-      widthMm: composed.sheet.widthMm,
-      heightMm: composed.sheet.heightMm,
-      ops,
+      pages: [{ widthMm: composed.sheet.widthMm, heightMm: composed.sheet.heightMm, ops }],
       provenance,
       fontBytes: deps.font.bytes,
       images,
@@ -342,6 +340,13 @@ export { drawingComposition, drawingLayerChips } from './composition'
 export type { DrawingComposition, DrawingLayerChip } from './composition'
 export { exportLists, listsSummary, CSV_MEDIA_TYPE } from './lists'
 export type { ListsSummary } from './lists'
+// The printed model (#84 §1): the CSV's rows as display strings. Public because the dialog shows the
+// row count and the notice a PDF of it carries, and both have to be read from the same model the
+// page is drawn from.
+export { tableModel } from './tableModel'
+export type { CellAlign, TableModel, TableColumn } from './tableModel'
+export { tableSheets, writeTablePdf } from './tablePdf'
+export type { TablePdfInput, TablePdfResult } from './tablePdf'
 export { LENGTH_DP, AREA_DP, ANGLE_DP, INTEGER_DP, formatNumber, neutralise, quote } from './csv/format'
 export {
   CSV_CONTRACT_VERSION,
@@ -350,7 +355,7 @@ export {
   TABLES,
   headerLine,
 } from './csv/tables'
-export type { Column, ColumnKind, TableId, TableSpec } from './csv/tables'
+export type { Column, ColumnKind, ListTableId, TableId, TableSpec } from './csv/tables'
 export { CSV_BOM, writeCsv } from './csv/write'
 export type { Cell, CsvRow } from './csv/write'
 export { slug, drawingFileName, archiveName, listFileName, listsArchiveName } from './slug'
@@ -372,6 +377,7 @@ export type {
   ExportResult,
   ExportSnapshot,
   ListsRecipe,
+  ListFormat,
   NotesSwitches,
   Orientation,
   OrientationSetting,

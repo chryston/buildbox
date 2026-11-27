@@ -71,6 +71,16 @@ export interface TableSpec {
 export type TableId = 'items' | 'cut-list' | 'rooms' | 'walls' | 'openings' | 'beams' | 'skirting' | 'services' | 'placed-items' | 'warnings' | 'comments'
 
 /**
+ * The three tables that are also printed as a PDF (#84 §1).
+ *
+ * A narrower `TableId` rather than the whole list, because #84 §1.1 gives the printed model one
+ * function for exactly these three: the eight element tables arrive with their own columns and
+ * their own widths, and a model that claimed to print them today would be a promise the layout
+ * cannot keep.
+ */
+export type ListTableId = Extract<TableId, 'items' | 'cut-list' | 'comments'>
+
+/**
  * A table's columns, in contract order: the header line supplies the file's words, the pairs
  * supply each column's row key, cell kind and — for an `enum` — the codes it publishes.
  */

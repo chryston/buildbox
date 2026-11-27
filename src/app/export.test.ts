@@ -69,6 +69,7 @@ function portFor(seed: Record<string, unknown> = {}) {
     readAsset: async () => null,
     clock: { now: () => '2026-03-04T09:30:00.000Z', localDate: () => '2026-03-04' },
     buildboxVersion: '0.0.0-test',
+    projectName: async () => 'Kitchen Renovation',
   })
   return {
     port,
@@ -93,6 +94,7 @@ function portWithProject(project: Project) {
     readAsset: async () => null,
     clock: { now: () => '2026-03-04T09:30:00.000Z', localDate: () => '2026-03-04' },
     buildboxVersion: '0.0.0-test',
+    projectName: async () => '',
   })
 }
 

@@ -71,6 +71,16 @@ export interface ExportPortDeps {
   readAsset(sha256: string): Promise<{ bytes: Uint8Array; mediaType: string } | null>
   readonly clock: ExportClock
   readonly buildboxVersion: string
+  /**
+   * The open Project's display name, for the printed table's title block (#84 §3.5).
+   *
+   * The name belongs to the Library record and not to the Project — `ProjectRecord` carries the
+   * bytes and the revision, and only the Library list carries what the person typed — so `export`
+   * cannot read it and this is where the app reaches across. Read per run rather than captured with
+   * the port, which outlives a Project switch. `''` when it cannot be had: a page without a name is
+   * a lesser loss than a download that fails over a label.
+   */
+  projectName(): Promise<string>
 }
 
 /** One remembered recipe: the view it belongs to and the recipe itself. */
@@ -90,6 +100,14 @@ interface RememberedListsRecipe {
 // the person ticked.
 const TABLE_IDS = ['items', 'cut-list', 'rooms', 'walls', 'openings', 'beams', 'skirting', 'services', 'placed-items', 'warnings', 'comments'] as const
 const RENOVATION_STATES = ['existing', 'demolition', 'proposed'] as const
+
+const LIST_FORMATS = ['csv', 'pdf', 'both'] as const
+const PRINTED_TABLES = ['items', 'cut-list', 'comments'] as const
+
+/** Does this recipe ask for any table as a printed table? Only then does the run need the face. */
+function wantsPrintedTable(recipe: ListsRecipe): boolean {
+  return Object.values(recipe.formats ?? {}).some((format) => format === 'pdf' || format === 'both')
+}
 
 /**
  * Is this the shape of a lists recipe?
@@ -117,6 +135,17 @@ function asListsRecipe(value: unknown): ListsRecipe | null {
   }
   if (scope.itemDesignId !== undefined && typeof scope.itemDesignId !== 'string') return null
   if (held.includeResolvedComments !== undefined && typeof held.includeResolvedComments !== 'boolean') return null
+  // #84: a remembered format for a table this build cannot print, or a page size it has no sheet for,
+  // is a recipe from a build this one has not met — the whole recipe is ignored, as the rule above says.
+  if (held.formats !== undefined) {
+    const formats = fields(held.formats)
+    if (formats === null) return null
+    for (const [table, format] of Object.entries(formats)) {
+      if (!oneOf(table, PRINTED_TABLES)) return null
+      if (!oneOf(format, LIST_FORMATS)) return null
+    }
+  }
+  if (held.pageSize !== undefined && !oneOf(held.pageSize, PAGE_SIZES)) return null
   return value as ListsRecipe
 }
 
@@ -258,7 +287,12 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
     const { exportFiles, exportLists } = await import('../export')
     const clock = { now: () => request.deps.instant, localDate: () => request.deps.localDay }
     if (request.job.kind === 'lists') {
-      return exportLists(request.snapshot, request.job.recipe, { ...request.deps, clock, onProgress })
+      return exportLists(request.snapshot, request.job.recipe, {
+        ...request.deps,
+        clock,
+        onProgress,
+        ...(request.job.font === undefined ? {} : { font: { bytes: request.job.font } }),
+      })
     }
     if (mainThread === null) mainThread = createRasterizer() ?? null
     const lookup = new Map(request.job.assets.map((one) => [one.sha256, one]))
@@ -493,8 +527,9 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
           buildboxVersion: deps.buildboxVersion,
           unsavedChanges,
           warningMessages: sentences,
+          projectName: await deps.projectName(),
         },
-        job: { kind: 'lists', recipe },
+        job: { kind: 'lists', recipe, ...(wantsPrintedTable(recipe) ? { font: await loadFont() } : {}) },
       }
       return runJob(request, onProgress, () => runHere(request, onProgress))
     },

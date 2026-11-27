@@ -746,6 +746,17 @@ function FlaggedRoot({ deps, legacyPending = false }: { deps: FlaggedDeps; legac
       },
       clock: { now: () => clock.now(), localDate: () => clock.dayKey(clock.now()) },
       buildboxVersion: __BUILDBOX_VERSION__,
+      // The name is the Library's, not the Project's, so it is read from the list rather than from
+      // the session — and read now rather than when the port was built, because the port is per tab
+      // and this is per Project. A record that cannot be read leaves the name unset: the printed
+      // table loses a line of its title block, which is a lesser loss than refusing the download.
+      projectName: async () => {
+        const id = held.current?.id ?? ''
+        if (id === '') return ''
+        const records = await ports.projects.list({ includeTrashed: true })
+        if (!records.ok) return ''
+        return records.value.find((record) => record.id === id)?.name ?? ''
+      },
     }),
   }), [sessionServices, ports.prefs, session?.id])
 

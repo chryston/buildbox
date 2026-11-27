@@ -23,18 +23,38 @@ import type { PlanView } from '../domain'
 import { sha256Hex } from '../lib'
 import { commentRegisterRows, commentScopeStatement } from './comments'
 import { TABLES } from './csv/tables'
-import type { TableId } from './csv/tables'
+import type { ListTableId, TableId } from './csv/tables'
 import { writeCsv } from './csv/write'
-import type { CsvRow } from './csv/write'
 import { fileDate } from './format'
 import { hiddenInView } from './hiddenInView'
 import type { HiddenInView } from './hiddenInView'
 import { provenanceOf } from './provenance'
+import { listRows } from './rows'
 import { describeScope } from './scope'
-import { listFileName, listsArchiveName } from './slug'
+import { listFileName, listsArchiveName, MEDIA_TYPE } from './slug'
+import { tableModel } from './tableModel'
+import { writeTablePdf } from './tablePdf'
 import { manifestBytes, manifestOf, zipOf } from './zip'
 import type { ManifestFile } from './zip'
-import type { ExportDeps, ExportFile, ExportResult, ExportSnapshot, ListsRecipe } from './types'
+import type { ExportDeps, ExportFailure, ExportFile, ExportResult, ExportSnapshot, ListFormat, ListsRecipe } from './types'
+
+/**
+ * What shape one table takes in this recipe.
+ *
+ * Absent is `csv`, which is what every recipe written before #84 asked for, and what a recipe that
+ * says nothing about a table still means: the CSV is the rows, and the printed table is a rendering
+ * of them a person has to ask for.
+ */
+function formatOf(recipe: ListsRecipe, table: TableId): ListFormat {
+  return isListTable(table) ? recipe.formats?.[table] ?? 'csv' : 'csv'
+}
+
+/** The tables with a column layout, and so with a printed form to ask for. */
+const LIST_TABLES: Readonly<Partial<Record<TableId, true>>> = { items: true, 'cut-list': true, comments: true }
+
+function isListTable(table: TableId): table is ListTableId {
+  return LIST_TABLES[table] === true
+}
 
 /** What a CSV is, as far as a browser is concerned. */
 export const CSV_MEDIA_TYPE = 'text/csv'
@@ -132,7 +152,7 @@ export async function exportLists(
   recipe: ListsRecipe,
   deps: Pick<
     ExportDeps,
-    'clock' | 'buildboxVersion' | 'contractVersion' | 'unsavedChanges' | 'onProgress' | 'warningMessages'
+    'clock' | 'buildboxVersion' | 'contractVersion' | 'unsavedChanges' | 'onProgress' | 'warningMessages' | 'font' | 'projectName'
   >,
 ): Promise<ExportResult> {
   const provenance = provenanceOf(snapshot, recipe, deps)
@@ -147,52 +167,85 @@ export async function exportLists(
     throw new TypeError('exportLists needs deps.warningMessages to write the Warnings List')
   }
 
-  const counted = quantities(snapshot.project, snapshot.revision, recipe.scope)
-  // The tables this function can write, by name. A `TableId` added to the contract before its rows
-  // are wired up here fails by name: the `id === 'items' ? items : cuts` this replaces would have
-  // written Cut List rows into a `rooms.csv` the moment a third table appeared (#68).
-  const rowsOf: Partial<Record<TableId, readonly CsvRow[]>> = { items: counted.items, 'cut-list': counted.cuts }
-  if (tables.includes('comments')) {
-    rowsOf.comments = commentRegisterRows(snapshot.project, recipe.scope, recipe.includeResolvedComments === true)
-  }
-  if (tables.some((id) => id !== 'items' && id !== 'cut-list')) {
-    const at = deriveTables(snapshot.project, recipe.scope, { warningMessages: deps.warningMessages ?? null })
-    rowsOf.rooms = at.rooms
-    rowsOf.walls = at.walls
-    rowsOf.openings = at.openings
-    rowsOf.beams = at.beams
-    rowsOf.skirting = at.skirting
-    rowsOf.services = at.services
-    rowsOf['placed-items'] = at.placedItems
-    rowsOf.warnings = at.warnings
-  }
+  // The rows come from the one source the printed table reads too (#84 §1.3), so a PDF and a CSV of
+  // one recipe cannot disagree about a row, a cell or an order. A `TableId` added to the contract
+  // before its rows are wired up there fails by name: the `id === 'items' ? items : cuts` the
+  // original replaced would have written Cut List rows into a `rooms.csv` the moment a third table
+  // appeared (#68).
+  const rowsOf = listRows(snapshot, recipe, tables, deps.warningMessages ?? null)
+  // The scope in plain words is already computed for the manifest and the file's own metadata; the
+  // title block prints that same sentence, so the page and the record cannot disagree about it.
+  const statement = describeScope(recipe.scope, snapshot.project)
+  const commentStatement = commentScopeStatement(snapshot.project, recipe.scope, recipe.includeResolvedComments === true)
+  const pageSize = recipe.pageSize ?? 'A4'
+  // A printed table sets text and so needs the face; a CSV never has. A recipe that asks for no PDF
+  // is therefore not made to fail for want of one.
+  const formats = new Map(tables.map((id) => [id, formatOf(recipe, id)]))
+  const outputs = tables.reduce((total, id) => total + (formats.get(id) === 'both' ? 2 : 1), 0)
   const files: ExportFile[] = []
   const entries: ManifestFile[] = []
-  for (const [index, id] of tables.entries()) {
+  const failures: ExportFailure[] = []
+  const missingGlyphs: string[] = []
+  let done = 0
+  for (const id of tables) {
     const rows = rowsOf[id]
     if (rows === undefined) throw new TypeError(`exportLists has no rows for the "${id}" table`)
-    const fileName = listFileName(name, id, date)
-    deps.onProgress?.({
-      stage: 'file',
-      done: index,
-      total: tables.length,
-      label: fileName,
-    })
-    const bytes = writeCsv(TABLES[id], rows)
-    files.push({ name: fileName, mediaType: CSV_MEDIA_TYPE, bytes })
-    entries.push({
-      path: fileName,
-      kind: 'list',
-      format: 'csv',
-      media_type: CSV_MEDIA_TYPE,
-      bytes: bytes.length,
-      sha256: await sha256Hex(bytes),
-      contract_version: provenance.contract_version,
-      warnings: [],
-    })
+    const format = formats.get(id)!
+    if (format !== 'pdf') {
+      const fileName = listFileName(name, id, date)
+      deps.onProgress?.({ stage: 'file', done, total: outputs, label: fileName })
+      done += 1
+      const bytes = writeCsv(TABLES[id], rows)
+      files.push({ name: fileName, mediaType: CSV_MEDIA_TYPE, bytes })
+      entries.push({
+        path: fileName,
+        kind: 'list',
+        format: 'csv',
+        media_type: CSV_MEDIA_TYPE,
+        bytes: bytes.length,
+        sha256: await sha256Hex(bytes),
+        contract_version: provenance.contract_version,
+        warnings: [],
+      })
+    }
+    if (format !== 'csv' && isListTable(id)) {
+      const fileName = listFileName(name, id, date, 'pdf')
+      deps.onProgress?.({ stage: 'file', done, total: outputs, label: fileName })
+      done += 1
+      if (deps.font === undefined) {
+        failures.push({ output: fileName, reason: 'no-font' })
+        continue
+      }
+      const printed = await writeTablePdf({
+        model: tableModel(snapshot, recipe, id),
+        scopeStatement: id === 'comments' ? commentStatement : statement,
+        projectName: deps.projectName ?? '',
+        provenance,
+        fontBytes: deps.font.bytes,
+        pageSize,
+        clock: deps.clock,
+      })
+      for (const glyph of printed.missingGlyphs) {
+        if (!missingGlyphs.includes(glyph.text)) missingGlyphs.push(glyph.text)
+      }
+      files.push({ name: fileName, mediaType: MEDIA_TYPE.pdf, bytes: printed.bytes })
+      entries.push({
+        path: fileName,
+        kind: 'list',
+        format: 'pdf',
+        media_type: MEDIA_TYPE.pdf,
+        bytes: printed.bytes.length,
+        sha256: await sha256Hex(printed.bytes),
+        contract_version: provenance.contract_version,
+        warnings: [],
+      })
+    }
   }
+  // All-or-nothing: one output that could not be written means the download does not happen at all,
+  // and the dialog names the output and the reason (#84 §3.7).
+  if (failures.length > 0) return { ok: false, failures }
 
-  if (files.length === 1) return { ok: true, kind: 'single', file: files[0]!, missingGlyphs: [] }
+  if (files.length === 1) return { ok: true, kind: 'single', file: files[0]!, missingGlyphs }
 
   const manifestFile: ExportFile = {
     name: 'manifest.json',
@@ -222,7 +275,7 @@ export async function exportLists(
     ok: true,
     kind: 'archive',
     files,
-    missingGlyphs: [],
+    missingGlyphs,
     manifest: manifestFile,
     archive: {
       name: archive,

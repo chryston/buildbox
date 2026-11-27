@@ -14,7 +14,7 @@
  */
 import { useEffect, useState } from 'react'
 import { SCOPE, defaultCutListStates } from '../../../export'
-import type { ExportProgress, ListsRecipe, ListsSummary, RecipeViewRef, TableId } from '../../../export'
+import type { ExportProgress, ListFormat, ListTableId, ListsRecipe, ListsSummary, PageSize, RecipeViewRef, TableId } from '../../../export'
 import { UNLAYERED_LAYER_KEY } from '../../../domain'
 
 import type { QuantityScope, RenovationState } from '../../../derive'
@@ -46,6 +46,25 @@ const TABLE_ROWS: readonly { id: TableId; label: string }[] = [
   // Last, because it is the one table here that is not a quantity: it lists what a person wrote
   // about the work rather than the work itself (#83 §4).
   { id: 'comments', label: STRINGS.exportListComments },
+]
+
+/**
+ * The three tables with a printed form (#84), and the reader's word for each shape it can take.
+ * The eight element tables are absent because they have no column layout yet — the question would
+ * have no answer to give.
+ */
+const PRINTED_TABLES: readonly ListTableId[] = ['items', 'cut-list', 'comments']
+
+const TABLE_LABELS: Readonly<Record<ListTableId, string>> = {
+  items: STRINGS.exportListItems,
+  'cut-list': STRINGS.exportListCutList,
+  comments: STRINGS.exportListComments,
+}
+
+const FORMAT_CHOICES: readonly { value: ListFormat; label: string }[] = [
+  { value: 'csv', label: STRINGS.exportListsFormatCsv },
+  { value: 'pdf', label: STRINGS.exportListsFormatPdf },
+  { value: 'both', label: STRINGS.exportListsFormatBoth },
 ]
 
 /**
@@ -130,6 +149,10 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
         // Off by default (#83 §4.1): Resolved Comments are opt-in, and a remembered recipe that
         // never set the field is the same as one that left it out.
         includeResolvedComments: remembered?.includeResolvedComments === true,
+        // CSV is what every recipe written before #84 meant, and what a recipe that says nothing
+        // about a table still means; A4 is the sheet the issue names as the default.
+        formats: remembered?.formats ?? {},
+        pageSize: remembered?.pageSize ?? 'A4',
       })
     })
     return () => {
@@ -185,6 +208,19 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
   // because it filters exactly one table: no other list here has a status to hide.
   const toggleResolved = (): void => {
     patch({ includeResolvedComments: !(recipe.includeResolvedComments === true) })
+  }
+
+  // The shape one table takes (#84 §3.1). Absent is CSV, so choosing CSV removes the entry rather
+  // than writing one that means the same as nothing — the remembered recipe stays the size it is.
+  const setFormat = (table: ListTableId, format: ListFormat): void => {
+    const held = { ...recipe.formats }
+    if (format === 'csv') delete held[table]
+    else held[table] = format
+    patch({ formats: held })
+  }
+
+  const setPageSize = (pageSize: PageSize): void => {
+    patch({ pageSize })
   }
 
   const toggleFloor = (floorId: string): void => {
@@ -266,6 +302,10 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
   // is absent rather than disabled, because a checkbox that can never be ticked is a question.
   const capable = summary?.cutListCapable ?? true
   const tables = capable ? recipe.tables : recipe.tables.filter((each) => each !== 'cut-list')
+  // Which tables this recipe can print: only the ticked ones, and only the three with a column
+  // layout. The paper is chosen once for the file, so it is asked about only when something needs it.
+  const printed = PRINTED_TABLES.filter((id) => tables.includes(id))
+  const wantsPrinted = printed.some((id) => (recipe.formats?.[id] ?? 'csv') !== 'csv')
   // The Warnings List is scoped by Floor and Design Option only (export contract §3), so on its own
   // it has no use for the State and Layer controls: they go grey and say why, rather than looking
   // like they work. Combined with any other table they stay live for that table — and the Warnings
@@ -282,13 +322,17 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
       tables,
       scope: recipe.scope,
       includeResolvedComments: recipe.includeResolvedComments === true,
+      formats: recipe.formats ?? {},
+      pageSize: recipe.pageSize ?? 'A4',
     }
     port.rememberLists(key, chosen)
     void port.runLists(chosen, setProgress).then((result) => {
       setBusy(false)
       setProgress(null)
       setOutcome(result)
-      if (result.kind === 'downloaded') onClose()
+      // The file was written even when a character had no glyph — the notice is beside the download,
+      // not instead of it — so the dialog stays open to show it, as the drawing tab does (#61 §11).
+      if (result.kind === 'downloaded' && result.missingGlyphs.length === 0) onClose()
     })
   }
 
@@ -345,6 +389,56 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
           </div>
         )}
       </fieldset>
+
+      {printed.length > 0 && (
+        // Only the ticked tables that have a printed form: the eight element tables have no column
+        // layout yet, so asking what shape their PDF takes would be a question with no answer.
+        <fieldset disabled={busy}>
+          <legend>{STRINGS.exportListsGroupFormat}</legend>
+          <ul className="bb-export-views" data-testid="export-lists-formats">
+            {printed.map((id) => (
+              <li key={id} data-testid={`export-lists-format-${id}`}>
+                <span>{TABLE_LABELS[id]}</span>
+                <span className="bb-export-format-choices">
+                  {FORMAT_CHOICES.map((choice) => (
+                    <label key={choice.value}>
+                      <input
+                        type="radio"
+                        name={`export-lists-format-${id}`}
+                        data-testid={`export-lists-format-${id}-${choice.value}`}
+                        checked={(recipe.formats?.[id] ?? 'csv') === choice.value}
+                        onChange={() => {
+                          setFormat(id, choice.value)
+                        }}
+                      />
+                      <span>{choice.label}</span>
+                    </label>
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {wantsPrinted && (
+            <div className="bb-export-page-size" data-testid="export-lists-page-size">
+              <span>{STRINGS.exportListsPageSize}</span>
+              {(['A4', 'A3'] as const).map((size) => (
+                <label key={size}>
+                  <input
+                    type="radio"
+                    name="export-lists-page-size"
+                    data-testid={`export-lists-page-size-${size}`}
+                    checked={(recipe.pageSize ?? 'A4') === size}
+                    onChange={() => {
+                      setPageSize(size)
+                    }}
+                  />
+                  <span>{size}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </fieldset>
+      )}
 
       <fieldset disabled={busy}>
         <legend>{STRINGS.exportListsGroupScope}</legend>
@@ -500,7 +594,11 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
             </ul>
           </details>
         )}
-        {tables.length === 1 && <p data-testid="export-lists-notice-single">{STRINGS.exportListsSingleNotice}</p>}
+        {tables.length === 1 && !wantsPrinted && (
+          // A printed table carries the provenance a bare CSV has nowhere to put, so the sentence
+          // belongs only to the CSV half of the choice (#84 §3.5).
+          <p data-testid="export-lists-notice-single">{STRINGS.exportListsSingleNotice}</p>
+        )}
         <p className="helper" data-testid="export-lists-backup-link">
           {STRINGS.exportBackupLink}
         </p>
@@ -509,6 +607,13 @@ export const ListsPanel = ({ origin, unsavedChanges, port, onClose }: ListsPanel
       {blocked !== null && (
         <p className="bb-export-blocked" data-testid="export-lists-blocked" role="alert">
           {blocked}
+        </p>
+      )}
+
+      {outcome?.kind === 'downloaded' && outcome.missingGlyphs.length > 0 && (
+        // The file was written; this names the labels to expect boxes in (#84 §3.7).
+        <p className="bb-export-notice" data-testid="export-lists-notice-glyphs">
+          {STRINGS.exportMissingGlyphNotice(outcome.missingGlyphs.join(', '))}
         </p>
       )}
 

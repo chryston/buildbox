@@ -63,7 +63,7 @@ interface Manifest {
   manifest_version: number
   contract_version: string
   exported_at: string
-  files: Array<{ path: string; kind: string; bytes?: number; sha256?: string }>
+  files: Array<{ path: string; kind: string; format?: string; bytes?: number; sha256?: string }>
   recipe: { tables: string[] }
 }
 
@@ -203,3 +203,75 @@ async function listsZip(page: Page): Promise<Buffer> {
   await openLists(page)
   return (await runLists(page)).buffer
 }
+
+// The printed lists (#84 criteria 2, 3, 9, 12): the same tab, the same Worker, the same download —
+// and a PDF instead of a CSV. What only a browser answers is that the face the PDF embeds was
+// fetched and shipped to the Worker, that the file the browser was handed opens as a PDF, and that
+// asking for both shapes of one table is two files and so an archive with a manifest.
+test('a table asked for as a PDF downloads a PDF, and the Project is untouched', async ({ page }) => {
+  await openPreviewApp(page)
+  await showFloorPlan(page)
+  await expect(saveStatus(page)).toContainText('Saved locally')
+  const revision = await projectRevision(page, previewSeed.projects[0].id)
+
+  await openLists(page)
+  await page.getByTestId('export-lists-table-cut-list').click()
+  await page.getByTestId('export-lists-format-items-pdf').click()
+  // A printed table carries its own provenance, so the bare-CSV sentence is gone.
+  await expect(page.getByTestId('export-lists-notice-single')).toHaveCount(0)
+  await expect(page.getByTestId('export-lists-page-size')).toBeVisible()
+
+  const file = await runLists(page)
+  expect(file.name).toMatch(new RegExp(`^${SLUG}_items_\\d{8}\\.pdf$`))
+  expect(file.buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-')
+  const text = file.buffer.toString('latin1')
+  expect(text).toContain('/Type /Page')
+  // The face was fetched and shipped to the Worker: a PDF with no embedded font is the failure this
+  // chain most easily produces, and it opens fine while showing nothing but boxes.
+  expect(text).toContain('/FontFile2')
+  expect(text).toContain('NotoSans')
+  expect(text).toContain('/ID [ <')
+
+  await expect(saveStatus(page)).toContainText('Saved locally')
+  await expect(undoButton(page)).toBeDisabled()
+  expect(await projectRevision(page, previewSeed.projects[0].id)).toBe(revision)
+})
+
+test('both shapes of one table arrive as one archive with both manifest entries', async ({ page }) => {
+  await openPreviewApp(page)
+  await showFloorPlan(page)
+  await openLists(page)
+  await page.getByTestId('export-lists-table-cut-list').click()
+  await page.getByTestId('export-lists-format-items-both').click()
+  await page.getByTestId('export-lists-page-size-A3').click()
+
+  const file = await runLists(page)
+  expect(file.name).toMatch(new RegExp(`^${SLUG}_lists_\\d{8}\\.zip$`))
+  const entries = unzipSync(new Uint8Array(file.buffer))
+  const names = Object.keys(entries).sort()
+  expect(names.filter((name) => !name.endsWith('.json'))).toHaveLength(2)
+  expect(names.some((name) => /_items_\d{8}\.csv$/.test(name))).toBe(true)
+  expect(names.some((name) => /_items_\d{8}\.pdf$/.test(name))).toBe(true)
+  const manifest = manifestOf(entries)
+  expect(manifest.files.filter((one) => one.kind === 'list').map((one) => one.format).sort()).toEqual(['csv', 'pdf'])
+  for (const one of manifest.files.filter((entry) => entry.kind === 'list')) {
+    const bytes = entries[one.path]!
+    expect(one.bytes, one.path).toBe(bytes.length)
+    expect(one.sha256, one.path).toBe(createHash('sha256').update(bytes).digest('hex'))
+  }
+})
+
+test('the paper and the shape are remembered for this view', async ({ page }) => {
+  await openPreviewApp(page)
+  await showFloorPlan(page)
+  await openLists(page)
+  await page.getByTestId('export-lists-table-cut-list').click()
+  await page.getByTestId('export-lists-format-items-pdf').click()
+  await page.getByTestId('export-lists-page-size-A3').click()
+  await runLists(page)
+
+  await page.getByTestId('export-open').click()
+  await page.getByTestId('export-tab-lists').click()
+  await expect(page.getByTestId('export-lists-format-items-pdf')).toBeChecked()
+  await expect(page.getByTestId('export-lists-page-size-A3')).toBeChecked()
+})
