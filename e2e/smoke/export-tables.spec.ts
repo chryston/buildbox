@@ -199,7 +199,8 @@ test('the five tables come back as one archive whose manifest hashes every entry
 
   const entries = unzipSync(new Uint8Array(file.buffer))
   // The contract's order, whatever order the boxes were ticked in — and nothing else in the archive.
-  expect(Object.keys(entries)).toEqual([...FIVE.map((id) => `${SLUG}_${id}_${day}.csv`), 'manifest.json'])
+  // The manifest leads the archive (#85 §2.1), then the tables in the order the dialog lists them.
+  expect(Object.keys(entries)).toEqual(['manifest.json', ...FIVE.map((id) => `${SLUG}_${id}_${day}.csv`)])
 
   for (const id of FIVE) {
     const path = `${SLUG}_${id}_${day}.csv`
