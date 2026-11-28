@@ -309,15 +309,20 @@ describe('the Export dialog', () => {
     expect(fake.runs[0]?.views).toEqual([ORIGIN, elevation])
   })
 
-  it('offers Lists as a live tab and Handoff pack as one that does nothing yet', async () => {
-    const { port } = fakePort()
+  it('opens the Handoff pack as a third live tab (#85 §3.1)', async () => {
+    const { port, handoffRuns } = fakePort()
     await open(port)
-    expect(screen.getByTestId('export-tab-drawing')).toBeEnabled()
-    expect(screen.getByTestId('export-tab-lists')).toBeEnabled()
     const tabs = screen.getAllByRole('tab')
     expect(tabs).toHaveLength(3)
-    expect(tabs[2]).toBeDisabled()
-    expect(tabs[2]).toHaveAttribute('title', 'Coming soon')
+    for (const tab of tabs) expect(tab).toBeEnabled()
+    fireEvent.click(screen.getByTestId('export-tab-handoff'))
+    // The pack's own controls, not the drawing's: the tab replaces the panel rather than adding to it.
+    expect(await screen.findByTestId('export-handoff-outputs')).toBeTruthy()
+    expect(screen.queryByTestId('export-views')).toBeNull()
+    // Every printed output and every CSV is ticked before the person touches anything (§3.1).
+    expect(screen.getByTestId<HTMLInputElement>('export-handoff-output-drawings').checked).toBe(true)
+    expect(screen.getByTestId<HTMLInputElement>('export-handoff-data-walls').checked).toBe(true)
+    expect(handoffRuns).toHaveLength(0)
   })
   it('says what the files carry and how many warnings are unacknowledged', async () => {
     const { port } = fakePort()

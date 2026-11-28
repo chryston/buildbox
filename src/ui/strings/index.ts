@@ -401,6 +401,26 @@ export const STRINGS = {
   exportTabLists: 'Lists',
   exportTabHandoff: 'Handoff pack',
   exportTabComingSoon: 'Coming soon',
+  // #85 §3: the Handoff Pack tab. The pack is one zip for the person the work is handed to, so the
+  // two notices that could be mistaken for a Backup or for an anonymous file are written to be read.
+  exportHandoffGroupOutputs: 'Printed pages',
+  exportHandoffGroupData: 'Data files',
+  exportHandoffDrawings: 'Drawing set',
+  exportHandoffItemList: 'Item list',
+  exportHandoffCutList: 'Cut list',
+  exportHandoffCommentRegister: 'Comment register',
+  exportHandoffRows: (rows: number): string => `${rows} ${rows === 1 ? 'row' : 'rows'}`,
+  exportHandoffNoCutList: 'Nothing in this scope has parts to cut.',
+  exportHandoffScopeOne: 'One scope for the whole pack: every page and every file below is drawn from it.',
+  exportHandoffHidden: (count: number): string =>
+    `Your saved view hides ${count} ${count === 1 ? 'row' : 'rows'}, and they are in the pack.`,
+  exportHandoffWarnings: (count: number): string =>
+    `${count} ${count === 1 ? 'warning is' : 'warnings are'} waiting for you.`,
+  exportHandoffUserContent: 'This pack holds what you typed — names, notes and comments — and leaves the device with it.',
+  exportHandoffNotBackup: 'A pack is for handing over, not for restoring. It cannot be opened again as your work.',
+  exportHandoffRetry: 'Untick that output and try again, or download the pack without it.',
+  exportHandoffRun: 'Download pack',
+  exportHandoffClose: 'Done',
   exportGroupViews: 'Views',
   exportGroupSheet: 'Sheet',
   exportGroupFiles: 'Files',

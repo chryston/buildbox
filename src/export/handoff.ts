@@ -29,35 +29,7 @@ import type {
   HandoffResult,
   Recipe,
 } from './types'
-
-/**
- * The eleven CSVs the pack can carry, in the order the contract lists them (#85 §3.1). The order is
- * the entry order, so two exports of one recipe write the same archive.
- */
-export const HANDOFF_TABLES: readonly TableId[] = [
-  'rooms',
-  'walls',
-  'openings',
-  'beams',
-  'skirting',
-  'services',
-  'placed-items',
-  'items',
-  'cut-list',
-  'comments',
-  'warnings',
-]
-
-/** Every printed output ticked, which is what the tab shows before the person changes anything. */
-export const DEFAULT_HANDOFF_OUTPUTS = Object.freeze({
-  drawings: true,
-  itemList: true,
-  cutList: true,
-  commentRegister: true,
-})
-
-/** The CSVs ticked by default: all of them, in contract order. */
-export const DEFAULT_HANDOFF_TABLES: readonly TableId[] = HANDOFF_TABLES
+import { HANDOFF_TABLES } from './types'
 
 /** Where one output sits inside the archive. Fixed names, so a reader can ask for `data/walls.csv`. */
 export function handoffPath(kind: 'drawings' | 'item-list' | 'cut-list' | 'comment-register'): string {

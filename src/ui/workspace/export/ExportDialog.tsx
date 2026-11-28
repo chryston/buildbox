@@ -35,6 +35,7 @@ import type {
 } from '../../../export'
 
 import { ListsPanel } from './ListsPanel'
+import { HandoffPanel } from './HandoffPanel'
 import { viewKey } from '../../../export'
 import type { BlockedView, ExportPort, ExportPreview, ExportRunOutcome } from './port'
 import type { Rect } from '../../../derive'
@@ -100,9 +101,9 @@ export const ExportDialog = ({
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<ExportProgress | null>(null)
   const [outcome, setOutcome] = useState<ExportRunOutcome | null>(null)
-  // Two tabs, one dialog: `Drawing` writes sheets, `Lists` writes tables (#62). The Handoff pack
-  // stays a disabled tab until #85 gives it something to do.
-  const [tab, setTab] = useState<'drawing' | 'lists'>('drawing')
+  // Three tabs, one dialog: `Drawing` writes sheets, `Lists` writes tables (#62), and `Handoff pack`
+  // packs both, plus the CSVs, into one archive for the person the work is handed to (#85).
+  const [tab, setTab] = useState<'drawing' | 'lists' | 'handoff'>('drawing')
 
   // The remembered recipe is a device preference read, so it arrives after the first paint. The
   // unit and precision are not remembered: they are the Project's, copied when the dialog opens.
@@ -399,10 +400,23 @@ export const ExportDialog = ({
         >
           {STRINGS.exportTabLists}
         </button>
-        <button type="button" role="tab" aria-selected="false" disabled title={STRINGS.exportTabComingSoon}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'handoff'}
+          data-testid="export-tab-handoff"
+          className={tab === 'handoff' ? 'active' : undefined}
+          onClick={() => {
+            setTab('handoff')
+          }}
+        >
           {STRINGS.exportTabHandoff}
         </button>
       </div>
+
+      {tab === 'handoff' && (
+        <HandoffPanel origin={origin} unsavedChanges={unsavedChanges} port={port} onClose={onClose} />
+      )}
 
       {tab === 'lists' && <ListsPanel origin={origin} unsavedChanges={unsavedChanges} port={port} onClose={onClose} />}
 
