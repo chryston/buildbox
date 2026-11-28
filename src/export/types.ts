@@ -225,6 +225,36 @@ export interface ListsRecipe {
   readonly pageSize?: PageSize
 }
 
+/**
+ * Which of the Handoff Pack's four printed outputs are in the pack (#85 §3.1). Every one of them is
+ * ticked when the tab opens; the Cut List is ticked only when there is a cut-list-capable Item Design
+ * in scope to cut, and an unticked one writes no entry at all.
+ */
+export interface HandoffOutputs {
+  readonly drawings: boolean
+  readonly itemList: boolean
+  readonly cutList: boolean
+  readonly commentRegister: boolean
+}
+
+/**
+ * A Handoff Pack: one Drawing Set, three printed lists and a folder of CSVs, in one archive (#85 §3).
+ *
+ * The two halves are the recipes the Drawing and Lists tabs already write, so a pack and the same
+ * settings exported from those tabs cannot disagree about a row, a page or a scope. The pack carries
+ * no new drawing or scope rule of its own — §3.2's per-table rules are `exportLists`' rules.
+ */
+export interface HandoffRecipe {
+  /** The Drawing Set: its views, page order, sheet, scale and Notes switches. */
+  readonly drawing: Recipe
+  readonly outputs: HandoffOutputs
+  /** The CSVs under `data/`, in the order the contract lists them. */
+  readonly tables: readonly TableId[]
+  readonly scope: QuantityScope
+  /** The Comment Register is Open Comments; this stays `false` unless the person asked otherwise. */
+  readonly includeResolvedComments?: boolean
+}
+
 /** The shape one table takes in the download: its rows as a file, as a printed table, or as both. */
 export type ListFormat = 'csv' | 'pdf' | 'both'
 
@@ -300,6 +330,23 @@ export type ExportResult =
       readonly missingGlyphs: readonly string[]
     }
   | { readonly ok: false; readonly failures: readonly ExportFailure[] }
+
+/** What one Handoff Pack run produced: the archive, its manifest, and any glyph notice. */
+export interface HandoffSuccess {
+  readonly ok: true
+  readonly archive: ExportFile
+  readonly manifest: ExportFile
+  readonly missingGlyphs: readonly string[]
+}
+
+/** Why a pack was not written: at least one output failed, and nothing was handed over. */
+export interface HandoffFailure {
+  readonly ok: false
+  readonly failures: readonly ExportFailure[]
+}
+
+/** The pack's result: the archive, or the list of outputs that failed. */
+export type HandoffResult = HandoffSuccess | HandoffFailure
 
 /**
  * The clock, narrowed to the two questions `export` asks it.
