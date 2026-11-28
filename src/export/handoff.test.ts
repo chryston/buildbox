@@ -12,9 +12,9 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import * as fc from 'fast-check'
 import { sha256Hex } from '../lib'
-import { referenceProject } from '../derive/testing'
+import { basicProject, referenceProject } from '../derive/testing'
 import { warningMessages, type QuantityScope } from '../derive'
-import type { Project } from '../domain'
+import { validateProject, type Project } from '../domain'
 import { unzipEntries } from '../lib'
 import { defaultListsScope } from './scope'
 import { exportHandoff, handoffDataPath } from './handoff'
@@ -34,23 +34,44 @@ const LATER: ExportClock = { now: () => '2026-03-04T09:31:00.000Z', localDate: (
 const sentences = (at: Project, scope: QuantityScope): Record<string, string> =>
   warningMessages(at, scope, (messageKey) => `sentence:${messageKey}`)
 
-const deps = (clock: ExportClock): ExportDeps => {
-  const project = referenceProject()
-  const scope = defaultListsScope(project, null)
-  return {
-    clock,
-    buildboxVersion: '0.0.0-test',
-    font: { bytes: latin1Font() },
-    warningMessages: sentences(project, scope),
-  }
-}
+/**
+ * The deps for one clock.
+ *
+ * Sentencing every Warning of the reference project is a full derivation of it, and a test that
+ * packs the same project repeatedly would otherwise pay for it each time. The sentences depend on
+ * nothing but the project and the scope, both fixed here, so they are built once.
+ */
+const reference = referenceProject()
+const referenceScope = defaultListsScope(reference, null)
+const referenceSentences = sentences(reference, referenceScope)
+const fontBytes = latin1Font()
+
+const deps = (clock: ExportClock): ExportDeps => ({
+  clock,
+  buildboxVersion: '0.0.0-test',
+  font: { bytes: fontBytes },
+  warningMessages: referenceSentences,
+})
 
 function snapshotOf(revision = 3): ExportSnapshot {
-  return { project: referenceProject(), revision }
+  return { project: reference, revision }
 }
 
+/**
+ * How long one test in this file may take.
+ *
+ * A pack of the reference project is a real document set: a Drawing Set of three views, an Item
+ * List, a Cut List of 1 620 rows over 58 pages, a Comment Register and eleven CSVs. Measured on one
+ * machine with the clock injected, that is about 2.5 s, of which roughly 2 s is `pdf-lib` writing
+ * the ~25 000 text operations the Cut List alone contains — the layout that decides them is 40 ms.
+ * Printing 1 620 rows costs what it costs, so the tests say so rather than pretending the default
+ * five seconds is enough for it. A loaded CI runner has been seen to take four times the local
+ * figure, which is where the margin below comes from; it is not headroom to spend.
+ */
+const PACK = 30_000
+
 function recipe(over: Partial<HandoffRecipe> = {}): HandoffRecipe {
-  const project = referenceProject()
+  const project = reference
   return {
     drawing: {
       views: project.views.map((view) => ({ kind: 'plan' as const, viewId: view.id })),
@@ -86,9 +107,23 @@ function text(bytes: Uint8Array, name: string): string {
 }
 
 describe('the Handoff Pack (#85 §3.1)', () => {
+  // The default pack answers three questions — what is in it, how the Drawing Set is paginated, and
+  // what the manifest says — and building it costs about 2.5 s of `pdf-lib` work. These tests read
+  // the same bytes and change nothing, so they share one build; the determinism test below still
+  // builds its own twice, because two calls is the thing it is checking.
+  let shared: Promise<Exclude<Awaited<ReturnType<typeof exportHandoff>>, { ok: false }>> | null = null
+  const defaultPack = async () => {
+    if (shared === null) {
+      shared = exportHandoff(snapshotOf(), recipe(), deps(AT)).then((result) => {
+        if (!result.ok) throw new Error(`the pack failed: ${JSON.stringify(result.failures)}`)
+        return result
+      })
+    }
+    return shared
+  }
+
   it('holds the drawings, the three printed lists and every CSV, under fixed names', async () => {
-    const result = await exportHandoff(snapshotOf(), recipe(), deps(AT))
-    if (!result.ok) throw new Error(`the pack failed: ${JSON.stringify(result.failures)}`)
+    const result = await defaultPack()
     const names = entriesOf(result.archive.bytes).map((each) => each.name)
     expect(names[0]).toBe('manifest.json')
     expect(names).toContain('drawings.pdf')
@@ -100,7 +135,7 @@ describe('the Handoff Pack (#85 §3.1)', () => {
     // one by name without knowing the Project.
     expect(names.filter((each) => each.startsWith('data/'))).toHaveLength(HANDOFF_TABLES.length)
     expect(result.archive.name).toBe(`${referenceProject().meta.name.replace(/[^A-Za-z0-9]+/g, '-')}_handoff_20260304.zip`)
-  })
+  }, PACK)
 
   it('writes only what was ticked', async () => {
     const result = await exportHandoff(
@@ -111,21 +146,19 @@ describe('the Handoff Pack (#85 §3.1)', () => {
     if (!result.ok) throw new Error(`the pack failed: ${JSON.stringify(result.failures)}`)
     const names = entriesOf(result.archive.bytes).map((each) => each.name)
     expect(names).toEqual(['manifest.json', 'data/walls.csv'])
-  })
+  }, PACK)
 
   it('holds one page per view in the Drawing Set, and says so on each page', async () => {
-    const result = await exportHandoff(snapshotOf(), recipe(), deps(AT))
-    if (!result.ok) throw new Error(`the pack failed: ${JSON.stringify(result.failures)}`)
+    const result = await defaultPack()
     const drawings = entriesOf(result.archive.bytes).find((each) => each.name === 'drawings.pdf')
     if (drawings === undefined) throw new Error('no drawings.pdf')
     const pdf = new TextDecoder('latin1').decode(drawings.data)
     expect(pdf).toContain('/Type /Pages')
     expect(pdf.match(/\/Type \/Page[^s]/g)).toHaveLength(referenceProject().views.length)
-  })
+  }, PACK)
 
   it('describes every entry in the manifest, and itself last', async () => {
-    const result = await exportHandoff(snapshotOf(), recipe(), deps(AT))
-    if (!result.ok) throw new Error(`the pack failed: ${JSON.stringify(result.failures)}`)
+    const result = await defaultPack()
     const manifest = JSON.parse(text(result.archive.bytes, 'manifest.json')) as Record<string, unknown>
     expect(manifest.format).toBe('buildbox-export')
     const archive = entriesOf(result.archive.bytes).map((each) => each.name)
@@ -138,9 +171,9 @@ describe('the Handoff Pack (#85 §3.1)', () => {
     expect(manifest.recipe).toMatchObject({ outputs: DEFAULT_HANDOFF_OUTPUTS })
     // Every entry says which contract wrote it, which is what a reader checks before it parses a header.
     for (const entry of files) expect(entry.contract_version).toBe('1.0')
-  })
+  }, PACK)
 
-  it('is byte-identical when nothing but the call changed, and moves only its clock otherwise', { timeout: 40_000 }, async () => {
+  it('is byte-identical when nothing but the call changed, and moves only its clock otherwise', async () => {
     const first = await exportHandoff(snapshotOf(), recipe(), deps(AT))
     const second = await exportHandoff(snapshotOf(), recipe(), deps(AT))
     const later = await exportHandoff(snapshotOf(), recipe(), deps(LATER))
@@ -163,7 +196,7 @@ describe('the Handoff Pack (#85 §3.1)', () => {
         }),
       )
     expect(strip(later.archive.bytes)).toBe(strip(first.archive.bytes))
-  })
+  }, PACK)
 
   it('produces no pack when one output cannot be written, and names that entry', async () => {
     const project = referenceProject()
@@ -177,7 +210,7 @@ describe('the Handoff Pack (#85 §3.1)', () => {
     // The person ticked `drawings.pdf`, so that is the name the failure has to use.
     expect(result.failures.every((each) => each.output === 'drawings.pdf')).toBe(true)
     expect(project.views.length).toBeGreaterThan(0)
-  })
+  }, PACK)
 
   it('records a digest that matches the bytes it names, for any selection (#85 §5)', async () => {
     // The manifest is the only thing a reader has before it opens a file: it says what is in the
@@ -188,6 +221,16 @@ describe('the Handoff Pack (#85 §3.1)', () => {
     // four printed outputs. The CSVs carry the selection rather than the PDFs, which take seconds
     // each and are covered whole by the tests above; the property is about the manifest, and the
     // manifest is written from the same list either way.
+    //
+    // It runs on the small fixture rather than the reference project for the same reason: the
+    // manifest's shape does not depend on how many cabinets a project holds, and deriving the
+    // reference project's eleven tables seventeen times costs more than it checks. Every other test
+    // in this file still packs the reference project.
+    const small = basicProject()
+    expect(validateProject(small).ok, 'the property test would prove nothing on an invalid project').toBe(true)
+    const little: ExportSnapshot = { project: small, revision: 3 }
+    const littleRecipe = (over: Partial<HandoffRecipe> = {}): HandoffRecipe =>
+      recipe({ ...over, scope: defaultListsScope(small, null) })
     const arbTables = fc.subarray([...HANDOFF_TABLES], { minLength: 1 })
     const arbOutputs = fc.record({
       drawings: fc.constant(false),
@@ -198,7 +241,7 @@ describe('the Handoff Pack (#85 §3.1)', () => {
     let checked = 0
     await fc.assert(
       fc.asyncProperty(arbTables, arbOutputs, async (tables, outputs) => {
-        const result = await exportHandoff(snapshotOf(), recipe({ tables, outputs }), deps(AT))
+        const result = await exportHandoff(little, littleRecipe({ tables, outputs }), deps(AT))
         if (!result.ok) throw new Error(`the pack refused: ${JSON.stringify(result.failures)}`)
         const manifest = JSON.parse(text(result.archive.bytes, 'manifest.json')) as {
           files: { path: string; sha256: string; bytes: number }[]
@@ -224,7 +267,7 @@ describe('the Handoff Pack (#85 §3.1)', () => {
     )
     // A property that never ran a case passes as happily as one that ran seventeen.
     expect(checked).toBeGreaterThan(17)
-  }, 120_000)
+  }, PACK)
 
   it('writes the same pack, byte for byte, as the golden', async () => {
     // One whole Handoff Pack, with the clock injected, held as bytes: the manifest's ordering, the
@@ -240,5 +283,5 @@ describe('the Handoff Pack (#85 §3.1)', () => {
       writeFileSync(golden, result.archive.bytes)
     }
     expect(result.archive.bytes).toEqual(new Uint8Array(readFileSync(golden)))
-  }, 60_000)
+  }, PACK)
 })
