@@ -70,6 +70,12 @@ export interface ExportDialogProps {
    * Item Detail View, which can never be blocked anyway.
    */
   onOpenView?(viewId: string): void
+  /**
+   * Taking the person to where a Backup is downloaded (#85 §3.4). A Handoff Pack cannot be opened
+   * again as their work, and the one thing they might want instead lives in the Project Library — so
+   * the tab says so and offers the way there, rather than offering a second Backup of its own.
+   */
+  onOpenBackup(): void
   onClose(): void
 }
 
@@ -80,6 +86,7 @@ export const ExportDialog = ({
   unsavedChanges,
   port,
   onOpenView,
+  onOpenBackup,
   onClose,
 }: ExportDialogProps): ReactNode => {
   const key = viewKey(origin)
@@ -415,7 +422,13 @@ export const ExportDialog = ({
       </div>
 
       {tab === 'handoff' && (
-        <HandoffPanel origin={origin} unsavedChanges={unsavedChanges} port={port} onClose={onClose} />
+        <HandoffPanel
+          origin={origin}
+          unsavedChanges={unsavedChanges}
+          port={port}
+          onOpenBackup={onOpenBackup}
+          onClose={onClose}
+        />
       )}
 
       {tab === 'lists' && <ListsPanel origin={origin} unsavedChanges={unsavedChanges} port={port} onClose={onClose} />}

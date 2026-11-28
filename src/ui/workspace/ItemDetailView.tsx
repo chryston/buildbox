@@ -38,7 +38,7 @@ function gotoPlacement(floorId: string, viewId: string | null, placedItemId: str
 }
 
 export function ItemDetailView({ itemDesignId, children }: ItemDetailViewProps) {
-  const { session, services } = useWorkspaceRoot()
+  const { session, services, host } = useWorkspaceRoot()
   const project = useWorkspaceProject(session)
   const [isExporting, setIsExporting] = useState(false)
   const detail = useWorkspace((state) => state.itemDetail)
@@ -90,6 +90,7 @@ export function ItemDetailView({ itemDesignId, children }: ItemDetailViewProps) 
           precision={project.preferences.displayPrecision}
           unsavedChanges={session.getSnapshot().save.kind !== 'saved'}
           port={services.exportDrawings}
+          onOpenBackup={host.returnToProjects}
           onClose={() => {
             setIsExporting(false)
           }}

@@ -418,6 +418,7 @@ export const STRINGS = {
     `${count} ${count === 1 ? 'warning is' : 'warnings are'} waiting for you.`,
   exportHandoffUserContent: 'This pack holds what you typed — names, notes and comments — and leaves the device with it.',
   exportHandoffNotBackup: 'A pack is for handing over, not for restoring. It cannot be opened again as your work.',
+  exportHandoffOpenBackup: 'Go to the Project Library to download a Backup',
   exportHandoffRetry: 'Untick that output and try again, or download the pack without it.',
   exportHandoffRun: 'Download pack',
   exportHandoffClose: 'Done',

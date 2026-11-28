@@ -193,6 +193,7 @@ exports[`the copy > is the whole vocabulary of the interface 1`] = `
   "exportHandoffItemList": "Item list",
   "exportHandoffNoCutList": "Nothing in this scope has parts to cut.",
   "exportHandoffNotBackup": "A pack is for handing over, not for restoring. It cannot be opened again as your work.",
+  "exportHandoffOpenBackup": "Go to the Project Library to download a Backup",
   "exportHandoffRetry": "Untick that output and try again, or download the pack without it.",
   "exportHandoffRows": [Function],
   "exportHandoffRun": "Download pack",

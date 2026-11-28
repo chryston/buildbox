@@ -89,12 +89,15 @@ export interface HandoffPanelProps {
   readonly unsavedChanges: boolean
   readonly port: ExportPort
   readonly onClose: () => void
+  /** Where a Backup is actually downloaded — the Library, which this tab never duplicates (#85 §3.4). */
+  readonly onOpenBackup: () => void
 }
 
 export function HandoffPanel({
   origin,
   unsavedChanges,
   port,
+  onOpenBackup,
   onClose,
 }: HandoffPanelProps): ReactNode {
   const [options, setOptions] = useState<ListsOptions | null>(null)
@@ -344,7 +347,15 @@ export function HandoffPanel({
           {STRINGS.exportHandoffUserContent}
         </p>
         <p className="bb-export-notice" data-testid="export-handoff-notice-backup">
-          <span>{STRINGS.exportHandoffNotBackup}</span> <span>{STRINGS.exportBackupLink}</span>
+          <span>{STRINGS.exportHandoffNotBackup}</span>{' '}
+          <button
+            type="button"
+            className="bb-export-link"
+            data-testid="export-handoff-open-backup"
+            onClick={onOpenBackup}
+          >
+            {STRINGS.exportHandoffOpenBackup}
+          </button>
         </p>
         {unsavedChanges && (
           <p className="bb-export-notice" data-testid="export-handoff-notice-unsaved">

@@ -29,6 +29,9 @@ import type {
   RecordedComposition,
 } from '../../../export'
 
+/** What the dialog was told to do when the pack's Backup note is followed (#85 §3.4). */
+let openBackup = (): void => {}
+
 const ORIGIN: RecipeViewRef = { kind: 'plan', viewId: 'v-1' }
 const OTHER: RecipeViewRef = { kind: 'plan', viewId: 'v-2' }
 /** A 4 m × 3 m Floor: 400 mm wide at 1:10, 40 mm at 1:100, so 1:10 cannot hold A4 and 1:100 can. */
@@ -241,6 +244,7 @@ async function open(
 ): Promise<void> {
   render(
     <ExportDialog
+      onOpenBackup={openBackup}
       origin={options?.origin ?? ORIGIN}
       unit="mm"
       precision={0}
@@ -324,6 +328,23 @@ describe('the Export dialog', () => {
     expect(screen.getByTestId<HTMLInputElement>('export-handoff-data-walls').checked).toBe(true)
     expect(handoffRuns).toHaveLength(0)
   })
+
+  it('takes the pack\'s Backup note to where a Backup is actually downloaded (#85 §3.4)', async () => {
+    const { port, handoffRuns } = fakePort()
+    let opened = 0
+    openBackup = () => {
+      opened += 1
+    }
+    await open(port)
+    fireEvent.click(screen.getByTestId('export-tab-handoff'))
+    const note = await screen.findByTestId('export-handoff-notice-backup')
+    // The pack is not a Backup, and the tab says so before offering the way to one.
+    expect(note).toHaveTextContent('not for restoring')
+    fireEvent.click(screen.getByTestId('export-handoff-open-backup'))
+    // The Library's own flow, not a second Backup started from inside the dialog.
+    expect(opened).toBe(1)
+    expect(handoffRuns).toHaveLength(0)
+  })
   it('says what the files carry and how many warnings are unacknowledged', async () => {
     const { port } = fakePort()
     await open(port)
@@ -353,7 +374,15 @@ describe('the Export dialog', () => {
   it('warns about unsaved changes only when there are some', async () => {
     const saved = fakePort()
     const { unmount } = render(
-      <ExportDialog origin={ORIGIN} unit="mm" precision={0} unsavedChanges={false} port={saved.port} onClose={() => {}} />,
+      <ExportDialog
+        origin={ORIGIN}
+        unit="mm"
+        precision={0}
+        unsavedChanges={false}
+        port={saved.port}
+        onOpenBackup={openBackup}
+        onClose={() => {}}
+      />,
     )
     expect(screen.queryByTestId('export-notice-unsaved')).toBeNull()
     unmount()
