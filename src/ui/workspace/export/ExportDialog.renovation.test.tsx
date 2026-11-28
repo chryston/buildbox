@@ -122,6 +122,9 @@ function portFor(answers: Answers = {}): {
       listsRuns.push(recipe)
       return Promise.resolve(CANCELLED)
     },
+    recallHandoff: () => Promise.resolve(null),
+    rememberHandoff: () => {},
+    runHandoff: () => Promise.resolve(CANCELLED),
     cancel: () => {},
   }
   return { port, runs, listsRuns, saved, views }

@@ -196,6 +196,12 @@ export interface PrefsMap {
    */
   exportListsRecipes: unknown[]
   /**
+   * #85 §3.6: the Handoff Pack tab's recipe, remembered per Project and saved view. A device
+   * preference for the same reason as the other two — what a person packs for the tradesperson they
+   * are handing over to today is not a fact about the Project, and never travels in a Backup.
+   */
+  exportHandoffRecipes: unknown[]
+  /**
    * #51 §6: whether the browser was asked to keep this origin's storage, and what it said.
    *
    * `askedAt` is when the question was put, which for a refusal is also the moment to start

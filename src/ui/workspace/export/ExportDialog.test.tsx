@@ -21,6 +21,7 @@ import type {
   DrawingLayerChip,
   ExportFailure,
   ExportProgress,
+  HandoffRecipe,
   ListsRecipe,
   ListsSummary,
   Recipe,
@@ -63,6 +64,10 @@ interface Fake {
   readonly scopes: QuantityScope[]
   /** Every recipe the preview was asked to compose, oldest first (#83 §3). */
   readonly previews: Recipe[]
+  /** Every Handoff Pack the tab was asked to write, oldest first (#85 §3). */
+  readonly handoffRuns: HandoffRecipe[]
+  /** Every Handoff Pack the tab asked the device to remember, oldest first (#85 §3.6). */
+  readonly handoffRemembered: HandoffRecipe[]
   setOutcome(outcome: ExportRunOutcome): void
   /** What the Lists tab is told its scope holds; the notices are answers to this. */
   setListsSummary(summary: ListsSummary): void
@@ -120,11 +125,15 @@ function fakePort(options?: {
   blocked?: BlockedView | null
   /** What the preview answers with; `null` is a recipe that composes no sheet (#83 §3). */
   preview?: ExportPreview | null
+  /** The Handoff Pack recipe the device remembers (#85 §3.6). */
+  rememberedHandoff?: HandoffRecipe | null
 }): Fake {
   const runs: Recipe[] = []
   const remembered: Recipe[] = []
   const listsRuns: ListsRecipe[] = []
   const rememberedLists: ListsRecipe[] = []
+  const handoffRuns: HandoffRecipe[] = []
+  const handoffRemembered: HandoffRecipe[] = []
   const scopes: QuantityScope[] = []
   const previews: Recipe[] = []
   let listsSummary: ListsSummary = options?.listsSummary ?? ITEM_SUMMARY
@@ -195,7 +204,19 @@ function fakePort(options?: {
         })
       },
       cancel: vi.fn(),
+      recallHandoff: () => Promise.resolve(options?.rememberedHandoff ?? null),
+      rememberHandoff: (_key, recipe) => {
+        handoffRemembered.push(recipe)
+      },
+      runHandoff: (recipe) => {
+        handoffRuns.push(recipe)
+        return new Promise<ExportRunOutcome>((resolve) => {
+          resolveRun = () => resolve(outcome)
+        })
+      },
     },
+    handoffRuns,
+    handoffRemembered,
   }
 }
 

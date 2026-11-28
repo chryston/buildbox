@@ -136,6 +136,9 @@ export const TEST_EXPORT_PORT: ExportPort = {
   recallLists: async () => null,
   rememberLists: () => {},
   runLists: () => Promise.reject(new Error('jsdom runs no export')),
+  recallHandoff: () => Promise.resolve(null),
+  rememberHandoff: () => {},
+  runHandoff: () => Promise.reject(new Error('jsdom runs no export')),
   cancel: () => {},
 }
 
