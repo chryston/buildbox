@@ -45,9 +45,9 @@ import type { FitSuggestion, Sheet } from './fit'
 import { formatLength } from './format'
 import { scaleDerivedFloor, scaleDerivedItemDetail, scaleFloorRooms, scaleFloorWalls, scaleWallOpenings } from './scaleInput'
 import { SHEET_SIZING, footerItems, frameItems, furnitureLayer, gridItems, renovationLegendItems, scaleBarItems, titleBlockItems } from './sheet'
-import { DESIGN_OPTION, DISPLAY_NAME, NOT_TO_SCALE, TITLE_BLOCK, roomLabel, scaleStatement, unitStatement } from './strings'
+import { DESIGN_OPTION, DISPLAY_NAME, NOT_TO_SCALE, TITLE_BLOCK, pageStatement, roomLabel, scaleStatement, unitStatement } from './strings'
 import { translateList } from './transform'
-import type { ExportSnapshot, Recipe, RecipeViewRef } from './types'
+import type { ExportSnapshot, Orientation, Recipe, RecipeViewRef } from './types'
 import { DEFAULT_NOTES_SWITCHES } from './types'
 
 /** One view, on the sheet it belongs on, in millimetres of paper. */
@@ -79,6 +79,24 @@ export type ComposedSheet =
 
 /** One view that made it onto its sheet. */
 export type ComposedDrawing = Extract<ComposedSheet, { ok: true }>
+
+/**
+ * Where this sheet sits in a Drawing Set, and which way it is held (#85 §1.3).
+ *
+ * A single drawing is page 1 of 1, which is what the title block has always printed. A set gives
+ * every page its own number across the whole set, and lets the person override the orientation the
+ * recipe's own `orientation` would have chosen — `auto` decides per page from the drawing's shape,
+ * and a set of a long Plan and a tall detail wants both held the way their own drawing suits.
+ */
+export interface SheetPage {
+  readonly number: number
+  readonly of: number
+  /** The person's own orientation for this page, which beats the recipe's setting. */
+  readonly orientation?: Orientation
+}
+
+/** The sheet of a drawing exported on its own. */
+export const SINGLE_PAGE: SheetPage = Object.freeze({ number: 1, of: 1 })
 
 /** The drawing for one view, before any sheet exists. */
 interface RawDrawing {
@@ -323,11 +341,13 @@ export function composeSheet(
   recipe: Recipe,
   clock: { localDate(): string },
   buildboxVersion: string,
+  page: SheetPage = SINGLE_PAGE,
 ): ComposedSheet {
   const bounds = modelBounds(snapshot, view)
   if (bounds === null) return { ok: false, reason: 'unknown-view' }
 
-  const orientation = recipe.orientation === 'auto' ? autoOrientation(bounds, recipe.pageSize) : recipe.orientation
+  const setting = page.orientation ?? recipe.orientation
+  const orientation = setting === 'auto' ? autoOrientation(bounds, recipe.pageSize) : setting
   const check = fitCheck(bounds, recipe.pageSize, orientation, recipe.scale)
   if (!check.fits) return { ok: false, reason: 'out-of-paper', suggestions: check.suggestions }
   const denominator = recipe.scale === 'fit' ? fitDenominator(bounds, recipe.pageSize, orientation) : recipe.scale
@@ -358,6 +378,7 @@ export function composeSheet(
           unit: unitStatement(recipe.unit),
           date: clock.localDate(),
           version: buildboxVersion,
+          page: pageStatement(page.number, page.of),
         })
       : []),
     ...(recipe.titleBlock ? footerItems(sheet) : []),

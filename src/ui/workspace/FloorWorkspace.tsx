@@ -4532,6 +4532,7 @@ export function FloorWorkspace(): ReactNode {
           unsavedChanges={session.getSnapshot().save.kind !== 'saved'}
           port={services.exportDrawings}
           onOpenView={openView}
+          onOpenBackup={host.returnToProjects}
           onClose={() => {
             setIsExporting(false)
           }}

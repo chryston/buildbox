@@ -1,0 +1,8 @@
+﻿stable_id,floor_id,floor,design_option_id,design_option,renovation_state,drawing_layer_id,drawing_layer,classification,construction_label,shape,length_mm,radius_mm,thickness_mm,justification,bottom_mm,top_mm,height_mm,predecessor_ids
+seed-tbl-001,seed-001,Floor 1,,,existing,view-2,Structure,external,Face brick,arc,3141.593,1999.999,100,centre,0,2600,2600,
+seed-tbl-002,seed-001,Floor 1,,,existing,view-2,Structure,,,straight,2400,,100,centre,0,2600,2600,
+seed-wall-002,seed-001,Floor 1,,,existing,view-2,Structure,,,straight,9000,,200,centre,0,2600,2600,
+seed-wall-003,seed-001,Floor 1,,,existing,view-2,Structure,,,straight,6400,,200,centre,0,2600,2600,
+seed-wall-004,seed-001,Floor 1,,,existing,view-2,Structure,,,straight,9000,,200,centre,0,2600,2600,
+seed-wall-005,seed-001,Floor 1,,,existing,view-2,Structure,,,straight,6400,,200,centre,0,2600,2600,
+seed-wall-010,seed-001,Floor 1,,,existing,view-2,Structure,,,straight,2400,,100,centre,0,2600,2600,

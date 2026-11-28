@@ -19,6 +19,9 @@ import type {
   RecordedComposition,
 } from '../../../export'
 
+/** What the dialog was told to do when the pack's Backup note is followed (#85 §3.4). */
+const openBackup = (): void => {}
+
 const ORIGIN: RecipeViewRef = { kind: 'plan', viewId: 'v-1' }
 const BOUNDS = { x: 0, y: 0, w: 4000, h: 3000 }
 const VIEW_NAME = 'Ground Floor · Plan · Demolition'
@@ -122,6 +125,9 @@ function portFor(answers: Answers = {}): {
       listsRuns.push(recipe)
       return Promise.resolve(CANCELLED)
     },
+    recallHandoff: () => Promise.resolve(null),
+    rememberHandoff: () => {},
+    runHandoff: () => Promise.resolve(CANCELLED),
     cancel: () => {},
   }
   return { port, runs, listsRuns, saved, views }
@@ -164,6 +170,7 @@ async function settle(): Promise<void> {
 async function open(port: ExportPort, onOpenView?: (viewId: string) => void): Promise<void> {
   render(
     <ExportDialog
+      onOpenBackup={openBackup}
       origin={ORIGIN}
       unit="mm"
       precision={0}

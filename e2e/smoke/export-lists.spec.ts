@@ -111,8 +111,10 @@ test('two tables arrive as one archive whose manifest hashes each entry', async 
   const day = /_(\d{8})\.zip$/.exec(file.name)![1]
 
   const entries = unzipSync(new Uint8Array(file.buffer))
-  // The contract's order, and nothing else in the archive: no directories, no stray files.
-  expect(Object.keys(entries)).toEqual([`${SLUG}_items_${day}.csv`, `${SLUG}_cut-list_${day}.csv`, 'manifest.json'])
+  // The manifest leads the archive (#85 §2.1) so that a reader learns what it is holding before it
+  // holds any of it, then the tables in the order the dialog listed them, and nothing else: no
+  // directories, no stray files.
+  expect(Object.keys(entries)).toEqual(['manifest.json', `${SLUG}_items_${day}.csv`, `${SLUG}_cut-list_${day}.csv`])
   expect(csvRows(Buffer.from(entries[`${SLUG}_items_${day}.csv`]!))[0]).toEqual(ITEMS_HEADER.split(','))
   expect(csvRows(Buffer.from(entries[`${SLUG}_cut-list_${day}.csv`]!))[0]).toEqual(CUT_LIST_HEADER.split(','))
 

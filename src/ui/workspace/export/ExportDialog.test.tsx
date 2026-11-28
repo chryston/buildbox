@@ -13,7 +13,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { ExportDialog } from './ExportDialog'
-import { viewKey } from './port'
+import { viewKey } from '../../../export'
 import type { BlockedView, ExportPort, ExportPreview, ExportRunOutcome, ExportableView, ListsOptions } from './port'
 import type { QuantityScope } from '../../../derive'
 import type { DisplayList } from '../../../drawing'
@@ -21,12 +21,16 @@ import type {
   DrawingLayerChip,
   ExportFailure,
   ExportProgress,
+  HandoffRecipe,
   ListsRecipe,
   ListsSummary,
   Recipe,
   RecipeViewRef,
   RecordedComposition,
 } from '../../../export'
+
+/** What the dialog was told to do when the pack's Backup note is followed (#85 §3.4). */
+let openBackup = (): void => {}
 
 const ORIGIN: RecipeViewRef = { kind: 'plan', viewId: 'v-1' }
 const OTHER: RecipeViewRef = { kind: 'plan', viewId: 'v-2' }
@@ -63,6 +67,10 @@ interface Fake {
   readonly scopes: QuantityScope[]
   /** Every recipe the preview was asked to compose, oldest first (#83 §3). */
   readonly previews: Recipe[]
+  /** Every Handoff Pack the tab was asked to write, oldest first (#85 §3). */
+  readonly handoffRuns: HandoffRecipe[]
+  /** Every Handoff Pack the tab asked the device to remember, oldest first (#85 §3.6). */
+  readonly handoffRemembered: HandoffRecipe[]
   setOutcome(outcome: ExportRunOutcome): void
   /** What the Lists tab is told its scope holds; the notices are answers to this. */
   setListsSummary(summary: ListsSummary): void
@@ -120,11 +128,15 @@ function fakePort(options?: {
   blocked?: BlockedView | null
   /** What the preview answers with; `null` is a recipe that composes no sheet (#83 §3). */
   preview?: ExportPreview | null
+  /** The Handoff Pack recipe the device remembers (#85 §3.6). */
+  rememberedHandoff?: HandoffRecipe | null
 }): Fake {
   const runs: Recipe[] = []
   const remembered: Recipe[] = []
   const listsRuns: ListsRecipe[] = []
   const rememberedLists: ListsRecipe[] = []
+  const handoffRuns: HandoffRecipe[] = []
+  const handoffRemembered: HandoffRecipe[] = []
   const scopes: QuantityScope[] = []
   const previews: Recipe[] = []
   let listsSummary: ListsSummary = options?.listsSummary ?? ITEM_SUMMARY
@@ -195,7 +207,19 @@ function fakePort(options?: {
         })
       },
       cancel: vi.fn(),
+      recallHandoff: () => Promise.resolve(options?.rememberedHandoff ?? null),
+      rememberHandoff: (_key, recipe) => {
+        handoffRemembered.push(recipe)
+      },
+      runHandoff: (recipe) => {
+        handoffRuns.push(recipe)
+        return new Promise<ExportRunOutcome>((resolve) => {
+          resolveRun = () => resolve(outcome)
+        })
+      },
     },
+    handoffRuns,
+    handoffRemembered,
   }
 }
 
@@ -220,6 +244,7 @@ async function open(
 ): Promise<void> {
   render(
     <ExportDialog
+      onOpenBackup={openBackup}
       origin={options?.origin ?? ORIGIN}
       unit="mm"
       precision={0}
@@ -288,15 +313,37 @@ describe('the Export dialog', () => {
     expect(fake.runs[0]?.views).toEqual([ORIGIN, elevation])
   })
 
-  it('offers Lists as a live tab and Handoff pack as one that does nothing yet', async () => {
-    const { port } = fakePort()
+  it('opens the Handoff pack as a third live tab (#85 §3.1)', async () => {
+    const { port, handoffRuns } = fakePort()
     await open(port)
-    expect(screen.getByTestId('export-tab-drawing')).toBeEnabled()
-    expect(screen.getByTestId('export-tab-lists')).toBeEnabled()
     const tabs = screen.getAllByRole('tab')
     expect(tabs).toHaveLength(3)
-    expect(tabs[2]).toBeDisabled()
-    expect(tabs[2]).toHaveAttribute('title', 'Coming soon')
+    for (const tab of tabs) expect(tab).toBeEnabled()
+    fireEvent.click(screen.getByTestId('export-tab-handoff'))
+    // The pack's own controls, not the drawing's: the tab replaces the panel rather than adding to it.
+    expect(await screen.findByTestId('export-handoff-outputs')).toBeTruthy()
+    expect(screen.queryByTestId('export-views')).toBeNull()
+    // Every printed output and every CSV is ticked before the person touches anything (§3.1).
+    expect(screen.getByTestId<HTMLInputElement>('export-handoff-output-drawings').checked).toBe(true)
+    expect(screen.getByTestId<HTMLInputElement>('export-handoff-data-walls').checked).toBe(true)
+    expect(handoffRuns).toHaveLength(0)
+  })
+
+  it('takes the pack\'s Backup note to where a Backup is actually downloaded (#85 §3.4)', async () => {
+    const { port, handoffRuns } = fakePort()
+    let opened = 0
+    openBackup = () => {
+      opened += 1
+    }
+    await open(port)
+    fireEvent.click(screen.getByTestId('export-tab-handoff'))
+    const note = await screen.findByTestId('export-handoff-notice-backup')
+    // The pack is not a Backup, and the tab says so before offering the way to one.
+    expect(note).toHaveTextContent('not for restoring')
+    fireEvent.click(screen.getByTestId('export-handoff-open-backup'))
+    // The Library's own flow, not a second Backup started from inside the dialog.
+    expect(opened).toBe(1)
+    expect(handoffRuns).toHaveLength(0)
   })
   it('says what the files carry and how many warnings are unacknowledged', async () => {
     const { port } = fakePort()
@@ -327,7 +374,15 @@ describe('the Export dialog', () => {
   it('warns about unsaved changes only when there are some', async () => {
     const saved = fakePort()
     const { unmount } = render(
-      <ExportDialog origin={ORIGIN} unit="mm" precision={0} unsavedChanges={false} port={saved.port} onClose={() => {}} />,
+      <ExportDialog
+        origin={ORIGIN}
+        unit="mm"
+        precision={0}
+        unsavedChanges={false}
+        port={saved.port}
+        onOpenBackup={openBackup}
+        onClose={() => {}}
+      />,
     )
     expect(screen.queryByTestId('export-notice-unsaved')).toBeNull()
     unmount()
@@ -354,7 +409,7 @@ describe('the Export dialog', () => {
     expect(screen.getByTestId('export-scale')).toBeInTheDocument()
   })
 
-  it('shows the PNG size only for PNG, and exports one view at a time as PDF', async () => {
+  it('shows the PNG size only for PNG, and lets a PDF hold every view chosen', async () => {
     const { port } = fakePort()
     await open(port)
     expect(screen.queryByTestId('export-png-size')).toBeNull()
@@ -362,8 +417,29 @@ describe('the Export dialog', () => {
     expect(screen.getByTestId('export-png-size')).toHaveValue('2048')
     fireEvent.change(screen.getByTestId('export-format'), { target: { value: 'pdf' } })
     expect(screen.getByTestId('export-notice-privacy')).toBeInTheDocument()
-    expect(screen.getByTestId(`export-view-${viewKey(OTHER)}`)).toBeDisabled()
-    expect(screen.getByText('PDF exports one view at a time.')).toBeInTheDocument()
+    // A Drawing Set (#85 §1.1): PDF no longer takes one view, so the other boxes stay tickable and
+    // the sentence that said otherwise is gone.
+    expect(screen.getByTestId(`export-view-${viewKey(OTHER)}`)).toBeEnabled()
+    expect(screen.queryByText('PDF exports one view at a time.')).toBeNull()
+  })
+
+  it('lists the pages of a set and moves one ahead of another (#85 §1.2)', async () => {
+    const { port, runs } = fakePort()
+    await open(port)
+    fireEvent.change(screen.getByTestId('export-format'), { target: { value: 'pdf' } })
+    expect(screen.queryByTestId('export-page-order')).toBeNull()
+    fireEvent.click(screen.getByTestId(`export-view-${viewKey(OTHER)}`))
+    // The order the ↑/↓ controls are listed in is the order the pages will be drawn in.
+    const pages = (): string[] =>
+      screen
+        .getAllByTestId(/^export-page-up-/)
+        .map((row) => row.getAttribute('data-testid')!.slice('export-page-up-'.length))
+    expect(pages()).toEqual([viewKey(ORIGIN), viewKey(OTHER)])
+    fireEvent.click(screen.getByTestId(`export-page-down-${viewKey(ORIGIN)}`))
+    expect(pages()).toEqual([viewKey(OTHER), viewKey(ORIGIN)])
+    fireEvent.click(screen.getByTestId('export-run'))
+    await waitFor(() => expect(runs).toHaveLength(1))
+    expect(runs[0]!.pageOrder).toEqual([viewKey(OTHER), viewKey(ORIGIN)])
   })
 
   it('blocks an export with no view chosen and says what is missing', async () => {
@@ -441,6 +517,8 @@ describe('the Export dialog', () => {
     await waitFor(() => expect(screen.getByTestId('export-failed')).toBeInTheDocument())
     expect(screen.getByTestId('export-failed')).toHaveTextContent('Nothing was downloaded.')
     expect(screen.getByTestId('export-failed')).toHaveTextContent('plan.svg: It does not fit the page at that scale.')
+    // All or nothing, and a way out in the same breath (#85 §2.4).
+    expect(screen.getByTestId('export-failed')).toHaveTextContent('Untick that view and try again.')
     expect(onClose).not.toHaveBeenCalled()
   })
 

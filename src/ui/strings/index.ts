@@ -401,6 +401,27 @@ export const STRINGS = {
   exportTabLists: 'Lists',
   exportTabHandoff: 'Handoff pack',
   exportTabComingSoon: 'Coming soon',
+  // #85 §3: the Handoff Pack tab. The pack is one zip for the person the work is handed to, so the
+  // two notices that could be mistaken for a Backup or for an anonymous file are written to be read.
+  exportHandoffGroupOutputs: 'Printed pages',
+  exportHandoffGroupData: 'Data files',
+  exportHandoffDrawings: 'Drawing set',
+  exportHandoffItemList: 'Item list',
+  exportHandoffCutList: 'Cut list',
+  exportHandoffCommentRegister: 'Comment register',
+  exportHandoffRows: (rows: number): string => `${rows} ${rows === 1 ? 'row' : 'rows'}`,
+  exportHandoffNoCutList: 'Nothing in this scope has parts to cut.',
+  exportHandoffScopeOne: 'One scope for the whole pack: every page and every file below is drawn from it.',
+  exportHandoffHidden: (count: number): string =>
+    `Your saved view hides ${count} ${count === 1 ? 'row' : 'rows'}, and they are in the pack.`,
+  exportHandoffWarnings: (count: number): string =>
+    `${count} ${count === 1 ? 'warning is' : 'warnings are'} waiting for you.`,
+  exportHandoffUserContent: 'This pack holds what you typed — names, notes and comments — and leaves the device with it.',
+  exportHandoffNotBackup: 'A pack is for handing over, not for restoring. It cannot be opened again as your work.',
+  exportHandoffOpenBackup: 'Go to the Project Library to download a Backup',
+  exportHandoffRetry: 'Untick that output and try again, or download the pack without it.',
+  exportHandoffRun: 'Download pack',
+  exportHandoffClose: 'Done',
   exportGroupViews: 'Views',
   exportGroupSheet: 'Sheet',
   exportGroupFiles: 'Files',
@@ -498,9 +519,20 @@ export const STRINGS = {
   exportRunning: 'Exporting…',
   /** Blocking explanations: Export stays disabled and says why in one line. */
   exportNeedViews: 'Choose at least one view to export.',
-  exportPdfSingleView: 'PDF exports one view at a time.',
-  exportScaleNoFit: (denominator: number): string =>
-    `At 1:${denominator} the drawing is bigger than the page.`,
+  /**
+   * A fixed scale that will not hold one particular page (#85 §1.4). The view is named because a
+   * Drawing Set of four views where one is too big for the paper is not a problem with the other
+   * three, and the person needs to know which one to change or untick.
+   */
+  exportScaleNoFit: (denominator: number, view: string): string =>
+    `At 1:${denominator} “${view}” is bigger than the page.`,
+  /** One page of a Drawing Set: which way it is held (#85 §1.3). */
+  exportPageHold: (view: string): string => `How “${view}” is held`,
+  exportPageHoldAuto: 'Auto',
+  exportPageHoldPortrait: 'Portrait',
+  exportPageHoldLandscape: 'Landscape',
+  exportPageUp: (view: string): string => `Move “${view}” up one page`,
+  exportPageDown: (view: string): string => `Move “${view}” down one page`,
   exportScaleNoFitFixes: 'One-click fixes:',
   exportFixScale: (denominator: number): string => `Use 1:${denominator}`,
   exportFixFit: 'Use Fit to page',

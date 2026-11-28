@@ -14,7 +14,7 @@
 
 import { zipEntries } from '../lib'
 import { PRODUCT_NAME } from './strings'
-import type { Recipe, ListsRecipe, ExportFile, ExportSnapshot } from './types'
+import type { Recipe, ListsRecipe, HandoffRecipe, ExportFile, ExportSnapshot } from './types'
 import type { Provenance } from './provenance'
 
 /** What one file in the archive is (export contract §9). */
@@ -57,8 +57,8 @@ export interface Manifest {
   readonly project_id: string
   readonly project_revision: number
   readonly unsaved_changes?: true
-  /** The recipe that produced the set: drawings (#61) or lists (#62). */
-  readonly recipe: Recipe | ListsRecipe
+  /** The recipe that produced the set: drawings (#61), lists (#62) or a Handoff Pack (#85). */
+  readonly recipe: Recipe | ListsRecipe | HandoffRecipe
   readonly files: readonly ManifestFile[]
 }
 
@@ -71,7 +71,7 @@ export interface Manifest {
  */
 export async function manifestOf(
   snapshot: ExportSnapshot,
-  recipe: Recipe | ListsRecipe,
+  recipe: Recipe | ListsRecipe | HandoffRecipe,
   provenance: Provenance,
   files: readonly ManifestFile[],
 ): Promise<Manifest> {

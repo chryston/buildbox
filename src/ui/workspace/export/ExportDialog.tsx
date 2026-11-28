@@ -35,7 +35,8 @@ import type {
 } from '../../../export'
 
 import { ListsPanel } from './ListsPanel'
-import { viewKey } from './port'
+import { HandoffPanel } from './HandoffPanel'
+import { viewKey } from '../../../export'
 import type { BlockedView, ExportPort, ExportPreview, ExportRunOutcome } from './port'
 import type { Rect } from '../../../derive'
 import type { DisplayUnit } from '../../../domain'
@@ -43,19 +44,6 @@ import type { ReactNode } from 'react'
 
 /** The unit as the read-only line prints it. `mm`, `cm`, `m`. */
 export const UNIT_LABEL: Record<DisplayUnit, string> = { mm: 'mm', cm: 'cm', m: 'm' }
-
-/** The smallest box holding both, in the same millimetres. */
-function unionOf(a: Rect | null, b: Rect): Rect {
-  if (a === null) return b
-  const x = Math.min(a.x, b.x)
-  const y = Math.min(a.y, b.y)
-  return {
-    x,
-    y,
-    w: Math.max(a.x + a.w, b.x + b.w) - x,
-    h: Math.max(a.y + a.h, b.y + b.h) - y,
-  }
-}
 
 /** The layers of a composition on one line, in the order the sheet paints them. */
 function layerNames(rows: readonly { readonly name: string }[]): string {
@@ -82,6 +70,12 @@ export interface ExportDialogProps {
    * Item Detail View, which can never be blocked anyway.
    */
   onOpenView?(viewId: string): void
+  /**
+   * Taking the person to where a Backup is downloaded (#85 §3.4). A Handoff Pack cannot be opened
+   * again as their work, and the one thing they might want instead lives in the Project Library — so
+   * the tab says so and offers the way there, rather than offering a second Backup of its own.
+   */
+  onOpenBackup(): void
   onClose(): void
 }
 
@@ -92,6 +86,7 @@ export const ExportDialog = ({
   unsavedChanges,
   port,
   onOpenView,
+  onOpenBackup,
   onClose,
 }: ExportDialogProps): ReactNode => {
   const key = viewKey(origin)
@@ -113,9 +108,9 @@ export const ExportDialog = ({
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<ExportProgress | null>(null)
   const [outcome, setOutcome] = useState<ExportRunOutcome | null>(null)
-  // Two tabs, one dialog: `Drawing` writes sheets, `Lists` writes tables (#62). The Handoff pack
-  // stays a disabled tab until #85 gives it something to do.
-  const [tab, setTab] = useState<'drawing' | 'lists'>('drawing')
+  // Three tabs, one dialog: `Drawing` writes sheets, `Lists` writes tables (#62), and `Handoff pack`
+  // packs both, plus the CSVs, into one archive for the person the work is handed to (#85).
+  const [tab, setTab] = useState<'drawing' | 'lists' | 'handoff'>('drawing')
 
   // The remembered recipe is a device preference read, so it arrives after the first paint. The
   // unit and precision are not remembered: they are the Project's, copied when the dialog opens.
@@ -145,14 +140,14 @@ export const ExportDialog = ({
   }
 
   const setFormat = (format: Recipe['format']): void => {
-    // PDF takes one view because Drawing Sets arrive in #85; the first selection survives.
-    patch({ format, views: format === 'pdf' ? selected.slice(0, 1) : selected })
+    patch({ format })
   }
 
-  // The union of what the selected views hold, in model millimetres. Measured rather than asked
-  // for at run time because a fixed scale that will not fit is a blocking error, and a person
-  // finds out about a blocking error by being told, not by being handed a failed export.
-  const [bounds, setBounds] = useState<Rect | null>(null)
+  // What each selected view holds, in model millimetres, by view key. Measured rather than asked for
+  // at run time because a fixed scale that will not fit is a blocking error, and a person finds out
+  // about a blocking error by being told — and told *which view*, because a Drawing Set of four views
+  // where one is too big for the paper is not a problem with the other three (#85 §1.4).
+  const [measured, setMeasured] = useState<ReadonlyMap<string, Rect | null>>(new Map())
   // The measurement depends on which views are chosen and on nothing else — not on the array they
   // arrive in, which every other control in the dialog replaces. Depending on the identity would
   // re-measure on every keystroke and land a state update after the dialog has moved on.
@@ -160,23 +155,64 @@ export const ExportDialog = ({
   useEffect(() => {
     let alive = true
     if (selection === '') {
-      setBounds(null)
+      setMeasured(new Map())
       return () => {
         alive = false
       }
     }
-    void Promise.all(selected.map((ref) => port.measure(ref))).then((measured) => {
-      if (!alive) return
-      let box: Rect | null = null
-      for (const { bounds: held } of measured) {
-        if (held !== null) box = unionOf(box, held)
-      }
-      setBounds(box)
+    void Promise.all(
+      selected.map(async (ref) => [viewKey(ref), (await port.measure(ref)).bounds] as const),
+    ).then((rows) => {
+      if (alive) setMeasured(new Map(rows))
     })
     return () => {
       alive = false
     }
   }, [port, selection])
+
+  // ---- the page order (#85 §1.2)
+  //
+  // Before the person moves anything it is the order the picker lists the views, which is every view
+  // of one Floor, then the next Floor, then the Item Detail Views — the contract's default, arrived
+  // at without the dialog holding a Project of its own. After that it is `recipe.pageOrder`, and the
+  // order shown is the order drawn: the same list is written into the recipe before the export runs,
+  // so the file's metadata records what the person saw.
+  const groupRank = new Map<string, number>()
+  for (const view of views) {
+    if (!groupRank.has(view.group)) groupRank.set(view.group, groupRank.size)
+  }
+  const byKey = new Map(selected.map((ref) => [viewKey(ref), ref]))
+  const pages: readonly RecipeViewRef[] = (
+    recipe.pageOrder ??
+    views
+      .filter((each) => byKey.has(viewKey(each.ref)))
+      .sort((a, b) => groupRank.get(a.group)! - groupRank.get(b.group)!)
+      .map((each) => each.ref)
+  )
+    .map((held) => (typeof held === 'string' ? byKey.get(held) : held))
+    .filter((ref): ref is RecipeViewRef => ref !== undefined)
+
+  const labelOf = (ref: RecipeViewRef): string =>
+    views.find((each) => viewKey(each.ref) === viewKey(ref))?.label ?? ''
+
+  /** Move one page up or down the set; the views it did not name keep their places. */
+  const movePage = (at: number, by: -1 | 1): void => {
+    const to = at + by
+    if (to < 0 || to >= pages.length) return
+    const next = [...pages]
+    const held = next[at]!
+    next[at] = next[to]!
+    next[to] = held
+    patch({ pageOrder: next.map(viewKey) })
+  }
+
+  /** One page held the way the person said, or the way the recipe's own setting says. */
+  const setPageHold = (ref: RecipeViewRef, hold: string): void => {
+    const held = { ...recipe.pageOrientations }
+    if (hold === 'auto') delete held[viewKey(ref)]
+    else held[viewKey(ref)] = hold as Orientation
+    patch({ pageOrientations: held })
+  }
 
   // ---- the Drawing tab's temporary layer toggles and the composition they record (#73 §1)
   //
@@ -293,18 +329,26 @@ export const ExportDialog = ({
   }, [port, selection])
 
 
-  const empty = selected.length > 0 && bounds === null
+  const empty = selected.length > 0 && [...measured.values()].every((held) => held === null)
 
-  // `auto` means either edge may lead, so the drawing fits if either orientation would hold it.
-  const orientations: readonly Orientation[] =
-    recipe.orientation === 'auto' ? ['portrait', 'landscape'] : [recipe.orientation]
-  const fit =
-    isPdf && recipe.scale !== 'fit' && bounds !== null
-      ? orientations.some((hold) => fitCheck(bounds, recipe.pageSize, hold, recipe.scale).fits)
-      : true
+  // `auto` means either edge may lead, so a page fits if either orientation would hold it; a hold the
+  // person forced on that one page narrows it to that edge alone.
+  const holdsFor = (ref: RecipeViewRef): readonly Orientation[] => {
+    const forced = recipe.pageOrientations?.[viewKey(ref)]
+    if (forced !== undefined) return [forced]
+    return recipe.orientation === 'auto' ? ['portrait', 'landscape'] : [recipe.orientation]
+  }
+  // The first page a fixed scale cannot hold, in page order — the one the dialog names (#85 §1.4).
+  const noFit =
+    recipe.scale === 'fit'
+      ? null
+      : (pages.find((ref) => {
+          const box = measured.get(viewKey(ref))
+          return box !== null && box !== undefined && !holdsFor(ref).some((hold) => fitCheck(box, recipe.pageSize, hold, recipe.scale).fits)
+        }) ?? null)
   const fixes =
-    !fit && bounds !== null && recipe.scale !== 'fit'
-      ? suggestionsFor(bounds, recipe.pageSize, orientations[0] ?? 'portrait')
+    noFit !== null && recipe.scale !== 'fit'
+      ? suggestionsFor(measured.get(viewKey(noFit))!, recipe.pageSize, holdsFor(noFit)[0] ?? 'portrait')
       : []
 
   const blocked =
@@ -314,8 +358,8 @@ export const ExportDialog = ({
         // a flag-off bundle, and that copy is what the bundle scan looks for (#69 criterion 13).
         blockedView !== null
         ? RENOVATION_STRINGS.exportNeedsOption(blockedView.viewName, displayLabel(blockedView.display))
-        : !fit && typeof recipe.scale === 'number'
-          ? STRINGS.exportScaleNoFit(recipe.scale)
+        : noFit !== null && typeof recipe.scale === 'number'
+          ? STRINGS.exportScaleNoFit(recipe.scale, labelOf(noFit))
           : null
   const warnings = port.unacknowledgedWarnings()
   const glyphs = outcome?.kind === 'downloaded' ? outcome.missingGlyphs : []
@@ -324,8 +368,11 @@ export const ExportDialog = ({
     if (blocked !== null || busy) return
     setBusy(true)
     setOutcome(null)
-    port.remember(key, recipe)
-    void port.run(recipe, setProgress).then((result) => {
+    // The order the list is showing is the order the pages are drawn in, and it is what the file's
+    // metadata will record (#85 §1.2).
+    const asRun: Recipe = { ...recipe, pageOrder: pages.map(viewKey) }
+    port.remember(key, asRun)
+    void port.run(asRun, setProgress).then((result) => {
       setBusy(false)
       setProgress(null)
       setOutcome(result)
@@ -360,10 +407,29 @@ export const ExportDialog = ({
         >
           {STRINGS.exportTabLists}
         </button>
-        <button type="button" role="tab" aria-selected="false" disabled title={STRINGS.exportTabComingSoon}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'handoff'}
+          data-testid="export-tab-handoff"
+          className={tab === 'handoff' ? 'active' : undefined}
+          onClick={() => {
+            setTab('handoff')
+          }}
+        >
           {STRINGS.exportTabHandoff}
         </button>
       </div>
+
+      {tab === 'handoff' && (
+        <HandoffPanel
+          origin={origin}
+          unsavedChanges={unsavedChanges}
+          port={port}
+          onOpenBackup={onOpenBackup}
+          onClose={onClose}
+        />
+      )}
 
       {tab === 'lists' && <ListsPanel origin={origin} unsavedChanges={unsavedChanges} port={port} onClose={onClose} />}
 
@@ -379,7 +445,6 @@ export const ExportDialog = ({
                       type="checkbox"
                       data-testid={`export-view-${viewKey(view.ref)}`}
                       checked={selected.some((held) => viewKey(held) === viewKey(view.ref))}
-                      disabled={isPdf && !selected.some((held) => viewKey(held) === viewKey(view.ref))}
                       onChange={() => {
                         toggle(view.ref)
                       }}
@@ -390,7 +455,50 @@ export const ExportDialog = ({
                 </li>
               ))}
             </ul>
-            {isPdf && selected.length > 0 && <p className="helper">{STRINGS.exportPdfSingleView}</p>}
+            {pages.length > 1 && (
+              <ol className="bb-export-pages" data-testid="export-page-order">
+                {pages.map((ref, index) => (
+                  <li key={viewKey(ref)} data-testid={`export-page-${viewKey(ref)}`}>
+                    <span className="bb-export-page-number">{index + 1}</span>
+                    <span className="bb-export-page-label">{labelOf(ref)}</span>
+                    <select
+                      aria-label={STRINGS.exportPageHold(labelOf(ref))}
+                      data-testid={`export-page-hold-${viewKey(ref)}`}
+                      value={recipe.pageOrientations?.[viewKey(ref)] ?? 'auto'}
+                      onChange={(event) => {
+                        setPageHold(ref, event.target.value)
+                      }}
+                    >
+                      <option value="auto">{STRINGS.exportPageHoldAuto}</option>
+                      <option value="portrait">{STRINGS.exportPageHoldPortrait}</option>
+                      <option value="landscape">{STRINGS.exportPageHoldLandscape}</option>
+                    </select>
+                    <button
+                      type="button"
+                      data-testid={`export-page-up-${viewKey(ref)}`}
+                      disabled={index === 0}
+                      aria-label={STRINGS.exportPageUp(labelOf(ref))}
+                      onClick={() => {
+                        movePage(index, -1)
+                      }}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      data-testid={`export-page-down-${viewKey(ref)}`}
+                      disabled={index === pages.length - 1}
+                      aria-label={STRINGS.exportPageDown(labelOf(ref))}
+                      onClick={() => {
+                        movePage(index, 1)
+                      }}
+                    >
+                      ↓
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            )}
           </fieldset>
 
           {chips.length > 0 && (

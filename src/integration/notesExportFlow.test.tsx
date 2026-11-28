@@ -164,6 +164,9 @@ function recordingPort(record: Recorded, memory: Map<string, Recipe>, listMemory
       record.listRuns.push(recipe)
       return { ...outcome, files: 10 }
     },
+    recallHandoff: async () => null,
+    rememberHandoff: () => {},
+    runHandoff: () => Promise.resolve({ kind: 'cancelled' }),
     cancel: () => {},
   }
 }

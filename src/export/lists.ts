@@ -135,7 +135,8 @@ export function listsSummary(
 }
 
 /** The tables in the contract's order, without repeats: a recipe is data, and data repeats. */
-function orderedTables(tables: readonly TableId[]): TableId[] {
+/** The tables in contract order, which is also the order `exportLists` writes its files in. */
+export function orderedTables(tables: readonly TableId[]): TableId[] {
   return (Object.keys(TABLES) as TableId[]).filter((id) => tables.includes(id))
 }
 
@@ -280,7 +281,8 @@ export async function exportLists(
     archive: {
       name: archive,
       mediaType: 'application/zip',
-      bytes: zipOf([...files, manifestFile]),
+      // The manifest leads the archive (#85 §2.1).
+      bytes: zipOf([manifestFile, ...files]),
     },
   }
 }

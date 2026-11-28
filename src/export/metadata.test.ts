@@ -229,7 +229,8 @@ describe('the archive', () => {
     // the clock, and the archiver does not use it.
     expect(Buffer.from(second.archive.bytes)).toEqual(Buffer.from(first.archive.bytes))
     const entries = unzipSync(first.archive.bytes)
-    expect(Object.keys(entries)).toEqual([...first.files.map((one) => one.name), 'manifest.json'])
+    // The manifest leads the archive (#85 §2.1), then the sheets in the order they were drawn.
+    expect(Object.keys(entries)).toEqual(['manifest.json', ...first.files.map((one) => one.name)])
   })
 })
 

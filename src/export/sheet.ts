@@ -20,7 +20,6 @@ import {
   RENOVATION_LEGEND,
   SCALE_BAR_LABEL,
   TITLE_BLOCK,
-  pageStatement,
   unitStatement,
 } from './strings'
 
@@ -44,6 +43,8 @@ export interface TitleBlockFields {
   readonly unit: string
   readonly date: string
   readonly version: string
+  /** `Page 2/3` across a Drawing Set, `Page 1/1` for a drawing on its own (#85 §1.3). */
+  readonly page: string
 }
 
 /** The unit statement for a display unit, as the title block prints it. */
@@ -137,7 +138,7 @@ export function titleBlockItems(rect: Rect, fields: TitleBlockFields): DisplayIt
     text('sheet-value', fields.unit, { x: col2, y: row3 }),
     ...pair(TITLE_BLOCK.date, fields.date, { x: col3, y: row1 }),
     ...pair(TITLE_BLOCK.version, fields.version, { x: col3, y: row2 }),
-    text('sheet-value', pageStatement(1, 1), { x: col3, y: row3 }),
+    text('sheet-value', fields.page, { x: col3, y: row3 }),
   ]
 }
 

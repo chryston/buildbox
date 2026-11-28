@@ -1,0 +1,13 @@
+﻿stable_id,floor_id,floor,design_option_id,design_option,renovation_state,drawing_layer_id,drawing_layer,label,item_design_id,item_design,rotation_deg,bottom_mm,top_mm,room_id,room,room_relation,predecessor_ids
+fp-counter,seed-001,Floor 1,,,existing,view-4,Furniture,Kitchen counter,seed-011,Kitchen counter,0,0,900,seed-room-012,Kitchen,inside,
+fp-fridge,seed-001,Floor 1,,,existing,view-4,Furniture,Fridge,seed-007,Fridge,90,0,1800,,,outside,
+fp-island,seed-001,Floor 1,,,existing,view-4,Furniture,Island (custom),seed-012,Island (custom),180,0,900,seed-room-012,Kitchen,inside,
+fp-sofa,seed-001,Floor 1,,,existing,view-4,Furniture,Sofa (3-seat),seed-006,Sofa (3-seat),0,0,850,,,outside,
+fp-toilet,seed-001,Floor 1,,,existing,view-4,Furniture,Toilet,seed-009,Toilet,270,0,750,,,outside,
+fp-wardrobe,seed-001,Floor 1,,,existing,view-4,Furniture,Wardrobe,seed-010,Wardrobe,90,0,2400,,,crosses,
+fp-washer,seed-001,Floor 1,,,existing,view-4,Furniture,Washer,seed-008,Washer,180,0,850,,,outside,
+seed-002,seed-001,Floor 1,,,existing,view-4,Furniture,Base Unit,unit-kitchen-base,Base Unit,0,0,800,,,outside,
+seed-003,seed-001,Floor 1,,,existing,view-4,Furniture,Tall Unit,unit-kitchen-tall,Tall Unit,0,0,2100,,,outside,
+seed-item-025,seed-001,Floor 1,,,existing,view-4,Furniture,Base 600 #1,seed-item-024,Base 600,0,0,850,seed-room-012,Kitchen,inside,
+seed-item-026,seed-001,Floor 1,,,existing,view-4,Furniture,Base 600 #2,seed-item-024,Base 600,0,0,850,,,crosses,
+seed-tbl-006,seed-001,Floor 1,,,existing,view-4,Furniture,Base 600 #3,seed-item-024,Base 600,0,0,850,,,crosses,

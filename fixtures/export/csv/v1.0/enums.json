@@ -1,0 +1,166 @@
+{
+  "rooms.renovation_state": [
+    "existing",
+    "demolition",
+    "proposed"
+  ],
+  "walls.renovation_state": [
+    "existing",
+    "demolition",
+    "proposed"
+  ],
+  "walls.classification": [
+    "external",
+    "internal",
+    "partition"
+  ],
+  "walls.shape": [
+    "straight",
+    "arc"
+  ],
+  "walls.justification": [
+    "left",
+    "centre",
+    "right"
+  ],
+  "openings.renovation_state": [
+    "existing",
+    "demolition",
+    "proposed"
+  ],
+  "openings.kind": [
+    "door",
+    "window",
+    "removed_section"
+  ],
+  "openings.hinge_side": [
+    "start",
+    "end"
+  ],
+  "openings.swing": [
+    "left",
+    "right",
+    "sliding"
+  ],
+  "beams.renovation_state": [
+    "existing",
+    "demolition",
+    "proposed"
+  ],
+  "skirting.renovation_state": [
+    "existing",
+    "demolition",
+    "proposed"
+  ],
+  "skirting.side": [
+    "left",
+    "right"
+  ],
+  "services.renovation_state": [
+    "existing",
+    "demolition",
+    "proposed"
+  ],
+  "services.kind": [
+    "water",
+    "drain",
+    "gas",
+    "electrical",
+    "air_con",
+    "other"
+  ],
+  "services.shape": [
+    "run",
+    "riser"
+  ],
+  "services.section": [
+    "round",
+    "rectangular"
+  ],
+  "placed-items.renovation_state": [
+    "existing",
+    "demolition",
+    "proposed"
+  ],
+  "placed-items.room_relation": [
+    "inside",
+    "crosses",
+    "outside"
+  ],
+  "items.renovation_state": [
+    "existing",
+    "demolition",
+    "proposed"
+  ],
+  "cut-list.renovation_state": [
+    "existing",
+    "demolition",
+    "proposed"
+  ],
+  "comments.status": [
+    "open",
+    "resolved"
+  ],
+  "comments.priority": [
+    "low",
+    "normal",
+    "high"
+  ],
+  "comments.scope": [
+    "all_options",
+    "existing_model",
+    "design_option"
+  ],
+  "comments.target_type": [
+    "project",
+    "floor",
+    "design_option",
+    "item_design",
+    "entity",
+    "feature",
+    "floor_point"
+  ],
+  "warnings.status": [
+    "unacknowledged",
+    "acknowledged"
+  ],
+  "warnings.warning_type": [
+    "wall_crossing",
+    "wall_overlap",
+    "item_crosses_room",
+    "item_item_overlap",
+    "item_into_wall",
+    "opening_host_above",
+    "opening_host_below",
+    "floor_limit_above",
+    "floor_limit_below",
+    "clearance_envelope_intrusion",
+    "beam_placed_item",
+    "beam_opening",
+    "skirting_placed_item",
+    "skirting_host_above",
+    "skirting_host_below",
+    "service_placed_item",
+    "service_opening",
+    "service_beam",
+    "service_clearance_envelope"
+  ],
+  "warnings.subject_type": [
+    "wall",
+    "opening",
+    "room",
+    "placed_item",
+    "beam",
+    "skirting",
+    "service"
+  ],
+  "warnings.other_type": [
+    "wall",
+    "opening",
+    "room",
+    "placed_item",
+    "beam",
+    "skirting",
+    "service"
+  ]
+}

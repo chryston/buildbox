@@ -18,6 +18,7 @@ import type {
   DrawingToggles,
   ExportFailure,
   ExportProgress,
+  HandoffRecipe,
   ListsRecipe,
   ListsSummary,
   NotesSwitches,
@@ -69,12 +70,6 @@ export interface ExportPreview {
   readonly list: DisplayList
   readonly widthMm: number
   readonly heightMm: number
-}
-
-/** The stable key a recipe is remembered under: one per Project and saved view. */
-export function viewKey(ref: RecipeViewRef): string {
-  if (ref.kind === 'plan') return `plan:${ref.viewId}`
-  return ref.kind === 'elevation' ? `elevation:${ref.viewId}` : `item:${ref.itemDesignId}`
 }
 
 /** One Floor or Design Option the Lists tab can put in scope, named as the Project names it. */
@@ -165,5 +160,16 @@ export interface ExportPort {
   recallLists(key: string): Promise<ListsRecipe | null>
   rememberLists(key: string, recipe: ListsRecipe): void
   runLists(recipe: ListsRecipe, onProgress: (progress: ExportProgress) => void): Promise<ExportRunOutcome>
+  /**
+   * The last Handoff Pack recipe used for this view on this device, if there is one (#85 §3.6).
+   *
+   * A pack is a device preference and never part of a Backup: what a person ticks for the tradesperson
+   * they are handing over to today is not a fact about the Project, and a Backup that carried it would
+   * restore someone else's pack settings onto a different job.
+   */
+  recallHandoff(key: string): Promise<HandoffRecipe | null>
+  rememberHandoff(key: string, recipe: HandoffRecipe): void
+  /** Write the pack. Read-only: no Transaction, no revision, no saved-view change. */
+  runHandoff(recipe: HandoffRecipe, onProgress: (progress: ExportProgress) => void): Promise<ExportRunOutcome>
   cancel(): void
 }

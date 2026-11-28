@@ -1,0 +1,326 @@
+/**
+ * The Handoff Pack (#85 §3).
+ *
+ * The pack is the one export that mixes kinds: a PDF of drawings, three printed lists and eleven CSVs,
+ * under fixed names, in one archive, from one recipe. These tests read the archive back rather than
+ * trusting what wrote it, because a pack a tradesperson cannot unpack is worth nothing however tidy
+ * the code that made it looked.
+ */
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { describe, expect, it } from 'vitest'
+import * as fc from 'fast-check'
+import { sha256Hex } from '../lib'
+import { basicProject, referenceProject } from '../derive/testing'
+import { warningMessages, type QuantityScope } from '../derive'
+import { validateProject, type Project } from '../domain'
+import { unzipEntries } from '../lib'
+import { defaultListsScope } from './scope'
+import { exportHandoff, handoffDataPath } from './handoff'
+import { HANDOFF_TABLES, DEFAULT_HANDOFF_OUTPUTS } from './types'
+import type { HandoffRecipe } from './types'
+import type { ExportClock, ExportDeps, ExportSnapshot } from './types'
+
+/** The subset face a PDF needs, read from the source tree — the only file system a test may touch. */
+function latin1Font(): Uint8Array {
+  return readFileSync(new URL('../assets/fonts/NotoSans-Latin1.ttf', import.meta.url))
+}
+
+const AT: ExportClock = { now: () => '2026-03-04T09:30:00.000Z', localDate: () => '2026-03-04' }
+const LATER: ExportClock = { now: () => '2026-03-04T09:31:00.000Z', localDate: () => '2026-03-04' }
+
+/** Sentences a reader could not mistake for the app's: each names the key it was built from. */
+const sentences = (at: Project, scope: QuantityScope): Record<string, string> =>
+  warningMessages(at, scope, (messageKey) => `sentence:${messageKey}`)
+
+/**
+ * The deps for one clock.
+ *
+ * Sentencing every Warning of the reference project is a full derivation of it, and a test that
+ * packs the same project repeatedly would otherwise pay for it each time. The sentences depend on
+ * nothing but the project and the scope, both fixed here, so they are built once.
+ */
+const reference = referenceProject()
+const referenceScope = defaultListsScope(reference, null)
+const referenceSentences = sentences(reference, referenceScope)
+const fontBytes = latin1Font()
+
+const deps = (clock: ExportClock): ExportDeps => ({
+  clock,
+  buildboxVersion: '0.0.0-test',
+  font: { bytes: fontBytes },
+  warningMessages: referenceSentences,
+})
+
+function snapshotOf(revision = 3): ExportSnapshot {
+  return { project: reference, revision }
+}
+
+/**
+ * How long one test in this file may take.
+ *
+ * A pack of the reference project is a real document set: a Drawing Set of three views, an Item
+ * List, a Cut List of 1 620 rows over 58 pages, a Comment Register and eleven CSVs. Measured on one
+ * machine with the clock injected, that is about 2.5 s, of which roughly 2 s is `pdf-lib` writing
+ * the ~25 000 text operations the Cut List alone contains — the layout that decides them is 40 ms.
+ * Printing 1 620 rows costs what it costs, so the tests say so rather than pretending the default
+ * five seconds is enough for it. A loaded CI runner has been measured at about fifteen seconds for
+ * one such pack, six times the local figure, which is where the margin below comes from.
+ */
+const PACK = 30_000
+
+/**
+ * The golden test's allowance, which is larger than `PACK` for one reason: it is the only test here
+ * that must pack the reference project, because the committed golden was written from it and a
+ * golden of a smaller project would not pin the 58 pages of Cut List that make the pack expensive.
+ * Measured at 5.4 s locally against a loaded CI runner six times slower, so it needs the margin the
+ * single-pack tests above do not.
+ */
+const GOLDEN_PACK = 90_000
+
+/**
+ * The same allowance for a pack of the small fixture, which is what the tests that check the
+ * archive rather than the page layout run on. One build is a few hundred milliseconds locally; ten
+ * seconds is the loaded-runner figure with room, and it is not headroom to spend.
+ */
+const SMALL_PACK = 10_000
+
+/**
+ * The small fixture, validated once.
+ *
+ * Two tests need a project that is not the reference one because they pack it repeatedly to check
+ * something that does not depend on how many cabinets a project holds — whether the same recipe
+ * twice writes the same bytes, and whether every manifest digest matches the bytes it names. The
+ * assertion is the point of the fixture: an invalid project makes the exporter refuse, and a refused
+ * pack passes a check like those by doing nothing.
+ */
+const small = basicProject()
+
+expect(validateProject(small).ok, 'the small-fixture tests would prove nothing on an invalid project').toBe(true)
+
+const little: ExportSnapshot = { project: small, revision: 3 }
+const littleScope = defaultListsScope(small, null)
+const littleRecipe = (over: Partial<HandoffRecipe> = {}): HandoffRecipe =>
+  recipe({ ...over, scope: littleScope })
+const littleDeps = (clock: ExportClock): ExportDeps => ({
+  clock,
+  buildboxVersion: '0.0.0-test',
+  font: { bytes: fontBytes },
+  warningMessages: sentences(small, littleScope),
+})
+
+function recipe(over: Partial<HandoffRecipe> = {}): HandoffRecipe {
+  const project = reference
+  return {
+    drawing: {
+      views: project.views.map((view) => ({ kind: 'plan' as const, viewId: view.id })),
+      format: 'pdf',
+      pageSize: 'A4',
+      orientation: 'auto',
+      scale: 'fit',
+      pngLongEdge: 2048,
+      titleBlock: true,
+      grid: false,
+      unit: 'mm',
+      precision: 0,
+    },
+    outputs: { ...DEFAULT_HANDOFF_OUTPUTS },
+    tables: [...HANDOFF_TABLES],
+    scope: defaultListsScope(project, null),
+    ...over,
+  }
+}
+
+const LIMITS = { maxEntries: 64, maxEntryBytes: 1 << 22, maxTotalBytes: 1 << 25, maxRatio: 200, ratioFloorBytes: 1 << 16 }
+
+function entriesOf(bytes: Uint8Array) {
+  const read = unzipEntries(bytes, LIMITS)
+  if (!read.ok) throw new Error(`the pack did not read back: ${read.failure.code}`)
+  return read.entries
+}
+
+function text(bytes: Uint8Array, name: string): string {
+  const entry = entriesOf(bytes).find((each) => each.name === name)
+  if (entry === undefined) throw new Error(`no entry named ${name}`)
+  return new TextDecoder().decode(entry.data)
+}
+
+describe('the Handoff Pack (#85 §3.1)', () => {
+  // The default pack answers three questions — what is in it, how the Drawing Set is paginated, and
+  // what the manifest says — and building it costs about 2.5 s of `pdf-lib` work. These tests read
+  // the same bytes and change nothing, so they share one build; the determinism test below still
+  // builds its own twice, because two calls is the thing it is checking.
+  let shared: Promise<Exclude<Awaited<ReturnType<typeof exportHandoff>>, { ok: false }>> | null = null
+  const defaultPack = async () => {
+    if (shared === null) {
+      shared = exportHandoff(snapshotOf(), recipe(), deps(AT)).then((result) => {
+        if (!result.ok) throw new Error(`the pack failed: ${JSON.stringify(result.failures)}`)
+        return result
+      })
+    }
+    return shared
+  }
+
+  it('holds the drawings, the three printed lists and every CSV, under fixed names', async () => {
+    const result = await defaultPack()
+    const names = entriesOf(result.archive.bytes).map((each) => each.name)
+    expect(names[0]).toBe('manifest.json')
+    expect(names).toContain('drawings.pdf')
+    expect(names).toContain('item-list.pdf')
+    expect(names).toContain('cut-list.pdf')
+    expect(names).toContain('comment-register.pdf')
+    expect(HANDOFF_TABLES.map((table) => handoffDataPath(table)).every((path) => names.includes(path))).toBe(true)
+    // The CSVs sit in a folder of their own and the printed pages at the top, so a reader can ask for
+    // one by name without knowing the Project.
+    expect(names.filter((each) => each.startsWith('data/'))).toHaveLength(HANDOFF_TABLES.length)
+    expect(result.archive.name).toBe(`${referenceProject().meta.name.replace(/[^A-Za-z0-9]+/g, '-')}_handoff_20260304.zip`)
+  }, PACK)
+
+  it('writes only what was ticked', async () => {
+    const result = await exportHandoff(
+      snapshotOf(),
+      recipe({ outputs: { drawings: false, itemList: false, cutList: false, commentRegister: false }, tables: ['walls'] }),
+      deps(AT),
+    )
+    if (!result.ok) throw new Error(`the pack failed: ${JSON.stringify(result.failures)}`)
+    const names = entriesOf(result.archive.bytes).map((each) => each.name)
+    expect(names).toEqual(['manifest.json', 'data/walls.csv'])
+  }, PACK)
+
+  it('holds one page per view in the Drawing Set, and says so on each page', async () => {
+    const result = await defaultPack()
+    const drawings = entriesOf(result.archive.bytes).find((each) => each.name === 'drawings.pdf')
+    if (drawings === undefined) throw new Error('no drawings.pdf')
+    const pdf = new TextDecoder('latin1').decode(drawings.data)
+    expect(pdf).toContain('/Type /Pages')
+    expect(pdf.match(/\/Type \/Page[^s]/g)).toHaveLength(referenceProject().views.length)
+  }, PACK)
+
+  it('describes every entry in the manifest, and itself last', async () => {
+    const result = await defaultPack()
+    const manifest = JSON.parse(text(result.archive.bytes, 'manifest.json')) as Record<string, unknown>
+    expect(manifest.format).toBe('buildbox-export')
+    const archive = entriesOf(result.archive.bytes).map((each) => each.name)
+    expect(archive[0]).toBe('manifest.json')
+    const files = manifest.files as readonly Record<string, unknown>[]
+    // The manifest lists the data first and itself last, because an entry cannot carry its own digest;
+    // the archive leads with it, because a reader unpacking it wants the explanation first.
+    expect(files.map((each) => each.path)).toEqual([...archive.slice(1), 'manifest.json'])
+    expect(files[files.length - 1]!.kind).toBe('manifest')
+    expect(manifest.recipe).toMatchObject({ outputs: DEFAULT_HANDOFF_OUTPUTS })
+    // Every entry says which contract wrote it, which is what a reader checks before it parses a header.
+    for (const entry of files) expect(entry.contract_version).toBe('1.0')
+  }, PACK)
+
+  it('is byte-identical when nothing but the call changed, and moves only its clock otherwise', async () => {
+    // Determinism is a property of the writer, not of how big the project is: the same recipe twice
+    // must produce the same bytes whatever the recipe was given to print. So this runs on the small
+    // fixture, which it can pack three times in a few hundred milliseconds instead of the forty-five
+    // seconds three reference-project packs cost on a loaded runner. The reference pack is covered
+    // byte for byte by the golden test below.
+    const first = await exportHandoff(little, littleRecipe(), littleDeps(AT))
+    const second = await exportHandoff(little, littleRecipe(), littleDeps(AT))
+    const later = await exportHandoff(little, littleRecipe(), littleDeps(LATER))
+    if (!first.ok || !second.ok || !later.ok) throw new Error('expected three packs')
+    expect(entriesOf(first.archive.bytes).map((each) => each.name)).toEqual(
+      entriesOf(second.archive.bytes).map((each) => each.name),
+    )
+    for (const entry of entriesOf(first.archive.bytes)) {
+      const again = entriesOf(second.archive.bytes).find((each) => each.name === entry.name)
+      expect(again?.data).toEqual(entry.data)
+    }
+    // The clock moves the instant and, because each file carries it, the digests of those files. The
+    // entry list itself does not move.
+    const strip = (bytes: Uint8Array): string =>
+      JSON.stringify(
+        (JSON.parse(text(bytes, 'manifest.json')).files as readonly Record<string, unknown>[]).map((entry) => {
+          const rest = { ...entry }
+          delete rest.sha256
+          return rest
+        }),
+      )
+    expect(strip(later.archive.bytes)).toBe(strip(first.archive.bytes))
+  }, SMALL_PACK)
+
+  it('produces no pack when one output cannot be written, and names that entry', async () => {
+    const project = referenceProject()
+    const broken = recipe({
+      drawing: { ...recipe().drawing, views: [{ kind: 'plan', viewId: 'view-that-is-not-here' }] },
+    })
+    const result = await exportHandoff(snapshotOf(), broken, deps(AT))
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.failures.length).toBeGreaterThan(0)
+    // The person ticked `drawings.pdf`, so that is the name the failure has to use.
+    expect(result.failures.every((each) => each.output === 'drawings.pdf')).toBe(true)
+    expect(project.views.length).toBeGreaterThan(0)
+  }, PACK)
+
+  it('records a digest that matches the bytes it names, for any selection (#85 §5)', async () => {
+    // The manifest is the only thing a reader has before it opens a file: it says what is in the
+    // archive and how big each piece is. A digest that did not match its own entry would be worse
+    // than no digest, because it would say the archive was intact while it was being read wrongly.
+    //
+    // Seventeen selections, from a fixed seed, each a different subset of the eleven CSVs and the
+    // four printed outputs. The CSVs carry the selection rather than the PDFs, which take seconds
+    // each and are covered whole by the tests above; the property is about the manifest, and the
+    // manifest is written from the same list either way.
+    //
+    // It runs on the small fixture rather than the reference project for the same reason: the
+    // manifest's shape does not depend on how many cabinets a project holds, and deriving the
+    // reference project's eleven tables seventeen times costs more than it checks.
+    const arbTables = fc.subarray([...HANDOFF_TABLES], { minLength: 1 })
+    const arbOutputs = fc.record({
+      drawings: fc.constant(false),
+      itemList: fc.boolean(),
+      cutList: fc.boolean(),
+      commentRegister: fc.boolean(),
+    })
+    let checked = 0
+    await fc.assert(
+      fc.asyncProperty(arbTables, arbOutputs, async (tables, outputs) => {
+        const result = await exportHandoff(little, littleRecipe({ tables, outputs }), littleDeps(AT))
+        if (!result.ok) throw new Error(`the pack refused: ${JSON.stringify(result.failures)}`)
+        const manifest = JSON.parse(text(result.archive.bytes, 'manifest.json')) as {
+          files: { path: string; sha256: string; bytes: number }[]
+        }
+        const entries = entriesOf(result.archive.bytes)
+        expect(entries[0]?.name).toBe('manifest.json')
+        // The manifest names itself last and carries no digest of its own: an entry cannot hold the
+        // hash of the file that holds it, so the one entry without a `sha256` is the manifest's.
+        const itself = manifest.files.filter((entry) => entry.path === 'manifest.json')
+        expect(itself).toHaveLength(1)
+        expect(itself[0]?.sha256).toBeUndefined()
+        expect(manifest.files[manifest.files.length - 1]?.path).toBe('manifest.json')
+        for (const entry of manifest.files) {
+          if (entry.path === 'manifest.json') continue
+          const held = entries.find((each) => each.name === entry.path)
+          if (held === undefined) throw new Error(`the manifest names ${entry.path}, the archive does not hold it`)
+          expect(entry.bytes, entry.path).toBe(held.data.length)
+          expect(entry.sha256, entry.path).toBe(await sha256Hex(held.data))
+          checked += 1
+        }
+      }),
+      { numRuns: 17, seed: 20261128 },
+    )
+    // A property that never ran a case passes as happily as one that ran seventeen.
+    expect(checked).toBeGreaterThan(17)
+  }, SMALL_PACK)
+
+  it('writes the same pack, byte for byte, as the golden', async () => {
+    // One whole Handoff Pack, with the clock injected, held as bytes: the manifest's ordering, the
+    // fixed timestamps, the entry names and every file inside it are all checked by this one file
+    // moving in a diff. Regenerate with
+    // `UPDATE_GOLDEN=1 npx vitest run --project pure src/export/handoff.test.ts`, then read the diff.
+    const goldenDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../fixtures/export/golden')
+    const golden = join(goldenDir, 'handoff-pack.zip')
+    const result = await exportHandoff(snapshotOf(), recipe(), deps(AT))
+    if (!result.ok) throw new Error(`the reference fixture produced no pack: ${JSON.stringify(result.failures)}`)
+    if (process.env['UPDATE_GOLDEN'] === '1') {
+      mkdirSync(goldenDir, { recursive: true })
+      writeFileSync(golden, result.archive.bytes)
+    }
+    expect(result.archive.bytes).toEqual(new Uint8Array(readFileSync(golden)))
+  }, GOLDEN_PACK)
+})

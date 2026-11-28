@@ -180,6 +180,19 @@ export interface Recipe {
   readonly notes?: NotesSwitches
   /** What the sheets were drawn from, recorded by `provenanceOf` for the file's metadata. */
   readonly composition?: readonly RecordedComposition[]
+  /**
+   * The page order the person set, as view keys (#85 §1.2). Absent is the Project's own order —
+   * Floor display order, then each Floor's view-list order, then Item Detail Views in Item Design
+   * order — which is what every recipe written before Drawing Sets meant, because a single view has
+   * one page and one order.
+   */
+  readonly pageOrder?: readonly string[]
+  /**
+   * The orientation the person forced on one page, by view key (#85 §1.3). Absent for a page means
+   * the recipe's own `orientation`, which is `auto` until they say otherwise: a Drawing Set of a
+   * long Plan and a tall detail wants each page held the way its own drawing suits.
+   */
+  readonly pageOrientations?: Readonly<Partial<Record<string, Orientation>>>
 }
 
 /**
@@ -210,6 +223,36 @@ export interface ListsRecipe {
    * when the columns will not fit the tall sheet; this only chooses which sheet to start from.
    */
   readonly pageSize?: PageSize
+}
+
+/**
+ * Which of the Handoff Pack's four printed outputs are in the pack (#85 §3.1). Every one of them is
+ * ticked when the tab opens; the Cut List is ticked only when there is a cut-list-capable Item Design
+ * in scope to cut, and an unticked one writes no entry at all.
+ */
+export interface HandoffOutputs {
+  readonly drawings: boolean
+  readonly itemList: boolean
+  readonly cutList: boolean
+  readonly commentRegister: boolean
+}
+
+/**
+ * A Handoff Pack: one Drawing Set, three printed lists and a folder of CSVs, in one archive (#85 §3).
+ *
+ * The two halves are the recipes the Drawing and Lists tabs already write, so a pack and the same
+ * settings exported from those tabs cannot disagree about a row, a page or a scope. The pack carries
+ * no new drawing or scope rule of its own — §3.2's per-table rules are `exportLists`' rules.
+ */
+export interface HandoffRecipe {
+  /** The Drawing Set: its views, page order, sheet, scale and Notes switches. */
+  readonly drawing: Recipe
+  readonly outputs: HandoffOutputs
+  /** The CSVs under `data/`, in the order the contract lists them. */
+  readonly tables: readonly TableId[]
+  readonly scope: QuantityScope
+  /** The Comment Register is Open Comments; this stays `false` unless the person asked otherwise. */
+  readonly includeResolvedComments?: boolean
 }
 
 /** The shape one table takes in the download: its rows as a file, as a printed table, or as both. */
@@ -287,6 +330,53 @@ export type ExportResult =
       readonly missingGlyphs: readonly string[]
     }
   | { readonly ok: false; readonly failures: readonly ExportFailure[] }
+
+/** What one Handoff Pack run produced: the archive, its manifest, and any glyph notice. */
+export interface HandoffSuccess {
+  readonly ok: true
+  readonly archive: ExportFile
+  readonly manifest: ExportFile
+  readonly missingGlyphs: readonly string[]
+}
+
+/** Why a pack was not written: at least one output failed, and nothing was handed over. */
+export interface HandoffFailure {
+  readonly ok: false
+  readonly failures: readonly ExportFailure[]
+}
+
+/** The pack's result: the archive, or the list of outputs that failed. */
+export type HandoffResult = HandoffSuccess | HandoffFailure
+
+/**
+ * The eleven CSVs the pack can carry, in the order the contract lists them (#85 §3.1). The order is
+ * the entry order, so two exports of one recipe write the same archive.
+ */
+export const HANDOFF_TABLES: readonly TableId[] = [
+  'rooms',
+  'walls',
+  'openings',
+  'beams',
+  'skirting',
+  'services',
+  'placed-items',
+  'items',
+  'cut-list',
+  'comments',
+  'warnings',
+]
+
+/** Every printed output ticked, which is what the tab shows before the person changes anything. */
+export const DEFAULT_HANDOFF_OUTPUTS = Object.freeze({
+  drawings: true,
+  itemList: true,
+  cutList: true,
+  commentRegister: true,
+})
+
+/** The CSVs ticked by default: all of them, in contract order. */
+export const DEFAULT_HANDOFF_TABLES: readonly TableId[] = HANDOFF_TABLES
+
 
 /**
  * The clock, narrowed to the two questions `export` asks it.

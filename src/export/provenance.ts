@@ -21,7 +21,16 @@ import { drawingComposition } from './composition'
 // drawing and a CSV carry the same number because they read the same constant.
 import { CSV_CONTRACT_VERSION } from './csv/tables'
 import { PRODUCT_NAME } from './strings'
-import type { ExportDeps, ExportSnapshot, ListsRecipe, NotesSwitches, Recipe, RecipeViewRef, RecordedComposition } from './types'
+import type {
+  ExportDeps,
+  ExportSnapshot,
+  HandoffRecipe,
+  ListsRecipe,
+  NotesSwitches,
+  Recipe,
+  RecipeViewRef,
+  RecordedComposition,
+} from './types'
 import { DEFAULT_NOTES_SWITCHES } from './types'
 import type { Project } from '../domain'
 
@@ -54,31 +63,38 @@ export interface Provenance {
   readonly project_id: string
   readonly project_revision: number
   readonly unsaved_changes?: true
-  /** Whatever the recipe was: the drawings' (#61) or the lists' (#62). */
-  readonly recipe: Recipe | ListsRecipe
+  /** Whatever the recipe was: the drawings' (#61), the lists' (#62) or the pack's (#85). */
+  readonly recipe: Recipe | ListsRecipe | HandoffRecipe
+}
+
+/** What a drawing recipe publishes: its own fields plus the composition its sheets were drawn from. */
+function publishedDrawing(snapshot: ExportSnapshot, recipe: Recipe): Recipe {
+  return {
+    ...recipe,
+    // The switches the sheet was actually drawn with, always published: a recipe remembered from
+    // before #83 has no `notes` field of its own, and the file still has to say what it shows.
+    notes: recipe.notes ?? DEFAULT_NOTES_SWITCHES,
+    composition: recipe.views
+      .map((view) => compositionOf(snapshot.project, view, recipe.notes))
+      .filter((each): each is RecordedComposition => each !== null),
+  }
 }
 
 /** The provenance for one call. Nothing in it is derived from the environment. */
 export function provenanceOf(
   snapshot: ExportSnapshot,
-  recipe: Recipe | ListsRecipe,
+  recipe: Recipe | ListsRecipe | HandoffRecipe,
   deps: Pick<ExportDeps, 'clock' | 'buildboxVersion' | 'contractVersion' | 'unsavedChanges'>,
 ): Provenance {
   // A drawing's recipe carries what its sheets were drawn from (#73 §1); a list's carries its scope,
-  // which is already its whole story. The composition is derived here rather than handed in by the
-  // dialog so that no caller can publish a recipe whose record disagrees with its request.
-  const published: Recipe | ListsRecipe =
+  // which is already its whole story; a pack's carries both, and its own drawing half is published
+  // with the composition derived below just as a bare Drawing Set's would be.
+  const published: Recipe | ListsRecipe | HandoffRecipe =
     'views' in recipe
-      ? {
-          ...recipe,
-          // The switches the sheet was actually drawn with, always published: a recipe remembered from
-          // before #83 has no `notes` field of its own, and the file still has to say what it shows.
-          notes: recipe.notes ?? DEFAULT_NOTES_SWITCHES,
-          composition: recipe.views
-            .map((view) => compositionOf(snapshot.project, view, recipe.notes))
-            .filter((each): each is RecordedComposition => each !== null),
-        }
-      : recipe
+      ? publishedDrawing(snapshot, recipe)
+      : 'drawing' in recipe
+        ? { ...recipe, drawing: publishedDrawing(snapshot, recipe.drawing) }
+        : recipe
   return {
     generator: PRODUCT_NAME,
     buildbox_version: deps.buildboxVersion,

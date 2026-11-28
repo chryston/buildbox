@@ -31,6 +31,7 @@ import type {
   ExportProgress,
   ExportResult,
   ExportSnapshot,
+  HandoffRecipe,
   ListsRecipe,
   ListsSummary,
   NotesSwitches,
@@ -93,6 +94,11 @@ interface RememberedRecipe {
 interface RememberedListsRecipe {
   readonly key: string
   readonly recipe: ListsRecipe
+}
+
+interface RememberedHandoffRecipe {
+  readonly key: string
+  readonly recipe: HandoffRecipe
 }
 
 // Every table this build writes, so a remembered recipe naming one of them is trusted: a list kept to
@@ -204,13 +210,55 @@ function asRecipe(value: unknown): Recipe | null {
       return null
     }
   }
+  // #85: a remembered page order is a list of view keys, and a remembered orientation is one per
+  // view. Both are absent for every recipe written before Drawing Sets, which is the Project's own
+  // order and the recipe's own orientation — so only a value that is neither absent nor well-formed
+  // is a recipe this build cannot run.
+  if (held.pageOrder !== undefined && (!Array.isArray(held.pageOrder) || !held.pageOrder.every((key) => typeof key === 'string'))) {
+    return null
+  }
+  if (held.pageOrientations !== undefined) {
+    const orientations = fields(held.pageOrientations)
+    if (orientations === null) return null
+    if (!Object.values(orientations).every((setting) => oneOf(setting, ['portrait', 'landscape']))) return null
+  }
   return value as Recipe
+}
+
+/**
+ * A remembered Handoff Pack, or nothing (#85 §3.6).
+ *
+ * The same rule as every other remembered recipe: a device's history is data from some other build,
+ * and a pack whose halves this build cannot both honour is forgotten whole rather than run half-read.
+ * The scope is checked by the lists' reader, because it is the lists' scope and the two must not be
+ * able to drift apart.
+ */
+function asHandoffRecipe(value: unknown): HandoffRecipe | null {
+  const held = fields(value)
+  if (held === null) return null
+  const drawing = asRecipe(held.drawing)
+  if (drawing === null) return null
+  const outputs = fields(held.outputs)
+  if (outputs === null) return null
+  if (!['drawings', 'itemList', 'cutList', 'commentRegister'].every((key) => typeof outputs[key] === 'boolean')) {
+    return null
+  }
+  if (!Array.isArray(held.tables) || !held.tables.every((table) => oneOf(table, TABLE_IDS))) return null
+  if (asListsRecipe({ tables: held.tables, scope: held.scope }) === null) return null
+  if (held.includeResolvedComments !== undefined && typeof held.includeResolvedComments !== 'boolean') return null
+  return value as HandoffRecipe
+}
+
+function isRememberedHandoff(value: unknown): value is RememberedHandoffRecipe {
+  const held = fields(value)
+  if (held === null) return false
+  return typeof held.key === 'string' && typeof held.recipe === 'object' && held.recipe !== null
 }
 
 function isViewRef(value: unknown): boolean {
   const held = fields(value)
   if (held === null) return false
-  if (held.kind === 'plan') return typeof held.viewId === 'string'
+  if (held.kind === 'plan' || held.kind === 'elevation') return typeof held.viewId === 'string'
   return held.kind === 'item-detail' && typeof held.itemDesignId === 'string'
 }
 
@@ -267,6 +315,13 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
     const rows: unknown = found.ok ? found.value : undefined
     if (!Array.isArray(rows)) return []
     return rows.filter(isRememberedLists)
+  }
+
+  const readHandoffRecipes = async (): Promise<RememberedHandoffRecipe[]> => {
+    const found = await deps.prefs.get('exportHandoffRecipes')
+    const rows: unknown = found.ok ? found.value : undefined
+    if (!Array.isArray(rows)) return []
+    return rows.filter(isRememberedHandoff)
   }
 
   const loadFont = async (): Promise<Uint8Array> => {
@@ -532,6 +587,43 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
         job: { kind: 'lists', recipe, ...(wantsPrintedTable(recipe) ? { font: await loadFont() } : {}) },
       }
       return runJob(request, onProgress, () => runHere(request, onProgress))
+    },
+
+    async recallHandoff(key: string): Promise<HandoffRecipe | null> {
+      const rows = await readHandoffRecipes()
+      const row = rows.find((each) => each.key === key)
+      return row === undefined ? null : asHandoffRecipe(row.recipe)
+    },
+
+    rememberHandoff(key: string, recipe: HandoffRecipe): void {
+      void readHandoffRecipes()
+        .then((rows) => [...rows.filter((each) => each.key !== key), { key, recipe }])
+        .then((rows) => deps.prefs.set('exportHandoffRecipes', rows))
+    },
+
+    // The pack runs on this thread rather than in the Worker. It is the one export a person starts and
+    // walks away from, it takes seconds rather than a frame, and giving it a Worker message would mean
+    // a third shape in a protocol whose two halves already share every input it needs.
+    async runHandoff(recipe: HandoffRecipe, onProgress: (progress: ExportProgress) => void): Promise<ExportRunOutcome> {
+      cancelled = false
+      const unsavedChanges = deps.session().getSnapshot().save.kind !== 'saved'
+      const snapshot = snapshotOf()
+      const sentences = warningMessages(snapshot.project, recipe.scope, warningSentence)
+      const { exportHandoff } = await import('../export')
+      const result = await exportHandoff(snapshot, recipe, {
+        clock: { now: () => deps.clock.now(), localDate: () => deps.clock.localDate() },
+        buildboxVersion: deps.buildboxVersion,
+        unsavedChanges,
+        warningMessages: sentences,
+        projectName: await deps.projectName(),
+        font: { bytes: await loadFont() },
+        onProgress,
+      })
+      if (cancelled) return { kind: 'cancelled' }
+      if (!result.ok) return { kind: 'failed', failures: result.failures }
+      if (cancelled) return { kind: 'cancelled' }
+      downloadFile(result.archive.name, result.archive.mediaType, result.archive.bytes)
+      return { kind: 'downloaded', files: 1, missingGlyphs: result.missingGlyphs }
     },
   }
 }

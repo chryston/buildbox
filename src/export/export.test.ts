@@ -154,7 +154,9 @@ describe('exportFiles', () => {
     if (result.ok) throw new Error('expected the export to refuse')
     expect(result.failures).toHaveLength(1)
     expect(result.failures[0]!.reason).toBe('image-format')
-    expect(result.failures[0]!.output).toContain('Floor-1')
+    // A Drawing Set PDF is one file, so the file's own name would name nothing; the failure names
+    // the view whose Plan Image the writer could not place (#85 §2.4).
+    expect(result.failures[0]!.output).toContain('Floor 1')
   })
 })
 
