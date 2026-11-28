@@ -609,9 +609,7 @@ export function createExportPort(deps: ExportPortDeps): ExportPort {
       const unsavedChanges = deps.session().getSnapshot().save.kind !== 'saved'
       const snapshot = snapshotOf()
       const sentences = warningMessages(snapshot.project, recipe.scope, warningSentence)
-      // `handoff` rather than the barrel: `handoff.ts` composes `exportFiles`, which lives in the
-      // barrel, and a barrel that also re-exported the pack would close a cycle through it.
-      const { exportHandoff } = await import('../export/handoff')
+      const { exportHandoff } = await import('../export')
       const result = await exportHandoff(snapshot, recipe, {
         clock: { now: () => deps.clock.now(), localDate: () => deps.clock.localDate() },
         buildboxVersion: deps.buildboxVersion,

@@ -1,0 +1,23 @@
+﻿design_option_id,design_option,renovation_state,item_design_id,item_design,part,length_mm,width_mm,thickness_mm,material,qty_per_item,item_count,qty_in_scope,notes
+,,existing,unit-kitchen-base,Base Unit,Side panel,800,500,18,walnut,2,1,2,
+,,existing,unit-kitchen-base,Base Unit,Top panel,564,500,18,walnut,1,1,1,
+,,existing,unit-kitchen-base,Base Unit,Bottom panel,564,500,18,walnut,1,1,1,
+,,existing,unit-kitchen-base,Base Unit,Back panel,764,564,6,walnut,1,1,1,6mm ply back
+,,existing,unit-kitchen-base,Base Unit,Toe-kick board,500,100,18,walnut,1,1,1,
+,,existing,unit-kitchen-base,Base Unit,Shelf,564,500,18,walnut,2,1,2,
+,,existing,unit-kitchen-base,Base Unit,Divider,500,465,18,walnut,2,1,2,
+,,existing,unit-kitchen-base,Base Unit,Drawer box (side-mount),451,130,482,walnut,1,1,1,Face: 180×463mm
+,,existing,unit-kitchen-base,Base Unit,Drawer box (undermount),564,75,482,walnut,1,1,1,Face: 564×87mm
+,,existing,unit-kitchen-base,Base Unit,Door panel,465,174,18,walnut,1,1,1,full overlay
+,,existing,unit-kitchen-base,Base Unit,Drawer front,465,180,18,walnut,1,1,1,
+,,existing,unit-kitchen-tall,Tall Unit,Side panel,2100,560,18,white,2,1,2,
+,,existing,unit-kitchen-tall,Tall Unit,Top panel,564,560,18,white,1,1,1,
+,,existing,unit-kitchen-tall,Tall Unit,Bottom panel,564,560,18,white,1,1,1,
+,,existing,unit-kitchen-tall,Tall Unit,Back panel,2064,564,6,white,1,1,1,6mm ply back
+,,existing,unit-kitchen-tall,Tall Unit,Toe-kick board,500,100,18,white,1,1,1,
+,,existing,unit-kitchen-tall,Tall Unit,Shelf,564,560,18,white,2,1,2,
+,,existing,unit-kitchen-tall,Tall Unit,Divider,1401,560,18,white,2,1,2,
+,,existing,unit-kitchen-tall,Tall Unit,Drawer box (side-mount),1387,130,542,white,1,1,1,Face: 180×1399mm
+,,existing,unit-kitchen-tall,Tall Unit,Drawer box (undermount),564,275,542,white,1,1,1,Face: 564×287mm
+,,existing,unit-kitchen-tall,Tall Unit,Door panel,1401,174,18,white,1,1,1,full overlay
+,,existing,unit-kitchen-tall,Tall Unit,Drawer front,1401,180,18,white,1,1,1,

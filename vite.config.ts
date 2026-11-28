@@ -56,6 +56,13 @@ const NODE_ONLY_INCLUDE = [
   // The five element goldens (#68 criterion 1) are compared against the files on disk, so they are
   // Node tests of the same kind — and `ui/strings` is injected into `tables` from here.
   'src/test/tablesGolden.test.ts',
+  // The CSV contract frozen at v1.0 (#85 §4) compares whole files and an enums.json against the
+  // bytes on disk, and injects `ui/strings` into the Warnings List the same way.
+  'src/test/csvContractV1.test.ts',
+  // The words inside a generated Handoff Pack (#85 §4.6): it reads the bundled font and the frozen
+  // enums.json off disk, and writes a real archive.
+  'src/test/handoffWords.test.ts',
+
   // Criterion 6 of #68 exports a PDF, which needs the bundled font read from disk — and
   // `import.meta.url` is only a file URL outside jsdom.
   'src/test/warningsOnDrawings.test.ts',

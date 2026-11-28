@@ -1,0 +1,3 @@
+﻿stable_id,floor_id,floor,design_option_id,design_option,renovation_state,drawing_layer_id,drawing_layer,name,area_m2,perimeter_mm,predecessor_ids
+seed-room-012,seed-001,Floor 1,,,existing,view-2,Structure,Kitchen,10.195,14300,
+seed-room-019,seed-001,Floor 1,,,existing,view-2,Structure,Bedroom,11.55,13600,

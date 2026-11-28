@@ -11,7 +11,7 @@
  * that describes all of it, and the rule that one failed output means no pack at all.
  */
 import { sha256Hex, zipEntries } from '../lib'
-import { exportFiles } from './index'
+import { exportFiles } from './files'
 import { exportLists, orderedTables } from './lists'
 import { manifestBytes, manifestOf, MANIFEST_VERSION } from './zip'
 import type { ManifestFile } from './zip'
