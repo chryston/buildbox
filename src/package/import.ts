@@ -141,6 +141,17 @@ function readArchive(bytes: Uint8Array): ArchiveRead {
     }
   }
 
+  // An export is classified before its entries are looked at. Its files are not Backup entries at
+  // all, so the alternative is to call a Handoff Pack an archive with an unexpected entry in it —
+  // true of the bytes, useless as an answer, because it tells the person their export is damaged
+  // when what they have done is try to Restore the wrong kind of file (#19, #85 §6). The manifest
+  // leads every export archive (#85 §2.1), so this costs one header read and no search.
+  const leading = read.entries[0]
+  if (leading?.name === MANIFEST_ENTRY) {
+    const sniffed = readManifestJson(leading.data)
+    if (sniffed.ok && sniffed.json.format === EXPORT_FORMAT) return packageProblem('export-not-backup')
+  }
+
   const entries = new Map<string, ZipEntry>()
   for (const entry of read.entries) {
     const path = entryPathProblem(entry.name)

@@ -200,6 +200,10 @@ export function HandoffPanel({
     const answer = await port.runHandoff(recipe, () => {})
     setOutcome(answer)
     setBusy(false)
+    // The same rule the other two tabs follow: a pack that went out with nothing to say closes,
+    // because the person asked for a file and has it. It stays open only when the missing-glyph
+    // notice is the thing they still have to read (#85 §3).
+    if (answer.kind === 'downloaded' && answer.missingGlyphs.length === 0) onClose()
   }
 
   const nothing =

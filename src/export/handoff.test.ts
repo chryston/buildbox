@@ -6,8 +6,12 @@
  * trusting what wrote it, because a pack a tradesperson cannot unpack is worth nothing however tidy
  * the code that made it looked.
  */
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import * as fc from 'fast-check'
+import { sha256Hex } from '../lib'
 import { referenceProject } from '../derive/testing'
 import { warningMessages, type QuantityScope } from '../derive'
 import type { Project } from '../domain'
@@ -174,4 +178,67 @@ describe('the Handoff Pack (#85 §3.1)', () => {
     expect(result.failures.every((each) => each.output === 'drawings.pdf')).toBe(true)
     expect(project.views.length).toBeGreaterThan(0)
   })
+
+  it('records a digest that matches the bytes it names, for any selection (#85 §5)', async () => {
+    // The manifest is the only thing a reader has before it opens a file: it says what is in the
+    // archive and how big each piece is. A digest that did not match its own entry would be worse
+    // than no digest, because it would say the archive was intact while it was being read wrongly.
+    //
+    // Seventeen selections, from a fixed seed, each a different subset of the eleven CSVs and the
+    // four printed outputs. The CSVs carry the selection rather than the PDFs, which take seconds
+    // each and are covered whole by the tests above; the property is about the manifest, and the
+    // manifest is written from the same list either way.
+    const arbTables = fc.subarray([...HANDOFF_TABLES], { minLength: 1 })
+    const arbOutputs = fc.record({
+      drawings: fc.constant(false),
+      itemList: fc.boolean(),
+      cutList: fc.boolean(),
+      commentRegister: fc.boolean(),
+    })
+    let checked = 0
+    await fc.assert(
+      fc.asyncProperty(arbTables, arbOutputs, async (tables, outputs) => {
+        const result = await exportHandoff(snapshotOf(), recipe({ tables, outputs }), deps(AT))
+        if (!result.ok) throw new Error(`the pack refused: ${JSON.stringify(result.failures)}`)
+        const manifest = JSON.parse(text(result.archive.bytes, 'manifest.json')) as {
+          files: { path: string; sha256: string; bytes: number }[]
+        }
+        const entries = entriesOf(result.archive.bytes)
+        expect(entries[0]?.name).toBe('manifest.json')
+        // The manifest names itself last and carries no digest of its own: an entry cannot hold the
+        // hash of the file that holds it, so the one entry without a `sha256` is the manifest's.
+        const itself = manifest.files.filter((entry) => entry.path === 'manifest.json')
+        expect(itself).toHaveLength(1)
+        expect(itself[0]?.sha256).toBeUndefined()
+        expect(manifest.files[manifest.files.length - 1]?.path).toBe('manifest.json')
+        for (const entry of manifest.files) {
+          if (entry.path === 'manifest.json') continue
+          const held = entries.find((each) => each.name === entry.path)
+          if (held === undefined) throw new Error(`the manifest names ${entry.path}, the archive does not hold it`)
+          expect(entry.bytes, entry.path).toBe(held.data.length)
+          expect(entry.sha256, entry.path).toBe(await sha256Hex(held.data))
+          checked += 1
+        }
+      }),
+      { numRuns: 17, seed: 20261128 },
+    )
+    // A property that never ran a case passes as happily as one that ran seventeen.
+    expect(checked).toBeGreaterThan(17)
+  }, 120_000)
+
+  it('writes the same pack, byte for byte, as the golden', async () => {
+    // One whole Handoff Pack, with the clock injected, held as bytes: the manifest's ordering, the
+    // fixed timestamps, the entry names and every file inside it are all checked by this one file
+    // moving in a diff. Regenerate with
+    // `UPDATE_GOLDEN=1 npx vitest run --project pure src/export/handoff.test.ts`, then read the diff.
+    const goldenDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../fixtures/export/golden')
+    const golden = join(goldenDir, 'handoff-pack.zip')
+    const result = await exportHandoff(snapshotOf(), recipe(), deps(AT))
+    if (!result.ok) throw new Error(`the reference fixture produced no pack: ${JSON.stringify(result.failures)}`)
+    if (process.env['UPDATE_GOLDEN'] === '1') {
+      mkdirSync(goldenDir, { recursive: true })
+      writeFileSync(golden, result.archive.bytes)
+    }
+    expect(result.archive.bytes).toEqual(new Uint8Array(readFileSync(golden)))
+  }, 60_000)
 })
