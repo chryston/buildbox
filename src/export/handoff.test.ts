@@ -65,10 +65,50 @@ function snapshotOf(revision = 3): ExportSnapshot {
  * machine with the clock injected, that is about 2.5 s, of which roughly 2 s is `pdf-lib` writing
  * the ~25 000 text operations the Cut List alone contains — the layout that decides them is 40 ms.
  * Printing 1 620 rows costs what it costs, so the tests say so rather than pretending the default
- * five seconds is enough for it. A loaded CI runner has been seen to take four times the local
- * figure, which is where the margin below comes from; it is not headroom to spend.
+ * five seconds is enough for it. A loaded CI runner has been measured at about fifteen seconds for
+ * one such pack, six times the local figure, which is where the margin below comes from.
  */
 const PACK = 30_000
+
+/**
+ * The golden test's allowance, which is larger than `PACK` for one reason: it is the only test here
+ * that must pack the reference project, because the committed golden was written from it and a
+ * golden of a smaller project would not pin the 58 pages of Cut List that make the pack expensive.
+ * Measured at 5.4 s locally against a loaded CI runner six times slower, so it needs the margin the
+ * single-pack tests above do not.
+ */
+const GOLDEN_PACK = 90_000
+
+/**
+ * The same allowance for a pack of the small fixture, which is what the tests that check the
+ * archive rather than the page layout run on. One build is a few hundred milliseconds locally; ten
+ * seconds is the loaded-runner figure with room, and it is not headroom to spend.
+ */
+const SMALL_PACK = 10_000
+
+/**
+ * The small fixture, validated once.
+ *
+ * Two tests need a project that is not the reference one because they pack it repeatedly to check
+ * something that does not depend on how many cabinets a project holds — whether the same recipe
+ * twice writes the same bytes, and whether every manifest digest matches the bytes it names. The
+ * assertion is the point of the fixture: an invalid project makes the exporter refuse, and a refused
+ * pack passes a check like those by doing nothing.
+ */
+const small = basicProject()
+
+expect(validateProject(small).ok, 'the small-fixture tests would prove nothing on an invalid project').toBe(true)
+
+const little: ExportSnapshot = { project: small, revision: 3 }
+const littleScope = defaultListsScope(small, null)
+const littleRecipe = (over: Partial<HandoffRecipe> = {}): HandoffRecipe =>
+  recipe({ ...over, scope: littleScope })
+const littleDeps = (clock: ExportClock): ExportDeps => ({
+  clock,
+  buildboxVersion: '0.0.0-test',
+  font: { bytes: fontBytes },
+  warningMessages: sentences(small, littleScope),
+})
 
 function recipe(over: Partial<HandoffRecipe> = {}): HandoffRecipe {
   const project = reference
@@ -174,9 +214,14 @@ describe('the Handoff Pack (#85 §3.1)', () => {
   }, PACK)
 
   it('is byte-identical when nothing but the call changed, and moves only its clock otherwise', async () => {
-    const first = await exportHandoff(snapshotOf(), recipe(), deps(AT))
-    const second = await exportHandoff(snapshotOf(), recipe(), deps(AT))
-    const later = await exportHandoff(snapshotOf(), recipe(), deps(LATER))
+    // Determinism is a property of the writer, not of how big the project is: the same recipe twice
+    // must produce the same bytes whatever the recipe was given to print. So this runs on the small
+    // fixture, which it can pack three times in a few hundred milliseconds instead of the forty-five
+    // seconds three reference-project packs cost on a loaded runner. The reference pack is covered
+    // byte for byte by the golden test below.
+    const first = await exportHandoff(little, littleRecipe(), littleDeps(AT))
+    const second = await exportHandoff(little, littleRecipe(), littleDeps(AT))
+    const later = await exportHandoff(little, littleRecipe(), littleDeps(LATER))
     if (!first.ok || !second.ok || !later.ok) throw new Error('expected three packs')
     expect(entriesOf(first.archive.bytes).map((each) => each.name)).toEqual(
       entriesOf(second.archive.bytes).map((each) => each.name),
@@ -196,7 +241,7 @@ describe('the Handoff Pack (#85 §3.1)', () => {
         }),
       )
     expect(strip(later.archive.bytes)).toBe(strip(first.archive.bytes))
-  }, PACK)
+  }, SMALL_PACK)
 
   it('produces no pack when one output cannot be written, and names that entry', async () => {
     const project = referenceProject()
@@ -224,13 +269,7 @@ describe('the Handoff Pack (#85 §3.1)', () => {
     //
     // It runs on the small fixture rather than the reference project for the same reason: the
     // manifest's shape does not depend on how many cabinets a project holds, and deriving the
-    // reference project's eleven tables seventeen times costs more than it checks. Every other test
-    // in this file still packs the reference project.
-    const small = basicProject()
-    expect(validateProject(small).ok, 'the property test would prove nothing on an invalid project').toBe(true)
-    const little: ExportSnapshot = { project: small, revision: 3 }
-    const littleRecipe = (over: Partial<HandoffRecipe> = {}): HandoffRecipe =>
-      recipe({ ...over, scope: defaultListsScope(small, null) })
+    // reference project's eleven tables seventeen times costs more than it checks.
     const arbTables = fc.subarray([...HANDOFF_TABLES], { minLength: 1 })
     const arbOutputs = fc.record({
       drawings: fc.constant(false),
@@ -241,7 +280,7 @@ describe('the Handoff Pack (#85 §3.1)', () => {
     let checked = 0
     await fc.assert(
       fc.asyncProperty(arbTables, arbOutputs, async (tables, outputs) => {
-        const result = await exportHandoff(little, littleRecipe({ tables, outputs }), deps(AT))
+        const result = await exportHandoff(little, littleRecipe({ tables, outputs }), littleDeps(AT))
         if (!result.ok) throw new Error(`the pack refused: ${JSON.stringify(result.failures)}`)
         const manifest = JSON.parse(text(result.archive.bytes, 'manifest.json')) as {
           files: { path: string; sha256: string; bytes: number }[]
@@ -267,7 +306,7 @@ describe('the Handoff Pack (#85 §3.1)', () => {
     )
     // A property that never ran a case passes as happily as one that ran seventeen.
     expect(checked).toBeGreaterThan(17)
-  }, PACK)
+  }, SMALL_PACK)
 
   it('writes the same pack, byte for byte, as the golden', async () => {
     // One whole Handoff Pack, with the clock injected, held as bytes: the manifest's ordering, the
@@ -283,5 +322,5 @@ describe('the Handoff Pack (#85 §3.1)', () => {
       writeFileSync(golden, result.archive.bytes)
     }
     expect(result.archive.bytes).toEqual(new Uint8Array(readFileSync(golden)))
-  }, PACK)
+  }, GOLDEN_PACK)
 })
